@@ -165,8 +165,12 @@ func (repository *Repository) AcquireOperationLock(ctx context.Context, operatio
 
 func (repository *Repository) loadOperationLock(ctx context.Context) (manifest.Receipt, operationLockDocument, error) {
 	var document operationLockDocument
-	receipt, err := repository.LoadJSON(ctx, "locks/controller.json", 4<<10, &document)
-	if err != nil || !validOperationLockDocument(document) {
+	receipt, err := repository.currentReceiptForKey(ctx, repository.key("locks/controller.json"))
+	if err != nil {
+		return manifest.Receipt{}, operationLockDocument{}, errors.New("backup repository operation lock readback is invalid")
+	}
+	payload, err := repository.destination.readBytes(ctx, receipt, 4<<10)
+	if err != nil || decodeJSON(payload, &document) != nil || !validOperationLockDocument(document) {
 		return manifest.Receipt{}, operationLockDocument{}, errors.New("backup repository operation lock readback is invalid")
 	}
 	return receipt, document, nil
@@ -177,16 +181,10 @@ func (repository *Repository) deleteExpiredOperationLock(ctx context.Context, re
 		receipt.Key != repository.key("locks/controller.json") {
 		return errors.New("expired backup repository operation lock receipt is invalid")
 	}
-	_, err := repository.destination.api.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(receipt.Bucket), Key: aws.String(receipt.Key), VersionId: aws.String(receipt.VersionID),
-	})
-	if err != nil {
+	if err := repository.deleteCurrentOperationLock(ctx, receipt); err != nil {
 		return errors.New("delete expired backup repository operation lock")
 	}
-	if _, err = repository.destination.head(ctx, receipt.Key, receipt.VersionID); errors.Is(err, ErrNotFound) {
-		return nil
-	}
-	return errors.New("expired backup repository operation lock deletion readback failed")
+	return nil
 }
 
 func validOperationLockDocument(document operationLockDocument) bool {
@@ -208,15 +206,29 @@ func (lock *OperationLock) Release(ctx context.Context) error {
 	if lock == nil || lock.repository == nil || !lock.receipt.Valid() {
 		return errors.New("backup repository operation lock is invalid")
 	}
-	_, err := lock.repository.destination.api.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(lock.receipt.Bucket), Key: aws.String(lock.receipt.Key),
-		VersionId: aws.String(lock.receipt.VersionID),
-	})
-	if err != nil {
+	if err := lock.repository.deleteCurrentOperationLock(ctx, lock.receipt); err != nil {
 		return errors.New("release backup repository operation lock")
 	}
-	_, err = lock.repository.receiptForKey(ctx, lock.receipt.Key)
+	return nil
+}
+
+func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, receipt manifest.Receipt) error {
+	if !receipt.Valid() || receipt.Bucket != repository.destination.config.Bucket ||
+		receipt.Key != repository.key("locks/controller.json") || strings.ContainsAny(receipt.ETag, "\"\r\n") {
+		return errors.New("backup repository operation lock receipt is invalid")
+	}
+	_, err := repository.destination.api.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(receipt.Bucket), Key: aws.String(receipt.Key),
+		IfMatch: aws.String("\"" + receipt.ETag + "\""),
+	})
+	if err != nil {
+		return mapError(err)
+	}
+	current, err := repository.currentReceiptForKey(ctx, receipt.Key)
 	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
 		return nil
 	}
 	return errors.New("backup repository operation lock release readback failed")
@@ -562,6 +574,19 @@ func (repository *Repository) backupReceiptsBound(value manifest.Manifest) bool 
 
 func (repository *Repository) receiptForKey(ctx context.Context, key string) (manifest.Receipt, error) {
 	objects, err := repository.destination.inventory(ctx, key)
+	if err != nil {
+		return manifest.Receipt{}, err
+	}
+	for _, object := range objects {
+		if object.Key == key {
+			return object, nil
+		}
+	}
+	return manifest.Receipt{}, ErrNotFound
+}
+
+func (repository *Repository) currentReceiptForKey(ctx context.Context, key string) (manifest.Receipt, error) {
+	objects, err := repository.destination.currentInventory(ctx, key)
 	if err != nil {
 		return manifest.Receipt{}, err
 	}

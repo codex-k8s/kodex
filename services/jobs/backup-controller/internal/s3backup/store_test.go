@@ -27,10 +27,12 @@ type fakeObject struct {
 }
 
 type fakeS3 struct {
-	objects       map[string]fakeObject
-	lastIfNoMatch string
-	nextVersion   int
-	deleteHook    func()
+	objects             map[string]fakeObject
+	lastIfNoMatch       string
+	lastDeleteIfMatch   string
+	lastDeleteVersionID string
+	nextVersion         int
+	deleteHook          func()
 }
 
 func newFakeS3() *fakeS3 {
@@ -102,8 +104,16 @@ func (fake *fakeS3) PutObject(_ context.Context, input *s3.PutObjectInput, _ ...
 func (fake *fakeS3) DeleteObject(_ context.Context, input *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
 	key := aws.ToString(input.Key)
 	object, exists := fake.objects[key]
-	if !exists || object.version != aws.ToString(input.VersionId) {
+	fake.lastDeleteIfMatch = aws.ToString(input.IfMatch)
+	fake.lastDeleteVersionID = aws.ToString(input.VersionId)
+	if !exists {
 		return nil, responseError(http.StatusNotFound)
+	}
+	if fake.lastDeleteVersionID != "" && object.version != fake.lastDeleteVersionID {
+		return nil, responseError(http.StatusNotFound)
+	}
+	if fake.lastDeleteIfMatch != "" && strings.Trim(fake.lastDeleteIfMatch, "\"") != strings.Trim(object.etag, "\"") {
+		return nil, responseError(http.StatusPreconditionFailed)
 	}
 	delete(fake.objects, key)
 	if fake.deleteHook != nil {
@@ -147,6 +157,10 @@ func TestOperationLockIsExclusiveAndExactlyReleased(t *testing.T) {
 	if err := lock.Release(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	if fake.lastDeleteVersionID != "" || fake.lastDeleteIfMatch != "\"etag-version-1\"" {
+		t.Fatalf("lock release delete condition = version %q, If-Match %q",
+			fake.lastDeleteVersionID, fake.lastDeleteIfMatch)
+	}
 	if _, err := repository.AcquireOperationLock(context.Background(), "restore", "restore", now, time.Hour); err != nil {
 		t.Fatalf("lock was not exactly released: %v", err)
 	}
@@ -171,8 +185,10 @@ func TestOperationLockReplacesOnlyExpiredExactVersion(t *testing.T) {
 	if err := stale.Release(ctx); err == nil {
 		t.Fatal("stale lock holder released the replacement lock")
 	}
-	var readback operationLockDocument
-	receipt, err := repository.LoadJSON(ctx, "locks/controller.json", 4<<10, &readback)
+	if fake.lastDeleteVersionID != "" || fake.lastDeleteIfMatch != "\"etag-version-1\"" {
+		t.Fatal("stale lock holder did not use its exact conditional identity")
+	}
+	receipt, readback, err := repository.loadOperationLock(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

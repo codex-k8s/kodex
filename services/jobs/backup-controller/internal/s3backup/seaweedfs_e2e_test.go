@@ -51,6 +51,26 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if err != nil || repository.Check(ctx, nil) != nil {
 		t.Fatal("local backup repository is unavailable")
 	}
+	lock, err := repository.AcquireOperationLock(ctx, "verify", "e2e-lock", time.Now().UTC(), 10*time.Minute)
+	if err != nil {
+		t.Fatalf("acquire disposable operation lock: %v", err)
+	}
+	if err := lock.Release(ctx); err != nil {
+		t.Fatalf("release disposable operation lock: %v", err)
+	}
+	replacement, err := repository.AcquireOperationLock(ctx, "verify", "e2e-lock-next", time.Now().UTC(), 10*time.Minute)
+	if err != nil {
+		t.Fatalf("acquire replacement operation lock: %v", err)
+	}
+	if err := lock.Release(ctx); err == nil {
+		t.Fatal("stale operation lock released its replacement")
+	}
+	if _, current, err := repository.loadOperationLock(ctx); err != nil || current.OperationID != "e2e-lock-next" {
+		t.Fatal("replacement operation lock did not survive stale release")
+	}
+	if err := replacement.Release(ctx); err != nil {
+		t.Fatalf("release replacement operation lock: %v", err)
+	}
 	backup, _, err := repository.LoadVerifiedManifest(ctx, backupID)
 	if err != nil {
 		t.Fatalf("verified backup readback failed: %v", err)
