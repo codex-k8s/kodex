@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  agentDetailTabFromQuery,
   agentInitials,
   extractTemplateVariables,
   insertTextAtSelection,
@@ -42,6 +43,22 @@ const runtimes: RuntimeSelection[] = [
     model: "model-x",
   },
 ];
+
+describe("agentDetailTabFromQuery", () => {
+  it.each(["profile", "instructions", "runtime", "environment", "access"])(
+    "принимает вкладку %s",
+    (tab) => {
+      expect(agentDetailTabFromQuery(tab)).toBe(tab);
+    },
+  );
+
+  it.each([undefined, null, "", "unknown", ["runtime"]])(
+    "возвращает профиль для некорректного значения %j",
+    (value) => {
+      expect(agentDetailTabFromQuery(value)).toBe("profile");
+    },
+  );
+});
 
 describe("agent detail model", () => {
   it("строит provider/model/runtime выбор только из готового каталога", () => {

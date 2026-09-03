@@ -68,8 +68,8 @@ kubectl -n kodex-system get deployment/control-api-gateway deployment/staff-cont
   fail 'hot reload workloads are absent'
 
 go_source="$repository_root/services/external/control-api-gateway/internal/app/app.go"
-vue_source="$repository_root/services/staff/control-center/src/App.vue"
-for source_file in "$go_source" "$vue_source"; do
+vue_css_source="$repository_root/services/staff/control-center/src/app/styles/base.css"
+for source_file in "$go_source" "$vue_css_source"; do
   [[ -f "$source_file" && ! -L "$source_file" ]] || fail 'hot reload source is absent or unsafe'
 done
 
@@ -80,7 +80,7 @@ evidence_file="$evidence_directory/$resource_prefix-hot-reload.json"
   fail 'hot reload evidence already exists for this resource prefix'
 backup_directory=$(mktemp -d "$state_directory/.hot-reload.XXXXXX")
 cp -p -- "$go_source" "$backup_directory/app.go"
-cp -p -- "$vue_source" "$backup_directory/App.vue"
+cp -p -- "$vue_css_source" "$backup_directory/base.css"
 
 go_port=""
 vue_port=""
@@ -94,8 +94,8 @@ cleanup() {
   set +e
   if [[ "$source_modified" == true ]]; then
     cp -p -- "$backup_directory/app.go" "$go_source"
-    cp -p -- "$backup_directory/App.vue" "$vue_source"
-    touch -- "$go_source" "$vue_source"
+    cp -p -- "$backup_directory/base.css" "$vue_css_source"
+    touch -- "$go_source" "$vue_css_source"
   fi
   [[ -z "$go_forward_pid" ]] || kill "$go_forward_pid" 2>/dev/null
   [[ -z "$vue_forward_pid" ]] || kill "$vue_forward_pid" 2>/dev/null
@@ -159,11 +159,11 @@ wait_for_status() {
   fail "Go hot reload did not expose HTTP $expected; last observed status: $last_status"
 }
 
-read_vue_module() {
+read_vue_css() {
   local public_host=$1 cache_buster=$2
   curl --silent --show-error --fail --max-time 5 \
     --header "Host: $public_host" \
-    "http://127.0.0.1:$vue_port/src/App.vue?proof=$cache_buster"
+    "http://127.0.0.1:$vue_port/src/app/styles/base.css?proof=$cache_buster"
 }
 
 wait_for_vue_marker() {
@@ -171,7 +171,7 @@ wait_for_vue_marker() {
   for _ in $(seq 1 180); do
     ensure_port_forward staff-control-center 8080 "$vue_port" \
       "$vue_forward_log" vue_forward_pid
-    module=$(read_vue_module "$public_host" "$RANDOM" 2>/dev/null || true)
+    module=$(read_vue_css "$public_host" "$RANDOM" 2>/dev/null || true)
     if [[ "$present" == true && "$module" == *"$marker"* ]]; then
       return 0
     fi
@@ -200,12 +200,12 @@ started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 wait_for_status 204
 marker=KODEX_HOT_RELOAD_E2E_MARKER
 source_modified=true
-python3 - "$go_source" "$vue_source" "$marker" <<'PY' || fail 'source marker injection failed'
+python3 - "$go_source" "$vue_css_source" "$marker" <<'PY' || fail 'source marker injection failed'
 from pathlib import Path
 import sys
 
 go_path = Path(sys.argv[1])
-vue_path = Path(sys.argv[2])
+css_path = Path(sys.argv[2])
 marker = sys.argv[3]
 go_text = go_path.read_text(encoding="utf-8")
 go_old = 'technicalMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })'
@@ -214,19 +214,17 @@ if go_text.count(go_old) != 1:
     raise SystemExit(1)
 go_path.write_text(go_text.replace(go_old, go_new), encoding="utf-8")
 
-vue_text = vue_path.read_text(encoding="utf-8")
-vue_old = "const route = useRoute();"
-vue_new = f'const hotReloadProof = "{marker}";\nvoid hotReloadProof;\n\n{vue_old}'
-if vue_text.count(vue_old) != 1 or marker in vue_text:
+css_text = css_path.read_text(encoding="utf-8")
+if marker in css_text:
     raise SystemExit(1)
-vue_path.write_text(vue_text.replace(vue_old, vue_new), encoding="utf-8")
+css_path.write_text(f"{css_text.rstrip()}\n\n/* {marker} */\n", encoding="utf-8")
 PY
 wait_for_status 202
 wait_for_vue_marker "$public_host" "$marker" true
 
 cp -p -- "$backup_directory/app.go" "$go_source"
-cp -p -- "$backup_directory/App.vue" "$vue_source"
-touch -- "$go_source" "$vue_source"
+cp -p -- "$backup_directory/base.css" "$vue_css_source"
+touch -- "$go_source" "$vue_css_source"
 wait_for_status 204
 wait_for_vue_marker "$public_host" "$marker" false
 source_modified=false

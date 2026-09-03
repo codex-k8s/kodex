@@ -11,6 +11,21 @@ export type AgentDetailTab =
   | "environment"
   | "access";
 
+const agentDetailTabs: readonly AgentDetailTab[] = [
+  "profile",
+  "instructions",
+  "runtime",
+  "environment",
+  "access",
+];
+
+export function agentDetailTabFromQuery(value: unknown): AgentDetailTab {
+  return typeof value === "string" &&
+    agentDetailTabs.some((tab) => tab === value)
+    ? (value as AgentDetailTab)
+    : "profile";
+}
+
 export type ApplyBoundary = "next-run" | "next-turn" | "published";
 
 export interface AgentProfileDraft {
