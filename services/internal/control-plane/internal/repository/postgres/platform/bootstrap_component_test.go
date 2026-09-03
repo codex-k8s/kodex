@@ -1106,7 +1106,9 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-first", ExpectedVersion: &agentVersion},
 		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: first.Ref},
 	})
-	if err != nil || boundFirst.RuntimeConfiguration == nil || boundFirst.RuntimeConfiguration.Environment.Ref != first.Ref {
+	if err != nil || boundFirst.RuntimeConfiguration == nil || boundFirst.RuntimeConfiguration.Environment.Ref != first.Ref ||
+		!boundFirst.RuntimeConfiguration.Environment.Ready ||
+		!reflect.DeepEqual(boundFirst.RuntimeConfiguration.Environment.CurrentVersion, first.CurrentVersion) {
 		t.Fatalf("bind first runtime environment: configuration=%#v err=%v", boundFirst.RuntimeConfiguration, err)
 	}
 	firstVersion := first.Version
@@ -1160,7 +1162,9 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-second", ExpectedVersion: &boundVersion},
 		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: second.Ref},
 	})
-	if err != nil || boundSecond.RuntimeConfiguration == nil || boundSecond.RuntimeConfiguration.Environment.Ref != second.Ref {
+	if err != nil || boundSecond.RuntimeConfiguration == nil || boundSecond.RuntimeConfiguration.Environment.Ref != second.Ref ||
+		!boundSecond.RuntimeConfiguration.Environment.Ready ||
+		!reflect.DeepEqual(boundSecond.RuntimeConfiguration.Environment.CurrentVersion, second.CurrentVersion) {
 		t.Fatalf("rebind second runtime environment: configuration=%#v err=%v", boundSecond.RuntimeConfiguration, err)
 	}
 	deleteCommand := command.Command{
