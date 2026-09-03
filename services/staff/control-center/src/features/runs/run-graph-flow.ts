@@ -25,7 +25,7 @@ export function runGraphFitViewOptions(viewportWidth: number): FitViewParams {
         ? 0.14
         : {
             top: "180px",
-            right: "180px",
+            right: "210px",
             bottom: "160px",
             left: "380px",
           },

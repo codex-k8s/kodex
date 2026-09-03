@@ -112,7 +112,7 @@ describe("RunGraphCanvas", () => {
   it("резервирует место для detached-панелей при начальном fit", () => {
     expect(runGraphFitViewOptions(1440).padding).toEqual({
       top: "180px",
-      right: "180px",
+      right: "210px",
       bottom: "160px",
       left: "380px",
     });
