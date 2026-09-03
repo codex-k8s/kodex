@@ -125,14 +125,18 @@ common_environment=(
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" prepare
 
 select_exact_runtime_pod() {
-  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" --arg digest "$manifest_digest" '
+  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" '
     [.[] |
       select((.metadata.uid as $uid | $before | index($uid)) == null) |
       select(
-        ([.spec.initContainers[]?,.spec.containers[]?] |
-          length == 3 and all(.; .image == $image)) and
-        ([.status.initContainerStatuses[]?,.status.containerStatuses[]?] |
-          length == 3 and all(.; (.imageID // "") | endswith("@" + $digest)))
+        ([(.spec.initContainers[]? | select(.name == "workspace-init") | .image),
+          (.spec.containers[]? |
+            select(.name == "role-runtime" or .name == "provider-runtime") | .image)] |
+          length == 3 and all(. == $image)) and
+        ([(.status.initContainerStatuses[]? | select(.name == "workspace-init") | .imageID),
+          (.status.containerStatuses[]? |
+            select(.name == "role-runtime" or .name == "provider-runtime") | .imageID)] |
+          length == 3 and all(test("@sha256:[a-f0-9]{64}$")) and (unique | length == 1))
       )] |
     sort_by(.metadata.creationTimestamp) | last // empty
   '
@@ -149,7 +153,6 @@ sleep 1
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" launch
 
 promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
-manifest_digest=$(jq -er '.manifestDigest | select(test("^sha256:[a-f0-9]{64}$"))' "$state")
 deadline=$((SECONDS + timeout_seconds))
 pod_json=""
 while ((SECONDS < deadline)); do
