@@ -1,4 +1,9 @@
-import { type Frame, type Page, type Response } from "@playwright/test";
+import {
+  type Frame,
+  type Page,
+  type Request,
+  type Response,
+} from "@playwright/test";
 
 import { gotoWithRetry } from "./helpers";
 
@@ -202,6 +207,12 @@ async function startFrontendOIDCTransition(
       frontendOrigin,
     );
   };
+  const recordRequest = (request: Request): void => {
+    authenticationProgressObserved ||= isOIDCProgressRequest(
+      request,
+      frontendOrigin,
+    );
+  };
   const recordFailedResponse = (response: Response): void => {
     if (isOwnerSessionCreationResponse(response, frontendOrigin)) {
       ownerSessionStatuses.push(response.status());
@@ -210,6 +221,7 @@ async function startFrontendOIDCTransition(
     failedResponse = `${String(response.status())}:${response.request().method()}:${safeLocation(response.url())}`;
   };
   page.on("framenavigated", recordNavigation);
+  page.on("request", recordRequest);
   page.on("response", recordFailedResponse);
   try {
     await page
@@ -280,6 +292,7 @@ async function startFrontendOIDCTransition(
     );
   } finally {
     page.off("framenavigated", recordNavigation);
+    page.off("request", recordRequest);
     page.off("response", recordFailedResponse);
   }
 }
@@ -519,6 +532,30 @@ function isOIDCProgressLocation(raw: string, frontendOrigin: string): boolean {
     return (
       location.origin !== frontendOrigin ||
       location.pathname === "/auth/callback"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOIDCProgressRequest(
+  request: Request,
+  frontendOrigin: string,
+): boolean {
+  try {
+    const location = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      location.origin === frontendOrigin &&
+      location.pathname === "/api/v1/session"
+    ) {
+      return true;
+    }
+    return (
+      location.pathname.includes("/.well-known/") ||
+      location.pathname.includes("/protocol/openid-connect/") ||
+      location.pathname.endsWith("/authorize") ||
+      location.pathname.endsWith("/token")
     );
   } catch {
     return false;
