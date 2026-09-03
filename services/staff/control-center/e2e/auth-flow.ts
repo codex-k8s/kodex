@@ -246,6 +246,7 @@ async function startFrontendOIDCTransition(
         return surface;
       }
       if (
+        !authenticationProgressObserved &&
         Date.now() >= blankCallbackDeadline &&
         new URL(page.url()).pathname === "/auth/callback" &&
         (await hasBlankApplicationDocument(page, frontendOrigin))
