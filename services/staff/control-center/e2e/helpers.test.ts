@@ -3,8 +3,24 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   readJsonWithNetworkRetry,
+  retryableProviderResult,
   retryReadOnlyBrowserAction,
 } from "./helpers";
+
+describe("повтор временного сбоя провайдера системного помощника", () => {
+  test.each(["RUNTIME_PROVIDER_UNAVAILABLE", "RUNTIMEPROVIDERUNAVAILABLE"])(
+    "распознаёт %s после нормализации UI",
+    (renderedResult) => {
+      expect(retryableProviderResult(renderedResult)).toBe(
+        "RUNTIME_PROVIDER_UNAVAILABLE",
+      );
+    },
+  );
+
+  test("не повторяет неизвестную терминальную ошибку", () => {
+    expect(retryableProviderResult("RUNTIME_EXECUTION_FAILED")).toBeUndefined();
+  });
+});
 
 describe("read-only JSON readback в браузере", () => {
   test("повторяет только временный сетевой сбой", async () => {

@@ -38,6 +38,40 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	}
 }
 
+func TestTurnStartedNotificationMayPrecedeTurnResponse(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	state.result.SessionID = testThreadID
+
+	started := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` +
+		testTurnID + `","items":[],"status":"inProgress"}}`)
+	if err := state.notification("turn/started", started); err != nil {
+		t.Fatalf("early turn start notification rejected: %v", err)
+	}
+	if err := state.bindTurn(raw(`{"turn":{"id":"` + testTurnID + `","items":[],"status":"inProgress"}}`)); err != nil {
+		t.Fatalf("turn response after notification rejected: %v", err)
+	}
+	if state.turnID != testTurnID || state.turnStarted != 1 {
+		t.Fatalf("turn identity was not bound exactly once: %#v", state)
+	}
+}
+
+func TestTurnStartOrderingRejectsIdentityMismatch(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	state.result.SessionID = testThreadID
+	otherTurnID := "01980000-0000-7000-8000-000000000099"
+
+	started := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` +
+		testTurnID + `","items":[],"status":"inProgress"}}`)
+	if err := state.notification("turn/started", started); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.bindTurn(raw(`{"turn":{"id":"` + otherTurnID + `","items":[],"status":"inProgress"}}`)); err == nil {
+		t.Fatal("mismatched turn response was accepted")
+	}
+}
+
 func TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.workspaceRoot = "/workspace"

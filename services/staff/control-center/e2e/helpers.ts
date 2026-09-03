@@ -1,9 +1,29 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+const retryableProviderTurnResults = new Map([
+  ["RUNTIMEPROVIDERUNAVAILABLE", "RUNTIME_PROVIDER_UNAVAILABLE"],
+  ["PROVIDERRESULTUNVERIFIABLE", "i18n:PROVIDER_RESULT_UNVERIFIABLE"],
+  ["PROVIDERRESULTUNKNOWN", "i18n:PROVIDER_RESULT_UNKNOWN"],
+  [
+    "PROVIDERRESPONSEINVALIDPROVIDERRESULTUNVERIFIABLE",
+    "PROVIDER_RESPONSE_INVALID / i18n:PROVIDER_RESULT_UNVERIFIABLE",
+  ],
+]);
+
 export type BrowserJsonReadback<T> = {
   readonly body: T;
   readonly status: number;
 };
+
+export function retryableProviderResult(
+  renderedResult: string,
+): string | undefined {
+  const normalized = renderedResult
+    .normalize("NFKC")
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase();
+  return retryableProviderTurnResults.get(normalized);
+}
 
 export async function readJsonWithNetworkRetry<T>(
   page: Page,

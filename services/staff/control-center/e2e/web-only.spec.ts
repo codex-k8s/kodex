@@ -30,6 +30,7 @@ import {
   launchAgent,
   publishAgent,
   readJsonWithNetworkRetry,
+  retryableProviderResult,
   retryReadOnlyBrowserAction,
   routeRef,
   waitForConnected,
@@ -59,15 +60,6 @@ const runtimeOverlay = [
   'persistence = "none"',
 ].join("\n");
 const accessRoleName = `${environment.resourcePrefix} — точечный запуск сотрудника`;
-const retryableProviderTurnResults = new Map([
-  ["PROVIDERRESULTUNVERIFIABLE", "i18n:PROVIDER_RESULT_UNVERIFIABLE"],
-  ["PROVIDERRESULTUNKNOWN", "i18n:PROVIDER_RESULT_UNKNOWN"],
-  [
-    "PROVIDERRESPONSEINVALIDPROVIDERRESULTUNVERIFIABLE",
-    "PROVIDER_RESPONSE_INVALID / i18n:PROVIDER_RESULT_UNVERIFIABLE",
-  ],
-]);
-
 const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
 let coordinatorRef = initialRefs.coordinatorRef ?? "";
@@ -268,14 +260,6 @@ async function waitForAssistantPlanAttempt(
   throw new Error(
     `System assistant did not produce a terminal turn or plan containing ${expectedText}`,
   );
-}
-
-function retryableProviderResult(renderedResult: string): string | undefined {
-  const normalized = renderedResult
-    .normalize("NFKC")
-    .replace(/[^A-Za-z]/g, "")
-    .toUpperCase();
-  return retryableProviderTurnResults.get(normalized);
 }
 
 async function applyLatestKodexPlan(

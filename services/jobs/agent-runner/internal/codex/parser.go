@@ -293,7 +293,8 @@ func (state *protocolState) bindTurn(raw json.RawMessage) error {
 		return errors.New("Codex app-server turn response is invalid")
 	}
 	turn, err := parseTurn(fields["turn"])
-	if err != nil || turn.status != "inProgress" || turn.errorValue != nil || state.turnID != "" {
+	if err != nil || turn.status != "inProgress" || turn.errorValue != nil ||
+		(state.turnID != "" && state.turnID != turn.id) {
 		return errors.New("Codex app-server turn start is invalid")
 	}
 	state.turnID = turn.id
@@ -319,10 +320,12 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		fields, _ := decodeObject(raw, notificationSchema(method))
 		threadID, err := decodeBoundedString(fields["threadId"], 128)
 		turn, turnErr := parseTurn(fields["turn"])
-		if err != nil || turnErr != nil || threadID != state.threadID || turn.id != state.turnID ||
+		if err != nil || turnErr != nil || threadID != state.threadID ||
+			(state.turnID != "" && turn.id != state.turnID) ||
 			turn.status != "inProgress" || state.turnStarted != 0 {
 			return errors.New("Codex app-server turn started notification is invalid")
 		}
+		state.turnID = turn.id
 		state.turnStarted++
 		return state.consumeItems(turn.items, false, 0)
 	case "mcpServer/startupStatus/updated":
