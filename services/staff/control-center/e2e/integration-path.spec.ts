@@ -788,15 +788,17 @@ async function waitForOpenGate(page: Page, runRef: string): Promise<OwnerGate> {
   await expect
     .poll(
       async () => {
-        const run = await readAPI<Run>(
+        const run = await readAPIDuringPoll<Run>(
           page,
           `/api/v1/runs/${encodeURIComponent(runRef)}`,
         );
+        if (!run) return false;
         for (const gateRef of run.gateRefs) {
-          const candidate = await readAPI<OwnerGate>(
+          const candidate = await readAPIDuringPoll<OwnerGate>(
             page,
             `/api/v1/owner-gates/${encodeURIComponent(gateRef)}`,
           );
+          if (!candidate) return false;
           if (candidate.runRef === runRef && candidate.state === "OPEN") {
             gate = candidate;
             return true;
@@ -835,10 +837,12 @@ async function waitForTerminalRun(
   await expect
     .poll(
       async () => {
-        current = await readAPI<Run>(
+        const observed = await readAPIDuringPoll<Run>(
           page,
           `/api/v1/runs/${encodeURIComponent(runRef)}`,
         );
+        if (!observed) return "PENDING";
+        current = observed;
         return terminalStates.has(current.state) ? current.state : "PENDING";
       },
       { timeout: environment.runTimeoutMs, intervals: [500, 1_000, 2_000] },

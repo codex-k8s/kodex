@@ -29,6 +29,7 @@ const (
 	githubAPIBaseURL            = "https://api.github.com/"
 	syntheticServiceHost        = "integration-synthetic.kodex-system.svc.cluster.local"
 	exactCredentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
+	credentialReadRetryInterval = 250 * time.Millisecond
 )
 
 type Config struct {
@@ -199,7 +200,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	case "SYNTHETIC_HTTP":
 		_, err = adapter.callSynthetic(ctx, http.MethodGet, "/v1/journals/"+url.PathEscape(configuration["journal"]), "", nil)
 	case "GITHUB":
-		client, cleanup, clientErr := adapter.githubClient(request.Credential)
+		client, cleanup, clientErr := adapter.githubClient(ctx, request.Credential)
 		if clientErr != nil {
 			return "", clientErr
 		}
@@ -380,7 +381,7 @@ func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectK
 }
 
 func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
-	client, cleanup, err := adapter.githubClient(request.Credential)
+	client, cleanup, err := adapter.githubClient(ctx, request.Credential)
 	if err != nil {
 		return Result{}, err
 	}
@@ -491,8 +492,8 @@ func githubIssueResult(issue *github.Issue, request Request) (Result, error) {
 	return successfulResult(string(summary), request, "github-issue:"+strconv.Itoa(issue.GetNumber())), nil
 }
 
-func (adapter *Adapter) githubClient(credential *CredentialRevision) (*github.Client, func(), error) {
-	value, err := adapter.readCredential(credential)
+func (adapter *Adapter) githubClient(ctx context.Context, credential *CredentialRevision) (*github.Client, func(), error) {
+	value, err := adapter.readCredential(ctx, credential)
 	if err != nil {
 		return nil, func() {}, err
 	}
@@ -501,24 +502,34 @@ func (adapter *Adapter) githubClient(credential *CredentialRevision) (*github.Cl
 	return client, func() { clear(value) }, nil
 }
 
-func (adapter *Adapter) readCredential(credential *CredentialRevision) ([]byte, error) {
+func (adapter *Adapter) readCredential(ctx context.Context, credential *CredentialRevision) ([]byte, error) {
 	if credential == nil || credential.Ref == "" || credential.Revision < 1 || uuid.Validate(credential.SecretUID) != nil ||
 		credential.SecretResourceVersion == "" || len(credential.SecretResourceVersion) > 128 ||
 		len(credential.ContentSHA256) != sha256.Size*2 || !strings.HasPrefix(credential.SecretRef, exactCredentialSecretPrefix) {
 		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	key := strings.TrimPrefix(credential.SecretRef, exactCredentialSecretPrefix)
-	value, err := adapter.credentials.ReadKey(key)
-	if err != nil {
-		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+	for {
+		value, err := adapter.credentials.ReadKey(key)
+		if err == nil {
+			value = bytes.TrimSpace(value)
+			digest := sha256.Sum256(value)
+			if len(value) == 0 || hex.EncodeToString(digest[:]) != credential.ContentSHA256 {
+				clear(value)
+				return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+			}
+			return value, nil
+		}
+		timer := time.NewTimer(credentialReadRetryInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+		case <-timer.C:
+		}
 	}
-	value = bytes.TrimSpace(value)
-	digest := sha256.Sum256(value)
-	if len(value) == 0 || hex.EncodeToString(digest[:]) != credential.ContentSHA256 {
-		clear(value)
-		return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
-	}
-	return value, nil
 }
 
 func successfulResult(summary string, request Request, providerRef string) Result {
