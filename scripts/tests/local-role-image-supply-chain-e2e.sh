@@ -97,8 +97,14 @@ KODEX_E2E_BASE_URL="${base_url%/}" \
   fail 'authenticated owner storage state was not created'
 
 api_storage_state=$(mktemp "$state_directory/e2e/$resource_prefix-owner-api.XXXXXX.json")
+pod_watch_file=""
+pod_watch_pid=""
 cleanup() {
-  rm -f -- "$api_storage_state"
+  if [[ -n "$pod_watch_pid" ]]; then
+    kill "$pod_watch_pid" >/dev/null 2>&1 || true
+    wait "$pod_watch_pid" >/dev/null 2>&1 || true
+  fi
+  rm -f -- "$api_storage_state" ${pod_watch_file:+"$pod_watch_file"}
 }
 trap cleanup EXIT
 KODEX_E2E_BASE_URL="${base_url%/}" \
@@ -118,18 +124,9 @@ common_environment=(
 )
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" prepare
 
-before_pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json |
-  jq -c '[.items[].metadata.uid]')
-env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" launch
-
-promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
-manifest_digest=$(jq -er '.manifestDigest | select(test("^sha256:[a-f0-9]{64}$"))' "$state")
-deadline=$((SECONDS + timeout_seconds))
-pod_json=""
-while ((SECONDS < deadline)); do
-  pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json)
-  pod_json=$(jq -c --argjson before "$before_pods" --arg image "$promoted_reference" --arg digest "$manifest_digest" '
-    [.items[] |
+select_exact_runtime_pod() {
+  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" --arg digest "$manifest_digest" '
+    [.[] |
       select((.metadata.uid as $uid | $before | index($uid)) == null) |
       select(
         ([.spec.initContainers[]?,.spec.containers[]?] |
@@ -138,10 +135,36 @@ while ((SECONDS < deadline)); do
           length == 3 and all(.; (.imageID // "") | endswith("@" + $digest)))
       )] |
     sort_by(.metadata.creationTimestamp) | last // empty
-  ' <<<"$pods")
+  '
+}
+
+before_pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json |
+  jq -c '[.items[].metadata.uid]')
+pod_watch_file=$(mktemp "$state.XXXXXX.pod-watch.json")
+chmod 0600 "$pod_watch_file"
+kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
+  --watch --output-watch-events -o json >"$pod_watch_file" 2>/dev/null &
+pod_watch_pid=$!
+sleep 1
+env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" launch
+
+promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
+manifest_digest=$(jq -er '.manifestDigest | select(test("^sha256:[a-f0-9]{64}$"))' "$state")
+deadline=$((SECONDS + timeout_seconds))
+pod_json=""
+while ((SECONDS < deadline)); do
+  pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json)
+  pod_json=$(jq -c '.items' <<<"$pods" | select_exact_runtime_pod)
+  if [[ -z "$pod_json" ]]; then
+    pod_json=$(jq -cs '[.[] | .object // .]' "$pod_watch_file" 2>/dev/null |
+      select_exact_runtime_pod 2>/dev/null || true)
+  fi
   [[ -z "$pod_json" ]] || break
   sleep 1
 done
+kill "$pod_watch_pid" >/dev/null 2>&1 || true
+wait "$pod_watch_pid" >/dev/null 2>&1 || true
+pod_watch_pid=""
 if [[ -z "$pod_json" ]]; then
   kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
     -o custom-columns=NAME:.metadata.name,PHASE:.status.phase --no-headers >&2 || true
