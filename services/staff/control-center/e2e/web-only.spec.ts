@@ -39,6 +39,7 @@ import {
 } from "./helpers";
 
 const environment = loadE2EEnvironment();
+const assistantTurnTimeoutMs = Math.min(environment.runTimeoutMs, 600_000);
 const execFileAsync = promisify(execFile);
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 const coordinatorName = `${environment.resourcePrefix} — координатор продаж`;
@@ -141,6 +142,7 @@ async function requestLatestKodexPlan(
   });
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptDeadline = Date.now() + assistantTurnTimeoutMs;
     const knownUserTurnRefs = new Set(
       await dialog
         .locator("article.assistant-message--user[data-turn-ref]")
@@ -193,13 +195,14 @@ async function requestLatestKodexPlan(
       `article.assistant-message--assistant[data-turn-sequence="${String(userTurnSequence + 1)}"]`,
     );
     await expect(currentAssistantMessage).toHaveCount(1, {
-      timeout: 120_000,
+      timeout: remainingAssistantTimeout(attemptDeadline),
     });
 
     const outcome = await waitForAssistantPlanAttempt(
       page,
       currentAssistantMessage,
       expectedText,
+      attemptDeadline,
     );
     if (outcome.planCard) return outcome.planCard;
 
@@ -228,8 +231,8 @@ async function waitForAssistantPlanAttempt(
   page: Page,
   assistantMessage: Locator,
   expectedText: string,
+  deadline: number,
 ): Promise<{ failedResult?: string; planCard?: Locator }> {
-  const deadline = Date.now() + 120_000;
   const matchingPlan = assistantMessage
     .locator(".assistant-plan-card")
     .filter({ hasText: expectedText })
@@ -261,6 +264,10 @@ async function waitForAssistantPlanAttempt(
   throw new Error(
     `System assistant did not produce a terminal turn or plan containing ${expectedText}`,
   );
+}
+
+function remainingAssistantTimeout(deadline: number): number {
+  return Math.max(1, deadline - Date.now());
 }
 
 async function applyLatestKodexPlan(
