@@ -821,6 +821,8 @@ patch_go_job() {
 }
 
 patch_go_container Deployment control-plane control-plane services/internal/control-plane ./cmd/control-plane
+patch_go_container Deployment control-plane internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment control-plane control-plane-platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment control-plane internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
 patch_go_container Deployment secret-broker secret-broker services/internal/secret-broker ./cmd/secret-broker
 patch_go_container Deployment secret-broker internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
@@ -1180,6 +1182,20 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
 ' >/dev/null || fail 'local Control API direct Ingress transport is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    . as $deployment |
+    $deployment.kind == "Deployment" and $deployment.metadata.name == "control-plane" and
+    all(
+      "internal-rpc-authority-issuer",
+      "control-plane-platform-worker-grant-agent",
+      "internal-rpc-authority-verifier";
+      . as $containerName |
+      any($deployment.spec.template.spec.containers[]?;
+        .name == $containerName and
+        .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
+        .image == "docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83")))
+' >/dev/null || fail 'Control Plane authority sidecars do not share the hot-reload source revision'
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
   any(.[];
     .kind == "Deployment" and .metadata.name == "secret-broker" and

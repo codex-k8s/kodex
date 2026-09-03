@@ -63,7 +63,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME" and
         .value == "secret-broker.kodex-system.svc.cluster.local") and
       any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET" and
-        .value == "dns:///control-plane.kodex-system.svc:8443") and
+        .value == "dns:///127.0.0.1:8443") and
       any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME" and
         .value == "control-plane.kodex-system.svc.cluster.local")) and
     any(.spec.template.spec.containers[];

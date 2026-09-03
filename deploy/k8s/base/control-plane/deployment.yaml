@@ -160,7 +160,7 @@ spec:
               value: /var/run/config/kodex/control-plane/application-grants/secret-broker.platform-worker.public.jwk
             - {name: CONTROL_PLANE_SECRET_BROKER_TARGET, value: "dns:///secret-broker.kodex-system.svc:8443"}
             - {name: CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME, value: secret-broker.kodex-system.svc.cluster.local}
-            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET, value: "dns:///control-plane.kodex-system.svc:8443"}
+            - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET, value: "dns:///127.0.0.1:8443"}
             - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME, value: control-plane.kodex-system.svc.cluster.local}
             - {name: CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_CA_FILE, value: /var/run/config/kodex/control-plane/internal-ca/ca.pem}
           ports:

@@ -15,6 +15,40 @@ const environment = loadE2EEnvironment();
 const execFileAsync = promisify(execFile);
 const terminalStates = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
+function execFileWithInput(
+  file: string,
+  args: readonly string[],
+  input: string,
+  options: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly maxBuffer: number;
+    readonly timeout: number;
+  },
+): Promise<{ readonly stderr: string; readonly stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      file,
+      [...args],
+      { ...options, encoding: "utf8" },
+      (error, stdout, stderr) => {
+        if (error) {
+          const rejection = new Error(error.message, { cause: error });
+          Object.assign(rejection, { stderr, stdout });
+          reject(rejection);
+          return;
+        }
+        resolve({ stderr, stdout });
+      },
+    );
+    if (child.stdin === null) {
+      child.kill();
+      reject(new Error("child process stdin is unavailable"));
+      return;
+    }
+    child.stdin.end(input);
+  });
+}
+
 interface VersionedRef {
   readonly ref: string;
   readonly version: number;
@@ -1243,7 +1277,7 @@ async function verifyProviderCredentialCleanup(
     "ORDER BY task.created_at, task.id;",
     "COMMIT;",
   ].join("\n");
-  const result = await execFileAsync(
+  const result = await execFileWithInput(
     "kubectl",
     [
       "--context",
@@ -1265,9 +1299,10 @@ async function verifyProviderCredentialCleanup(
       "control_plane",
       "-v",
       `account_ref=${accountRef}`,
-      "-c",
-      query,
+      "-f",
+      "-",
     ],
+    `${query}\n`,
     { env: childEnvironment, timeout: 30_000, maxBuffer: 64 << 10 },
   );
   const tasks = result.stdout
