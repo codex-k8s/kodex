@@ -77,9 +77,7 @@ const instructionValidationMessages = computed(
   () => agent.value?.draftInstructions?.validationMessages ?? [],
 );
 
-const activeTab = ref<AgentDetailTab>(
-  agentDetailTabFromQuery(route.query.tab),
-);
+const activeTab = ref<AgentDetailTab>(agentDetailTabFromQuery(route.query.tab));
 const profileDraft = ref<AgentProfileDraft>({
   name: "",
   purpose: "",
