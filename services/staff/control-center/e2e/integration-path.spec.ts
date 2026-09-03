@@ -67,6 +67,7 @@ interface ProviderAccount extends VersionedRef {
   readonly enabled: boolean;
   readonly externalAccountMasked: string;
   readonly name: string;
+  readonly nextActions: readonly string[];
   readonly ready: boolean;
   readonly state: string;
 }
@@ -502,6 +503,12 @@ test.describe("deployed local integration path", () => {
         enabled: false,
         state: "PENDING_AUTHORIZATION",
       });
+      expect(account.nextActions).toContain("CONFIGURE_CREDENTIAL");
+      const accountReadback = await readAPI<ProviderAccount>(
+        page,
+        `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
+      );
+      expect(accountReadback.nextActions).toContain("CONFIGURE_CREDENTIAL");
 
       const authorizationDialog = page.getByRole("dialog", {
         name: new RegExp(`Авторизация: ${escapeRegExp(account.name)}`),
@@ -519,8 +526,9 @@ test.describe("deployed local integration path", () => {
         .click();
       apiKey = undefined;
       const authorized = await authorizationResponse;
-      expect(authorized.status()).toBe(200);
-      account = (await authorized.json()) as ProviderAccount;
+      const authorizedPayload = (await authorized.json()) as ProviderAccount;
+      expect(authorized.status(), JSON.stringify(authorizedPayload)).toBe(200);
+      account = authorizedPayload;
       expect(account).toMatchObject({
         authorization: { method: "API_KEY", state: "AUTHORIZED" },
         enabled: true,
