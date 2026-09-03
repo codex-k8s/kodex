@@ -360,7 +360,13 @@ func RunPublisher(
 			)
 			if graphErr != nil || publishErr != nil || readyErr != nil {
 				if readiness.Set(false, "readback-publication-failed") {
-					logger.Error("authority publisher reconciliation unavailable", "error_class", "postgresql_or_delivery")
+					logger.Error(
+						"authority publisher reconciliation unavailable",
+						"error_class", "postgresql_or_delivery",
+						"graph_failed", graphErr != nil,
+						"readback_failed", publishErr != nil,
+						"readiness_failed", readyErr != nil,
+					)
 				}
 				metrics.SetReady(false)
 			} else {
