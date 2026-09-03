@@ -543,6 +543,7 @@ test.describe("deployed local integration path", () => {
         ),
       ).toBeVisible();
       await authorizationDialog
+        .locator(".modal__footer")
         .getByRole("button", { name: "Закрыть", exact: true })
         .click();
 
