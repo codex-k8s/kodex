@@ -79,7 +79,7 @@ func (service *Service) StartProviderAccountDeviceAuthorization(
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
 	}
-	result, err := service.Execute(ctx, command.Command{
+	result, err := service.executeResolved(ctx, command.Command{
 		Kind: command.StartProviderDeviceAuth, Principal: principal, Mutation: mutation,
 		Payload: command.ProviderAccountInput{
 			AccountRef: accountRef, AuthorizationRef: attemptRef, AuthorizationMethod: "DEVICE_CODE",
@@ -125,7 +125,7 @@ func (service *Service) AuthorizeProviderAccountAPIKey(
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
 	}
-	result, err := service.Execute(ctx, command.Command{
+	result, err := service.executeResolved(ctx, command.Command{
 		Kind: command.AuthorizeProviderAPIKey, Principal: principal, Mutation: mutation,
 		Payload: command.ProviderAccountInput{
 			AccountRef: accountRef, AuthorizationRef: attemptRef, AuthorizationMethod: "API_KEY",
@@ -191,7 +191,7 @@ func (service *Service) RefreshProviderAccountAuthorization(
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
 	}
-	result, err := service.Execute(ctx, command.Command{
+	result, err := service.executeResolved(ctx, command.Command{
 		Kind: command.RefreshProviderAuthorization, Principal: principal, Mutation: mutation,
 		Payload: command.ProviderAccountInput{
 			AccountRef: accountRef, AuthorizationRef: account.Authorization.Ref,

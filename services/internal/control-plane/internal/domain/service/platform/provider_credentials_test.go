@@ -22,10 +22,12 @@ type providerFailureRepository struct {
 	referenced      bool
 	referenceErr    error
 	referenceChecks int
+	resolveCalls    int
 	executed        command.Command
 }
 
 func (repository *providerFailureRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {
+	repository.resolveCalls++
 	return principal, nil
 }
 
@@ -99,8 +101,9 @@ func TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure
 			t.Fatalf("attempt %d error = %v", attempt+1, err)
 		}
 	}
-	if materializer.apiCalls != 2 || len(materializer.discards) != 0 || repository.referenceChecks != 2 {
-		t.Fatalf("materialize/discard calls = %d/%d", materializer.apiCalls, len(materializer.discards))
+	if materializer.apiCalls != 2 || len(materializer.discards) != 0 || repository.referenceChecks != 2 || repository.resolveCalls != 2 {
+		t.Fatalf("materialize/discard/reference/resolve calls = %d/%d/%d/%d",
+			materializer.apiCalls, len(materializer.discards), repository.referenceChecks, repository.resolveCalls)
 	}
 }
 
@@ -123,8 +126,9 @@ func TestProviderAPIKeyCompensatesOnlyAfterAuthoritativeNonReference(t *testing.
 	const rawAPIKey = "sk-synthetic-provider-key"
 	_, err = service.AuthorizeProviderAccountAPIKey(context.Background(), providerTestPrincipal(), mutation,
 		repository.account.Ref, []byte(rawAPIKey))
-	if !errors.Is(err, errProviderOwnerCommit) || len(materializer.discards) != 1 || repository.referenceChecks != 1 {
-		t.Fatalf("error/discards/reference checks = %v/%#v/%d", err, materializer.discards, repository.referenceChecks)
+	if !errors.Is(err, errProviderOwnerCommit) || len(materializer.discards) != 1 || repository.referenceChecks != 1 || repository.resolveCalls != 1 {
+		t.Fatalf("error/discards/reference/resolve checks = %v/%#v/%d/%d",
+			err, materializer.discards, repository.referenceChecks, repository.resolveCalls)
 	}
 	payload, ok := repository.executed.Payload.(command.ProviderAccountInput)
 	if !ok || payload.Credential == nil || strings.Contains(err.Error(), rawAPIKey) ||
@@ -153,8 +157,8 @@ func TestProviderDeviceAuthorizationCompensatesExactAttemptAfterAuthoritativeNon
 	service, _ := New(repository, WithProviderCredentialMaterializer(materializer))
 	mutation := value.Mutation{IdempotencyKey: "provider-device-retry", ExpectedVersion: &version}
 	_, err := service.StartProviderAccountDeviceAuthorization(context.Background(), providerTestPrincipal(), mutation, repository.account.Ref)
-	if !errors.Is(err, errProviderOwnerCommit) || len(materializer.discards) != 1 {
-		t.Fatalf("error/discards = %v/%#v", err, materializer.discards)
+	if !errors.Is(err, errProviderOwnerCommit) || len(materializer.discards) != 1 || repository.resolveCalls != 1 {
+		t.Fatalf("error/discards/resolve calls = %v/%#v/%d", err, materializer.discards, repository.resolveCalls)
 	}
 	discard := materializer.discards[0]
 	if discard.AttemptRef == "" || discard.AccountRef != repository.account.Ref ||
@@ -185,8 +189,9 @@ func TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable(
 	if !errors.Is(err, errProviderOwnerCommit) || !errors.Is(err, errs.ErrUnavailable) {
 		t.Fatalf("unexpected ambiguous commit/readback error: %v", err)
 	}
-	if len(materializer.discards) != 0 || repository.referenceChecks != 1 {
-		t.Fatalf("ambiguous readback discarded materialization: %#v", materializer.discards)
+	if len(materializer.discards) != 0 || repository.referenceChecks != 1 || repository.resolveCalls != 1 {
+		t.Fatalf("ambiguous readback discarded materialization or repeated principal resolution: %#v/%d",
+			materializer.discards, repository.resolveCalls)
 	}
 }
 
@@ -215,8 +220,9 @@ func TestProviderRefreshKeepsObservedCredentialAfterAmbiguousOwnerCommitFailure(
 	if !errors.Is(err, errProviderOwnerCommit) {
 		t.Fatalf("refresh error = %v", err)
 	}
-	if len(materializer.discards) != 0 || repository.referenceChecks != 0 {
-		t.Fatalf("ambiguous refresh discarded observed materialization: %#v", materializer.discards)
+	if len(materializer.discards) != 0 || repository.referenceChecks != 0 || repository.resolveCalls != 1 {
+		t.Fatalf("ambiguous refresh discarded observed materialization or repeated principal resolution: %#v/%d",
+			materializer.discards, repository.resolveCalls)
 	}
 	payload, ok := repository.executed.Payload.(command.ProviderAccountInput)
 	if !ok || payload.Credential == nil || *payload.Credential != descriptor {
