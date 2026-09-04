@@ -16,13 +16,13 @@ spec:
           annotations:
             summary: Integration gateway reconciliation is failing
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
-        - alert: IntegrationGatewayClaimBacklog
-          expr: kodex_integration_gateway_tracked_claims > 200
-          for: 10m
+        - alert: IntegrationGatewayUnknownOutcome
+          expr: increase(kodex_integration_gateway_operations_total{outcome="unknown"}[10m]) > 0
+          for: 1m
           labels:
             severity: warning
           annotations:
-            summary: Integration gateway transient claim tracking is near its bound
+            summary: Integration provider effect requires reconciliation or owner decision
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/integration-gateway.md
         - alert: IntegrationGatewayProtectedPathUnavailable
           expr: kodex_integration_gateway_readiness{ready="false"} == 1

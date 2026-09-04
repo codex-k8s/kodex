@@ -3,6 +3,10 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/workers_schedule_event_scope.sql
+	queryWorkersScheduleEventScope string
+	//go:embed sql/workers_schedule_clock.sql
+	queryWorkersScheduleClock string
 	//go:embed sql/workers_reconcilewarmruntime_lock_session_binding.sql
 	queryWorkersReconcilewarmruntimeLockSessionBinding string
 	//go:embed sql/workers_reconcilewarmruntime_select_system_provider_policy.sql
@@ -33,6 +37,8 @@ var (
 	queryWorkersClaimdueschedulesUpdateSchedulesNextRunAt string
 	//go:embed sql/workers_claimdueschedules_insert_schedule_occurrences_ref_schedule_id_state.sql
 	queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState string
+	//go:embed sql/workers_claimdueschedules_insert_attempt.sql
+	queryWorkersClaimdueschedulesInsertAttempt string
 	//go:embed sql/workers_changeoccurrence_select_schedule_occurrences_organization_id_ref_lease_ref.sql
 	queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef string
 	//go:embed sql/workers_changeoccurrence_select_schedules_id.sql
@@ -41,6 +47,14 @@ var (
 	queryWorkersChangeoccurrenceSelectRunsRef string
 	//go:embed sql/workers_changeoccurrence_update_schedule_occurrences_state_run_id_version.sql
 	queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion string
+	//go:embed sql/workers_schedule_attempt_finish.sql
+	queryWorkersScheduleAttemptFinish string
+	//go:embed sql/workers_schedule_occurrence_fail.sql
+	queryWorkersScheduleOccurrenceFail string
+	//go:embed sql/workers_schedule_occurrence_renew.sql
+	queryWorkersScheduleOccurrenceRenew string
+	//go:embed sql/workers_schedule_occurrence_expire_dead_letter.sql
+	queryWorkersScheduleOccurrenceExpireDeadLetter string
 	//go:embed sql/workers_claimintegrationtests_expire_stale_test_leases.sql
 	queryWorkersClaimintegrationtestsExpireStaleTestLeases string
 	//go:embed sql/workers_claimintegrationtests_select_integration_connection_tests_organization_id_state.sql

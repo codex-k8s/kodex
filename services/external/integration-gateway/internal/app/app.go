@@ -15,6 +15,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"
+	businessmetrics "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/observability/metrics"
 	"github.com/google/uuid"
 )
 
@@ -40,6 +41,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	logger := telemetry.Logger(os.Stdout)
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
+	business, err := businessmetrics.New(metrics)
+	if err != nil {
+		return err
+	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
@@ -70,7 +75,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorLocalReadiness(control, readiness, metrics, logger, config), runIntegrationLoop(control, adapter, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorLocalReadiness(control, readiness, metrics, logger, config), runIntegrationLoop(control, adapter, business, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -126,14 +131,15 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 	}
 }
 
-func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
-			cycle, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-			processed, err := processIntegrationWork(cycle, control, adapter, config)
+			cycle, cancel := context.WithTimeout(ctx, 2*config.OperationTimeout+4*config.RequestTimeout)
+			processed, err := processIntegrationWork(cycle, control, adapter, metrics, config)
 			cancel()
+			metrics.Cycle(err)
 			if err != nil && !degraded {
 				degraded = true
 				logger.WarnContext(ctx, "integration work delivery degraded", "error_class", "control_plane_or_adapter")
@@ -154,14 +160,17 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 	}
 }
 
-func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, config Config) (int, error) {
+func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, config Config) (int, error) {
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
 		return 0, err
 	}
 	processed := 0
 	for _, claim := range tests.GetClaims() {
-		result, operationErr := adapter.Test(ctx, integration.RequestFromTest(claim))
+		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
+		result, operationErr := adapter.Test(operation, integration.RequestFromTest(claim))
+		cancel()
+		metrics.Operation(true, operationErr == nil, false)
 		if err := completeTest(ctx, control, claim, result, operationErr); err != nil {
 			return processed, err
 		}
@@ -172,7 +181,13 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		return processed, err
 	}
 	for _, claim := range invocations.GetClaims() {
-		result, operationErr := adapter.Execute(ctx, integration.RequestFromInvocation(claim))
+		if claim.GetLease().GetExpiresAt().AsTime().Before(time.Now().Add(config.OperationTimeout + config.RequestTimeout)) {
+			return processed, errors.New("integration lease budget is insufficient")
+		}
+		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
+		result, operationErr := adapter.Execute(operation, integration.RequestFromInvocation(claim))
+		cancel()
+		metrics.Operation(false, operationErr == nil, integration.IsUnknownOutcome(operationErr))
 		if err := completeInvocation(ctx, control, claim, result, operationErr); err != nil {
 			return processed, err
 		}
@@ -200,7 +215,7 @@ func completeInvocation(ctx context.Context, control *controlplaneclient.Client,
 	request := &controlplanev1.CompleteIntegrationInvocationRequest{
 		Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetInvocationRef(), "complete")},
 		InvocationRef: claim.GetInvocationRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(),
-		Generation: lease.GetGeneration(), Success: success, ResultSummary: result.Summary, SafeErrorCode: code,
+		Generation: lease.GetGeneration(), Success: success, UnknownOutcome: integration.IsUnknownOutcome(operationErr), ResultSummary: result.Summary, SafeErrorCode: code,
 	}
 	if success {
 		request.EffectReceipt = &controlplanev1.IntegrationEffectReceipt{

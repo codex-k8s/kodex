@@ -30,6 +30,9 @@
         "description",
         "category",
         "adapter",
+        "adapterOwner",
+        "executionRoute",
+        "readiness",
         "configurationFields",
         "networkDestinations",
         "healthCheck",
@@ -49,6 +52,15 @@
             "EMAIL_HTTPS",
             "MATTERMOST_INTERACTION"
           ]
+        },
+        "adapterOwner": {
+          "enum": ["integration-gateway", "interaction-gateway"]
+        },
+        "executionRoute": {
+          "enum": ["MANAGED_MCP", "INTERACTION"]
+        },
+        "readiness": {
+          "enum": ["READY", "NOT_READY"]
         },
         "credential": { "$ref": "#/$defs/credential" },
         "configurationFields": {

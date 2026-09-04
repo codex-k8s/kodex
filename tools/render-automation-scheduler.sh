@@ -66,8 +66,8 @@ fi
 
 authority_placeholder='ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000'
 authority_replacement="$registry_pull_host/kodex/internal-rpc-authority@$authority_digest"
-if [[ $(grep -F -c "$authority_placeholder" "$raw_render" || true) -ne 2 ]]; then
-  echo "canonical render does not contain exactly two authority image inputs" >&2
+if [[ $(grep -F -c "$authority_placeholder" "$raw_render" || true) -ne 3 ]]; then
+  echo "canonical render does not contain exactly three authority image inputs" >&2
   exit 1
 fi
 

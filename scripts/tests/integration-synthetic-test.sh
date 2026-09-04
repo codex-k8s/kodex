@@ -28,7 +28,7 @@ yq -o=json -I=0 '.' "$local_render" | jq -s 'map(select(.kind != null))' >"$loca
 definition_json="$temporary_directory/synthetic-definition.json"
 yq -o=json -I=0 '.' "$repository_root/contracts/integrations/v1/definitions/synthetic.yaml" >"$definition_json"
 jq -e '
-  .metadata.version == "3.0.0" and
+  .metadata.version == "3.1.0" and
   (.spec.healthCheck.operation == "synthetic.journal.read") and
   any(.spec.capabilities[];
     .key == "synthetic.journal.write" and

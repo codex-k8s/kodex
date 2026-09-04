@@ -18,10 +18,11 @@ WITH suspended AS (
         fence_digest = NULL,
         workload_instance = NULL,
         lease_expires_at = NULL,
+        completed_at = clock_timestamp(),
         version = occurrence.version + 1,
         updated_at = clock_timestamp()
     WHERE occurrence.schedule_id IN (SELECT id FROM suspended)
-      AND occurrence.state IN ('DUE', 'CLAIMED')
+      AND occurrence.state IN ('DUE', 'CLAIMED', 'RETRY_WAIT', 'DEAD_LETTER')
     RETURNING occurrence.id
 )
 SELECT count(*), COALESCE(min(ref), '')

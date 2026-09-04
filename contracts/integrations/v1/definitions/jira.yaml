@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Jira
   description: Поиск и чтение задач, а также ограниченное создание, уточнение, комментарии и связи в одном проекте.
   category: work-management
   adapter: JIRA
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   credential: {secretKey: token, kind: TOKEN}
   configurationFields:
     - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
@@ -43,9 +46,11 @@ spec:
       inputFields:
         - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
         - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+        - {key: cursor, type: STRING, format: PLAIN, required: false, maximumLength: 2048}
       outputFields:
         - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
         - {key: issues, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: next_cursor, type: STRING, format: PLAIN, required: false, maximumLength: 2048}
       execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 300}
     - key: jira.issue.read
       name: Прочитать задачу

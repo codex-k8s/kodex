@@ -155,6 +155,22 @@ func TestCompleteFailureKeepsRuntimeUntilDurableCommit(t *testing.T) {
 	}
 }
 
+func TestWarmFileProjectionEligibilityFailsClosed(t *testing.T) {
+	if !warmFileProjectionEligible(runtimecontract.RunnerInput{}) {
+		t.Fatal("empty immutable file projection was rejected")
+	}
+	for name, input := range map[string]runtimecontract.RunnerInput{
+		"attachment set": {AttachmentSets: []runtimecontract.RunnerAttachmentSet{{Ref: "aset_abcdefgh"}}},
+		"artifact":       {InputArtifacts: []runtimecontract.RunnerInputArtifact{{Ref: "artifact_abcdefgh"}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if warmFileProjectionEligible(input) {
+				t.Fatal("warm runtime accepted a turn-specific file projection")
+			}
+		})
+	}
+}
+
 func trackingRuntime(client controlplanev1.RuntimeWorkServiceClient, turns turnLifecycle, coordinator *callback.Coordinator) *runtime {
 	capacity := make(chan struct{}, 1)
 	capacity <- struct{}{}

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"go.yaml.in/yaml/v3"
 )
@@ -61,6 +62,13 @@ func Validate(kind, format, content string) (string, []Diagnostic, error) {
 	if content == "" || len(content) > 256<<10 {
 		return "", []Diagnostic{{Code: "REVISION_CONTENT_INVALID", Message: "Revision content is empty or exceeds the size limit"}}, ErrInvalid
 	}
+	if kind == KindIntegrationDefinition {
+		definition, err := IntegrationPackage(format, content)
+		if err != nil {
+			return "", []Diagnostic{{Code: "REVISION_SEMANTICS_INVALID", Message: "Integration package is not registered and ready"}}, ErrInvalid
+		}
+		return definition.Digest, nil, nil
+	}
 	if kind == KindPromptTemplate && format == "TEXT" {
 		diagnostics := promptservice.Validate(content, promptservice.Catalog())
 		for _, diagnostic := range diagnostics {
@@ -83,12 +91,32 @@ func Validate(kind, format, content string) (string, []Diagnostic, error) {
 // IntegrationDefinitionKey возвращает server-validated stable key typed
 // definition; caller не может подменить его отдельным полем rebind-команды.
 func IntegrationDefinitionKey(format, content string) (string, error) {
-	var value document
-	if err := decodeStrict(strings.ToUpper(strings.TrimSpace(format)), strings.TrimSpace(content), &value); err != nil ||
-		validateDocument(KindIntegrationDefinition, value) != nil {
-		return "", ErrInvalid
+	definition, err := IntegrationPackage(format, content)
+	if err != nil {
+		return "", err
 	}
-	return value.Definition.Key, nil
+	return definition.Metadata.Key, nil
+}
+
+// UI закрепляет тот же versioned package, который поставлен с adapter.
+// Произвольный новый профиль требует поставки его исполняемого adapter path.
+func IntegrationPackage(format, content string) (integrationpackage.Package, error) {
+	if format != "JSON" && format != "YAML" {
+		return integrationpackage.Package{}, ErrInvalid
+	}
+	definition, err := integrationpackage.Parse([]byte(content))
+	if err != nil || !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+		return integrationpackage.Package{}, ErrInvalid
+	}
+	registered, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return integrationpackage.Package{}, ErrInvalid
+	}
+	profile, ok := registered[definition.Metadata.Key]
+	if !ok || profile.Digest != definition.Digest {
+		return integrationpackage.Package{}, ErrInvalid
+	}
+	return definition, nil
 }
 
 func decodeStrict(format, content string, target any) error {

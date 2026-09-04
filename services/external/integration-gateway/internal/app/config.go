@@ -50,7 +50,7 @@ func loadConfig() (Config, error) {
 		EgressProxyURL:   "http://egress-gateway.kodex-system.svc.cluster.local:8080",
 		SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
 		StartupTimeout:   30 * time.Second, ShutdownTimeout: 20 * time.Second, RequestTimeout: 3 * time.Second,
-		OperationTimeout: 30 * time.Second, PollInterval: 500 * time.Millisecond, ReadinessInterval: 10 * time.Second, ClaimLimit: 8,
+		OperationTimeout: 20 * time.Second, PollInterval: 500 * time.Millisecond, ReadinessInterval: 10 * time.Second, ClaimLimit: 1,
 	}
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
 		return Config{}, err
@@ -62,6 +62,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.ClaimLimit != 1 || config.OperationTimeout+config.RequestTimeout >= 28*time.Second {
+		return errors.New("integration lease budget is invalid")
+	}
 	if config.Environment != "staging" && config.Environment != "production" {
 		return errors.New("integration-gateway environment is invalid")
 	}

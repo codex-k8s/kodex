@@ -14,6 +14,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/credentialprojection"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 )
 
@@ -76,17 +77,33 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
 		cancelSentry()
 	}()
+	runtimeOperations := controlplaneclient.RuntimeOperations()
+	proofOperations := mergeOperations(runtimeOperations, controlplaneclient.RuntimeCredentialProjectionOperations())
+	projectionProjects := make(map[string]struct{})
+	for operation := range controlplaneclient.RuntimeCredentialProjectionOperations() {
+		projectionProjects[operation] = struct{}{}
+	}
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
 		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout,
-		Operations: controlplaneclient.RuntimeOperations(),
+		Operations: runtimeOperations, ProofOperations: proofOperations, ProjectRequiredOperations: projectionProjects,
 	})
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	credentials, err := credentialprojection.Dial(startup, credentialprojection.Config{
+		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
+		CAFile: config.SecretBrokerCAFile, CertificateFile: config.ControlPlaneCertificateFile,
+		PrivateKeyFile: config.ControlPlanePrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
+		DialTimeout: config.RequestTimeout, Proofs: control,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, credentials.Close()) }()
 	manager, err := workload.InCluster(workload.Config{
 		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
 		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
@@ -120,7 +137,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	unitReadiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	assistantReadiness.Set(false, "assistant_runtime_starting")
-	runtime := newRuntime(control.Runtime, manager, coordinator, config, assistantReadiness, logger)
+	runtime := newRuntime(control.Runtime, credentials, manager, coordinator, config, assistantReadiness, logger)
 	technical := technicalServer(lifecycle, config, unitReadiness, assistantReadiness, metrics)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveHTTP(technical, config.ShutdownTimeout), callbackServer.Run,
@@ -134,6 +151,16 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "runtime workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(err, shutdownErr)
+}
+
+func mergeOperations(sets ...map[string]string) map[string]string {
+	result := make(map[string]string)
+	for _, set := range sets {
+		for operation, method := range set {
+			result[operation] = method
+		}
+	}
+	return result
 }
 
 func technicalServer(lifecycle context.Context, config Config, unit, assistant *serviceruntime.Readiness, metrics *sharedobservability.Metrics) *http.Server {

@@ -101,6 +101,31 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         . == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | unique | length) == 5)
 ' >/dev/null || fail 'provider credential authority sidecars and readiness are incomplete'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  any($resources[];
+    .kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_TARGET ==
+      "dns:///secret-broker.kodex-system.svc:8443" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_TLS_SERVER_NAME ==
+      "secret-broker.kodex-system.svc.cluster.local" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE ==
+      "/var/run/config/kodex/runtime-controller/control-plane/ca.pem") and
+  any($resources[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "runtime-controller-exact-paths" and
+    any(.spec.egress[];
+      any(.to[]?.podSelector.matchLabels?;
+        .["app.kubernetes.io/name"] == "secret-broker" and
+        .["app.kubernetes.io/component"] == "secret-broker") and
+      any(.ports[]?; .protocol == "TCP" and .port == 8443))) and
+  any($resources[];
+    .kind == "PrometheusRule" and .metadata.name == "runtime-controller" and
+    any(.spec.groups[].rules[];
+      .alert == "RuntimeWorkspaceCanaryFailed" and
+      .annotations.runbook_url ==
+        "https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/runtime-controller.md"))
+' >/dev/null || fail 'runtime controller credential projection render contract is incomplete'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[]; .kind == "NetworkPolicy" and
     .metadata.name == "control-plane-internal-rpc-authority-issuer-exact-paths" and
     any(.spec.egress[]; any(.to[]?.podSelector.matchLabels?;
@@ -155,7 +180,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["key-delivery-targets.yaml"]
 ' "$render" | yq -e '
-  .source_revision == 4 and
+  .source_revision == 5 and
   ([.targets[] | select(.workload_id == "control-plane" and
     .role == "AUTHORIZATION_ISSUER" and
     .database_identity.login_principal == "ira_control_plane_issuer_g1" and
@@ -177,7 +202,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
 ' "$render" | jq -e '
-  .policy_revision == 43 and
+  .policy_revision == 44 and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
@@ -257,12 +282,33 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .data.providerAppArmorProfile == "") and
   any($resources[];
     .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "workspace-policy.json")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "provider-auth.sha256")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "size(object.data) == 9")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/execution-binding-digest")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/organization-hash"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    .spec.policyName == "runtime-revision-exact-configmap-projection" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-execution-ticket-exact-projection" and
     .spec.failurePolicy == "Fail" and
     ([.spec.validations[].expression] | join(" ") | contains(
       "system:serviceaccount:kodex-system:runtime-controller")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "!has(object.stringData)")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "size(object.data) == 2")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "^environment-[a-f0-9]{16}$")) and
     ([.spec.validations[].expression] | join(" ") | contains(
@@ -303,9 +349,21 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     ([.spec.validations[].expression] | join(" ") | contains(
       "item.valueFrom.secretKeyRef.name")) and
     ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/credential-projection-name")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime-credentials-[a-f0-9]{40}")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
       "container.name != '\''provider-runtime'\''")) and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']")) and
+      "runtime-projection-[a-f0-9]{16}")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.name == '\''runtime-ticket'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.mountPath == '\''/workspace/input'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "fsGroupChangePolicy == '\''OnRootMismatch'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "quantity('\''1Gi'\'')")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
     ([.spec.validations[].expression] | join(" ") | contains(
@@ -334,7 +392,10 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .kind == "Role" and .metadata.name == "runtime-controller" and
     any(.rules[];
       .apiGroups == [""] and .resources == ["secrets"] and
-      ((.verbs | sort) == (["create", "delete", "get"] | sort)))) and
+      ((.verbs | sort) == (["create", "delete", "get"] | sort))) and
+    any(.rules[];
+      .apiGroups == [""] and .resources == ["configmaps"] and
+      ((.verbs | sort) == (["create", "delete", "get", "list"] | sort)))) and
   any($resources[];
     .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
     .automountServiceAccountToken == false)
@@ -505,8 +566,9 @@ for policy in kodex-image-admission-controller-exact-paths \
   internal-rpc-authority-restore-controller-exact-paths \
   internal-rpc-authority-restore-jobs-exact-paths \
   internal-rpc-authority-restore-pitr-telemetry; do
-  [[ $(rg -F ".metadata.name == \"$policy\"" \
-    "$repository_root/tools/release/render-web-only.sh" | wc -l) -eq 2 ]] ||
+  [[ $(sed -n '/^api_client_policy_count=/,/^if /p' \
+    "$repository_root/tools/release/render-web-only.sh" |
+    rg -F ".metadata.name == \"$policy\"" | wc -l) -eq 2 ]] ||
     fail "Kubernetes API endpoint render registry omits a client: $policy"
 done
 yq -o=json -I=0 '.' "$render" | jq -s -e '

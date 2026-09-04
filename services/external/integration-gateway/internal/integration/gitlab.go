@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -61,6 +62,45 @@ func (adapter *Adapter) executeGitLab(
 ) (Result, error) {
 	projectPath := adapter.gitLabProjectPath(configuration)
 	switch request.Operation {
+	case "gitlab.issue.list":
+		var input struct {
+			State         string
+			Limit, Cursor int
+		}
+		if decodeProviderJSON(canonicalInput, &input) != nil {
+			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		if input.Limit == 0 {
+			input.Limit = 20
+		}
+		if input.Cursor == 0 {
+			input.Cursor = 1
+		}
+		if input.State == "" {
+			input.State = "all"
+		}
+		query := url.Values{"state": {input.State}, "page": {strconv.Itoa(input.Cursor)}, "per_page": {strconv.Itoa(input.Limit)}}
+		body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, projectPath+"/issues", query, nil, "")
+		if err != nil {
+			return Result{}, err
+		}
+		var issues []gitLabIssue
+		if decodeProviderJSON(body, &issues) != nil || len(issues) > input.Limit {
+			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		items := make([]map[string]any, 0, len(issues))
+		for _, issue := range issues {
+			if issue.IID < 1 {
+				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			}
+			items = append(items, map[string]any{"iid": issue.IID, "title": issue.Title, "state": issue.State, "web_url": issue.WebURL})
+		}
+		encoded, _ := json.Marshal(items)
+		output := map[string]any{"count": len(items), "issues": string(encoded)}
+		if len(items) == input.Limit {
+			output["next_cursor"] = input.Cursor + 1
+		}
+		return providerResult(request, "gitlab-issues:"+strconv.Itoa(input.Cursor), output)
 	case "gitlab.project.metadata.read":
 		body, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, projectPath, nil, nil, "")
 		if err != nil {
@@ -336,10 +376,11 @@ func gitLabMergeRequestResult(request Request, provider gitLabMergeRequest) (Res
 	if provider.IID < 1 || provider.WebURL == "" {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
-	return providerResult(request, "gitlab-merge-request:"+strconv.FormatInt(provider.IID, 10), map[string]any{
-		"iid": provider.IID, "title": provider.Title, "state": provider.State, "source_branch": provider.SourceBranch,
-		"target_branch": provider.TargetBranch, "web_url": provider.WebURL,
-	})
+	output := map[string]any{"iid": provider.IID, "title": provider.Title, "state": provider.State, "web_url": provider.WebURL}
+	if request.Operation == "gitlab.merge_request.read" {
+		output["source_branch"], output["target_branch"] = provider.SourceBranch, provider.TargetBranch
+	}
+	return providerResult(request, "gitlab-merge-request:"+strconv.FormatInt(provider.IID, 10), output)
 }
 
 func (adapter *Adapter) createGitLabDiscussion(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte, projectPath string) (Result, error) {

@@ -284,7 +284,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask:
 		return repository.changeSessionArchive(ctx, tx, scope, input)
-	case command.MaterializeOccurrence:
+	case command.MaterializeOccurrence, command.FailScheduleOccurrence:
 		return repository.changeOccurrence(ctx, tx, scope, input)
 	case command.CompleteConnectionTest:
 		return repository.completeIntegrationConnectionTest(ctx, tx, scope, input)

@@ -1,7 +1,7 @@
 -- name: repository_bootstrap_insert_integration_definitions_stable_key_description_capabilities :exec
 INSERT INTO control_plane.integration_definitions
-	(stable_key,name,description,category,capabilities,configuration_schema,schema_version,definition_version,origin,digest,adapter,credential_secret_key)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''))
+	(stable_key,name,description,category,capabilities,configuration_schema,schema_version,definition_version,origin,digest,adapter,credential_secret_key,adapter_owner,execution_route,adapter_readiness)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''),$13,$14,$15)
 ON CONFLICT (stable_key) DO UPDATE SET
 	name=EXCLUDED.name,
 	description=EXCLUDED.description,
@@ -14,5 +14,8 @@ ON CONFLICT (stable_key) DO UPDATE SET
 	digest=EXCLUDED.digest,
 	adapter=EXCLUDED.adapter,
 	credential_secret_key=EXCLUDED.credential_secret_key,
+	adapter_owner=EXCLUDED.adapter_owner,
+	execution_route=EXCLUDED.execution_route,
+	adapter_readiness=EXCLUDED.adapter_readiness,
 	enabled=true,
 	version=control_plane.integration_definitions.version+1

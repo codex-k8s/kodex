@@ -20,7 +20,7 @@ SELECT n.id::text,
            SELECT schedule.ref
            FROM control_plane.schedule_occurrences occurrence
            JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
-           WHERE occurrence.run_id = root.id
+           WHERE occurrence.run_id = schedule_origin.run_id
              AND occurrence.organization_id = r.organization_id
            ORDER BY occurrence.created_at DESC
            LIMIT 1
@@ -128,7 +128,20 @@ SELECT n.id::text,
                    AND knowledge_artifact.scan_state='CLEAN'
                    AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
-       r.input,
+       r.input || CASE WHEN r.source = 'SCHEDULE' THEN COALESCE((
+           SELECT jsonb_build_object('automation', jsonb_build_object(
+               'occurrenceRef', occurrence.ref, 'attempt', occurrence.attempt,
+               'scheduleRef', schedule.ref, 'scheduleRevisionRef', revision.ref,
+               'scheduleRevision', revision.revision, 'scheduleRevisionDigest', revision.digest,
+               'targetRef', occurrence.target_ref, 'targetVersion', occurrence.target_version,
+               'targetDigest', occurrence.target_digest, 'text', occurrence.automation_text,
+               'textDigest', occurrence.automation_text_digest, 'promptInputs', occurrence.prompt_inputs,
+               'promptInputsDigest', occurrence.prompt_inputs_digest))
+           FROM control_plane.schedule_occurrences occurrence
+           JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
+           JOIN control_plane.schedule_revisions revision ON revision.id = occurrence.schedule_revision_id
+           WHERE occurrence.run_id = schedule_origin.run_id AND occurrence.organization_id = r.organization_id
+       ), '{}'::jsonb) ELSE '{}'::jsonb END,
        COALESCE(input_attachment_set.ref, ''),
        COALESCE(input_attachment_set.manifest_digest, ''),
        COALESCE(input_attachment_set.purpose, ''),
@@ -384,10 +397,15 @@ SELECT n.id::text,
                'ref', integration_grant.ref,
                'connectionRef', connection.ref,
                'definitionKey', connection.definition_key,
+               'definitionVersion', connection.definition_version,
+               'definitionDigest', connection.definition_digest,
                'connectionName', connection.name,
                'capabilityKey', integration_grant.capability_key,
                'capabilityName', capability.value ->> 'name',
                'capabilityDescription', capability.value ->> 'description',
+               'operation', capability.value ->> 'operation',
+               'inputSchema', capability.value ->> 'inputSchema',
+               'inputSchemaSha256', capability.value ->> 'inputSchemaSha256',
                'risk', capability.value ->> 'risk'
            ) ORDER BY connection.name, integration_grant.capability_key)
            FROM control_plane.integration_grants integration_grant
@@ -399,12 +417,10 @@ SELECT n.id::text,
              AND integration_grant.target_kind = 'AGENT'
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
-             AND integration_grant.capability_key NOT IN (
-                 'mattermost.inbound',
-                 'mattermost.notifications',
-                 'mattermost.result_mirror',
-                 'mattermost.gate_decisions'
-             )
+             AND definition.enabled
+             AND definition.adapter_owner = 'integration-gateway'
+             AND definition.execution_route = 'MANAGED_MCP'
+             AND definition.adapter_readiness = 'READY'
              AND connection.enabled
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
@@ -562,6 +578,23 @@ SELECT n.id::text,
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
+LEFT JOIN LATERAL (
+    -- Повтор Run наследует происхождение только по серверному ребру, не из input.
+    WITH RECURSIVE ancestors AS (
+        SELECT root.id, root.retry_of_run_id
+        WHERE root.source = 'SCHEDULE'
+        UNION
+        SELECT previous.id, previous.retry_of_run_id
+        FROM ancestors current_run
+        JOIN control_plane.runs previous ON previous.id = current_run.retry_of_run_id
+        WHERE previous.organization_id = root.organization_id
+    )
+    SELECT occurrence.run_id
+    FROM ancestors
+    JOIN control_plane.schedule_occurrences occurrence ON occurrence.run_id = ancestors.id
+    WHERE occurrence.organization_id = root.organization_id
+    LIMIT 1
+) schedule_origin ON true
 JOIN control_plane.subjects initiator ON initiator.id = root.initiated_by
 JOIN control_plane.organizations organization ON organization.id = r.organization_id
 LEFT JOIN control_plane.projects p ON p.id = r.project_id

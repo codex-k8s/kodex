@@ -34,11 +34,12 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		payload.CronExpression = normalized.CronExpression
 		payload.TimeOfDay = normalized.TimeOfDay
 		payload.DayOfWeek = normalized.DayOfWeek
+		applyNormalizedSchedulePolicies(&payload, normalized)
 		projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
 		if projectID == "" {
 			return commandOutcome{}, errs.ErrNotFound
 		}
-		if err := repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); err != nil {
+		if payload.TargetVersion, payload.TargetDigest, err = repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); err != nil {
 			return commandOutcome{}, err
 		}
 		ref, _ := newRef("sch")
@@ -54,10 +55,14 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		err = tx.QueryRow(ctx, queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType,
 			scheduleID, ref, scope.organizationID, projectID, payload.Name, payload.Target.Type,
 			payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input),
-			payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, scope.actorID, revisionID,
+			payload.SessionPolicy, payload.NotificationPolicy, payload.DSTGapPolicy, payload.DSTFoldPolicy,
+			payload.MisfirePolicy, payload.OverlapPolicy, payload.TargetVersion, payload.TargetDigest,
+			payload.AutomationText, asJSON(payload.PromptInputs), normalized.Next, scope.actorID, revisionID,
 		).Scan(&item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone,
 			&item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version,
-			&next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+			&next, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &item.DSTGapPolicy,
+			&item.DSTFoldPolicy, &item.MisfirePolicy, &item.OverlapPolicy, &item.TargetVersion,
+			&item.TargetDigest, &item.AutomationText, &item.PromptInputs)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -65,12 +70,15 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			revisionID, revisionRef, scope.organizationID, scheduleID, int64(1), payload.Name,
 			payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone,
 			asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, revisionDigest, scope.actorID,
+			payload.DSTGapPolicy, payload.DSTFoldPolicy, payload.MisfirePolicy, payload.OverlapPolicy,
+			payload.TargetVersion, payload.TargetDigest, payload.AutomationText, asJSON(payload.PromptInputs),
 		).Scan(&revisionCreatedAt); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 		item.ProjectRef = payload.ProjectRef
 		item.Target = payload.Target
 		item.Input = payload.Input
+		item.PromptInputs = payload.PromptInputs
 		item.TimeOfDay = payload.TimeOfDay
 		item.DayOfWeek = payload.DayOfWeek
 		item.NextRunAt = next
@@ -79,6 +87,10 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			Target: payload.Target, Preset: payload.Preset, CronExpression: payload.CronExpression,
 			Timezone: payload.Timezone, Input: payload.Input, SessionPolicy: payload.SessionPolicy,
 			NotificationPolicy: payload.NotificationPolicy, CreatedAt: revisionCreatedAt,
+			DSTGapPolicy: payload.DSTGapPolicy, DSTFoldPolicy: payload.DSTFoldPolicy,
+			MisfirePolicy: payload.MisfirePolicy, OverlapPolicy: payload.OverlapPolicy,
+			TargetVersion: payload.TargetVersion, TargetDigest: payload.TargetDigest,
+			AutomationText: payload.AutomationText, PromptInputs: payload.PromptInputs,
 		}
 		item.NextActions = scheduleActions(item, true)
 		return scheduleCommandOutcome(item, projectID, payload.ProjectRef, "i18n:SCHEDULE_CREATED"), nil
@@ -89,7 +101,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 	var scheduleID, projectID, projectRef, storedPreset, storedCron, storedTimezone, storedState string
 	var storedVersion int64
 	var currentRevision entity.ScheduleRevision
-	var currentRevisionInput []byte
+	var currentRevisionInput, currentRevisionPromptInputs []byte
 	if err := tx.QueryRow(ctx, queryConfigurationChangescheduleSelectScheduleForUpdate, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "schedule_ref": payload.Ref,
 	}).Scan(
@@ -97,13 +109,17 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		&currentRevision.Ref, &currentRevision.Revision, &currentRevision.Digest, &currentRevision.Name,
 		&currentRevision.Target.Type, &currentRevision.Target.Ref, &currentRevision.Preset,
 		&currentRevision.CronExpression, &currentRevision.Timezone, &currentRevisionInput,
-		&currentRevision.SessionPolicy, &currentRevision.NotificationPolicy, &currentRevision.CreatedAt,
+		&currentRevision.SessionPolicy, &currentRevision.NotificationPolicy, &currentRevision.DSTGapPolicy,
+		&currentRevision.DSTFoldPolicy, &currentRevision.MisfirePolicy, &currentRevision.OverlapPolicy,
+		&currentRevision.TargetVersion, &currentRevision.TargetDigest, &currentRevision.AutomationText,
+		&currentRevisionPromptInputs, &currentRevision.CreatedAt,
 	); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if json.Unmarshal(currentRevisionInput, &currentRevision.Input) != nil {
+	if json.Unmarshal(currentRevisionInput, &currentRevision.Input) != nil ||
+		json.Unmarshal(currentRevisionPromptInputs, &currentRevision.PromptInputs) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if storedVersion != *input.Mutation.ExpectedVersion {
@@ -169,12 +185,14 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if normalizeErr != nil {
 			return commandOutcome{}, normalizeErr
 		}
-		if targetErr := repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); targetErr != nil {
+		var targetErr error
+		if payload.TargetVersion, payload.TargetDigest, targetErr = repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, payload.Target); targetErr != nil {
 			return commandOutcome{}, targetErr
 		}
 		payload.CronExpression = normalized.CronExpression
 		payload.TimeOfDay = normalized.TimeOfDay
 		payload.DayOfWeek = normalized.DayOfWeek
+		applyNormalizedSchedulePolicies(&payload, normalized)
 		revisionRef, _ := newRef("srev")
 		revisionID := uuid.NewString()
 		revisionDigest, digestErr := scheduleRevisionDigest(payload)
@@ -186,10 +204,12 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			revisionID, revisionRef, scope.organizationID, scheduleID, currentRevision.Revision+1, payload.Name,
 			payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone,
 			asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, revisionDigest, scope.actorID,
+			payload.DSTGapPolicy, payload.DSTFoldPolicy, payload.MisfirePolicy, payload.OverlapPolicy,
+			payload.TargetVersion, payload.TargetDigest, payload.AutomationText, asJSON(payload.PromptInputs),
 		).Scan(&revisionCreatedAt); revisionErr != nil {
 			return commandOutcome{}, mapWriteError(revisionErr)
 		}
-		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, normalized.Next, revisionID).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt)
+		err := tx.QueryRow(ctx, queryConfigurationChangescheduleUpdateSchedulesNameTargetTypeTargetRef, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion, payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset, payload.CronExpression, payload.Timezone, asJSON(payload.Input), payload.SessionPolicy, payload.NotificationPolicy, payload.DSTGapPolicy, payload.DSTFoldPolicy, payload.MisfirePolicy, payload.OverlapPolicy, payload.TargetVersion, payload.TargetDigest, payload.AutomationText, asJSON(payload.PromptInputs), normalized.Next, revisionID).Scan(&projectID, &projectRef, &item.Ref, &item.Name, &item.Preset, &item.CronExpression, &item.Timezone, &item.SessionPolicy, &item.NotificationPolicy, &item.State, &item.Enabled, &item.Version, &item.NextRunAt, &item.LastRunAt, &item.CreatedAt, &item.UpdatedAt, &item.DSTGapPolicy, &item.DSTFoldPolicy, &item.MisfirePolicy, &item.OverlapPolicy, &item.TargetVersion, &item.TargetDigest, &item.AutomationText, &item.PromptInputs)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -198,6 +218,7 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		}
 		item.Target = payload.Target
 		item.Input = payload.Input
+		item.PromptInputs = payload.PromptInputs
 		item.TimeOfDay = payload.TimeOfDay
 		item.DayOfWeek = payload.DayOfWeek
 		item.CurrentRevision = entity.ScheduleRevision{
@@ -205,9 +226,17 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 			Target: payload.Target, Preset: payload.Preset, CronExpression: payload.CronExpression,
 			Timezone: payload.Timezone, Input: payload.Input, SessionPolicy: payload.SessionPolicy,
 			NotificationPolicy: payload.NotificationPolicy, CreatedAt: revisionCreatedAt,
+			DSTGapPolicy: payload.DSTGapPolicy, DSTFoldPolicy: payload.DSTFoldPolicy,
+			MisfirePolicy: payload.MisfirePolicy, OverlapPolicy: payload.OverlapPolicy,
+			TargetVersion: payload.TargetVersion, TargetDigest: payload.TargetDigest,
+			AutomationText: payload.AutomationText, PromptInputs: payload.PromptInputs,
 		}
 	} else {
-		next, nextErr := scheduleservice.Next(storedPreset, storedCron, storedTimezone, time.Now().UTC())
+		next, nextErr := scheduleservice.NextWithPolicy(scheduleservice.Spec{
+			Preset: storedPreset, CronExpression: storedCron, Timezone: storedTimezone,
+			DSTGapPolicy: currentRevision.DSTGapPolicy, DSTFoldPolicy: currentRevision.DSTFoldPolicy,
+			MisfirePolicy: currentRevision.MisfirePolicy, OverlapPolicy: currentRevision.OverlapPolicy,
+		}, time.Now().UTC())
 		if nextErr != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -237,12 +266,17 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 
 func scheduleRevisionDigest(payload command.ScheduleInput) (string, error) {
 	encoded, err := json.Marshal(struct {
-		Name, TargetType, TargetRef, Preset, CronExpression, Timezone string
-		Input                                                         map[string]any
-		SessionPolicy, NotificationPolicy                             string
+		Name, TargetType, TargetRef, Preset, CronExpression, Timezone             string
+		DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, AutomationText string
+		TargetVersion                                                             int64
+		TargetDigest                                                              string
+		Input, PromptInputs                                                       map[string]any
+		SessionPolicy, NotificationPolicy                                         string
 	}{
 		payload.Name, payload.Target.Type, payload.Target.Ref, payload.Preset,
-		payload.CronExpression, payload.Timezone, payload.Input,
+		payload.CronExpression, payload.Timezone, payload.DSTGapPolicy, payload.DSTFoldPolicy,
+		payload.MisfirePolicy, payload.OverlapPolicy, payload.AutomationText,
+		payload.TargetVersion, payload.TargetDigest, payload.Input, payload.PromptInputs,
 		payload.SessionPolicy, payload.NotificationPolicy,
 	})
 	if err != nil {
@@ -253,6 +287,10 @@ func scheduleRevisionDigest(payload command.ScheduleInput) (string, error) {
 }
 
 func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary string) commandOutcome {
+	item.DSTGapPolicy, item.DSTFoldPolicy = item.CurrentRevision.DSTGapPolicy, item.CurrentRevision.DSTFoldPolicy
+	item.MisfirePolicy, item.OverlapPolicy = item.CurrentRevision.MisfirePolicy, item.CurrentRevision.OverlapPolicy
+	item.TargetVersion, item.TargetDigest = item.CurrentRevision.TargetVersion, item.CurrentRevision.TargetDigest
+	item.AutomationText, item.PromptInputs = item.CurrentRevision.AutomationText, item.CurrentRevision.PromptInputs
 	state := item.State
 	if state == "" || state == "ACTIVE" {
 		state = "PAUSED"
@@ -275,30 +313,67 @@ func scheduleCommandOutcome(item entity.Schedule, projectID, projectRef, summary
 
 func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (scheduleservice.Normalized, error) {
 	payload.Name = strings.TrimSpace(payload.Name)
-	if payload.Name == "" || len(payload.Name) > 160 || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || !contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) {
+	payload.AutomationText = strings.TrimSpace(payload.AutomationText)
+	if payload.AutomationText == "" {
+		payload.AutomationText, _ = payload.Input["task"].(string)
+		if strings.TrimSpace(payload.AutomationText) == "" {
+			payload.AutomationText = payload.Name
+		}
+	}
+	if payload.PromptInputs == nil {
+		payload.PromptInputs = map[string]any{}
+	}
+	if payload.Name == "" || len(payload.Name) > 160 || payload.AutomationText == "" || len(payload.AutomationText) > 32768 ||
+		!validBoundedRunInput(payload.PromptInputs) || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || !contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) {
 		return scheduleservice.Normalized{}, errs.ErrInvalid
 	}
-	normalized, err := scheduleservice.Normalize(scheduleservice.Spec{Preset: payload.Preset, CronExpression: payload.CronExpression, TimeOfDay: payload.TimeOfDay, DayOfWeek: payload.DayOfWeek, Timezone: payload.Timezone}, after)
+	normalized, err := scheduleservice.Normalize(scheduleservice.Spec{
+		Preset: payload.Preset, CronExpression: payload.CronExpression, TimeOfDay: payload.TimeOfDay,
+		DayOfWeek: payload.DayOfWeek, Timezone: payload.Timezone, DSTGapPolicy: payload.DSTGapPolicy,
+		DSTFoldPolicy: payload.DSTFoldPolicy, MisfirePolicy: payload.MisfirePolicy,
+		OverlapPolicy: payload.OverlapPolicy,
+	}, after)
 	if err != nil {
 		return scheduleservice.Normalized{}, errs.ErrInvalid
 	}
 	return normalized, nil
 }
 
-func (repository *Repository) validateScheduleTarget(ctx context.Context, tx pgx.Tx, organizationID, projectID string, target entity.RunTarget) error {
+func applyNormalizedSchedulePolicies(payload *command.ScheduleInput, normalized scheduleservice.Normalized) {
+	payload.Preset = normalized.Preset
+	payload.Timezone = normalized.Timezone
+	payload.DSTGapPolicy = normalized.DSTGapPolicy
+	payload.DSTFoldPolicy = normalized.DSTFoldPolicy
+	payload.MisfirePolicy = normalized.MisfirePolicy
+	payload.OverlapPolicy = normalized.OverlapPolicy
+	payload.AutomationText = strings.TrimSpace(payload.AutomationText)
+	if payload.AutomationText == "" {
+		payload.AutomationText, _ = payload.Input["task"].(string)
+		if strings.TrimSpace(payload.AutomationText) == "" {
+			payload.AutomationText = payload.Name
+		}
+	}
+	if payload.PromptInputs == nil {
+		payload.PromptInputs = map[string]any{}
+	}
+}
+
+func (repository *Repository) validateScheduleTarget(ctx context.Context, tx pgx.Tx, organizationID, projectID string, target entity.RunTarget) (int64, string, error) {
 	query := queryConfigurationChangescheduleSelectAgentTarget
 	if target.Type == "WORKFLOW" {
 		query = queryConfigurationChangescheduleSelectWorkflowTarget
 	} else if target.Type != "AGENT" {
-		return errs.ErrInvalid
+		return 0, "", errs.ErrInvalid
 	}
 	var id string
-	if err := tx.QueryRow(ctx, query, organizationID, projectID, target.Ref).Scan(&id); errors.Is(err, pgx.ErrNoRows) {
-		return errs.ErrNotFound
+	var version int64
+	var digest string
+	if err := tx.QueryRow(ctx, query, organizationID, projectID, target.Ref).Scan(&id, &version, &digest); errors.Is(err, pgx.ErrNoRows) {
+		return 0, "", errs.ErrNotFound
 	} else if err != nil {
-		return errs.ErrUnavailable
+		return 0, "", errs.ErrUnavailable
 	}
-	return nil
+	return version, digest, nil
 }
 
 func attachScheduleDisplay(item *entity.Schedule) error {

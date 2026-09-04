@@ -25,7 +25,13 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compute baseline environment digest: %v", err)
 	}
-	baseline := runtimeRevisionDigest(environmentDigest, "fixed-runtime-input")
+	input := runtimecontract.RunnerInput{RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: 1,
+		EnvironmentImage: image, EnvironmentTools: tools, RuntimeEnvironmentDigest: environmentDigest}
+	source := runtimecontract.RuntimeRevisionCredentialSource{SecretName: "provider-auth", SecretUID: "uid-1", SecretResourceVersion: "1"}
+	baseline, err := runtimecontract.RuntimeRevisionDigest(input, source)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	image.Digest = "sha256:" + strings.Repeat("b", 64)
 	image.Reference = "registry.example/kodex/role@" + image.Digest
@@ -33,7 +39,9 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compute changed image environment digest: %v", err)
 	}
-	if runtimeRevisionDigest(changedImageDigest, "fixed-runtime-input") == baseline {
+	input.EnvironmentImage = image
+	input.RuntimeEnvironmentDigest = changedImageDigest
+	if digest, _ := runtimecontract.RuntimeRevisionDigest(input, source); digest == baseline {
 		t.Fatal("exact image change did not change RuntimeRevision digest")
 	}
 
@@ -44,7 +52,10 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compute changed tools environment digest: %v", err)
 	}
-	if runtimeRevisionDigest(changedToolsDigest, "fixed-runtime-input") == baseline {
+	input.EnvironmentImage = image
+	input.EnvironmentTools = tools
+	input.RuntimeEnvironmentDigest = changedToolsDigest
+	if digest, _ := runtimecontract.RuntimeRevisionDigest(input, source); digest == baseline {
 		t.Fatal("selected tools change did not change RuntimeRevision digest")
 	}
 }
@@ -68,9 +79,10 @@ func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 		policy.MaximumFileCount != 10_000 || len(policy.Digest) != 64 {
 		t.Fatalf("workspace policy = %#v", policy)
 	}
-	if len(policy.Rules) != 3 || policy.Rules[0].Path != "/workspace/input" ||
-		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[2].Path != "/workspace" ||
-		policy.Rules[2].Access != "WRITABLE" {
+	if len(policy.Rules) != 4 || policy.Rules[0].Path != "/workspace/input" ||
+		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[3].Path != "/workspace" ||
+		policy.Rules[3].Access != "WRITABLE" || policy.Rules[2].Path != "/workspace/.kodex/state/codex-home/auth.json" ||
+		policy.Rules[2].Access != "READ_ONLY" {
 		t.Fatalf("workspace path matrix = %#v", policy.Rules)
 	}
 	if strings.Join(policy.DenialReasons, ",") != "READ_ONLY,QUOTA_EXCEEDED,PATH_OUTSIDE_WORKSPACE,RUNTIME_IO_ERROR" {

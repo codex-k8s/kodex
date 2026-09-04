@@ -321,11 +321,17 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 		}
 		capabilities := make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 		for _, capability := range definition.Spec.Capabilities {
+			inputSchema, schemaErr := capability.InputSchema()
+			inputSchemaDigest, digestErr := capability.InputSchemaDigest()
+			if schemaErr != nil || digestErr != nil {
+				return errors.New("encode integration capability input schema")
+			}
 			capabilities = append(capabilities, entity.IntegrationCapability{
 				Key: capability.Key, Name: capability.Name, Description: capability.Description,
 				Operation: capability.Operation, Risk: capability.Risk,
 				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
 				InputFields: integrationConfigurationFields(capability.InputFields),
+				InputSchema: string(inputSchema), InputSchemaSHA256: inputSchemaDigest,
 			})
 		}
 		fields := integrationConfigurationFields(definition.Spec.ConfigurationFields)
@@ -342,6 +348,7 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 			definition.Metadata.Key, definition.Spec.Name, definition.Spec.Description, definition.Spec.Category,
 			capabilityJSON, configurationJSON, definition.APIVersion, definition.Metadata.Version,
 			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
+			definition.Spec.AdapterOwner, definition.Spec.ExecutionRoute, definition.Spec.Readiness,
 		); err != nil {
 			return errors.New("reconcile integration definition")
 		}
@@ -360,9 +367,18 @@ func integrationConfigurationFields(fields []integrationpackage.Field) []entity.
 		if field.Format == "HTTPS_ORIGIN" || field.Format == "HTTPS_URL" {
 			valueType = "URL"
 		}
-		result = append(result, entity.IntegrationConfigurationField{
-			Key: field.Key, Label: field.Key, ValueType: valueType, Required: field.Required,
-		})
+		item := entity.IntegrationConfigurationField{
+			Key: field.Key, Label: field.Key, ValueType: valueType, Format: field.Format,
+			AllowedValues: append([]string(nil), field.AllowedValues...), MaximumLength: int32(field.MaximumLength), Required: field.Required,
+		}
+		if field.Type == "INTEGER" {
+			minimum, maximum := field.Minimum, field.Maximum
+			item.Minimum = &minimum
+			if maximum != 0 {
+				item.Maximum = &maximum
+			}
+		}
+		result = append(result, item)
 	}
 	return result
 }

@@ -24,15 +24,15 @@ digest.
 Поставляются семь schema-versioned packages:
 
 - synthetic HTTP journal: read и идемпотентный write по exact effect key;
-- GitHub: repository metadata read и create/update issue только в exact
+- GitHub: repository metadata, list/read/create/update/comment issue только в exact
   `owner/repository` Connection scope через `https://api.github.com`;
 - GitLab: metadata, repository file, issues, merge requests, branches, commit и
   pipeline в exact `base_url/project_path` scope;
 - Jira: project, bounded issue search/read, create, comment, limited update и
   issue link в exact `base_url/project_key` scope;
-- Confluence: space, bounded page search/read, draft create и OCC update в exact
+- Confluence: space, bounded page search/read, draft create, OCC update и attachment upload в exact
   `base_url/space_id` scope;
-- электронная почта: health и отправка текстового письма через
+- электронная почта: health, status и отправка текстового письма через
   provider-neutral HTTPS bridge с provider-native idempotency;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
 
@@ -53,10 +53,31 @@ FQDN в policy egress gateway; отсутствие host в policy являет�
 fail-closed отказом подключения. Redirect запрещён.
 
 READ повторяется только на bounded network/`429`/`502`/`503`/`504` отказах.
-Provider mutation без нативной идемпотентности автоматически не повторяется
+Любая provider mutation, включая `PROVIDER_NATIVE`, автоматически не повторяется
 после неоднозначного сетевого исхода; immutable invocation receipt защищает от
 повторного выполнения уже подтверждённого effect. Email bridge обязан принимать
 `Idempotency-Key` и возвращать один provider receipt для exact retry.
+
+Потеря ответа, повреждённый успешный ответ или истечение mutation lease
+сохраняют `UNKNOWN_OUTCOME` в PostgreSQL. Такой invocation никогда не возвращается
+в `READY`; новый worker не повторяет внешний эффект. GitHub create/comment,
+Synthetic и email пытаются сверить эффект только через чтение. Если сверка не
+подтверждена, MCP возвращает `INTEGRATION_OUTCOME_UNKNOWN` и
+`owner_decision_required=true`. Этот исход не является успехом или отсутствием
+эффекта. Контракт bridge находится в `contracts/openapi/email-bridge/v1`;
+его POP/SMTP реализация принадлежит #1037.
+
+UI revision использует тот же `IntegrationPackage` JSON/YAML, что shipped
+catalog. Публикация и rebind допускают только exact зарегистрированный и ready
+package digest, а не произвольные operation names. Новый исполняемый профиль
+поставляется вместе с adapter, схемой и fake-provider проверкой. Mattermost
+виден в catalog metadata, но generic execution и credential route ему не
+принадлежат.
+
+Worker получает по одному claim, ограничивает provider phase двадцатью
+секундами и сохраняет отдельный бюджет завершения внутри 30-секундной lease.
+Счётчики `cycles_total` и `operations_total` учитывают результат adapter до
+записи receipt, включая частичный цикл и unknown outcome.
 
 READ invocation может быть claim-нут сразу. WRITE, SENSITIVE и DESTRUCTIVE
 сначала атомарно создают отдельный Human Gate и остаются недоступны worker до

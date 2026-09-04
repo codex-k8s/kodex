@@ -17,6 +17,7 @@ import (
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
+	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -965,6 +966,14 @@ func (service *Service) executeResolved(ctx context.Context, input command.Comma
 			return command.Result{}, errs.ErrProtected
 		}
 	}
+	if input.Kind == command.MaterializeOccurrence &&
+		(input.Principal.CallerWorkload != "automation-scheduler" || input.Principal.Permission != "platform.runtime.schedules.materialize") {
+		return command.Result{}, errs.ErrForbidden
+	}
+	if input.Kind == command.FailScheduleOccurrence &&
+		(input.Principal.CallerWorkload != "automation-scheduler" || input.Principal.Permission != "platform.runtime.schedules.fail") {
+		return command.Result{}, errs.ErrForbidden
+	}
 	if input.Kind == command.ArchiveAgent {
 		payload, ok := input.Payload.(command.AgentInput)
 		if !ok || payload.Ref == "system-assistant" {
@@ -1022,10 +1031,46 @@ func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal
 	if err != nil {
 		return nil, err
 	}
+	if p.CallerWorkload != "automation-scheduler" || p.Permission != "platform.runtime.schedules.claim" {
+		return nil, errs.ErrForbidden
+	}
 	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 128 {
 		return nil, errs.ErrInvalid
 	}
 	return service.repository.ClaimDueSchedules(ctx, p, instance, limit)
+}
+
+func (service *Service) RenewScheduleOccurrence(ctx context.Context, p value.Principal, input command.OccurrenceInput) (map[string]any, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if p.CallerWorkload != "automation-scheduler" || p.Permission != "platform.runtime.schedules.renew" {
+		return nil, errs.ErrForbidden
+	}
+	return service.repository.RenewScheduleOccurrence(ctx, p, input)
+}
+
+func (service *Service) PreviewSchedule(ctx context.Context, p value.Principal, spec scheduleservice.Spec, after time.Time, limit int32) (scheduleservice.Normalized, []time.Time, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return scheduleservice.Normalized{}, nil, err
+	}
+	if p.CallerWorkload != "control-api-gateway" || p.Permission != "platform.query.schedules.preview" {
+		return scheduleservice.Normalized{}, nil, errs.ErrForbidden
+	}
+	if after.IsZero() {
+		after = time.Now().UTC()
+	}
+	normalized, err := scheduleservice.Normalize(spec, after)
+	if err != nil {
+		return scheduleservice.Normalized{}, nil, errs.ErrInvalid
+	}
+	occurrences, err := scheduleservice.Preview(normalized.Spec, after, int(limit))
+	if err != nil {
+		return scheduleservice.Normalized{}, nil, errs.ErrInvalid
+	}
+	return normalized, occurrences, nil
 }
 func (service *Service) ClaimIntegrationConnectionTests(ctx context.Context, p value.Principal, instance string, limit int32) ([]map[string]any, error) {
 	p, err := service.principal(ctx, p)
@@ -1123,7 +1168,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask,
-		command.MaterializeOccurrence, command.CompleteConnectionTest,
+		command.MaterializeOccurrence, command.FailScheduleOccurrence, command.CompleteConnectionTest,
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
 		command.AcceptInteractionMessage, command.CreateAccessRole,
 		command.CreateAccessRoleVersion, command.ArchiveAccessRole,
