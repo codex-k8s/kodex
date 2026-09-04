@@ -93,7 +93,8 @@ updated: 2026-09-05
 - Ровно один SKILL.md, ownership artifact revision, structure/scan/policy
   проверяет CP validation. Черновик может быть структурно неполным.
   Scan/review/provenance доступны только в ответе.
-- Memory title <=160 bytes, summary <=65536 bytes; оба непустые при create/revise.
+- Memory title <=160 Unicode символов, summary <=65536 UTF-8 bytes;
+  оба непустые при create/revise, NUL запрещён.
   RetentionUntil — корректный timestamp. Разрешённый срок и source run
   eligibility проверяет CP. Diagnostics <=128 строк по 2000 bytes.
 - Все integer versions <=9007199254740991. Неизвестные enums, corrupt

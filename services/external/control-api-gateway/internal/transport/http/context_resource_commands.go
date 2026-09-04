@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -30,7 +31,7 @@ func skillSpecificationInput(value generated.SkillBundleSpecification) (*control
 }
 func memorySpecificationInput(value generated.MemoryRecordSpecification) (*controlplanev1.MemoryRecordSpecification, bool) {
 	retention := timestamppb.New(value.RetentionUntil)
-	if strings.TrimSpace(value.Title) == "" || len(value.Title) > 160 || strings.TrimSpace(value.Summary) == "" || len(value.Summary) > 65536 || value.RetentionUntil.IsZero() || retention.CheckValid() != nil ||
+	if strings.TrimSpace(value.Title) == "" || utf8.RuneCountInString(value.Title) > 160 || strings.ContainsRune(value.Title+value.Summary, 0) || strings.TrimSpace(value.Summary) == "" || len(value.Summary) > 65536 || value.RetentionUntil.IsZero() || retention.CheckValid() != nil ||
 		value.SourceRunRef != nil && !opaqueHTTPReference.MatchString(*value.SourceRunRef) {
 		return nil, false
 	}

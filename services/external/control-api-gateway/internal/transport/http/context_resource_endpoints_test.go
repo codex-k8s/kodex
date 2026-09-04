@@ -239,6 +239,32 @@ func TestContextResourceNewDraftOCCAndBodyMapping(t *testing.T) {
 	}
 }
 
+func TestContextMemoryTitleUsesUnicodeCharacters(t *testing.T) {
+	for _, length := range []int{160, 161} {
+		title := strings.Repeat("я", length)
+		client := &contextRPCRecorder{}
+		w := httptest.NewRecorder()
+		body := strings.Replace(contextMemorySpec, "Fixture memory", title, 1)
+		contextHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/memory-records/mem_fixture01/revisions", body))
+		want := 201
+		if length > 160 {
+			want = 400
+		}
+		if w.Code != want {
+			t.Fatalf("title length=%d status=%d", length, w.Code)
+		}
+		if length <= 160 && client.request.(*controlplanev1.ReviseMemoryRecordRequest).Specification.Title != title {
+			t.Fatal("title changed during mapping")
+		}
+		_, record, _ := contextFixtures()
+		record.CurrentRevision.Title = title
+		_, ok := memoryRecordView(record)
+		if ok != (length <= 160) {
+			t.Fatalf("response title length=%d accepted=%t", length, ok)
+		}
+	}
+}
+
 func TestContextResourceAuthorityAndUnimplementedRemainFailures(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.Unauthenticated: 401, codes.Aborted: 412, codes.Unavailable: 503, codes.Unimplemented: 500} {
 		for _, path := range []string{"/api/v1/skill-bundles/skl_fixture01/archive", "/api/v1/memory-records/mem_fixture01/purge"} {

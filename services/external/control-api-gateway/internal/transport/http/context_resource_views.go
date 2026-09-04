@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -112,7 +113,7 @@ func memoryRevisionView(value *controlplanev1.MemoryRecordRevision) (generated.M
 	provenance, ok := contextProvenanceView(value.GetProvenance())
 	retention, rok := contextTimestamp(value.GetRetentionUntil())
 	if !ok || !rok || !opaqueHTTPReference.MatchString(value.GetRef()) || !validManagedVersion(value.GetRevision()) || !validManagedDigest(value.GetDigest()) ||
-		len(value.GetTitle()) > 160 || len(value.GetSummary()) > 65536 || value.GetRedacted() && value.GetSummary() != "" || value.GetParentRevisionRef() != "" && !opaqueHTTPReference.MatchString(value.GetParentRevisionRef()) {
+		utf8.RuneCountInString(value.GetTitle()) > 160 || strings.ContainsRune(value.GetTitle()+value.GetSummary(), 0) || len(value.GetSummary()) > 65536 || value.GetRedacted() && value.GetSummary() != "" || value.GetParentRevisionRef() != "" && !opaqueHTTPReference.MatchString(value.GetParentRevisionRef()) {
 		return generated.MemoryRecordRevision{}, false
 	}
 	return generated.MemoryRecordRevision{Ref: value.GetRef(), Revision: value.GetRevision(), Title: value.GetTitle(), Summary: value.GetSummary(), Digest: value.GetDigest(), ParentRevisionRef: contextOptionalText(value.GetParentRevisionRef()), Provenance: provenance, RetentionUntil: retention, Redacted: value.GetRedacted()}, true
