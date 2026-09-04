@@ -130,6 +130,24 @@ jq -e '
   (.objectStores | length) > 0
 ' "$credentials" >/dev/null || fail 'local backup-controller credentials are invalid'
 
+jq -er '.destination.accessKeyId' "$credentials" >"$temporary_directory/access-key"
+jq -er '.destination.secretAccessKey' "$credentials" >"$temporary_directory/secret-key"
+chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
+port_forward_log="$temporary_directory/port-forward.log"
+kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
+  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
+port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
+endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
+(
+  cd "$repository_root/services/jobs/backup-controller"
+  BACKUP_RESTORE_E2E=1 \
+  BACKUP_RESTORE_E2E_ENDPOINT="$endpoint" \
+  BACKUP_RESTORE_E2E_ACCESS_KEY_FILE="$temporary_directory/access-key" \
+  BACKUP_RESTORE_E2E_SECRET_KEY_FILE="$temporary_directory/secret-key" \
+  BACKUP_RESTORE_E2E_LOCK_ID="e2e-lock-$suffix" \
+    go test ./internal/s3backup -run '^TestSeaweedFSOperationLockE2E$' -count=1 -timeout=2m
+)
+
 postgres_password=$(kubectl -n kodex-system get secret/kodex-postgresql-bootstrap -o json | \
   jq -er '.data.password | @base64d') || fail 'local PostgreSQL bootstrap credential is unavailable'
 [[ -n "$postgres_password" && "$postgres_password" != *$'\n'* ]] || fail 'local PostgreSQL bootstrap credential is invalid'
@@ -264,15 +282,6 @@ for database in "${target_databases[@]}"; do
   [[ "$exists" == 1 ]] || fail 'restored PostgreSQL database readback failed'
 done
 
-jq -er '.destination.accessKeyId' "$credentials" >"$temporary_directory/access-key"
-jq -er '.destination.secretAccessKey' "$credentials" >"$temporary_directory/secret-key"
-chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
-
-port_forward_log="$temporary_directory/port-forward.log"
-kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
-  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
-port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
-endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
 (
   cd "$repository_root/services/jobs/backup-controller"
   BACKUP_RESTORE_E2E=1 \

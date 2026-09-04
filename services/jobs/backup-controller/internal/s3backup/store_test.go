@@ -33,6 +33,7 @@ type fakeS3 struct {
 	lastDeleteVersionID string
 	nextVersion         int
 	deleteHook          func()
+	deleteResponseLost  bool
 }
 
 func newFakeS3() *fakeS3 {
@@ -121,6 +122,10 @@ func (fake *fakeS3) DeleteObject(_ context.Context, input *s3.DeleteObjectInput,
 		fake.deleteHook = nil
 		hook()
 	}
+	if fake.deleteResponseLost {
+		fake.deleteResponseLost = false
+		return nil, responseError(http.StatusInternalServerError)
+	}
 	return &s3.DeleteObjectOutput{}, nil
 }
 
@@ -163,6 +168,23 @@ func TestOperationLockIsExclusiveAndExactlyReleased(t *testing.T) {
 	}
 	if _, err := repository.AcquireOperationLock(context.Background(), "restore", "restore", now, time.Hour); err != nil {
 		t.Fatalf("lock was not exactly released: %v", err)
+	}
+}
+
+func TestOperationLockReleaseAcceptsLostResponseAfterExactDeletion(t *testing.T) {
+	t.Parallel()
+	repository, fake := testRepository(t)
+	lock, err := repository.AcquireOperationLock(context.Background(), "backup", "attempt",
+		time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.deleteResponseLost = true
+	if err := lock.Release(context.Background()); err != nil {
+		t.Fatalf("release after lost S3 response: %v", err)
+	}
+	if len(fake.objects) != 0 {
+		t.Fatalf("lock object survived exact deletion: %#v", fake.objects)
 	}
 }
 

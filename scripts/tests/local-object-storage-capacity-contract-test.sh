@@ -23,6 +23,16 @@ volume_max=$(yq -r '
   .args[] | select(test("^-volume\\.max=")) |
   sub("^-volume.max="; "")
 ' "$statefulset")
+memory_request=$(yq -r '
+  select(.kind == "StatefulSet" and .metadata.name == "seaweedfs") |
+  .spec.template.spec.containers[] | select(.name == "seaweedfs") |
+  .resources.requests.memory
+' "$statefulset")
+memory_limit=$(yq -r '
+  select(.kind == "StatefulSet" and .metadata.name == "seaweedfs") |
+  .spec.template.spec.containers[] | select(.name == "seaweedfs") |
+  .resources.limits.memory
+' "$statefulset")
 
 [[ "$volume_size" =~ ^[0-9]+$ && "$volume_max" =~ ^[0-9]+$ ]] ||
   fail 'SeaweedFS volume capacity arguments are absent'
@@ -30,6 +40,8 @@ volume_max=$(yq -r '
   fail 'declared SeaweedFS volume capacity exceeds the local PVC budget'
 ((volume_max >= 32)) ||
   fail 'SeaweedFS cannot allocate independent collections for all required buckets'
+[[ "$memory_request" == 512Mi && "$memory_limit" == 2Gi ]] ||
+  fail 'SeaweedFS memory budget cannot sustain the full backup and restore drill'
 
 [[ "$(yq -r '.spec.activeDeadlineSeconds' "$bootstrap")" == 900 ]] ||
   fail 'SeaweedFS bucket bootstrap deadline must cover bounded versioned write readback'

@@ -46,7 +46,11 @@ type Policy struct {
 	Keep       int
 }
 
-const operationLockTTL = 25 * time.Hour
+const (
+	operationLockTTL                  = 25 * time.Hour
+	operationLockReleaseTimeout       = 90 * time.Second
+	operationLockReleaseRetryInterval = time.Second
+)
 
 type attemptDocument struct {
 	SchemaVersion int       `json:"schemaVersion"`
@@ -398,7 +402,29 @@ func newBackupID(now time.Time) string {
 }
 
 func releaseOperationLock(ctx context.Context, lock *s3backup.OperationLock) error {
-	releaseContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	releaseContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationLockReleaseTimeout)
 	defer cancel()
-	return lock.Release(releaseContext)
+	return retryOperationLockRelease(releaseContext, operationLockReleaseRetryInterval, lock.Release)
+}
+
+func retryOperationLockRelease(ctx context.Context, retryInterval time.Duration,
+	release func(context.Context) error) error {
+	if release == nil || retryInterval <= 0 {
+		return errors.New("backup repository operation lock release retry is invalid")
+	}
+	var lastErr error
+	for {
+		if err := release(ctx); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return lastErr
+		case <-timer.C:
+		}
+	}
 }

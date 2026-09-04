@@ -20,6 +20,52 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
 
+func TestSeaweedFSOperationLockE2E(t *testing.T) {
+	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
+		t.Skip("local backup restore E2E is disabled")
+	}
+	operationID := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_LOCK_ID"))
+	if !strings.HasPrefix(operationID, "e2e-lock-") || len(operationID) > 128 || strings.ContainsAny(operationID, "\r\n/") {
+		t.Fatal("disposable operation lock identifier is invalid")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	client, err := NewClient(ctx, configspec.S3{
+		Name: "backup-repository", Endpoint: requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT")),
+		Region: "us-east-1", Bucket: "kodex-backups",
+		AccessKeyID:     readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE")),
+		SecretAccessKey: readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE")),
+		UsePathStyle:    true, AllowInsecureLocal: true,
+	})
+	if err != nil {
+		t.Fatal("initialize local backup repository")
+	}
+	repository, err := NewRepository(client, "kodex")
+	if err != nil || repository.Check(ctx, nil) != nil {
+		t.Fatal("local backup repository is unavailable")
+	}
+	lock, err := repository.AcquireOperationLock(ctx, "verify", operationID, time.Now().UTC(), 10*time.Minute)
+	if err != nil {
+		t.Fatalf("acquire disposable operation lock: %v", err)
+	}
+	if err := lock.Release(ctx); err != nil {
+		t.Fatalf("release disposable operation lock: %v", err)
+	}
+	replacement, err := repository.AcquireOperationLock(ctx, "verify", operationID+"-next", time.Now().UTC(), 10*time.Minute)
+	if err != nil {
+		t.Fatalf("acquire replacement operation lock: %v", err)
+	}
+	if err := lock.Release(ctx); err == nil {
+		t.Fatal("stale operation lock released its replacement")
+	}
+	if _, current, err := repository.loadOperationLock(ctx); err != nil || current.OperationID != operationID+"-next" {
+		t.Fatal("replacement operation lock did not survive stale release")
+	}
+	if err := replacement.Release(ctx); err != nil {
+		t.Fatalf("release replacement operation lock: %v", err)
+	}
+}
+
 func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
@@ -50,26 +96,6 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	repository, err := NewRepository(client, "kodex")
 	if err != nil || repository.Check(ctx, nil) != nil {
 		t.Fatal("local backup repository is unavailable")
-	}
-	lock, err := repository.AcquireOperationLock(ctx, "verify", "e2e-lock", time.Now().UTC(), 10*time.Minute)
-	if err != nil {
-		t.Fatalf("acquire disposable operation lock: %v", err)
-	}
-	if err := lock.Release(ctx); err != nil {
-		t.Fatalf("release disposable operation lock: %v", err)
-	}
-	replacement, err := repository.AcquireOperationLock(ctx, "verify", "e2e-lock-next", time.Now().UTC(), 10*time.Minute)
-	if err != nil {
-		t.Fatalf("acquire replacement operation lock: %v", err)
-	}
-	if err := lock.Release(ctx); err == nil {
-		t.Fatal("stale operation lock released its replacement")
-	}
-	if _, current, err := repository.loadOperationLock(ctx); err != nil || current.OperationID != "e2e-lock-next" {
-		t.Fatal("replacement operation lock did not survive stale release")
-	}
-	if err := replacement.Release(ctx); err != nil {
-		t.Fatalf("release replacement operation lock: %v", err)
 	}
 	backup, _, err := repository.LoadVerifiedManifest(ctx, backupID)
 	if err != nil {

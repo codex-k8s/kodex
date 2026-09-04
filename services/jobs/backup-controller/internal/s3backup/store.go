@@ -222,7 +222,15 @@ func (repository *Repository) deleteCurrentOperationLock(ctx context.Context, re
 		IfMatch: aws.String("\"" + receipt.ETag + "\""),
 	})
 	if err != nil {
-		return mapError(err)
+		deleteErr := mapError(err)
+		current, readErr := repository.currentReceiptForKey(ctx, receipt.Key)
+		if errors.Is(readErr, ErrNotFound) {
+			return nil
+		}
+		if readErr == nil && (current.VersionID != receipt.VersionID || current.ETag != receipt.ETag) {
+			return ErrConflict
+		}
+		return deleteErr
 	}
 	current, err := repository.currentReceiptForKey(ctx, receipt.Key)
 	if errors.Is(err, ErrNotFound) {
@@ -460,12 +468,13 @@ func (repository *Repository) RestorePlatformObjects(ctx context.Context, value 
 		receipt, putErr := target.putFile(ctx, targetKey, "application/octet-stream", filePath,
 			object.Source.ChecksumSHA256, object.Source.SizeBytes)
 		removeErr := os.Remove(filePath)
-		if putErr == nil {
-			result = append(result, receipt)
+		if putErr != nil {
+			return result, errors.New("store restored platform object")
 		}
-		if putErr != nil || removeErr != nil {
-			return result, errors.New("restore platform object")
+		if removeErr != nil {
+			return result, errors.New("remove restored platform object workspace")
 		}
+		result = append(result, receipt)
 	}
 	return result, nil
 }
