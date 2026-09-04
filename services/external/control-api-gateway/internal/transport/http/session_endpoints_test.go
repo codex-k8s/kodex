@@ -8,13 +8,24 @@ import (
 	"testing"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 )
+
+type bootstrapQueryStub struct {
+	controlplanev1.PlatformQueryServiceClient
+}
+
+func (*bootstrapQueryStub) GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error) {
+	return &controlplanev1.GetBootstrapStateResponse{State: &controlplanev1.BootstrapState{}}, nil
+}
 
 type ownerSessionOIDCStub struct {
 	principal oidcauth.Principal
@@ -105,5 +116,37 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 				t.Fatalf("elevation is not exact: %#v", store.elevation)
 			}
 		})
+	}
+}
+
+func TestBootstrapReturnsAuthenticatedSessionRevision(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	claims := ownerSessionClaims(now, nil)
+	claims.Subject = uuid.NewString()
+	claims.OrganizationID = uuid.NewString()
+	claims.OIDCSessionID = uuid.NewString()
+	claims.Bearer = "bound-bearer"
+	principal := oidcauth.Principal{
+		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
+		SessionRevision: claims.SessionRevision, ExpiresAt: now.Add(time.Hour),
+	}
+	security, err := boundary.New(boundary.Config{
+		Origins: []string{"https://control.example.test"}, Verifier: runtimeSecretOIDCStub{principal: principal},
+		Sessions: runtimeSecretSessionStoreStub{claims: claims}, Revocations: &runtimeSecretRevocationStoreStub{},
+		Limiter: ratelimit.New(ratelimit.Config{Window: time.Minute, Limit: 100, MaximumKeys: 10, PreAuthConcurrency: 2, GlobalHTTPConcurrency: 4, PerSubjectHTTPConcurrency: 2, GlobalWebSocketConcurrency: 4, PerSubjectWebSocketConcurrency: 2}),
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("new boundary: %v", err)
+	}
+	server := &Server{control: &controlplaneclient.Client{Query: &bootstrapQueryStub{}}}
+	request := httptest.NewRequest(http.MethodGet, "https://control.example.test/api/v1/bootstrap", nil)
+	request.AddCookie(&http.Cookie{Name: boundary.SessionCookieName, Value: "encoded-session"})
+	response := httptest.NewRecorder()
+
+	security.Middleware(http.HandlerFunc(server.GetBootstrapState)).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || response.Header().Get("ETag") != `"5"` {
+		t.Fatalf("bootstrap result = status %d ETag %q", response.Code, response.Header().Get("ETag"))
 	}
 }

@@ -157,4 +157,28 @@ describe("session renewal coordinator", () => {
     first.close();
     second.close();
   });
+
+  it("отклоняет Broadcast revision ниже подтверждённой bootstrap revision", () => {
+    const channel = new MemoryChannel();
+    const bus = new SessionRenewalBus(channel, 0);
+    const receipts: number[] = [];
+    bus.subscribe((receipt) => receipts.push(receipt.revision));
+    bus.observeRevision(7);
+
+    channel.inject({
+      type: "session-renewed",
+      revision: 6,
+      completedAt: 100,
+      nextRenewalAt: 300_100,
+    });
+    channel.inject({
+      type: "session-renewed",
+      revision: 7,
+      completedAt: 101,
+      nextRenewalAt: 300_101,
+    });
+
+    expect(receipts).toEqual([7]);
+    bus.close();
+  });
 });

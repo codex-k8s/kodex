@@ -81,6 +81,14 @@ async function withOwnerSessionRetry<T>(request: () => Promise<T>): Promise<T> {
   }
 }
 
+function ownerSessionRevision(etagValue?: string): number {
+  const match = /^"([1-9][0-9]*)"$/.exec(etagValue ?? "");
+  const parsed = Number(match?.[1] ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 1)
+    throw new Error("Owner session revision is unavailable");
+  return parsed;
+}
+
 function oidcManager(): UserManager {
   const config = runtimeConfig().oidc;
   const requestTimeoutInSeconds = Math.max(
@@ -164,8 +172,17 @@ export const useSessionStore = defineStore("session", () => {
     problem.value = undefined;
     for (let attempt = 0; ; attempt += 1) {
       try {
-        await unwrap(getBootstrapState({ signal: requestSignal() }));
+        const response = await unwrap(
+          getBootstrapState({ signal: requestSignal() }),
+        );
+        const serverRevision = ownerSessionRevision(response.etag);
         if (current !== generation) return;
+        revision.value = serverRevision;
+        renewalBus.observeRevision(serverRevision);
+        window.sessionStorage.setItem(
+          sessionRevisionKey,
+          String(serverRevision),
+        );
         phase.value = "authenticated";
         startRenewal();
         resetUnauthorizedNotification();
@@ -328,14 +345,11 @@ export const useSessionStore = defineStore("session", () => {
           }),
         ),
       );
-      const parsedRevision = Number.parseInt(
-        response.etag?.replaceAll('"', "") ?? "0",
-      );
-      if (!Number.isSafeInteger(parsedRevision) || parsedRevision < 1)
-        throw new Error("Owner session revision is unavailable");
+      const parsedRevision = ownerSessionRevision(response.etag);
       if (current !== generation)
         throw new Error("OIDC callback was superseded");
       revision.value = parsedRevision;
+      renewalBus.observeRevision(parsedRevision);
       window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
       phase.value = "authenticated";
       startRenewal();

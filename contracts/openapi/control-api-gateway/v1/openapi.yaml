@@ -72,6 +72,7 @@ paths:
       responses:
         '200':
           description: Авторитетное состояние bootstrap и помощника
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BootstrapState' }

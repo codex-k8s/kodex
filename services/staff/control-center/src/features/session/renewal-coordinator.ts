@@ -180,6 +180,14 @@ export class SessionRenewalBus {
     return () => this.listeners.delete(listener);
   }
 
+  observeRevision(revision: number): void {
+    if (validRevision(revision))
+      this.revisionHighWatermark = Math.max(
+        this.revisionHighWatermark,
+        revision,
+      );
+  }
+
   close(): void {
     this.channel?.removeEventListener("message", this.receive);
     this.channel?.close();
