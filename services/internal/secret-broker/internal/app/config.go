@@ -16,6 +16,8 @@ const (
 	defaultControlPlaneTLSServerName  = "control-plane.kodex-system.svc.cluster.local"
 	defaultControlAPIClientSPIFFEID   = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
 	defaultControlPlaneClientSPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	defaultRuntimeClientSPIFFEID      = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+	defaultSTTClientSPIFFEID          = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
 	defaultProviderEgressProxy        = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
 )
 
@@ -52,10 +54,13 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		RuntimeNamespace: "kodex-runtime", GRPCListen: ":8443", TechnicalListen: ":9090",
-		ServerCertificateFile:       "/var/run/secrets/kodex/secret-broker/server/tls.crt",
-		ServerPrivateKeyFile:        "/var/run/secrets/kodex/secret-broker/server/tls.key",
-		ClientCAFile:                "/var/run/config/kodex/secret-broker/client/ca.pem",
-		ExpectedClientSPIFFEIDs:     []string{defaultControlAPIClientSPIFFEID, defaultControlPlaneClientSPIFFEID},
+		ServerCertificateFile: "/var/run/secrets/kodex/secret-broker/server/tls.crt",
+		ServerPrivateKeyFile:  "/var/run/secrets/kodex/secret-broker/server/tls.key",
+		ClientCAFile:          "/var/run/config/kodex/secret-broker/client/ca.pem",
+		ExpectedClientSPIFFEIDs: []string{
+			defaultControlAPIClientSPIFFEID, defaultControlPlaneClientSPIFFEID,
+			defaultRuntimeClientSPIFFEID, defaultSTTClientSPIFFEID,
+		},
 		ControlPlaneTarget:          defaultControlPlaneTarget,
 		ControlPlaneTLSServerName:   defaultControlPlaneTLSServerName,
 		ControlPlaneCAFile:          "/var/run/config/kodex/secret-broker/control-plane/ca.pem",
@@ -98,9 +103,11 @@ func (config Config) validate() error {
 	}
 	if config.ProviderDeviceAuthTTL < time.Minute || config.ProviderDeviceAuthTTL > time.Hour ||
 		config.ProviderHTTPSProxy != defaultProviderEgressProxy || config.ProviderHTTPProxy != defaultProviderEgressProxy ||
-		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 || len(config.ExpectedClientSPIFFEIDs) != 2 ||
+		config.AuthorityVerifierUID == 0 || config.AuthorityVerifierGID == 0 || len(config.ExpectedClientSPIFFEIDs) != 4 ||
 		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultControlAPIClientSPIFFEID) ||
-		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultControlPlaneClientSPIFFEID) {
+		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultControlPlaneClientSPIFFEID) ||
+		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultRuntimeClientSPIFFEID) ||
+		!slices.Contains(config.ExpectedClientSPIFFEIDs, defaultSTTClientSPIFFEID) {
 		return errors.New("secret broker provider credential configuration is invalid")
 	}
 	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile,

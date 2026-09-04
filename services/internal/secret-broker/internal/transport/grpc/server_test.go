@@ -30,7 +30,17 @@ type fakeOwner struct {
 	events           *[]string
 }
 
-func (owner *fakeOwner) Check(context.Context) error { return nil }
+func (owner *fakeOwner) Check(context.Context) error                     { return nil }
+func (owner *fakeOwner) CheckCredentialProjection(context.Context) error { return nil }
+func (owner *fakeOwner) ResolveRuntimeCredentialProjection(context.Context, *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected runtime credential projection")
+}
+func (owner *fakeOwner) ValidateRuntimeCredentialProjection(context.Context, *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
+	return false, errors.New("unexpected runtime credential projection validation")
+}
+func (owner *fakeOwner) ResolveTranscriptionCredentialProjection(context.Context, *controlplanev1.ResolveTranscriptionCredentialProjectionRequest) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected transcription credential projection")
+}
 
 func (owner *fakeOwner) Consume(_ context.Context, grant string) (*controlplanev1.ConsumeRuntimeSecretOperationResponse, error) {
 	owner.mu.Lock()
@@ -108,6 +118,18 @@ func (store *fakeStore) DeleteExact(context.Context, kubernetesstore.Materializa
 		*store.events = append(*store.events, "delete")
 	}
 	return store.deleteErr
+}
+func (store *fakeStore) ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
+	return nil, errors.New("unexpected provider credential read")
+}
+func (store *fakeStore) MaterializeRuntimeCredentialProjection(context.Context, kubernetesstore.CredentialProjectionManifest) (kubernetesstore.CredentialProjection, error) {
+	return kubernetesstore.CredentialProjection{}, errors.New("unexpected runtime credential projection")
+}
+func (store *fakeStore) ListRuntimeCredentialProjections(context.Context) ([]kubernetesstore.CredentialProjection, error) {
+	return nil, nil
+}
+func (store *fakeStore) DeleteRuntimeCredentialProjection(context.Context, kubernetesstore.CredentialProjection) error {
+	return nil
 }
 
 func TestCreateUsesFencedEffectAndBuildsBoundedHint(t *testing.T) {
@@ -203,7 +225,7 @@ func TestStaleGenerationNeverDeletesRevokeMaterializations(t *testing.T) {
 	}
 }
 
-func TestRevokeCompletesBeforeBestEffortDelete(t *testing.T) {
+func TestRevokeReportsIncompleteCleanupAfterDurableCompletion(t *testing.T) {
 	t.Parallel()
 	events := []string{}
 	operation := readOperation(controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_REVOKE, "secop_revoke", 2)
@@ -212,8 +234,8 @@ func TestRevokeCompletesBeforeBestEffortDelete(t *testing.T) {
 	store := &fakeStore{materialized: materialization(operation), deleteErr: errors.New("synthetic delete outage"), events: &events}
 	server, _ := New(owner, store, &fakeRecovery{}, 512<<10)
 	response, err := server.RevokeSecret(context.Background(), &secretbrokerv1.RevokeSecretRequest{OperationGrant: "grant"})
-	if err != nil || response.GetSecret().GetStatus() != secretbrokerv1.RuntimeSecretStatus_RUNTIME_SECRET_STATUS_REVOKED {
-		t.Fatalf("authoritative revoke must succeed independently from cleanup: response=%#v err=%v", response, err)
+	if status.Code(err) != codes.Unavailable || response != nil || owner.completionCalls != 1 {
+		t.Fatalf("incomplete cleanup must remain visible after authoritative revoke: response=%#v err=%v completions=%d", response, err, owner.completionCalls)
 	}
 	if len(events) != 3 || events[0] != "complete" || events[1] != "resolve" || events[2] != "delete" {
 		t.Fatalf("unexpected revoke effect order: %v", events)

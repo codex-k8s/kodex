@@ -185,11 +185,15 @@ service PlatformCommandService {
 // grant связывает actor, Проект, вид операции и exact Secret revision.
 service RuntimeSecretWorkService {
   rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
+  rpc CheckCredentialProjectionWorkReadiness(CheckCredentialProjectionWorkReadinessRequest) returns (CheckCredentialProjectionWorkReadinessResponse);
   rpc ListRuntimeSecretRecoveryWork(ListRuntimeSecretRecoveryWorkRequest) returns (ListRuntimeSecretRecoveryWorkResponse);
   rpc ConsumeRuntimeSecretOperation(ConsumeRuntimeSecretOperationRequest) returns (ConsumeRuntimeSecretOperationResponse);
   rpc CompleteRuntimeSecretOperation(CompleteRuntimeSecretOperationRequest) returns (CompleteRuntimeSecretOperationResponse);
   rpc FailRuntimeSecretOperation(FailRuntimeSecretOperationRequest) returns (FailRuntimeSecretOperationResponse);
   rpc RecoverRuntimeSecretMaterialization(RecoverRuntimeSecretMaterializationRequest) returns (RecoverRuntimeSecretMaterializationResponse);
+  rpc ResolveRuntimeCredentialProjection(ResolveRuntimeCredentialProjectionRequest) returns (ResolveRuntimeCredentialProjectionResponse);
+  rpc ValidateRuntimeCredentialProjection(ValidateRuntimeCredentialProjectionRequest) returns (ValidateRuntimeCredentialProjectionResponse);
+  rpc ResolveTranscriptionCredentialProjection(ResolveTranscriptionCredentialProjectionRequest) returns (ResolveTranscriptionCredentialProjectionResponse);
 }
 
 service SystemAssistantService {
@@ -4333,6 +4337,7 @@ message SystemSTTConfiguration {
   string permission_key = 8;
   bool ready = 9;
   repeated string readiness_blockers = 10;
+  uint64 provider_credential_generation = 11;
 }
 message GetSystemSTTConfigurationRequest {}
 message GetSystemSTTConfigurationResponse { SystemSTTConfiguration configuration = 1; }
@@ -4421,4 +4426,73 @@ message ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest {
 message ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse {
   // terminal_receipt — безопасное идемпотентное подтверждение длиной 1..512 байт.
   string terminal_receipt = 1;
+}
+
+// CredentialProjectionAuthority переносит только результат проверки bearer
+// proof внутри secret-broker. Обычный consumer не может вызвать owner RPC и
+// назначить эти поля самостоятельно.
+message CredentialProjectionAuthority {
+  string actor_id = 1;
+  string tenant_id = 2;
+  string project_id = 3;
+  uint64 source_revision = 4;
+  string source_digest_sha256 = 5;
+  string proof_jti = 6;
+  string caller_workload_id = 7;
+  string caller_full_method = 8;
+  uint64 caller_credential_revision = 9;
+  google.protobuf.Timestamp expires_at = 10;
+}
+
+message CheckCredentialProjectionWorkReadinessRequest {}
+message CheckCredentialProjectionWorkReadinessResponse { bool ready = 1; }
+
+message ResolveRuntimeCredentialProjectionRequest {
+  CredentialProjectionAuthority authority = 1;
+  string workload_instance = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string runtime_revision_ref = 6;
+  string runtime_revision_digest = 7;
+  string session_ref = 8;
+  string turn_ref = 9;
+  int32 attempt = 10;
+  string input_digest = 11;
+}
+
+message ResolveRuntimeCredentialProjectionResponse {
+  ProviderCredentialBinding provider_credential = 1;
+  repeated RuntimeSecretDescriptor runtime_secrets = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message ValidateRuntimeCredentialProjectionRequest {
+  CredentialProjectionAuthority authority = 1;
+  string workload_instance = 2;
+  string lease_ref = 3;
+  int64 generation = 4;
+  string runtime_revision_ref = 5;
+  string runtime_revision_digest = 6;
+  string session_ref = 7;
+  string turn_ref = 8;
+  int32 attempt = 9;
+  string input_digest = 10;
+  ProviderCredentialBinding provider_credential = 11;
+  repeated RuntimeSecretDescriptor runtime_secrets = 12;
+}
+
+message ValidateRuntimeCredentialProjectionResponse { bool valid = 1; }
+
+message ResolveTranscriptionCredentialProjectionRequest {
+  CredentialProjectionAuthority authority = 1;
+  string provider_account_ref = 2;
+  uint64 provider_credential_generation = 3;
+  uint64 config_revision = 4;
+  string config_digest_sha256 = 5;
+}
+
+message ResolveTranscriptionCredentialProjectionResponse {
+  ProviderCredentialBinding provider_credential = 1;
+  google.protobuf.Timestamp expires_at = 2;
 }

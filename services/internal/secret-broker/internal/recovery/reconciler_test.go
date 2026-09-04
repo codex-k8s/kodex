@@ -14,15 +14,18 @@ import (
 )
 
 type fakeOwner struct {
-	mu        sync.Mutex
-	decisions map[string]controlplanev1.RuntimeSecretRecoveryAction
-	states    map[string]controlplanev1.RuntimeSecretOperationState
-	calls     []string
-	err       error
-	work      []RecoveryWork
-	workError error
-	failed    []failedClaim
-	failError error
+	mu                 sync.Mutex
+	decisions          map[string]controlplanev1.RuntimeSecretRecoveryAction
+	states             map[string]controlplanev1.RuntimeSecretOperationState
+	calls              []string
+	err                error
+	work               []RecoveryWork
+	workError          error
+	failed             []failedClaim
+	failError          error
+	projectionValidity map[string]bool
+	projectionError    error
+	projectionCalls    []string
 }
 
 type failedClaim struct {
@@ -59,14 +62,24 @@ func (owner *fakeOwner) FailExpiredClaim(_ context.Context, operationRef, claima
 	return owner.failError
 }
 
+func (owner *fakeOwner) ValidateRuntimeCredentialProjection(_ context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	owner.projectionCalls = append(owner.projectionCalls, request.GetLeaseRef())
+	return owner.projectionValidity[request.GetLeaseRef()], owner.projectionError
+}
+
 type fakeStore struct {
-	items       []kubernetesstore.Materialization
-	deleted     []string
-	deleteError error
-	listError   error
-	readError   error
-	lookup      kubernetesstore.Materialization
-	lookupError error
+	items                 []kubernetesstore.Materialization
+	deleted               []string
+	deleteError           error
+	listError             error
+	readError             error
+	lookup                kubernetesstore.Materialization
+	lookupError           error
+	projections           []kubernetesstore.CredentialProjection
+	deletedProjections    []string
+	projectionDeleteError error
 }
 
 func (store *fakeStore) LookupExpectedEffect(context.Context, kubernetesstore.MaterializationEffect) (kubernetesstore.Materialization, error) {
@@ -84,6 +97,33 @@ func (store *fakeStore) ReadbackExact(_ context.Context, materialization kuberne
 func (store *fakeStore) DeleteExact(_ context.Context, materialization kubernetesstore.Materialization) error {
 	store.deleted = append(store.deleted, materialization.OperationRef)
 	return store.deleteError
+}
+
+func (store *fakeStore) ListRuntimeCredentialProjections(context.Context) ([]kubernetesstore.CredentialProjection, error) {
+	return append([]kubernetesstore.CredentialProjection(nil), store.projections...), nil
+}
+
+func (store *fakeStore) DeleteRuntimeCredentialProjection(_ context.Context, projection kubernetesstore.CredentialProjection) error {
+	store.deletedProjections = append(store.deletedProjections, projection.SecretName)
+	return store.projectionDeleteError
+}
+
+func TestCredentialProjectionRecoveryDeletesRevokedOrChangedBinding(t *testing.T) {
+	t.Parallel()
+	keep := kubernetesstore.CredentialProjection{SecretName: "projection-keep", Manifest: kubernetesstore.CredentialProjectionManifest{LeaseRef: "lease-keep"}}
+	remove := kubernetesstore.CredentialProjection{SecretName: "projection-remove", Manifest: kubernetesstore.CredentialProjectionManifest{LeaseRef: "lease-remove"}}
+	owner := &fakeOwner{projectionValidity: map[string]bool{"lease-keep": true}}
+	store := &fakeStore{projections: []kubernetesstore.CredentialProjection{keep, remove}}
+	reconciler := newTestReconciler(t, owner, store)
+	if err := reconciler.EnableCredentialProjectionRecovery(owner, store); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconciler.ReconcileOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(owner.projectionCalls) != 2 || len(store.deletedProjections) != 1 || store.deletedProjections[0] != "projection-remove" {
+		t.Fatalf("unexpected projection recovery: calls=%v deleted=%v", owner.projectionCalls, store.deletedProjections)
+	}
 }
 
 func TestRecoveryCompletesOrphanAndDeletesRejectedMaterialization(t *testing.T) {

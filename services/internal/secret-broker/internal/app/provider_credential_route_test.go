@@ -8,13 +8,14 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"google.golang.org/grpc"
 )
 
-func TestRouteProviderCredentialUnaryProtectsExactService(t *testing.T) {
+func TestRouteProtectedUnaryProtectsExactServices(t *testing.T) {
 	protectedCalls := 0
 	handlerCalls := 0
-	interceptor := routeProviderCredentialUnary(func(
+	interceptor := routeProtectedUnary(func(
 		_ context.Context,
 		_ any,
 		_ *grpc.UnaryServerInfo,
@@ -27,25 +28,28 @@ func TestRouteProviderCredentialUnaryProtectsExactService(t *testing.T) {
 		handlerCalls++
 		return "handler", nil
 	}
-	providerMethods := []string{
+	protectedMethods := []string{
 		controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
+		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName,
+		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName,
+		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName,
 	}
-	for _, method := range providerMethods {
+	for _, method := range protectedMethods {
 		result, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: method}, handler)
 		if err != nil || result != "protected" {
-			t.Fatalf("provider method %q bypassed authorization verifier", method)
+			t.Fatalf("protected method %q bypassed authorization verifier", method)
 		}
 	}
 	result, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{
 		FullMethod: secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName,
 	}, handler)
-	if err != nil || result != "handler" || protectedCalls != len(providerMethods) || handlerCalls != 1 {
-		t.Fatal("provider route protection expanded beyond the exact service")
+	if err != nil || result != "handler" || protectedCalls != len(protectedMethods) || handlerCalls != 1 {
+		t.Fatal("route protection expanded beyond the exact services")
 	}
 }
 

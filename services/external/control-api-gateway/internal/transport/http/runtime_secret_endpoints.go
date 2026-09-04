@@ -29,7 +29,11 @@ func (server *Server) ListRuntimeSecrets(writer http.ResponseWriter, request *ht
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "", "secrets")
+	page := generated.RuntimeSecretPage{NextPageToken: response.GetPage().GetNextPageToken()}
+	for _, item := range response.GetSecrets() {
+		page.Items = append(page.Items, castControlPlaneRuntimeSecret(item))
+	}
+	writeJSON(writer, http.StatusOK, page)
 }
 
 func (server *Server) GetRuntimeSecret(writer http.ResponseWriter, request *http.Request, secretRef generated.SecretRef) {
@@ -39,7 +43,11 @@ func (server *Server) GetRuntimeSecret(writer http.ResponseWriter, request *http
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "secret", "")
+	if response.GetSecret() == nil {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeJSON(writer, http.StatusOK, castControlPlaneRuntimeSecret(response.GetSecret()))
 }
 
 func (server *Server) CreateRuntimeSecret(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.CreateRuntimeSecretParams) {

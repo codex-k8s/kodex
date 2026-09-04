@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -19,6 +20,22 @@ type fakeRuntimeSecretClient struct {
 
 func (*fakeRuntimeSecretClient) CheckRuntimeSecretWorkReadiness(context.Context, *controlplanev1.CheckRuntimeSecretWorkReadinessRequest, ...grpc.CallOption) (*controlplanev1.CheckRuntimeSecretWorkReadinessResponse, error) {
 	return &controlplanev1.CheckRuntimeSecretWorkReadinessResponse{Ready: true}, nil
+}
+
+func (*fakeRuntimeSecretClient) CheckCredentialProjectionWorkReadiness(context.Context, *controlplanev1.CheckCredentialProjectionWorkReadinessRequest, ...grpc.CallOption) (*controlplanev1.CheckCredentialProjectionWorkReadinessResponse, error) {
+	return &controlplanev1.CheckCredentialProjectionWorkReadinessResponse{Ready: true}, nil
+}
+
+func (*fakeRuntimeSecretClient) ResolveRuntimeCredentialProjection(context.Context, *controlplanev1.ResolveRuntimeCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected runtime credential projection")
+}
+
+func (*fakeRuntimeSecretClient) ValidateRuntimeCredentialProjection(context.Context, *controlplanev1.ValidateRuntimeCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ValidateRuntimeCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected runtime credential projection validation")
+}
+
+func (*fakeRuntimeSecretClient) ResolveTranscriptionCredentialProjection(context.Context, *controlplanev1.ResolveTranscriptionCredentialProjectionRequest, ...grpc.CallOption) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
+	return nil, errors.New("unexpected transcription credential projection")
 }
 
 func (client *fakeRuntimeSecretClient) ListRuntimeSecretRecoveryWork(_ context.Context, request *controlplanev1.ListRuntimeSecretRecoveryWorkRequest, _ ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretRecoveryWorkResponse, error) {

@@ -261,6 +261,7 @@ type SystemSTTConfiguration struct {
 	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef string
 	Model, Language, PermissionKey                            string
 	Revision                                                  int64
+	ProviderCredentialGeneration                              uint64
 	Ready                                                     bool
 	ReadinessBlockers                                         []string
 }

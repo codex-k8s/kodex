@@ -8,6 +8,8 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/recovery"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -38,7 +40,48 @@ func (owner *Owner) Check(ctx context.Context) error {
 	if !result.GetReady() {
 		return errors.New("runtime secret owner is unavailable")
 	}
+	projection, err := owner.client.RuntimeSecrets.CheckCredentialProjectionWorkReadiness(ctx, &controlplanev1.CheckCredentialProjectionWorkReadinessRequest{})
+	if err != nil {
+		return fmt.Errorf("check credential projection owner readiness: %w", err)
+	}
+	if !projection.GetReady() {
+		return errors.New("credential projection owner is unavailable")
+	}
 	return nil
+}
+
+func (owner *Owner) CheckCredentialProjection(ctx context.Context) error {
+	if err := owner.client.CheckLocalAuthority(ctx); err != nil {
+		return err
+	}
+	result, err := owner.client.RuntimeSecrets.CheckCredentialProjectionWorkReadiness(ctx, &controlplanev1.CheckCredentialProjectionWorkReadinessRequest{})
+	if err != nil {
+		return fmt.Errorf("check credential projection owner readiness: %w", err)
+	}
+	if !result.GetReady() {
+		return errors.New("credential projection owner is unavailable")
+	}
+	return nil
+}
+
+func (owner *Owner) ResolveRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
+	return owner.client.RuntimeSecrets.ResolveRuntimeCredentialProjection(ctx, request)
+}
+
+func (owner *Owner) ValidateRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error) {
+	result, err := owner.client.RuntimeSecrets.ValidateRuntimeCredentialProjection(ctx, request)
+	if err != nil {
+		switch status.Code(err) {
+		case codes.PermissionDenied, codes.NotFound, codes.FailedPrecondition:
+			return false, nil
+		}
+		return false, err
+	}
+	return result.GetValid(), nil
+}
+
+func (owner *Owner) ResolveTranscriptionCredentialProjection(ctx context.Context, request *controlplanev1.ResolveTranscriptionCredentialProjectionRequest) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
+	return owner.client.RuntimeSecrets.ResolveTranscriptionCredentialProjection(ctx, request)
 }
 
 // ListRecoveryWork читает bounded snapshot просроченных CLAIMED operation.

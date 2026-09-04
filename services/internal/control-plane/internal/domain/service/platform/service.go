@@ -324,6 +324,30 @@ func (service *Service) RecoverRuntimeSecretMaterialization(ctx context.Context,
 	}
 	return service.repository.RecoverRuntimeSecretMaterialization(ctx, p, input)
 }
+
+func (service *Service) ResolveRuntimeCredentialProjection(ctx context.Context, p value.Principal, input repository.RuntimeCredentialProjectionInput) (repository.RuntimeCredentialProjection, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.RuntimeCredentialProjection{}, err
+	}
+	return service.repository.ResolveRuntimeCredentialProjection(ctx, p, input)
+}
+
+func (service *Service) ValidateRuntimeCredentialProjection(ctx context.Context, p value.Principal, input repository.RuntimeCredentialProjectionInput) (bool, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return false, err
+	}
+	return service.repository.ValidateRuntimeCredentialProjection(ctx, p, input)
+}
+
+func (service *Service) ResolveTranscriptionCredentialProjection(ctx context.Context, p value.Principal, input repository.TranscriptionCredentialProjectionInput) (repository.TranscriptionCredentialProjection, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.TranscriptionCredentialProjection{}, err
+	}
+	return service.repository.ResolveTranscriptionCredentialProjection(ctx, p, input)
+}
 func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

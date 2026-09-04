@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Owner interface {
@@ -49,21 +50,32 @@ type RecoveryWorkStore interface {
 	LookupExpectedEffect(context.Context, kubernetesstore.MaterializationEffect) (kubernetesstore.Materialization, error)
 }
 
+type CredentialProjectionOwner interface {
+	ValidateRuntimeCredentialProjection(context.Context, *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error)
+}
+
+type CredentialProjectionStore interface {
+	ListRuntimeCredentialProjections(context.Context) ([]kubernetesstore.CredentialProjection, error)
+	DeleteRuntimeCredentialProjection(context.Context, kubernetesstore.CredentialProjection) error
+}
+
 type healthSnapshot struct {
 	ready bool
 }
 
 type Reconciler struct {
-	owner     Owner
-	store     Store
-	interval  time.Duration
-	timeout   time.Duration
-	logger    *slog.Logger
-	metrics   *Metrics
-	health    atomic.Pointer[healthSnapshot]
-	work      RecoveryWorkOwner
-	workStore RecoveryWorkStore
-	namespace string
+	owner           Owner
+	store           Store
+	interval        time.Duration
+	timeout         time.Duration
+	logger          *slog.Logger
+	metrics         *Metrics
+	health          atomic.Pointer[healthSnapshot]
+	work            RecoveryWorkOwner
+	workStore       RecoveryWorkStore
+	namespace       string
+	projectionOwner CredentialProjectionOwner
+	projectionStore CredentialProjectionStore
 }
 
 // EnableExpiredClaimRecovery подключает owner-side список просроченных claim.
@@ -73,6 +85,16 @@ func (reconciler *Reconciler) EnableExpiredClaimRecovery(owner RecoveryWorkOwner
 		return errors.New("runtime secret expired claim recovery configuration is invalid")
 	}
 	reconciler.work, reconciler.workStore, reconciler.namespace = owner, store, namespace
+	return nil
+}
+
+// EnableCredentialProjectionRecovery подключает удаление projection после
+// terminal lease, revoke, config change либо смены credential generation.
+func (reconciler *Reconciler) EnableCredentialProjectionRecovery(owner CredentialProjectionOwner, store CredentialProjectionStore) error {
+	if owner == nil || store == nil {
+		return errors.New("credential projection recovery configuration is invalid")
+	}
+	reconciler.projectionOwner, reconciler.projectionStore = owner, store
 	return nil
 }
 
@@ -96,6 +118,9 @@ func (reconciler *Reconciler) Check(context.Context) error {
 // после ошибки одного объекта. Возвращаемые ошибки не содержат identifiers.
 func (reconciler *Reconciler) ReconcileOnce(ctx context.Context) error {
 	failures, joined := reconciler.reconcileExpiredClaims(ctx)
+	projectionFailures, projectionErr := reconciler.reconcileCredentialProjections(ctx)
+	failures += projectionFailures
+	joined = errors.Join(joined, projectionErr)
 	items, err := reconciler.store.ListManaged(ctx)
 	if err != nil {
 		failures++
@@ -154,6 +179,69 @@ func (reconciler *Reconciler) ReconcileOnce(ctx context.Context) error {
 	reconciler.metrics.ObserveRun("success")
 	reconciler.setHealth(true)
 	return nil
+}
+
+func (reconciler *Reconciler) reconcileCredentialProjections(ctx context.Context) (int, error) {
+	if reconciler.projectionOwner == nil || reconciler.projectionStore == nil {
+		return 0, nil
+	}
+	items, err := reconciler.projectionStore.ListRuntimeCredentialProjections(ctx)
+	if err != nil {
+		reconciler.metrics.ObserveError("projection_list")
+		return 1, errors.New("list runtime credential projections")
+	}
+	failures := 0
+	var joined error
+	for _, item := range items {
+		valid, validationErr := reconciler.projectionOwner.ValidateRuntimeCredentialProjection(ctx, projectionValidationRequest(item.Manifest))
+		if validationErr != nil {
+			failures++
+			reconciler.metrics.ObserveError("projection_decision")
+			joined = errors.Join(joined, errors.New("validate runtime credential projection"))
+			continue
+		}
+		if valid {
+			reconciler.metrics.ObserveAction("projection_keep")
+			continue
+		}
+		if err := reconciler.projectionStore.DeleteRuntimeCredentialProjection(ctx, item); err != nil {
+			failures++
+			reconciler.metrics.ObserveError("projection_delete")
+			joined = errors.Join(joined, errors.New("delete invalid runtime credential projection"))
+			continue
+		}
+		reconciler.metrics.ObserveAction("projection_delete")
+	}
+	return failures, joined
+}
+
+func projectionValidationRequest(manifest kubernetesstore.CredentialProjectionManifest) *controlplanev1.ValidateRuntimeCredentialProjectionRequest {
+	request := &controlplanev1.ValidateRuntimeCredentialProjectionRequest{
+		Authority: &controlplanev1.CredentialProjectionAuthority{
+			ActorId: manifest.Authority.ActorID, TenantId: manifest.Authority.TenantID, ProjectId: manifest.Authority.ProjectID,
+			SourceRevision: manifest.Authority.SourceRevision, SourceDigestSha256: manifest.Authority.SourceDigestSHA256,
+			ProofJti: manifest.Authority.ProofJTI, CallerWorkloadId: manifest.Authority.CallerWorkloadID,
+			CallerFullMethod: manifest.Authority.CallerFullMethod, CallerCredentialRevision: manifest.Authority.CallerCredentialRevision,
+			ExpiresAt: timestamppb.New(manifest.Authority.ExpiresAt),
+		},
+		WorkloadInstance: manifest.WorkloadInstance, LeaseRef: manifest.LeaseRef, Generation: manifest.Generation,
+		RuntimeRevisionRef: manifest.RuntimeRevisionRef, RuntimeRevisionDigest: manifest.RuntimeRevisionDigest,
+		SessionRef: manifest.SessionRef, TurnRef: manifest.TurnRef, Attempt: manifest.Attempt, InputDigest: manifest.InputDigest,
+		ProviderCredential: &controlplanev1.ProviderCredentialBinding{
+			AccountRef: manifest.ProviderCredential.AccountRef, CredentialRevisionRef: manifest.ProviderCredential.CredentialRevisionRef,
+			CredentialRevision: manifest.ProviderCredential.CredentialRevision, SecretName: manifest.ProviderCredential.SecretName,
+			SecretUid: manifest.ProviderCredential.SecretUID, SecretResourceVersion: manifest.ProviderCredential.SecretResourceVersion,
+			ContentSha256: manifest.ProviderCredential.ContentSHA256,
+		},
+	}
+	for _, item := range manifest.RuntimeSecrets {
+		request.RuntimeSecrets = append(request.RuntimeSecrets, &controlplanev1.RuntimeSecretDescriptor{
+			Name: item.Name, SecretRef: item.SecretRef, Revision: item.Revision, Namespace: item.Namespace,
+			SecretName: item.SecretName, SecretKey: item.SecretKey, SecretUid: item.SecretUID,
+			SecretResourceVersion: item.SecretResourceVersion, ContentSha256: item.ContentSHA256,
+		})
+	}
+	return request
 }
 
 func (reconciler *Reconciler) reconcileExpiredClaims(ctx context.Context) (int, error) {
@@ -308,7 +396,7 @@ func (metrics *Metrics) ObserveRun(outcome string) {
 
 func (metrics *Metrics) ObserveAction(action string) {
 	switch action {
-	case "keep", "delete", "not_found", "effect_present", "claim_failed", "claim_conflict":
+	case "keep", "delete", "not_found", "effect_present", "claim_failed", "claim_conflict", "projection_keep", "projection_delete":
 	default:
 		action = "not_found"
 	}
@@ -317,7 +405,8 @@ func (metrics *Metrics) ObserveAction(action string) {
 
 func (metrics *Metrics) ObserveError(stage string) {
 	switch stage {
-	case "list", "readback", "decision", "delete", "protocol", "work_list", "work_lookup", "work_fail", "work_conflict", "work_protocol":
+	case "list", "readback", "decision", "delete", "protocol", "work_list", "work_lookup", "work_fail", "work_conflict", "work_protocol",
+		"projection_list", "projection_decision", "projection_delete":
 	default:
 		stage = "protocol"
 	}

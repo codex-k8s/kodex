@@ -120,6 +120,14 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[]; .kind == "NetworkPolicy" and .metadata.name == "secret-broker-exact-runtime-paths" and
     any(.spec.ingress[]; any(.from[]?.podSelector.matchLabels?;
       .["app.kubernetes.io/name"] == "control-plane") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443)) and
+    any(.spec.ingress[]; any(.from[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "runtime-controller" and
+      .["app.kubernetes.io/component"] == "internal-controller") and
+      any(.ports[]; .protocol == "TCP" and .port == 8443)) and
+    any(.spec.ingress[]; any(.from[]?.podSelector.matchLabels?;
+      .["app.kubernetes.io/name"] == "stt-tts-service" and
+      .["app.kubernetes.io/component"] == "internal-service") and
       any(.ports[]; .protocol == "TCP" and .port == 8443))) and
   any(.[]; .kind == "Service" and .metadata.name == "secret-broker" and
     any(.spec.ports[]; .name == "verify-metrics" and .port == 9092)) and
@@ -169,7 +177,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
 ' "$render" | jq -e '
-  .policy_revision == 42 and
+  .policy_revision == 43 and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
@@ -188,8 +196,20 @@ yq -N -r '
       .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local" and
       .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
       .authority_sources == ["DOMAIN_STATE"] and
-      .project_required == false)] | length) == 1
-' >/dev/null || fail 'provider credential cleanup workload operation profile is incomplete'
+      .project_required == false)] | length) == 1 and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.runtime.credentials.materialize" and
+      .caller_workload_id == "runtime-controller" and
+      .target_workload_id == "secret-broker" and
+      .project_required == true and
+      .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials")] | length) == 1 and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.stt.credential.project" and
+      .caller_workload_id == "stt-tts-service" and
+      .target_workload_id == "secret-broker" and
+      .project_required == true and
+      .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
+' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
   control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \

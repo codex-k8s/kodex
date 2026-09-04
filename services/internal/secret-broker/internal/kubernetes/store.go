@@ -266,7 +266,15 @@ func (store *Store) DeleteExact(ctx context.Context, expected Materialization) e
 	if err != nil {
 		return errors.New("delete exact runtime secret materialization")
 	}
-	return nil
+	readback, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, expected.Name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("read back exact runtime secret deletion")
+	}
+	clearSecretData(readback)
+	return ErrMaterializationConflict
 }
 
 // ResolveExact проверяет назначенный control-plane descriptor и возвращает

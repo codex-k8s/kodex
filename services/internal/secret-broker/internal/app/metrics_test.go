@@ -32,10 +32,13 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
 	operations := secretBrokerOperations()
-	if len(operations) != 6 ||
+	if len(operations) != 10 ||
 		operations["platform.runtime-secrets.operations.fail"] != controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName ||
 		operations["platform.runtime-secrets.operations.recover"] != controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName ||
-		operations["platform.runtime-secrets.materialization.recover"] != controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName {
+		operations["platform.runtime-secrets.materialization.recover"] != controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName ||
+		operations["platform.credential-projections.runtime.resolve"] != controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName ||
+		operations["platform.credential-projections.runtime.validate"] != controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName ||
+		operations["platform.credential-projections.stt.resolve"] != controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName {
 		t.Fatalf("secret broker owner operation registry is incomplete: %#v", operations)
 	}
 }
