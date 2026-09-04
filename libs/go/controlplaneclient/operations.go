@@ -82,6 +82,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.prompt-templates.validate":                 controlplanev1.PlatformQueryService_ValidatePromptTemplate_FullMethodName,
 		"platform.query.prompt-templates.preview":                  controlplanev1.PlatformQueryService_PreviewPromptTemplate_FullMethodName,
 		"platform.query.managed-configurations.history.list":       controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName,
+		"platform.query.managed-configurations.list":               controlplanev1.PlatformQueryService_ListManagedConfigurations_FullMethodName,
 		"platform.query.managed-configurations.impact.get":         controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName,
 		"platform.query.system-stt.get":                            controlplanev1.PlatformQueryService_GetSystemSTTConfiguration_FullMethodName,
 		"platform.query.role-image-revisions.list":                 controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName,
@@ -236,8 +237,9 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 // который материализует и проверяет credentials одной execution lease.
 func RuntimeCredentialProjectionOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime.credentials.materialize":     "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
-		"platform.runtime.credentials.readiness.check": "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
+		"platform.runtime.credentials.materialize":                  "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
+		"platform.runtime.credentials.system-assistant.materialize": "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials",
+		"platform.runtime.credentials.readiness.check":              "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
 	}
 }
 
@@ -352,14 +354,7 @@ func InteractionGatewayOperations() map[string]string {
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
 		"platform.query.projects.get":                           {},
-		"platform.query.memberships.list":                       {},
 		"platform.query.membership-candidates.list":             {},
-		"platform.query.agents.list":                            {},
-		"platform.query.workflows.list":                         {},
-		"platform.query.artifacts.list":                         {},
-		"platform.query.schedules.list":                         {},
-		"platform.query.runtime-environments.list":              {},
-		"platform.query.runtime-secrets.list":                   {},
 		"platform.query.template-variables.list":                {},
 		"platform.query.role-image-revisions.list":              {},
 		"platform.command.projects.update":                      {},

@@ -98,12 +98,12 @@ func (server *Server) ListPlatformMembershipCandidates(w http.ResponseWriter, r 
 	}
 	writeMessage(w, http.StatusOK, response, "", "users")
 }
-func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
-	r, ok := withProjectReference(w, r, ref)
+func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListProjectMembershipsParams) {
+	r, ok := catalogRequest(w, r, &ref, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Page: page(nil, nil)})
+	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

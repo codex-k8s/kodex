@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	materializeOperation = "platform.runtime.credentials.materialize"
-	readinessOperation   = "platform.runtime.credentials.readiness.check"
-	providerAuthKey      = "provider-auth.json"
+	materializeOperation          = "platform.runtime.credentials.materialize"
+	assistantMaterializeOperation = "platform.runtime.credentials.system-assistant.materialize"
+	readinessOperation            = "platform.runtime.credentials.readiness.check"
+	providerAuthKey               = "provider-auth.json"
 )
 
 type Config struct {
@@ -71,6 +72,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	}
 	operations := operationRegistry{
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName:             materializeOperation,
+		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName:     assistantMaterializeOperation,
 		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName: readinessOperation,
 	}
 	connection, err := grpc.NewClient(config.Target,
@@ -88,6 +90,13 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 func (client *Client) Materialize(ctx context.Context, input runtimecontract.RunnerInput) (Projection, error) {
 	if client == nil || client.api == nil || input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return Projection{}, errors.New("runtime credential projection input is invalid")
+	}
+	if input.SystemAssistant && input.ProjectRef == "" {
+		response, err := client.api.MaterializeSystemAssistantCredentials(ctx, &secretbrokerv1.MaterializeSystemAssistantCredentialsRequest{Execution: materializeRequest(input)})
+		if err != nil {
+			return Projection{}, errors.New("materialize assistant credential projection")
+		}
+		return projectionFromDescriptor(input, response.GetProjection())
 	}
 	projectContext, err := controlplaneclient.WithProjectReference(ctx, input.ProjectRef)
 	if err != nil {

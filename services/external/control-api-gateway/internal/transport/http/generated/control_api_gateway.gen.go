@@ -1307,22 +1307,22 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 
 // Defines values for ManagedConfigurationKind.
 const (
-	INTEGRATIONDEFINITION ManagedConfigurationKind = "INTEGRATION_DEFINITION"
-	PROMPTTEMPLATE        ManagedConfigurationKind = "PROMPT_TEMPLATE"
-	ROLEIMAGE             ManagedConfigurationKind = "ROLE_IMAGE"
-	SYSTEMSTT             ManagedConfigurationKind = "SYSTEM_STT"
+	ManagedConfigurationKindINTEGRATIONDEFINITION ManagedConfigurationKind = "INTEGRATION_DEFINITION"
+	ManagedConfigurationKindPROMPTTEMPLATE        ManagedConfigurationKind = "PROMPT_TEMPLATE"
+	ManagedConfigurationKindROLEIMAGE             ManagedConfigurationKind = "ROLE_IMAGE"
+	ManagedConfigurationKindSYSTEMSTT             ManagedConfigurationKind = "SYSTEM_STT"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationKind enum.
 func (e ManagedConfigurationKind) Valid() bool {
 	switch e {
-	case INTEGRATIONDEFINITION:
+	case ManagedConfigurationKindINTEGRATIONDEFINITION:
 		return true
-	case PROMPTTEMPLATE:
+	case ManagedConfigurationKindPROMPTTEMPLATE:
 		return true
-	case ROLEIMAGE:
+	case ManagedConfigurationKindROLEIMAGE:
 		return true
-	case SYSTEMSTT:
+	case ManagedConfigurationKindSYSTEMSTT:
 		return true
 	default:
 		return false
@@ -1331,16 +1331,16 @@ func (e ManagedConfigurationKind) Valid() bool {
 
 // Defines values for ManagedConfigurationManagedBy.
 const (
-	GIT ManagedConfigurationManagedBy = "GIT"
-	UI  ManagedConfigurationManagedBy = "UI"
+	ManagedConfigurationManagedByGIT ManagedConfigurationManagedBy = "GIT"
+	ManagedConfigurationManagedByUI  ManagedConfigurationManagedBy = "UI"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationManagedBy enum.
 func (e ManagedConfigurationManagedBy) Valid() bool {
 	switch e {
-	case GIT:
+	case ManagedConfigurationManagedByGIT:
 		return true
-	case UI:
+	case ManagedConfigurationManagedByUI:
 		return true
 	default:
 		return false
@@ -1446,6 +1446,75 @@ func (e ManagedConfigurationRevisionState) Valid() bool {
 	case ManagedConfigurationRevisionStateSUPERSEDED:
 		return true
 	case ManagedConfigurationRevisionStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationSummaryCurrentRevisionState.
+const (
+	ManagedConfigurationSummaryCurrentRevisionStateDRAFT      ManagedConfigurationSummaryCurrentRevisionState = "DRAFT"
+	ManagedConfigurationSummaryCurrentRevisionStateINVALID    ManagedConfigurationSummaryCurrentRevisionState = "INVALID"
+	ManagedConfigurationSummaryCurrentRevisionStatePUBLISHED  ManagedConfigurationSummaryCurrentRevisionState = "PUBLISHED"
+	ManagedConfigurationSummaryCurrentRevisionStateSUPERSEDED ManagedConfigurationSummaryCurrentRevisionState = "SUPERSEDED"
+	ManagedConfigurationSummaryCurrentRevisionStateVALID      ManagedConfigurationSummaryCurrentRevisionState = "VALID"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationSummaryCurrentRevisionState enum.
+func (e ManagedConfigurationSummaryCurrentRevisionState) Valid() bool {
+	switch e {
+	case ManagedConfigurationSummaryCurrentRevisionStateDRAFT:
+		return true
+	case ManagedConfigurationSummaryCurrentRevisionStateINVALID:
+		return true
+	case ManagedConfigurationSummaryCurrentRevisionStatePUBLISHED:
+		return true
+	case ManagedConfigurationSummaryCurrentRevisionStateSUPERSEDED:
+		return true
+	case ManagedConfigurationSummaryCurrentRevisionStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationSummaryKind.
+const (
+	ManagedConfigurationSummaryKindINTEGRATIONDEFINITION ManagedConfigurationSummaryKind = "INTEGRATION_DEFINITION"
+	ManagedConfigurationSummaryKindPROMPTTEMPLATE        ManagedConfigurationSummaryKind = "PROMPT_TEMPLATE"
+	ManagedConfigurationSummaryKindROLEIMAGE             ManagedConfigurationSummaryKind = "ROLE_IMAGE"
+	ManagedConfigurationSummaryKindSYSTEMSTT             ManagedConfigurationSummaryKind = "SYSTEM_STT"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationSummaryKind enum.
+func (e ManagedConfigurationSummaryKind) Valid() bool {
+	switch e {
+	case ManagedConfigurationSummaryKindINTEGRATIONDEFINITION:
+		return true
+	case ManagedConfigurationSummaryKindPROMPTTEMPLATE:
+		return true
+	case ManagedConfigurationSummaryKindROLEIMAGE:
+		return true
+	case ManagedConfigurationSummaryKindSYSTEMSTT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationSummaryManagedBy.
+const (
+	ManagedConfigurationSummaryManagedByGIT ManagedConfigurationSummaryManagedBy = "GIT"
+	ManagedConfigurationSummaryManagedByUI  ManagedConfigurationSummaryManagedBy = "UI"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationSummaryManagedBy enum.
+func (e ManagedConfigurationSummaryManagedBy) Valid() bool {
+	switch e {
+	case ManagedConfigurationSummaryManagedByGIT:
+		return true
+	case ManagedConfigurationSummaryManagedByUI:
 		return true
 	default:
 		return false
@@ -4013,22 +4082,22 @@ func (e VFSNodeKind) Valid() bool {
 
 // Defines values for WorkflowState.
 const (
-	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
-	WorkflowStateDRAFT     WorkflowState = "DRAFT"
-	WorkflowStatePUBLISHED WorkflowState = "PUBLISHED"
-	WorkflowStateVALID     WorkflowState = "VALID"
+	ARCHIVED  WorkflowState = "ARCHIVED"
+	DRAFT     WorkflowState = "DRAFT"
+	PUBLISHED WorkflowState = "PUBLISHED"
+	VALID     WorkflowState = "VALID"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowState enum.
 func (e WorkflowState) Valid() bool {
 	switch e {
-	case WorkflowStateARCHIVED:
+	case ARCHIVED:
 		return true
-	case WorkflowStateDRAFT:
+	case DRAFT:
 		return true
-	case WorkflowStatePUBLISHED:
+	case PUBLISHED:
 		return true
-	case WorkflowStateVALID:
+	case VALID:
 		return true
 	default:
 		return false
@@ -4392,6 +4461,30 @@ func (e GetArtifactImpactParamsAction) Valid() bool {
 	case DELETE:
 		return true
 	case PURGE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListManagedConfigurationsParamsKind.
+const (
+	INTEGRATIONDEFINITION ListManagedConfigurationsParamsKind = "INTEGRATION_DEFINITION"
+	PROMPTTEMPLATE        ListManagedConfigurationsParamsKind = "PROMPT_TEMPLATE"
+	ROLEIMAGE             ListManagedConfigurationsParamsKind = "ROLE_IMAGE"
+	SYSTEMSTT             ListManagedConfigurationsParamsKind = "SYSTEM_STT"
+)
+
+// Valid indicates whether the value is a known member of the ListManagedConfigurationsParamsKind enum.
+func (e ListManagedConfigurationsParamsKind) Valid() bool {
+	switch e {
+	case INTEGRATIONDEFINITION:
+		return true
+	case PROMPTTEMPLATE:
+		return true
+	case ROLEIMAGE:
+		return true
+	case SYSTEMSTT:
 		return true
 	default:
 		return false
@@ -5541,6 +5634,13 @@ type ManagedConfigurationImpact struct {
 	TargetRevisionRef OpaqueRef                      `json:"targetRevisionRef"`
 }
 
+// ManagedConfigurationPage defines model for ManagedConfigurationPage.
+type ManagedConfigurationPage struct {
+	Items         []ManagedConfigurationSummary `json:"items"`
+	NextPageToken *string                       `json:"nextPageToken,omitempty"`
+	Total         int64                         `json:"total"`
+}
+
 // ManagedConfigurationRebindInput defines model for ManagedConfigurationRebindInput.
 type ManagedConfigurationRebindInput struct {
 	Consumers    []ManagedConfigurationConsumer `json:"consumers"`
@@ -5573,6 +5673,34 @@ type ManagedConfigurationRevisionContentFormat string
 
 // ManagedConfigurationRevisionState defines model for ManagedConfigurationRevision.State.
 type ManagedConfigurationRevisionState string
+
+// ManagedConfigurationSummary defines model for ManagedConfigurationSummary.
+type ManagedConfigurationSummary struct {
+	CurrentRevision *struct {
+		Digest   string                                          `json:"digest"`
+		Ref      OpaqueRef                                       `json:"ref"`
+		Revision int64                                           `json:"revision"`
+		State    ManagedConfigurationSummaryCurrentRevisionState `json:"state"`
+	} `json:"currentRevision,omitempty"`
+	Kind           ManagedConfigurationSummaryKind      `json:"kind"`
+	ManagedBy      ManagedConfigurationSummaryManagedBy `json:"managedBy"`
+	Name           string                               `json:"name"`
+	ProjectRef     *OpaqueRef                           `json:"projectRef,omitempty"`
+	Ref            OpaqueRef                            `json:"ref"`
+	Source         string                               `json:"source"`
+	SourceRevision string                               `json:"sourceRevision"`
+	UpdatedAt      Timestamp                            `json:"updatedAt"`
+	Version        int64                                `json:"version"`
+}
+
+// ManagedConfigurationSummaryCurrentRevisionState defines model for ManagedConfigurationSummary.CurrentRevision.State.
+type ManagedConfigurationSummaryCurrentRevisionState string
+
+// ManagedConfigurationSummaryKind defines model for ManagedConfigurationSummary.Kind.
+type ManagedConfigurationSummaryKind string
+
+// ManagedConfigurationSummaryManagedBy defines model for ManagedConfigurationSummary.ManagedBy.
+type ManagedConfigurationSummaryManagedBy string
 
 // Membership defines model for Membership.
 type Membership struct {
@@ -7826,6 +7954,18 @@ type ListIntegrationDefinitionsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListManagedConfigurationsParams defines parameters for ListManagedConfigurations.
+type ListManagedConfigurationsParams struct {
+	ProjectRef *ProjectRefQuery                     `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query                               `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize                            `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken                           `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Kind       *ListManagedConfigurationsParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListManagedConfigurationsParamsKind defines parameters for ListManagedConfigurations.
+type ListManagedConfigurationsParamsKind string
+
 // CopyGitManagedConfigurationParams defines parameters for CopyGitManagedConfiguration.
 type CopyGitManagedConfigurationParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -7869,6 +8009,14 @@ type ResolveOwnerGateParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListOrganizationProjectMembershipsParams defines parameters for ListOrganizationProjectMemberships.
+type ListOrganizationProjectMembershipsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListProjectsParams defines parameters for ListProjects.
@@ -7948,6 +8096,13 @@ type UploadArtifactParams struct {
 type CreateAttachmentSetDraftParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListProjectMembershipsParams defines parameters for ListProjectMemberships.
+type ListProjectMembershipsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // AddProjectMembershipParams defines parameters for AddProjectMembership.
@@ -8985,6 +9140,9 @@ type ServerInterface interface {
 	// (GET /api/v1/integration-definitions)
 	ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, params ListIntegrationDefinitionsParams)
 
+	// (GET /api/v1/managed-configurations)
+	ListManagedConfigurations(w http.ResponseWriter, r *http.Request, params ListManagedConfigurationsParams)
+
 	// (POST /api/v1/managed-configurations/{configurationRef}/copies)
 	CopyGitManagedConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params CopyGitManagedConfigurationParams)
 
@@ -9014,6 +9172,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/platform-capabilities)
 	ListPlatformCapabilities(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/project-memberships)
+	ListOrganizationProjectMemberships(w http.ResponseWriter, r *http.Request, params ListOrganizationProjectMembershipsParams)
 
 	// (GET /api/v1/projects)
 	ListProjects(w http.ResponseWriter, r *http.Request, params ListProjectsParams)
@@ -9046,7 +9207,7 @@ type ServerInterface interface {
 	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
 
 	// (GET /api/v1/projects/{projectRef}/members)
-	ListProjectMemberships(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+	ListProjectMemberships(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListProjectMembershipsParams)
 
 	// (POST /api/v1/projects/{projectRef}/members)
 	AddProjectMembership(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params AddProjectMembershipParams)
@@ -15672,6 +15833,97 @@ func (siw *ServerInterfaceWrapper) ListIntegrationDefinitions(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ListManagedConfigurations operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedConfigurations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedConfigurationsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedConfigurations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CopyGitManagedConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) CopyGitManagedConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -16313,6 +16565,84 @@ func (siw *ServerInterfaceWrapper) ListPlatformCapabilities(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPlatformCapabilities(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationProjectMemberships operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationProjectMemberships(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationProjectMembershipsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationProjectMemberships(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17256,8 +17586,50 @@ func (siw *ServerInterfaceWrapper) ListProjectMemberships(w http.ResponseWriter,
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProjectMembershipsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListProjectMemberships(w, r, projectRef)
+		siw.Handler.ListProjectMemberships(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25041,6 +25413,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-definitions", wrapper.ListIntegrationDefinitions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations", wrapper.ListManagedConfigurations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/copies", wrapper.CopyGitManagedConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/detachment", wrapper.DetachGitManagedConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions", wrapper.ListManagedConfigurationHistory)
@@ -25051,6 +25424,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/resolution", wrapper.ResolveOwnerGate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/platform-capabilities", wrapper.ListPlatformCapabilities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/project-memberships", wrapper.ListOrganizationProjectMemberships)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects", wrapper.ListProjects)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects", wrapper.CreateProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}", wrapper.GetProject)

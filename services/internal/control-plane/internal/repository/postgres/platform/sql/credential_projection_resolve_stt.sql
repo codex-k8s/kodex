@@ -7,6 +7,7 @@ SELECT account.ref,
        credential.secret_resource_version,
        credential.content_sha256,
        revision.content::jsonb -> 'stt' ->> 'model',
+       revision.content::jsonb -> 'stt' ->> 'language',
        definition.capabilities
 FROM control_plane.managed_configuration_bindings binding
 JOIN control_plane.managed_configuration_sets configuration
@@ -30,6 +31,7 @@ WHERE configuration.organization_id = @organization_id::uuid
   AND binding.consumer_kind = 'STT_SERVICE'
   AND binding.consumer_ref = 'stt-tts-service'
   AND revision.state IN ('PUBLISHED', 'SUPERSEDED')
+  AND COALESCE((revision.content::jsonb -> 'stt' ->> 'enabled')::boolean, false)
   AND revision.revision = @config_revision
   AND revision.digest = @config_digest
   AND account.ref = @account_ref

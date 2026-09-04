@@ -46,6 +46,7 @@ require (
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/codex-k8s/kodex/libs/go/oidcidentity v0.0.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
@@ -145,3 +146,5 @@ replace github.com/codex-k8s/kodex/libs/go/runtimesecret => ../../../libs/go/run
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
+
+replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi

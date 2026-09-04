@@ -53,6 +53,7 @@ func TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout(t *test
 		{"schedules", "ListSchedules", &controlplanev1.ListSchedulesResponse{Page: next}},
 		{"runtime-environments", "ListRuntimeEnvironmentSets", &controlplanev1.ListRuntimeEnvironmentSetsResponse{Page: next}},
 		{"runtime-secrets", "ListRuntimeSecrets", &controlplanev1.ListRuntimeSecretsResponse{Page: next}},
+		{"project-memberships", "ListProjectMemberships", &controlplanev1.ListProjectMembershipsResponse{Page: next}},
 	} {
 		for _, project := range []string{"", "prj_fixture01"} {
 			t.Run(tc.path+"/"+project, func(t *testing.T) {
@@ -87,6 +88,73 @@ func TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout(t *test
 				}
 			})
 		}
+	}
+}
+
+func TestProjectMembershipsForwardSearchAndPagination(t *testing.T) {
+	client := &catalogRPCRecorder{response: &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: "next"}}}
+	recorder := httptest.NewRecorder()
+	catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/projects/prj_fixture01/members?query=member&pageSize=20&pageToken=first", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	request := client.request.(*controlplanev1.ListProjectMembershipsRequest)
+	if request.GetProjectRef() != "prj_fixture01" || request.GetQuery() != "member" || request.GetPage().GetPageSize() != 20 || request.GetPage().GetPageToken() != "first" || !strings.Contains(recorder.Body.String(), `"nextPageToken":"next"`) {
+		t.Fatal("membership query or cursor changed")
+	}
+}
+
+func TestManagedCatalogPreservesSummaryAndFilters(t *testing.T) {
+	configuration, revision := managedFixture()
+	configuration.CurrentRevision = &controlplanev1.ManagedConfigurationRevision{Ref: revision.Ref, Revision: revision.Revision, State: revision.State, Digest: revision.Digest}
+	client := &catalogRPCRecorder{response: &controlplanev1.ListManagedConfigurationsResponse{Configurations: []*controlplanev1.ManagedConfigurationSet{configuration}, Total: 2, Page: &controlplanev1.PageInfo{NextPageToken: "next"}}}
+	recorder := httptest.NewRecorder()
+	catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/managed-configurations?kind=PROMPT_TEMPLATE&query=TYPE_&projectRef=prj_fixture01&pageSize=20&pageToken=first", nil))
+	if recorder.Code != http.StatusOK || !strings.HasSuffix(client.method, "/ListManagedConfigurations") {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	request := client.request.(*controlplanev1.ListManagedConfigurationsRequest)
+	if request.GetProjectRef() != "prj_fixture01" || request.GetKind() != configuration.GetKind() || request.GetQuery() != "TYPE_" || request.GetPage().GetPageSize() != 20 || request.GetPage().GetPageToken() != "first" {
+		t.Fatal("managed catalog filters changed")
+	}
+	var page generated.ManagedConfigurationPage
+	if json.Unmarshal(recorder.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].Name != configuration.Name || page.Items[0].CurrentRevision == nil || page.Items[0].CurrentRevision.Ref != revision.Ref || page.Total != 2 || page.NextPageToken == nil || *page.NextPageToken != "next" {
+		t.Fatalf("summary changed: %s", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), `"content"`) || recorder.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("catalog exposed revision content or became cacheable")
+	}
+}
+
+func TestManagedCatalogRejectsMalformedInputsAndProducer(t *testing.T) {
+	for _, query := range []string{"kind=UNKNOWN", "kind=UNSPECIFIED", "kind=", "pageSize=4294967346", "pageToken=" + strings.Repeat("a", 513)} {
+		client := &catalogRPCRecorder{}
+		recorder := httptest.NewRecorder()
+		catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/managed-configurations?"+query, nil))
+		if recorder.Code != http.StatusBadRequest || client.method != "" {
+			t.Fatalf("invalid catalog query reached RPC: status=%d method=%s", recorder.Code, client.method)
+		}
+	}
+	configuration, revision := managedFixture()
+	revision.State = controlplanev1.ManagedConfigurationState(999)
+	configuration.CurrentRevision = revision
+	for _, response := range []*controlplanev1.ListManagedConfigurationsResponse{
+		{Configurations: []*controlplanev1.ManagedConfigurationSet{configuration}, Total: 1},
+		{Configurations: []*controlplanev1.ManagedConfigurationSet{nil}, Total: 1},
+		{Total: -1},
+	} {
+		client := &catalogRPCRecorder{response: response}
+		recorder := httptest.NewRecorder()
+		catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/managed-configurations", nil))
+		if recorder.Code != http.StatusBadGateway {
+			t.Fatalf("malformed producer accepted: %s", recorder.Body.String())
+		}
+	}
+	client := &catalogRPCRecorder{response: &controlplanev1.ListManagedConfigurationsResponse{}}
+	recorder := httptest.NewRecorder()
+	catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/managed-configurations", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"items":[]`) {
+		t.Fatal("empty managed catalog is not an array")
 	}
 }
 

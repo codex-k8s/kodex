@@ -621,6 +621,7 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 }
 
 type scope struct {
+	authorityProjectID                                                                  string
 	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
 	credentialAuthenticatedAt                                                           time.Time
 }
@@ -880,6 +881,7 @@ func (repository *Repository) resolveScope(ctx context.Context, principal value.
 		return scope{}, errs.ErrUnavailable
 	}
 	result.correlationRef = principal.CorrelationRef
+	result.authorityProjectID = principal.ProjectRef
 	result.credentialAuthenticatedAt = principal.CredentialAuthenticatedAt
 	return result, nil
 }

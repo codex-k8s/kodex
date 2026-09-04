@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -232,6 +233,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		),
 	)
 	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
+	sttv1.RegisterTranscriptionPolicyProjectionServiceServer(grpcServer, transport)
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)

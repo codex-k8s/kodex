@@ -280,6 +280,7 @@ var SecretBrokerService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName             = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials"
+	RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName     = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
 	RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName = "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness"
 )
 
@@ -292,6 +293,7 @@ const (
 // берётся только из проверенного mTLS+bearer context.
 type RuntimeCredentialProjectionServiceClient interface {
 	MaterializeRuntimeCredentials(ctx context.Context, in *MaterializeRuntimeCredentialsRequest, opts ...grpc.CallOption) (*MaterializeRuntimeCredentialsResponse, error)
+	MaterializeSystemAssistantCredentials(ctx context.Context, in *MaterializeSystemAssistantCredentialsRequest, opts ...grpc.CallOption) (*MaterializeSystemAssistantCredentialsResponse, error)
 	CheckRuntimeCredentialProjectionReadiness(ctx context.Context, in *CheckRuntimeCredentialProjectionReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
 }
 
@@ -307,6 +309,16 @@ func (c *runtimeCredentialProjectionServiceClient) MaterializeRuntimeCredentials
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MaterializeRuntimeCredentialsResponse)
 	err := c.cc.Invoke(ctx, RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeCredentialProjectionServiceClient) MaterializeSystemAssistantCredentials(ctx context.Context, in *MaterializeSystemAssistantCredentialsRequest, opts ...grpc.CallOption) (*MaterializeSystemAssistantCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeSystemAssistantCredentialsResponse)
+	err := c.cc.Invoke(ctx, RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +344,7 @@ func (c *runtimeCredentialProjectionServiceClient) CheckRuntimeCredentialProject
 // берётся только из проверенного mTLS+bearer context.
 type RuntimeCredentialProjectionServiceServer interface {
 	MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error)
+	MaterializeSystemAssistantCredentials(context.Context, *MaterializeSystemAssistantCredentialsRequest) (*MaterializeSystemAssistantCredentialsResponse, error)
 	CheckRuntimeCredentialProjectionReadiness(context.Context, *CheckRuntimeCredentialProjectionReadinessRequest) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
 	mustEmbedUnimplementedRuntimeCredentialProjectionServiceServer()
 }
@@ -345,6 +358,9 @@ type UnimplementedRuntimeCredentialProjectionServiceServer struct{}
 
 func (UnimplementedRuntimeCredentialProjectionServiceServer) MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeRuntimeCredentials not implemented")
+}
+func (UnimplementedRuntimeCredentialProjectionServiceServer) MaterializeSystemAssistantCredentials(context.Context, *MaterializeSystemAssistantCredentialsRequest) (*MaterializeSystemAssistantCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeSystemAssistantCredentials not implemented")
 }
 func (UnimplementedRuntimeCredentialProjectionServiceServer) CheckRuntimeCredentialProjectionReadiness(context.Context, *CheckRuntimeCredentialProjectionReadinessRequest) (*CheckRuntimeCredentialProjectionReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeCredentialProjectionReadiness not implemented")
@@ -389,6 +405,24 @@ func _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler(s
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeSystemAssistantCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeCredentialProjectionServiceServer).MaterializeSystemAssistantCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeCredentialProjectionServiceServer).MaterializeSystemAssistantCredentials(ctx, req.(*MaterializeSystemAssistantCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckRuntimeCredentialProjectionReadinessRequest)
 	if err := dec(in); err != nil {
@@ -417,6 +451,10 @@ var RuntimeCredentialProjectionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeRuntimeCredentials",
 			Handler:    _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler,
+		},
+		{
+			MethodName: "MaterializeSystemAssistantCredentials",
+			Handler:    _RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_Handler,
 		},
 		{
 			MethodName: "CheckRuntimeCredentialProjectionReadiness",

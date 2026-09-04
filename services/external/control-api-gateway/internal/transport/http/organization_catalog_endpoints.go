@@ -21,6 +21,21 @@ func catalogRequest(w http.ResponseWriter, r *http.Request, projectRef, query *s
 	return r, true
 }
 
+func (server *Server) ListOrganizationProjectMemberships(w http.ResponseWriter, r *http.Request, p generated.ListOrganizationProjectMembershipsParams) {
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{
+		ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "memberships")
+}
+
 func (server *Server) ListOrganizationAgents(w http.ResponseWriter, r *http.Request, p generated.ListOrganizationAgentsParams) {
 	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
 	if !ok {

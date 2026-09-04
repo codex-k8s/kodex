@@ -508,7 +508,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	`, ownerScope.organizationID).Scan(&sttProviderAccountRef); err != nil {
 		t.Fatalf("select eligible system STT provider account: %v", err)
 	}
-	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"providerAccountRef":%q,"model":"gpt-6-astra","language":"ru","permissionKey":"platform.stt.use"}}`, sttProviderAccountRef)
+	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"enabled":true,"providerAccountRef":%q,"model":"gpt-transcribe","language":"ru","permissionKey":"platform.stt.use"}}`, sttProviderAccountRef)
 	sttCreated, err := service.Execute(ctx, command.Command{Kind: command.CreateSystemSTTDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-system-stt-create"},
 		Payload:  command.ManagedConfigurationInput{Name: "System STT", ContentFormat: "JSON", Content: sttContent}})
@@ -578,6 +578,11 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if err != nil || credentialProjection.ProviderCredential.AccountRef != sttProviderAccountRef ||
 		uint64(credentialProjection.ProviderCredential.CredentialRevision) != sttConfiguration.ProviderCredentialGeneration {
 		t.Fatalf("resolve exact system STT credential: projection=%#v err=%v", credentialProjection, err)
+	}
+	organizationProjection := projectionInput
+	organizationProjection.Authority.ProjectID = ""
+	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, organizationProjection); err != nil {
+		t.Fatalf("resolve organization scoped STT credential: %v", err)
 	}
 	changedConfig := projectionInput
 	changedConfig.ConfigDigestSHA256 = strings.Repeat("f", 64)
@@ -754,6 +759,37 @@ func testManagedPromptHistoryRedaction(
 		t.Fatalf("bind prompt history reader: binding=%#v err=%v", binding.AccessBinding, err)
 	}
 	reader := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
+	filter := query.Filter{Category: "PROMPT_TEMPLATE", Page: query.Page{Size: 1}}
+	seenConfigurations := map[string]bool{}
+	var catalogTotal int64
+	for {
+		items, count, next, err := service.ListManagedConfigurations(ctx, reader, filter)
+		if err != nil || count < 1 {
+			t.Fatalf("managed catalog read: total=%d err=%v", count, err)
+		}
+		catalogTotal = count
+		for _, item := range items {
+			if item.ProjectRef != projectRef || seenConfigurations[item.Ref] || item.CurrentRevision != nil && item.CurrentRevision.Content != "" {
+				t.Fatal("managed catalog leaked content, another project, or repeated a row")
+			}
+			seenConfigurations[item.Ref] = true
+		}
+		if next == "" {
+			break
+		}
+		if next == filter.Page.Token {
+			t.Fatal("managed catalog cursor did not advance")
+		}
+		changed := filter
+		changed.ProjectRef, changed.Page.Token = projectRef, next
+		if _, _, _, err := service.ListManagedConfigurations(ctx, reader, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("managed cursor accepted another filter: %v", err)
+		}
+		filter.Page.Token = next
+	}
+	if int64(len(seenConfigurations)) != catalogTotal || !seenConfigurations[configurationRef] {
+		t.Fatal("managed catalog total or visibility mismatch")
+	}
 	_, history, total, _, err := service.ListManagedConfigurationHistory(ctx, reader, configurationRef, query.Page{Size: 20})
 	if err != nil || total < 1 || len(history) < 1 {
 		t.Fatalf("read redacted prompt history: history=%#v total=%d err=%v", history, total, err)
@@ -1543,7 +1579,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	}
 	lease := claimed.RuntimeItems[0]
 	workspacePolicy, ok := lease["workspacePolicy"].(entity.RuntimeWorkspacePolicy)
-	if !ok || workspacePolicy.Root != "/workspace" || workspacePolicy.Digest == "" || len(workspacePolicy.Rules) != 3 {
+	if !ok || !reflect.DeepEqual(workspacePolicy, runtimeWorkspacePolicy()) {
 		t.Fatalf("claim does not carry a bounded workspace policy: %#v", lease["workspacePolicy"])
 	}
 	promptSnapshot, ok := lease["promptSnapshot"].(entity.PromptMaterializationSnapshot)
@@ -2142,6 +2178,44 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	resolvedCandidate, err := repository.ResolvePrincipal(ctx, candidate)
 	if err != nil {
 		t.Fatalf("resolve restricted application principal: %v", err)
+	}
+	for _, projectRef := range []string{"", projectA.Ref, projectB.Ref} {
+		items, next, err := service.ListAgents(ctx, candidate, query.Filter{ProjectRef: projectRef, Query: "Enterprise", Page: query.Page{Size: 1}})
+		expected := 1
+		if projectRef == projectB.Ref {
+			expected = 0
+		}
+		if err != nil || len(items) != expected || next != "" || expected == 1 && items[0].Ref != agentA.Ref {
+			t.Fatalf("exact-grant catalog eligibility: project=%q items=%d next=%q err=%v", projectRef, len(items), next, err)
+		}
+	}
+	page := query.Filter{Query: "Enterprise", Page: query.Page{Size: 1}}
+	seen := map[string]bool{}
+	for {
+		items, next, err := service.ListAgents(ctx, owner, page)
+		if err != nil || len(items) != 1 || seen[items[0].Ref] {
+			t.Fatalf("global keyset page: items=%d err=%v", len(items), err)
+		}
+		seen[items[0].Ref] = true
+		if next == "" {
+			break
+		}
+		changed := page
+		changed.Page.Token, changed.ProjectRef = next, projectA.Ref
+		if _, _, err := service.ListAgents(ctx, owner, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("cross-filter cursor accepted: %v", err)
+		}
+		changed.ProjectRef = ""
+		if _, _, err := service.ListAgents(ctx, candidate, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("cross-actor cursor accepted: %v", err)
+		}
+		if next == page.Page.Token {
+			t.Fatal("cursor did not advance")
+		}
+		page.Page.Token = next
+	}
+	if len(seen) != 3 {
+		t.Fatalf("global catalog lost rows: %d", len(seen))
 	}
 	var membershipRelationKind string
 	if err := repository.pool.QueryRow(ctx, `
@@ -3076,7 +3150,7 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	candidate := value.Principal{
 		ActorID: candidateAuthority.ActorID, AuthorityTenant: candidateAuthority.OrganizationID,
 		Permission: candidateInput.Operation, CorrelationRef: "membership-candidate-component",
-		CallerWorkload: "control-api-gateway", ProjectRef: projectRef, CredentialRevision: 1,
+		CallerWorkload: "control-api-gateway", ProjectRef: candidateAuthority.ProjectID, CredentialRevision: 1,
 	}
 	memberships, _, err := service.ListMemberships(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
 	if err != nil || len(memberships) != 2 {
