@@ -61,8 +61,15 @@ func processDeliveries(ctx context.Context, control controlplanev1.InteractionWo
 }
 
 func deliveryContext(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim, completionBudget time.Duration) (context.Context, context.CancelFunc, error) {
+	if claim.GetDeliveryRef() == "" {
+		return nil, nil, errDeliveryLease
+	}
 	lease := claim.GetLease()
-	if claim.GetDeliveryRef() == "" || lease == nil || lease.GetRef() == "" || lease.GetFence() == "" || lease.GetGeneration() < 1 || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil {
+	return leaseContext(ctx, lease, completionBudget)
+}
+
+func leaseContext(ctx context.Context, lease *controlplanev1.WorkLease, completionBudget time.Duration) (context.Context, context.CancelFunc, error) {
+	if lease == nil || lease.GetRef() == "" || lease.GetFence() == "" || lease.GetGeneration() < 1 || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil {
 		return nil, nil, errDeliveryLease
 	}
 	deadline := lease.GetExpiresAt().AsTime()

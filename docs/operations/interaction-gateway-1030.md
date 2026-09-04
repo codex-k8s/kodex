@@ -77,12 +77,41 @@ gate/run/version передаются в `AcceptInteractionMessage`.
 `ListInteractionIdentities`. HTTP/PWA-поверхность этих новых producer-команд
 подключается в зависимых unit и пока не объявляется готовой этим checkpoint.
 
+## Типизированные операции MCP
+
+Пакет Mattermost `2.2.0` содержит 18 capabilities. Две системные подписки
+`mattermost.inbound` и `mattermost.gate_decisions` не доступны как вызываемые
+агентом MCP tools. Остальные 16 операций исполняются только владельцем
+`interaction-gateway`:
+
+- чтение команды, канала и участников;
+- список, чтение и поиск posts, чтение threads;
+- список вложений и ограниченное чтение file ranges;
+- чтение, добавление и удаление reactions;
+- отправка, notification, result mirror и обновление собственного bot post.
+
+Каждая попытка сверяет version/digest пакета, exact scope, canonical input
+digest, risk и approval policy. Ответ проверяется по schema и связывается
+с effect key, input digest и response digest. Изменяющая операция без
+подтверждённого результата завершается `UNKNOWN_OUTCOME`.
+
+Поиск принудительно ограничен каналом и не принимает пользовательские search
+operators. File download требует attachment membership в предварительно
+прочитанном post и exact Content-Range; публичные ссылки не выдаются. Агент
+не может изменить bot post, содержащий Human Gate. Credential читается из
+точного read-only Secret key с проверкой content digest и ограниченным
+временем ожидания проекции.
+
+Connection tests и invocations арендуются по одной непосредственно перед
+исполнением. Completion сохраняет lease/fence/generation и резерв времени;
+receipt от другого effect/input не принимается.
+
 ## Проверка checkpoint
 
 Локальная точка входа из каталога unit:
 
 ```bash
-go test ./... -count=1 -race
+go test ./... -count=1 -race -timeout=90s
 go vet ./...
 go build ./...
 ```
@@ -93,8 +122,7 @@ readback без `core_run_affected` и последовательную смен
 WebSocket fixture работает только на loopback без реальных credentials.
 
 Это промежуточная реализация полного unit, не объявление готовности #1030.
-До полного PR остаются typed MCP catalog для teams/channels/posts/threads/
-search/files/reactions/send/update, HTTP/PWA управления identity,
+До полного PR остаются HTTP/PWA управления identity,
 durable inbound acknowledgement, readiness рабочего пути и сквозной
 component-сценарий. Live Mattermost и staging не запускались.
 

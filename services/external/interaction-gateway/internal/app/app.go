@@ -86,6 +86,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serveTechnical(technical),
 		monitorLocalReadiness(control, readiness, metrics, logger, config),
 		runDeliveryLoop(control, adapter, logger, config),
+		runInvocationLoop(control.Runtime, adapter, logger, config),
 		runSourceRefresh(sources, control, logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))

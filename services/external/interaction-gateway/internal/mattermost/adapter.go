@@ -17,6 +17,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/gorilla/websocket"
 	"github.com/mattermost/mattermost/server/public/model"
 )
@@ -45,6 +46,7 @@ type Adapter struct {
 	allowedHosts map[string]struct{}
 	timeout      time.Duration
 	text         *texti18n.Localizer
+	definition   integrationpackage.Package
 }
 
 type Message struct {
@@ -83,7 +85,11 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		}
 		hosts[host] = struct{}{}
 	}
-	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text}, nil
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return nil, errConfiguration
+	}
+	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text, definition: definitions["mattermost"]}, nil
 }
 
 func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (postRef, threadRef string, resultErr error) {
@@ -233,6 +239,10 @@ func (adapter *Adapter) client(ctx context.Context, source source) (*model.Clien
 	if token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\r\n") {
 		return nil, "", nil, func() {}, errCredential
 	}
+	return adapter.authenticatedClient(ctx, source, base, token)
+}
+
+func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, base *url.URL, token string) (*model.Client4, string, *model.Channel, func(), error) {
 	transport := &http.Transport{
 		Proxy:                 http.ProxyURL(adapter.proxy),
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS13, ServerName: base.Hostname()},
