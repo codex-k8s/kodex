@@ -1328,47 +1328,48 @@ func (e MembershipPlatformRole) Valid() bool {
 
 // Defines values for NextAction.
 const (
-	NextActionADDTURN             NextAction = "ADD_TURN"
-	NextActionAPPLYPLAN           NextAction = "APPLY_PLAN"
-	NextActionARCHIVE             NextAction = "ARCHIVE"
-	NextActionBIND                NextAction = "BIND"
-	NextActionCANCEL              NextAction = "CANCEL"
-	NextActionCOMPLETEONBOARDING  NextAction = "COMPLETE_ONBOARDING"
-	NextActionCONFIGURECREDENTIAL NextAction = "CONFIGURE_CREDENTIAL"
-	NextActionCREATEAGENT         NextAction = "CREATE_AGENT"
-	NextActionCREATECONNECTION    NextAction = "CREATE_CONNECTION"
-	NextActionCREATECONVERSATION  NextAction = "CREATE_CONVERSATION"
-	NextActionCREATEPROJECT       NextAction = "CREATE_PROJECT"
-	NextActionCREATERUN           NextAction = "CREATE_RUN"
-	NextActionCREATESCHEDULE      NextAction = "CREATE_SCHEDULE"
-	NextActionCREATEWORKFLOW      NextAction = "CREATE_WORKFLOW"
-	NextActionDELETE              NextAction = "DELETE"
-	NextActionDISABLE             NextAction = "DISABLE"
-	NextActionDOWNLOAD            NextAction = "DOWNLOAD"
-	NextActionEDIT                NextAction = "EDIT"
-	NextActionENABLE              NextAction = "ENABLE"
-	NextActionLAUNCH              NextAction = "LAUNCH"
-	NextActionMANAGECAPABILITIES  NextAction = "MANAGE_CAPABILITIES"
-	NextActionMANAGEGRANTS        NextAction = "MANAGE_GRANTS"
-	NextActionMANAGEINTEGRATIONS  NextAction = "MANAGE_INTEGRATIONS"
-	NextActionMANAGEMEMBERS       NextAction = "MANAGE_MEMBERS"
-	NextActionOPEN                NextAction = "OPEN"
-	NextActionPROMOTE             NextAction = "PROMOTE"
-	NextActionPUBLISH             NextAction = "PUBLISH"
-	NextActionPURGE               NextAction = "PURGE"
-	NextActionRECOVER             NextAction = "RECOVER"
-	NextActionREQUESTBUILD        NextAction = "REQUEST_BUILD"
-	NextActionRESOLVEGATE         NextAction = "RESOLVE_GATE"
-	NextActionRESTORE             NextAction = "RESTORE"
-	NextActionRETRY               NextAction = "RETRY"
-	NextActionREVEAL              NextAction = "REVEAL"
-	NextActionREVOKE              NextAction = "REVOKE"
-	NextActionROLLBACK            NextAction = "ROLLBACK"
-	NextActionROTATE              NextAction = "ROTATE"
-	NextActionTEST                NextAction = "TEST"
-	NextActionUPDATE              NextAction = "UPDATE"
-	NextActionUPLOADARTIFACT      NextAction = "UPLOAD_ARTIFACT"
-	NextActionVALIDATE            NextAction = "VALIDATE"
+	NextActionADDTURN              NextAction = "ADD_TURN"
+	NextActionAPPLYPLAN            NextAction = "APPLY_PLAN"
+	NextActionARCHIVE              NextAction = "ARCHIVE"
+	NextActionBIND                 NextAction = "BIND"
+	NextActionCANCEL               NextAction = "CANCEL"
+	NextActionCOMPLETEONBOARDING   NextAction = "COMPLETE_ONBOARDING"
+	NextActionCONFIGURECREDENTIAL  NextAction = "CONFIGURE_CREDENTIAL"
+	NextActionCREATEAGENT          NextAction = "CREATE_AGENT"
+	NextActionCREATECONNECTION     NextAction = "CREATE_CONNECTION"
+	NextActionCREATECONVERSATION   NextAction = "CREATE_CONVERSATION"
+	NextActionCREATEPROJECT        NextAction = "CREATE_PROJECT"
+	NextActionCREATERUN            NextAction = "CREATE_RUN"
+	NextActionCREATESCHEDULE       NextAction = "CREATE_SCHEDULE"
+	NextActionCREATEWORKFLOW       NextAction = "CREATE_WORKFLOW"
+	NextActionDELETE               NextAction = "DELETE"
+	NextActionDISABLE              NextAction = "DISABLE"
+	NextActionDOWNLOAD             NextAction = "DOWNLOAD"
+	NextActionEDIT                 NextAction = "EDIT"
+	NextActionENABLE               NextAction = "ENABLE"
+	NextActionLAUNCH               NextAction = "LAUNCH"
+	NextActionMANAGECAPABILITIES   NextAction = "MANAGE_CAPABILITIES"
+	NextActionMANAGEGRANTS         NextAction = "MANAGE_GRANTS"
+	NextActionMANAGEINTEGRATIONS   NextAction = "MANAGE_INTEGRATIONS"
+	NextActionMANAGEMEMBERS        NextAction = "MANAGE_MEMBERS"
+	NextActionOPEN                 NextAction = "OPEN"
+	NextActionPROMOTE              NextAction = "PROMOTE"
+	NextActionPUBLISH              NextAction = "PUBLISH"
+	NextActionPURGE                NextAction = "PURGE"
+	NextActionRECOVER              NextAction = "RECOVER"
+	NextActionREFRESHAUTHORIZATION NextAction = "REFRESH_AUTHORIZATION"
+	NextActionREQUESTBUILD         NextAction = "REQUEST_BUILD"
+	NextActionRESOLVEGATE          NextAction = "RESOLVE_GATE"
+	NextActionRESTORE              NextAction = "RESTORE"
+	NextActionRETRY                NextAction = "RETRY"
+	NextActionREVEAL               NextAction = "REVEAL"
+	NextActionREVOKE               NextAction = "REVOKE"
+	NextActionROLLBACK             NextAction = "ROLLBACK"
+	NextActionROTATE               NextAction = "ROTATE"
+	NextActionTEST                 NextAction = "TEST"
+	NextActionUPDATE               NextAction = "UPDATE"
+	NextActionUPLOADARTIFACT       NextAction = "UPLOAD_ARTIFACT"
+	NextActionVALIDATE             NextAction = "VALIDATE"
 )
 
 // Valid indicates whether the value is a known member of the NextAction enum.
@@ -1431,6 +1432,8 @@ func (e NextAction) Valid() bool {
 	case NextActionPURGE:
 		return true
 	case NextActionRECOVER:
+		return true
+	case NextActionREFRESHAUTHORIZATION:
 		return true
 	case NextActionREQUESTBUILD:
 		return true
@@ -3126,6 +3129,21 @@ func (e SearchResultKind) Valid() bool {
 	case SearchResultKindRUN:
 		return true
 	case SearchResultKindWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SpeechTranscriptionReceiptCompletedStage.
+const (
+	PROVIDERCOMPLETED SpeechTranscriptionReceiptCompletedStage = "PROVIDER_COMPLETED"
+)
+
+// Valid indicates whether the value is a known member of the SpeechTranscriptionReceiptCompletedStage enum.
+func (e SpeechTranscriptionReceiptCompletedStage) Valid() bool {
+	switch e {
+	case PROVIDERCOMPLETED:
 		return true
 	default:
 		return false
@@ -4949,6 +4967,7 @@ type Problem struct {
 	Code          string             `json:"code"`
 	CorrelationId openapi_types.UUID `json:"correlationId"`
 	Detail        *string            `json:"detail,omitempty"`
+	Retryable     bool               `json:"retryable"`
 	Status        int                `json:"status"`
 	Title         string             `json:"title"`
 	Type          string             `json:"type"`
@@ -5986,7 +6005,9 @@ type SearchResultKind string
 
 // SearchResultPage defines model for SearchResultPage.
 type SearchResultPage struct {
-	Items []SearchResult `json:"items"`
+	Items         []SearchResult `json:"items"`
+	NextPageToken *string        `json:"nextPageToken,omitempty"`
+	Total         int64          `json:"total"`
 }
 
 // SimulateAccessInput defines model for SimulateAccessInput.
@@ -6006,6 +6027,26 @@ type SimulateAccessResult struct {
 	Simulated   EffectiveAccessDecision `json:"simulated"`
 	Subject     AccessSubject           `json:"subject"`
 }
+
+// SpeechTranscription defines model for SpeechTranscription.
+type SpeechTranscription struct {
+	Receipt SpeechTranscriptionReceipt `json:"receipt"`
+	Text    string                     `json:"text"`
+}
+
+// SpeechTranscriptionReceipt defines model for SpeechTranscriptionReceipt.
+type SpeechTranscriptionReceipt struct {
+	AuthoritySourceRevision int64                                    `json:"authoritySourceRevision"`
+	CompletedStage          SpeechTranscriptionReceiptCompletedStage `json:"completedStage"`
+	ConfigRevision          int64                                    `json:"configRevision"`
+	CorrelationId           openapi_types.UUID                       `json:"correlationId"`
+	Language                string                                   `json:"language"`
+	Model                   string                                   `json:"model"`
+	RequestId               openapi_types.UUID                       `json:"requestId"`
+}
+
+// SpeechTranscriptionReceiptCompletedStage defines model for SpeechTranscriptionReceipt.CompletedStage.
+type SpeechTranscriptionReceiptCompletedStage string
 
 // SystemAssistant defines model for SystemAssistant.
 type SystemAssistant struct {
@@ -6854,6 +6895,14 @@ type CreateAgentParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// UploadAgentAvatarParams defines parameters for UploadAgentAvatar.
+type UploadAgentAvatarParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	XFileName      string         `json:"X-File-Name"`
+}
+
 // ListArtifactsParams defines parameters for ListArtifacts.
 type ListArtifactsParams struct {
 	RunRef         *RunRefQuery                       `form:"runRef,omitempty" json:"runRef,omitempty"`
@@ -6998,6 +7047,19 @@ type CreateScheduleParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// TranscribeSpeechMultipartBody defines parameters for TranscribeSpeech.
+type TranscribeSpeechMultipartBody struct {
+	Audio openapi_types.File `json:"audio"`
+}
+
+// TranscribeSpeechParams defines parameters for TranscribeSpeech.
+type TranscribeSpeechParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+
+	// XAudioSize Точный размер audio part; gateway и STT сверяют его до provider RPC.
+	XAudioSize int64 `json:"X-Audio-Size"`
+}
+
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
 type ListTemplateVariablesParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -7053,6 +7115,13 @@ type CreateProviderAccountParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DeleteProviderAccountParams defines parameters for DeleteProviderAccount.
+type DeleteProviderAccountParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // AuthorizeProviderAccountApiKeyParams defines parameters for AuthorizeProviderAccountApiKey.
 type AuthorizeProviderAccountApiKeyParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -7069,6 +7138,20 @@ type RefreshProviderAccountAuthorizationParams struct {
 
 // StartProviderAccountDeviceAuthorizationParams defines parameters for StartProviderAccountDeviceAuthorization.
 type StartProviderAccountDeviceAuthorizationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// VerifyProviderAccountDeviceAuthorizationParams defines parameters for VerifyProviderAccountDeviceAuthorization.
+type VerifyProviderAccountDeviceAuthorizationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ReauthorizeProviderAccountDeviceCodeParams defines parameters for ReauthorizeProviderAccountDeviceCode.
+type ReauthorizeProviderAccountDeviceCodeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -7218,8 +7301,10 @@ type ListScheduleRunsParams struct {
 
 // SearchPlatformParams defines parameters for SearchPlatform.
 type SearchPlatformParams struct {
-	Query string `form:"query" json:"query"`
-	Limit *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Query      string           `form:"query" json:"query"`
+	Limit      *int             `form:"limit,omitempty" json:"limit,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
 }
 
 // DeleteOwnerSessionParams defines parameters for DeleteOwnerSession.
@@ -7429,6 +7514,9 @@ type CreateRuntimeSecretJSONRequestBody = RuntimeSecretCreateInput
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = ScheduleInput
+
+// TranscribeSpeechMultipartRequestBody defines body for TranscribeSpeech for multipart/form-data ContentType.
+type TranscribeSpeechMultipartRequestBody TranscribeSpeechMultipartBody
 
 // CreateWorkflowJSONRequestBody defines body for CreateWorkflow for application/json ContentType.
 type CreateWorkflowJSONRequestBody = WorkflowInput
@@ -7742,6 +7830,9 @@ type ServerInterface interface {
 	// (POST /api/v1/projects/{projectRef}/agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAgentParams)
 
+	// (PUT /api/v1/projects/{projectRef}/agents/{agentRef}/avatar)
+	UploadAgentAvatar(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, agentRef AgentRef, params UploadAgentAvatarParams)
+
 	// (GET /api/v1/projects/{projectRef}/artifacts)
 	ListArtifacts(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListArtifactsParams)
 
@@ -7805,6 +7896,9 @@ type ServerInterface interface {
 	// (POST /api/v1/projects/{projectRef}/schedules)
 	CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateScheduleParams)
 
+	// (POST /api/v1/projects/{projectRef}/speech/transcriptions)
+	TranscribeSpeech(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params TranscribeSpeechParams)
+
 	// (GET /api/v1/projects/{projectRef}/template-variables)
 	ListTemplateVariables(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListTemplateVariablesParams)
 
@@ -7829,6 +7923,9 @@ type ServerInterface interface {
 	// (POST /api/v1/provider-accounts)
 	CreateProviderAccount(w http.ResponseWriter, r *http.Request, params CreateProviderAccountParams)
 
+	// (DELETE /api/v1/provider-accounts/{providerAccountRef})
+	DeleteProviderAccount(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params DeleteProviderAccountParams)
+
 	// (GET /api/v1/provider-accounts/{providerAccountRef})
 	GetProviderAccount(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef)
 
@@ -7840,6 +7937,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-authorization)
 	StartProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params StartProviderAccountDeviceAuthorizationParams)
+
+	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification)
+	VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params VerifyProviderAccountDeviceAuthorizationParams)
+
+	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations)
+	ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params ReauthorizeProviderAccountDeviceCodeParams)
 
 	// (PUT /api/v1/provider-accounts/{providerAccountRef}/enabled)
 	SetProviderAccountEnabled(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params SetProviderAccountEnabledParams)
@@ -14560,6 +14663,144 @@ func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// UploadAgentAvatar operation middleware
+func (siw *ServerInterfaceWrapper) UploadAgentAvatar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadAgentAvatarParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-File-Name" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-File-Name")]; found {
+		var XFileName string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-File-Name", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-File-Name", valueList[0], &XFileName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-File-Name", Err: err})
+			return
+		}
+
+		params.XFileName = XFileName
+
+	} else {
+		err := fmt.Errorf("Header parameter X-File-Name is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-File-Name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadAgentAvatar(w, r, projectRef, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListArtifacts operation middleware
 func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
 
@@ -16404,6 +16645,89 @@ func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// TranscribeSpeech operation middleware
+func (siw *ServerInterfaceWrapper) TranscribeSpeech(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TranscribeSpeechParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-Audio-Size" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Audio-Size")]; found {
+		var XAudioSize int64
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Audio-Size", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Audio-Size", valueList[0], &XAudioSize, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: "int64"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Audio-Size", Err: err})
+			return
+		}
+
+		params.XAudioSize = XAudioSize
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Audio-Size is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Audio-Size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TranscribeSpeech(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTemplateVariables operation middleware
 func (siw *ServerInterfaceWrapper) ListTemplateVariables(w http.ResponseWriter, r *http.Request) {
 
@@ -16967,6 +17291,112 @@ func (siw *ServerInterfaceWrapper) CreateProviderAccount(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteProviderAccount operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProviderAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerAccountRef" -------------
+	var providerAccountRef ProviderAccountRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteProviderAccountParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProviderAccount(w, r, providerAccountRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProviderAccount operation middleware
 func (siw *ServerInterfaceWrapper) GetProviderAccount(w http.ResponseWriter, r *http.Request) {
 
@@ -17308,6 +17738,218 @@ func (siw *ServerInterfaceWrapper) StartProviderAccountDeviceAuthorization(w htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartProviderAccountDeviceAuthorization(w, r, providerAccountRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyProviderAccountDeviceAuthorization operation middleware
+func (siw *ServerInterfaceWrapper) VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerAccountRef" -------------
+	var providerAccountRef ProviderAccountRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params VerifyProviderAccountDeviceAuthorizationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyProviderAccountDeviceAuthorization(w, r, providerAccountRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReauthorizeProviderAccountDeviceCode operation middleware
+func (siw *ServerInterfaceWrapper) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerAccountRef" -------------
+	var providerAccountRef ProviderAccountRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReauthorizeProviderAccountDeviceCodeParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReauthorizeProviderAccountDeviceCode(w, r, providerAccountRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -19480,6 +20122,32 @@ func (siw *ServerInterfaceWrapper) SearchPlatform(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchPlatform(w, r, params)
 	}))
@@ -20434,6 +21102,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}", wrapper.UpdateProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents", wrapper.CreateAgent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/projects/{projectRef}/agents/{agentRef}/avatar", wrapper.UploadAgentAvatar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.ListArtifacts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
@@ -20455,6 +21124,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-secrets", wrapper.CreateRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.ListSchedules)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.CreateSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/speech/transcriptions", wrapper.TranscribeSpeech)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/template-variables", wrapper.ListTemplateVariables)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.ListWorkflows)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.CreateWorkflow)
@@ -20463,10 +21133,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/prompt-templates/validation", wrapper.ValidatePromptTemplate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-accounts", wrapper.ListProviderAccounts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts", wrapper.CreateProviderAccount)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}", wrapper.DeleteProviderAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}", wrapper.GetProviderAccount)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/api-key-authorization", wrapper.AuthorizeProviderAccountApiKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/authorization-refresh", wrapper.RefreshProviderAccountAuthorization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization", wrapper.StartProviderAccountDeviceAuthorization)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification", wrapper.VerifyProviderAccountDeviceAuthorization)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations", wrapper.ReauthorizeProviderAccountDeviceCode)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/enabled", wrapper.SetProviderAccountEnabled)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/revocation", wrapper.RevokeProviderAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-definitions", wrapper.ListProviderDefinitions)

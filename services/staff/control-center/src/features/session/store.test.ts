@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const api = vi.hoisted(() => ({
   createOwnerSession: vi.fn(),
   deleteOwnerSession: vi.fn(() => Promise.resolve({ data: undefined })),
-  getBootstrapState: vi.fn(() => Promise.resolve({ data: {} })),
+  getBootstrapState: vi.fn(() =>
+    Promise.resolve({ data: {}, etag: '"7"' }),
+  ),
   renewOwnerSession: vi.fn((options?: { signal?: AbortSignal }) => {
     void options;
     return Promise.resolve({ data: undefined });
@@ -115,7 +117,8 @@ function requestBody(call: unknown[]): unknown {
 describe("session renewal lifecycle", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    api.getBootstrapState.mockClear();
+    api.getBootstrapState.mockReset();
+    api.getBootstrapState.mockResolvedValue({ data: {}, etag: '"7"' });
     api.createOwnerSession.mockClear();
     api.createOwnerSession.mockResolvedValue({
       data: undefined,
@@ -135,16 +138,21 @@ describe("session renewal lifecycle", () => {
     mutation.idempotencyKey.mockClear();
     oidcManagerSettings.mockClear();
     const values = new Map<string, string>([["kodex.session.revision", "7"]]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    vi.stubGlobal("BroadcastChannel", undefined);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
+        clearTimeout: globalThis.clearTimeout,
         clearInterval: globalThis.clearInterval,
+        setTimeout: globalThis.setTimeout,
         setInterval: globalThis.setInterval,
-        sessionStorage: {
-          getItem: (key: string) => values.get(key) ?? null,
-          removeItem: (key: string) => values.delete(key),
-          setItem: (key: string, value: string) => values.set(key, value),
-        },
+        localStorage: storage,
+        sessionStorage: storage,
       },
     });
     setActivePinia(createPinia());
@@ -152,6 +160,7 @@ describe("session renewal lifecycle", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     Reflect.deleteProperty(globalThis, "window");
   });
 
@@ -224,7 +233,7 @@ describe("session renewal lifecycle", () => {
         kind: "unavailable",
         retryable: true,
       })
-      .mockResolvedValueOnce({ data: {} });
+      .mockResolvedValueOnce({ data: {}, etag: '"7"' });
     const session = useSessionStore();
 
     const probing = session.probe();
@@ -233,6 +242,20 @@ describe("session renewal lifecycle", () => {
 
     expect(api.getBootstrapState).toHaveBeenCalledTimes(2);
     expect(session.phase).toBe("authenticated");
+  });
+
+  test("берёт server revision из bootstrap для новой вкладки и logout", async () => {
+    window.sessionStorage.removeItem("kodex.session.revision");
+    api.getBootstrapState.mockResolvedValueOnce({ data: {}, etag: '"11"' });
+    const session = useSessionStore();
+
+    await session.probe();
+    await session.logout();
+
+    expect(session.canLogout).toBe(false);
+    expect(requestHeaders(api.deleteOwnerSession.mock.calls[0] ?? [])).toEqual(
+      expect.objectContaining({ "If-Match": '"11"' }),
+    );
   });
 
   test("повторяет создание owner session с одним idempotency key", async () => {

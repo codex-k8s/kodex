@@ -6,12 +6,14 @@ import type { ProviderAccount, ProviderAccountPage } from "./model";
 const api = vi.hoisted(() => ({
   authorizeProviderApiKey: vi.fn(),
   createProviderAccount: vi.fn(),
+  deleteProviderApiKeyAccount: vi.fn(),
   loadProviderAccounts: vi.fn(),
   loadProviderDefinitions: vi.fn(),
-  refreshProviderAuthorization: vi.fn(),
+  reauthorizeProviderDevice: vi.fn(),
   revokeProviderAccount: vi.fn(),
   setProviderAccountEnabled: vi.fn(),
   startDeviceAuthorization: vi.fn(),
+  verifyDeviceAuthorization: vi.fn(),
 }));
 vi.mock("./api", () => api);
 
@@ -199,6 +201,7 @@ describe("providers store", () => {
     vi.useFakeTimers();
     const pending = account({
       state: "PENDING_AUTHORIZATION",
+      nextActions: ["REFRESH_AUTHORIZATION", "REVOKE"],
       authorization: {
         ref: "pauth_one",
         method: "DEVICE_CODE",
@@ -208,16 +211,60 @@ describe("providers store", () => {
     });
     const authorized = account({ version: 2 });
     api.startDeviceAuthorization.mockResolvedValue(pending);
-    api.refreshProviderAuthorization.mockResolvedValue(authorized);
+    api.verifyDeviceAuthorization.mockResolvedValue(authorized);
     const store = useProvidersStore();
-    store.accounts = [pending];
+    const configurable = account();
+    store.accounts = [configurable];
 
-    await store.startDevice(pending);
+    await store.startDevice(configurable);
     expect(store.pollingRefs).toEqual([pending.ref]);
     await vi.advanceTimersByTimeAsync(4_000);
 
-    expect(api.refreshProviderAuthorization).toHaveBeenCalledWith(pending);
+    expect(api.verifyDeviceAuthorization).toHaveBeenCalledWith(pending);
     expect(store.pollingRefs).toEqual([]);
     expect(store.accounts[0]?.state).toBe("AUTHORIZED");
+  });
+
+  it("использует reauthorize для expired device flow и delete для API key", async () => {
+    const expired = account({
+      state: "REAUTHORIZATION_REQUIRED",
+      nextActions: ["CONFIGURE_CREDENTIAL", "REVOKE"],
+      authorization: {
+        ref: "pauth_old",
+        method: "DEVICE_CODE",
+        state: "FAILED",
+      },
+    });
+    const pending = account({
+      version: 2,
+      state: "PENDING_AUTHORIZATION",
+      nextActions: ["REFRESH_AUTHORIZATION", "REVOKE"],
+      authorization: {
+        ref: "pauth_new",
+        method: "DEVICE_CODE",
+        state: "PENDING",
+      },
+    });
+    api.reauthorizeProviderDevice.mockResolvedValue(pending);
+    const apiKey = account({
+      authorization: {
+        ref: "pauth_key",
+        method: "API_KEY",
+        state: "AUTHORIZED",
+      },
+    });
+    api.deleteProviderApiKeyAccount.mockResolvedValue({
+      ...apiKey,
+      state: "REVOKED",
+    });
+    const store = useProvidersStore();
+
+    await store.startDevice(expired);
+    await store.revoke(apiKey);
+
+    expect(api.reauthorizeProviderDevice).toHaveBeenCalledWith(expired);
+    expect(api.startDeviceAuthorization).not.toHaveBeenCalled();
+    expect(api.deleteProviderApiKeyAccount).toHaveBeenCalledWith(apiKey);
+    expect(api.revokeProviderAccount).not.toHaveBeenCalled();
   });
 });

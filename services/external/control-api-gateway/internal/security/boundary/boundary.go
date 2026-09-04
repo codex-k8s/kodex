@@ -149,7 +149,7 @@ func (boundary *Boundary) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
+			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-Audio-Size, X-CSRF-Token, X-File-Name, X-Kodex-Project-ID")
 			writer.Header().Add("Vary", "Access-Control-Request-Method")
 			writer.Header().Add("Vary", "Access-Control-Request-Headers")
 			writer.Header().Set("Access-Control-Max-Age", "300")
@@ -263,7 +263,7 @@ func allowedPreflight(request *http.Request) bool {
 	default:
 		return false
 	}
-	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-csrf-token": {}, "x-kodex-project-id": {}}
+	allowedHeaders := map[string]struct{}{"authorization": {}, "content-type": {}, "idempotency-key": {}, "if-match": {}, "x-audio-size": {}, "x-csrf-token": {}, "x-file-name": {}, "x-kodex-project-id": {}}
 	rawHeaders := request.Header.Get("Access-Control-Request-Headers")
 	if rawHeaders == "" {
 		return true

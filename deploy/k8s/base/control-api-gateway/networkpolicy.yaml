@@ -38,6 +38,9 @@ spec:
         - podSelector: {matchLabels: {app.kubernetes.io/name: secret-broker}}
       ports: [{protocol: TCP, port: 8443}]
     - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: stt-tts-service}}
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
         - podSelector: {matchLabels: {app.kubernetes.io/name: kodex-nats}}
       ports: [{protocol: TCP, port: 4222}]
     - to:

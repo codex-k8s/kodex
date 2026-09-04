@@ -30,6 +30,22 @@ STOPPING:
   other: Сервис перезапускается; подключитесь снова через несколько секунд
 PAYLOAD_TOO_LARGE:
   other: Загружаемые данные слишком велики
+CONTENT_LENGTH_REQUIRED:
+  other: Не удалось определить размер загружаемых данных
+CONTENT_LENGTH_MISMATCH:
+  other: Размер загруженных данных не совпадает с заявленным
+REQUEST_BODY_READ_FAILED:
+  other: Не удалось прочитать загружаемые данные
+UNSUPPORTED_MEDIA_TYPE:
+  other: Формат загружаемых данных не поддерживается
+UPSTREAM_RESPONSE_INVALID:
+  other: Внутренний сервис вернул некорректный ответ
+INVALID_UPSTREAM_RESPONSE:
+  other: Внутренний сервис вернул неполный ответ
+UPSTREAM_ARTIFACT_METADATA_INVALID:
+  other: Внутренний сервис вернул некорректные сведения о файле
+STALE_VERSION:
+  other: Сессия уже изменилась; обновите страницу и повторите действие
 UPSTREAM_PAYLOAD_TOO_LARGE:
   other: Созданный файл слишком велик для загрузки
 RUN_NOT_FOUND:

@@ -2,9 +2,19 @@
   "name": "Kodex Control Center",
   "short_name": "Kodex",
   "description": "Служебный интерфейс владельца Kodex",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f5f6f6",
   "theme_color": "#0f8577",
-  "lang": "ru"
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "1000x1000",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

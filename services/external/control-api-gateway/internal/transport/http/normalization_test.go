@@ -151,6 +151,21 @@ func TestMessageMapNormalizesProviderEnumsToOpenAPIValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesSearchKindsToLocalizedKeys(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.SearchResult{
+		Kind: controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUN,
+		Ref:  "run-example", ProjectRef: "prj-example", Title: "Запуск", State: "ACTIVE",
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["kind"] != "RUN" {
+		t.Fatalf("search kind leaked protobuf enum key: %#v", value)
+	}
+}
+
 func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	t.Parallel()
 

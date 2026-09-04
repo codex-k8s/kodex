@@ -80,6 +80,9 @@ type fakeRevocationStore struct {
 
 func (store *fakeRevocationStore) Revoke(_ context.Context, sessionID string) error {
 	store.revokedRecord = sessionID
+	if store.revokeErr == nil {
+		store.revoked = true
+	}
 	return store.revokeErr
 }
 
@@ -107,7 +110,7 @@ func TestAuthenticationProblemPreservesSigningKeyOutage(t *testing.T) {
 func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "https://control-api.kodex.local/api/v1/session", nil)
 	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
+	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-Audio-Size, X-CSRF-Token, X-File-Name, X-Kodex-Project-ID")
 	if !allowedPreflight(request) {
 		t.Fatal("exact credentialed owner preflight was rejected")
 	}
@@ -117,7 +120,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	}
 
 	request.Header.Set("Origin", "https://control.example.test")
-	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID")
+	request.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, X-Audio-Size, X-CSRF-Token, X-File-Name, X-Kodex-Project-ID")
 	called := false
 	boundary := &Boundary{origins: map[string]struct{}{"https://control.example.test": {}}}
 	response := httptest.NewRecorder()
@@ -125,7 +128,7 @@ func TestCredentialedPreflightAllowsExactOwnerHeaders(t *testing.T) {
 	if called || response.Code != http.StatusNoContent ||
 		response.Header().Get("Access-Control-Allow-Origin") != "https://control.example.test" ||
 		response.Header().Get("Access-Control-Allow-Credentials") != "true" ||
-		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-CSRF-Token, X-Kodex-Project-ID" {
+		response.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type, Idempotency-Key, If-Match, X-Audio-Size, X-CSRF-Token, X-File-Name, X-Kodex-Project-ID" {
 		t.Fatalf("credentialed preflight response is incomplete: status=%d headers=%v", response.Code, response.Header())
 	}
 	vary := make([]string, 0)
@@ -374,6 +377,35 @@ func TestRevokeSessionPersistsBrowserSessionID(t *testing.T) {
 	}
 	if revocations.revokedRecord != sessionID {
 		t.Fatalf("revoked session = %q, want %q", revocations.revokedRecord, sessionID)
+	}
+}
+
+func TestLogoutRevocationWinsOverConcurrentRenewedCookie(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	csrf := strings.Repeat("c", 43)
+	digest := sha256.Sum256([]byte(csrf))
+	claims := session.Claims{
+		Subject: uuid.NewString(), OrganizationID: uuid.NewString(), OIDCSessionID: uuid.NewString(),
+		SessionRevision: 4, SessionID: uuid.NewString(), Bearer: "bearer", CSRFHash: hex.EncodeToString(digest[:]),
+		IssuedAt: now.Unix(), ExpiresAt: now.Add(15 * time.Minute).Unix(),
+	}
+	principal := oidcauth.Principal{
+		Subject: claims.Subject, OrganizationID: claims.OrganizationID, SessionID: claims.OIDCSessionID,
+		SessionRevision: claims.SessionRevision, ExpiresAt: now.Add(time.Hour),
+	}
+	store := &fakeSessionStore{claims: claims}
+	revocations := &fakeRevocationStore{}
+	security := testBoundaryWithRevocations(t, &fakeOIDCVerifier{principal: principal}, store, revocations)
+	if err := security.RevokeSession(context.Background(), Identity{BrowserSessionID: claims.SessionID}); err != nil {
+		t.Fatalf("revoke concurrent session: %v", err)
+	}
+
+	request := authenticatedRequest(http.MethodGet, csrf)
+	response := httptest.NewRecorder()
+	called := false
+	security.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })).ServeHTTP(response, request)
+	if called || response.Code != http.StatusUnauthorized || store.renewCalls != 0 || revocations.checked != claims.SessionID {
+		t.Fatalf("renewed cookie survived logout race: called=%t status=%d renew=%d checked=%q", called, response.Code, store.renewCalls, revocations.checked)
 	}
 }
 

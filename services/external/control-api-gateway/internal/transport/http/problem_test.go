@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason(t *testing.T) {
@@ -114,6 +116,36 @@ func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t 
 	}
 }
 
+func TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		code       codes.Code
+		wantStatus int
+		wantCode   string
+	}{
+		{code: codes.NotFound, wantStatus: http.StatusNotFound, wantCode: "NOT_FOUND"},
+		{code: codes.Internal, wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL"},
+		{code: codes.Unavailable, wantStatus: http.StatusServiceUnavailable, wantCode: "UNAVAILABLE"},
+	} {
+		recorder := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
+		writeRPCProblem(recorder, status.Error(test.code, "raw upstream details must not leak"))
+		var body struct {
+			Type          string `json:"type"`
+			Title         string `json:"title"`
+			Code          string `json:"code"`
+			CorrelationID string `json:"correlationId"`
+			Status        int    `json:"status"`
+			Retryable     bool   `json:"retryable"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode strict problem: %v", err)
+		}
+		if recorder.Code != test.wantStatus || body.Status != test.wantStatus || body.Code != test.wantCode || body.Title != "localized:"+test.wantCode || body.Type == "" || body.CorrelationID == "" || strings.Contains(recorder.Body.String(), "raw upstream") {
+			t.Fatalf("strict problem = status %d body %s", recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 type testOperationResolver map[string]string
 
 func (resolver testOperationResolver) OperationID(method string) (string, bool) {
@@ -133,7 +165,7 @@ func localAuthorityFailure(t *testing.T, code codes.Code) error {
 	interceptor := authorityclient.IssuerUnaryClientInterceptor(nil, testOperationResolver{method: "example.read"}, testProofProvider{
 		err: status.Error(code, "authority failure"),
 	})
-	return interceptor(context.Background(), method, nil, nil, nil,
+	return interceptor(context.Background(), method, &emptypb.Empty{}, nil, nil,
 		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
 			t.Fatal("downstream RPC was opened after failed authority proof")
 			return nil

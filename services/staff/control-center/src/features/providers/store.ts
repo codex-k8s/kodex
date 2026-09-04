@@ -5,12 +5,14 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import {
   authorizeProviderApiKey,
   createProviderAccount,
+  deleteProviderApiKeyAccount,
   loadProviderAccounts,
   loadProviderDefinitions,
-  refreshProviderAuthorization,
+  reauthorizeProviderDevice,
   revokeProviderAccount,
   setProviderAccountEnabled,
   startDeviceAuthorization,
+  verifyDeviceAuthorization,
 } from "./api";
 import {
   accountAllows,
@@ -143,7 +145,9 @@ export const useProvidersStore = defineStore("providers", {
     async startDevice(account: ProviderAccount): Promise<ProviderAccount> {
       if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
       const updated = await this.execute(account.ref, () =>
-        startDeviceAuthorization(account),
+        account.state === "REAUTHORIZATION_REQUIRED"
+          ? reauthorizeProviderDevice(account)
+          : startDeviceAuthorization(account),
       );
       if (isPendingDeviceAuthorization(updated)) this.schedulePoll(updated.ref);
       return updated;
@@ -151,12 +155,12 @@ export const useProvidersStore = defineStore("providers", {
     async refreshAuthorization(
       account: ProviderAccount,
     ): Promise<ProviderAccount> {
-      if (!accountAllows(account, "TEST")) {
+      if (!accountAllows(account, "REFRESH_AUTHORIZATION")) {
         this.stopPolling(account.ref);
         return account;
       }
       const updated = await this.execute(account.ref, () =>
-        refreshProviderAuthorization(account),
+        verifyDeviceAuthorization(account),
       );
       if (isPendingDeviceAuthorization(updated)) this.schedulePoll(updated.ref);
       else this.stopPolling(updated.ref);
@@ -184,7 +188,11 @@ export const useProvidersStore = defineStore("providers", {
     async revoke(account: ProviderAccount): Promise<ProviderAccount> {
       if (!accountAllows(account, "REVOKE")) return account;
       this.stopPolling(account.ref);
-      return this.execute(account.ref, () => revokeProviderAccount(account));
+      return this.execute(account.ref, () =>
+        account.authorization?.method === "API_KEY"
+          ? deleteProviderApiKeyAccount(account)
+          : revokeProviderAccount(account),
+      );
     },
     schedulePoll(accountRef: string): void {
       this.stopPolling(accountRef);

@@ -236,7 +236,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE';
 
 export type Problem = {
     type: string;
@@ -245,6 +245,7 @@ export type Problem = {
     detail?: string;
     code: string;
     correlationId: string;
+    retryable: boolean;
     actualVersion?: number;
     winnerSummary?: string;
 };
@@ -318,6 +319,23 @@ export type SearchResult = {
 
 export type SearchResultPage = {
     items: Array<SearchResult>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type SpeechTranscription = {
+    text: string;
+    receipt: SpeechTranscriptionReceipt;
+};
+
+export type SpeechTranscriptionReceipt = {
+    requestId: string;
+    correlationId: string;
+    authoritySourceRevision: number;
+    configRevision: number;
+    model: string;
+    language: string;
+    completedStage: 'PROVIDER_COMPLETED';
 };
 
 export type ProjectInput = {
@@ -2129,6 +2147,8 @@ export type SearchPlatformData = {
     query: {
         query: string;
         limit?: number;
+        pageToken?: string;
+        projectRef?: OpaqueRef;
     };
     url: '/api/v1/search';
 };
@@ -2771,6 +2791,43 @@ export type SetAgentAvatarResponses = {
 
 export type SetAgentAvatarResponse = SetAgentAvatarResponses[keyof SetAgentAvatarResponses];
 
+export type UploadAgentAvatarData = {
+    /**
+     * Ограниченный поток готового avatar до 5 MiB; Artifact, binding и Agent version фиксируются одной транзакцией владельца.
+     */
+    body: Blob | File;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'X-File-Name': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        agentRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/agents/{agentRef}/avatar';
+};
+
+export type UploadAgentAvatarErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UploadAgentAvatarError = UploadAgentAvatarErrors[keyof UploadAgentAvatarErrors];
+
+export type UploadAgentAvatarResponses = {
+    /**
+     * Avatar и новая версия ИИ-сотрудника опубликованы атомарно
+     */
+    200: Agent;
+};
+
+export type UploadAgentAvatarResponse = UploadAgentAvatarResponses[keyof UploadAgentAvatarResponses];
+
 export type GetAgentAvatarContentData = {
     body?: never;
     path: {
@@ -3356,6 +3413,38 @@ export type CreateProviderAccountResponses = {
 
 export type CreateProviderAccountResponse = CreateProviderAccountResponses[keyof CreateProviderAccountResponses];
 
+export type DeleteProviderAccountData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}';
+};
+
+export type DeleteProviderAccountErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DeleteProviderAccountError = DeleteProviderAccountErrors[keyof DeleteProviderAccountErrors];
+
+export type DeleteProviderAccountResponses = {
+    /**
+     * API-key credential удалён durable lifecycle, account оставлен audit-visible tombstone
+     */
+    200: ProviderAccount;
+};
+
+export type DeleteProviderAccountResponse = DeleteProviderAccountResponses[keyof DeleteProviderAccountResponses];
+
 export type GetProviderAccountData = {
     body?: never;
     path: {
@@ -3382,6 +3471,45 @@ export type GetProviderAccountResponses = {
 };
 
 export type GetProviderAccountResponse = GetProviderAccountResponses[keyof GetProviderAccountResponses];
+
+export type TranscribeSpeechData = {
+    /**
+     * Ровно одна multipart audio part; gateway читает и отправляет chunks последовательно без полной буферизации.
+     */
+    body: {
+        audio: Blob | File;
+    };
+    headers: {
+        'X-CSRF-Token': string;
+        /**
+         * Точный размер audio part; gateway и STT сверяют его до provider RPC.
+         */
+        'X-Audio-Size': number;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/speech/transcriptions';
+};
+
+export type TranscribeSpeechErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type TranscribeSpeechError = TranscribeSpeechErrors[keyof TranscribeSpeechErrors];
+
+export type TranscribeSpeechResponses = {
+    /**
+     * Текст и безопасный receipt завершённой транскрипции
+     */
+    200: SpeechTranscription;
+};
+
+export type TranscribeSpeechResponse = TranscribeSpeechResponses[keyof TranscribeSpeechResponses];
 
 export type StartProviderAccountDeviceAuthorizationData = {
     body?: never;
@@ -3478,6 +3606,70 @@ export type RefreshProviderAccountAuthorizationResponses = {
 };
 
 export type RefreshProviderAccountAuthorizationResponse = RefreshProviderAccountAuthorizationResponses[keyof RefreshProviderAccountAuthorizationResponses];
+
+export type VerifyProviderAccountDeviceAuthorizationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification';
+};
+
+export type VerifyProviderAccountDeviceAuthorizationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type VerifyProviderAccountDeviceAuthorizationError = VerifyProviderAccountDeviceAuthorizationErrors[keyof VerifyProviderAccountDeviceAuthorizationErrors];
+
+export type VerifyProviderAccountDeviceAuthorizationResponses = {
+    /**
+     * Device authorization проверена авторитетным provider adapter
+     */
+    200: ProviderAccount;
+};
+
+export type VerifyProviderAccountDeviceAuthorizationResponse = VerifyProviderAccountDeviceAuthorizationResponses[keyof VerifyProviderAccountDeviceAuthorizationResponses];
+
+export type ReauthorizeProviderAccountDeviceCodeData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        providerAccountRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations';
+};
+
+export type ReauthorizeProviderAccountDeviceCodeErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReauthorizeProviderAccountDeviceCodeError = ReauthorizeProviderAccountDeviceCodeErrors[keyof ReauthorizeProviderAccountDeviceCodeErrors];
+
+export type ReauthorizeProviderAccountDeviceCodeResponses = {
+    /**
+     * Начата новая device-code authorization revision той же logical account
+     */
+    202: ProviderAccount;
+};
+
+export type ReauthorizeProviderAccountDeviceCodeResponse = ReauthorizeProviderAccountDeviceCodeResponses[keyof ReauthorizeProviderAccountDeviceCodeResponses];
 
 export type RevokeProviderAccountData = {
     body?: never;

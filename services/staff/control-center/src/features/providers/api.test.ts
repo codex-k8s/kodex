@@ -5,13 +5,15 @@ import type { ProviderAccount } from "./model";
 const sdk = vi.hoisted(() => ({
   authorizeProviderAccountApiKey: vi.fn(),
   createProviderAccount: vi.fn(),
+  deleteProviderAccount: vi.fn(),
   getProviderAccount: vi.fn(),
   listProviderAccounts: vi.fn(),
   listProviderDefinitions: vi.fn(),
-  refreshProviderAccountAuthorization: vi.fn(),
+  reauthorizeProviderAccountDeviceCode: vi.fn(),
   revokeProviderAccount: vi.fn(),
   setProviderAccountEnabled: vi.fn(),
   startProviderAccountDeviceAuthorization: vi.fn(),
+  verifyProviderAccountDeviceAuthorization: vi.fn(),
 }));
 const mutateMock = vi.hoisted(() =>
   vi.fn(
@@ -39,9 +41,11 @@ vi.mock("@/shared/api/mutation", () => ({ mutate: mutateMock }));
 import {
   authorizeProviderApiKey,
   createProviderAccount,
+  deleteProviderApiKeyAccount,
   loadProviderAccounts,
-  refreshProviderAuthorization,
+  reauthorizeProviderDevice,
   setProviderAccountEnabled,
+  verifyDeviceAuthorization,
 } from "./api";
 
 const account: ProviderAccount = {
@@ -127,18 +131,18 @@ describe("provider API adapter", () => {
     expect(JSON.stringify(result)).not.toContain("secret-api-key");
   });
 
-  it("использует отдельный refresh endpoint и PUT для enabled", async () => {
-    sdk.refreshProviderAccountAuthorization.mockResolvedValue({
+  it("использует отдельный verify endpoint и PUT для enabled", async () => {
+    sdk.verifyProviderAccountDeviceAuthorization.mockResolvedValue({
       data: account,
     });
     sdk.setProviderAccountEnabled.mockResolvedValue({
       data: { ...account, enabled: false },
     });
 
-    await refreshProviderAuthorization(account);
+    await verifyDeviceAuthorization(account);
     await setProviderAccountEnabled(account, false);
 
-    expect(sdk.refreshProviderAccountAuthorization).toHaveBeenCalledWith(
+    expect(sdk.verifyProviderAccountDeviceAuthorization).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { providerAccountRef: account.ref },
       }),
@@ -148,6 +152,23 @@ describe("provider API adapter", () => {
         path: { providerAccountRef: account.ref },
         body: { enabled: false },
       }),
+    );
+  });
+
+  it("использует отдельные reauthorize и API-key delete endpoints", async () => {
+    sdk.reauthorizeProviderAccountDeviceCode.mockResolvedValue({
+      data: account,
+    });
+    sdk.deleteProviderAccount.mockResolvedValue({ data: account });
+
+    await reauthorizeProviderDevice(account);
+    await deleteProviderApiKeyAccount(account);
+
+    expect(sdk.reauthorizeProviderAccountDeviceCode).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { providerAccountRef: account.ref } }),
+    );
+    expect(sdk.deleteProviderAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { providerAccountRef: account.ref } }),
     );
   });
 });

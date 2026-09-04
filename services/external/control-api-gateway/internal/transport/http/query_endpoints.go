@@ -1,18 +1,26 @@
 package httptransport
 
 import (
+	"fmt"
 	"net/http"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
 func (server *Server) GetBootstrapState(w http.ResponseWriter, r *http.Request) {
+	identity, ok := boundary.IdentityFromContext(r.Context())
+	if !ok || identity.SessionRevision < 1 {
+		writeLocalProblem(w, http.StatusUnauthorized, "UNAUTHENTICATED", false)
+		return
+	}
 	response, err := server.control.Query.GetBootstrapState(r.Context(), &controlplanev1.GetBootstrapStateRequest{})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
+	w.Header().Set("ETag", fmt.Sprintf("\"%d\"", identity.SessionRevision))
 	writeMessage(w, http.StatusOK, response, "state", "")
 }
 func (server *Server) GetOverview(w http.ResponseWriter, r *http.Request, p generated.GetOverviewParams) {
@@ -44,7 +52,9 @@ func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p g
 	if p.Limit != nil {
 		limit = int32(*p.Limit)
 	}
-	response, err := server.control.Query.SearchPlatform(r.Context(), &controlplanev1.SearchPlatformRequest{Query: p.Query, Limit: limit})
+	response, err := server.control.Query.SearchPlatform(r.Context(), &controlplanev1.SearchPlatformRequest{
+		Query: p.Query, Limit: limit, ProjectRef: stringValue(p.ProjectRef), Page: page(nil, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/sttclient"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	websockettransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/usertext"
@@ -60,11 +62,20 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	limiter := ratelimit.New(ratelimit.Config{Window: config.RateWindow, Limit: config.RateLimit, MaximumKeys: config.MaximumRateKeys, PreAuthConcurrency: config.PreAuthConcurrency, GlobalHTTPConcurrency: config.MaximumHTTPConcurrency, PerSubjectHTTPConcurrency: config.PerSubjectHTTPConcurrency, GlobalWebSocketConcurrency: config.MaximumWebSocketConcurrency, PerSubjectWebSocketConcurrency: config.PerSubjectWebSocketConcurrency})
-	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProjectRequiredOperations: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProofOperations: authorityProofOperations(), ProjectRequiredOperations: authorityProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	speech, err := sttclient.Dial(startup, sttclient.Config{
+		Target: config.STTTarget, TLSServerName: config.STTTLSServerName, CAFile: config.STTCAFile,
+		ClientCertificateFile: config.STTClientCertificateFile, ClientPrivateKeyFile: config.STTClientPrivateKeyFile,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Proofs: control,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, speech.Close()) }()
 	secrets, err := secretbrokerclient.Dial(startup, secretbrokerclient.Config{
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
 		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
@@ -108,6 +119,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := api.AttachSecretBroker(secrets.SecretBroker); err != nil {
+		return err
+	}
+	if err := api.AttachSpeechToText(speech.Speech); err != nil {
 		return err
 	}
 	api.AttachRealtime(http.HandlerFunc(realtime.ServeSessionHTTP))
@@ -239,11 +253,25 @@ func methodOperations() map[string]string {
 	}
 	return result
 }
+
+func authorityProofOperations() map[string]string {
+	result := controlplaneclient.ControlAPIGatewayOperations()
+	maps.Copy(result, controlplaneclient.STTGatewayOperations())
+	return result
+}
+
+func authorityProjectRequiredOperations() map[string]struct{} {
+	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
+	for operation := range controlplaneclient.STTGatewayOperations() {
+		result[operation] = struct{}{}
+	}
+	return result
+}
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})

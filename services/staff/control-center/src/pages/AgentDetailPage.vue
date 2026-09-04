@@ -25,7 +25,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import {
   removeAgentAvatar,
-  setAgentAvatar,
+  uploadAgentAvatar,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -42,15 +42,10 @@ const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
 const agent = computed(() => platform.agents[agentRef.value]);
-const project = computed(() => platform.projects[projectRef.value]);
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
 );
-const canManageAvatar = computed(
-  () =>
-    canEdit.value &&
-    (project.value?.nextActions.includes("UPLOAD_ARTIFACT") ?? false),
-);
+const canManageAvatar = computed(() => canEdit.value);
 const canManageCapabilities = computed(
   () => agent.value?.nextActions.includes("MANAGE_CAPABILITIES") ?? false,
 );
@@ -279,15 +274,18 @@ function avatarMutationHeaders(headers: MutationHeaders) {
   };
 }
 
-async function setAvatarArtifact(artifactRef: string): Promise<void> {
+async function uploadAvatar(file: File): Promise<void> {
   const current = agent.value;
   if (!current) throw new Error("Agent state is unavailable");
   const result = await mutate(
     (headers) =>
-      setAgentAvatar({
-        path: { agentRef: current.ref },
-        body: { artifactRef },
-        headers: avatarMutationHeaders(headers),
+      uploadAgentAvatar({
+        path: { projectRef: projectRef.value, agentRef: current.ref },
+        body: file,
+        headers: {
+          ...avatarMutationHeaders(headers),
+          "X-File-Name": file.name,
+        },
         signal: requestSignal(),
       }),
     current.version,
@@ -316,49 +314,16 @@ function markAvatarApplied(): void {
   else setApplyState("APPLIED", tabScope("profile"), "next-run");
 }
 
-async function moveAvatarArtifactToTrash(
-  artifactRef: string | undefined,
-): Promise<void> {
-  if (!artifactRef) return;
-  const artifact = await platform.readArtifact(artifactRef);
-  if (
-    artifact.lifecycleState === "ACTIVE" &&
-    (artifact.nextActions as readonly string[]).includes("DELETE")
-  )
-    await platform.deleteProjectArtifact(artifact);
-}
-
 async function applyAvatar(file: File): Promise<void> {
   if (!agent.value || !canManageAvatar.value || busy.value) return;
-  const previousArtifactRef = agent.value.avatar?.artifactRef;
-  let uploadedArtifactRef: string | undefined;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
-    const uploaded = await platform.uploadProjectArtifact(
-      projectRef.value,
-      file,
-    );
-    uploadedArtifactRef = uploaded.ref;
-    await setAvatarArtifact(uploaded.ref);
+    await uploadAvatar(file);
     avatarFile.value = undefined;
     markAvatarApplied();
-    if (previousArtifactRef && previousArtifactRef !== uploaded.ref) {
-      try {
-        await moveAvatarArtifactToTrash(previousArtifactRef);
-      } catch (error) {
-        problem.value = asProblem(error);
-      }
-    }
   } catch (error) {
-    if (uploadedArtifactRef) {
-      try {
-        await moveAvatarArtifactToTrash(uploadedArtifactRef);
-      } catch {
-        // Исходная ошибка изменения остаётся авторитетной для пользователя.
-      }
-    }
     problem.value = asProblem(error);
     markFailed();
   } finally {
@@ -367,19 +332,14 @@ async function applyAvatar(file: File): Promise<void> {
 }
 
 async function removeAvatar(): Promise<void> {
-  const previousArtifactRef = agent.value?.avatar?.artifactRef;
-  if (!previousArtifactRef || !canManageAvatar.value || busy.value) return;
+  if (!agent.value?.avatar?.artifactRef || !canManageAvatar.value || busy.value)
+    return;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
     await clearAvatar();
     markAvatarApplied();
-    try {
-      await moveAvatarArtifactToTrash(previousArtifactRef);
-    } catch (error) {
-      problem.value = asProblem(error);
-    }
   } catch (error) {
     problem.value = asProblem(error);
     markFailed();

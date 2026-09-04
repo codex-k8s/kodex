@@ -2,13 +2,15 @@ import { requestSignal } from "@/shared/api/client";
 import {
   authorizeProviderAccountApiKey,
   createProviderAccount as createProviderAccountRequest,
+  deleteProviderAccount,
   getProviderAccount,
   listProviderAccounts,
   listProviderDefinitions,
-  refreshProviderAccountAuthorization,
+  reauthorizeProviderAccountDeviceCode,
   revokeProviderAccount as revokeProviderAccountRequest,
   setProviderAccountEnabled as setProviderAccountEnabledRequest,
   startProviderAccountDeviceAuthorization,
+  verifyProviderAccountDeviceAuthorization,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -125,13 +127,29 @@ export async function startDeviceAuthorization(
   ).data;
 }
 
-export async function refreshProviderAuthorization(
+export async function verifyDeviceAuthorization(
   account: ProviderAccount,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
       (headers) =>
-        refreshProviderAccountAuthorization({
+        verifyProviderAccountDeviceAuthorization({
+          path: { providerAccountRef: account.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      account.version,
+    )
+  ).data;
+}
+
+export async function reauthorizeProviderDevice(
+  account: ProviderAccount,
+): Promise<ProviderAccount> {
+  return (
+    await mutate(
+      (headers) =>
+        reauthorizeProviderAccountDeviceCode({
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
@@ -166,6 +184,22 @@ export async function revokeProviderAccount(
     await mutate(
       (headers) =>
         revokeProviderAccountRequest({
+          path: { providerAccountRef: account.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      account.version,
+    )
+  ).data;
+}
+
+export async function deleteProviderApiKeyAccount(
+  account: ProviderAccount,
+): Promise<ProviderAccount> {
+  return (
+    await mutate(
+      (headers) =>
+        deleteProviderAccount({
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),

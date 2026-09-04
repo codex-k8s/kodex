@@ -41,6 +41,10 @@ import { resolveAssistantContext } from "@/features/assistant/context";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRuntimeStore } from "@/features/runtime/store";
+import {
+  canonicalSearchRoute,
+  SearchCoordinator,
+} from "@/features/search/model";
 import { useSessionStore } from "@/features/session/store";
 import { selectProjectRef } from "@/shared/project-context";
 import {
@@ -56,7 +60,6 @@ import {
   useDismissibleLayer,
   type DismissibleLayerCloseReason,
 } from "@/shared/ui/useDismissibleLayer";
-import { runPath } from "@/shared/routes";
 
 const route = useRoute();
 const router = useRouter();
@@ -77,6 +80,7 @@ const preloadFailed = ref(
 const searchRoot = ref<HTMLElement>();
 const realtimeStarted = ref(false);
 let disposed = false;
+const searchCoordinator = new SearchCoordinator();
 
 const projectRef = computed(() => routeProjectRef(route.params));
 const activeSection = computed(() => activeNavigationSection(route.name));
@@ -288,14 +292,18 @@ function changeProject(event: Event): void {
   else void router.push("/projects");
 }
 
-async function submitSearch(): Promise<void> {
+function submitSearch(): void {
   if (search.value.trim().length < 2) {
     searchOpen.value = true;
+    void platform.search(search.value);
+    searchCoordinator.cancel();
     return;
   }
   searchOpen.value = true;
   mobileOpen.value = false;
-  await platform.search(search.value);
+  searchCoordinator.schedule(search.value, (normalized) => {
+    void platform.search(normalized);
+  });
 }
 
 function openMobileSearch(): void {
@@ -316,18 +324,6 @@ function closeSearch(
     void nextTick(() => searchInput.value?.focus());
 }
 
-function searchResultPath(result: {
-  kind: "PROJECT" | "AGENT" | "WORKFLOW" | "RUN";
-  ref: string;
-  projectRef?: string;
-}): string {
-  if (result.kind === "PROJECT") return `/projects/${result.ref}`;
-  if (result.kind === "RUN") return runPath(result.ref, result.projectRef);
-  const project = encodeURIComponent(result.projectRef ?? "");
-  const resource = result.kind === "AGENT" ? "agents" : "workflows";
-  return `/projects/${project}/${resource}/${encodeURIComponent(result.ref)}`;
-}
-
 function changeLocale(value: SupportedLocale): void {
   persistLocale(value);
   locale.value = value;
@@ -345,6 +341,17 @@ function refreshAfterPreloadFailure(): void {
   globalThis.location.assign(globalThis.location.href);
 }
 
+watch(search, (value) => {
+  searchOpen.value = value.trim().length > 0;
+  if (value.trim().length < 2) {
+    void platform.search(value);
+    searchCoordinator.cancel();
+    return;
+  }
+  searchCoordinator.schedule(value, (normalized) => {
+    void platform.search(normalized);
+  });
+});
 watch(
   projectRef,
   (value) => {
@@ -383,6 +390,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   disposed = true;
+  searchCoordinator.cancel();
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
   window.removeEventListener("kodex:preload-error", markPreloadFailed);
@@ -471,7 +479,7 @@ onBeforeUnmount(() => {
               v-for="result in platform.searchResults"
               :key="`${result.kind}:${result.ref}`"
               class="search-result"
-              :to="searchResultPath(result)"
+              :to="canonicalSearchRoute(result)"
               @click="closeSearch('route')"
             >
               <span>

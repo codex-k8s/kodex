@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { setUnauthorizedHandler, unwrap } from "./problem";
+import { normalizeProblem, setUnauthorizedHandler, unwrap } from "./problem";
 
 afterEach(() => setUnauthorizedHandler(null));
 
@@ -45,5 +45,57 @@ describe("authoritative session invalidation", () => {
       status: 403,
     });
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("strict Problem normalization", () => {
+  it.each([
+    [404, "not-found", false],
+    [500, "unavailable", true],
+    [503, "unavailable", true],
+  ] as const)(
+    "нормализует malformed HTTP %d без зависимости от тела",
+    (status, kind, retryable) => {
+      const problem = normalizeProblem(
+        "upstream HTML",
+        new Response(null, { status }),
+      );
+      expect(problem).toMatchObject({
+        status,
+        code: "UNKNOWN",
+        kind,
+        retryable,
+      });
+    },
+  );
+
+  it("сохраняет только typed локализованный Problem", () => {
+    const problem = normalizeProblem({
+      type: "urn:kodex:problem:not_found",
+      title: "Запрошенный объект не найден",
+      status: 404,
+      code: "NOT_FOUND",
+      correlationId: "00000000-0000-4000-8000-000000000001",
+      retryable: false,
+    });
+    expect(problem.title).toBe("Запрошенный объект не найден");
+    expect(problem.kind).toBe("not-found");
+  });
+
+  it("не показывает raw i18n key из невалидного Problem", () => {
+    const problem = normalizeProblem(
+      {
+        status: 503,
+        code: "app.searchKind.SEARCH_RESULT_KIND_RUN",
+        retryable: true,
+      },
+      new Response(null, { status: 503 }),
+    );
+    expect(problem).toMatchObject({
+      status: 503,
+      code: "UNKNOWN",
+      kind: "unavailable",
+      retryable: true,
+    });
   });
 });
