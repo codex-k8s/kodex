@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddAttachmentSetItemsData, AddAttachmentSetItemsErrors, AddAttachmentSetItemsResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ArchiveAccessRoleData, ArchiveAccessRoleErrors, ArchiveAccessRoleResponses, AuthorizeProviderAccountApiKeyData, AuthorizeProviderAccountApiKeyErrors, AuthorizeProviderAccountApiKeyResponses, BindAgentRuntimeEnvironmentData, BindAgentRuntimeEnvironmentErrors, BindAgentRuntimeEnvironmentResponses, ChangeAccessBindingData, ChangeAccessBindingErrors, ChangeAccessBindingResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, ConfigureIntegrationConnectionCredentialData, ConfigureIntegrationConnectionCredentialErrors, ConfigureIntegrationConnectionCredentialResponses, CreateAccessBindingData, CreateAccessBindingErrors, CreateAccessBindingResponses, CreateAccessRoleData, CreateAccessRoleErrors, CreateAccessRoleResponses, CreateAccessRoleVersionData, CreateAccessRoleVersionErrors, CreateAccessRoleVersionResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateAttachmentSetDraftData, CreateAttachmentSetDraftErrors, CreateAttachmentSetDraftResponses, CreateConfigOverlayDraftData, CreateConfigOverlayDraftErrors, CreateConfigOverlayDraftResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateOrganizationAttachmentSetDraftData, CreateOrganizationAttachmentSetDraftErrors, CreateOrganizationAttachmentSetDraftResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateProviderAccountData, CreateProviderAccountErrors, CreateProviderAccountResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateRuntimeEnvironmentSetData, CreateRuntimeEnvironmentSetErrors, CreateRuntimeEnvironmentSetResponses, CreateRuntimeSecretData, CreateRuntimeSecretErrors, CreateRuntimeSecretResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteArtifactData, DeleteArtifactErrors, DeleteArtifactResponses, DeleteIntegrationConnectionData, DeleteIntegrationConnectionErrors, DeleteIntegrationConnectionResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DeleteProviderAccountData, DeleteProviderAccountErrors, DeleteProviderAccountResponses, DeleteRuntimeEnvironmentData, DeleteRuntimeEnvironmentErrors, DeleteRuntimeEnvironmentResponses, DeleteScheduleData, DeleteScheduleErrors, DeleteScheduleResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, ExplainAccessData, ExplainAccessErrors, ExplainAccessResponses, FinalizeAttachmentSetData, FinalizeAttachmentSetErrors, FinalizeAttachmentSetResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentAvatarContentData, GetAgentAvatarContentErrors, GetAgentAvatarContentResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetAgentRuntimeConfigurationData, GetAgentRuntimeConfigurationErrors, GetAgentRuntimeConfigurationResponses, GetArtifactData, GetArtifactErrors, GetArtifactImpactData, GetArtifactImpactErrors, GetArtifactImpactResponses, GetArtifactResponses, GetAttachmentSetData, GetAttachmentSetErrors, GetAttachmentSetResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetProviderAccountData, GetProviderAccountErrors, GetProviderAccountResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetRuntimeEnvironmentReadinessData, GetRuntimeEnvironmentReadinessErrors, GetRuntimeEnvironmentReadinessResponses, GetRuntimeEnvironmentSetData, GetRuntimeEnvironmentSetErrors, GetRuntimeEnvironmentSetResponses, GetRuntimeSecretData, GetRuntimeSecretErrors, GetRuntimeSecretResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAccessBindingsData, ListAccessBindingsErrors, ListAccessBindingsResponses, ListAccessRolesData, ListAccessRolesErrors, ListAccessRolesResponses, ListAccessRoleVersionsData, ListAccessRoleVersionsErrors, ListAccessRoleVersionsResponses, ListAccessSubjectsData, ListAccessSubjectsErrors, ListAccessSubjectsResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentRuntimeConfigurationVersionsData, ListAgentRuntimeConfigurationVersionsErrors, ListAgentRuntimeConfigurationVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListOidcGroupsData, ListOidcGroupsErrors, ListOidcGroupsResponses, ListOrganizationArtifactsData, ListOrganizationArtifactsErrors, ListOrganizationArtifactsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPermissionRegistryData, ListPermissionRegistryErrors, ListPermissionRegistryResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListPromptTemplateVariablesData, ListPromptTemplateVariablesErrors, ListPromptTemplateVariablesResponses, ListProviderAccountsData, ListProviderAccountsErrors, ListProviderAccountsResponses, ListProviderDefinitionsData, ListProviderDefinitionsErrors, ListProviderDefinitionsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipeRevisionsData, ListRoleImageRecipeRevisionsErrors, ListRoleImageRecipeRevisionsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeEnvironmentAgentsData, ListRuntimeEnvironmentAgentsErrors, ListRuntimeEnvironmentAgentsResponses, ListRuntimeEnvironmentSetsData, ListRuntimeEnvironmentSetsErrors, ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentVersionsData, ListRuntimeEnvironmentVersionsErrors, ListRuntimeEnvironmentVersionsResponses, ListRuntimeSecretsData, ListRuntimeSecretsErrors, ListRuntimeSecretsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListScheduleRevisionsData, ListScheduleRevisionsErrors, ListScheduleRevisionsResponses, ListScheduleRunsData, ListScheduleRunsErrors, ListScheduleRunsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListTemplateVariablesData, ListTemplateVariablesErrors, ListTemplateVariablesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, PreviewPromptTemplateData, PreviewPromptTemplateErrors, PreviewPromptTemplateResponses, PromoteRoleImageData, PromoteRoleImageErrors, PromoteRoleImageResponses, PublishAgentRuntimeConfigurationData, PublishAgentRuntimeConfigurationErrors, PublishAgentRuntimeConfigurationResponses, PublishConfigOverlayDraftData, PublishConfigOverlayDraftErrors, PublishConfigOverlayDraftResponses, PublishRuntimeEnvironmentVersionData, PublishRuntimeEnvironmentVersionErrors, PublishRuntimeEnvironmentVersionResponses, PurgeArtifactData, PurgeArtifactErrors, PurgeArtifactResponses, QueryEffectiveAccessData, QueryEffectiveAccessErrors, QueryEffectiveAccessResponses, ReauthorizeProviderAccountDeviceCodeData, ReauthorizeProviderAccountDeviceCodeErrors, ReauthorizeProviderAccountDeviceCodeResponses, RefreshProviderAccountAuthorizationData, RefreshProviderAccountAuthorizationErrors, RefreshProviderAccountAuthorizationResponses, RejectAssistantPlanData, RejectAssistantPlanErrors, RejectAssistantPlanResponses, RemoveAgentAvatarData, RemoveAgentAvatarErrors, RemoveAgentAvatarResponses, RemoveAttachmentSetItemsData, RemoveAttachmentSetItemsErrors, RemoveAttachmentSetItemsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, RestoreArtifactData, RestoreArtifactErrors, RestoreArtifactResponses, RevealRuntimeSecretData, RevealRuntimeSecretErrors, RevealRuntimeSecretResponses, RevokeAccessBindingData, RevokeAccessBindingErrors, RevokeAccessBindingResponses, RevokeProviderAccountData, RevokeProviderAccountErrors, RevokeProviderAccountResponses, RevokeRuntimeSecretData, RevokeRuntimeSecretErrors, RevokeRuntimeSecretResponses, RollbackConfigOverlayData, RollbackConfigOverlayErrors, RollbackConfigOverlayResponses, RollbackRuntimeEnvironmentData, RollbackRuntimeEnvironmentErrors, RollbackRuntimeEnvironmentResponses, RotateRuntimeSecretData, RotateRuntimeSecretErrors, RotateRuntimeSecretResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, SetAgentAvatarData, SetAgentAvatarErrors, SetAgentAvatarResponses, SetProviderAccountEnabledData, SetProviderAccountEnabledErrors, SetProviderAccountEnabledResponses, SetRuntimeEnvironmentEnabledData, SetRuntimeEnvironmentEnabledErrors, SetRuntimeEnvironmentEnabledResponses, SimulateAccessData, SimulateAccessErrors, SimulateAccessResponses, StartProviderAccountDeviceAuthorizationData, StartProviderAccountDeviceAuthorizationErrors, StartProviderAccountDeviceAuthorizationResponses, TranscribeSpeechData, TranscribeSpeechErrors, TranscribeSpeechResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateAssistantConversationTitleData, UpdateAssistantConversationTitleErrors, UpdateAssistantConversationTitleResponses, UpdateAssistantPlanDraftData, UpdateAssistantPlanDraftErrors, UpdateAssistantPlanDraftResponses, UpdateIntegrationConnectionData, UpdateIntegrationConnectionErrors, UpdateIntegrationConnectionResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadAgentAvatarData, UploadAgentAvatarErrors, UploadAgentAvatarResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses, UploadOrganizationArtifactData, UploadOrganizationArtifactErrors, UploadOrganizationArtifactResponses, ValidateAssistantPlanData, ValidateAssistantPlanErrors, ValidateAssistantPlanResponses, ValidateConfigOverlayDraftData, ValidateConfigOverlayDraftErrors, ValidateConfigOverlayDraftResponses, ValidatePromptTemplateData, ValidatePromptTemplateErrors, ValidatePromptTemplateResponses, VerifyProviderAccountDeviceAuthorizationData, VerifyProviderAccountDeviceAuthorizationErrors, VerifyProviderAccountDeviceAuthorizationResponses } from './types.gen';
+import type { AddAssistantTurnData, AddAssistantTurnErrors, AddAssistantTurnResponses, AddAttachmentSetItemsData, AddAttachmentSetItemsErrors, AddAttachmentSetItemsResponses, AddPlatformMembershipData, AddPlatformMembershipErrors, AddPlatformMembershipResponses, AddProjectMembershipData, AddProjectMembershipErrors, AddProjectMembershipResponses, AddSessionTurnData, AddSessionTurnErrors, AddSessionTurnResponses, ApplyAssistantPlanData, ApplyAssistantPlanErrors, ApplyAssistantPlanResponses, ArchiveAccessRoleData, ArchiveAccessRoleErrors, ArchiveAccessRoleResponses, AuthorizeProviderAccountApiKeyData, AuthorizeProviderAccountApiKeyErrors, AuthorizeProviderAccountApiKeyResponses, BindAgentRuntimeEnvironmentData, BindAgentRuntimeEnvironmentErrors, BindAgentRuntimeEnvironmentResponses, ChangeAccessBindingData, ChangeAccessBindingErrors, ChangeAccessBindingResponses, ChangeArtifactBindingData, ChangeArtifactBindingErrors, ChangeArtifactBindingResponses, ChangeIntegrationGrantData, ChangeIntegrationGrantErrors, ChangeIntegrationGrantResponses, ChangePlatformMembershipData, ChangePlatformMembershipErrors, ChangePlatformMembershipResponses, ChangeProjectMembershipData, ChangeProjectMembershipErrors, ChangeProjectMembershipResponses, CommandAgentData, CommandAgentErrors, CommandAgentInstructionsData, CommandAgentInstructionsErrors, CommandAgentInstructionsResponses, CommandAgentResponses, CommandIntegrationConnectionData, CommandIntegrationConnectionErrors, CommandIntegrationConnectionResponses, CommandRoleImageRecipeData, CommandRoleImageRecipeErrors, CommandRoleImageRecipeResponses, CommandRunData, CommandRunErrors, CommandRunResponses, CommandScheduleData, CommandScheduleErrors, CommandScheduleResponses, CommandSystemAssistantData, CommandSystemAssistantErrors, CommandSystemAssistantResponses, CommandWorkflowData, CommandWorkflowErrors, CommandWorkflowResponses, CompleteOnboardingData, CompleteOnboardingErrors, CompleteOnboardingResponses, ConfigureIntegrationConnectionCredentialData, ConfigureIntegrationConnectionCredentialErrors, ConfigureIntegrationConnectionCredentialResponses, CopyGitManagedConfigurationData, CopyGitManagedConfigurationErrors, CopyGitManagedConfigurationResponses, CreateAccessBindingData, CreateAccessBindingErrors, CreateAccessBindingResponses, CreateAccessRoleData, CreateAccessRoleErrors, CreateAccessRoleResponses, CreateAccessRoleVersionData, CreateAccessRoleVersionErrors, CreateAccessRoleVersionResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAssistantConversationData, CreateAssistantConversationErrors, CreateAssistantConversationResponses, CreateAttachmentSetDraftData, CreateAttachmentSetDraftErrors, CreateAttachmentSetDraftResponses, CreateConfigOverlayDraftData, CreateConfigOverlayDraftErrors, CreateConfigOverlayDraftResponses, CreateInstructionDraftData, CreateInstructionDraftErrors, CreateInstructionDraftResponses, CreateIntegrationConnectionData, CreateIntegrationConnectionErrors, CreateIntegrationConnectionResponses, CreateIntegrationDefinitionDraftData, CreateIntegrationDefinitionDraftErrors, CreateIntegrationDefinitionDraftResponses, CreateOrganizationAttachmentSetDraftData, CreateOrganizationAttachmentSetDraftErrors, CreateOrganizationAttachmentSetDraftResponses, CreateOwnerSessionData, CreateOwnerSessionErrors, CreateOwnerSessionResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreatePromptTemplateDraftData, CreatePromptTemplateDraftErrors, CreatePromptTemplateDraftResponses, CreateProviderAccountData, CreateProviderAccountErrors, CreateProviderAccountResponses, CreateRoleImageRecipeData, CreateRoleImageRecipeErrors, CreateRoleImageRecipeResponses, CreateRoleImageRevisionDraftData, CreateRoleImageRevisionDraftErrors, CreateRoleImageRevisionDraftResponses, CreateRunData, CreateRunErrors, CreateRunResponses, CreateRuntimeEnvironmentSetData, CreateRuntimeEnvironmentSetErrors, CreateRuntimeEnvironmentSetResponses, CreateRuntimeSecretData, CreateRuntimeSecretErrors, CreateRuntimeSecretResponses, CreateScheduleData, CreateScheduleErrors, CreateScheduleResponses, CreateSystemSttConfigurationDraftData, CreateSystemSttConfigurationDraftErrors, CreateSystemSttConfigurationDraftResponses, CreateWorkflowData, CreateWorkflowErrors, CreateWorkflowResponses, DeleteArtifactData, DeleteArtifactErrors, DeleteArtifactResponses, DeleteIntegrationConnectionData, DeleteIntegrationConnectionErrors, DeleteIntegrationConnectionResponses, DeleteOwnerSessionData, DeleteOwnerSessionErrors, DeleteOwnerSessionResponses, DeleteProviderAccountData, DeleteProviderAccountErrors, DeleteProviderAccountResponses, DeleteRuntimeEnvironmentData, DeleteRuntimeEnvironmentErrors, DeleteRuntimeEnvironmentResponses, DeleteScheduleData, DeleteScheduleErrors, DeleteScheduleResponses, DetachGitManagedConfigurationData, DetachGitManagedConfigurationErrors, DetachGitManagedConfigurationResponses, DownloadArtifactData, DownloadArtifactErrors, DownloadArtifactResponses, ExplainAccessData, ExplainAccessErrors, ExplainAccessResponses, FinalizeAttachmentSetData, FinalizeAttachmentSetErrors, FinalizeAttachmentSetResponses, GetAdministrationData, GetAdministrationErrors, GetAdministrationResponses, GetAgentAvatarContentData, GetAgentAvatarContentErrors, GetAgentAvatarContentResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetAgentRuntimeConfigurationData, GetAgentRuntimeConfigurationErrors, GetAgentRuntimeConfigurationResponses, GetArtifactData, GetArtifactErrors, GetArtifactImpactData, GetArtifactImpactErrors, GetArtifactImpactResponses, GetArtifactResponses, GetAttachmentSetData, GetAttachmentSetErrors, GetAttachmentSetResponses, GetBootstrapStateData, GetBootstrapStateErrors, GetBootstrapStateResponses, GetIntegrationConnectionData, GetIntegrationConnectionErrors, GetIntegrationConnectionResponses, GetManagedConfigurationImpactData, GetManagedConfigurationImpactErrors, GetManagedConfigurationImpactResponses, GetOverviewData, GetOverviewErrors, GetOverviewResponses, GetOwnerGateData, GetOwnerGateErrors, GetOwnerGateResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetProviderAccountData, GetProviderAccountErrors, GetProviderAccountResponses, GetRoleImageRecipeData, GetRoleImageRecipeErrors, GetRoleImageRecipeResponses, GetRunData, GetRunErrors, GetRunGraphData, GetRunGraphErrors, GetRunGraphResponses, GetRunResponses, GetRuntimeEnvironmentReadinessData, GetRuntimeEnvironmentReadinessErrors, GetRuntimeEnvironmentReadinessResponses, GetRuntimeEnvironmentSetData, GetRuntimeEnvironmentSetErrors, GetRuntimeEnvironmentSetResponses, GetRuntimeSecretData, GetRuntimeSecretErrors, GetRuntimeSecretResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetSystemAssistantData, GetSystemAssistantErrors, GetSystemAssistantResponses, GetSystemSttConfigurationData, GetSystemSttConfigurationErrors, GetSystemSttConfigurationResponses, GetWorkflowData, GetWorkflowErrors, GetWorkflowResponses, ListAccessBindingsData, ListAccessBindingsErrors, ListAccessBindingsResponses, ListAccessRolesData, ListAccessRolesErrors, ListAccessRolesResponses, ListAccessRoleVersionsData, ListAccessRoleVersionsErrors, ListAccessRoleVersionsResponses, ListAccessSubjectsData, ListAccessSubjectsErrors, ListAccessSubjectsResponses, ListAgentInstructionVersionsData, ListAgentInstructionVersionsErrors, ListAgentInstructionVersionsResponses, ListAgentRuntimeConfigurationVersionsData, ListAgentRuntimeConfigurationVersionsErrors, ListAgentRuntimeConfigurationVersionsResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListArtifactsData, ListArtifactsErrors, ListArtifactsResponses, ListAssistantConversationsData, ListAssistantConversationsErrors, ListAssistantConversationsResponses, ListAuditEventsData, ListAuditEventsErrors, ListAuditEventsResponses, ListIntegrationConnectionsData, ListIntegrationConnectionsErrors, ListIntegrationConnectionsResponses, ListIntegrationDefinitionsData, ListIntegrationDefinitionsErrors, ListIntegrationDefinitionsResponses, ListManagedConfigurationHistoryData, ListManagedConfigurationHistoryErrors, ListManagedConfigurationHistoryResponses, ListOidcGroupsData, ListOidcGroupsErrors, ListOidcGroupsResponses, ListOrganizationArtifactsData, ListOrganizationArtifactsErrors, ListOrganizationArtifactsResponses, ListOwnerGatesData, ListOwnerGatesErrors, ListOwnerGatesResponses, ListPermissionRegistryData, ListPermissionRegistryErrors, ListPermissionRegistryResponses, ListPlatformCapabilitiesData, ListPlatformCapabilitiesErrors, ListPlatformCapabilitiesResponses, ListPlatformMembershipCandidatesData, ListPlatformMembershipCandidatesErrors, ListPlatformMembershipCandidatesResponses, ListPlatformMembershipsData, ListPlatformMembershipsErrors, ListPlatformMembershipsResponses, ListProjectMembershipCandidatesData, ListProjectMembershipCandidatesErrors, ListProjectMembershipCandidatesResponses, ListProjectMembershipsData, ListProjectMembershipsErrors, ListProjectMembershipsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListPromptTemplateVariablesData, ListPromptTemplateVariablesErrors, ListPromptTemplateVariablesResponses, ListProviderAccountsData, ListProviderAccountsErrors, ListProviderAccountsResponses, ListProviderDefinitionsData, ListProviderDefinitionsErrors, ListProviderDefinitionsResponses, ListRoleEnvironmentsData, ListRoleEnvironmentsErrors, ListRoleEnvironmentsResponses, ListRoleImageRecipeRevisionsData, ListRoleImageRecipeRevisionsErrors, ListRoleImageRecipeRevisionsResponses, ListRoleImageRecipesData, ListRoleImageRecipesErrors, ListRoleImageRecipesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeEnvironmentAgentsData, ListRuntimeEnvironmentAgentsErrors, ListRuntimeEnvironmentAgentsResponses, ListRuntimeEnvironmentSetsData, ListRuntimeEnvironmentSetsErrors, ListRuntimeEnvironmentSetsResponses, ListRuntimeEnvironmentVersionsData, ListRuntimeEnvironmentVersionsErrors, ListRuntimeEnvironmentVersionsResponses, ListRuntimeSecretsData, ListRuntimeSecretsErrors, ListRuntimeSecretsResponses, ListRuntimeSelectionsData, ListRuntimeSelectionsErrors, ListRuntimeSelectionsResponses, ListScheduleRevisionsData, ListScheduleRevisionsErrors, ListScheduleRevisionsResponses, ListScheduleRunsData, ListScheduleRunsErrors, ListScheduleRunsResponses, ListSchedulesData, ListSchedulesErrors, ListSchedulesResponses, ListTemplateVariablesData, ListTemplateVariablesErrors, ListTemplateVariablesResponses, ListWorkflowsData, ListWorkflowsErrors, ListWorkflowsResponses, PreviewPromptTemplateData, PreviewPromptTemplateErrors, PreviewPromptTemplateResponses, PromoteRoleImageData, PromoteRoleImageErrors, PromoteRoleImageResponses, PublishAgentRuntimeConfigurationData, PublishAgentRuntimeConfigurationErrors, PublishAgentRuntimeConfigurationResponses, PublishConfigOverlayDraftData, PublishConfigOverlayDraftErrors, PublishConfigOverlayDraftResponses, PublishIntegrationDefinitionDraftData, PublishIntegrationDefinitionDraftErrors, PublishIntegrationDefinitionDraftResponses, PublishPromptTemplateDraftData, PublishPromptTemplateDraftErrors, PublishPromptTemplateDraftResponses, PublishRoleImageRevisionDraftData, PublishRoleImageRevisionDraftErrors, PublishRoleImageRevisionDraftResponses, PublishRuntimeEnvironmentVersionData, PublishRuntimeEnvironmentVersionErrors, PublishRuntimeEnvironmentVersionResponses, PublishSystemSttConfigurationDraftData, PublishSystemSttConfigurationDraftErrors, PublishSystemSttConfigurationDraftResponses, PurgeArtifactData, PurgeArtifactErrors, PurgeArtifactResponses, QueryEffectiveAccessData, QueryEffectiveAccessErrors, QueryEffectiveAccessResponses, ReauthorizeProviderAccountDeviceCodeData, ReauthorizeProviderAccountDeviceCodeErrors, ReauthorizeProviderAccountDeviceCodeResponses, RebindIntegrationDefinitionConsumersData, RebindIntegrationDefinitionConsumersErrors, RebindIntegrationDefinitionConsumersResponses, RebindPromptTemplateConsumersData, RebindPromptTemplateConsumersErrors, RebindPromptTemplateConsumersResponses, RebindRoleImageConsumersData, RebindRoleImageConsumersErrors, RebindRoleImageConsumersResponses, RebindSystemSttConsumersData, RebindSystemSttConsumersErrors, RebindSystemSttConsumersResponses, RefreshProviderAccountAuthorizationData, RefreshProviderAccountAuthorizationErrors, RefreshProviderAccountAuthorizationResponses, RejectAssistantPlanData, RejectAssistantPlanErrors, RejectAssistantPlanResponses, RemoveAgentAvatarData, RemoveAgentAvatarErrors, RemoveAgentAvatarResponses, RemoveAttachmentSetItemsData, RemoveAttachmentSetItemsErrors, RemoveAttachmentSetItemsResponses, RemovePlatformMembershipData, RemovePlatformMembershipErrors, RemovePlatformMembershipResponses, RemoveProjectMembershipData, RemoveProjectMembershipErrors, RemoveProjectMembershipResponses, RenewOwnerSessionData, RenewOwnerSessionErrors, RenewOwnerSessionResponses, ResolveOwnerGateData, ResolveOwnerGateErrors, ResolveOwnerGateResponses, RestoreArtifactData, RestoreArtifactErrors, RestoreArtifactResponses, RevealRuntimeSecretData, RevealRuntimeSecretErrors, RevealRuntimeSecretResponses, RevokeAccessBindingData, RevokeAccessBindingErrors, RevokeAccessBindingResponses, RevokeProviderAccountData, RevokeProviderAccountErrors, RevokeProviderAccountResponses, RevokeRuntimeSecretData, RevokeRuntimeSecretErrors, RevokeRuntimeSecretResponses, RollbackConfigOverlayData, RollbackConfigOverlayErrors, RollbackConfigOverlayResponses, RollbackRuntimeEnvironmentData, RollbackRuntimeEnvironmentErrors, RollbackRuntimeEnvironmentResponses, RotateRuntimeSecretData, RotateRuntimeSecretErrors, RotateRuntimeSecretResponses, SearchPlatformData, SearchPlatformErrors, SearchPlatformResponses, SetAgentAvatarData, SetAgentAvatarErrors, SetAgentAvatarResponses, SetProviderAccountEnabledData, SetProviderAccountEnabledErrors, SetProviderAccountEnabledResponses, SetRuntimeEnvironmentEnabledData, SetRuntimeEnvironmentEnabledErrors, SetRuntimeEnvironmentEnabledResponses, SimulateAccessData, SimulateAccessErrors, SimulateAccessResponses, StartProviderAccountDeviceAuthorizationData, StartProviderAccountDeviceAuthorizationErrors, StartProviderAccountDeviceAuthorizationResponses, TranscribeSpeechData, TranscribeSpeechErrors, TranscribeSpeechResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses, UpdateAssistantConversationTitleData, UpdateAssistantConversationTitleErrors, UpdateAssistantConversationTitleResponses, UpdateAssistantPlanDraftData, UpdateAssistantPlanDraftErrors, UpdateAssistantPlanDraftResponses, UpdateIntegrationConnectionData, UpdateIntegrationConnectionErrors, UpdateIntegrationConnectionResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateRoleImageRecipeData, UpdateRoleImageRecipeErrors, UpdateRoleImageRecipeResponses, UpdateScheduleData, UpdateScheduleErrors, UpdateScheduleResponses, UpdateSystemAssistantOwnerInstructionsData, UpdateSystemAssistantOwnerInstructionsErrors, UpdateSystemAssistantOwnerInstructionsResponses, UpdateWorkflowDraftData, UpdateWorkflowDraftErrors, UpdateWorkflowDraftResponses, UploadAgentAvatarData, UploadAgentAvatarErrors, UploadAgentAvatarResponses, UploadArtifactData, UploadArtifactErrors, UploadArtifactResponses, UploadOrganizationArtifactData, UploadOrganizationArtifactErrors, UploadOrganizationArtifactResponses, ValidateAssistantPlanData, ValidateAssistantPlanErrors, ValidateAssistantPlanResponses, ValidateConfigOverlayDraftData, ValidateConfigOverlayDraftErrors, ValidateConfigOverlayDraftResponses, ValidateIntegrationDefinitionDraftData, ValidateIntegrationDefinitionDraftErrors, ValidateIntegrationDefinitionDraftResponses, ValidatePromptTemplateData, ValidatePromptTemplateDraftData, ValidatePromptTemplateDraftErrors, ValidatePromptTemplateDraftResponses, ValidatePromptTemplateErrors, ValidatePromptTemplateResponses, ValidateRoleImageRevisionDraftData, ValidateRoleImageRevisionDraftErrors, ValidateRoleImageRevisionDraftResponses, ValidateSystemSttConfigurationDraftData, ValidateSystemSttConfigurationDraftErrors, ValidateSystemSttConfigurationDraftResponses, VerifyProviderAccountDeviceAuthorizationData, VerifyProviderAccountDeviceAuthorizationErrors, VerifyProviderAccountDeviceAuthorizationResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -1913,5 +1913,251 @@ export const listAuditEvents = <ThrowOnError extends boolean = false>(options?: 
             type: 'apiKey'
         }],
     url: '/api/v1/audit-events',
+    ...options
+});
+
+export const createPromptTemplateDraft = <ThrowOnError extends boolean = false>(options: Options<CreatePromptTemplateDraftData, ThrowOnError>): RequestResult<CreatePromptTemplateDraftResponses, CreatePromptTemplateDraftErrors, ThrowOnError> => (options.client ?? client).post<CreatePromptTemplateDraftResponses, CreatePromptTemplateDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-template-configurations/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validatePromptTemplateDraft = <ThrowOnError extends boolean = false>(options: Options<ValidatePromptTemplateDraftData, ThrowOnError>): RequestResult<ValidatePromptTemplateDraftResponses, ValidatePromptTemplateDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidatePromptTemplateDraftResponses, ValidatePromptTemplateDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation',
+    ...options
+});
+
+export const publishPromptTemplateDraft = <ThrowOnError extends boolean = false>(options: Options<PublishPromptTemplateDraftData, ThrowOnError>): RequestResult<PublishPromptTemplateDraftResponses, PublishPromptTemplateDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishPromptTemplateDraftResponses, PublishPromptTemplateDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/publication',
+    ...options
+});
+
+export const rebindPromptTemplateConsumers = <ThrowOnError extends boolean = false>(options: Options<RebindPromptTemplateConsumersData, ThrowOnError>): RequestResult<RebindPromptTemplateConsumersResponses, RebindPromptTemplateConsumersErrors, ThrowOnError> => (options.client ?? client).post<RebindPromptTemplateConsumersResponses, RebindPromptTemplateConsumersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createRoleImageRevisionDraft = <ThrowOnError extends boolean = false>(options: Options<CreateRoleImageRevisionDraftData, ThrowOnError>): RequestResult<CreateRoleImageRevisionDraftResponses, CreateRoleImageRevisionDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateRoleImageRevisionDraftResponses, CreateRoleImageRevisionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/role-image-configurations/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateRoleImageRevisionDraft = <ThrowOnError extends boolean = false>(options: Options<ValidateRoleImageRevisionDraftData, ThrowOnError>): RequestResult<ValidateRoleImageRevisionDraftResponses, ValidateRoleImageRevisionDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidateRoleImageRevisionDraftResponses, ValidateRoleImageRevisionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/validation',
+    ...options
+});
+
+export const publishRoleImageRevisionDraft = <ThrowOnError extends boolean = false>(options: Options<PublishRoleImageRevisionDraftData, ThrowOnError>): RequestResult<PublishRoleImageRevisionDraftResponses, PublishRoleImageRevisionDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishRoleImageRevisionDraftResponses, PublishRoleImageRevisionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication',
+    ...options
+});
+
+export const rebindRoleImageConsumers = <ThrowOnError extends boolean = false>(options: Options<RebindRoleImageConsumersData, ThrowOnError>): RequestResult<RebindRoleImageConsumersResponses, RebindRoleImageConsumersErrors, ThrowOnError> => (options.client ?? client).post<RebindRoleImageConsumersResponses, RebindRoleImageConsumersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createIntegrationDefinitionDraft = <ThrowOnError extends boolean = false>(options: Options<CreateIntegrationDefinitionDraftData, ThrowOnError>): RequestResult<CreateIntegrationDefinitionDraftResponses, CreateIntegrationDefinitionDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateIntegrationDefinitionDraftResponses, CreateIntegrationDefinitionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-definition-configurations/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateIntegrationDefinitionDraft = <ThrowOnError extends boolean = false>(options: Options<ValidateIntegrationDefinitionDraftData, ThrowOnError>): RequestResult<ValidateIntegrationDefinitionDraftResponses, ValidateIntegrationDefinitionDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidateIntegrationDefinitionDraftResponses, ValidateIntegrationDefinitionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation',
+    ...options
+});
+
+export const publishIntegrationDefinitionDraft = <ThrowOnError extends boolean = false>(options: Options<PublishIntegrationDefinitionDraftData, ThrowOnError>): RequestResult<PublishIntegrationDefinitionDraftResponses, PublishIntegrationDefinitionDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishIntegrationDefinitionDraftResponses, PublishIntegrationDefinitionDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication',
+    ...options
+});
+
+export const rebindIntegrationDefinitionConsumers = <ThrowOnError extends boolean = false>(options: Options<RebindIntegrationDefinitionConsumersData, ThrowOnError>): RequestResult<RebindIntegrationDefinitionConsumersResponses, RebindIntegrationDefinitionConsumersErrors, ThrowOnError> => (options.client ?? client).post<RebindIntegrationDefinitionConsumersResponses, RebindIntegrationDefinitionConsumersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const createSystemSttConfigurationDraft = <ThrowOnError extends boolean = false>(options: Options<CreateSystemSttConfigurationDraftData, ThrowOnError>): RequestResult<CreateSystemSttConfigurationDraftResponses, CreateSystemSttConfigurationDraftErrors, ThrowOnError> => (options.client ?? client).post<CreateSystemSttConfigurationDraftResponses, CreateSystemSttConfigurationDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/system-stt-configurations/drafts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const validateSystemSttConfigurationDraft = <ThrowOnError extends boolean = false>(options: Options<ValidateSystemSttConfigurationDraftData, ThrowOnError>): RequestResult<ValidateSystemSttConfigurationDraftResponses, ValidateSystemSttConfigurationDraftErrors, ThrowOnError> => (options.client ?? client).post<ValidateSystemSttConfigurationDraftResponses, ValidateSystemSttConfigurationDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation',
+    ...options
+});
+
+export const publishSystemSttConfigurationDraft = <ThrowOnError extends boolean = false>(options: Options<PublishSystemSttConfigurationDraftData, ThrowOnError>): RequestResult<PublishSystemSttConfigurationDraftResponses, PublishSystemSttConfigurationDraftErrors, ThrowOnError> => (options.client ?? client).post<PublishSystemSttConfigurationDraftResponses, PublishSystemSttConfigurationDraftErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication',
+    ...options
+});
+
+export const rebindSystemSttConsumers = <ThrowOnError extends boolean = false>(options: Options<RebindSystemSttConsumersData, ThrowOnError>): RequestResult<RebindSystemSttConsumersResponses, RebindSystemSttConsumersErrors, ThrowOnError> => (options.client ?? client).post<RebindSystemSttConsumersResponses, RebindSystemSttConsumersErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const listManagedConfigurationHistory = <ThrowOnError extends boolean = false>(options: Options<ListManagedConfigurationHistoryData, ThrowOnError>): RequestResult<ListManagedConfigurationHistoryResponses, ListManagedConfigurationHistoryErrors, ThrowOnError> => (options.client ?? client).get<ListManagedConfigurationHistoryResponses, ListManagedConfigurationHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions',
+    ...options
+});
+
+export const getManagedConfigurationImpact = <ThrowOnError extends boolean = false>(options: Options<GetManagedConfigurationImpactData, ThrowOnError>): RequestResult<GetManagedConfigurationImpactResponses, GetManagedConfigurationImpactErrors, ThrowOnError> => (options.client ?? client).get<GetManagedConfigurationImpactResponses, GetManagedConfigurationImpactErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact',
+    ...options
+});
+
+export const detachGitManagedConfiguration = <ThrowOnError extends boolean = false>(options: Options<DetachGitManagedConfigurationData, ThrowOnError>): RequestResult<DetachGitManagedConfigurationResponses, DetachGitManagedConfigurationErrors, ThrowOnError> => (options.client ?? client).post<DetachGitManagedConfigurationResponses, DetachGitManagedConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/managed-configurations/{configurationRef}/detachment',
+    ...options
+});
+
+export const copyGitManagedConfiguration = <ThrowOnError extends boolean = false>(options: Options<CopyGitManagedConfigurationData, ThrowOnError>): RequestResult<CopyGitManagedConfigurationResponses, CopyGitManagedConfigurationErrors, ThrowOnError> => (options.client ?? client).post<CopyGitManagedConfigurationResponses, CopyGitManagedConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/managed-configurations/{configurationRef}/copies',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getSystemSttConfiguration = <ThrowOnError extends boolean = false>(options?: Options<GetSystemSttConfigurationData, ThrowOnError>): RequestResult<GetSystemSttConfigurationResponses, GetSystemSttConfigurationErrors, ThrowOnError> => (options?.client ?? client).get<GetSystemSttConfigurationResponses, GetSystemSttConfigurationErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: 'kodex_session',
+            type: 'apiKey'
+        }],
+    url: '/api/v1/system-stt-configuration',
     ...options
 });

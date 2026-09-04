@@ -291,6 +291,94 @@ export type BootstrapState = {
     nextActions: Array<NextAction>;
 };
 
+export type ManagedConfigurationDraftInput = {
+    configurationRef?: OpaqueRef;
+    projectRef?: OpaqueRef;
+    name: string;
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    content: string;
+};
+
+export type ManagedConfigurationCopyInput = {
+    name: string;
+};
+
+export type ManagedConfigurationConsumer = {
+    kind: 'AGENT' | 'WORKFLOW' | 'SCHEDULE' | 'RUNTIME_ENVIRONMENT' | 'INTEGRATION_CONNECTION' | 'STT_SERVICE';
+    ref: string;
+    revisionRef: OpaqueRef;
+    version: number;
+};
+
+export type ManagedConfigurationRebindInput = {
+    impactDigest: string;
+    consumers: Array<ManagedConfigurationConsumer>;
+};
+
+export type ManagedConfigurationRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED';
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    content: string;
+    digest: string;
+    validationDiagnostics: Array<string>;
+    parentRevisionRef?: OpaqueRef;
+    createdAt: Timestamp;
+    validatedAt?: Timestamp;
+    publishedAt?: Timestamp;
+};
+
+export type ManagedConfiguration = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    name: string;
+    managedBy: 'UI' | 'GIT';
+    source: string;
+    sourceRevision: string;
+    currentRevision?: ManagedConfigurationRevision;
+    updatedAt: Timestamp;
+};
+
+export type ManagedConfigurationResult = {
+    configuration: ManagedConfiguration;
+    revision: ManagedConfigurationRevision;
+};
+
+export type ManagedConfigurationDetachment = {
+    configuration: ManagedConfiguration;
+};
+
+export type ManagedConfigurationHistory = {
+    configuration: ManagedConfiguration;
+    items: Array<ManagedConfigurationRevision>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type ManagedConfigurationImpact = {
+    configurationRef: OpaqueRef;
+    targetRevisionRef: OpaqueRef;
+    consumers: Array<ManagedConfigurationConsumer>;
+    digest: string;
+};
+
+export type SystemSttConfiguration = {
+    configurationRef: OpaqueRef;
+    revisionRef: OpaqueRef;
+    revision: number;
+    digest: string;
+    providerAccountRef: OpaqueRef;
+    model: string;
+    language: string;
+    permissionKey: 'platform.stt.use';
+    ready: boolean;
+    readinessBlockers: Array<string>;
+    providerCredentialGeneration: number;
+};
+
 export type Project = {
     ref: OpaqueRef;
     version: number;
@@ -1848,6 +1936,10 @@ export type AdministrationState = {
     incidents: Array<Incident>;
     observedAt: Timestamp;
 };
+
+export type ConfigurationRef = OpaqueRef;
+
+export type ConfigurationRevisionRef = OpaqueRef;
 
 export type CsrfToken = string;
 
@@ -6877,3 +6969,666 @@ export type ListAuditEventsResponses = {
 };
 
 export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
+
+export type CreatePromptTemplateDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/drafts';
+};
+
+export type CreatePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreatePromptTemplateDraftError = CreatePromptTemplateDraftErrors[keyof CreatePromptTemplateDraftErrors];
+
+export type CreatePromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreatePromptTemplateDraftResponse = CreatePromptTemplateDraftResponses[keyof CreatePromptTemplateDraftResponses];
+
+export type ValidatePromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidatePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidatePromptTemplateDraftError = ValidatePromptTemplateDraftErrors[keyof ValidatePromptTemplateDraftErrors];
+
+export type ValidatePromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidatePromptTemplateDraftResponse = ValidatePromptTemplateDraftResponses[keyof ValidatePromptTemplateDraftResponses];
+
+export type PublishPromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishPromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishPromptTemplateDraftError = PublishPromptTemplateDraftErrors[keyof PublishPromptTemplateDraftErrors];
+
+export type PublishPromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishPromptTemplateDraftResponse = PublishPromptTemplateDraftResponses[keyof PublishPromptTemplateDraftResponses];
+
+export type RebindPromptTemplateConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindPromptTemplateConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindPromptTemplateConsumersError = RebindPromptTemplateConsumersErrors[keyof RebindPromptTemplateConsumersErrors];
+
+export type RebindPromptTemplateConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindPromptTemplateConsumersResponse = RebindPromptTemplateConsumersResponses[keyof RebindPromptTemplateConsumersResponses];
+
+export type CreateRoleImageRevisionDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/role-image-configurations/drafts';
+};
+
+export type CreateRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRoleImageRevisionDraftError = CreateRoleImageRevisionDraftErrors[keyof CreateRoleImageRevisionDraftErrors];
+
+export type CreateRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateRoleImageRevisionDraftResponse = CreateRoleImageRevisionDraftResponses[keyof CreateRoleImageRevisionDraftResponses];
+
+export type ValidateRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRoleImageRevisionDraftError = ValidateRoleImageRevisionDraftErrors[keyof ValidateRoleImageRevisionDraftErrors];
+
+export type ValidateRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateRoleImageRevisionDraftResponse = ValidateRoleImageRevisionDraftResponses[keyof ValidateRoleImageRevisionDraftResponses];
+
+export type PublishRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRoleImageRevisionDraftError = PublishRoleImageRevisionDraftErrors[keyof PublishRoleImageRevisionDraftErrors];
+
+export type PublishRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishRoleImageRevisionDraftResponse = PublishRoleImageRevisionDraftResponses[keyof PublishRoleImageRevisionDraftResponses];
+
+export type RebindRoleImageConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindRoleImageConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRoleImageConsumersError = RebindRoleImageConsumersErrors[keyof RebindRoleImageConsumersErrors];
+
+export type RebindRoleImageConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindRoleImageConsumersResponse = RebindRoleImageConsumersResponses[keyof RebindRoleImageConsumersResponses];
+
+export type CreateIntegrationDefinitionDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/drafts';
+};
+
+export type CreateIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateIntegrationDefinitionDraftError = CreateIntegrationDefinitionDraftErrors[keyof CreateIntegrationDefinitionDraftErrors];
+
+export type CreateIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateIntegrationDefinitionDraftResponse = CreateIntegrationDefinitionDraftResponses[keyof CreateIntegrationDefinitionDraftResponses];
+
+export type ValidateIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateIntegrationDefinitionDraftError = ValidateIntegrationDefinitionDraftErrors[keyof ValidateIntegrationDefinitionDraftErrors];
+
+export type ValidateIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateIntegrationDefinitionDraftResponse = ValidateIntegrationDefinitionDraftResponses[keyof ValidateIntegrationDefinitionDraftResponses];
+
+export type PublishIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishIntegrationDefinitionDraftError = PublishIntegrationDefinitionDraftErrors[keyof PublishIntegrationDefinitionDraftErrors];
+
+export type PublishIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishIntegrationDefinitionDraftResponse = PublishIntegrationDefinitionDraftResponses[keyof PublishIntegrationDefinitionDraftResponses];
+
+export type RebindIntegrationDefinitionConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindIntegrationDefinitionConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindIntegrationDefinitionConsumersError = RebindIntegrationDefinitionConsumersErrors[keyof RebindIntegrationDefinitionConsumersErrors];
+
+export type RebindIntegrationDefinitionConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindIntegrationDefinitionConsumersResponse = RebindIntegrationDefinitionConsumersResponses[keyof RebindIntegrationDefinitionConsumersResponses];
+
+export type CreateSystemSttConfigurationDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configurations/drafts';
+};
+
+export type CreateSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSystemSttConfigurationDraftError = CreateSystemSttConfigurationDraftErrors[keyof CreateSystemSttConfigurationDraftErrors];
+
+export type CreateSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateSystemSttConfigurationDraftResponse = CreateSystemSttConfigurationDraftResponses[keyof CreateSystemSttConfigurationDraftResponses];
+
+export type ValidateSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateSystemSttConfigurationDraftError = ValidateSystemSttConfigurationDraftErrors[keyof ValidateSystemSttConfigurationDraftErrors];
+
+export type ValidateSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateSystemSttConfigurationDraftResponse = ValidateSystemSttConfigurationDraftResponses[keyof ValidateSystemSttConfigurationDraftResponses];
+
+export type PublishSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishSystemSttConfigurationDraftError = PublishSystemSttConfigurationDraftErrors[keyof PublishSystemSttConfigurationDraftErrors];
+
+export type PublishSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishSystemSttConfigurationDraftResponse = PublishSystemSttConfigurationDraftResponses[keyof PublishSystemSttConfigurationDraftResponses];
+
+export type RebindSystemSttConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindSystemSttConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindSystemSttConsumersError = RebindSystemSttConsumersErrors[keyof RebindSystemSttConsumersErrors];
+
+export type RebindSystemSttConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindSystemSttConsumersResponse = RebindSystemSttConsumersResponses[keyof RebindSystemSttConsumersResponses];
+
+export type ListManagedConfigurationHistoryData = {
+    body?: never;
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions';
+};
+
+export type ListManagedConfigurationHistoryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedConfigurationHistoryError = ListManagedConfigurationHistoryErrors[keyof ListManagedConfigurationHistoryErrors];
+
+export type ListManagedConfigurationHistoryResponses = {
+    /**
+     * История неизменяемых ревизий
+     */
+    200: ManagedConfigurationHistory;
+};
+
+export type ListManagedConfigurationHistoryResponse = ListManagedConfigurationHistoryResponses[keyof ListManagedConfigurationHistoryResponses];
+
+export type GetManagedConfigurationImpactData = {
+    body?: never;
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact';
+};
+
+export type GetManagedConfigurationImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedConfigurationImpactError = GetManagedConfigurationImpactErrors[keyof GetManagedConfigurationImpactErrors];
+
+export type GetManagedConfigurationImpactResponses = {
+    /**
+     * Точные привязки потребителей и digest для выборочного обновления
+     */
+    200: ManagedConfigurationImpact;
+};
+
+export type GetManagedConfigurationImpactResponse = GetManagedConfigurationImpactResponses[keyof GetManagedConfigurationImpactResponses];
+
+export type DetachGitManagedConfigurationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/managed-configurations/{configurationRef}/detachment';
+};
+
+export type DetachGitManagedConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DetachGitManagedConfigurationError = DetachGitManagedConfigurationErrors[keyof DetachGitManagedConfigurationErrors];
+
+export type DetachGitManagedConfigurationResponses = {
+    /**
+     * Конфигурация переведена под управление UI
+     */
+    200: ManagedConfigurationDetachment;
+};
+
+export type DetachGitManagedConfigurationResponse = DetachGitManagedConfigurationResponses[keyof DetachGitManagedConfigurationResponses];
+
+export type CopyGitManagedConfigurationData = {
+    body: ManagedConfigurationCopyInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/managed-configurations/{configurationRef}/copies';
+};
+
+export type CopyGitManagedConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CopyGitManagedConfigurationError = CopyGitManagedConfigurationErrors[keyof CopyGitManagedConfigurationErrors];
+
+export type CopyGitManagedConfigurationResponses = {
+    /**
+     * Создана отдельная UI-конфигурация
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CopyGitManagedConfigurationResponse = CopyGitManagedConfigurationResponses[keyof CopyGitManagedConfigurationResponses];
+
+export type GetSystemSttConfigurationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configuration';
+};
+
+export type GetSystemSttConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemSttConfigurationError = GetSystemSttConfigurationErrors[keyof GetSystemSttConfigurationErrors];
+
+export type GetSystemSttConfigurationResponses = {
+    /**
+     * Безопасная опубликованная конфигурация STT, не пользовательское разрешение на транскрипцию
+     */
+    200: SystemSttConfiguration;
+};
+
+export type GetSystemSttConfigurationResponse = GetSystemSttConfigurationResponses[keyof GetSystemSttConfigurationResponses];

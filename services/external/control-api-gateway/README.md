@@ -86,6 +86,53 @@ typed `Unavailable`/HTTP `502/503/504`.
 JWKS LKG ограничен двумя минутами без продления на повторной ошибке. Signature,
 rollback, conflicting revision и expiry немедленно fail closed.
 
+## HTTP lifecycle управляемых конфигураций (#1045)
+
+Источник требований: #1018, #1019, #1022 и корректирующие #1045/#1046.
+Проверенная browser session задаёт actor и organization; query/body refs
+служат только локаторами. Generated controlplaneclient выбирает exact RPC
+и зарегистрированный authority operation. Owner проверяет resource eligibility
+до OCC/idempotency; gateway не принимает managedBy/source/actor от клиента.
+
+| HTTP базовый путь /api/v1/ | POST /drafts | POST /{configurationRef}/revisions/{revisionRef}/validation | POST .../publication | POST .../consumer-bindings |
+| --- | --- | --- | --- | --- |
+| `prompt-template-configurations` | `CreatePromptTemplateDraft` | `ValidatePromptTemplateDraft` | `PublishPromptTemplateDraft` | `RebindPromptTemplateConsumers` |
+| `role-image-configurations` | `CreateRoleImageRevisionDraft` | `ValidateRoleImageRevisionDraft` | `PublishRoleImageRevisionDraft` | `RebindRoleImageConsumers` |
+| `integration-definition-configurations` | `CreateIntegrationDefinitionDraft` | `ValidateIntegrationDefinitionDraft` | `PublishIntegrationDefinitionDraft` | `RebindIntegrationDefinitionConsumers` |
+| `system-stt-configurations` | `CreateSystemSTTConfigurationDraft` | `ValidateSystemSTTConfigurationDraft` | `PublishSystemSTTConfigurationDraft` | `RebindSystemSTTConsumers` |
+
+В каждой строке draft создаёт серверную ревизию DRAFT; validation возвращает
+VALID/INVALID с диагностикой; publish фиксирует PUBLISHED; rebind меняет
+только явно выбранные bindings после проверки impact digest и версий
+потребителей. Existing configuration требует If-Match, все mutations требуют
+Idempotency-Key и CSRF. Configuration/ref/version назначает control-plane.
+Состояние и idempotency receipt сохраняет owner transaction, gateway не
+публикует события; потребитель результата здесь PWA, runtime читает точную
+закреплённую ревизию своим защищённым read path.
+
+| Дополнительный HTTP путь | RPC | Результат |
+| --- | --- | --- |
+| GET /managed-configurations/{ref}/revisions | ListManagedConfigurationHistory | bounded items, configuration, total и nextPageToken |
+| GET /managed-configurations/{ref}/revisions/{revisionRef}/impact | GetManagedConfigurationImpact | exact consumer bindings, target revision и digest |
+| POST /managed-configurations/{ref}/detachment | DetachGitManagedConfiguration | UI source ownership без выдуманной новой ревизии |
+| POST /managed-configurations/{ref}/copies | CopyGitManagedConfiguration | отдельный server-owned ref и DRAFT |
+| GET /system-stt-configuration | GetSystemSTTConfiguration | безопасная конфигурация и provider blockers; НЕ разрешение пользователя на STT |
+
+Отказы owner сохраняют Problem mapping: InvalidArgument → 400,
+PermissionDenied → 403, NotFound → 404, Aborted/OCC → 412,
+FailedPrecondition → 409, Unavailable → 503. Неизвестный/повреждённый
+producer response закрыто отклоняется. Source content и name не проходят
+общую строковую enum/i18n нормализацию, иначе редактор потеряет исходный текст.
+
+Доказательство mapping: TestManagedConfigurationRoutesCallExactTypedRPC
+проверяет все перечисленные маршруты, точные RPC, idempotency/OCC и pagination.
+Дополнительные тесты проверяют сохранение source, отсутствие caller authority,
+невалидные revisions, owner denial и duplicate consumers.
+
+Глобальные каталоги, environment/secret revision lifecycle и per-user STT
+eligibility зависят от завершения #1046. Этот раздел не заявляет готовность
+всего #1045 до подключения этих producer contracts.
+
 ## Контракты и проверка
 
 - OpenAPI: `contracts/openapi/control-api-gateway/v1/openapi.yaml`;

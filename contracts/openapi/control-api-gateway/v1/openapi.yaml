@@ -2554,6 +2554,259 @@ paths:
                   nextPageToken: { type: string, maxLength: 512 }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/prompt-template-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createPromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validatePromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishPromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindPromptTemplateConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindRoleImageConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindIntegrationDefinitionConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindSystemSTTConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/revisions:
+    get:
+      tags: [Administration]
+      operationId: listManagedConfigurationHistory
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: История неизменяемых ревизий
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationHistory' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact:
+    get:
+      tags: [Administration]
+      operationId: getManagedConfigurationImpact
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }]
+      responses:
+        '200':
+          description: Точные привязки потребителей и digest для выборочного обновления
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationImpact' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/detachment:
+    post:
+      tags: [Administration]
+      operationId: detachGitManagedConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Конфигурация переведена под управление UI
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDetachment' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/copies:
+    post:
+      tags: [Administration]
+      operationId: copyGitManagedConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationCopyInput' } } }
+      responses:
+        '201':
+          description: Создана отдельная UI-конфигурация
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configuration:
+    get:
+      tags: [Administration]
+      operationId: getSystemSTTConfiguration
+      responses:
+        '200':
+          description: Безопасная опубликованная конфигурация STT, не пользовательское разрешение на транскрипцию
+          content: { application/json: { schema: { $ref: '#/components/schemas/SystemSTTConfiguration' } } }
+        default: { $ref: '#/components/responses/Problem' }
+
 components:
   securitySchemes:
     oidcBearer:
@@ -2569,6 +2822,16 @@ components:
       description: Версия авторитетного агрегата
       schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
   parameters:
+    ConfigurationRef:
+      name: configurationRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ConfigurationRevisionRef:
+      name: revisionRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     CsrfToken:
       name: X-CSRF-Token
       in: header
@@ -3127,6 +3390,116 @@ components:
         currentUser: { $ref: '#/components/schemas/UserSummary' }
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+    ManagedConfigurationDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, contentFormat, content]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content: { type: string, minLength: 1, maxLength: 262144 }
+    ManagedConfigurationCopyInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+    ManagedConfigurationConsumer:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, revisionRef, version]
+      properties:
+        kind: { type: string, enum: [AGENT, WORKFLOW, SCHEDULE, RUNTIME_ENVIRONMENT, INTEGRATION_CONNECTION, STT_SERVICE] }
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    ManagedConfigurationRebindInput:
+      type: object
+      additionalProperties: false
+      required: [impactDigest, consumers]
+      properties:
+        impactDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        consumers: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/ManagedConfigurationConsumer' } }
+    ManagedConfigurationRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, state, contentFormat, content, digest, validationDiagnostics, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED] }
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content: { type: string, maxLength: 262144 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        validationDiagnostics: { type: array, items: { type: string } }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        validatedAt: { $ref: '#/components/schemas/Timestamp' }
+        publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    ManagedConfiguration:
+      type: object
+      additionalProperties: false
+      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        managedBy: { type: string, enum: [UI, GIT] }
+        source: { type: string, maxLength: 2000 }
+        sourceRevision: { type: string, maxLength: 2000 }
+        currentRevision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    ManagedConfigurationResult:
+      type: object
+      additionalProperties: false
+      required: [configuration, revision]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        revision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+    ManagedConfigurationDetachment:
+      type: object
+      additionalProperties: false
+      required: [configuration]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+    ManagedConfigurationHistory:
+      type: object
+      additionalProperties: false
+      required: [configuration, items, total]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/ManagedConfigurationRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    ManagedConfigurationImpact:
+      type: object
+      additionalProperties: false
+      required: [configurationRef, targetRevisionRef, consumers, digest]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        targetRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        consumers: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/ManagedConfigurationConsumer' } }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SystemSTTConfiguration:
+      type: object
+      additionalProperties: false
+      required: [configurationRef, revisionRef, revision, digest, providerAccountRef, model, language, permissionKey, ready, readinessBlockers, providerCredentialGeneration]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerAccountRef: { $ref: '#/components/schemas/OpaqueRef' }
+        model: { type: string, minLength: 1, maxLength: 160 }
+        language: { type: string, maxLength: 16 }
+        permissionKey: { type: string, enum: [platform.stt.use] }
+        ready: { type: boolean }
+        readinessBlockers: { type: array, items: { type: string } }
+        providerCredentialGeneration: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
     Project:
       type: object
       additionalProperties: false
