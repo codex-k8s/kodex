@@ -66,6 +66,14 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.RuntimeEnvironmentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.RuntimeEnvironmentRebindInput:
+		lookup := current
+		lookup.role = "OWNER"
+		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookup, payload.EnvironmentRef)
+		if err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
 	case command.RuntimeEnvironmentLifecycleInput:
 		permission := "runtime.environment.disable"
 		if input.Kind == command.DeleteRuntimeEnvironment {

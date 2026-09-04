@@ -80,6 +80,7 @@ const (
 	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
 	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
+	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -149,6 +150,7 @@ type PlatformQueryServiceClient interface {
 	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error)
+	GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -769,6 +771,16 @@ func (c *platformQueryServiceClient) GetRuntimeEnvironmentDraft(ctx context.Cont
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
@@ -836,6 +848,7 @@ type PlatformQueryServiceServer interface {
 	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error)
+	GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -1028,6 +1041,9 @@ func (UnimplementedPlatformQueryServiceServer) GetSystemSTTConfiguration(context
 }
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentImpact not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -2148,6 +2164,24 @@ func _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentImpact(ctx, req.(*GetRuntimeEnvironmentImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2399,6 +2433,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetRuntimeEnvironmentDraft",
 			Handler:    _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler,
 		},
+		{
+			MethodName: "GetRuntimeEnvironmentImpact",
+			Handler:    _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
@@ -2410,6 +2448,7 @@ const (
 	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
 	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
 	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
+	PlatformCommandService_RebindRuntimeEnvironment_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRuntimeEnvironment"
 	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
 	PlatformCommandService_CreateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateProject"
 	PlatformCommandService_UpdateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateProject"
@@ -2520,6 +2559,7 @@ type PlatformCommandServiceClient interface {
 	ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
 	DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error)
+	RebindRuntimeEnvironment(ctx context.Context, in *RebindRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RebindRuntimeEnvironmentResponse, error)
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
@@ -2678,6 +2718,16 @@ func (c *platformCommandServiceClient) DiscardRuntimeEnvironmentDraft(ctx contex
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DiscardRuntimeEnvironmentDraftResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindRuntimeEnvironment(ctx context.Context, in *RebindRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RebindRuntimeEnvironmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindRuntimeEnvironmentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRuntimeEnvironment_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3701,6 +3751,7 @@ type PlatformCommandServiceServer interface {
 	ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error)
 	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
 	DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error)
+	RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error)
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
@@ -3829,6 +3880,9 @@ func (UnimplementedPlatformCommandServiceServer) PublishRuntimeEnvironmentDraft(
 }
 func (UnimplementedPlatformCommandServiceServer) DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindRuntimeEnvironment not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteOnboarding not implemented")
@@ -4235,6 +4289,24 @@ func _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler(srv interfac
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).DiscardRuntimeEnvironmentDraft(ctx, req.(*DiscardRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindRuntimeEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindRuntimeEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeEnvironment(ctx, req.(*RebindRuntimeEnvironmentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6007,6 +6079,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiscardRuntimeEnvironmentDraft",
 			Handler:    _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "RebindRuntimeEnvironment",
+			Handler:    _PlatformCommandService_RebindRuntimeEnvironment_Handler,
 		},
 		{
 			MethodName: "CompleteOnboarding",

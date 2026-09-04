@@ -660,7 +660,8 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	var bindingRef string
 	err = tx.QueryRow(ctx, queryRuntimeConfigurationBindEnvironment, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "environment_ref": payload.EnvironmentRef, "project_id": agent.projectID,
-		"agent_id": agent.id, "expected_version": agent.bindingVersion, "digest": digest, "updated_by": scope.actorID,
+		"version_ref": payload.VersionRef,
+		"agent_id":    agent.id, "expected_version": agent.bindingVersion, "digest": digest, "updated_by": scope.actorID,
 	}).Scan(&bindingRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound

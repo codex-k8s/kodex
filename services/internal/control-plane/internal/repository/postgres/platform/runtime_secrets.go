@@ -74,6 +74,7 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	return authorizedCatalog(ctx, repository, current, "SECRET", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeSecret, error) {
 			rows, err := tx.Query(ctx, queryRuntimeSecretsList, pgx.StrictNamedArgs{
+				"actor_id": current.actorID, "authority_project": current.authorityProjectID,
 				"organization_id": current.organizationID, "project_ref": filter.ProjectRef,
 				"query": filter.Query, "cursor_ref": cursor, "page_size": limit,
 			})

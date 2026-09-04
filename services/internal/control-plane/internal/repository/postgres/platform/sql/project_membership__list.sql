@@ -24,5 +24,8 @@ WHERE project.organization_id = @organization_id::uuid
   AND (@project_ref = '' OR project.ref = @project_ref)
   AND (@query = '' OR subject.display_name ILIKE '%' || @query || '%' OR subject.email_masked ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR project_membership.ref > @cursor_ref)
+  AND (@authority_project = '' OR project.id = NULLIF(@authority_project,'')::uuid)
+  AND control_plane.catalog_resource_visible(project.organization_id, @actor_id::uuid, 'access.manage', 'PROJECT',
+      project.id, project.id, project.created_by, '{}'::jsonb, statement_timestamp())
 ORDER BY project_membership.ref
 LIMIT @page_size;

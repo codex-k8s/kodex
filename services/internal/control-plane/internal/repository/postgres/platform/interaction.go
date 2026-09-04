@@ -22,6 +22,11 @@ func projectInteractionIncident(incident entity.Incident, deliveryState string, 
 	incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
 	incident.CoreAffected = false
 	switch {
+	case deliveryState == "UNKNOWN_OUTCOME":
+		incident.Severity = "ERROR"
+		incident.State = "OPEN"
+		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_OUTCOME_UNKNOWN"
+		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RECONCILIATION_REQUIRED"
 	case deliveryState == "SUCCEEDED":
 		incident.Severity = "INFO"
 		incident.State = "RESOLVED"
@@ -121,6 +126,12 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	if !ok || payload.DeliveryRef == "" || payload.LeaseRef == "" || payload.Fence == "" || payload.Generation < 1 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if (payload.Success && (payload.UnknownOutcome || payload.ConfirmedNoEffect)) || (payload.UnknownOutcome && payload.ConfirmedNoEffect) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if !payload.Success && !payload.ConfirmedNoEffect && payload.SafeErrorCode == "" {
+		payload.SafeErrorCode = "INTERACTION_OUTCOME_UNKNOWN"
+	}
 	if payload.Success {
 		if payload.ExternalPostRef == "" || len(payload.ExternalPostRef) > 128 || len(payload.ExternalThreadRef) > 128 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -148,6 +159,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	err = tx.QueryRow(ctx, queryInteractionCompleteDeliveryUpdate, pgx.StrictNamedArgs{
 		"delivery_id":         deliveryID,
 		"success":             payload.Success,
+		"confirmed_no_effect": payload.ConfirmedNoEffect,
 		"external_post_ref":   payload.ExternalPostRef,
 		"external_thread_ref": payload.ExternalThreadRef,
 		"safe_error_code":     payload.SafeErrorCode,
@@ -442,7 +454,7 @@ func validInteractionErrorCode(value string) bool {
 	switch value {
 	case "INTERACTION_CONFIGURATION_INVALID", "INTERACTION_CREDENTIAL_UNAVAILABLE", "INTERACTION_FORBIDDEN",
 		"INTERACTION_RATE_LIMITED", "INTERACTION_UNAVAILABLE", "INTERACTION_RESPONSE_INVALID",
-		"INTERACTION_LEASE_EXPIRED":
+		"INTERACTION_LEASE_EXPIRED", "INTERACTION_OUTCOME_UNKNOWN":
 		return true
 	default:
 		return false

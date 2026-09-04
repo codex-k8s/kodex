@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentDraftRequest) (*controlplanev1.GetRuntimeEnvironmentDraftResponse, error) {
@@ -60,6 +62,14 @@ func (server *Server) PublishRuntimeEnvironmentDraft(ctx context.Context, reques
 		command.PublishRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef()})
 	if err != nil {
 		return nil, err
+	}
+	return castPublishedEnvironmentDraft(result)
+}
+
+func castPublishedEnvironmentDraft(result command.Result) (*controlplanev1.PublishRuntimeEnvironmentDraftResponse, error) {
+	if result.RuntimeEnvironment == nil || result.RuntimeEnvironmentDraft == nil || result.RuntimeEnvironment.Ref == "" ||
+		result.RuntimeEnvironmentDraft.State != "PUBLISHED" || result.RuntimeEnvironmentDraft.PublishedEnvironmentRef != result.RuntimeEnvironment.Ref {
+		return nil, status.Error(codes.Internal, "runtime environment publication result is incomplete")
 	}
 	return &controlplanev1.PublishRuntimeEnvironmentDraftResponse{Draft: castEnvironmentDraft(result.RuntimeEnvironmentDraft), Environment: castRuntimeEnvironment(*result.RuntimeEnvironment)}, nil
 }
