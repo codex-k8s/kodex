@@ -16,10 +16,12 @@ updated: 2026-09-05
 `d977531546d43f681c94da5aa2a8d32a7ba64562`, policy revision 51.
 Семантика владельца зафиксирована в `context-contracts-1046.md`.
 
-Это исполняемый HTTP adapter и тесты с fake CP, **не готовый owner lifecycle**:
-в потреблённом checkpoint новые CP методы отвечают Unimplemented, SQL/domain
-ещё реализует #1046. HTTP не заменяет их локальным state и не превращает
-ошибку CP в успешный результат. Полный unit #1045 не финализирован.
+Дополнительно потреблён CP `7df60ddef88348aaf47dd50d0d22737d1e83fec3`:
+MemoryRecord create/revise/archive/restore/purge, get/list/history имеют
+SQL/domain implementation. Skill lifecycle, agent bind/unbind обоих видов
+и runtime materialization ещё реализует #1046. HTTP не заменяет отсутствующий
+owner lifecycle локальным state и не превращает ошибку CP в успешный результат.
+Полный unit #1045 не финализирован.
 
 ## Paths И SDK
 
@@ -82,6 +84,11 @@ updated: 2026-09-05
   принадлежат транзакции CP. HTTP не создаёт события. Event origin/cardinality
   и runtime consumer acceptance подтверждаются отдельным owner checkpoint.
   Query не имеет эффекта; tombstone/expired metadata читаются авторитетно.
+- В CP `7df60ddef` Memory create/revise/archive/restore/purge не создают
+  domain event: авторитетный read path — GetMemoryRecord, ListMemoryRecords
+  и ListMemoryRecordRevisions. Archive/purge выключают bindings в owner
+  transaction, restore не включает их обратно. Runtime consumer ещё не готов;
+  проверка ACTIVE/retention перед каждой attempt остаётся его обязательством.
 
 ## Границы Формата
 
@@ -114,6 +121,11 @@ idempotency, cursor, refs и отсутствие ложного agent ETag.
 Дополнительные tests проверяют malformed manifest, подмену authority/scan,
 unsafe versions, retention field, Unimplemented/401/403/404/412/503,
 corrupt response и redaction. Общий PWA прогон не повторялся.
+`TestMemoryOwnerProjectionHTTP` отдельно проверяет формы CP `7df60ddef`
+на get/list/history: USER_SUMMARY с source run и без него, все четыре states,
+redacted историю при активной записи, сохранение retention/digest/provenance.
+Это проверка HTTP с fake gRPC response по сверенной SQL projection,
+не запуск PostgreSQL и не сквозной protected CP integration.
 
 NOT RUN: новые CP owner SQL и runtime materialization в HTTP integration,
 браузерный пользовательский lifecycle, live providers, staging/deploy.

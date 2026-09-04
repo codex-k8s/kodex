@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,89 @@ func (client *contextRPCRecorder) Invoke(_ context.Context, method string, reque
 func contextHandler(client *contextRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client)}})
 }
+
+// Формы CP 7df60ddef: USER_SUMMARY, optional source run и отдельная redaction каждой revision.
+func TestMemoryOwnerProjectionHTTP(t *testing.T) {
+	for _, state := range []controlplanev1.ContextResourceState{
+		controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ACTIVE,
+		controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ARCHIVED,
+		controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_EXPIRED,
+		controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_PURGED,
+	} {
+		for _, sourceRun := range []bool{false, true} {
+			for _, route := range []string{"single", "catalog", "history"} {
+				t.Run(state.String()+"/"+route+"/source="+strconv.FormatBool(sourceRun), func(t *testing.T) {
+					_, record, _ := contextFixtures()
+					record.State = state
+					revision := record.CurrentRevision
+					revision.Provenance.SourceKind = "USER_SUMMARY"
+					if !sourceRun {
+						revision.Provenance.SourceRef = ""
+						revision.Provenance.SourceRevision = ""
+					}
+					if state == controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_EXPIRED || state == controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_PURGED || route == "history" {
+						revision.Redacted = true
+						revision.Summary = ""
+						revision.RetentionUntil = timestamppb.New(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+					}
+					path := "/api/v1/memory-records/mem_fixture01"
+					if route == "catalog" {
+						path = "/api/v1/memory-records?state=" + strings.TrimPrefix(state.String(), "CONTEXT_RESOURCE_STATE_")
+					} else if route == "history" {
+						path += "/revisions"
+					}
+					client := &contextRPCRecorder{corrupt: func(response proto.Message) {
+						switch response := response.(type) {
+						case *controlplanev1.GetMemoryRecordResponse:
+							response.Record = record
+						case *controlplanev1.ListMemoryRecordsResponse:
+							response.Records = []*controlplanev1.KodexMemoryRecord{record}
+						case *controlplanev1.ListMemoryRecordRevisionsResponse:
+							response.Revisions = []*controlplanev1.MemoryRecordRevision{revision}
+						}
+					}}
+					w := httptest.NewRecorder()
+					contextHandler(client).ServeHTTP(w, managedTestRequest("GET", path, ""))
+					if w.Code != http.StatusOK {
+						t.Fatalf("owner projection rejected: status=%d", w.Code)
+					}
+					var got generated.MemoryRecordRevision
+					switch route {
+					case "single":
+						var result generated.KodexMemoryRecord
+						if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+							t.Fatal(err)
+						}
+						got = result.CurrentRevision
+					case "catalog":
+						var result generated.MemoryRecordPage
+						if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || len(result.Items) != 1 {
+							t.Fatal("invalid memory catalog")
+						}
+						got = result.Items[0].CurrentRevision
+					case "history":
+						var result generated.MemoryRecordRevisionPage
+						if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || len(result.Items) != 1 {
+							t.Fatal("invalid memory history")
+						}
+						got = result.Items[0]
+					}
+					if got.Redacted != revision.Redacted || got.Summary != revision.Summary || got.Digest != revision.Digest || got.Provenance.SourceKind != "USER_SUMMARY" || !got.RetentionUntil.Equal(revision.RetentionUntil.AsTime()) {
+						t.Fatal("owner revision metadata changed")
+					}
+					if sourceRun {
+						if got.Provenance.SourceRef == nil || *got.Provenance.SourceRef != "run_fixture01" || got.Provenance.SourceRevision == nil || *got.Provenance.SourceRevision != "1" {
+							t.Fatal("source run provenance lost")
+						}
+					} else if got.Provenance.SourceRef != nil || got.Provenance.SourceRevision != nil {
+						t.Fatal("source run provenance fabricated")
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestContextResourceEveryTypedRoute(t *testing.T) {
 	cases := []struct {
 		method, path, body, rpc string
