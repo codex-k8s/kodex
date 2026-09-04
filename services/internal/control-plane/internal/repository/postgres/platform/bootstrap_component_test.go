@@ -230,6 +230,7 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
 		testOptionalInteractionIncident(t, ctx, repository, pool)
+		testInteractionUnknownOutcome(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)

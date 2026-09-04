@@ -299,7 +299,7 @@ func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *c
 		PublishedOverlay: castConfigOverlay(&value.PublishedOverlay), DraftOverlay: castConfigOverlay(value.DraftOverlay),
 		EnvironmentBinding: &controlplanev1.AgentRuntimeEnvironmentBinding{Ref: value.EnvironmentBinding.Ref,
 			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
-			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest},
+			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest, VersionRef: value.EnvironmentBinding.VersionRef},
 		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
 		AgentVersion: value.AgentVersion}
 }

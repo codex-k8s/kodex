@@ -16,5 +16,8 @@ WHERE secret.organization_id = @organization_id::uuid
   AND secret.state <> 'PROVISIONING'
   AND (@query = '' OR secret.name ILIKE '%' || @query || '%' OR secret.description ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR secret.ref > @cursor_ref)
+  AND (@authority_project = '' OR secret.project_id = NULLIF(@authority_project,'')::uuid)
+  AND control_plane.catalog_resource_visible(secret.organization_id, @actor_id::uuid, 'secret.view', 'SECRET',
+      secret.id, secret.project_id, secret.created_by, jsonb_build_object('PROJECT',secret.project_id::text), statement_timestamp())
 ORDER BY secret.ref
 LIMIT @page_size;

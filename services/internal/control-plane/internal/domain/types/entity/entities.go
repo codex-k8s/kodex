@@ -151,8 +151,8 @@ type RuntimeEnvironmentReadiness struct {
 }
 
 type AgentRuntimeEnvironmentBinding struct {
-	Ref, AgentRef, EnvironmentRef, Digest string
-	Version                               int64
+	Ref, AgentRef, EnvironmentRef, Digest, VersionRef string
+	Version                                           int64
 }
 
 type AgentRuntimeConfigurationView struct {

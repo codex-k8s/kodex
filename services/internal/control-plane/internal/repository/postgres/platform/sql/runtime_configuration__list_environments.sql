@@ -39,5 +39,8 @@ WHERE environment.organization_id = @organization_id::uuid
   AND environment.state <> 'DELETED'
   AND (@query = '' OR environment.name ILIKE '%' || @query || '%' OR environment.description ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR environment.ref > @cursor_ref)
+  AND (@authority_project = '' OR environment.project_id = NULLIF(@authority_project,'')::uuid)
+  AND control_plane.catalog_resource_visible(environment.organization_id, @actor_id::uuid, 'project.view', 'PROJECT',
+      project.id, project.id, project.created_by, '{}'::jsonb, statement_timestamp())
 ORDER BY environment.ref
 LIMIT @page_size;

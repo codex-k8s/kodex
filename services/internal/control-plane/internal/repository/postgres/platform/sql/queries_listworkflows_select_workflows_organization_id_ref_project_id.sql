@@ -5,4 +5,8 @@ SELECT w.ref,p.ref,w.name,w.purpose,COALESCE(a.ref,''),w.state,w.version,w.draft
 		FROM control_plane.workflows w JOIN control_plane.projects p ON p.id=w.project_id LEFT JOIN control_plane.agents a ON a.id=w.coordinator_agent_id
 		WHERE w.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND w.state<>'ARCHIVED'
 		AND ($5='' OR w.name ILIKE '%'||$5||'%') AND ($6='' OR w.state=$6)
-		AND ($8='' OR w.ref > $8) ORDER BY w.ref LIMIT $7
+		AND ($8='' OR w.ref > $8)
+		AND ($9='' OR w.project_id = NULLIF($9,'')::uuid)
+		AND control_plane.catalog_resource_visible(w.organization_id, $4::uuid, 'workflow.view', 'WORKFLOW',
+		    w.id, w.project_id, w.created_by, jsonb_build_object('PROJECT',w.project_id::text), statement_timestamp())
+		ORDER BY w.ref LIMIT $7

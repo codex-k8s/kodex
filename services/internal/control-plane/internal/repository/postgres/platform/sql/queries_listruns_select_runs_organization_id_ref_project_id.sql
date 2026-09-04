@@ -27,5 +27,10 @@ WHERE r.organization_id=$1::uuid
   AND ($5='' OR r.title ILIKE '%'||$5||'%' OR r.task ILIKE '%'||$5||'%')
   AND ($7 = '' OR r.ref > $7)
   AND (cardinality($8::text[]) = 0 OR r.state = ANY($8::text[]))
+  AND ($9='' OR r.project_id = NULLIF($9,'')::uuid)
+  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=r.organization_id AND target.kind='RUN' AND target.id=r.id
+        AND control_plane.catalog_resource_visible(r.organization_id, $4::uuid, 'run.view', target.kind,
+            target.id, target.project_id, target.owner_id, target.related_ids, statement_timestamp()))
 ORDER BY r.ref
 LIMIT $6

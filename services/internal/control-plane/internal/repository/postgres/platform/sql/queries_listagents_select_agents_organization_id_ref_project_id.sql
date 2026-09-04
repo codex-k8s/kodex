@@ -10,4 +10,7 @@ SELECT a.ref,p.ref,role.ref,role.name,COALESCE(a.system_key,''),a.name,a.purpose
 		WHERE a.organization_id=$1::uuid AND a.system_key IS NULL AND ($2='' OR p.ref=$2) AND a.state<>'ARCHIVED'
 		AND ($5='' OR a.name ILIKE '%'||$5||'%' OR a.purpose ILIKE '%'||$5||'%') AND ($6='' OR a.state=$6)
 		AND ($8='' OR a.ref > $8)
+		AND ($9='' OR a.project_id = NULLIF($9,'')::uuid)
+		AND control_plane.catalog_resource_visible(a.organization_id, $4::uuid, 'agent.view', 'AGENT',
+		    a.id, a.project_id, a.created_by, jsonb_build_object('PROJECT',a.project_id::text), statement_timestamp())
 		ORDER BY a.ref LIMIT $7

@@ -238,6 +238,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
 		return repository.changeRuntimeEnvironmentDraft(ctx, tx, scope, input)
+	case command.RebindRuntimeEnvironment:
+		return repository.rebindRuntimeEnvironment(ctx, tx, scope, input)
 	case command.SetAgentAvatar, command.RemoveAgentAvatar:
 		return repository.changeAgentAvatar(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:

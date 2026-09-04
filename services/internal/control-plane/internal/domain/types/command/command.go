@@ -42,6 +42,7 @@ const (
 	ValidateRuntimeEnvironmentDraft Kind = "VALIDATE_RUNTIME_ENVIRONMENT_DRAFT"
 	PublishRuntimeEnvironmentDraft  Kind = "PUBLISH_RUNTIME_ENVIRONMENT_DRAFT"
 	DiscardRuntimeEnvironmentDraft  Kind = "DISCARD_RUNTIME_ENVIRONMENT_DRAFT"
+	RebindRuntimeEnvironment        Kind = "REBIND_RUNTIME_ENVIRONMENT"
 	PublishRuntimeEnvironment       Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
 	RollbackRuntimeEnvironment      Kind = "ROLLBACK_RUNTIME_ENVIRONMENT"
 	SetRuntimeEnvironmentEnabled    Kind = "SET_RUNTIME_ENVIRONMENT_ENABLED"
@@ -190,7 +191,12 @@ type RuntimeEnvironmentDraftInput struct {
 	Specification                        entity.RuntimeEnvironmentDraftSpecification
 }
 type RuntimeEnvironmentBindingInput struct {
-	AgentRef, EnvironmentRef string
+	AgentRef, EnvironmentRef, VersionRef string
+}
+
+type RuntimeEnvironmentRebindInput struct {
+	EnvironmentRef, VersionRef string
+	Consumers                  []entity.RuntimeEnvironmentConsumer
 }
 type RuntimeEnvironmentLifecycleInput struct {
 	EnvironmentRef string
@@ -352,6 +358,7 @@ type InteractionDeliveryInput struct {
 	DeliveryRef, LeaseRef, Fence, ExternalPostRef, ExternalThreadRef, SafeErrorCode string
 	Generation                                                                      int64
 	Success                                                                         bool
+	UnknownOutcome, ConfirmedNoEffect                                               bool
 }
 type InteractionMessageInput struct {
 	ConnectionRef, ExternalEventRef, ExternalPostRef, ExternalRootPostRef string
@@ -364,6 +371,7 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	EnvironmentBindings     []entity.AgentRuntimeEnvironmentBinding
 	RuntimeEnvironmentDraft *entity.RuntimeEnvironmentDraft
 	Project                 *entity.Project
 	Membership              *entity.Membership

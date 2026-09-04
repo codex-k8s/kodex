@@ -472,6 +472,7 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 	return authorizedCatalog(ctx, repository, scope, "MEMBERSHIP", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Membership, error) {
 			rows, err := tx.Query(ctx, queryProjectMembershipList, pgx.StrictNamedArgs{
+				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
 				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef,
 				"query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
 			})
@@ -559,7 +560,7 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	}
 	result, next, err := authorizedCatalog(ctx, repository, scope, "AGENT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Agent, error) {
-			rows, err := tx.Query(ctx, queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor)
+			rows, err := tx.Query(ctx, queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor, scope.authorityProjectID)
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
@@ -729,7 +730,7 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 	}
 	return authorizedCatalog(ctx, repository, scope, "WORKFLOW", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Workflow, error) {
-			rows, err := tx.Query(ctx, queryQueriesListworkflowsSelectWorkflowsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor)
+			rows, err := tx.Query(ctx, queryQueriesListworkflowsSelectWorkflowsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor, scope.authorityProjectID)
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
@@ -828,7 +829,7 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	return authorizedCatalog(ctx, repository, scope, "RUN", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Run, error) {
 			rows, err := tx.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef,
-				scope.role, scope.actorID, strings.TrimSpace(filter.Query), limit, cursor, append([]string{}, filter.States...))
+				scope.role, scope.actorID, strings.TrimSpace(filter.Query), limit, cursor, append([]string{}, filter.States...), scope.authorityProjectID)
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
@@ -1325,18 +1326,19 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	return authorizedCatalog(ctx, repository, scope, "ARTIFACT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursorRef string, limit int32) ([]entity.Artifact, error) {
 			rows, err := tx.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
-				"organization_id": scope.organizationID,
-				"project_ref":     strings.TrimSpace(filter.ProjectRef),
-				"run_ref":         strings.TrimSpace(filter.ResourceRef),
-				"role":            scope.role,
-				"actor_id":        scope.actorID,
-				"query":           strings.TrimSpace(filter.Query),
-				"lifecycle_state": lifecycleState,
-				"artifact_type":   artifactType,
-				"scan_state":      scanState,
-				"source_kind":     sourceKind,
-				"cursor_ref":      cursorRef,
-				"limit":           limit,
+				"authority_project": scope.authorityProjectID,
+				"organization_id":   scope.organizationID,
+				"project_ref":       strings.TrimSpace(filter.ProjectRef),
+				"run_ref":           strings.TrimSpace(filter.ResourceRef),
+				"role":              scope.role,
+				"actor_id":          scope.actorID,
+				"query":             strings.TrimSpace(filter.Query),
+				"lifecycle_state":   lifecycleState,
+				"artifact_type":     artifactType,
+				"scan_state":        scanState,
+				"source_kind":       sourceKind,
+				"cursor_ref":        cursorRef,
+				"limit":             limit,
 			})
 			if err != nil {
 				return nil, errs.ErrUnavailable
@@ -1464,7 +1466,8 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	return authorizedCatalog(ctx, repository, scope, "SCHEDULE", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Schedule, error) {
 			rows, err := tx.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId, pgx.StrictNamedArgs{
-				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "role": scope.role, "actor_id": scope.actorID,
+				"authority_project": scope.authorityProjectID,
+				"organization_id":   scope.organizationID, "project_ref": filter.ProjectRef, "role": scope.role, "actor_id": scope.actorID,
 				"search_query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
 			})
 			if err != nil {
