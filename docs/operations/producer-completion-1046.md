@@ -280,11 +280,21 @@ updated: 2026-09-05
   negative case теперь явно портит READY registry descriptor, а не отклоняет
   принятый executable package.
 
+## STT permission существующих установок
+
+Migration 00610 создаёт следующую immutable version только для активных
+SYSTEM OWNER/ADMINISTRATOR, которым не хватает `platform.stt.use`.
+Переводятся только активные bindings прежней current revision; custom roles,
+архивные роли и отключённые bindings не расширяются. Повторное применение
+не создаёт новых версий. `STT_system_roles_advance_immutably`: PASS в targeted
+PostgreSQL; проверены новая version, неизменность старой и перевод bindings.
+Полный suite после 00610: NOT RUN; последний полный PASS относится к STT params.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
 сквозная credential matrix secret revisions; проверка Git lifecycle;
-обновление STT permission существующих ролей и полная credential matrix; mail authorization producer #1037;
+полная STT credential matrix; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов
 выполняют eligibility до SQL LIMIT, с дополнительной per-result проверкой Go.
