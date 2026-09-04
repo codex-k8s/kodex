@@ -97,10 +97,13 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		var capabilityKey, messageKey, leaseRef, fence string
 		var templateRaw []byte
 		var generation int64
+		var gateRef, runRef string
+		var gateVersion int64
 		var expiresAt any
 		if err := rows.Scan(
 			&deliveryRef, &connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale,
 			&capabilityKey, &messageKey, &templateRaw, &leaseRef, &fence, &generation, &expiresAt,
+			&gateRef, &gateVersion, &runRef,
 		); err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -113,6 +116,7 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 			"baseURL": baseURL, "teamName": teamName, "channelName": channelName, "locale": locale,
 			"capabilityKey": capabilityKey, "messageKey": messageKey, "templateData": templateData,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
+			"gateRef": gateRef, "gateVersion": gateVersion, "runRef": runRef,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -198,7 +202,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.InteractionMessageInput)
 	if !ok || payload.ConnectionRef == "" || payload.ExternalEventRef == "" || payload.ExternalPostRef == "" ||
-		payload.ExternalChannelRef == "" || !lowerHexDigest(payload.ExternalUserDigest) ||
+		payload.ExternalTeamRef == "" || len(payload.ExternalTeamRef) > 128 || payload.ExternalChannelRef == "" || !lowerHexDigest(payload.ExternalUserDigest) ||
 		len(payload.ExternalEventRef) > 256 || len(payload.ExternalPostRef) > 128 || len(payload.ExternalRootPostRef) > 128 ||
 		len(payload.ExternalChannelRef) > 128 || len(payload.Message) > 16<<10 {
 		return commandOutcome{}, errs.ErrInvalid
@@ -212,9 +216,15 @@ func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx p
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	human, err := repository.resolveInteractionIdentity(ctx, tx, scope, payload)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	scope = human
 	eventDigest := interactionDigest(payload.ConnectionRef, payload.ExternalEventRef)
 	var previousOutcome, previousRunRef, previousGateRef string
-	err := tx.QueryRow(ctx, queryInteractionFindMessageReceipt, pgx.StrictNamedArgs{
+	err = tx.QueryRow(ctx, queryInteractionFindMessageReceipt, pgx.StrictNamedArgs{
+		"subject_id": scope.actorID, "identity_id": scope.interactionIdentityID,
 		"organization_id":       scope.organizationID,
 		"connection_id":         connectionID,
 		"external_event_digest": eventDigest,
@@ -232,6 +242,9 @@ func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx p
 	gateOutcome, gateMatched, err := repository.acceptInteractionGateDecision(ctx, tx, scope, input, connectionID, eventDigest)
 	if err != nil || gateMatched {
 		return gateOutcome, err
+	}
+	if payload.Decision != "" || payload.GateRef != "" || payload.ExpectedGateVersion != 0 {
+		return commandOutcome{}, errs.ErrNotFound
 	}
 	return repository.acceptInteractionInbound(ctx, tx, scope, input, connectionID, eventDigest)
 }
@@ -252,6 +265,12 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	}
 	if err != nil {
 		return commandOutcome{}, true, errs.ErrUnavailable
+	}
+	if payload.Decision != "" && (payload.GateRef != gateRef || payload.RunRef != runRef || payload.ExpectedGateVersion != gateVersion) {
+		return commandOutcome{}, true, errs.ErrVersionMismatch
+	}
+	if err := repository.requireAccess(ctx, tx, scope, "gate.resolve", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: gateRef}); err != nil {
+		return commandOutcome{}, true, err
 	}
 	decision := payload.Decision
 	if decision == "" || !contains([]string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}, decision) || !contains(allowed, decision) {
@@ -338,6 +357,13 @@ func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx p
 		return interactionMessageOutcome(payload.ConnectionRef, "IGNORED", "i18n:MATTERMOST_INBOUND_ROUTE_UNAVAILABLE", payload.ConnectionRef, "", ""), nil
 	}
 	selected := routes[0]
+	permission := "agent.launch"
+	if selected.targetKind == "WORKFLOW" {
+		permission = "workflow.launch"
+	}
+	if err := repository.requireAccess(ctx, tx, scope, permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: selected.targetKind, ResourceRef: selected.targetRef}); err != nil {
+		return commandOutcome{}, err
+	}
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = command.LaunchRunInput{
@@ -389,6 +415,8 @@ func (repository *Repository) insertInteractionReceipt(ctx context.Context, tx p
 		"external_user_digest":  receipt.userDigest,
 		"outcome":               receipt.outcome,
 		"decision":              receipt.decision,
+		"identity_id":           scope.interactionIdentityID,
+		"subject_id":            scope.actorID,
 	}); err != nil {
 		return errs.ErrUnavailable
 	}

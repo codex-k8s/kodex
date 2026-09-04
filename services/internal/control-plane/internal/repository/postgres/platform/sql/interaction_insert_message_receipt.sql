@@ -10,7 +10,9 @@ INSERT INTO control_plane.interaction_message_receipts (
     external_event_digest,
     external_user_digest,
     outcome,
-    decision
+    decision,
+    identity_id,
+    subject_id
 )
 VALUES (
     @receipt_ref,
@@ -23,5 +25,7 @@ VALUES (
     @external_event_digest,
     @external_user_digest,
     @outcome,
-    NULLIF(@decision, '')
+    NULLIF(@decision, ''),
+    @identity_id::uuid,
+    @subject_id::uuid
 )

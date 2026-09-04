@@ -1074,7 +1074,22 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}, nil
 }
 
+func integrationExecutionRoute(workload string) (string, error) {
+	switch workload {
+	case "integration-gateway":
+		return "MANAGED_MCP", nil
+	case "interaction-gateway":
+		return "INTERACTION", nil
+	default:
+		return "", errs.ErrForbidden
+	}
+}
+
 func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	route, err := integrationExecutionRoute(principal.CallerWorkload)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -1084,10 +1099,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -1134,7 +1149,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -1180,6 +1195,9 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 }
 
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
+		return commandOutcome{}, err
+	}
 	payload, ok := input.Payload.(command.IntegrationInvocationInput)
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1203,7 +1221,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	var receiptProviderRef, receiptResponseDigest, receiptResult string
 	var generation int64
 	var expiresAt *time.Time
-	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef).Scan(
+	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef, input.Principal.CallerWorkload).Scan(
 		&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
 		&generation, &state, &leaseRef, &expiresAt, &effectKey, &inputDigest, &receiptRef,
 		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult,

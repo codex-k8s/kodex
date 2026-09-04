@@ -97,12 +97,44 @@ updated: 2026-09-05
 - `TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult`: PASS локально;
   неполный owner result возвращает Internal вместо nil dereference.
 
-## Ещё не закрыто
+## Четвёртая промежуточная передача
+
+- `ListInteractionIdentities`, `BindInteractionIdentity`,
+  `RevokeInteractionIdentity`: owner назначает связь exact connection version,
+  external team/channel/user digest и активного platform subject. Требуются
+  `access.manage` организации и `integration.manage` connection, включая replay.
+  Bind использует expected version connection, revoke — version identity.
+  Событий нет: авторитетный read path — ListInteractionIdentities; audit и
+  idempotency receipt входят в owner transaction.
+- `AcceptInteractionMessageRequest`: `external_team_ref=10`, `gate_ref=11`,
+  `expected_gate_version=12`, `run_ref=13`. Gate decision проверяет mapped
+  human permission, а не полномочия workload. Receipt сохраняет identity и subject.
+- `InteractionDeliveryClaim`: `gate_ref=12`, `gate_version=13`, `run_ref=14`.
+- Policy revision 48: `platform.interactions.invocations.claim/complete`
+  используют существующие RuntimeWorkService RPC. CP выводит route из workload,
+  фильтрует claim и expiry, сохраняет workload/lease/fence попытки для проверки
+  completion до idempotency readback. Generic gateway не получает INTERACTION.
+  Исторический completion без сохранённого fence закрыто отклоняется.
+- Draft caster сохраняет отсутствие policy; publish caster проверяет состояние,
+  digest, положительную version и соответствие опубликованной ссылки.
+- PostgreSQL suite после этих изменений: PASS локально. Отдельный запуск
+  identity вместе с human-gate fixture: identity PASS; integration subtest
+  отдельно от остальных общих fixtures FAIL на отсутствии runtime claim.
+  Полный штатный suite этот сценарий проходит; runtime invariant не ослаблен.
+- Targeted Go domain/revision/transport/repository: PASS локально.
+- `lint-proto`, `test-authority-policy-codegen`, `check-proto-codegen` и Go
+  controlplaneclient: PASS локально. Render policy 48 и race: NOT RUN на этой
+  промежуточной передаче.
+- ACK delivery, точная привязка delivery к external channel, положительный
+  INTERACTION adapter path и connection-test consumer ещё не завершены.
+  Эта передача не объявляет #1030 или полный #1046 готовыми.
+
+## Остаток unit
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
 revision impact и selected rebind secrets; проверка Git lifecycle;
 полные STT model params и immutable projection; mail authorization producer #1037;
-trusted external subject mapping и INTERACTION invocation routing #1030;
+сквозная проверка external subject mapping и INTERACTION routing/ACK #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов
 выполняют eligibility до SQL LIMIT, с дополнительной per-result проверкой Go.
 Это не завершённый unit. UNKNOWN_OUTCOME запрещает автоповтор; отдельный owner

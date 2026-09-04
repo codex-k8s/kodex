@@ -43,6 +43,8 @@ const (
 	PublishRuntimeEnvironmentDraft  Kind = "PUBLISH_RUNTIME_ENVIRONMENT_DRAFT"
 	DiscardRuntimeEnvironmentDraft  Kind = "DISCARD_RUNTIME_ENVIRONMENT_DRAFT"
 	RebindRuntimeEnvironment        Kind = "REBIND_RUNTIME_ENVIRONMENT"
+	BindInteractionIdentity         Kind = "BIND_INTERACTION_IDENTITY"
+	RevokeInteractionIdentity       Kind = "REVOKE_INTERACTION_IDENTITY"
 	PublishRuntimeEnvironment       Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
 	RollbackRuntimeEnvironment      Kind = "ROLLBACK_RUNTIME_ENVIRONMENT"
 	SetRuntimeEnvironmentEnabled    Kind = "SET_RUNTIME_ENVIRONMENT_ENABLED"
@@ -363,6 +365,12 @@ type InteractionDeliveryInput struct {
 type InteractionMessageInput struct {
 	ConnectionRef, ExternalEventRef, ExternalPostRef, ExternalRootPostRef string
 	ExternalChannelRef, ExternalUserDigest, Message, Decision             string
+	ExternalTeamRef, GateRef, RunRef                                      string
+	ExpectedGateVersion                                                   int64
+}
+
+type InteractionIdentityInput struct {
+	IdentityRef, ConnectionRef, ExternalTeamRef, ExternalChannelRef, ExternalUserDigest, SubjectRef string
 }
 
 type ManagedConfigurationInput struct {
@@ -371,6 +379,7 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	InteractionIdentity     *entity.InteractionIdentity
 	EnvironmentBindings     []entity.AgentRuntimeEnvironmentBinding
 	RuntimeEnvironmentDraft *entity.RuntimeEnvironmentDraft
 	Project                 *entity.Project
