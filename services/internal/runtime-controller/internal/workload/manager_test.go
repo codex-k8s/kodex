@@ -103,7 +103,7 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		t.Fatal("role runtime can reach provider credential material")
 	}
 	if hasMount(provider, "callback-ca") || hasMount(provider, "callback-client") ||
-		hasMountAt(provider, "runtime-input", input.ExecutionTicketFile) {
+		hasMountAt(provider, "runtime-ticket", input.ExecutionTicketFile) {
 		t.Fatal("provider runtime received callback authority")
 	}
 	if !hasMount(provider, "provider-auth") || !hasMount(provider, "provider-socket") ||
@@ -115,12 +115,12 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 			t.Fatalf("provider credential relay received forbidden mount %q", forbidden)
 		}
 	}
-	for _, required := range []string{"runtime-input", "callback-ca", "callback-client", "provider-credential-relay"} {
+	for _, required := range []string{"runtime-input", "runtime-ticket", "callback-ca", "callback-client", "provider-credential-relay"} {
 		if !hasMount(relay, required) {
 			t.Fatalf("provider credential relay is missing mount %q", required)
 		}
 	}
-	if !hasMountAt(relay, "runtime-input", input.ExecutionTicketFile) || relay.SecurityContext == nil ||
+	if !hasMountAt(relay, "runtime-ticket", input.ExecutionTicketFile) || relay.SecurityContext == nil ||
 		relay.SecurityContext.RunAsUser == nil || *relay.SecurityContext.RunAsUser != 10003 ||
 		relay.SecurityContext.SeccompProfile == nil || relay.SecurityContext.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
 		t.Fatalf("provider credential relay boundary is invalid: %#v", relay)
@@ -170,6 +170,52 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if bytes.Contains(secret.Data[inputKey], []byte(binding.Name)) || bytes.Contains(secret.Data[inputKey], []byte(binding.UID)) {
 		t.Fatal("Kubernetes provider Secret locator leaked into role-visible runtime input")
 	}
+	projection, err := client.CoreV1().ConfigMaps("kodex-runtime").Get(context.Background(), runtimeProjectionName(input), metav1.GetOptions{})
+	if err != nil || projection.Immutable == nil || !*projection.Immutable || len(projection.BinaryData) != 0 {
+		t.Fatalf("immutable runtime projection is invalid: err=%v projection=%#v", err, projection)
+	}
+	expectedProjectionKeys := []string{inputKey, workspacePolicyKey, inputManifestKey, resultManifestKey, skillManifestKey, memoryManifestKey, mcpManifestKey, callbackManifestKey}
+	if len(projection.Data) != len(expectedProjectionKeys) {
+		t.Fatalf("runtime projection keys = %#v", projection.Data)
+	}
+	for _, key := range expectedProjectionKeys {
+		if projection.Data[key] == "" {
+			t.Fatalf("runtime projection key %q is empty", key)
+		}
+	}
+	if projection.Annotations[executionBindingAnnotation] != input.ExecutionBindingDigest ||
+		projection.Annotations[mcpBindingAnnotation] != input.MCPBindingDigest ||
+		projection.Annotations[organizationHashAnnotation] != shortHash(input.OrganizationRef) ||
+		projection.Annotations[projectHashAnnotation] != shortHash(input.ProjectRef) ||
+		projection.Annotations[sessionHashAnnotation] != shortHash(input.SessionRef) ||
+		projection.Annotations[turnHashAnnotation] != shortHash(input.TurnRef) ||
+		projection.Annotations[attemptAnnotation] != "1" {
+		t.Fatalf("runtime projection execution binding = %#v", projection.Annotations)
+	}
+	workspaceVolume := podVolumeByName(t, pod, "workspace")
+	if workspaceVolume.EmptyDir == nil || workspaceVolume.EmptyDir.SizeLimit == nil || workspaceVolume.EmptyDir.SizeLimit.Value() != runtimecontract.RuntimeWorkspaceWritableBytes {
+		t.Fatalf("workspace quota volume = %#v", workspaceVolume)
+	}
+	runtimeInputVolume := podVolumeByName(t, pod, "runtime-input")
+	if runtimeInputVolume.ConfigMap == nil || runtimeInputVolume.ConfigMap.Name != projection.Name || runtimeInputVolume.ConfigMap.DefaultMode == nil || *runtimeInputVolume.ConfigMap.DefaultMode != 0o440 {
+		t.Fatalf("runtime ConfigMap projection volume = %#v", runtimeInputVolume)
+	}
+	runtimeTicketVolume := podVolumeByName(t, pod, "runtime-ticket")
+	if runtimeTicketVolume.Secret == nil || runtimeTicketVolume.Secret.SecretName != secret.Name || runtimeTicketVolume.Secret.DefaultMode == nil || *runtimeTicketVolume.Secret.DefaultMode != 0o440 {
+		t.Fatalf("runtime ticket volume = %#v", runtimeTicketVolume)
+	}
+	if pod.Spec.SecurityContext == nil || pod.Spec.SecurityContext.FSGroup == nil || *pod.Spec.SecurityContext.FSGroup != 29000 ||
+		pod.Spec.SecurityContext.FSGroupChangePolicy == nil || *pod.Spec.SecurityContext.FSGroupChangePolicy != corev1.FSGroupChangeOnRootMismatch {
+		t.Fatalf("runtime Pod fsGroup matrix = %#v", pod.Spec.SecurityContext)
+	}
+	for _, volume := range []string{"vfs-input", "vfs-knowledge"} {
+		if !mountReadOnly(provider, volume, true) || !mountReadOnly(role, volume, false) {
+			t.Fatalf("runtime VFS mount mode %q is invalid", volume)
+		}
+	}
+	if !hasMountAt(provider, "workspace", "/workspace") || !hasMountAt(provider, "session", "/workspace/.kodex/state") || hasMountAt(provider, "session", "/workspace") {
+		t.Fatalf("provider writable roots are not bounded: %#v", provider.VolumeMounts)
+	}
 	sessionVolumeName, nameErr := runtimecontract.SessionPVCName(input.SessionRef)
 	if nameErr != nil {
 		t.Fatalf("derive session volume name: %v", nameErr)
@@ -190,6 +236,26 @@ func hasMountAt(container corev1.Container, volumeName, path string) bool {
 		}
 	}
 	return false
+}
+
+func mountReadOnly(container corev1.Container, volumeName string, expected bool) bool {
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == volumeName {
+			return mount.ReadOnly == expected
+		}
+	}
+	return false
+}
+
+func podVolumeByName(t *testing.T, pod *corev1.Pod, name string) corev1.Volume {
+	t.Helper()
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == name {
+			return volume
+		}
+	}
+	t.Fatalf("Pod volume %q is missing", name)
+	return corev1.Volume{}
 }
 
 func TestManagerAcceptsOnlyDefaultOrValidExplicitStorageClass(t *testing.T) {
@@ -1081,6 +1147,114 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	}
 }
 
+func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	data, err := runtimeProjectionData(input)
+	if err != nil {
+		t.Fatalf("runtimeProjectionData() error = %v", err)
+	}
+	data[mcpManifestKey] = `{"binding_digest":"stale"}`
+	immutable := true
+	projection := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: runtimeProjectionName(input), Namespace: "kodex-runtime",
+		Labels: map[string]string{managedLabel: "true", modeLabel: "turn"}, Annotations: runtimeProjectionAnnotations(input, runtimecontract.RuntimeTurnPodName(input.LeaseRef))},
+		Immutable: &immutable, Data: data}
+	if _, err := client.CoreV1().ConfigMaps("kodex-runtime").Create(context.Background(), projection, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create(stale projection) error = %v", err)
+	}
+	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil || !strings.Contains(err.Error(), "conflicts with immutable revision") {
+		t.Fatalf("EnsureTurn(stale projection) error = %v", err)
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeTurnPodName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("Pod was created from a stale projection: %v", err)
+	}
+}
+
+func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, _, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil {
+		t.Fatalf("BuildTurnInput() error = %v", err)
+	}
+	if err := manager.ensureSessionPVC(context.Background(), input); err != nil {
+		t.Fatalf("ensureSessionPVC(first) error = %v", err)
+	}
+	for name, mutate := range map[string]func(*runtimecontract.RunnerInput){
+		"organization": func(value *runtimecontract.RunnerInput) { value.OrganizationRef = "org_ijklmnop" },
+		"project":      func(value *runtimecontract.RunnerInput) { value.ProjectRef = "prj_ijklmnop" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := input
+			mutate(&candidate)
+			if err := manager.ensureSessionPVC(context.Background(), candidate); err == nil || !strings.Contains(err.Error(), "exact session binding") {
+				t.Fatalf("cross-boundary PVC reuse error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	first, firstBinding, err := manager.BuildTurnInput(testExecution(false))
+	if err != nil || manager.EnsureTurn(context.Background(), first, firstBinding) != nil {
+		t.Fatalf("materialize first attempt: %v", err)
+	}
+	retryExecution := testExecution(false)
+	retryExecution.Revision.Ref = "revision_ijklmnop"
+	retryExecution.Revision.Version = 2
+	retryExecution.Revision.Attempt = 2
+	retryExecution.Revision.RevisionDigest = strings.Repeat("f", 64)
+	retryExecution.Lease = &controlplanev1.WorkLease{Ref: "lease_ijklmnop", Fence: "fence-2", Generation: 2}
+	policy, _ := runtimeEnvironmentPolicyFromProto(retryExecution.Revision.EnvironmentPolicy)
+	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
+		runtimecontract.RuntimeServiceAccountName(retryExecution.Lease.Ref), runtimecontract.RuntimeTurnPodName(retryExecution.Lease.Ref))
+	retryExecution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
+	retry, retryBinding, err := manager.BuildTurnInput(retryExecution)
+	if err != nil || manager.EnsureTurn(context.Background(), retry, retryBinding) != nil {
+		t.Fatalf("materialize retry attempt: %v", err)
+	}
+	if first.RuntimeRevisionDigest == retry.RuntimeRevisionDigest || first.ExecutionBindingDigest == retry.ExecutionBindingDigest || runtimeProjectionName(first) == runtimeProjectionName(retry) {
+		t.Fatal("retry reused an immutable runtime binding")
+	}
+	if err := manager.DeleteTurn(context.Background(), first.LeaseRef); err != nil {
+		t.Fatalf("DeleteTurn(first) error = %v", err)
+	}
+	for _, read := range []func() error{
+		func() error {
+			_, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeTurnPodName(first.LeaseRef), metav1.GetOptions{})
+			return err
+		},
+		func() error {
+			_, err := client.CoreV1().Secrets("kodex-runtime").Get(context.Background(), ticketName(first.LeaseRef), metav1.GetOptions{})
+			return err
+		},
+		func() error {
+			_, err := client.CoreV1().ConfigMaps("kodex-runtime").Get(context.Background(), runtimeProjectionName(first), metav1.GetOptions{})
+			return err
+		},
+		func() error {
+			_, err := client.CoreV1().ServiceAccounts("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeServiceAccountName(first.LeaseRef), metav1.GetOptions{})
+			return err
+		},
+	} {
+		if err := read(); !apierrors.IsNotFound(err) {
+			t.Fatalf("old attempt resource survived cleanup: %v", err)
+		}
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeTurnPodName(retry.LeaseRef), metav1.GetOptions{}); err != nil {
+		t.Fatalf("new retry Pod was removed with predecessor: %v", err)
+	}
+	if _, err := client.CoreV1().ConfigMaps("kodex-runtime").Get(context.Background(), runtimeProjectionName(retry), metav1.GetOptions{}); err != nil {
+		t.Fatalf("new retry projection was removed with predecessor: %v", err)
+	}
+}
+
 func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1129,6 +1303,9 @@ func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	if err := manager.ensureExecutionPolicy(context.Background(), input, runtimecontract.RuntimeTurnPodName(input.LeaseRef)); err != nil {
 		t.Fatalf("ensureExecutionPolicy() error = %v", err)
 	}
+	if err := manager.ensureProjection(context.Background(), runtimecontract.RuntimeTurnPodName(input.LeaseRef), "turn", input); err != nil {
+		t.Fatalf("ensureProjection() error = %v", err)
+	}
 	if err := manager.CleanupStaleTurns(context.Background()); err != nil {
 		t.Fatalf("CleanupStaleTurns() error = %v", err)
 	}
@@ -1137,6 +1314,9 @@ func TestCleanupStaleTurnsRemovesOrphanedExecutionPolicy(t *testing.T) {
 	}
 	if _, err := client.NetworkingV1().NetworkPolicies("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeNetworkPolicyName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("orphaned execution NetworkPolicy survived cleanup: %v", err)
+	}
+	if _, err := client.CoreV1().ConfigMaps("kodex-runtime").Get(context.Background(), runtimeProjectionName(input), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("orphaned runtime projection survived cleanup: %v", err)
 	}
 }
 
@@ -1205,9 +1385,11 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	execution := &controlplanev1.ClaimedExecution{
 		Run: &controlplanev1.Run{Ref: "run_abcdefgh", ProjectRef: "prj_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
-			Ref: "revision_abcdefgh", Version: 1, SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
-			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Provider: "openai", Model: "codex"},
-			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
+			Ref: "revision_abcdefgh", Version: 1, OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
+			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "runtime_abcdefgh", Revision: "revision-1", Provider: "openai", Model: "codex"},
+			InputDigest: strings.Repeat("0", 64), RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
+			RoleDefinitionRef: "roledef_abcdefgh", InstructionRef: "instruction_abcdefgh", InstructionDigest: strings.Repeat("4", 64),
+			PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("5", 64), PromptMaterializationDigest: strings.Repeat("6", 64),
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
 			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
 			Capabilities:     []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},

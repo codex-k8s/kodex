@@ -8,11 +8,28 @@ import (
 )
 
 func validWorkspacePolicy() RuntimeWorkspacePolicy {
-	p := RuntimeWorkspacePolicy{Revision: 1, Root: "/workspace", Rules: []RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: "READ_ONLY"}, {Path: "/workspace", Access: "WRITABLE"}}, MaximumWritableBytes: 1024, MaximumFileCount: 10, DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"}}
+	p := RuntimeWorkspacePolicy{Revision: 1, Root: RuntimeWorkspaceRoot, Rules: []RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: RuntimeWorkspaceReadOnly}, {Path: "/workspace/knowledge", Access: RuntimeWorkspaceReadOnly}, {Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable}}, MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceMaximumFiles, DenialReasons: runtimeWorkspaceDenialReasons[:]}
 	raw, _ := json.Marshal(p)
 	sum := sha256.Sum256(raw)
 	p.Digest = hex.EncodeToString(sum[:])
 	return p
+}
+
+func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
+	policy := validWorkspacePolicy()
+	for _, test := range []struct{ candidate, access, denial string }{
+		{".kodex/outbox/result.md", RuntimeWorkspaceWritable, ""},
+		{"/workspace/input/set/files/a.txt", RuntimeWorkspaceReadOnly, ""},
+		{"/workspace/knowledge/memory.md", RuntimeWorkspaceReadOnly, ""},
+		{"../other/session", "", RuntimeWorkspacePathOutsideWorkspace},
+		{"/workspace/input/../../other", "", RuntimeWorkspacePathOutsideWorkspace},
+		{"/other/project", "", RuntimeWorkspacePathOutsideWorkspace},
+	} {
+		access, denial := policy.AccessForPath(test.candidate)
+		if access != test.access || denial != test.denial {
+			t.Errorf("AccessForPath(%q) = (%q, %q), want (%q, %q)", test.candidate, access, denial, test.access, test.denial)
+		}
+	}
 }
 
 func TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath(t *testing.T) {

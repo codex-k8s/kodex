@@ -21154,20 +21154,30 @@ type RuntimeRevisionSnapshot struct {
 	SecretProjections         []*RuntimeSecretDescriptor `protobuf:"bytes,46,rep,name=secret_projections,json=secretProjections,proto3" json:"secret_projections,omitempty"`
 	// Provider thread ID назначен Codex app-server и сохранён control-plane из
 	// terminal handoff предыдущего turn.
-	CodexSessionId              string                      `protobuf:"bytes,47,opt,name=codex_session_id,json=codexSessionId,proto3" json:"codex_session_id,omitempty"`
-	AssistantContext            *AssistantContextDescriptor `protobuf:"bytes,48,opt,name=assistant_context,json=assistantContext,proto3" json:"assistant_context,omitempty"`
-	AttachmentSetRef            string                      `protobuf:"bytes,49,opt,name=attachment_set_ref,json=attachmentSetRef,proto3" json:"attachment_set_ref,omitempty"`
-	AttachmentSetManifestDigest string                      `protobuf:"bytes,50,opt,name=attachment_set_manifest_digest,json=attachmentSetManifestDigest,proto3" json:"attachment_set_manifest_digest,omitempty"`
-	InputArtifacts              []*RuntimeInputArtifact     `protobuf:"bytes,51,rep,name=input_artifacts,json=inputArtifacts,proto3" json:"input_artifacts,omitempty"`
-	AttachmentContext           string                      `protobuf:"bytes,52,opt,name=attachment_context,json=attachmentContext,proto3" json:"attachment_context,omitempty"`
-	RoleImageRecipeGeneration   int64                       `protobuf:"varint,53,opt,name=role_image_recipe_generation,json=roleImageRecipeGeneration,proto3" json:"role_image_recipe_generation,omitempty"`
-	EnvironmentTools            []*RuntimeEnvironmentTool   `protobuf:"bytes,54,rep,name=environment_tools,json=environmentTools,proto3" json:"environment_tools,omitempty"`
-	EnvironmentPolicy           *RuntimeEnvironmentPolicy   `protobuf:"bytes,55,opt,name=environment_policy,json=environmentPolicy,proto3" json:"environment_policy,omitempty"`
-	EffectiveKubernetesAccess   *RuntimeKubernetesAccess    `protobuf:"bytes,56,opt,name=effective_kubernetes_access,json=effectiveKubernetesAccess,proto3" json:"effective_kubernetes_access,omitempty"`
-	AttachmentSets              []*RuntimeAttachmentSet     `protobuf:"bytes,57,rep,name=attachment_sets,json=attachmentSets,proto3" json:"attachment_sets,omitempty"`
-	WorkspacePolicy             *RuntimeWorkspacePolicy     `protobuf:"bytes,58,opt,name=workspace_policy,json=workspacePolicy,proto3" json:"workspace_policy,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	CodexSessionId                    string                      `protobuf:"bytes,47,opt,name=codex_session_id,json=codexSessionId,proto3" json:"codex_session_id,omitempty"`
+	AssistantContext                  *AssistantContextDescriptor `protobuf:"bytes,48,opt,name=assistant_context,json=assistantContext,proto3" json:"assistant_context,omitempty"`
+	AttachmentSetRef                  string                      `protobuf:"bytes,49,opt,name=attachment_set_ref,json=attachmentSetRef,proto3" json:"attachment_set_ref,omitempty"`
+	AttachmentSetManifestDigest       string                      `protobuf:"bytes,50,opt,name=attachment_set_manifest_digest,json=attachmentSetManifestDigest,proto3" json:"attachment_set_manifest_digest,omitempty"`
+	InputArtifacts                    []*RuntimeInputArtifact     `protobuf:"bytes,51,rep,name=input_artifacts,json=inputArtifacts,proto3" json:"input_artifacts,omitempty"`
+	AttachmentContext                 string                      `protobuf:"bytes,52,opt,name=attachment_context,json=attachmentContext,proto3" json:"attachment_context,omitempty"`
+	RoleImageRecipeGeneration         int64                       `protobuf:"varint,53,opt,name=role_image_recipe_generation,json=roleImageRecipeGeneration,proto3" json:"role_image_recipe_generation,omitempty"`
+	EnvironmentTools                  []*RuntimeEnvironmentTool   `protobuf:"bytes,54,rep,name=environment_tools,json=environmentTools,proto3" json:"environment_tools,omitempty"`
+	EnvironmentPolicy                 *RuntimeEnvironmentPolicy   `protobuf:"bytes,55,opt,name=environment_policy,json=environmentPolicy,proto3" json:"environment_policy,omitempty"`
+	EffectiveKubernetesAccess         *RuntimeKubernetesAccess    `protobuf:"bytes,56,opt,name=effective_kubernetes_access,json=effectiveKubernetesAccess,proto3" json:"effective_kubernetes_access,omitempty"`
+	AttachmentSets                    []*RuntimeAttachmentSet     `protobuf:"bytes,57,rep,name=attachment_sets,json=attachmentSets,proto3" json:"attachment_sets,omitempty"`
+	WorkspacePolicy                   *RuntimeWorkspacePolicy     `protobuf:"bytes,58,opt,name=workspace_policy,json=workspacePolicy,proto3" json:"workspace_policy,omitempty"`
+	InstructionRef                    string                      `protobuf:"bytes,59,opt,name=instruction_ref,json=instructionRef,proto3" json:"instruction_ref,omitempty"`
+	InstructionDigest                 string                      `protobuf:"bytes,60,opt,name=instruction_digest,json=instructionDigest,proto3" json:"instruction_digest,omitempty"`
+	PromptTemplateRef                 string                      `protobuf:"bytes,61,opt,name=prompt_template_ref,json=promptTemplateRef,proto3" json:"prompt_template_ref,omitempty"`
+	PromptTemplateDigest              string                      `protobuf:"bytes,62,opt,name=prompt_template_digest,json=promptTemplateDigest,proto3" json:"prompt_template_digest,omitempty"`
+	PromptMaterializationDigest       string                      `protobuf:"bytes,63,opt,name=prompt_materialization_digest,json=promptMaterializationDigest,proto3" json:"prompt_materialization_digest,omitempty"`
+	SystemSttConfigurationRef         string                      `protobuf:"bytes,64,opt,name=system_stt_configuration_ref,json=systemSttConfigurationRef,proto3" json:"system_stt_configuration_ref,omitempty"`
+	SystemSttConfigurationVersion     int64                       `protobuf:"varint,65,opt,name=system_stt_configuration_version,json=systemSttConfigurationVersion,proto3" json:"system_stt_configuration_version,omitempty"`
+	SystemSttConfigurationDigest      string                      `protobuf:"bytes,66,opt,name=system_stt_configuration_digest,json=systemSttConfigurationDigest,proto3" json:"system_stt_configuration_digest,omitempty"`
+	SystemSttConfigurationRevisionRef string                      `protobuf:"bytes,67,opt,name=system_stt_configuration_revision_ref,json=systemSttConfigurationRevisionRef,proto3" json:"system_stt_configuration_revision_ref,omitempty"`
+	OrganizationRef                   string                      `protobuf:"bytes,68,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	unknownFields                     protoimpl.UnknownFields
+	sizeCache                         protoimpl.SizeCache
 }
 
 func (x *RuntimeRevisionSnapshot) Reset() {
@@ -21604,6 +21614,76 @@ func (x *RuntimeRevisionSnapshot) GetWorkspacePolicy() *RuntimeWorkspacePolicy {
 		return x.WorkspacePolicy
 	}
 	return nil
+}
+
+func (x *RuntimeRevisionSnapshot) GetInstructionRef() string {
+	if x != nil {
+		return x.InstructionRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetInstructionDigest() string {
+	if x != nil {
+		return x.InstructionDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptTemplateRef() string {
+	if x != nil {
+		return x.PromptTemplateRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptTemplateDigest() string {
+	if x != nil {
+		return x.PromptTemplateDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptMaterializationDigest() string {
+	if x != nil {
+		return x.PromptMaterializationDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetSystemSttConfigurationRef() string {
+	if x != nil {
+		return x.SystemSttConfigurationRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetSystemSttConfigurationVersion() int64 {
+	if x != nil {
+		return x.SystemSttConfigurationVersion
+	}
+	return 0
+}
+
+func (x *RuntimeRevisionSnapshot) GetSystemSttConfigurationDigest() string {
+	if x != nil {
+		return x.SystemSttConfigurationDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetSystemSttConfigurationRevisionRef() string {
+	if x != nil {
+		return x.SystemSttConfigurationRevisionRef
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
 }
 
 type RuntimeWorkspacePathRule struct {
@@ -43679,7 +43759,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05query\x18\x05 \x01(\tR\x05query\"}\n" +
 	"\x17ListAuditEventsResponse\x123\n" +
 	"\x06events\x18\x01 \x03(\v2\x1b.controlplane.v1.AuditEventR\x06events\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\x87\x1a\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xd7\x1e\n" +
 	"\x17RuntimeRevisionSnapshot\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
@@ -43740,7 +43820,17 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12environment_policy\x187 \x01(\v2).controlplane.v1.RuntimeEnvironmentPolicyR\x11environmentPolicy\x12h\n" +
 	"\x1beffective_kubernetes_access\x188 \x01(\v2(.controlplane.v1.RuntimeKubernetesAccessR\x19effectiveKubernetesAccess\x12N\n" +
 	"\x0fattachment_sets\x189 \x03(\v2%.controlplane.v1.RuntimeAttachmentSetR\x0eattachmentSets\x12R\n" +
-	"\x10workspace_policy\x18: \x01(\v2'.controlplane.v1.RuntimeWorkspacePolicyR\x0fworkspacePolicy\"o\n" +
+	"\x10workspace_policy\x18: \x01(\v2'.controlplane.v1.RuntimeWorkspacePolicyR\x0fworkspacePolicy\x12'\n" +
+	"\x0finstruction_ref\x18; \x01(\tR\x0einstructionRef\x12-\n" +
+	"\x12instruction_digest\x18< \x01(\tR\x11instructionDigest\x12.\n" +
+	"\x13prompt_template_ref\x18= \x01(\tR\x11promptTemplateRef\x124\n" +
+	"\x16prompt_template_digest\x18> \x01(\tR\x14promptTemplateDigest\x12B\n" +
+	"\x1dprompt_materialization_digest\x18? \x01(\tR\x1bpromptMaterializationDigest\x12?\n" +
+	"\x1csystem_stt_configuration_ref\x18@ \x01(\tR\x19systemSttConfigurationRef\x12G\n" +
+	" system_stt_configuration_version\x18A \x01(\x03R\x1dsystemSttConfigurationVersion\x12E\n" +
+	"\x1fsystem_stt_configuration_digest\x18B \x01(\tR\x1csystemSttConfigurationDigest\x12P\n" +
+	"%system_stt_configuration_revision_ref\x18C \x01(\tR!systemSttConfigurationRevisionRef\x12)\n" +
+	"\x10organization_ref\x18D \x01(\tR\x0forganizationRef\"o\n" +
 	"\x18RuntimeWorkspacePathRule\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12?\n" +
 	"\x06access\x18\x02 \x01(\x0e2'.controlplane.v1.RuntimeWorkspaceAccessR\x06access\"\xdb\x02\n" +

@@ -43,15 +43,21 @@ func validWarmExecutionInput() runtimecontract.RunnerInput {
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
-	return runtimecontract.RunnerInput{
+	input := runtimecontract.RunnerInput{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
+		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
-		SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
+		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence", LeaseGeneration: 1,
+		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: image.Reference,
 		ImageManifestDigest: digest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256: strings.Repeat("c", 64), SystemAssistant: true,
+		RoleRuntimeContractSHA256: strings.Repeat("c", 64), RoleDefinitionRef: "roledef_abcdefgh",
+		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
+		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
+		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
+		PromptMaterializationDigest: strings.Repeat("7", 64), SystemAssistant: true,
 		Instructions: "Complete the task.", Task: "Prepare the result.", Provider: "openai-codex", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("d", 64),
@@ -60,8 +66,8 @@ func validWarmExecutionInput() runtimecontract.RunnerInput {
 		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
-		RuntimeEnvironmentDigest:  environmentDigest,
-		EnvironmentPolicy:         policy,
+		RuntimeEnvironmentDigest: environmentDigest,
+		EnvironmentPolicy:        policy, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(),
 		EffectiveKubernetesAccess: access,
 		EnvironmentBindingRef:     "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
@@ -76,4 +82,6 @@ func validWarmExecutionInput() runtimecontract.RunnerInput {
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
+	return input
 }

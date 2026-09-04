@@ -257,6 +257,21 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .data.providerAppArmorProfile == "") and
   any($resources[];
     .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    .spec.failurePolicy == "Fail" and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "workspace-policy.json")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/execution-binding-digest")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "runtime.kodex.dev/organization-hash"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    .spec.policyName == "runtime-revision-exact-configmap-projection" and
+    .spec.validationActions == ["Deny"]) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-execution-ticket-exact-projection" and
     .spec.failurePolicy == "Fail" and
     ([.spec.validations[].expression] | join(" ") | contains(
@@ -305,7 +320,15 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.name != '\''provider-runtime'\''")) and
     ([.spec.validations[].expression] | join(" ") | contains(
-      "mount.subPath in ['\''runtime.json'\'', '\''token'\'']")) and
+      "runtime-projection-[a-f0-9]{16}")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.name == '\''runtime-ticket'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "mount.mountPath == '\''/workspace/input'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "fsGroupChangePolicy == '\''OnRootMismatch'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "quantity('\''1Gi'\'')")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
     ([.spec.validations[].expression] | join(" ") | contains(
@@ -334,7 +357,10 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .kind == "Role" and .metadata.name == "runtime-controller" and
     any(.rules[];
       .apiGroups == [""] and .resources == ["secrets"] and
-      ((.verbs | sort) == (["create", "delete", "get"] | sort)))) and
+      ((.verbs | sort) == (["create", "delete", "get"] | sort))) and
+    any(.rules[];
+      .apiGroups == [""] and .resources == ["configmaps"] and
+      ((.verbs | sort) == (["create", "delete", "get", "list"] | sort)))) and
   any($resources[];
     .kind == "ServiceAccount" and .metadata.name == "agent-runner" and
     .automountServiceAccountToken == false)

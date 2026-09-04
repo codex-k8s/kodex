@@ -1253,7 +1253,26 @@ func (server *Server) authorize(request *http.Request, leaseRef string) (runtime
 		return runtimecontract.RunnerInput{}, false
 	}
 	input, err := server.manager.ResolveTurn(request.Context(), leaseRef, token)
-	return input, err == nil
+	return input, err == nil && executionHeadersMatch(request, input)
+}
+
+func executionHeadersMatch(request *http.Request, input runtimecontract.RunnerInput) bool {
+	method := ""
+	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if len(parts) == 5 && parts[3] == "artifacts" {
+		method = "artifact"
+	} else if len(parts) == 4 {
+		method = parts[3]
+	}
+	return method != "" && request.Header.Get("X-Kodex-Callback-Method") == method &&
+		request.Header.Get("X-Kodex-Organization-Ref") == input.OrganizationRef &&
+		request.Header.Get("X-Kodex-Project-Ref") == input.ProjectRef && request.Header.Get("X-Kodex-Run-Ref") == input.RunRef &&
+		request.Header.Get("X-Kodex-Node-Ref") == input.NodeRef && request.Header.Get("X-Kodex-Session-Ref") == input.SessionRef &&
+		request.Header.Get("X-Kodex-Turn-Ref") == input.TurnRef && request.Header.Get("X-Kodex-Attempt") == strconv.FormatInt(int64(input.Attempt), 10) &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Runtime-Revision-Digest")), []byte(input.RuntimeRevisionDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Input-Digest")), []byte(input.InputDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Execution-Binding-Digest")), []byte(input.ExecutionBindingDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-MCP-Binding-Digest")), []byte(input.MCPBindingDigest)) == 1
 }
 
 func bearer(request *http.Request) (string, bool) {

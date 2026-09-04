@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -49,6 +50,14 @@ const (
 	networkAnnotation                       = "runtime.kodex.dev/network-digest"
 	rbacProfileAnnotation                   = "runtime.kodex.dev/rbac-profile-digest"
 	effectiveRBACAnnotation                 = "runtime.kodex.dev/effective-rbac-digest"
+	workspacePolicyAnnotation               = "runtime.kodex.dev/workspace-policy-digest"
+	executionBindingAnnotation              = "runtime.kodex.dev/execution-binding-digest"
+	mcpBindingAnnotation                    = "runtime.kodex.dev/mcp-binding-digest"
+	organizationHashAnnotation              = "runtime.kodex.dev/organization-hash"
+	projectHashAnnotation                   = "runtime.kodex.dev/project-hash"
+	sessionHashAnnotation                   = "runtime.kodex.dev/session-hash"
+	turnHashAnnotation                      = "runtime.kodex.dev/turn-hash"
+	attemptAnnotation                       = "runtime.kodex.dev/attempt"
 	providerSecretNameAnnotation            = "runtime.kodex.dev/provider-secret-name"
 	providerSecretUIDAnnotation             = "runtime.kodex.dev/provider-secret-uid"
 	providerSecretResourceVersionAnnotation = "runtime.kodex.dev/provider-secret-resource-version"
@@ -60,6 +69,13 @@ const (
 	executionHashLabel                      = "runtime.kodex.dev/execution-hash"
 	inputKey                                = "runtime.json"
 	ticketKey                               = "token"
+	workspacePolicyKey                      = "workspace-policy.json"
+	inputManifestKey                        = "inputs.json"
+	resultManifestKey                       = "results.json"
+	skillManifestKey                        = "skills.json"
+	memoryManifestKey                       = "memories.json"
+	mcpManifestKey                          = "mcp.json"
+	callbackManifestKey                     = "callback.json"
 )
 
 // ErrProviderCredentialRefreshRejected отделяет stale/invalid lineage от
@@ -252,6 +268,29 @@ func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
 		}
 		continueToken = tickets.Continue
 	}
+	continueToken = ""
+	for {
+		projections, projectionErr := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256, Continue: continueToken})
+		if projectionErr != nil {
+			result = errors.Join(result, errors.New("list retained runtime VFS projections"))
+			break
+		}
+		for index := range projections.Items {
+			projection := &projections.Items[index]
+			executionHash := strings.TrimPrefix(projection.Annotations[podAnnotation], "runtime-turn-")
+			_, active := activeHashes[executionHash]
+			if projection.Annotations[controllerAnnotation] == manager.config.ControllerPodUID && active {
+				continue
+			}
+			if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, projection.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+				result = errors.Join(result, errors.New("delete stale runtime VFS projection"))
+			}
+		}
+		if projections.Continue == "" {
+			break
+		}
+		continueToken = projections.Continue
+	}
 	return result
 }
 
@@ -344,6 +383,7 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef = execution.GetRun().GetRef(), execution.GetNode().GetRef(), revision.GetSessionRef(), revision.GetTurnRef()
 	input.ProjectRef = execution.GetRun().GetProjectRef()
 	input.AgentRef, input.Attempt = revision.GetAgentRef(), revision.GetAttempt()
+	input.InputDigest = revision.GetInputDigest()
 	input.LeaseRef, input.LeaseFence, input.LeaseGeneration = execution.GetLease().GetRef(), execution.GetLease().GetFence(), execution.GetLease().GetGeneration()
 	input.Task, input.BoundedInput = execution.GetTask(), map[string]any{}
 	if revision.GetBoundedInput() != nil {
@@ -359,6 +399,10 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		}
 	}
 	manager.addCatalog(&input, revision)
+	input.ExecutionBindingDigest, input.MCPBindingDigest, err = runtimecontract.RuntimeExecutionBindingDigests(input)
+	if err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
@@ -426,6 +470,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 	}
 	input := runtimecontract.RunnerInput{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		OrganizationRef:    revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		EnvironmentImage: runtimecontract.RuntimeEnvironmentImage{
@@ -433,6 +478,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 			RecipeGeneration: revision.GetRoleImageRecipeGeneration(), Reference: revision.GetImageReference(), Digest: revision.GetImageManifestDigest(),
 		},
 		RoleRuntimeContractRevision: revision.GetRoleRuntimeContractRevision(), RoleRuntimeContractSHA256: revision.GetRoleRuntimeContractSha256(),
+		RoleDefinitionRef: revision.GetRoleDefinitionRef(), RuntimeProfileRef: revision.GetRuntime().GetRef(), RuntimeProfileRevision: revision.GetRuntime().GetRevision(),
+		InstructionRef: revision.GetInstructionRef(), InstructionDigest: revision.GetInstructionDigest(),
+		PromptTemplateRef: revision.GetPromptTemplateRef(), PromptTemplateDigest: revision.GetPromptTemplateDigest(), PromptMaterializationDigest: revision.GetPromptMaterializationDigest(),
+		SystemSTTConfigurationRef: revision.GetSystemSttConfigurationRef(), SystemSTTConfigurationRevisionRef: revision.GetSystemSttConfigurationRevisionRef(), SystemSTTConfigurationVersion: revision.GetSystemSttConfigurationVersion(), SystemSTTConfigurationDigest: revision.GetSystemSttConfigurationDigest(),
 		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
 		CodexSessionID:             revision.GetCodexSessionId(),
 		ProviderAccountRef:         revision.GetProviderCredential().GetAccountRef(),
@@ -694,7 +743,7 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if err != nil {
 		return fmt.Errorf("materialize runtime environment secrets: %w", err)
 	}
-	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
+	if err := manager.ensureSessionPVC(ctx, input); err != nil {
 		return fmt.Errorf("ensure runtime session volume: %w", err)
 	}
 	token, err := newTicket()
@@ -705,6 +754,9 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if err := manager.ensureExecutionPolicy(ctx, input, podName); err != nil {
 		return fmt.Errorf("ensure runtime execution policy: %w", err)
+	}
+	if err := manager.ensureProjection(ctx, podName, "turn", input); err != nil {
+		return fmt.Errorf("ensure runtime VFS projection: %w", err)
 	}
 	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets, &providerBinding); err != nil {
 		return fmt.Errorf("ensure runtime execution ticket: %w", err)
@@ -926,7 +978,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 	if err != nil {
 		return false, err
 	}
-	if err := manager.ensureSessionPVC(ctx, input.SessionRef); err != nil {
+	if err := manager.ensureSessionPVC(ctx, input); err != nil {
 		return false, err
 	}
 	const podName = "system-assistant-warm"
@@ -963,6 +1015,9 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		if ticketErr = manager.ensureTicket(ctx, secretName, podName, "warm", input, token, environmentSecrets, &providerBinding); ticketErr != nil {
 			return false, ticketErr
 		}
+		if projectionErr := manager.ensureProjection(ctx, podName, "warm", input); projectionErr != nil {
+			return false, projectionErr
+		}
 		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
 		existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 		if apierrors.IsAlreadyExists(err) {
@@ -975,6 +1030,9 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		return false, errors.New("read warm runtime pod")
 	}
 	if err := manager.cleanupStaleWarmTickets(ctx, secretName); err != nil {
+		return false, err
+	}
+	if err := manager.cleanupStaleWarmProjections(ctx, runtimeProjectionName(input)); err != nil {
 		return false, err
 	}
 	return podReady(existing), nil
@@ -991,10 +1049,33 @@ func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) 
 	if secret.Labels[managedLabel] != "true" || secret.Labels[modeLabel] != "warm" {
 		return errors.New("stale warm runtime ticket ownership is invalid")
 	}
+	if input, decodeErr := runtimecontract.DecodeRunnerInput(secret.Data[inputKey]); decodeErr == nil {
+		if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, runtimeProjectionName(input), metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("delete stale warm runtime projection")
+		}
+	}
 	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("delete stale warm runtime ticket")
 	}
 	return nil
+}
+
+func (manager *Manager) cleanupStaleWarmProjections(ctx context.Context, current string) error {
+	selector := labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String()
+	projections, err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector, Limit: 256})
+	if err != nil {
+		return errors.New("list stale warm runtime projections")
+	}
+	var result error
+	for index := range projections.Items {
+		if projections.Items[index].Name == current {
+			continue
+		}
+		if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, projections.Items[index].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			result = errors.Join(result, errors.New("delete stale warm runtime projection"))
+		}
+	}
+	return result
 }
 
 func (manager *Manager) cleanupStaleWarmTickets(ctx context.Context, current string) error {
@@ -1020,7 +1101,7 @@ func runtimeInputSecretName(pod *corev1.Pod) string {
 		return ""
 	}
 	for _, volume := range pod.Spec.Volumes {
-		if volume.Name == "runtime-input" && volume.Secret != nil {
+		if volume.Name == "runtime-ticket" && volume.Secret != nil {
 			return volume.Secret.SecretName
 		}
 	}
@@ -1141,6 +1222,10 @@ func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
 	}
 	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		result = errors.Join(result, errors.New("delete completed runtime ticket"))
+	}
+	projectionName := "runtime-projection-" + shortHash(leaseRef)
+	if err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Delete(ctx, projectionName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		result = errors.Join(result, errors.New("delete completed runtime VFS projection"))
 	}
 	if err := manager.deleteExecutionPolicy(ctx, leaseRef); err != nil {
 		result = errors.Join(result, err)
@@ -1282,6 +1367,110 @@ func canonicalRuntimeContainers(values []corev1.Container) []corev1.Container {
 	return result
 }
 
+func runtimeProjectionName(input runtimecontract.RunnerInput) string {
+	identity := input.LeaseRef
+	if identity == "" {
+		identity = input.RuntimeRevisionRef + "|" + input.RuntimeRevisionDigest + "|" + input.WorkloadInstance
+	}
+	return "runtime-projection-" + shortHash(identity)
+}
+
+func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string, error) {
+	runtimeRaw, err := runtimecontract.EncodeRunnerInput(input)
+	if err != nil {
+		return nil, err
+	}
+	workspaceRaw, err := json.Marshal(input.WorkspacePolicy)
+	if err != nil {
+		return nil, errors.New("encode runtime workspace policy")
+	}
+	inputs, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	if err != nil {
+		return nil, errors.New("encode runtime input projection")
+	}
+	memories := make([]runtimecontract.RunnerInputArtifact, 0)
+	for _, artifact := range input.InputArtifacts {
+		if artifact.Scope == runtimecontract.AttachmentScopeKnowledge {
+			memories = append(memories, artifact)
+		}
+	}
+	identity := map[string]any{
+		"organization_ref": input.OrganizationRef, "project_ref": input.ProjectRef, "run_ref": input.RunRef, "node_ref": input.NodeRef,
+		"session_ref": input.SessionRef, "turn_ref": input.TurnRef, "attempt": input.Attempt,
+		"runtime_revision_ref": input.RuntimeRevisionRef, "runtime_revision_version": input.RuntimeRevisionVersion,
+		"runtime_revision_digest": input.RuntimeRevisionDigest, "input_digest": input.InputDigest,
+	}
+	encode := func(value any, diagnostic string) (string, error) {
+		raw, encodeErr := json.Marshal(value)
+		if encodeErr != nil {
+			return "", errors.New(diagnostic)
+		}
+		return string(raw), nil
+	}
+	skills, err := encode(map[string]any{"identity": identity, "tools": input.EnvironmentTools}, "encode runtime skill projection")
+	if err != nil {
+		return nil, err
+	}
+	memory, err := encode(map[string]any{"identity": identity, "artifacts": memories}, "encode runtime memory projection")
+	if err != nil {
+		return nil, err
+	}
+	mcp, err := encode(map[string]any{"identity": identity, "binding_digest": input.MCPBindingDigest, "capabilities": input.Capabilities, "grants": input.IntegrationGrants}, "encode runtime MCP projection")
+	if err != nil {
+		return nil, err
+	}
+	callback, err := encode(map[string]any{"identity": identity, "binding_digest": input.ExecutionBindingDigest, "url": input.CallbackURL, "tls_server_name": input.CallbackTLS.ServerName}, "encode runtime callback projection")
+	if err != nil {
+		return nil, err
+	}
+	results, err := encode(map[string]any{"identity": identity, "root": input.OutboxRoot, "maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount}, "encode runtime result projection")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{
+		inputKey: string(runtimeRaw), workspacePolicyKey: string(workspaceRaw), inputManifestKey: string(inputs.Bytes),
+		resultManifestKey: results, skillManifestKey: skills, memoryManifestKey: memory,
+		mcpManifestKey: mcp, callbackManifestKey: callback,
+	}, nil
+}
+
+func runtimeProjectionAnnotations(input runtimecontract.RunnerInput, podName string) map[string]string {
+	return map[string]string{
+		revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
+		environmentAnnotation: input.RuntimeEnvironmentDigest, workspacePolicyAnnotation: input.WorkspacePolicy.Digest,
+		executionBindingAnnotation: input.ExecutionBindingDigest, mcpBindingAnnotation: input.MCPBindingDigest,
+		controllerAnnotation: input.WorkloadInstance, podAnnotation: podName,
+		resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
+		networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
+		effectiveRBACAnnotation:    input.EffectiveKubernetesAccess.Digest,
+		organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef), sessionHashAnnotation: shortHash(input.SessionRef),
+		turnHashAnnotation: shortHash(input.TurnRef), attemptAnnotation: strconv.FormatInt(int64(input.Attempt), 10),
+	}
+}
+
+func (manager *Manager) ensureProjection(ctx context.Context, podName, mode string, input runtimecontract.RunnerInput) error {
+	data, err := runtimeProjectionData(input)
+	if err != nil {
+		return err
+	}
+	immutable := true
+	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: runtimeProjectionName(input), Namespace: manager.config.RuntimeNamespace,
+		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: runtimeProjectionAnnotations(input, podName)},
+		Immutable: &immutable, Data: data}
+	_, err = manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Create(ctx, desired, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+		if getErr != nil || existing.Immutable == nil || !*existing.Immutable || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) || !apiequality.Semantic.DeepEqual(existing.Data, desired.Data) || len(existing.BinaryData) != 0 {
+			return errors.New("existing runtime projection conflicts with immutable revision")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.New("create immutable runtime projection")
+	}
+	return nil
+}
+
 func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) error {
 	raw, err := runtimecontract.EncodeRunnerInput(input)
 	if err != nil {
@@ -1292,13 +1481,7 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	for key, value := range environmentSecrets {
 		data[key] = append([]byte(nil), value...)
 	}
-	annotations := map[string]string{
-		revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
-		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID, podAnnotation: podName,
-		resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
-		networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
-		effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest,
-	}
+	annotations := runtimeProjectionAnnotations(input, podName)
 	if providerBinding != nil {
 		annotations[providerSecretNameAnnotation] = providerBinding.Name
 		annotations[providerSecretUIDAnnotation] = providerBinding.UID
@@ -1325,7 +1508,8 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 }
 
 func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) bool {
-	if existing == nil || existing.Immutable == nil || !*existing.Immutable ||
+	expectedMetadata := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: runtimeProjectionAnnotations(input, podName)}
+	if existing == nil || existing.Immutable == nil || !*existing.Immutable || !managedMetadataMatches(existing.ObjectMeta, expectedMetadata) ||
 		existing.Labels[managedLabel] != "true" || existing.Labels[modeLabel] != mode ||
 		existing.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest ||
 		existing.Annotations[configAnnotation] != input.RuntimeConfigDigest ||
@@ -1362,13 +1546,22 @@ func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input r
 	return true
 }
 
-func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string) error {
-	name, err := runtimecontract.SessionPVCName(sessionRef)
+func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontract.RunnerInput) error {
+	name, err := runtimecontract.SessionPVCName(input.SessionRef)
 	if err != nil {
 		return err
 	}
-	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
+		request := existing.Spec.Resources.Requests[corev1.ResourceStorage]
+		if existing.Labels[managedLabel] != "true" || existing.Labels[sessionHashAnnotation] != shortHash(input.SessionRef) ||
+			existing.Annotations[organizationHashAnnotation] != shortHash(input.OrganizationRef) ||
+			existing.Annotations[projectHashAnnotation] != shortHash(input.ProjectRef) || request.Cmp(manager.pvcRequest) != 0 ||
+			len(existing.Spec.AccessModes) != 1 || existing.Spec.AccessModes[0] != corev1.ReadWriteOnce ||
+			existing.Spec.Selector != nil || existing.Spec.DataSource != nil || existing.Spec.DataSourceRef != nil ||
+			(manager.config.StorageClass != "" && (existing.Spec.StorageClassName == nil || *existing.Spec.StorageClassName != manager.config.StorageClass)) {
+			return errors.New("existing runtime session volume conflicts with exact session binding")
+		}
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -1379,7 +1572,8 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, sessionRef string)
 		storageClassName = &manager.config.StorageClass
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
-		Labels: map[string]string{managedLabel: "true", "runtime.kodex.dev/session-hash": shortHash(sessionRef)}},
+		Labels:      map[string]string{managedLabel: "true", sessionHashAnnotation: shortHash(input.SessionRef)},
+		Annotations: map[string]string{organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef)}},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Create(ctx, pvc, metav1.CreateOptions{})
@@ -1395,9 +1589,14 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		roleArgs = []string{"runtime-warm"}
 	}
 	sessionVolumeName, _ := runtimecontract.SessionPVCName(input.SessionRef)
+	workspaceLimit := *resource.NewQuantity(input.WorkspacePolicy.MaximumWritableBytes, resource.BinarySI)
 	volumes := []corev1.Volume{
 		{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: sessionVolumeName}}},
-		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
+		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		{Name: "vfs-input", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		{Name: "vfs-knowledge", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: runtimeProjectionName(input)}, DefaultMode: int32Pointer(0o440)}}},
+		{Name: "runtime-ticket", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerBinding.Name, DefaultMode: int32Pointer(0o400)}}},
@@ -1406,8 +1605,22 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 		{Name: "provider-tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
 	}
-	roleMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, {Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, {Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, {Name: "provider-socket", MountPath: "/run/kodex/provider"}, {Name: "tmp", MountPath: "/tmp"}}
-	initMounts := []corev1.VolumeMount{{Name: "session", MountPath: "/workspace"}, {Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true}, {Name: "tmp", MountPath: "/tmp"}}
+	materializerWorkspaceMounts := []corev1.VolumeMount{
+		{Name: "workspace", MountPath: "/workspace"},
+		{Name: "session", MountPath: "/workspace/.kodex/state"},
+		{Name: "vfs-input", MountPath: "/workspace/input"},
+		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge"},
+	}
+	sandboxWorkspaceMounts := []corev1.VolumeMount{
+		{Name: "workspace", MountPath: "/workspace"},
+		{Name: "session", MountPath: "/workspace/.kodex/state"},
+		{Name: "vfs-input", MountPath: "/workspace/input", ReadOnly: true},
+		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge", ReadOnly: true},
+	}
+	roleMounts := append([]corev1.VolumeMount(nil), materializerWorkspaceMounts...)
+	roleMounts = append(roleMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, corev1.VolumeMount{Name: "provider-socket", MountPath: "/run/kodex/provider"}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})
+	initMounts := append([]corev1.VolumeMount(nil), materializerWorkspaceMounts...)
+	initMounts = append(initMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})
 	for _, item := range input.EnvironmentPolicy.Volumes {
 		volumeName := "environment-" + shortHash(item.Name)
 		source := &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(*resource.NewQuantity(item.SizeMiB<<20, resource.BinarySI))}
@@ -1446,15 +1659,14 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: manager.config.ProviderHTTPSProxy}, {Name: "HTTP_PROXY", Value: manager.config.ProviderHTTPSProxy},
 			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile),
-		VolumeMounts: []corev1.VolumeMount{
-			{Name: "session", MountPath: "/workspace"},
-			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true},
+		VolumeMounts: append(append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...), []corev1.VolumeMount{
+			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
 			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.json", SubPath: "auth.json", ReadOnly: true},
 			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.sha256", SubPath: "auth.sha256", ReadOnly: true},
 			{Name: "provider-socket", MountPath: "/run/kodex/provider"},
 			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
 			{Name: "provider-tmp", MountPath: "/tmp"},
-		},
+		}...),
 		Resources: smallResources(), ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", "/run/kodex/provider/provider.sock"}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}
 	relay := corev1.Container{Name: "provider-credential-relay", Image: manager.config.DefaultRoleImageReference, ImagePullPolicy: corev1.PullIfNotPresent,
 		Args: []string{"runtime-provider-credential-relay"},
@@ -1465,8 +1677,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		},
 		SecurityContext: restrictedSecurityContext(10003),
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true},
-			{Name: "runtime-input", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true},
+			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
+			{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true},
 			{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true},
 			{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true},
 			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
@@ -1480,11 +1692,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			LocalObjectReference: corev1.LocalObjectReference{Name: ticketSecret}, Key: environmentProjectionKey(item.Name), Optional: boolPointer(false),
 		}}})
 	}
-	annotations := map[string]string{revisionAnnotation: input.RuntimeRevisionDigest, configAnnotation: input.RuntimeConfigDigest,
-		environmentAnnotation: input.RuntimeEnvironmentDigest, controllerAnnotation: manager.config.ControllerPodUID,
-		resourcesAnnotation: input.EnvironmentPolicy.ResourcesDigest, volumesAnnotation: input.EnvironmentPolicy.VolumesDigest,
-		networkAnnotation: input.EnvironmentPolicy.NetworkDigest, rbacProfileAnnotation: input.EnvironmentPolicy.RBACDigest,
-		effectiveRBACAnnotation: input.EffectiveKubernetesAccess.Digest}
+	annotations := runtimeProjectionAnnotations(input, podName)
 	labels := map[string]string{managedLabel: "true", modeLabel: mode, "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment}
 	if mode == "turn" {
 		annotations[leaseAnnotation] = input.LeaseRef
@@ -1498,7 +1706,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Labels:      labels,
 		Annotations: annotations},
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
-			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()}},
 			Containers:      []corev1.Container{role, provider, relay}, Volumes: volumes}}
 }
@@ -1865,6 +2073,9 @@ func int32Pointer(value int32) *int32                            { return &value
 func boolPointer(value bool) *bool                               { return &value }
 func stringPointer(value string) *string                         { return &value }
 func quantityPointer(value resource.Quantity) *resource.Quantity { return &value }
+func fsGroupChangePolicyPointer(value corev1.PodFSGroupChangePolicy) *corev1.PodFSGroupChangePolicy {
+	return &value
+}
 
 func validDNSLabel(value string) bool {
 	if value == "" || len(value) > 63 {

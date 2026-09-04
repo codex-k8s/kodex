@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -346,6 +348,53 @@ func TestCompletionWithoutArtifactCapabilityDoesNotCreateProjectArtifact(t *test
 	}
 	if len(artifacts) != 0 {
 		t.Fatalf("completion without artifact capability = %#v", artifacts)
+	}
+}
+
+func TestCollectArtifactsRejectsSymlinkWithoutReadingTarget(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "private.txt")
+	if err := os.WriteFile(target, []byte("private"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, ".kodex/outbox/result.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectArtifacts(model.Input{WorkspaceRoot: root}, "done"); err == nil || strings.Contains(err.Error(), target) {
+		t.Fatalf("collectArtifacts() error = %v", err)
+	}
+}
+
+func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
+	root := t.TempDir()
+	for _, relative := range []string{".kodex/outbox", "input", "knowledge"} {
+		if err := os.MkdirAll(filepath.Join(root, relative), 0o770); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := &health{input: model.Input{WorkspaceRoot: root, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}}
+	state.live.Store(true)
+	state.ready.Store(true)
+	response := httptest.NewRecorder()
+	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("healthy readiness status = %d body=%q", response.Code, response.Body.String())
+	}
+	if err := os.Remove(filepath.Join(root, ".kodex/outbox")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, ".kodex/outbox")); err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if response.Code != http.StatusServiceUnavailable ||
+		strings.TrimSpace(response.Body.String()) != "workspace readiness denied: PATH_OUTSIDE_WORKSPACE" ||
+		strings.Contains(response.Body.String(), root) {
+		t.Fatalf("unsafe readiness response: status=%d body=%q", response.Code, response.Body.String())
 	}
 }
 

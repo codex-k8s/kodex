@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -602,6 +603,27 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
 		integrationGrantsDigest := sha256.Sum256(rawEffectiveIntegrationGrants)
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
+		sttConfiguration := entity.SystemSTTConfiguration{}
+		if capabilityEnabled(capabilities, "platform.stt.use") {
+			var eligible, providerEnabled bool
+			var rawProviderCapabilities []byte
+			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
+				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
+				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
+				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
+				&rawProviderCapabilities); err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			var providerCapabilities map[string]any
+			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
+				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
+				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+				return commandOutcome{}, errs.ErrConflict
+			}
+		}
 		workspacePolicy := runtimeWorkspacePolicy()
 		revisionDigestHex := runtimeRevisionDigest(runtimeEnvironmentDigest,
 			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
@@ -621,6 +643,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
 			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
 			workspacePolicy.Digest,
+			candidate.organizationRef, sttConfiguration.ConfigurationRef, sttConfiguration.RevisionRef,
+			strconv.FormatInt(sttConfiguration.Revision, 10), sttConfiguration.Digest,
 			codexSessionID,
 		)
 		revisionRef, err := newRef("rrev")
@@ -628,7 +652,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, err
 		}
 		snapshot := map[string]any{
-			"runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
+			"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
 			"turnRef": turnRef, "attempt": attempt, "task": task,
 			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
@@ -676,6 +700,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
 			"workspacePolicy": workspacePolicy,
 			"codexSessionID":  codexSessionID,
+		}
+		if sttConfiguration.ConfigurationRef != "" {
+			snapshot["systemSTTConfigurationRef"] = sttConfiguration.ConfigurationRef
+			snapshot["systemSTTConfigurationRevisionRef"] = sttConfiguration.RevisionRef
+			snapshot["systemSTTConfigurationVersion"] = sttConfiguration.Revision
+			snapshot["systemSTTConfigurationDigest"] = sttConfiguration.Digest
 		}
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
@@ -909,6 +939,15 @@ func filterIntegrationGrants(grants []map[string]string, capabilities []string) 
 		}
 	}
 	return result
+}
+
+func capabilityEnabled(capabilities []string, expected string) bool {
+	for _, capability := range capabilities {
+		if capability == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
