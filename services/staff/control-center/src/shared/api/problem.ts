@@ -78,7 +78,13 @@ function isProblem(value: unknown): value is Problem {
     typeof value === "object" &&
     value !== null &&
     "code" in value &&
-    "status" in value
+    typeof value.code === "string" &&
+    /^[A-Z0-9_]{1,80}$/.test(value.code) &&
+    "status" in value &&
+    typeof value.status === "number" &&
+    Number.isSafeInteger(value.status) &&
+    value.status >= 400 &&
+    value.status <= 599
   );
 }
 

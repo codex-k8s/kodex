@@ -27,6 +27,7 @@ const maximumJSONBody = 1 << 20
 type Server struct {
 	control  *controlplaneclient.Client
 	secrets  secretbrokerv1.SecretBrokerServiceClient
+	speech   speechToTextClient
 	boundary *boundary.Boundary
 	logger   *slog.Logger
 	realtime http.Handler
@@ -262,6 +263,9 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 		if coreReady, ok := value["coreReady"].(bool); ok {
 			output["coreReady"] = coreReady
 		}
+		if total, ok := value["total"].(float64); ok {
+			output["total"] = total
+		}
 		for _, key := range []string{"subject", "evaluatedAt", "role"} {
 			if preserved, ok := value[key]; ok {
 				output[key] = preserved
@@ -463,6 +467,8 @@ var enumPrefixes = []string{
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
 	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_",
 	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",
+	"RUNTIME_SECRET_VALUE_TYPE_",
+	"SEARCH_RESULT_KIND_",
 	"PERMISSION_RISK_", "ACCESS_SUBJECT_KIND_", "ACCESS_SCOPE_KIND_", "ACCESS_RESOURCE_KIND_",
 	"ACCESS_ROLE_KIND_", "ACCESS_ROLE_STATE_", "ACCESS_BINDING_STATE_", "OIDC_GROUP_STATE_",
 	"ACCESS_DECISION_", "ACTION_", "TYPE_",

@@ -77,6 +77,11 @@ spec:
             - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CA_FILE, value: /var/run/config/kodex/control-api-gateway/secret-broker/ca.pem}
             - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CLIENT_CERTIFICATE_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.crt}
             - {name: CONTROL_API_GATEWAY_SECRET_BROKER_CLIENT_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.key}
+            - {name: CONTROL_API_GATEWAY_STT_TARGET, value: "dns:///stt-tts-service.kodex-system.svc:8443"}
+            - {name: CONTROL_API_GATEWAY_STT_TLS_SERVER_NAME, value: stt-tts-service.kodex-system.svc.cluster.local}
+            - {name: CONTROL_API_GATEWAY_STT_CA_FILE, value: /var/run/config/kodex/control-api-gateway/control-plane/ca.pem}
+            - {name: CONTROL_API_GATEWAY_STT_CLIENT_CERTIFICATE_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.crt}
+            - {name: CONTROL_API_GATEWAY_STT_CLIENT_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/control-api-gateway/control-plane-client/tls.key}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: otel-collector.observability.svc.cluster.local}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: /var/run/config/kodex/control-api-gateway/observability/otel-ca.pem}

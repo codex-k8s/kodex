@@ -15,6 +15,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
+	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
 	github.com/oapi-codegen/runtime v1.6.0
@@ -80,6 +81,8 @@ replace github.com/codex-k8s/kodex/libs/go/oidcverifier => ../../../libs/go/oidc
 replace github.com/codex-k8s/kodex/libs/go/observability => ../../../libs/go/observability
 
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
+
+replace github.com/codex-k8s/kodex/libs/go/sttapi => ../../../libs/go/sttapi
 
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
 

@@ -135,16 +135,21 @@ describe("session renewal lifecycle", () => {
     mutation.idempotencyKey.mockClear();
     oidcManagerSettings.mockClear();
     const values = new Map<string, string>([["kodex.session.revision", "7"]]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    vi.stubGlobal("BroadcastChannel", undefined);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
+        clearTimeout: globalThis.clearTimeout,
         clearInterval: globalThis.clearInterval,
+        setTimeout: globalThis.setTimeout,
         setInterval: globalThis.setInterval,
-        sessionStorage: {
-          getItem: (key: string) => values.get(key) ?? null,
-          removeItem: (key: string) => values.delete(key),
-          setItem: (key: string, value: string) => values.set(key, value),
-        },
+        localStorage: storage,
+        sessionStorage: storage,
       },
     });
     setActivePinia(createPinia());
@@ -152,6 +157,7 @@ describe("session renewal lifecycle", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     Reflect.deleteProperty(globalThis, "window");
   });
 

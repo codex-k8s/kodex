@@ -4,7 +4,7 @@ import {
   UserManager,
   WebStorageStateStore,
 } from "oidc-client-ts";
-import { computed, ref } from "vue";
+import { computed, onScopeDispose, ref } from "vue";
 
 import {
   consumeOidcIntent,
@@ -16,6 +16,10 @@ import {
   type OidcIntent,
   type RuntimeEnvironmentPolicyOperation,
 } from "./reauth";
+import {
+  SessionRenewalBus,
+  SessionRenewalCoordinator,
+} from "./renewal-coordinator";
 
 import { requestSignal } from "@/shared/api/client";
 import {
@@ -49,8 +53,6 @@ const sessionRenewalIntervalMs = 5 * 60 * 1000;
 const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
 const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
 const runtimeSecretRevealPendingLifetimeMs = 5 * 60 * 1000;
-const renewalLeaseKey = "kodex.session.renewal.lease";
-const renewalLeaseMs = 15_000;
 const renewalChannelName = "kodex.session";
 
 export interface LoginCompletion {
@@ -115,45 +117,28 @@ export const useSessionStore = defineStore("session", () => {
   let renewalTimer: number | undefined;
   let renewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
+  let renewalRetryTimer: number | undefined;
   let loggingOut = false;
   const tabId = crypto.randomUUID();
-  const renewalChannel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel(renewalChannelName);
+  const renewalChannel =
+    typeof BroadcastChannel === "undefined"
+      ? undefined
+      : new BroadcastChannel(renewalChannelName);
+  const renewalBus = new SessionRenewalBus(renewalChannel, revision.value);
+  const renewalCoordinator = new SessionRenewalCoordinator(
+    window.localStorage,
+    tabId,
+  );
 
-  function publishSessionRevision(nextRevision: number): void {
-    renewalChannel?.postMessage({ type: "session-revision", revision: nextRevision });
-  }
-
-  function ownsRenewalLease(): boolean {
-    const now = Date.now();
-    const raw = window.localStorage.getItem(renewalLeaseKey);
-    if (raw) {
-      try {
-        const lease = JSON.parse(raw) as { owner?: string; expiresAt?: number };
-        if (lease.owner !== tabId && typeof lease.expiresAt === "number" && lease.expiresAt > now) return false;
-      } catch {
-        window.localStorage.removeItem(renewalLeaseKey);
-      }
-    }
-    window.localStorage.setItem(renewalLeaseKey, JSON.stringify({ owner: tabId, expiresAt: now + renewalLeaseMs }));
-    return true;
-  }
-
-  renewalChannel?.addEventListener("message", (event: MessageEvent) => {
-    const message = event.data as { type?: string; revision?: unknown };
-    if (message.type !== "session-revision" || typeof message.revision !== "number" || !Number.isSafeInteger(message.revision) || message.revision < 1) return;
-    revision.value = message.revision;
-    window.sessionStorage.setItem(sessionRevisionKey, String(message.revision));
+  renewalBus.subscribe((receipt) => {
+    revision.value = receipt.revision;
+    window.sessionStorage.setItem(sessionRevisionKey, String(receipt.revision));
+    scheduleRenewal(Math.max(0, receipt.nextRenewalAt - Date.now()));
   });
-  window.addEventListener("storage", (event) => {
-    if (event.key !== renewalLeaseKey || !event.newValue) return;
-    try {
-      const lease = JSON.parse(event.newValue) as { owner?: string; expiresAt?: number };
-      if (lease.owner === tabId || typeof lease.expiresAt !== "number" || lease.expiresAt <= Date.now()) return;
-    } catch {
-      return;
-    }
+  onScopeDispose(() => {
+    void cancelRenewal();
+    renewalBus.close();
   });
-
   const canLogout = computed(
     () => phase.value === "authenticated" && revision.value > 0,
   );
@@ -454,8 +439,17 @@ export const useSessionStore = defineStore("session", () => {
 
   async function renew(): Promise<void> {
     if (phase.value !== "authenticated" || loggingOut) return;
-    if (!ownsRenewalLease()) return;
     if (renewalRequest) return await renewalRequest;
+    const lease = renewalCoordinator.acquire();
+    if (!lease.acquired) {
+      if (renewalRetryTimer !== undefined)
+        window.clearTimeout(renewalRetryTimer);
+      renewalRetryTimer = window.setTimeout(() => {
+        renewalRetryTimer = undefined;
+        void renew();
+      }, lease.retryAfterMs + 25);
+      return;
+    }
     const controller = new AbortController();
     renewalController = controller;
     const pending = (async () => {
@@ -466,11 +460,28 @@ export const useSessionStore = defineStore("session", () => {
             signal: AbortSignal.any([requestSignal(), controller.signal]),
           }),
         );
-        publishSessionRevision(revision.value);
+        const completedAt = Date.now();
+        const nextRenewalAt = renewalCoordinator.complete(
+          sessionRenewalIntervalMs,
+        );
+        renewalBus.publish({
+          revision: revision.value,
+          completedAt,
+          nextRenewalAt,
+        });
+        scheduleRenewal(Math.max(0, nextRenewalAt - Date.now()));
       } catch (error) {
         if (controller.signal.aborted) return;
         const normalized = asProblem(error);
         if (normalized.kind === "unauthorized") setUnauthenticated();
+        else {
+          renewalRetryTimer = window.setTimeout(() => {
+            renewalRetryTimer = undefined;
+            void renew();
+          }, 1_000);
+        }
+      } finally {
+        renewalCoordinator.release();
       }
     })();
     renewalRequest = pending;
@@ -483,19 +494,33 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   function startRenewal(): void {
-    if (renewalTimer !== undefined || loggingOut) return;
+    if (renewalTimer !== undefined || renewalRequest || loggingOut) return;
     void renew();
-    renewalTimer = window.setInterval(() => {
+  }
+
+  function scheduleRenewal(delayMs: number): void {
+    if (renewalRetryTimer !== undefined) {
+      window.clearTimeout(renewalRetryTimer);
+      renewalRetryTimer = undefined;
+    }
+    if (renewalTimer !== undefined) window.clearTimeout(renewalTimer);
+    renewalTimer = window.setTimeout(() => {
+      renewalTimer = undefined;
       void renew();
-    }, sessionRenewalIntervalMs);
+    }, delayMs);
   }
 
   function cancelRenewal(): Promise<void> | undefined {
     if (renewalTimer !== undefined) {
-      window.clearInterval(renewalTimer);
+      window.clearTimeout(renewalTimer);
       renewalTimer = undefined;
     }
     renewalController?.abort();
+    if (renewalRetryTimer !== undefined) {
+      window.clearTimeout(renewalRetryTimer);
+      renewalRetryTimer = undefined;
+    }
+    renewalCoordinator.release();
     return renewalRequest;
   }
 

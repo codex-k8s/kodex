@@ -30,6 +30,22 @@ STOPPING:
   other: The service is restarting; reconnect shortly
 PAYLOAD_TOO_LARGE:
   other: The uploaded data is too large
+CONTENT_LENGTH_REQUIRED:
+  other: The uploaded data size is unavailable
+CONTENT_LENGTH_MISMATCH:
+  other: The uploaded data size does not match the declared size
+REQUEST_BODY_READ_FAILED:
+  other: The uploaded data could not be read
+UNSUPPORTED_MEDIA_TYPE:
+  other: The uploaded data format is not supported
+UPSTREAM_RESPONSE_INVALID:
+  other: An internal service returned an invalid response
+INVALID_UPSTREAM_RESPONSE:
+  other: An internal service returned an incomplete response
+UPSTREAM_ARTIFACT_METADATA_INVALID:
+  other: An internal service returned invalid file metadata
+STALE_VERSION:
+  other: The session has changed; reload the page and try again
 UPSTREAM_PAYLOAD_TOO_LARGE:
   other: The generated file is too large to download
 RUN_NOT_FOUND:

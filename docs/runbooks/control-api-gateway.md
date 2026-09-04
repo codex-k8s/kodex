@@ -4,8 +4,8 @@ title: Диагностика control-api-gateway
 type: runbook
 status: approved
 owner: sre
-version: 2.3.0
-updated: 2026-08-28
+version: 2.4.0
+updated: 2026-09-04
 ---
 
 # Диагностика control-api-gateway
@@ -38,6 +38,12 @@ fail-closed результатом.
 WebSocket handshake и обычные GET/HEAD не продлевают API session. Control
 Center вызывает bounded renewal mutation каждые пять минут; reconnect после
 idle expiry создаёт новую session через warm SSO.
+
+В нескольких вкладках `localStorage` lease допускает один renewal request, а
+`BroadcastChannel` передаёт подтверждённое время следующего renewal. Успех
+оставляет общий пятиминутный cooldown, expired lease может забрать другая
+вкладка, failure освобождает lease для bounded retry. Поэтому открытие или
+возврат нескольких вкладок не создаёт request storm.
 
 При logout Control Center останавливает renewal loop, отменяет и дожидается
 текущего renewal, после чего вызывает `DELETE /api/v1/session`. Gateway
@@ -107,6 +113,21 @@ WebSocket не передаёт raw stdout/stderr, Codex JSONL, provider respons
 arbitrary tool payload, secret или file body. Artifact скачивается отдельным
 HTTP path после owner authorization.
 
+## Speech-to-text
+
+`POST /api/v1/projects/{projectRef}/speech/transcriptions` принимает ровно одну
+multipart part `audio`. Browser заранее передаёт `X-Audio-Size`; gateway
+отклоняет неизвестный project context, отсутствующий permission/config,
+неподдерживаемый media type и размер больше 25 MiB до provider effect.
+
+Gateway открывает generated `sttapi` client stream через mTLS и signed local
+authority proof `platform.stt.transcribe`, последовательно отправляет chunks не
+более 64 KiB и не читает следующий chunk до завершения `Send`. Request cancel и
+deadline отменяют upstream RPC. Ответ содержит только transcript, request и
+correlation IDs, authority/config revisions, model, язык и terminal stage;
+audio, transcript, credentials, provider account и raw provider diagnostics не
+логируются.
+
 ## Assistant HTTP lifecycle
 
 - создание conversation не принимает авторитетный title; context entity и
@@ -125,6 +146,8 @@ HTTP path после owner authorization.
 | `403`             | exact Origin/CSRF и server-owned permission                                |
 | `409`             | `If-Match`, idempotency intent либо stale Human Gate winner                |
 | `503`             | JWKS/control-plane working path; это не причина делать gateway Pod unready |
+| STT `400/413/415` | multipart boundary, `X-Audio-Size`, одна `audio` part и media type          |
+| STT `502/503/504` | exact STT mTLS/authority target и рабочий provider path                    |
 | WS reconnect loop | NATS client material, subject policy, sequence/catch-up                    |
 | старая локаль     | trusted user locale и наличие key в RU/EN YAML                             |
 

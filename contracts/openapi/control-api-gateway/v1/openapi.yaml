@@ -24,6 +24,8 @@ tags:
   - name: AttachmentSets
   - name: Automations
   - name: Integrations
+  - name: Providers
+  - name: Speech
   - name: Assistant
   - name: Administration
   - name: Access
@@ -148,6 +150,8 @@ paths:
           in: query
           required: false
           schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - { $ref: '#/components/parameters/PageToken' }
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
       responses:
         '200':
           description: Доступные actor результаты глобального поиска
@@ -469,6 +473,33 @@ paths:
           description: Пользовательский avatar удалён, активирован server-generated fallback
           content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/agents/{agentRef}/avatar:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectRef' }
+      - { $ref: '#/components/parameters/AgentRef' }
+    put:
+      tags: [Agents]
+      operationId: uploadAgentAvatar
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - name: X-File-Name
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        description: Ограниченный поток готового avatar до 5 MiB; Artifact, binding и Agent version фиксируются одной транзакцией владельца.
+        content:
+          image/png: { schema: { type: string, format: binary, maxLength: 5242880 } }
+          image/jpeg: { schema: { type: string, format: binary, maxLength: 5242880 } }
+          image/webp: { schema: { type: string, format: binary, maxLength: 5242880 } }
+      responses:
+        '200':
+          description: Avatar и новая версия ИИ-сотрудника опубликованы атомарно
+          content: { application/json: { schema: { $ref: '#/components/schemas/Agent' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/avatar/content:
     get:
       tags: [Agents]
@@ -765,6 +796,48 @@ paths:
           description: Provider account status и pending authorization descriptor
           content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAccount' } } }
         default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Providers]
+      operationId: deleteProviderAccount
+      parameters: [{ $ref: '#/components/parameters/ProviderAccountRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: API-key credential удалён durable lifecycle, account оставлен audit-visible tombstone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderAccount' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/projects/{projectRef}/speech/transcriptions:
+    post:
+      tags: [Speech]
+      operationId: transcribeSpeech
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRef' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - name: X-Audio-Size
+          in: header
+          required: true
+          description: Точный размер audio part; gateway и STT сверяют его до provider RPC.
+          schema: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
+      requestBody:
+        required: true
+        description: Ровно одна multipart audio part; gateway читает и отправляет chunks последовательно без полной буферизации.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+      responses:
+        '200':
+          description: Текст и безопасный receipt завершённой транскрипции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SpeechTranscription' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/provider-accounts/{providerAccountRef}/device-authorization:
     post:
       tags: [Agents]
@@ -797,6 +870,32 @@ paths:
         '200':
           description: Pending authorization observed or authorized account refreshed
           content: { application/json: { schema: { $ref: '#/components/schemas/ProviderAccount' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification:
+    parameters: [{ $ref: '#/components/parameters/ProviderAccountRef' }]
+    post:
+      tags: [Providers]
+      operationId: verifyProviderAccountDeviceAuthorization
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Device authorization проверена авторитетным provider adapter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderAccount' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations:
+    parameters: [{ $ref: '#/components/parameters/ProviderAccountRef' }]
+    post:
+      tags: [Providers]
+      operationId: reauthorizeProviderAccountDeviceCode
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '202':
+          description: Начата новая device-code authorization revision той же logical account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderAccount' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/provider-accounts/{providerAccountRef}/revocation:
     post:
@@ -2963,11 +3062,11 @@ components:
         evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, REFRESH_AUTHORIZATION, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE]
     Problem:
       type: object
       additionalProperties: false
-      required: [type, title, status, code, correlationId]
+      required: [type, title, status, code, correlationId, retryable]
       properties:
         type: { type: string, format: uri }
         title: { type: string, maxLength: 200 }
@@ -2975,6 +3074,7 @@ components:
         detail: { type: string, maxLength: 1000 }
         code: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 }
         correlationId: { type: string, format: uuid }
+        retryable: { type: boolean }
         actualVersion: { type: integer, format: int64, minimum: 1 }
         winnerSummary: { type: string, maxLength: 300 }
     UserSummary:
@@ -3059,12 +3159,33 @@ components:
     SearchResultPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items:
           type: array
           maxItems: 50
           items: { $ref: '#/components/schemas/SearchResult' }
+        total: { type: integer, format: int64, minimum: 0 }
+        nextPageToken: { type: string, minLength: 1, maxLength: 512 }
+    SpeechTranscription:
+      type: object
+      additionalProperties: false
+      required: [text, receipt]
+      properties:
+        text: { type: string }
+        receipt: { $ref: '#/components/schemas/SpeechTranscriptionReceipt' }
+    SpeechTranscriptionReceipt:
+      type: object
+      additionalProperties: false
+      required: [requestId, correlationId, authoritySourceRevision, configRevision, model, language, completedStage]
+      properties:
+        requestId: { type: string, format: uuid }
+        correlationId: { type: string, format: uuid }
+        authoritySourceRevision: { type: integer, format: int64, minimum: 1 }
+        configRevision: { type: integer, format: int64, minimum: 1 }
+        model: { type: string, minLength: 1, maxLength: 160 }
+        language: { type: string, minLength: 1, maxLength: 35 }
+        completedStage: { type: string, enum: [PROVIDER_COMPLETED] }
     ProjectInput:
       type: object
       additionalProperties: false

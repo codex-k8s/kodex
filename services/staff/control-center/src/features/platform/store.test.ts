@@ -141,7 +141,7 @@ function searchResponse(items: SearchResult[]): {
   response: Response;
 } {
   return {
-    data: { items },
+    data: { items, total: items.length },
     response: new Response(null, { status: 200 }),
   };
 }

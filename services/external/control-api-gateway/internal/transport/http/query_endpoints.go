@@ -1,9 +1,7 @@
 package httptransport
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -46,9 +44,9 @@ func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p g
 	if p.Limit != nil {
 		limit = int32(*p.Limit)
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
-	defer cancel()
-	response, err := server.control.Query.SearchPlatform(ctx, &controlplanev1.SearchPlatformRequest{Query: p.Query, Limit: limit})
+	response, err := server.control.Query.SearchPlatform(r.Context(), &controlplanev1.SearchPlatformRequest{
+		Query: p.Query, Limit: limit, ProjectRef: stringValue(p.ProjectRef), Page: page(nil, p.PageToken),
+	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

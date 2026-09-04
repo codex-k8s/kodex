@@ -21,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/ratelimit"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/sttclient"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	websockettransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/usertext"
@@ -65,6 +66,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	speech, err := sttclient.Dial(startup, sttclient.Config{
+		Target: config.STTTarget, TLSServerName: config.STTTLSServerName, CAFile: config.STTCAFile,
+		ClientCertificateFile: config.STTClientCertificateFile, ClientPrivateKeyFile: config.STTClientPrivateKeyFile,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Proofs: control,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, speech.Close()) }()
 	secrets, err := secretbrokerclient.Dial(startup, secretbrokerclient.Config{
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
 		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
@@ -108,6 +118,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := api.AttachSecretBroker(secrets.SecretBroker); err != nil {
+		return err
+	}
+	if err := api.AttachSpeechToText(speech.Speech); err != nil {
 		return err
 	}
 	api.AttachRealtime(http.HandlerFunc(realtime.ServeSessionHTTP))
@@ -243,7 +256,7 @@ func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})

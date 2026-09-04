@@ -2,9 +2,11 @@ package httptransport
 
 import (
 	"crypto/sha256"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +15,71 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+const maximumAgentAvatarBytes = 5 << 20
+
+func (server *Server) UploadAgentAvatar(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, ref generated.AgentRef, p generated.UploadAgentAvatarParams) {
+	r, ok := withProjectReference(w, r, projectRef)
+	if !ok {
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "image/png" && mediaType != "image/jpeg" && mediaType != "image/webp" {
+		writeLocalProblem(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", false)
+		return
+	}
+	if r.ContentLength < 1 {
+		writeLocalProblem(w, http.StatusLengthRequired, "CONTENT_LENGTH_REQUIRED", false)
+		return
+	}
+	if r.ContentLength > maximumAgentAvatarBytes {
+		writeLocalProblem(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	stream, err := server.control.Command.UploadAgentAvatar(r.Context())
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if err = stream.Send(&controlplanev1.UploadAgentAvatarRequest{Part: &controlplanev1.UploadAgentAvatarRequest_Metadata{Metadata: &controlplanev1.UploadAgentAvatarMetadata{
+		Mutation: mutation, ProjectRef: projectRef, AgentRef: ref, FileName: p.XFileName,
+		MediaType: mediaType, SizeBytes: r.ContentLength,
+	}}}); err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	received, digest, err := forwardArtifactBody(r.Body, r.ContentLength, func(chunk []byte) error {
+		return stream.Send(&controlplanev1.UploadAgentAvatarRequest{Part: &controlplanev1.UploadAgentAvatarRequest_Chunk{Chunk: chunk}})
+	})
+	if errors.Is(err, errArtifactContentLengthMismatch) {
+		writeLocalProblem(w, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
+		return
+	}
+	if errors.Is(err, errArtifactBodyRead) {
+		writeLocalProblem(w, http.StatusBadRequest, "REQUEST_BODY_READ_FAILED", false)
+		return
+	}
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if err = stream.Send(&controlplanev1.UploadAgentAvatarRequest{Part: &controlplanev1.UploadAgentAvatarRequest_Commit{Commit: &controlplanev1.UploadArtifactCommit{
+		SizeBytes: received, Sha256: digest,
+	}}}); err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	response, err := stream.CloseAndRecv()
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "agent", "")
+}
 
 func (server *Server) SetAgentAvatar(w http.ResponseWriter, r *http.Request, ref generated.AgentRef, p generated.SetAgentAvatarParams) {
 	body, ok := decodeJSON[generated.AgentAvatarInput](w, r)
@@ -183,6 +250,45 @@ func (server *Server) RefreshProviderAccountAuthorization(w http.ResponseWriter,
 		return
 	}
 	writeMessage(w, http.StatusAccepted, response, "account", "")
+}
+
+func (server *Server) VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.VerifyProviderAccountDeviceAuthorizationParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.VerifyProviderAccountDeviceAuthorization(r.Context(), &controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
+}
+
+func (server *Server) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.ReauthorizeProviderAccountDeviceCodeParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.ReauthorizeProviderAccountDeviceCode(r.Context(), &controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusAccepted, response, "account", "")
+}
+
+func (server *Server) DeleteProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.DeleteProviderAccountParams) {
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.DeleteProviderAccount(r.Context(), &controlplanev1.DeleteProviderAccountRequest{Mutation: mutation, AccountRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "account", "")
 }
 
 func (server *Server) RevokeProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.RevokeProviderAccountParams) {

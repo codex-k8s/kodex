@@ -255,6 +255,10 @@ func castControlPlaneRuntimeSecret(value *controlplanev1.RuntimeSecret) generate
 		Ref: value.GetRef(), ProjectRef: value.GetProjectRef(), Name: value.GetName(), Description: value.GetDescription(),
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())), State: generated.RuntimeSecretState(value.GetState()),
 		Version: value.GetVersion(), CurrentRevision: value.GetCurrentRevision(), CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
+		NextActions: make([]generated.NextAction, 0, len(value.GetNextActions())),
+	}
+	for _, action := range value.GetNextActions() {
+		result.NextActions = append(result.NextActions, generated.NextAction(normalizeEnum(action.String())))
 	}
 	if hint := value.GetDisplayHint(); hint != nil {
 		result.DisplayHint = &generated.RuntimeSecretDisplayHint{Prefix: hint.GetPrefix(), Suffix: hint.GetSuffix()}
@@ -275,8 +279,7 @@ func writeTerminalRuntimeSecretOperation(writer http.ResponseWriter, status int,
 		writeJSON(writer, status, castControlPlaneRuntimeSecret(secret))
 		return true
 	}
-	failure := operation.GetFailureCode().String()
-	writeLocalProblem(writer, http.StatusConflict, failure, false)
+	writeLocalProblem(writer, http.StatusConflict, "RUNTIME_SECRET_OPERATION_FAILED", false)
 	return true
 }
 

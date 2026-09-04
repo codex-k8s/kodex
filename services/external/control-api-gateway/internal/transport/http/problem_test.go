@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
@@ -111,6 +112,36 @@ func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t 
 				t.Fatalf("problem = HTTP %d body=%+v, want status=%d code=%q retryable=%t", recorder.Code, body, test.wantStatus, test.wantCode, test.wantRetryable)
 			}
 		})
+	}
+}
+
+func TestWriteRPCProblemAlwaysReturnsLocalizedStrictProblem(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		code       codes.Code
+		wantStatus int
+		wantCode   string
+	}{
+		{code: codes.NotFound, wantStatus: http.StatusNotFound, wantCode: "NOT_FOUND"},
+		{code: codes.Internal, wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL"},
+		{code: codes.Unavailable, wantStatus: http.StatusServiceUnavailable, wantCode: "UNAVAILABLE"},
+	} {
+		recorder := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
+		writeRPCProblem(recorder, status.Error(test.code, "raw upstream details must not leak"))
+		var body struct {
+			Type          string `json:"type"`
+			Title         string `json:"title"`
+			Code          string `json:"code"`
+			CorrelationID string `json:"correlationId"`
+			Status        int    `json:"status"`
+			Retryable     bool   `json:"retryable"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode strict problem: %v", err)
+		}
+		if recorder.Code != test.wantStatus || body.Status != test.wantStatus || body.Code != test.wantCode || body.Title != "localized:"+test.wantCode || body.Type == "" || body.CorrelationID == "" || strings.Contains(recorder.Body.String(), "raw upstream") {
+			t.Fatalf("strict problem = status %d body %s", recorder.Code, recorder.Body.String())
+		}
 	}
 }
 

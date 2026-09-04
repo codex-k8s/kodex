@@ -72,6 +72,26 @@ describe("runtime config", () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("отклоняет cross-origin OIDC redirect", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          ...validConfig,
+          oidc: {
+            ...validConfig.oidc,
+            redirectUri: "https://attacker.invalid/auth/callback",
+          },
+        }),
+      ),
+    );
+    const { loadRuntimeConfig } = await import("./runtime");
+
+    await expect(loadRuntimeConfig()).rejects.toThrow(
+      "Runtime same-origin URL is invalid",
+    );
+  });
 });
 
 function jsonResponse(value: unknown): Response {

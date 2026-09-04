@@ -32,15 +32,17 @@ type runtimeSecretCommandStub struct {
 
 type runtimeSecretQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
-	list *controlplanev1.ListRuntimeSecretsResponse
-	get  *controlplanev1.GetRuntimeSecretResponse
+	list    *controlplanev1.ListRuntimeSecretsResponse
+	get     *controlplanev1.GetRuntimeSecretResponse
+	request *controlplanev1.ListRuntimeSecretsRequest
 }
 
-func (stub runtimeSecretQueryStub) ListRuntimeSecrets(context.Context, *controlplanev1.ListRuntimeSecretsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretsResponse, error) {
+func (stub *runtimeSecretQueryStub) ListRuntimeSecrets(_ context.Context, request *controlplanev1.ListRuntimeSecretsRequest, _ ...grpc.CallOption) (*controlplanev1.ListRuntimeSecretsResponse, error) {
+	stub.request = request
 	return stub.list, nil
 }
 
-func (stub runtimeSecretQueryStub) GetRuntimeSecret(context.Context, *controlplanev1.GetRuntimeSecretRequest, ...grpc.CallOption) (*controlplanev1.GetRuntimeSecretResponse, error) {
+func (stub *runtimeSecretQueryStub) GetRuntimeSecret(context.Context, *controlplanev1.GetRuntimeSecretRequest, ...grpc.CallOption) (*controlplanev1.GetRuntimeSecretResponse, error) {
 	return stub.get, nil
 }
 
@@ -191,7 +193,7 @@ func TestRuntimeSecretReadEndpointsReturnPublicMetadataShape(t *testing.T) {
 		Version: 3, CurrentRevision: 2, DisplayHint: &controlplanev1.RuntimeSecretDisplayHint{Prefix: "syn", Suffix: "key"},
 		CreatedAt: now, UpdatedAt: now,
 	}
-	query := runtimeSecretQueryStub{
+	query := &runtimeSecretQueryStub{
 		list: &controlplanev1.ListRuntimeSecretsResponse{Secrets: []*controlplanev1.RuntimeSecret{secret}, Page: &controlplanev1.PageInfo{NextPageToken: "next-page"}},
 		get:  &controlplanev1.GetRuntimeSecretResponse{Secret: secret},
 	}
@@ -255,5 +257,42 @@ func TestCreateRuntimeSecretBindsDigestAndReturnsTerminalReceipt(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), value) {
 		t.Fatal("secret plaintext leaked into terminal response")
+	}
+	if !strings.Contains(response.Body.String(), `"valueType":"STRING"`) || strings.Contains(response.Body.String(), "RUNTIME_SECRET_VALUE_TYPE_") {
+		t.Fatalf("create response is not normalized: %s", response.Body.String())
+	}
+}
+
+func TestListRuntimeSecretsNormalizesPublicShapeAndPagination(t *testing.T) {
+	now := timestamppb.Now()
+	query := &runtimeSecretQueryStub{list: &controlplanev1.ListRuntimeSecretsResponse{
+		Secrets: []*controlplanev1.RuntimeSecret{{
+			Ref: "sec_database01", ProjectRef: "prj_project_sales", Name: "DATABASE_TOKEN", Description: "Database",
+			ValueType: controlplanev1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING, State: "ACTIVE",
+			Version: 2, CurrentRevision: 2, CreatedAt: now, UpdatedAt: now,
+			NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_ROTATE},
+		}},
+		Page: &controlplanev1.PageInfo{NextPageToken: "next-page"},
+	}}
+	server := &Server{control: &controlplaneclient.Client{Query: query}}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects/prj_project_sales/runtime-secrets?query=data&pageSize=10&pageToken=cursor", nil)
+	search, pageSize, pageToken := "data", 10, "cursor"
+
+	server.ListRuntimeSecrets(response, request, "prj_project_sales", generated.ListRuntimeSecretsParams{
+		Query: &search, PageSize: &pageSize, PageToken: &pageToken,
+	})
+
+	if response.Code != http.StatusOK || query.request.GetProjectRef() != "prj_project_sales" || query.request.GetPage().GetPageSize() != 10 || query.request.GetPage().GetPageToken() != "cursor" {
+		t.Fatalf("list mapping failed: status=%d request=%v body=%s", response.Code, query.request, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, value := range []string{`"valueType":"STRING"`, `"nextActions":["ROTATE"]`, `"nextPageToken":"next-page"`} {
+		if !strings.Contains(body, value) {
+			t.Fatalf("list response misses %s: %s", value, body)
+		}
+	}
+	if strings.Contains(body, "RUNTIME_SECRET_VALUE_TYPE_") {
+		t.Fatalf("list response leaked protobuf enum: %s", body)
 	}
 }
