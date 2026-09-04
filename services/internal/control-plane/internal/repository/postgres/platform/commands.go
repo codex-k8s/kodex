@@ -75,6 +75,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if err := repository.refreshMemoryReceipt(ctx, tx, scope, &result); err != nil {
 			return command.Result{}, err
 		}
+		if err := repository.refreshSkillReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
 			if err := repository.applyResultActionPermissions(ctx, tx, scope, &result, ""); err != nil {
 				return command.Result{}, err
@@ -226,6 +229,12 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	switch input.Kind {
 	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
 		return repository.changeMemoryRecord(ctx, tx, scope, input)
+	case command.CreateSkillBundleDraft, command.SaveSkillBundleDraft:
+		return repository.saveSkillDraft(ctx, tx, scope, input)
+	case command.ValidateSkillBundleDraft:
+		return repository.validateSkillDraft(ctx, tx, scope, input)
+	case command.ReviewSkillBundleDraft, command.PublishSkillBundleDraft, command.DiscardSkillBundleDraft, command.ArchiveSkillBundle, command.RestoreSkillBundle, command.PurgeSkillBundle:
+		return repository.transitionSkillBundle(ctx, tx, scope, input)
 	case command.CompleteOnboarding:
 		return repository.completeOnboarding(ctx, tx, scope)
 	case command.CreateProject:

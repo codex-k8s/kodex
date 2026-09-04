@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -41,6 +42,7 @@ type Repository struct {
 	providerCredential     ProviderCredentialConfig
 	roleImages             RoleImageConfig
 	objects                objectstorage.Store
+	skillScanner           skillpolicy.Scanner
 	integrationDefinitions map[string]integrationpackage.Package
 	runtimeSecretNamespace string
 }

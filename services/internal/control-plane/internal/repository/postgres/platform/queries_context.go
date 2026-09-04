@@ -3,6 +3,36 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/skill_bundle_list.sql
+	querySkillBundleList string
+	//go:embed sql/skill_revision_list.sql
+	querySkillRevisionList string
+	//go:embed sql/skill_revision_transition.sql
+	querySkillRevisionTransition string
+	//go:embed sql/skill_bundle_transition.sql
+	querySkillBundleTransition string
+	//go:embed sql/skill_bundle_disable_bindings.sql
+	querySkillBundleDisableBindings string
+	//go:embed sql/skill_bundle_purge.sql
+	querySkillBundlePurge string
+	//go:embed sql/skill_artifact_content.sql
+	querySkillArtifactContent string
+	//go:embed sql/skill_revision_validate.sql
+	querySkillRevisionValidate string
+	//go:embed sql/skill_bundle_get.sql
+	querySkillBundleGet string
+	//go:embed sql/skill_bundle_insert.sql
+	querySkillBundleInsert string
+	//go:embed sql/skill_bundle_lock.sql
+	querySkillBundleLock string
+	//go:embed sql/skill_revision_insert.sql
+	querySkillRevisionInsert string
+	//go:embed sql/skill_revision_save.sql
+	querySkillRevisionSave string
+	//go:embed sql/skill_bundle_set_draft.sql
+	querySkillBundleSetDraft string
+	//go:embed sql/skill_artifact_get.sql
+	querySkillArtifactGet string
 	//go:embed sql/memory_revision_get.sql
 	queryMemoryRevisionGet string
 	//go:embed sql/memory_record_list.sql
