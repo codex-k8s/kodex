@@ -72,6 +72,16 @@ func IsUnexpectedCode(code codes.Code) bool {
 	}
 }
 
+func normalizeContextError(ctx context.Context, err error) error {
+	if err == nil || !IsUnexpectedCode(status.Code(err)) {
+		return err
+	}
+	if contextErr := ctx.Err(); contextErr != nil {
+		return status.FromContextError(contextErr).Err()
+	}
+	return err
+}
+
 // ErrorBoundary перехватывает panic и уведомляет о неожиданных ошибках один раз.
 func ErrorBoundary(observer ErrorObserver) grpc.UnaryServerInterceptor {
 	return func(
@@ -94,6 +104,7 @@ func ErrorBoundary(observer ErrorObserver) grpc.UnaryServerInterceptor {
 			}
 		}()
 		response, err = handler(ctx, request)
+		err = normalizeContextError(ctx, err)
 		if err != nil {
 			code := status.Code(err)
 			if observer != nil && IsUnexpectedCode(code) {
@@ -121,6 +132,7 @@ func StreamErrorBoundary(observer ErrorObserver) grpc.StreamServerInterceptor {
 			}
 		}()
 		err = handler(service, stream)
+		err = normalizeContextError(stream.Context(), err)
 		if err != nil {
 			code := status.Code(err)
 			if observer != nil && IsUnexpectedCode(code) {

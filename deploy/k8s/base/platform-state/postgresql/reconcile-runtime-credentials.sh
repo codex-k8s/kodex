@@ -3,6 +3,17 @@ set -eu
 
 PGPASSWORD=$(cat "$PGPASSWORD_FILE")
 export PGPASSWORD
+
+attempt=0
+until pg_isready --timeout=2 >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 90 ]; then
+    echo 'PostgreSQL runtime credential reconciliation readiness timed out' >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 psql --set ON_ERROR_STOP=1 --command "
 DO \$\$
 BEGIN

@@ -161,10 +161,7 @@ describe("assistant workspace store", () => {
     await store.send("Создай сотрудника");
 
     expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
-    expect(appendTurnMock).toHaveBeenCalledWith(
-      "cnv_sales",
-      "Создай сотрудника",
-    );
+    expect(appendTurnMock).toHaveBeenCalledWith(created, "Создай сотрудника");
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
 
@@ -244,6 +241,37 @@ describe("assistant workspace store", () => {
     expect(store.loading).toBe(false);
   });
 
+  it("очищает ошибку истории перед созданием диалога из realtime state", async () => {
+    const created = { ...conversation(), turns: [] };
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockRejectedValue(
+      new TypeError("history unavailable"),
+    );
+    const store = useAssistantStore();
+
+    await store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+
+    expect(store.assistant?.runtimeState).toBe("READY");
+    expect(store.assistant?.nextActions).toContain("CREATE_CONVERSATION");
+    expect(store.problem).toMatchObject({
+      code: "UNKNOWN",
+      kind: "unavailable",
+    });
+
+    let problemDuringMutation: AppProblem | undefined;
+    createConversationMock.mockImplementation(() => {
+      problemDuringMutation = store.problem;
+      return Promise.resolve(created);
+    });
+
+    await store.startConversation();
+
+    expect(problemDuringMutation).toBeUndefined();
+    expect(store.problem).toBeUndefined();
+    expect(store.selectedRef).toBe(created.ref);
+  });
+
   it("передаёт finalized AttachmentSet в сообщение помощнику", async () => {
     const initial = conversation();
     appendTurnMock.mockResolvedValue({
@@ -259,7 +287,7 @@ describe("assistant workspace store", () => {
     await store.send("Изучи вложения", "aset_contracts");
 
     expect(appendTurnMock).toHaveBeenCalledWith(
-      "cnv_sales",
+      initial,
       "Изучи вложения",
       "aset_contracts",
     );

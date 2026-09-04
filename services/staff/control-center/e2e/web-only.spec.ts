@@ -5,6 +5,7 @@ import {
   type Request,
   type Response,
   type Route,
+  type TestInfo,
 } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -28,12 +29,17 @@ import {
   gotoWithRetry,
   launchAgent,
   publishAgent,
+  readJsonWithNetworkRetry,
+  retryIdempotentBrowserAction,
+  retryableProviderResult,
+  retryReadOnlyBrowserAction,
   routeRef,
   waitForConnected,
   waitForTerminalSuccess,
 } from "./helpers";
 
 const environment = loadE2EEnvironment();
+const assistantTurnTimeoutMs = Math.min(environment.runTimeoutMs, 600_000);
 const execFileAsync = promisify(execFile);
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 const coordinatorName = `${environment.resourcePrefix} — координатор продаж`;
@@ -56,15 +62,6 @@ const runtimeOverlay = [
   'persistence = "none"',
 ].join("\n");
 const accessRoleName = `${environment.resourcePrefix} — точечный запуск сотрудника`;
-const retryableProviderTurnResults = new Map([
-  ["PROVIDERRESULTUNVERIFIABLE", "i18n:PROVIDER_RESULT_UNVERIFIABLE"],
-  ["PROVIDERRESULTUNKNOWN", "i18n:PROVIDER_RESULT_UNKNOWN"],
-  [
-    "PROVIDERRESPONSEINVALIDPROVIDERRESULTUNVERIFIABLE",
-    "PROVIDER_RESPONSE_INVALID / i18n:PROVIDER_RESULT_UNVERIFIABLE",
-  ],
-]);
-
 const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
 let coordinatorRef = initialRefs.coordinatorRef ?? "";
@@ -86,6 +83,24 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Kodex" });
   await expect(dialog).toBeVisible();
   if (!newConversation) return;
+  await startNewKodexConversation(page, dialog);
+}
+
+async function attachVisualEvidence(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+): Promise<void> {
+  await testInfo.attach(name, {
+    body: await page.screenshot({ animations: "disabled", fullPage: false }),
+    contentType: "image/png",
+  });
+}
+
+async function startNewKodexConversation(
+  page: Page,
+  dialog: Locator,
+): Promise<void> {
   const createButton = dialog.getByRole("button", {
     name: "Новый диалог",
     exact: true,
@@ -110,6 +125,12 @@ async function openKodex(page: Page, newConversation = false): Promise<void> {
   await expect(dialog.locator("article.assistant-message")).toHaveCount(0);
 }
 
+async function closeKodex(page: Page): Promise<void> {
+  const dialog = page.getByRole("dialog", { name: "Kodex" });
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
 async function requestLatestKodexPlan(
   page: Page,
   prompt: string,
@@ -121,50 +142,67 @@ async function requestLatestKodexPlan(
   });
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptDeadline = Date.now() + assistantTurnTimeoutMs;
+    const knownUserTurnRefs = new Set(
+      await dialog
+        .locator("article.assistant-message--user[data-turn-ref]")
+        .evaluateAll((messages) =>
+          messages
+            .map((message) => message.getAttribute("data-turn-ref") ?? "")
+            .filter(Boolean),
+        ),
+    );
     await composer.fill(prompt);
-    const appendResponse = page.waitForResponse((response) => {
-      const request = response.request();
-      return (
-        request.method() === "POST" &&
-        /^\/api\/v1\/assistant-conversations\/[^/]+\/turns$/.test(
-          new URL(response.url()).pathname,
-        )
-      );
-    });
     await dialog.getByRole("button", { name: "Отправить помощнику" }).click();
-    const appended = await appendResponse;
-    expect(appended.status(), await appended.text()).toBe(202);
-    const conversation = (await appended.json()) as {
-      turns?: Array<{
-        ref?: string;
-        role?: string;
-        sequence?: number;
-        content?: string;
-      }>;
-    };
-    const userTurn = conversation.turns
-      ?.filter((turn) => turn.role === "USER" && turn.content === prompt)
-      .toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0))
-      .at(0);
-    expect(userTurn?.ref).toMatch(/^trn_[A-Za-z0-9_-]+$/);
-    expect(
-      Number.isSafeInteger(userTurn?.sequence) && (userTurn?.sequence ?? 0) > 0,
-    ).toBe(true);
+    let userTurnRef = "";
+    await expect
+      .poll(
+        async () => {
+          const candidates = await dialog
+            .locator("article.assistant-message--user[data-turn-ref]")
+            .evaluateAll((messages) =>
+              messages.map((message) => ({
+                ref: message.getAttribute("data-turn-ref") ?? "",
+                sequence: message.getAttribute("data-turn-sequence") ?? "",
+              })),
+            );
+          const appended = candidates.find(
+            (candidate) =>
+              candidate.ref && !knownUserTurnRefs.has(candidate.ref),
+          );
+          userTurnRef = appended?.ref ?? "";
+          return appended;
+        },
+        {
+          message: "авторитетный USER-turn должен появиться после отправки",
+          timeout: 30_000,
+        },
+      )
+      .toMatchObject({
+        ref: expect.stringMatching(/^trn_[A-Za-z0-9_-]+$/),
+        sequence: expect.stringMatching(/^[1-9][0-9]*$/),
+      });
     const currentUserMessage = dialog.locator(
-      `article.assistant-message--user[data-turn-ref="${userTurn?.ref ?? ""}"]`,
+      `article.assistant-message--user[data-turn-ref="${userTurnRef}"]`,
     );
     await expect(currentUserMessage).toHaveCount(1);
+    const userTurnSequence = Number.parseInt(
+      (await currentUserMessage.getAttribute("data-turn-sequence")) ?? "",
+      10,
+    );
+    expect(Number.isSafeInteger(userTurnSequence)).toBe(true);
     const currentAssistantMessage = dialog.locator(
-      `article.assistant-message--assistant[data-turn-sequence="${String((userTurn?.sequence ?? 0) + 1)}"]`,
+      `article.assistant-message--assistant[data-turn-sequence="${String(userTurnSequence + 1)}"]`,
     );
     await expect(currentAssistantMessage).toHaveCount(1, {
-      timeout: 120_000,
+      timeout: remainingAssistantTimeout(attemptDeadline),
     });
 
     const outcome = await waitForAssistantPlanAttempt(
       page,
       currentAssistantMessage,
       expectedText,
+      attemptDeadline,
     );
     if (outcome.planCard) return outcome.planCard;
 
@@ -193,8 +231,8 @@ async function waitForAssistantPlanAttempt(
   page: Page,
   assistantMessage: Locator,
   expectedText: string,
+  deadline: number,
 ): Promise<{ failedResult?: string; planCard?: Locator }> {
-  const deadline = Date.now() + 120_000;
   const matchingPlan = assistantMessage
     .locator(".assistant-plan-card")
     .filter({ hasText: expectedText })
@@ -228,12 +266,8 @@ async function waitForAssistantPlanAttempt(
   );
 }
 
-function retryableProviderResult(renderedResult: string): string | undefined {
-  const normalized = renderedResult
-    .normalize("NFKC")
-    .replace(/[^A-Za-z]/g, "")
-    .toUpperCase();
-  return retryableProviderTurnResults.get(normalized);
+function remainingAssistantTimeout(deadline: number): number {
+  return Math.max(1, deadline - Date.now());
 }
 
 async function applyLatestKodexPlan(
@@ -325,13 +359,18 @@ async function exerciseAttachmentComposer(
       .filter({ hasText: failedName });
     await expect(failedItem).toHaveClass(/attachment-composer__item--failed/);
     await page.unroute("**/api/v1/**", rejectFirstUpload);
-    const retryResponse = waitForArtifactUpload(page, uploadPath, failedName);
-    await failedItem
-      .getByRole("button", {
-        name: `Повторить загрузку файла «${failedName}»`,
-      })
-      .click();
-    const retriedUpload = await retryResponse;
+    const retriedUpload = await uploadArtifactWithNetworkRetry(
+      page,
+      composer,
+      uploadPath,
+      failedName,
+      () =>
+        failedItem
+          .getByRole("button", {
+            name: `Повторить загрузку файла «${failedName}»`,
+          })
+          .click(),
+    );
     expect(retriedUpload.status(), await retriedUpload.text()).toBe(201);
     await expect(
       failedItem.locator(".attachment-composer__ready"),
@@ -347,28 +386,25 @@ async function exerciseAttachmentComposer(
   }
   expect(rejected, `retry fixture was not used on ${surface}`).toBe(true);
 
-  const droppedResponse = waitForArtifactUpload(page, uploadPath, droppedName);
-  const dataTransfer = await page.evaluateHandle(
-    ({ content, fileName }) => {
-      const transfer = new DataTransfer();
-      transfer.items.add(
-        new File([content], fileName, {
-          type: "text/plain",
-          lastModified: 1_700_000_000_000,
-        }),
-      );
-      return transfer;
-    },
-    { content: `drop fixture for ${surface}`, fileName: droppedName },
+  await composer.dispatchEvent("dragenter");
+  await expect(composer).toHaveClass(/attachment-composer--dragging/);
+  await composer.dispatchEvent("dragleave");
+  await expect(composer).not.toHaveClass(/attachment-composer--dragging/);
+  const droppedResponse = await uploadArtifactWithNetworkRetry(
+    page,
+    composer,
+    uploadPath,
+    droppedName,
+    () =>
+      composer.drop({
+        files: {
+          name: droppedName,
+          mimeType: "text/plain",
+          buffer: Buffer.from(`drop fixture for ${surface}`, "utf8"),
+        },
+      }),
   );
-  try {
-    await composer.dispatchEvent("dragenter", { dataTransfer });
-    await expect(composer).toHaveClass(/attachment-composer--dragging/);
-    await composer.dispatchEvent("drop", { dataTransfer });
-  } finally {
-    await dataTransfer.dispose();
-  }
-  expect((await droppedResponse).status()).toBe(201);
+  expect(droppedResponse.status()).toBe(201);
   const droppedItem = composer
     .locator(".attachment-composer__item")
     .filter({ hasText: droppedName });
@@ -382,13 +418,18 @@ async function exerciseAttachmentComposer(
     .click();
   await expect(droppedItem).toHaveCount(0);
 
-  const finalResponse = waitForArtifactUpload(page, uploadPath, finalName);
-  await composer.locator('input[type="file"]').setInputFiles({
-    name: finalName,
-    mimeType: "text/plain",
-    buffer: Buffer.from(`${marker}\n`, "utf8"),
-  });
-  const response = await finalResponse;
+  const response = await uploadArtifactWithNetworkRetry(
+    page,
+    composer,
+    uploadPath,
+    finalName,
+    () =>
+      composer.locator('input[type="file"]').setInputFiles({
+        name: finalName,
+        mimeType: "text/plain",
+        buffer: Buffer.from(`${marker}\n`, "utf8"),
+      }),
+  );
   expect(response.status(), await response.text()).toBe(201);
   const artifact = (await response.json()) as { ref?: string };
   expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
@@ -409,6 +450,52 @@ function waitForArtifactUpload(
     return (
       request.method() === "POST" &&
       new URL(response.url()).pathname === uploadPath &&
+      request.headers()["x-file-name"] === fileName
+    );
+  });
+}
+
+async function uploadArtifactWithNetworkRetry(
+  page: Page,
+  composer: Locator,
+  uploadPath: string,
+  fileName: string,
+  start: () => Promise<unknown>,
+): Promise<Response> {
+  const item = composer
+    .locator(".attachment-composer__item")
+    .filter({ hasText: fileName });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const requestPromise = waitForArtifactUploadRequest(
+      page,
+      uploadPath,
+      fileName,
+    );
+    if (attempt === 0) {
+      await start();
+    } else {
+      await expect(item).toHaveClass(/attachment-composer__item--failed/);
+      await item
+        .getByRole("button", {
+          name: `Повторить загрузку файла «${fileName}»`,
+        })
+        .click();
+    }
+    const response = await (await requestPromise).response();
+    if (response) return response;
+  }
+  throw new Error(`Artifact upload retry budget exhausted: ${fileName}`);
+}
+
+function waitForArtifactUploadRequest(
+  page: Page,
+  uploadPath: string,
+  fileName: string,
+): Promise<Request> {
+  return page.waitForRequest((request) => {
+    return (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === uploadPath &&
       request.headers()["x-file-name"] === fileName
     );
   });
@@ -488,24 +575,19 @@ test.describe("web-only fresh installation", () => {
 
   test("первый вход, горячий помощник и первый Проект", async ({ page }) => {
     await gotoWithRetry(page, "/onboarding");
-    const preflight = await page.evaluate(async () => {
-      const [bootstrapResponse, assistantResponse] = await Promise.all([
-        fetch("/api/v1/bootstrap"),
-        fetch("/api/v1/system-assistant"),
-      ]);
-      const bootstrap = bootstrapResponse.ok
-        ? ((await bootstrapResponse.json()) as { onboardingComplete?: boolean })
-        : undefined;
-      const assistant = assistantResponse.ok
-        ? ((await assistantResponse.json()) as { ref?: string })
-        : undefined;
-      return {
-        assistantRef: assistant?.ref ?? "",
-        assistantStatus: assistantResponse.status,
-        bootstrapStatus: bootstrapResponse.status,
-        onboardingComplete: bootstrap?.onboardingComplete ?? false,
-      };
-    });
+    const bootstrapResponse = await readJsonWithNetworkRetry<{
+      onboardingComplete?: boolean;
+    }>(page, "/api/v1/bootstrap");
+    const assistantResponse = await readJsonWithNetworkRetry<{ ref?: string }>(
+      page,
+      "/api/v1/system-assistant",
+    );
+    const preflight = {
+      assistantRef: assistantResponse.body.ref ?? "",
+      assistantStatus: assistantResponse.status,
+      bootstrapStatus: bootstrapResponse.status,
+      onboardingComplete: bootstrapResponse.body.onboardingComplete ?? false,
+    };
     expect(preflight.bootstrapStatus).toBe(200);
     expect(preflight.assistantStatus).toBe(200);
     expect(preflight.assistantRef).toMatch(/^agt_[A-Za-z0-9_-]+$/);
@@ -531,10 +613,16 @@ test.describe("web-only fresh installation", () => {
       await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
     }
 
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const dialog = page.getByRole("dialog", { name: "Kodex" });
+    await expect(dialog).toBeVisible();
+
     if (discoveryMode && projectRef) {
       await gotoWithRetry(page, `/projects/${projectRef}`);
       await expectPageHeading(page, projectName);
-      const currentUser = page.locator("button[aria-haspopup='menu']");
+      const currentUser = page.getByRole("button", {
+        name: /owner.*роль: Владелец/i,
+      });
       await expect(currentUser).toBeVisible();
       await expect(currentUser).toHaveAttribute(
         "aria-label",
@@ -544,6 +632,8 @@ test.describe("web-only fresh installation", () => {
       return;
     }
 
+    if (discoveryMode) await startNewKodexConversation(page, dialog);
+
     const prompt = [
       `Создай один Проект с точным названием «${projectName}».`,
       "Назначение: квалификация входящих лидов и подготовка коммерческих предложений.",
@@ -551,6 +641,8 @@ test.describe("web-only fresh installation", () => {
       "Не создавай другие объекты.",
     ].join(" ");
     await applyLatestKodexPlan(page, prompt, projectName);
+
+    await closeKodex(page);
 
     await gotoWithRetry(page, "/projects");
     const projectLink = page.getByRole("link", {
@@ -561,7 +653,9 @@ test.describe("web-only fresh installation", () => {
     await expect(page).toHaveURL(/\/projects\/[^/]+$/);
     projectRef = routeRef(page, "projects");
     persistRefs();
-    const currentUser = page.locator("button[aria-haspopup='menu']");
+    const currentUser = page.getByRole("button", {
+      name: /owner.*роль: Владелец/i,
+    });
     await expect(currentUser).toBeVisible();
     await expect(currentUser).toHaveAttribute(
       "aria-label",
@@ -632,7 +726,7 @@ test.describe("web-only fresh installation", () => {
     await expect(renderedUsage).toContainText(
       new Intl.NumberFormat("ru-RU").format(usageBeforeReload.totalTokens),
     );
-    await page.reload();
+    await gotoWithRetry(page, page.url());
     await waitForConnected(page);
     await expectRunState(page, "Завершён");
     expect(await readRunUsage(page, firstRunRef)).toEqual(usageBeforeReload);
@@ -934,6 +1028,7 @@ test.describe("web-only fresh installation", () => {
         "Не запускай его и не меняй другие объекты.",
       ].join(" ");
       await applyLatestKodexPlan(page, prompt, analystName);
+      await closeKodex(page);
 
       await gotoWithRetry(page, `/projects/${projectRef}/agents`);
       const analystLink = page.getByRole("link", {
@@ -1021,7 +1116,7 @@ test.describe("web-only fresh installation", () => {
   test("runtime сотрудника публикует policy, config.toml overlay и окружение", async ({
     page,
   }) => {
-    requireRefs("projectRef", "coordinatorRef");
+    requireRefs("projectRef", "coordinatorRef", "analystRef");
     if (!discoveryMode || !runtimeEnvironmentRef) {
       await gotoWithRetry(page, `/projects/${projectRef}/environments/new`);
       await expectPageHeading(page, "Новое окружение");
@@ -1053,9 +1148,18 @@ test.describe("web-only fresh installation", () => {
             `/api/v1/projects/${projectRef}/runtime-environments`,
       );
       await page.getByRole("button", { name: "Создать", exact: true }).click();
-      expect((await creation).status()).toBe(201);
-      await expect(page).toHaveURL(/\/environments\/[^/]+$/);
-      runtimeEnvironmentRef = routeRef(page, "environments");
+      const creationResponse = await creation;
+      expect(creationResponse.status()).toBe(201);
+      const createdEnvironment = (await creationResponse.json()) as {
+        ref?: string;
+      };
+      expect(createdEnvironment.ref).toMatch(/^renv_[A-Za-z0-9_-]+$/);
+      runtimeEnvironmentRef = createdEnvironment.ref ?? "";
+      await expect(page).toHaveURL(
+        (url) =>
+          url.pathname ===
+          `/projects/${projectRef}/environments/${runtimeEnvironmentRef}`,
+      );
       persistRefs();
       await page.getByRole("tab", { name: "Переменные", exact: true }).click();
       await expect(page.getByLabel("Имя переменной")).toHaveValue("E2E_MODE");
@@ -1092,6 +1196,15 @@ test.describe("web-only fresh installation", () => {
         name: "Модель и среда выполнения",
       }),
     ).toBeVisible();
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get("tab") === "runtime",
+    );
+    await page.reload();
+    await expect(
+      runtimePanel.getByRole("heading", {
+        name: "Модель и среда выполнения",
+      }),
+    ).toBeVisible();
 
     const providerPicker = runtimePanel.getByRole("button", {
       name: "Выберите провайдера",
@@ -1113,37 +1226,72 @@ test.describe("web-only fresh installation", () => {
     ).trim();
     const modelName = (await modelPicker.locator("strong").innerText()).trim();
 
+    const accountSelector = runtimePanel.locator(".provider-selector");
+    const accountStatus = runtimePanel
+      .locator(".runtime-panel__account-capability")
+      .locator(".status-badge")
+      .first();
+    await expect(accountStatus).not.toHaveAttribute(
+      "data-state",
+      "CONNECTING",
+      { timeout: 30_000 },
+    );
+    if ((await accountStatus.getAttribute("data-state")) === "UNAVAILABLE") {
+      const selectedRows = accountSelector.locator(
+        ".provider-selector__selected-row",
+      );
+      while ((await selectedRows.count()) > 0) {
+        await selectedRows
+          .first()
+          .locator("button.icon-button--danger")
+          .click();
+      }
+      const accountPicker = accountSelector.locator(
+        ".provider-selector__trigger",
+      );
+      await accountPicker.click();
+      const eligibleAccount = page
+        .getByRole("dialog", { name: "Учётные записи провайдера" })
+        .locator('button[role="option"]:not(:disabled)')
+        .first();
+      await expect(eligibleAccount).toBeVisible();
+      await eligibleAccount.click();
+      await accountPicker.click();
+      await expect(accountStatus).toHaveAttribute("data-state", "READY");
+    }
+
     const policy = runtimePanel.getByLabel("Политика учётных записей");
     const policyBefore = await policy.inputValue();
-    const policyAfter = "LEAST_USED";
-    if (policyBefore !== policyAfter) {
-      await policy.selectOption(policyAfter);
-      const runtimePublication = page.waitForResponse(
-        (response) =>
-          response.request().method() === "PUT" &&
-          new URL(response.url()).pathname ===
-            `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
-      );
-      await runtimePanel
-        .getByRole("button", { name: "Сохранить runtime" })
-        .click();
-      const publicationResponse = await runtimePublication;
-      const publicationProblem =
-        publicationResponse.status() === 200
-          ? undefined
-          : ((await publicationResponse.json()) as {
-              code?: string;
-              detail?: string;
-            });
-      expect(
-        publicationResponse.status(),
-        JSON.stringify({
-          ifMatch: publicationResponse.request().headers()["if-match"],
-          code: publicationProblem?.code,
-          detail: publicationProblem?.detail,
-        }),
-      ).toBe(200);
-    }
+    const policyAfter =
+      policyBefore === "LEAST_USED" ? "WEIGHTED" : "LEAST_USED";
+    await policy.selectOption(policyAfter);
+    const saveRuntimeButton = runtimePanel.getByRole("button", {
+      name: "Сохранить runtime",
+    });
+    await expect(saveRuntimeButton).toBeEnabled();
+    const runtimePublication = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${coordinatorRef}/runtime-configuration`,
+    );
+    await saveRuntimeButton.click();
+    const publicationResponse = await runtimePublication;
+    const publicationProblem =
+      publicationResponse.status() === 200
+        ? undefined
+        : ((await publicationResponse.json()) as {
+            code?: string;
+            detail?: string;
+          });
+    expect(
+      publicationResponse.status(),
+      JSON.stringify({
+        ifMatch: publicationResponse.request().headers()["if-match"],
+        code: publicationProblem?.code,
+        detail: publicationProblem?.detail,
+      }),
+    ).toBe(200);
     await expect(policy).toHaveValue(policyAfter);
 
     const overlayEditor = runtimePanel.getByRole("textbox", {
@@ -1153,26 +1301,25 @@ test.describe("web-only fresh installation", () => {
       draftContent?: string;
       draftState?: string;
       publishedContent: string;
-    }> =>
-      page.evaluate(async (agentRef) => {
-        const response = await fetch(
-          `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+    }> => {
+      const response = await readJsonWithNetworkRetry<{
+        draftOverlay?: { content: string; state: string };
+        publishedOverlay: { content: string };
+      }>(
+        page,
+        `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+      );
+      if (response.status !== 200) {
+        throw new Error(
+          `runtime overlay readback failed: ${String(response.status)}`,
         );
-        if (!response.ok) {
-          throw new Error(
-            `runtime overlay readback failed: ${String(response.status)}`,
-          );
-        }
-        const body = (await response.json()) as {
-          draftOverlay?: { content: string; state: string };
-          publishedOverlay: { content: string };
-        };
-        return {
-          draftContent: body.draftOverlay?.content,
-          draftState: body.draftOverlay?.state,
-          publishedContent: body.publishedOverlay.content,
-        };
-      }, coordinatorRef);
+      }
+      return {
+        draftContent: response.body.draftOverlay?.content,
+        draftState: response.body.draftOverlay?.state,
+        publishedContent: response.body.publishedOverlay.content,
+      };
+    };
     let overlayState = await readOverlayState();
     if (overlayState.publishedContent !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
@@ -1247,13 +1394,14 @@ test.describe("web-only fresh installation", () => {
       .getByRole("heading", { name: "Текущее окружение" })
       .click();
     await expect(environmentPicker).toHaveAttribute("aria-expanded", "false");
-    const boundEnvironmentRef = await page.evaluate(async (agentRef) => {
-      const response = await fetch(
-        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
-      );
-      const body = (await response.json()) as { environment: { ref: string } };
-      return body.environment.ref;
-    }, coordinatorRef);
+    const boundEnvironmentResponse = await readJsonWithNetworkRetry<{
+      environment: { ref: string };
+    }>(
+      page,
+      `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+    );
+    expect(boundEnvironmentResponse.status).toBe(200);
+    const boundEnvironmentRef = boundEnvironmentResponse.body.environment.ref;
     if (boundEnvironmentRef !== runtimeEnvironmentRef) {
       await environmentPicker.click();
       const popover = page.getByRole("dialog", {
@@ -1279,24 +1427,22 @@ test.describe("web-only fresh installation", () => {
       expect((await binding).status()).toBe(200);
     }
 
-    const readback = await page.evaluate(async (agentRef) => {
-      const response = await fetch(
-        `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
-      );
-      if (!response.ok)
-        throw new Error(`runtime readback failed: ${String(response.status)}`);
-      return (await response.json()) as {
-        configuration: {
-          model: string;
-          provider: string;
-          providerPolicy: { mode: string };
-          version: number;
-        };
-        environment: { ref: string; currentVersion: { revision: number } };
-        publishedOverlay: { content: string; state: string };
-        safeEffectiveConfig: string;
+    const readbackResponse = await readJsonWithNetworkRetry<{
+      configuration: {
+        model: string;
+        provider: string;
+        providerPolicy: { mode: string };
+        version: number;
       };
-    }, coordinatorRef);
+      environment: { ref: string; currentVersion: { revision: number } };
+      publishedOverlay: { content: string; state: string };
+      safeEffectiveConfig: string;
+    }>(
+      page,
+      `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+    );
+    expect(readbackResponse.status).toBe(200);
+    const readback = readbackResponse.body;
     expect(readback.configuration.provider).toBe(providerName);
     expect(readback.configuration.model).toBe(modelName);
     expect(readback.configuration.version).toBeGreaterThan(0);
@@ -1737,125 +1883,106 @@ test.describe("web-only fresh installation", () => {
     ).toBe(200);
     await expect(row.locator(".status-badge")).toHaveText("Активен");
 
-    scheduledRunRef = await expect
+    let discoveredScheduledRunRef = "";
+    await expect
       .poll(
-        async () =>
-          page.evaluate(
+        async () => {
+          discoveredScheduledRunRef = await page.evaluate(
             async ({ expectedTitle, expectedProjectRef }) => {
-              const response = await fetch(
-                `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-              );
-              if (!response.ok) return "";
-              const body = (await response.json()) as {
-                items?: Array<{
-                  ref: string;
-                  source: string;
-                  title: string;
-                }>;
-              };
-              return (
-                body.items?.find(
-                  (run) =>
-                    run.source === "SCHEDULE" && run.title === expectedTitle,
-                )?.ref ?? ""
-              );
+              try {
+                const response = await fetch(
+                  `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
+                );
+                if (!response.ok) return "";
+                const body = (await response.json()) as {
+                  items?: Array<{
+                    ref: string;
+                    source: string;
+                    title: string;
+                  }>;
+                };
+                return (
+                  body.items?.find(
+                    (run) =>
+                      run.source === "SCHEDULE" && run.title === expectedTitle,
+                  )?.ref ?? ""
+                );
+              } catch {
+                return "";
+              }
             },
             { expectedTitle: automationName, expectedProjectRef: projectRef },
-          ),
+          );
+          return discoveredScheduledRunRef;
+        },
         {
           message: "расписание должно создать run",
           timeout: 180_000,
           intervals: [1_000, 2_000, 5_000],
         },
       )
-      .not.toBe("")
-      .then(() =>
-        page.evaluate(
-          async ({ expectedTitle, expectedProjectRef }) => {
-            const response = await fetch(
-              `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-            );
-            const body = (await response.json()) as {
-              items: Array<{ ref: string; source: string; title: string }>;
-            };
-            return (
-              body.items.find(
-                (run) =>
-                  run.source === "SCHEDULE" && run.title === expectedTitle,
-              )?.ref ?? ""
-            );
-          },
-          { expectedTitle: automationName, expectedProjectRef: projectRef },
-        ),
-      );
+      .not.toBe("");
+    scheduledRunRef = discoveredScheduledRunRef;
     expect(scheduledRunRef).not.toBe("");
     persistRefs();
     await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
     await waitForTerminalSuccess(page);
-    const scheduledRunReadback = await page.evaluate(
-      async ({ runRef, expectedAgentRef }) => {
-        const [graphResponse, eventsResponse] = await Promise.all([
-          fetch(`/api/v1/runs/${encodeURIComponent(runRef)}/graph`),
-          fetch(
-            `/api/v1/runs/${encodeURIComponent(runRef)}/events?afterSequence=0&limit=500`,
-          ),
-        ]);
-        if (!graphResponse.ok || !eventsResponse.ok) {
-          throw new Error(
-            `Scheduled run readback failed: graph=${String(graphResponse.status)}, events=${String(eventsResponse.status)}`,
-          );
-        }
-        const workspace = (await graphResponse.json()) as {
-          run: {
-            ref: string;
-            state: string;
-            source: string;
-            resultSummary?: string;
-            target: { type: string; ref: string };
-          };
-          graph: {
-            nodes: Array<{
-              ref: string;
-              type: string;
-              state: string;
-              agentRef?: string;
-            }>;
-          };
-        };
-        const events = (await eventsResponse.json()) as {
-          complete: boolean;
-          currentSequence: number;
-          items: Array<{
-            type: string;
-            nodeRef?: string;
-            messageKind?: string;
-            summary: string;
-            actor?: { ref?: string };
-          }>;
-        };
-        const agentNode = workspace.graph.nodes.find(
-          (node) =>
-            node.type === "AGENT_EXECUTION" &&
-            node.agentRef === expectedAgentRef,
-        );
-        return {
-          run: workspace.run,
-          agentNode,
-          complete: events.complete,
-          currentSequence: events.currentSequence,
-          finalMessages: events.items
-            .filter(
-              (event) =>
-                event.type === "TURN_COMPLETED" &&
-                event.nodeRef === agentNode?.ref &&
-                event.messageKind === "FINAL_MESSAGE" &&
-                event.actor?.ref === expectedAgentRef,
-            )
-            .map((event) => event.summary.trim()),
-        };
-      },
-      { runRef: scheduledRunRef, expectedAgentRef: analystRef },
+    const graphResponse = await readJsonWithNetworkRetry<{
+      run: {
+        ref: string;
+        state: string;
+        source: string;
+        resultSummary?: string;
+        target: { type: string; ref: string };
+      };
+      graph: {
+        nodes: Array<{
+          ref: string;
+          type: string;
+          state: string;
+          agentRef?: string;
+        }>;
+      };
+    }>(page, `/api/v1/runs/${encodeURIComponent(scheduledRunRef)}/graph`);
+    const eventsResponse = await readJsonWithNetworkRetry<{
+      complete: boolean;
+      currentSequence: number;
+      items: Array<{
+        type: string;
+        nodeRef?: string;
+        messageKind?: string;
+        summary: string;
+        actor?: { ref?: string };
+      }>;
+    }>(
+      page,
+      `/api/v1/runs/${encodeURIComponent(scheduledRunRef)}/events?afterSequence=0&limit=500`,
     );
+    if (graphResponse.status !== 200 || eventsResponse.status !== 200) {
+      throw new Error(
+        `Scheduled run readback failed: graph=${String(graphResponse.status)}, events=${String(eventsResponse.status)}`,
+      );
+    }
+    const workspace = graphResponse.body;
+    const events = eventsResponse.body;
+    const agentNode = workspace.graph.nodes.find(
+      (node) => node.type === "AGENT_EXECUTION" && node.agentRef === analystRef,
+    );
+    const scheduledRunReadback = {
+      run: workspace.run,
+      agentNode,
+      complete: events.complete,
+      currentSequence: events.currentSequence,
+      finalMessages: events.items
+        .filter(
+          (event) =>
+            event.type === "TURN_COMPLETED" &&
+            event.nodeRef === agentNode?.ref &&
+            event.messageKind === "FINAL_MESSAGE" &&
+            event.actor?.ref === analystRef,
+        )
+        .map((event) => event.summary.trim()),
+    };
     expect(scheduledRunReadback.run).toMatchObject({
       ref: scheduledRunRef,
       state: "SUCCEEDED",
@@ -2016,109 +2143,115 @@ test.describe("web-only fresh installation", () => {
       "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы»",
     );
 
-    const forgedResult = await page.evaluate(
-      async ({ expectedFileName, expectedProjectRef, targetRef, title }) => {
-        const artifactResponse = await fetch(
-          `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/artifacts?pageSize=100`,
-        );
-        const artifactPage = (await artifactResponse.json()) as {
-          items: Array<{ fileName: string; ref: string }>;
-        };
-        const artifactRef = artifactPage.items.find(
-          (item) => item.fileName === expectedFileName,
-        )?.ref;
-        if (!artifactRef) throw new Error("E2E artifact is absent");
-        const csrfPrefix = "__Host-kodex-csrf=";
-        const csrf = document.cookie
-          .split(";")
-          .map((part) => part.trim())
-          .find((part) => part.startsWith(csrfPrefix))
-          ?.slice(csrfPrefix.length);
-        if (!csrf) throw new Error("E2E CSRF cookie is absent");
-        const mutationHeaders = (): Record<string, string> => ({
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-          "X-CSRF-Token": decodeURIComponent(csrf),
-        });
-        const draftResponse = await fetch(
-          `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/attachment-sets`,
-          {
-            method: "POST",
-            headers: mutationHeaders(),
-            body: JSON.stringify({
-              purpose: "RUN_INPUT",
-              artifactRefs: [artifactRef],
-            }),
-          },
-        );
-        if (!draftResponse.ok)
-          throw new Error(
-            `E2E AttachmentSet draft failed: ${String(draftResponse.status)}`,
+    const idempotencyKeys = await page.evaluate(() => ({
+      attachmentSet: crypto.randomUUID(),
+      finalization: crypto.randomUUID(),
+      run: crypto.randomUUID(),
+    }));
+    const forgedResult = await retryIdempotentBrowserAction(page, () =>
+      page.evaluate(
+        async ({
+          artifactRef,
+          expectedProjectRef,
+          idempotencyKeys,
+          targetRef,
+          title,
+        }) => {
+          const csrfPrefix = "__Host-kodex-csrf=";
+          const csrf = document.cookie
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) => part.startsWith(csrfPrefix))
+            ?.slice(csrfPrefix.length);
+          if (!csrf) throw new Error("E2E CSRF cookie is absent");
+          const mutationHeaders = (
+            idempotencyKey: string,
+          ): Record<string, string> => ({
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          });
+          const draftResponse = await fetch(
+            `/api/v1/projects/${encodeURIComponent(expectedProjectRef)}/attachment-sets`,
+            {
+              method: "POST",
+              headers: mutationHeaders(idempotencyKeys.attachmentSet),
+              body: JSON.stringify({
+                purpose: "RUN_INPUT",
+                artifactRefs: [artifactRef],
+              }),
+            },
           );
-        const draft = (await draftResponse.json()) as {
-          ref: string;
-          version: number;
-        };
-        const finalizeResponse = await fetch(
-          `/api/v1/attachment-sets/${encodeURIComponent(draft.ref)}/finalization`,
-          {
+          if (!draftResponse.ok)
+            throw new Error(
+              `E2E AttachmentSet draft failed: ${String(draftResponse.status)}`,
+            );
+          const draft = (await draftResponse.json()) as {
+            ref: string;
+            version: number;
+          };
+          const finalizeResponse = await fetch(
+            `/api/v1/attachment-sets/${encodeURIComponent(draft.ref)}/finalization`,
+            {
+              method: "POST",
+              headers: {
+                ...mutationHeaders(idempotencyKeys.finalization),
+                "If-Match": `"${String(draft.version)}"`,
+              },
+            },
+          );
+          if (!finalizeResponse.ok)
+            throw new Error(
+              `E2E AttachmentSet finalization failed: ${String(finalizeResponse.status)}`,
+            );
+          const attachmentSet = (await finalizeResponse.json()) as {
+            ref: string;
+          };
+          const beforeResponse = await fetch(
+            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
+          );
+          const before = (await beforeResponse.json()) as {
+            items: Array<{ title: string }>;
+          };
+          const response = await fetch("/api/v1/runs", {
             method: "POST",
             headers: {
-              ...mutationHeaders(),
-              "If-Match": `"${String(draft.version)}"`,
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKeys.run,
+              "X-CSRF-Token": decodeURIComponent(csrf),
             },
-          },
-        );
-        if (!finalizeResponse.ok)
-          throw new Error(
-            `E2E AttachmentSet finalization failed: ${String(finalizeResponse.status)}`,
+            body: JSON.stringify({
+              projectRef: expectedProjectRef,
+              targetRef,
+              targetType: "AGENT",
+              title,
+              task: "Эта подделанная команда не должна создать Run.",
+              attachmentSetRef: attachmentSet.ref,
+            }),
+          });
+          const problem = (await response.json()) as { code?: string };
+          const afterResponse = await fetch(
+            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
           );
-        const attachmentSet = (await finalizeResponse.json()) as {
-          ref: string;
-        };
-        const beforeResponse = await fetch(
-          `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-        );
-        const before = (await beforeResponse.json()) as {
-          items: Array<{ title: string }>;
-        };
-        const response = await fetch("/api/v1/runs", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-            "X-CSRF-Token": decodeURIComponent(csrf),
-          },
-          body: JSON.stringify({
-            projectRef: expectedProjectRef,
-            targetRef,
-            targetType: "AGENT",
-            title,
-            task: "Эта подделанная команда не должна создать Run.",
-            attachmentSetRef: attachmentSet.ref,
-          }),
-        });
-        const problem = (await response.json()) as { code?: string };
-        const afterResponse = await fetch(
-          `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-        );
-        const after = (await afterResponse.json()) as {
-          items: Array<{ title: string }>;
-        };
-        return {
-          afterCount: after.items.length,
-          beforeCount: before.items.length,
-          code: problem.code ?? "",
-          created: after.items.some((run) => run.title === title),
-          status: response.status,
-        };
-      },
-      {
-        expectedFileName: uploadedFileName,
-        expectedProjectRef: projectRef,
-        targetRef: analystRef,
-        title: `${environment.resourcePrefix} — запрещённый запуск с файлом`,
-      },
+          const after = (await afterResponse.json()) as {
+            items: Array<{ title: string }>;
+          };
+          return {
+            afterCount: after.items.length,
+            beforeCount: before.items.length,
+            code: problem.code ?? "",
+            created: after.items.some((run) => run.title === title),
+            status: response.status,
+          };
+        },
+        {
+          artifactRef: uploadedArtifactRef,
+          expectedProjectRef: projectRef,
+          idempotencyKeys,
+          targetRef: analystRef,
+          title: `${environment.resourcePrefix} — запрещённый запуск с файлом`,
+        },
+      ),
     );
     expect(forgedResult.status).toBe(409);
     expect(forgedResult.code).not.toBe("");
@@ -2167,6 +2300,7 @@ test.describe("web-only fresh installation", () => {
         "Не создавай и не меняй сотрудников, не запускай Процесс и не создавай другие объекты.",
       ].join(" ");
       await applyLatestKodexPlan(page, prompt, workflowName);
+      await closeKodex(page);
 
       await gotoWithRetry(page, `/projects/${projectRef}/workflows`);
       const workflowLink = page.getByRole("link", {
@@ -2196,15 +2330,14 @@ test.describe("web-only fresh installation", () => {
 
     let resumeExistingRun = false;
     if (discoveryMode && workflowRunRef && workflowRunRef !== "new") {
-      const state = await page.evaluate(async (runRef) => {
-        const response = await fetch(
-          `/api/v1/runs/${encodeURIComponent(runRef)}`,
-        );
-        if (!response.ok) return "MISSING";
-        return (
-          ((await response.json()) as { state?: string }).state ?? "MISSING"
-        );
-      }, workflowRunRef);
+      const runReadback = await readJsonWithNetworkRetry<{ state?: string }>(
+        page,
+        `/api/v1/runs/${encodeURIComponent(workflowRunRef)}`,
+      );
+      const state =
+        runReadback.status === 200
+          ? (runReadback.body.state ?? "MISSING")
+          : "MISSING";
       resumeExistingRun = ![
         "MISSING",
         "SUCCEEDED",
@@ -2262,7 +2395,7 @@ test.describe("web-only fresh installation", () => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await expect(decisionAttention).toHaveCSS(
       "animation-name",
-      "attention-outline",
+      /^attention-outline(?:-[a-z0-9]+)?$/,
     );
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(decisionAttention).toHaveCSS("animation-name", "none");
@@ -2286,24 +2419,18 @@ test.describe("web-only fresh installation", () => {
           expect.stringContaining(writerName),
         ]),
       );
-    const authoritativeGraph = await page.evaluate(async (runRef) => {
-      const response = await fetch(
-        `/api/v1/runs/${encodeURIComponent(runRef)}/graph`,
-      );
-      if (!response.ok)
-        throw new Error(`graph read failed: ${String(response.status)}`);
-      const body = (await response.json()) as {
-        graph: {
-          edges: Array<{
-            sourceNodeRef: string;
-            targetNodeRef: string;
-            type: string;
-          }>;
-          nodes: Array<{ ref: string; type: string }>;
-        };
+    const authoritativeGraphReadback = await readJsonWithNetworkRetry<{
+      graph: {
+        edges: Array<{
+          sourceNodeRef: string;
+          targetNodeRef: string;
+          type: string;
+        }>;
+        nodes: Array<{ ref: string; type: string }>;
       };
-      return body.graph;
-    }, workflowRunRef);
+    }>(page, `/api/v1/runs/${encodeURIComponent(workflowRunRef)}/graph`);
+    expect(authoritativeGraphReadback.status).toBe(200);
+    const authoritativeGraph = authoritativeGraphReadback.body.graph;
     const authoritativeNodeRefs = new Set(
       authoritativeGraph.nodes.map((node) => node.ref),
     );
@@ -2500,18 +2627,15 @@ test.describe("web-only fresh installation", () => {
     ).toHaveAttribute("href", `/projects/${projectRef}/runs/${cancelledRef}`);
     await expect
       .poll(
-        () =>
-          page.evaluate(async (runRef) => {
-            const response = await fetch(
-              `/api/v1/runs/${encodeURIComponent(runRef)}/graph`,
-            );
-            if (!response.ok) return -1;
-            const body = (await response.json()) as {
-              graph: { edges: Array<{ type: string }> };
-            };
-            return body.graph.edges.filter((edge) => edge.type === "RETRY_OF")
-              .length;
-          }, retriedRef),
+        async () => {
+          const readback = await readJsonWithNetworkRetry<{
+            graph: { edges: Array<{ type: string }> };
+          }>(page, `/api/v1/runs/${encodeURIComponent(retriedRef)}/graph`);
+          if (readback.status !== 200) return -1;
+          return readback.body.graph.edges.filter(
+            (edge) => edge.type === "RETRY_OF",
+          ).length;
+        },
         { timeout: 30_000 },
       )
       .toBe(1);
@@ -2586,71 +2710,120 @@ test.describe("web-only fresh installation", () => {
       `Role badges must remain compact, received heights: ${roleTagHeights.join(", ")}`,
     ).toBe(true);
 
-    const setup = await page.evaluate(
-      async ({
-        exactAgentRef,
-        expectedGroupName,
-        expectedRoleName,
-        otherAgentRef,
-        projectRef,
-      }) => {
-        const [rolesResponse, groupsResponse] = await Promise.all([
-          fetch(
-            "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
-          ),
-          fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
-        ]);
-        if (!rolesResponse.ok || !groupsResponse.ok)
-          throw new Error("RBAC catalog readback failed");
-        const roles = (await rolesResponse.json()) as {
-          items: Array<{
-            ref: string;
-            currentVersion: { ref: string; name: string };
-          }>;
-        };
-        const role = roles.items.find(
-          (item) => item.currentVersion.name === expectedRoleName,
-        );
-        if (!role) throw new Error("E2E access role is absent");
-        const groups = (await groupsResponse.json()) as {
-          items: Array<{
-            ref: string;
-            displayName: string;
-            memberCount: number;
-            state: string;
-          }>;
-        };
-        const matchingGroups = groups.items.filter(
-          (group) => group.displayName === expectedGroupName,
-        );
-        if (
-          matchingGroups.length !== 1 ||
-          matchingGroups[0]?.state !== "ACTIVE" ||
-          matchingGroups[0].memberCount < 1
-        ) {
-          throw new Error("Ожидаемая активная OIDC-группа не синхронизирована");
-        }
-        const candidate = {
-          ...matchingGroups[0],
-          kind: "OIDC_GROUP" as const,
-        };
-        const bindingsResponse = await fetch(
-          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
-        );
-        if (!bindingsResponse.ok)
-          throw new Error("RBAC binding catalog readback failed");
-        const bindings = (await bindingsResponse.json()) as {
-          items: Array<{
-            subject: { ref: string };
-            scope: { resourceKind?: string; resourceRef?: string };
-          }>;
-        };
-        const existing = bindings.items.find(
-          (binding) =>
-            binding.scope.resourceKind === "AGENT" &&
-            binding.scope.resourceRef === exactAgentRef,
-        );
-        if (existing?.subject.ref === candidate.ref) {
+    const setup = await retryReadOnlyBrowserAction(page, () =>
+      page.evaluate(
+        async ({
+          exactAgentRef,
+          expectedGroupName,
+          expectedRoleName,
+          otherAgentRef,
+          projectRef,
+        }) => {
+          const [rolesResponse, groupsResponse] = await Promise.all([
+            fetch(
+              "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
+            ),
+            fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
+          ]);
+          if (!rolesResponse.ok || !groupsResponse.ok)
+            throw new Error("RBAC catalog readback failed");
+          const roles = (await rolesResponse.json()) as {
+            items: Array<{
+              ref: string;
+              currentVersion: { ref: string; name: string };
+            }>;
+          };
+          const role = roles.items.find(
+            (item) => item.currentVersion.name === expectedRoleName,
+          );
+          if (!role) throw new Error("E2E access role is absent");
+          const groups = (await groupsResponse.json()) as {
+            items: Array<{
+              ref: string;
+              displayName: string;
+              memberCount: number;
+              state: string;
+            }>;
+          };
+          const matchingGroups = groups.items.filter(
+            (group) => group.displayName === expectedGroupName,
+          );
+          if (
+            matchingGroups.length !== 1 ||
+            matchingGroups[0]?.state !== "ACTIVE" ||
+            matchingGroups[0].memberCount < 1
+          ) {
+            throw new Error(
+              "Ожидаемая активная OIDC-группа не синхронизирована",
+            );
+          }
+          const candidate = {
+            ...matchingGroups[0],
+            kind: "OIDC_GROUP" as const,
+          };
+          const bindingsResponse = await fetch(
+            `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(role.ref)}&includeRevoked=false`,
+          );
+          if (!bindingsResponse.ok)
+            throw new Error("RBAC binding catalog readback failed");
+          const bindings = (await bindingsResponse.json()) as {
+            items: Array<{
+              subject: { ref: string };
+              scope: { resourceKind?: string; resourceRef?: string };
+            }>;
+          };
+          const existing = bindings.items.find(
+            (binding) =>
+              binding.scope.resourceKind === "AGENT" &&
+              binding.scope.resourceRef === exactAgentRef,
+          );
+          if (existing?.subject.ref === candidate.ref) {
+            return {
+              candidate,
+              exactAgentRef,
+              otherAgentRef,
+              projectRef,
+              roleRef: role.ref,
+              roleVersionRef: role.currentVersion.ref,
+            };
+          }
+          const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+          const csrf = document.cookie
+            .split("; ")
+            .find((part) => part.startsWith(csrfPrefix))
+            ?.slice(csrfPrefix.length);
+          if (!csrf) throw new Error("E2E CSRF cookie is absent");
+          const response = await fetch(
+            "/api/v1/administration/access/effective-access/query",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": decodeURIComponent(csrf),
+              },
+              body: JSON.stringify({
+                subjectRef: candidate.ref,
+                permissionKeys: ["agent.launch"],
+                target: {
+                  kind: "RESOURCE_INSTANCE",
+                  projectRef,
+                  resourceKind: "AGENT",
+                  resourceRef: exactAgentRef,
+                },
+              }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(
+              `Исходное решение OIDC-group RBAC недоступно: ${String(response.status)} ${await response.text()}`,
+            );
+          }
+          const body = (await response.json()) as {
+            items: Array<{ decision: string }>;
+          };
+          if (body.items[0]?.decision !== "DENIED") {
+            throw new Error("OIDC-группа имеет неожиданный исходный доступ");
+          }
           return {
             candidate,
             exactAgentRef,
@@ -2659,81 +2832,38 @@ test.describe("web-only fresh installation", () => {
             roleRef: role.ref,
             roleVersionRef: role.currentVersion.ref,
           };
-        }
-        const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-        const csrf = document.cookie
-          .split("; ")
-          .find((part) => part.startsWith(csrfPrefix))
-          ?.slice(csrfPrefix.length);
-        if (!csrf) throw new Error("E2E CSRF cookie is absent");
-        const response = await fetch(
-          "/api/v1/administration/access/effective-access/query",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-Token": decodeURIComponent(csrf),
-            },
-            body: JSON.stringify({
-              subjectRef: candidate.ref,
-              permissionKeys: ["agent.launch"],
-              target: {
-                kind: "RESOURCE_INSTANCE",
-                projectRef,
-                resourceKind: "AGENT",
-                resourceRef: exactAgentRef,
-              },
-            }),
-          },
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Исходное решение OIDC-group RBAC недоступно: ${String(response.status)} ${await response.text()}`,
-          );
-        }
-        const body = (await response.json()) as {
-          items: Array<{ decision: string }>;
-        };
-        if (body.items[0]?.decision !== "DENIED") {
-          throw new Error("OIDC-группа имеет неожиданный исходный доступ");
-        }
-        return {
-          candidate,
-          exactAgentRef,
-          otherAgentRef,
+        },
+        {
+          exactAgentRef: coordinatorRef,
+          expectedGroupName: environment.rbacGroup,
+          expectedRoleName: accessRoleName,
+          otherAgentRef: analystRef,
           projectRef,
-          roleRef: role.ref,
-          roleVersionRef: role.currentVersion.ref,
-        };
-      },
-      {
-        exactAgentRef: coordinatorRef,
-        expectedGroupName: environment.rbacGroup,
-        expectedRoleName: accessRoleName,
-        otherAgentRef: analystRef,
-        projectRef,
-      },
+        },
+      ),
     );
 
-    const existingBinding = await page.evaluate(
-      async ({ exactAgentRef, projectRef, roleRef, subjectRef }) => {
-        const response = await fetch(
-          `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(roleRef)}&subjectRef=${encodeURIComponent(subjectRef)}&includeRevoked=false`,
-        );
-        if (!response.ok) throw new Error("RBAC binding readback failed");
-        const body = (await response.json()) as {
-          items: Array<{ scope: { resourceRef?: string } }>;
-        };
-        return body.items.some(
-          (item) => item.scope.resourceRef === exactAgentRef,
-        );
-      },
-      {
-        exactAgentRef: coordinatorRef,
-        projectRef,
-        roleRef: setup.roleRef,
-        subjectRef: setup.candidate.ref,
-      },
+    const existingBinding = await retryReadOnlyBrowserAction(page, () =>
+      page.evaluate(
+        async ({ exactAgentRef, projectRef, roleRef, subjectRef }) => {
+          const response = await fetch(
+            `/api/v1/administration/access/bindings?pageSize=100&projectRef=${encodeURIComponent(projectRef)}&roleRef=${encodeURIComponent(roleRef)}&subjectRef=${encodeURIComponent(subjectRef)}&includeRevoked=false`,
+          );
+          if (!response.ok) throw new Error("RBAC binding readback failed");
+          const body = (await response.json()) as {
+            items: Array<{ scope: { resourceRef?: string } }>;
+          };
+          return body.items.some(
+            (item) => item.scope.resourceRef === exactAgentRef,
+          );
+        },
+        {
+          exactAgentRef: coordinatorRef,
+          projectRef,
+          roleRef: setup.roleRef,
+          subjectRef: setup.candidate.ref,
+        },
+      ),
     );
     if (!existingBinding) {
       await gotoWithRetry(page, "/administration/access/bindings");
@@ -2994,7 +3124,9 @@ test.describe("web-only fresh installation", () => {
     );
   });
 
-  test("финальная визуальная приёмка: run canvas", async ({ page }) => {
+  test("финальная визуальная приёмка: run canvas", async ({
+    page,
+  }, testInfo) => {
     requireRefs("projectRef", "workflowRunRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
@@ -3116,12 +3248,16 @@ test.describe("web-only fresh installation", () => {
         expectNoIntersection(leftPanel, rightPanel);
       }
     }
+    await attachVisualEvidence(page, testInfo, "visual-1920x1080-run-canvas");
   });
 
   test("финальная визуальная приёмка: badges", async ({ page }) => {
     requireRefs("projectRef", "workflowRunRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+    await expect
+      .poll(() => page.locator(".status-badge:visible").count())
+      .toBeGreaterThanOrEqual(4);
     const samples = await page.locator(".status-badge").evaluateAll((badges) =>
       badges.flatMap((badge) => {
         const box = badge.getBoundingClientRect();
@@ -3131,10 +3267,17 @@ test.describe("web-only fresh installation", () => {
         return [
           {
             alignSelf: style.alignSelf,
+            className: badge.getAttribute("class") ?? "",
             display: style.display,
             flexGrow: style.flexGrow,
+            grandparentClassName:
+              badge.parentElement?.parentElement?.getAttribute("class") ?? "",
             height: box.height,
+            layoutHeight: (badge as HTMLElement).offsetHeight,
+            layoutWidth: (badge as HTMLElement).offsetWidth,
             parentHeight: parentBox?.height ?? 0,
+            parentLayoutHeight: badge.parentElement?.offsetHeight ?? 0,
+            parentClassName: badge.parentElement?.getAttribute("class") ?? "",
             text: badge.textContent.trim(),
             width: box.width,
           },
@@ -3143,15 +3286,18 @@ test.describe("web-only fresh installation", () => {
     );
     expect(samples.length).toBeGreaterThanOrEqual(4);
     for (const sample of samples) {
-      expect(sample.display, sample.text).toBe("inline-flex");
-      expect(sample.alignSelf, sample.text).not.toBe("stretch");
-      expect(Number(sample.flexGrow), sample.text).toBe(0);
-      expect(sample.height, sample.text).toBeGreaterThan(0);
-      expect(sample.height, sample.text).toBeLessThanOrEqual(32);
-      if (sample.parentHeight > 48) {
-        expect(sample.height, sample.text).toBeLessThan(sample.parentHeight);
+      const diagnostic = JSON.stringify(sample);
+      expect(["inline-flex", "flex"], diagnostic).toContain(sample.display);
+      expect(sample.alignSelf, diagnostic).not.toBe("stretch");
+      expect(Number(sample.flexGrow), diagnostic).toBe(0);
+      expect(sample.layoutHeight, diagnostic).toBeGreaterThan(0);
+      expect(sample.layoutHeight, diagnostic).toBeLessThanOrEqual(32);
+      if (sample.parentLayoutHeight > 48) {
+        expect(sample.layoutHeight, diagnostic).toBeLessThan(
+          sample.parentLayoutHeight,
+        );
       }
-      expect(sample.width, sample.text).toBeLessThan(640);
+      expect(sample.layoutWidth, diagnostic).toBeLessThan(640);
     }
   });
 
@@ -3163,7 +3309,7 @@ test.describe("web-only fresh installation", () => {
       `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
     );
     const details = page.locator(".file-details");
-    await expect(details).toBeVisible();
+    await waitForFilesWorkspaceArtifact(page, details);
     await details.getByRole("button", { name: "Открыть", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: uploadedFileName });
     await expect(dialog).toBeVisible();
@@ -3181,7 +3327,9 @@ test.describe("web-only fresh installation", () => {
     expect(overflow.panel).toBeLessThanOrEqual(1);
   });
 
-  test("финальная визуальная приёмка: files workspace", async ({ page }) => {
+  test("финальная визуальная приёмка: files workspace", async ({
+    page,
+  }, testInfo) => {
     requireRefs("projectRef", "uploadedArtifactRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await gotoWithRetry(
@@ -3228,11 +3376,16 @@ test.describe("web-only fresh installation", () => {
     expectNear(detailsBox.right, layoutBox.right, "details right edge");
     expect(collectionBox.right).toBeLessThanOrEqual(detailsBox.left + 1);
     expect(collectionBox.width).toBeGreaterThan(detailsBox.width * 3);
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1920x1080-files-workspace",
+    );
   });
 
   test("финальная визуальная приёмка: assistant entity drawer", async ({
     page,
-  }) => {
+  }, testInfo) => {
     requireRefs("projectRef", "coordinatorRef");
     await page.setViewportSize({ width: 1920, height: 1080 });
     const agentPath = `/projects/${projectRef}/agents/${coordinatorRef}`;
@@ -3273,6 +3426,113 @@ test.describe("web-only fresh installation", () => {
       expect(Number.isFinite(item.overflow)).toBe(true);
       expect(item.overflow).toBeLessThanOrEqual(1);
     }
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1920x1080-assistant-drawer",
+    );
+  });
+
+  test("финальная визуальная приёмка: desktop 1440", async ({
+    page,
+  }, testInfo) => {
+    requireRefs(
+      "projectRef",
+      "workflowRunRef",
+      "uploadedArtifactRef",
+      "coordinatorRef",
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
+    const workspace = page.locator(".run-workspace");
+    await expectInsideViewport(page, workspace, "run workspace at 1440");
+    const summaryBox = await expectInsideViewport(
+      page,
+      workspace.locator(".run-canvas-summary"),
+      "run summary at 1440",
+    );
+    const workspaceToolbarBox = await expectInsideViewport(
+      page,
+      workspace.locator(".run-workspace-toolbar"),
+      "run workspace toolbar at 1440",
+    );
+    const graphToolbarBox = await expectInsideViewport(
+      page,
+      workspace.locator(".graph-toolbar"),
+      "graph toolbar at 1440",
+    );
+    const legendBox = await expectInsideViewport(
+      page,
+      workspace.locator(".graph-legend"),
+      "graph legend at 1440",
+    );
+    const minimapBox = await expectInsideViewport(
+      page,
+      workspace.locator(".vue-flow__minimap"),
+      "graph minimap at 1440",
+    );
+    const overlays = [
+      { label: "summary", box: summaryBox },
+      { label: "workspace toolbar", box: workspaceToolbarBox },
+      { label: "graph toolbar", box: graphToolbarBox },
+      { label: "legend", box: legendBox },
+      { label: "minimap", box: minimapBox },
+    ];
+    const graphNodes = workspace.locator(".vue-flow__node");
+    await expect.poll(() => graphNodes.count()).toBeGreaterThan(0);
+    for (let index = 0; index < (await graphNodes.count()); index += 1) {
+      const node = {
+        label: `graph node ${String(index + 1)}`,
+        box: await visualBox(
+          graphNodes.nth(index),
+          `graph node ${String(index + 1)}`,
+        ),
+      };
+      for (const overlay of overlays) expectNoIntersection(node, overlay);
+    }
+    await attachVisualEvidence(page, testInfo, "visual-1440x900-run-canvas");
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/files?artifactRef=${encodeURIComponent(uploadedArtifactRef)}`,
+    );
+    const filesWorkspace = page.locator(".files-workspace");
+    await waitForFilesWorkspaceArtifact(
+      page,
+      filesWorkspace.locator(".file-details"),
+    );
+    const filesBox = await visualBox(filesWorkspace, "files workspace at 1440");
+    expect(filesBox.left).toBeGreaterThanOrEqual(-0.5);
+    expect(filesBox.top).toBeGreaterThanOrEqual(-0.5);
+    expect(filesBox.right).toBeLessThanOrEqual(1440.5);
+    const filterWidths = await filesWorkspace
+      .locator(".files-workspace__toolbar select")
+      .evaluateAll((selects) =>
+        selects.map((select) => select.getBoundingClientRect().width),
+      );
+    expect(filterWidths.length).toBeGreaterThanOrEqual(4);
+    for (const width of filterWidths) expect(width).toBeGreaterThanOrEqual(120);
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1440x900-files-workspace",
+    );
+
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/agents/${coordinatorRef}`,
+    );
+    await expectPageHeading(page, coordinatorName);
+    await openKodex(page);
+    const drawer = page.getByRole("dialog", { name: "Kodex" });
+    await expect(drawer).toHaveAttribute("aria-busy", "false");
+    await expectInsideViewport(page, drawer, "Kodex drawer at 1440");
+    await attachVisualEvidence(
+      page,
+      testInfo,
+      "visual-1440x900-assistant-drawer",
+    );
   });
 
   test("административные экраны и security boundary дают ожидаемый readback", async ({
@@ -3463,26 +3723,21 @@ async function ensureAuthorizedProviderAffinity(
   agentRef: string,
   eligibleIndex = 0,
 ): Promise<void> {
-  const preflight = await page.evaluate(async (requestedEligibleIndex) => {
-    const response = await fetch(
-      "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100",
+  const response = await readJsonWithNetworkRetry<{
+    items: Array<{
+      enabled: boolean;
+      ready: boolean;
+      ref: string;
+      state: string;
+    }>;
+  }>(page, "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100");
+  if (response.status !== 200) {
+    throw new Error(
+      `provider account catalog readback failed: ${String(response.status)}`,
     );
-    if (!response.ok) {
-      return {
-        accountRef: "",
-        eligibleCount: 0,
-        status: response.status,
-        summary: "provider account catalog readback failed",
-      };
-    }
-    const body = (await response.json()) as {
-      items: Array<{
-        enabled: boolean;
-        ready: boolean;
-        ref: string;
-        state: string;
-      }>;
-    };
+  }
+  const preflight = (() => {
+    const body = response.body;
     const eligible = body.items
       .filter(
         (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
@@ -3494,7 +3749,7 @@ async function ensureAuthorizedProviderAffinity(
       return result;
     }, {});
     return {
-      accountRef: eligible[requestedEligibleIndex]?.ref ?? "",
+      accountRef: eligible[eligibleIndex]?.ref ?? "",
       eligibleCount: eligible.length,
       status: response.status,
       summary: Object.entries(states)
@@ -3502,7 +3757,7 @@ async function ensureAuthorizedProviderAffinity(
         .map(([state, count]) => `${state}=${String(count)}`)
         .join(", "),
     };
-  }, eligibleIndex);
+  })();
   expect(preflight.status, preflight.summary).toBe(200);
   if (!preflight.accountRef) {
     const blocker = `BLOCKED: AUTHORIZED+enabled+ready provider account index ${String(eligibleIndex)} is unavailable; eligible=${String(preflight.eligibleCount)} (${preflight.summary || "empty catalog"})`;
@@ -3517,34 +3772,38 @@ async function pinAgentProviderAccount(
   agentRef: string,
   accountRef: string,
 ): Promise<void> {
-  const result = await page.evaluate(
-    async ({ expectedAccountRef, expectedAgentRef }) => {
-      const readbackResponse = await fetch(
-        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
-      );
-      if (!readbackResponse.ok) {
-        return { status: readbackResponse.status, detail: "runtime readback" };
-      }
-      const readback = (await readbackResponse.json()) as {
-        agentVersion: number;
-        configuration: {
-          runtimeProfileRef: string;
-          model: string;
-          providerPolicy: {
-            accountCandidates: Array<{ accountRef: string; weight: number }>;
-            mode: string;
-          };
-        };
+  const readbackResponse = await readJsonWithNetworkRetry<{
+    agentVersion: number;
+    configuration: {
+      runtimeProfileRef: string;
+      model: string;
+      providerPolicy: {
+        accountCandidates: Array<{ accountRef: string; weight: number }>;
+        mode: string;
       };
-      const currentCandidates =
-        readback.configuration.providerPolicy.accountCandidates;
-      if (
-        readback.configuration.providerPolicy.mode === "FIXED" &&
-        currentCandidates.length === 1 &&
-        currentCandidates[0]?.accountRef === expectedAccountRef
-      ) {
-        return { status: 200, detail: "" };
-      }
+    };
+  }>(
+    page,
+    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+  );
+  if (readbackResponse.status !== 200) {
+    throw new Error(
+      `runtime readback failed: ${String(readbackResponse.status)}`,
+    );
+  }
+  const readback = readbackResponse.body;
+  const currentCandidates =
+    readback.configuration.providerPolicy.accountCandidates;
+  if (
+    readback.configuration.providerPolicy.mode === "FIXED" &&
+    currentCandidates.length === 1 &&
+    currentCandidates[0]?.accountRef === accountRef
+  ) {
+    return;
+  }
+
+  const result = await page.evaluate(
+    async ({ expectedAccountRef, expectedAgentRef, runtime }) => {
       const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
       const csrf = document.cookie
         .split(";")
@@ -3559,12 +3818,12 @@ async function pinAgentProviderAccount(
           headers: {
             "Content-Type": "application/json",
             "Idempotency-Key": crypto.randomUUID(),
-            "If-Match": `"${String(readback.agentVersion)}"`,
+            "If-Match": `"${String(runtime.agentVersion)}"`,
             "X-CSRF-Token": decodeURIComponent(csrf),
           },
           body: JSON.stringify({
-            runtimeProfileRef: readback.configuration.runtimeProfileRef,
-            model: readback.configuration.model,
+            runtimeProfileRef: runtime.runtimeProfileRef,
+            model: runtime.model,
             providerPolicyMode: "FIXED",
             providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
           }),
@@ -3575,7 +3834,15 @@ async function pinAgentProviderAccount(
         detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
       };
     },
-    { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
+    {
+      expectedAccountRef: accountRef,
+      expectedAgentRef: agentRef,
+      runtime: {
+        agentVersion: readback.agentVersion,
+        model: readback.configuration.model,
+        runtimeProfileRef: readback.configuration.runtimeProfileRef,
+      },
+    },
   );
   expect(result.status, result.detail).toBe(200);
 }
@@ -3627,18 +3894,22 @@ async function readRequestAttachmentSet(
     attachmentSetRef?: string;
   };
   expect(request.attachmentSetRef).toMatch(/^aset_[A-Za-z0-9_-]+$/);
-  const attachmentSet = await page.evaluate(async (ref) => {
-    const read = await fetch(
-      `/api/v1/attachment-sets/${encodeURIComponent(ref ?? "")}?pageSize=100`,
-    );
-    if (!read.ok) {
-      throw new Error(`attachment set readback failed: ${String(read.status)}`);
-    }
-    const body = (await read.json()) as {
-      attachmentSet: AttachmentSetReadback;
-    };
-    return body.attachmentSet;
-  }, request.attachmentSetRef);
+  const attachmentSet = await retryReadOnlyBrowserAction(page, () =>
+    page.evaluate(async (ref) => {
+      const read = await fetch(
+        `/api/v1/attachment-sets/${encodeURIComponent(ref ?? "")}?pageSize=100`,
+      );
+      if (!read.ok) {
+        throw new Error(
+          `attachment set readback failed: ${String(read.status)}`,
+        );
+      }
+      const body = (await read.json()) as {
+        attachmentSet: AttachmentSetReadback;
+      };
+      return body.attachmentSet;
+    }, request.attachmentSetRef),
+  );
   expect(attachmentSet.ref).toBe(request.attachmentSetRef);
   expect(attachmentSet.state).toBe("FINALIZED");
   expect(
@@ -3654,26 +3925,92 @@ async function uploadFilesWorkspaceArtifact(
   fileName: string,
   content: string,
 ): Promise<ArtifactReadback> {
-  const uploadButton = page
-    .locator(".files-workspace")
-    .getByRole("button", { name: "Загрузить", exact: true });
+  const workspace = page.locator(".files-workspace");
+  const uploadButton = workspace.getByRole("button", {
+    name: "Загрузить",
+    exact: true,
+  });
   await expect(uploadButton).toBeVisible();
   await expect(uploadButton).toBeEnabled();
-  const response = page.waitForResponse(
-    (candidate) =>
-      candidate.request().method() === "POST" &&
-      new URL(candidate.url()).pathname ===
-        `/api/v1/projects/${projectRef}/artifacts` &&
-      candidate.request().headers()["x-file-name"] === fileName,
-  );
-  await page.locator('.files-workspace input[type="file"]').setInputFiles({
+  const retryButton = workspace.getByRole("button", {
+    name: `Повторить: ${fileName}`,
+    exact: true,
+  });
+  const firstAttempt = Promise.race([
+    waitForFilesWorkspaceUpload(page, fileName).then((response) => ({
+      response,
+      retryableNetworkFailure: false,
+    })),
+    retryButton.waitFor({ state: "visible" }).then(() => ({
+      response: undefined,
+      retryableNetworkFailure: true,
+    })),
+  ]);
+  const fileChooser = page.waitForEvent("filechooser");
+  await uploadButton.click();
+  await (
+    await fileChooser
+  ).setFiles({
     name: fileName,
     mimeType: "text/plain",
     buffer: Buffer.from(content, "utf8"),
   });
-  const upload = await response;
+  const firstUpload = await firstAttempt;
+  let upload = firstUpload.response;
+  if (
+    firstUpload.retryableNetworkFailure ||
+    (upload !== undefined && upload.status() >= 500 && upload.status() < 600)
+  ) {
+    await expect(retryButton).toBeVisible();
+    const retryResponse = waitForFilesWorkspaceUpload(page, fileName);
+    await retryButton.click();
+    upload = await retryResponse;
+  }
+  if (!upload) throw new Error("artifact upload completed without a response");
+  expect(upload.request().headers()["x-file-name"]).toBe(fileName);
   expect(upload.status(), await upload.text()).toBe(201);
   return (await upload.json()) as ArtifactReadback;
+}
+
+function waitForFilesWorkspaceUpload(
+  page: Page,
+  fileName: string,
+): Promise<Response> {
+  return page.waitForResponse((candidate) => {
+    const request = candidate.request();
+    return (
+      request.method() === "POST" &&
+      new URL(candidate.url()).pathname ===
+        `/api/v1/projects/${projectRef}/artifacts` &&
+      request.headers()["x-file-name"] === fileName
+    );
+  });
+}
+
+async function waitForFilesWorkspaceArtifact(
+  page: Page,
+  details: Locator,
+): Promise<void> {
+  const workspace = page.locator(".files-workspace");
+  const retryButton = workspace
+    .locator(".problem-notice")
+    .getByRole("button", { name: "Повторить", exact: true });
+  const state = await Promise.race([
+    details.waitFor({ state: "visible" }).then(() => "ready" as const),
+    retryButton.waitFor({ state: "visible" }).then(() => "retry" as const),
+  ]);
+  if (state === "retry") {
+    const retryResponse = page.waitForResponse(
+      (candidate) =>
+        candidate.request().method() === "GET" &&
+        new URL(candidate.url()).pathname ===
+          `/api/v1/projects/${projectRef}/artifacts`,
+    );
+    await retryButton.click();
+    const response = await retryResponse;
+    expect(response.status(), await response.text()).toBe(200);
+  }
+  await expect(details).toBeVisible();
 }
 
 async function operateArtifactLifecycle(

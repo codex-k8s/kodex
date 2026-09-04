@@ -28,11 +28,24 @@ describe("bootstrap Control Center", () => {
     expect(authGateSource).toContain("session.phase === 'checking'");
     expect(authGateSource).toContain('role="status"');
     expect(authGateSource).toContain("<ProblemNotice");
-    expect(authGateSource).toContain('@retry="session.probe"');
+    expect(authGateSource).toContain('@click="startLogin"');
+    expect(authGateSource).toContain("session.beginLogin().catch");
+    expect(authGateSource).toContain('@retry="retryAuthentication"');
   });
 
-  it("не наблюдает каталоги с результатами browser tests", () => {
+  it("не наблюдает browser test artifacts и сохранённую OIDC-сессию", () => {
+    expect(viteConfigSource).toContain("hmr: false");
+    expect(viteConfigSource).not.toContain("ws: false");
+    expect(viteConfigSource).toContain('"/__kodex_dev_revision"');
+    expect(viteConfigSource).toContain('"**/.auth/**"');
+    expect(viteConfigSource).toContain('"**/e2e/**"');
     expect(viteConfigSource).toContain('"**/test-results/**"');
     expect(viteConfigSource).toContain('"**/playwright-report/**"');
+  });
+
+  it("не подавляет Vite preload error до bounded router recovery", () => {
+    expect(mainSource).toContain('"vite:preloadError"');
+    expect(mainSource).not.toContain("event.preventDefault()");
+    expect(mainSource).not.toContain("window.location.reload()");
   });
 });

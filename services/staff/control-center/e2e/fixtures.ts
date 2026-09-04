@@ -1,9 +1,6 @@
 import { expect, test as base, type Page } from "@playwright/test";
 
 import { authenticateOwner } from "./auth-flow";
-import { loadE2EEnvironment } from "./environment";
-
-const environment = loadE2EEnvironment();
 
 export interface BrowserDiagnostics {
   readonly monitorPage: (page: Page) => void;
@@ -106,16 +103,11 @@ export const test = base.extend<{
   ],
   freshOwnerSession: [
     async ({ browserDiagnostics, page }, use) => {
-      const sessionResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          new URL(response.url()).origin === environment.baseURL &&
-          new URL(response.url()).pathname === "/api/v1/session",
-        { timeout: 100_000 },
-      );
       void browserDiagnostics;
-      await authenticateOwner(page, undefined, { mode: "warm" });
-      expect((await sessionResponse).status()).toBe(204);
+      const authentication = await authenticateOwner(page, undefined, {
+        mode: "warm",
+      });
+      expect(authentication.ownerSessionStatuses).toEqual([204]);
       await use(true);
     },
     { auto: true },

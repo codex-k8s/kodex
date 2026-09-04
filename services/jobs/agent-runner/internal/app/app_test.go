@@ -21,6 +21,7 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}{
 		{name: "provider auth", err: codex.ErrProviderAuthentication, want: "PROVIDER_AUTH_REJECTED"},
 		{name: "authority request", err: codex.ErrAuthorityRequestUnsupported, want: "RUNTIME_PROFILE_UNSUPPORTED"},
+		{name: "required MCP", err: codex.ErrRequiredMCPUnavailable, want: "RUNTIME_MCP_UNAVAILABLE"},
 		{name: "provider transport", err: errors.New("provider transport failed"), want: "RUNTIME_PROVIDER_UNAVAILABLE"},
 	}
 	for _, test := range tests {
@@ -29,6 +30,15 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 				t.Fatalf("runtimeExecutionFailureCode() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
+	t.Parallel()
+
+	code := runtimeExecutionFailureCode(codex.ErrRequiredMCPUnavailable)
+	if got := safeFailureCode(code); got != "RUNTIME_MCP_UNAVAILABLE" {
+		t.Fatalf("safeFailureCode(runtimeExecutionFailureCode()) = %q, want %q", got, "RUNTIME_MCP_UNAVAILABLE")
 	}
 }
 

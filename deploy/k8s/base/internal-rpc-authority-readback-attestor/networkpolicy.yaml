@@ -37,6 +37,14 @@ spec:
                   - internal-rpc-authority-publisher
                   - role-image-builder
                   - runtime-controller
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kodex-image-admission
+              app.kubernetes.io/component: image-admission
+            matchExpressions:
+              - key: kodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
       ports:
         - protocol: TCP
           port: 8443

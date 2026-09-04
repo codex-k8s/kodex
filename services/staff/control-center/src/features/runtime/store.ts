@@ -59,6 +59,35 @@ type RuntimeResource =
   | `environment-readiness:${string}`
   | `environment-versions:${string}`;
 
+const runtimeConfigurationReadRetryDelaysMs = [
+  0, 200, 600, 1_500, 3_000,
+] as const;
+
+async function readRuntimeConfigurationWithRetry<T>(
+  request: () => Promise<T>,
+): Promise<T> {
+  let lastProblem = asProblem(new Error("Runtime read did not start"));
+  for (const delayMs of runtimeConfigurationReadRetryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayMs),
+      );
+    }
+    try {
+      return await request();
+    } catch (error) {
+      lastProblem = asProblem(error);
+      if (
+        !lastProblem.retryable ||
+        delayMs === runtimeConfigurationReadRetryDelaysMs.at(-1)
+      ) {
+        throw lastProblem;
+      }
+    }
+  }
+  throw lastProblem;
+}
+
 function versionHeaders(headers: MutationHeaders): {
   "If-Match": string;
   "Idempotency-Key": string;
@@ -129,15 +158,18 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadAgentRuntime(agentRef: string): Promise<void> {
     await query(
       `agent:${agentRef}`,
-      async () =>
-        (
-          await unwrap(
-            getAgentRuntimeConfiguration({
-              path: { agentRef },
-              signal: requestSignal(),
-            }),
-          )
-        ).data,
+      () =>
+        readRuntimeConfigurationWithRetry(
+          async () =>
+            (
+              await unwrap(
+                getAgentRuntimeConfiguration({
+                  path: { agentRef },
+                  signal: requestSignal(),
+                }),
+              )
+            ).data,
+        ),
       (value) => applyAgentView(agentRef, value),
     );
   }
@@ -145,16 +177,19 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadAgentVersions(agentRef: string): Promise<void> {
     await query(
       `agent-versions:${agentRef}`,
-      async () =>
-        (
-          await unwrap(
-            listAgentRuntimeConfigurationVersions({
-              path: { agentRef },
-              query: { pageSize: 100 },
-              signal: requestSignal(),
-            }),
-          )
-        ).data.items,
+      () =>
+        readRuntimeConfigurationWithRetry(
+          async () =>
+            (
+              await unwrap(
+                listAgentRuntimeConfigurationVersions({
+                  path: { agentRef },
+                  query: { pageSize: 100 },
+                  signal: requestSignal(),
+                }),
+              )
+            ).data.items,
+        ),
       (values) => {
         agentVersions[agentRef] = values;
       },

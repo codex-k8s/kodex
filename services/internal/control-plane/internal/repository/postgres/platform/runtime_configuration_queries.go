@@ -22,7 +22,7 @@ func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, 
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	row := repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetAgentView, scope.organizationID, ref, scope.role, scope.actorID)
-	view, err := scanAgentRuntimeConfigurationView(row)
+	view, err := repository.scanAgentRuntimeConfigurationView(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
 	}
@@ -233,10 +233,11 @@ func scanAgentRuntimeConfiguration(scanner rowScanner) (entity.AgentRuntimeConfi
 	return item, nil
 }
 
-func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeConfigurationView, error) {
+func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeConfigurationView, error) {
 	var view entity.AgentRuntimeConfigurationView
-	var rawCandidates, rawPublishedProblems, rawDraftProblems, rawValues, rawSecrets []byte
+	var rawCandidates, rawPublishedProblems, rawDraftProblems, rawValues, rawSecrets, rawTools []byte
 	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
+	var coreDigest string
 	var draftRef, draftState, draftContent, draftDigest *string
 	var draftVersion *int64
 	var draftCreatedAt, draftPublishedAt *time.Time
@@ -253,6 +254,10 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 		&view.EnvironmentBinding.Digest, &view.Environment.Ref, &view.Environment.Version, &view.Environment.ProjectRef,
 		&view.Environment.Name, &view.Environment.Description, &view.Environment.State, &view.Environment.UpdatedAt,
 		&view.Environment.CurrentVersion.Ref, &view.Environment.CurrentVersion.Revision, &rawValues, &rawSecrets,
+		&view.Environment.CurrentVersion.Image.ArtifactRef, &view.Environment.CurrentVersion.Image.RecipeRef,
+		&view.Environment.CurrentVersion.Image.RecipeGeneration, &view.Environment.CurrentVersion.Image.Reference,
+		&view.Environment.CurrentVersion.Image.Digest, &view.Environment.CurrentVersion.Image.RoleRuntimeContractRevision,
+		&view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256, &rawTools, &coreDigest,
 		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&view.Environment.CurrentVersion.Policy.ResourcesDigest, &view.Environment.CurrentVersion.Policy.VolumesDigest,
 		&view.Environment.CurrentVersion.Policy.NetworkDigest, &view.Environment.CurrentVersion.Policy.RBACDigest,
@@ -267,7 +272,8 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 	if decodeStrict(rawCandidates, &view.Configuration.ProviderPolicy.AccountCandidates) != nil ||
 		decodeStrict(rawPublishedProblems, &view.PublishedOverlay.ValidationMessages) != nil ||
 		decodeStrict(rawValues, &view.Environment.CurrentVersion.Values) != nil ||
-		decodeStrict(rawSecrets, &view.Environment.CurrentVersion.SecretDescriptors) != nil {
+		decodeStrict(rawSecrets, &view.Environment.CurrentVersion.SecretDescriptors) != nil ||
+		decodeStrict(rawTools, &view.Environment.CurrentVersion.Tools) != nil {
 		return entity.AgentRuntimeConfigurationView{}, errors.New("decode agent runtime configuration")
 	}
 	view.Environment.CurrentVersion.Policy, err = decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork,
@@ -276,6 +282,21 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
+	values, secrets := runtimeEnvironmentContract(view.Environment.CurrentVersion)
+	if view.Environment.CurrentVersion.Image.ArtifactRef != "" {
+		storedCore, storedDigest, digestErr := runtimeEnvironmentConfigurationDigests(values, secrets,
+			view.Environment.CurrentVersion.Image, view.Environment.CurrentVersion.Tools, view.Environment.CurrentVersion.Policy)
+		if digestErr != nil || storedCore != coreDigest || storedDigest != view.Environment.CurrentVersion.Digest {
+			return entity.AgentRuntimeConfigurationView{}, errors.New("runtime environment digest mismatch")
+		}
+	} else if view.Environment.ProjectRef != "" {
+		return entity.AgentRuntimeConfigurationView{}, errors.New("project runtime environment image is absent")
+	}
+	readiness := repository.runtimeEnvironmentReadiness(view.Environment)
+	view.Environment.Ready = readiness.Ready
+	view.Environment.ReadinessBlockers = readiness.Blockers
+	view.Environment.CurrentVersion.Image.RoleRuntimeContractRevision = 0
+	view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256 = ""
 	if draftRef != nil {
 		draft := entity.ConfigOverlayVersion{Ref: *draftRef, State: *draftState, Content: *draftContent,
 			Digest: *draftDigest, Revision: *draftVersion, Version: *draftVersion, CreatedAt: *draftCreatedAt,
@@ -285,7 +306,6 @@ func scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeC
 		}
 		view.DraftOverlay = &draft
 	}
-	values, secrets := runtimeEnvironmentContract(view.Environment.CurrentVersion)
 	view.SafeEffectiveConfig, err = runtimecontract.RenderSafeEffectiveConfig(runtimecontract.SafeEffectiveConfigInput{
 		Model: view.Configuration.Model, Provider: view.Configuration.Provider, RuntimeProfileRef: view.Configuration.RuntimeProfileRef,
 		RuntimeConfigRef: view.Configuration.Ref, RuntimeConfigVersion: view.Configuration.Version, RuntimeConfigDigest: view.Configuration.Digest,

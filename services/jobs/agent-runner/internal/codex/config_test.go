@@ -1,12 +1,15 @@
 package codex
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -14,6 +17,26 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestProviderSandboxProbeUsesBoundedBubblewrapBoundary(t *testing.T) {
+	previousEUID := os.Geteuid()
+	called := false
+	err := verifyProviderSandbox(context.Background(), func(command *exec.Cmd) error {
+		called = true
+		expected := []string{"/usr/bin/bwrap", "--unshare-user", "--uid", strconv.Itoa(previousEUID),
+			"--gid", strconv.Itoa(previousEUID), "--ro-bind", "/", "/", "/usr/bin/true"}
+		if !slices.Equal(command.Args, expected) || !slices.Equal(command.Env, []string{"PATH=/usr/local/bin:/usr/bin:/bin"}) {
+			t.Fatalf("unexpected provider sandbox probe: args=%q env=%q", command.Args, command.Env)
+		}
+		return nil
+	})
+	if err != nil || !called {
+		t.Fatalf("verifyProviderSandbox() error = %v, called = %t", err, called)
+	}
+	if err := verifyProviderSandbox(context.Background(), func(*exec.Cmd) error { return errors.New("denied") }); err == nil || err.Error() != "Codex provider sandbox is unavailable" {
+		t.Fatalf("provider sandbox probe failure was not classified safely: %v", err)
+	}
+}
 
 func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	workspace := t.TempDir()
@@ -42,7 +65,10 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		profile.Filesystem["/proc"] != "deny" ||
 		profile.Filesystem["/run/secrets"] != "deny" ||
 		profile.Filesystem["/var/run/secrets"] != "" ||
-		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" {
+		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
+		config.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
+		config.MCPServers["kodex"].ToolTimeoutSeconds != runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds ||
+		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
 	}
 	for path := range profile.Filesystem {

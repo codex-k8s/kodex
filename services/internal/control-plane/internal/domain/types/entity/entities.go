@@ -439,8 +439,14 @@ type ScheduleRunOccurrence struct {
 }
 
 type IntegrationCapability struct {
-	Key, Name, Description, Operation, Risk, ApprovalPolicy, ResourceKind string
-	InputFields                                                           []IntegrationConfigurationField
+	Key            string                          `json:"key"`
+	Name           string                          `json:"name"`
+	Description    string                          `json:"description"`
+	Operation      string                          `json:"operation"`
+	Risk           string                          `json:"risk"`
+	ApprovalPolicy string                          `json:"approvalPolicy"`
+	ResourceKind   string                          `json:"resourceKind"`
+	InputFields    []IntegrationConfigurationField `json:"inputFields"`
 }
 
 type IntegrationConfigurationField struct {

@@ -66,55 +66,63 @@ const connection: IntegrationConnection = {
   },
 };
 
+const messages = {
+  ru: {
+    common: {
+      test: "Проверить",
+      enable: "Включить",
+      disable: "Отключить",
+      edit: "Изменить",
+      delete: "Удалить",
+    },
+    integrations: {
+      credentialsConfigured: "Учётные данные настроены",
+      credentialsNotConfigured: "Учётные данные не настроены",
+      configureCredential: "Настроить учётные данные",
+      lastTest: "Последняя проверка",
+      manageGrants: "Настроить разрешения",
+      noConnectionsTitle: "Платформа работает без интеграций",
+      noConnections: "Откройте каталог, чтобы настроить подключение.",
+      webOnlyReady:
+        "Подключения необязательны: core-сценарии работают без внешних систем.",
+      risk: { WRITE: "изменение" },
+    },
+    integrationsRedesign: {
+      connectionsTitle: "Рабочие подключения",
+      connectionsDescription: "Описание",
+      connectionCount: "Подключений: {count}",
+      noConnectionsYet: "Подключений пока нет",
+      activeGrants: "разрешений",
+      capabilitiesShort: "возможностей",
+    },
+  },
+};
+
+async function renderPanel(
+  values: readonly IntegrationConnection[],
+  coreReady: boolean,
+): Promise<string> {
+  const app = createSSRApp({
+    render: () =>
+      h(IntegrationConnectionsPanel, {
+        connections: values,
+        definitions: { synthetic: definition },
+        coreReady,
+        busyRef: "",
+      }),
+  });
+  app.use(
+    createI18n({ legacy: false, locale: "ru", messages, missingWarn: false }),
+  );
+  return renderToString(app);
+}
+
 describe("IntegrationConnectionsPanel", () => {
   it("показывает только разрешённые server-owned lifecycle действия", async () => {
-    const app = createSSRApp({
-      render: () =>
-        h(IntegrationConnectionsPanel, {
-          connections: [connection],
-          definitions: { synthetic: definition },
-          busyRef: "",
-        }),
-    });
-    app.use(
-      createI18n({
-        legacy: false,
-        locale: "ru",
-        missingWarn: false,
-        messages: {
-          ru: {
-            common: {
-              test: "Проверить",
-              enable: "Включить",
-              disable: "Отключить",
-              edit: "Изменить",
-              delete: "Удалить",
-            },
-            integrations: {
-              credentialsConfigured: "Учётные данные настроены",
-              credentialsNotConfigured: "Учётные данные не настроены",
-              configureCredential: "Настроить учётные данные",
-              lastTest: "Последняя проверка",
-              manageGrants: "Настроить разрешения",
-              noConnectionsTitle: "Нет подключений",
-              noConnections: "Нет подключений",
-              webOnlyReady: "Core готов",
-              risk: { WRITE: "изменение" },
-            },
-            integrationsRedesign: {
-              connectionsTitle: "Рабочие подключения",
-              connectionsDescription: "Описание",
-              connectionCount: "Подключений: {count}",
-              activeGrants: "разрешений",
-              capabilitiesShort: "возможностей",
-            },
-          },
-        },
-      }),
-    );
+    const html = await renderPanel([connection], true);
 
-    const html = await renderToString(app);
-
+    expect(html).toContain("Платформа работает без интеграций");
+    expect(html).toContain("Подключения необязательны");
     expect(html).toContain("Synthetic lifecycle");
     expect(html).toContain("ui-lifecycle");
     expect(html).toContain("SYNTHETIC_JOURNAL");
@@ -124,5 +132,14 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Изменить");
     expect(html).toContain("Удалить");
     expect(html).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it("отделяет пустой список от неподтверждённой готовности core", async () => {
+    const html = await renderPanel([], false);
+
+    expect(html).toContain("Подключений пока нет");
+    expect(html).toContain("Откройте каталог, чтобы настроить подключение.");
+    expect(html).not.toContain("Платформа работает без интеграций");
+    expect(html).not.toContain("Подключения необязательны");
   });
 });

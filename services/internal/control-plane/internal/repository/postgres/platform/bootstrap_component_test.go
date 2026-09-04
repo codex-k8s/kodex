@@ -735,6 +735,20 @@ func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, rep
 		!contains(ownerItems[0].NextActions, "REVOKE") {
 		t.Fatalf("owner provider account actions: items=%#v actions=%v err=%v", ownerItems, ownerActions, err)
 	}
+	created, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProviderAccount, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-account-owner-create"},
+		Payload: command.ProviderAccountInput{
+			DefinitionKey: "openai-codex", Name: "Provider account owner API key",
+		},
+	})
+	if err != nil || created.ProviderAccount == nil || created.ProviderAccount.State != "PENDING_AUTHORIZATION" {
+		t.Fatalf("owner create provider account: account=%#v err=%v", created.ProviderAccount, err)
+	}
+	ownerItems, _, _, err = service.ListProviderAccounts(ctx, owner, query.Filter{Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list provider accounts after owner create: %v", err)
+	}
 	providerAccess, err := service.QueryEffectiveAccess(ctx, owner, "", entity.AccessScope{
 		Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: ownerItems[0].Ref,
 	}, []string{"provider.account.view"}, time.Time{})
@@ -1106,7 +1120,9 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-first", ExpectedVersion: &agentVersion},
 		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: first.Ref},
 	})
-	if err != nil || boundFirst.RuntimeConfiguration == nil || boundFirst.RuntimeConfiguration.Environment.Ref != first.Ref {
+	if err != nil || boundFirst.RuntimeConfiguration == nil || boundFirst.RuntimeConfiguration.Environment.Ref != first.Ref ||
+		!boundFirst.RuntimeConfiguration.Environment.Ready ||
+		!reflect.DeepEqual(boundFirst.RuntimeConfiguration.Environment.CurrentVersion, first.CurrentVersion) {
 		t.Fatalf("bind first runtime environment: configuration=%#v err=%v", boundFirst.RuntimeConfiguration, err)
 	}
 	firstVersion := first.Version
@@ -1160,7 +1176,9 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-bind-second", ExpectedVersion: &boundVersion},
 		Payload:  command.RuntimeEnvironmentBindingInput{AgentRef: agent.Ref, EnvironmentRef: second.Ref},
 	})
-	if err != nil || boundSecond.RuntimeConfiguration == nil || boundSecond.RuntimeConfiguration.Environment.Ref != second.Ref {
+	if err != nil || boundSecond.RuntimeConfiguration == nil || boundSecond.RuntimeConfiguration.Environment.Ref != second.Ref ||
+		!boundSecond.RuntimeConfiguration.Environment.Ready ||
+		!reflect.DeepEqual(boundSecond.RuntimeConfiguration.Environment.CurrentVersion, second.CurrentVersion) {
 		t.Fatalf("rebind second runtime environment: configuration=%#v err=%v", boundSecond.RuntimeConfiguration, err)
 	}
 	deleteCommand := command.Command{
@@ -1412,6 +1430,30 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	}
 	if fastPathErr != nil {
 		t.Fatalf("unchanged OIDC groups waited for subject lock: %v", fastPathErr)
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE control_plane.oidc_groups
+		SET last_seen_at = clock_timestamp() - interval '25 hours'
+		WHERE organization_id = $1::uuid AND display_name = $2
+	`, owner.AuthorityTenant, groupedOwner.ExternalGroups[0]); err != nil {
+		t.Fatalf("age synchronized OIDC group: %v", err)
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, groupedOwner); err != nil {
+		t.Fatalf("refresh unchanged stale OIDC group: %v", err)
+	}
+	var refreshedGroups int
+	if err := repository.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM control_plane.oidc_groups oidc_group
+		JOIN control_plane.oidc_group_memberships membership ON membership.group_id = oidc_group.id
+		WHERE oidc_group.organization_id = $1::uuid
+		  AND oidc_group.display_name = $2
+		  AND oidc_group.state = 'ACTIVE'
+		  AND oidc_group.last_seen_at >= clock_timestamp() - interval '1 minute'
+		  AND membership.subject_id = $3::uuid
+		  AND membership.subject_session_revision = $4
+	`, owner.AuthorityTenant, groupedOwner.ExternalGroups[0], owner.ActorID, groupedOwner.ExternalSessionRevision).Scan(&refreshedGroups); err != nil || refreshedGroups != 1 {
+		t.Fatalf("refreshed unchanged OIDC group readback: groups=%d err=%v", refreshedGroups, err)
 	}
 	service, err := platformservice.New(repository)
 	if err != nil {
@@ -2158,6 +2200,12 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("claim rejected effect runtime: claims=%d err=%v", len(rejectedExecutionResult.RuntimeItems), err)
 	}
 	rejectedExecution := rejectedExecutionResult.RuntimeItems[0]
+	integrationGrants, ok := rejectedExecution["integrationGrants"].([]map[string]string)
+	if !ok || len(integrationGrants) != 2 ||
+		integrationGrants[0]["capabilityKey"] != "synthetic.journal.read" ||
+		integrationGrants[1]["capabilityKey"] != "synthetic.journal.write" {
+		t.Fatalf("claimed runtime lost integration grants: %#v", rejectedExecution["integrationGrants"])
+	}
 	readResolved, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
 		"run_ref": stringMap(rejectedExecution, "runRef"), "node_ref": stringMap(rejectedExecution, "nodeRef"),
 		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.read",
@@ -2203,8 +2251,11 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-reject", ExpectedVersion: &gateVersion},
 		Payload:  command.GateResolutionInput{GateRef: stringMap(rejected, "gateRef"), Decision: "REJECT", Comment: "Reject exact journal write"},
 	})
-	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" || rejection.Run == nil || rejection.Run.State != "FAILED" {
+	if err != nil || rejection.Gate == nil || rejection.Gate.State != "REJECTED" || rejection.Run == nil || rejection.Run.State != "RUNNING" {
 		t.Fatalf("reject integration effect: gate=%#v run=%#v err=%v", rejection.Gate, rejection.Run, err)
+	}
+	if rejection.Graph == nil || graphNodeState(rejection.Graph.Nodes, "ROOT_PROCESS") != "RUNNING" {
+		t.Fatalf("rejected integration effect terminated the active root graph: %#v", rejection.Graph)
 	}
 	afterRejection, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
 	if err != nil || len(afterRejection) != 0 {
@@ -4503,6 +4554,15 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("claim lifecycle execution: claims=%d err=%v", len(claimed.RuntimeItems), err)
 	}
 	lease := claimed.RuntimeItems[0]
+	metadata, err := service.Execute(ctx, command.Command{Kind: command.ProposeRunMetadata, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "lifecycle-run-metadata"}, Payload: command.ProposeRunMetadataInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+			Title: "Agent-proposed support run", ActivitySummary: "Preparing the support response",
+		}})
+	if err != nil || metadata.Run == nil || metadata.Run.Title != launch.Run.Title ||
+		metadata.Run.TitleSource != "USER_EDITED" || metadata.Run.ActivitySummary != "Preparing the support response" {
+		t.Fatalf("propose run metadata without overriding user title: run=%#v err=%v", metadata.Run, err)
+	}
 	catalog, ok := lease["artifacts"].([]map[string]any)
 	if !ok || len(catalog) != 2 {
 		t.Fatalf("runtime artifact catalog = %#v, want input and knowledge artifacts", lease["artifacts"])

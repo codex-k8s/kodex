@@ -54,6 +54,8 @@ spec:
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractRevision}}
             - name: RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256
               valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: roleRuntimeContractSHA256}}
+            - name: RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE
+              valueFrom: {configMapKeyRef: {name: kodex-image-admission-policy, key: providerAppArmorProfile}}
             - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "otel-collector.observability.svc:4317"}
             - {name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME, value: "otel-collector.observability.svc.cluster.local"}
             - {name: OTEL_EXPORTER_OTLP_CA_FILE, value: "/var/run/config/kodex/runtime-controller/observability/otel-ca.pem"}

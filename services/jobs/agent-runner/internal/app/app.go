@@ -251,6 +251,8 @@ func safeFailureCode(code string) string {
 		return "PROVIDER_RESPONSE_INVALID"
 	case "RUNTIME_INPUT_INVALID", "RUNTIME_WORKSPACE_INVALID":
 		return "RUNTIME_INPUT_INVALID"
+	case "RUNTIME_MCP_UNAVAILABLE":
+		return "RUNTIME_MCP_UNAVAILABLE"
 	default:
 		return "RUNTIME_UNAVAILABLE"
 	}
@@ -262,6 +264,8 @@ func runtimeExecutionFailureCode(err error) string {
 		return "PROVIDER_AUTH_REJECTED"
 	case errors.Is(err, codex.ErrAuthorityRequestUnsupported):
 		return "RUNTIME_PROFILE_UNSUPPORTED"
+	case errors.Is(err, codex.ErrRequiredMCPUnavailable):
+		return "RUNTIME_MCP_UNAVAILABLE"
 	default:
 		return "RUNTIME_PROVIDER_UNAVAILABLE"
 	}

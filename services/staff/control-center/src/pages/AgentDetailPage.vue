@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Play, Power, PowerOff } from "@lucide/vue";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -14,6 +14,7 @@ import AgentProfilePanel from "@/features/agents/detail/AgentProfilePanel.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import {
+  agentDetailTabFromQuery,
   sameProfileDraft,
   type AgentBackendFeatureAvailability,
   type AgentDetailTab,
@@ -76,7 +77,7 @@ const instructionValidationMessages = computed(
   () => agent.value?.draftInstructions?.validationMessages ?? [],
 );
 
-const activeTab = ref<AgentDetailTab>("profile");
+const activeTab = ref<AgentDetailTab>(agentDetailTabFromQuery(route.query.tab));
 const profileDraft = ref<AgentProfileDraft>({
   name: "",
   purpose: "",
@@ -190,7 +191,7 @@ function tabHasDraft(tab: AgentDetailTab): boolean {
   return false;
 }
 
-function selectTab(tab: AgentDetailTab): void {
+function activateTab(tab: AgentDetailTab): void {
   activeTab.value = tab;
   const snapshot = tabApplyStates[tab];
   if (tabHasDraft(tab)) snapshot.state = "DRAFT";
@@ -199,6 +200,13 @@ function selectTab(tab: AgentDetailTab): void {
   applyState.value = snapshot.state;
   applyScope.value = snapshot.scope;
   applyBoundary.value = snapshot.boundary;
+}
+
+function selectTab(tab: AgentDetailTab): void {
+  activateTab(tab);
+  if (route.query.tab !== tab) {
+    void router.replace({ query: { ...route.query, tab } });
+  }
 }
 
 function setApplyState(
@@ -569,6 +577,13 @@ async function toggle(): Promise<void> {
   }
 }
 
+watch(
+  () => route.query.tab,
+  (value) => {
+    const tab = agentDetailTabFromQuery(value);
+    if (tab !== activeTab.value) activateTab(tab);
+  },
+);
 onMounted(() => void load());
 </script>
 

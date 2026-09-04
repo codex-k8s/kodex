@@ -1,4 +1,9 @@
-import { type Frame, type Page, type Response } from "@playwright/test";
+import {
+  type Frame,
+  type Page,
+  type Request,
+  type Response,
+} from "@playwright/test";
 
 import { gotoWithRetry } from "./helpers";
 
@@ -11,6 +16,7 @@ const maxTransitions = 5;
 type AuthSurface =
   | "authenticated-ui"
   | "application-failure"
+  | "frontend-retry"
   | "frontend-sign-in"
   | "identity-provider"
   | "pending";
@@ -24,6 +30,19 @@ export interface AuthenticationOptions {
   readonly mode: "cold" | "local" | "warm";
 }
 
+export interface AuthenticationResult {
+  readonly frontendOIDCAttempts: number;
+  readonly identitySubmissions: number;
+  readonly ownerSessionStatuses: readonly number[];
+}
+
+export interface AuthenticationDocumentSnapshot {
+  readonly appChildElementCount: number | undefined;
+  readonly bodyText: string;
+  readonly origin: string;
+  readonly pathname: string;
+}
+
 interface AuthProgress {
   readonly frontendOIDCAttempts: number;
   readonly identitySubmissions: number;
@@ -33,10 +52,11 @@ export async function authenticateOwner(
   page: Page,
   credentials: OwnerCredentials | undefined,
   options: AuthenticationOptions,
-): Promise<void> {
+): Promise<AuthenticationResult> {
   const deadline = Date.now() + authenticationTimeoutMs;
   let identitySubmissions = 0;
   let frontendOIDCAttempts = 0;
+  const ownerSessionStatuses: number[] = [];
 
   await gotoWithRetry(
     page,
@@ -77,10 +97,14 @@ export async function authenticateOwner(
       }
       await waitForVisibleImages(page, deadline);
       await waitForAuthenticationNavigation(page, deadline);
-      return;
+      return {
+        frontendOIDCAttempts,
+        identitySubmissions,
+        ownerSessionStatuses,
+      };
     }
 
-    if (surface === "frontend-sign-in") {
+    if (surface === "frontend-sign-in" || surface === "frontend-retry") {
       if (options.mode === "cold" && identitySubmissions < 1) {
         throw authenticationError(
           page,
@@ -98,12 +122,17 @@ export async function authenticateOwner(
         );
       }
       frontendOIDCAttempts += 1;
-      surface = await startFrontendOIDCTransition(page, deadline, {
-        identitySubmissions,
-        frontendOIDCAttempts,
-      });
+      surface = await startFrontendOIDCTransition(
+        page,
+        deadline,
+        {
+          identitySubmissions,
+          frontendOIDCAttempts,
+        },
+        ownerSessionStatuses,
+      );
       if (
-        surface === "frontend-sign-in" &&
+        surface === "frontend-retry" &&
         frontendOIDCAttempts < maxFrontendOIDCAttempts
       ) {
         reportFrontendOIDCRetry(page, frontendOIDCAttempts);
@@ -165,6 +194,7 @@ async function startFrontendOIDCTransition(
   page: Page,
   deadline: number,
   progress: AuthProgress,
+  ownerSessionStatuses: number[],
 ): Promise<Exclude<AuthSurface, "pending">> {
   const frontendOrigin = new URL(page.url()).origin;
   let authenticationProgressObserved = false;
@@ -176,11 +206,21 @@ async function startFrontendOIDCTransition(
       frontendOrigin,
     );
   };
+  const recordRequest = (request: Request): void => {
+    authenticationProgressObserved ||= isOIDCProgressRequest(
+      request,
+      frontendOrigin,
+    );
+  };
   const recordFailedResponse = (response: Response): void => {
+    if (isOwnerSessionCreationResponse(response, frontendOrigin)) {
+      ownerSessionStatuses.push(response.status());
+    }
     if (response.status() < 400 || !isAuthenticationResponse(response)) return;
     failedResponse = `${String(response.status())}:${response.request().method()}:${safeLocation(response.url())}`;
   };
   page.on("framenavigated", recordNavigation);
+  page.on("request", recordRequest);
   page.on("response", recordFailedResponse);
   try {
     await page
@@ -224,7 +264,14 @@ async function startFrontendOIDCTransition(
         progress.frontendOIDCAttempts,
       );
     }
-    if (surface === "frontend-sign-in") return surface;
+    if (surface === "frontend-sign-in") {
+      throw authenticationError(
+        page,
+        "the frontend sign-in gate did not start an observable OIDC transition",
+        progress.identitySubmissions,
+        progress.frontendOIDCAttempts,
+      );
+    }
     throw authenticationError(
       page,
       authenticationProgressObserved
@@ -235,6 +282,7 @@ async function startFrontendOIDCTransition(
     );
   } finally {
     page.off("framenavigated", recordNavigation);
+    page.off("request", recordRequest);
     page.off("response", recordFailedResponse);
   }
 }
@@ -290,7 +338,7 @@ async function waitForAuthSurface(
       previous === undefined &&
       !retriedBlankInitialDocument &&
       Date.now() >= initialDeadline &&
-      (await hasBlankApplicationDocument(page))
+      (await hasBlankApplicationDocument(page, new URL(page.url()).origin))
     ) {
       retriedBlankInitialDocument = true;
       await page.reload({
@@ -313,19 +361,40 @@ async function waitForAuthSurface(
   );
 }
 
-async function hasBlankApplicationDocument(page: Page): Promise<boolean> {
+async function hasBlankApplicationDocument(
+  page: Page,
+  frontendOrigin: string,
+): Promise<boolean> {
   try {
-    return await page.evaluate(() => {
+    const snapshot = await page.evaluate(() => {
       const application = document.querySelector("#app");
-      return (
-        document.body.textContent.trim() === "" &&
-        application instanceof HTMLElement &&
-        application.childElementCount === 0
-      );
+      return {
+        appChildElementCount:
+          application instanceof HTMLElement
+            ? application.childElementCount
+            : undefined,
+        bodyText: document.body.textContent,
+        origin: window.location.origin,
+        pathname: window.location.pathname,
+      } satisfies AuthenticationDocumentSnapshot;
     });
+    return isRecoverableBlankFrontendDocument(snapshot, frontendOrigin);
   } catch {
     return false;
   }
+}
+
+export function isRecoverableBlankFrontendDocument(
+  snapshot: AuthenticationDocumentSnapshot,
+  frontendOrigin: string,
+): boolean {
+  return (
+    snapshot.origin === frontendOrigin &&
+    (snapshot.pathname === "/" || snapshot.pathname === "/auth/callback") &&
+    snapshot.bodyText.trim() === "" &&
+    (snapshot.appChildElementCount === undefined ||
+      snapshot.appChildElementCount === 0)
+  );
 }
 
 async function detectAuthSurface(page: Page): Promise<AuthSurface> {
@@ -359,12 +428,12 @@ async function detectAuthSurface(page: Page): Promise<AuthSurface> {
       return "frontend-sign-in";
     }
     if (
-      new URL(page.url()).pathname === "/auth/callback" &&
-      (await page
+      await page
+        .locator(".auth-gate")
         .getByRole("button", { name: "Повторить", exact: true })
-        .isVisible())
+        .isVisible()
     ) {
-      return "frontend-sign-in";
+      return "frontend-retry";
     }
   } catch {
     // Navigation may replace the execution context between locator probes.
@@ -431,12 +500,52 @@ function isAuthenticationResponse(response: Response): boolean {
   }
 }
 
+function isOwnerSessionCreationResponse(
+  response: Response,
+  frontendOrigin: string,
+): boolean {
+  try {
+    const location = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      location.origin === frontendOrigin &&
+      location.pathname === "/api/v1/session"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isOIDCProgressLocation(raw: string, frontendOrigin: string): boolean {
   try {
     const location = new URL(raw);
     return (
       location.origin !== frontendOrigin ||
       location.pathname === "/auth/callback"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOIDCProgressRequest(
+  request: Request,
+  frontendOrigin: string,
+): boolean {
+  try {
+    const location = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      location.origin === frontendOrigin &&
+      location.pathname === "/api/v1/session"
+    ) {
+      return true;
+    }
+    return (
+      location.pathname.includes("/.well-known/") ||
+      location.pathname.includes("/protocol/openid-connect/") ||
+      location.pathname.endsWith("/authorize") ||
+      location.pathname.endsWith("/token")
     );
   } catch {
     return false;

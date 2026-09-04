@@ -452,8 +452,13 @@ spec:
         variables.providerContainers[0].securityContext.runAsGroup == 10002 &&
         variables.providerContainers[0].securityContext.seccompProfile.type ==
           'Unconfined' &&
-        variables.providerContainers[0].securityContext.appArmorProfile.type ==
-          'Unconfined' &&
+        (params.data['providerAppArmorProfile'] == '' ?
+          !has(variables.providerContainers[0].securityContext.appArmorProfile) :
+          params.data['providerAppArmorProfile'] == 'kodex-provider-runtime' &&
+          has(variables.providerContainers[0].securityContext.appArmorProfile) &&
+          variables.providerContainers[0].securityContext.appArmorProfile.type == 'Localhost' &&
+          variables.providerContainers[0].securityContext.appArmorProfile.localhostProfile ==
+            params.data['providerAppArmorProfile']) &&
         variables.relayContainers[0].securityContext.runAsUser == 10003 &&
         variables.relayContainers[0].securityContext.runAsGroup == 10003 &&
         variables.relayContainers[0].securityContext.seccompProfile.type ==

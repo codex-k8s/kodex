@@ -9,19 +9,21 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
-    '  --render <path> --state-directory <path>' >&2
+    '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' >&2
 }
 
 context=""
 mode=""
 render=""
 state_directory=""
+tls_mode=local-ca
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --tls-mode) tls_mode=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -29,6 +31,7 @@ done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
   ! -L "$state_directory" ]] || fail 'state directory is invalid'
@@ -67,6 +70,56 @@ apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
+}
+
+cleanup_local_frontend_transport() {
+  kubectl get customresourcedefinition/serverstransports.traefik.io >/dev/null 2>&1 || return 0
+  kubectl -n "$namespace" delete \
+    serverstransport.traefik.io/staff-control-center \
+    --ignore-not-found --wait=true --timeout=2m >/dev/null ||
+    fail 'obsolete local frontend ServersTransport cleanup failed'
+}
+
+readback_local_frontend_transport() {
+  kubectl get customresourcedefinition/serverstransports.traefik.io >/dev/null 2>&1 || return 0
+  if kubectl -n "$namespace" get \
+    serverstransport.traefik.io/staff-control-center >/dev/null 2>&1; then
+    fail 'obsolete local frontend ServersTransport is still present'
+  fi
+  kubectl -n "$namespace" get \
+    serverstransport.traefik.io/control-api-gateway -o json | jq -e '
+      .spec.serverName == "control-api-gateway.kodex-system.svc" and
+      .spec.insecureSkipVerify == false and
+      .spec.rootCAs == [{secret:"control-api-gateway-public-tls-material"}] and
+      ((.spec.rootCAsSecrets // []) | length) == 0
+    ' >/dev/null || fail 'local Control API ServersTransport readback failed'
+  kubectl -n "$namespace" get service/control-api-gateway -o json | jq -e '
+    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+      "kodex-system-control-api-gateway@kubernetescrd"
+  ' >/dev/null || fail 'local Control API Service transport readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center-api -o json | jq -e \
+    --arg tls_mode "$tls_mode" '
+    .spec.rules[0].http.paths == [{
+      path:"/api/v1",pathType:"Prefix",
+      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
+    }] and
+    (if $tls_mode == "public-acme" then
+      .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+        "kodex-system-oauth2-control-center-auth@kubernetescrd"
+    else
+      (.metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] // "") == ""
+    end)
+  ' >/dev/null || fail 'local Control API direct Ingress readback failed'
+  kubectl -n "$namespace" get ingress/staff-control-center -o json | jq -e \
+    --arg tls_mode "$tls_mode" '
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
+      else "kodex-system-staff-control-center-retry@kubernetescrd" end)
+  ' >/dev/null || fail 'local frontend middleware Ingress readback failed'
+  kubectl -n "$namespace" get middleware.traefik.io/staff-control-center-retry -o json | jq -e '
+    .spec.retry == {attempts:4,initialInterval:"100ms"}
+  ' >/dev/null || fail 'local frontend retry Middleware readback failed'
 }
 
 apply_image_admission_crd() {
@@ -212,22 +265,40 @@ reconcile_local_mutable_configmaps() {
   ' "$render" | sort -u)
 }
 
+wait_for_pod_uid_replacement() {
+  local pod=$1 previous_uid=$2 deadline=$((SECONDS + 180)) current current_uid
+  while ((SECONDS < deadline)); do
+    current=$(kubectl -n "$namespace" get "pod/$pod" -o json 2>/dev/null || true)
+    if [[ -z "$current" ]]; then
+      return
+    fi
+    current_uid=$(jq -r '.metadata.uid // ""' <<<"$current")
+    if [[ -n "$current_uid" && "$current_uid" != "$previous_uid" ]]; then
+      return
+    fi
+    sleep 1
+  done
+  kubectl -n "$namespace" get "pod/$pod" -o wide >&2 || true
+  fail "local StatefulSet Pod retained its previous UID after deletion: $pod"
+}
+
 reconcile_local_statefulset_rollout() {
-  local workload state current_revision update_revision pod
+  local workload state current_revision update_revision pod pod_uid
   for workload in "$@"; do
     state=$(kubectl -n "$namespace" get "statefulset/$workload" -o json)
     current_revision=$(jq -r '.status.currentRevision // ""' <<<"$state")
     update_revision=$(jq -r '.status.updateRevision // ""' <<<"$state")
     [[ -n "$current_revision" && -n "$update_revision" &&
       "$current_revision" != "$update_revision" ]] || continue
-    while IFS= read -r pod; do
-      [[ -n "$pod" ]] || continue
-      kubectl -n "$namespace" delete "pod/$pod" --wait=true --timeout=3m >/dev/null
+    while IFS=$'\t' read -r pod pod_uid; do
+      [[ -n "$pod" && -n "$pod_uid" ]] || continue
+      kubectl -n "$namespace" delete "pod/$pod" --ignore-not-found --wait=false >/dev/null
+      wait_for_pod_uid_replacement "$pod" "$pod_uid"
     done < <(kubectl -n "$namespace" get pods -o json | jq -r --arg workload "$workload" '
       .items[] |
       select(any(.metadata.ownerReferences[]?;
         .kind == "StatefulSet" and .name == $workload)) |
-      .metadata.name
+      [.metadata.name, .metadata.uid] | @tsv
     ')
   done
 }
@@ -860,7 +931,8 @@ wait_stable_workloads() {
 }
 
 readback_local_image_supply_chain() {
-  local expected_policy actual_policy policy_resource controller workloads expected_digest actual_digest
+  local expected_policy actual_policy policy_resource controller workloads expected_deployments
+  local expected_digest actual_digest
   local target_registry promoted_pull_host resource name
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
@@ -907,17 +979,14 @@ readback_local_image_supply_chain() {
     fail 'runtime-controller materialization config readback mismatch'
   workloads=$(kubectl -n "$namespace" get deployments -o json) ||
     fail 'local Deployments are unavailable for policy readback'
-  jq -e --argjson policy "$expected_policy" '
-    (.items | length) > 0 and
-    all(.items[];
-      .spec.template.metadata.annotations[
-        "kodex.dev/runtime-admission-policy-sha256"] == $policy.policySHA256 and
-      all(((.spec.template.spec.initContainers // []) +
-          (.spec.template.spec.containers // []))[];
-        all((.env // [])[];
-          .valueFrom.configMapKeyRef.name !=
-            "kodex-image-admission-policy")))
-  ' <<<"$workloads" >/dev/null ||
+  expected_deployments=$(yq -o=json -I=0 '
+    select(.kind == "Deployment" and .metadata.namespace == "kodex-system") |
+    .metadata.name
+  ' "$render" | jq -sc 'unique | sort')
+  jq -e --argjson policy "$expected_policy" \
+    --argjson expected_deployments "$expected_deployments" \
+    -f "$script_directory/readback-rendered-deployments.jq" \
+    <<<"$workloads" >/dev/null ||
     fail 'local Deployment admission policy materialization readback mismatch'
   jq -e '
     .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
@@ -1007,6 +1076,7 @@ if [[ "$mode" == apply ]]; then
     select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
+  cleanup_local_frontend_transport
   ensure_session_archive_worker_secret
   cleanup_legacy_session_archive_worker_resources
   wait_certificates
@@ -1057,6 +1127,7 @@ else
   readback_session_archive_worker_secret
 fi
 
+readback_local_frontend_transport
 wait_certificates
 readback_local_object_storage_secret
 expected_backup_credentials="$temporary_directory/backup-controller-credentials-expected.json"

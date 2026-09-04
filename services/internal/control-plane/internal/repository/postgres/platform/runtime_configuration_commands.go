@@ -691,7 +691,7 @@ func lockOverlayDraft(ctx context.Context, tx pgx.Tx, organizationID, agentRef s
 }
 
 func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.AgentRuntimeConfigurationView, error) {
-	view, err := scanAgentRuntimeConfigurationView(tx.QueryRow(ctx, queryRuntimeConfigurationGetAgentView,
+	view, err := repository.scanAgentRuntimeConfigurationView(tx.QueryRow(ctx, queryRuntimeConfigurationGetAgentView,
 		scope.organizationID, ref, scope.role, scope.actorID))
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable

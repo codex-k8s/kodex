@@ -183,20 +183,21 @@ type proofClaims struct {
 }
 
 type workerGrantClaims struct {
-	Version        int    `json:"v"`
-	Issuer         string `json:"iss"`
-	Audience       string `json:"aud"`
-	Subject        string `json:"sub"`
-	CallerSPIFFEID string `json:"caller_spiffe_id"`
-	WorkloadID     string `json:"workload_id"`
-	OrganizationID string `json:"organization_id"`
-	ProjectID      string `json:"project_id"`
-	TenantOwner    bool   `json:"tenant_owner"`
-	Revision       uint64 `json:"revision"`
-	JTI            string `json:"jti"`
-	IssuedAt       int64  `json:"iat"`
-	NotBefore      int64  `json:"nbf"`
-	ExpiresAt      int64  `json:"exp"`
+	Version              int    `json:"v"`
+	Issuer               string `json:"iss"`
+	Audience             string `json:"aud"`
+	Subject              string `json:"sub"`
+	CallerSPIFFEID       string `json:"caller_spiffe_id"`
+	WorkloadID           string `json:"workload_id"`
+	OrganizationID       string `json:"organization_id"`
+	ProjectID            string `json:"project_id"`
+	TenantOwner          bool   `json:"tenant_owner"`
+	Revision             uint64 `json:"revision"`
+	CredentialGeneration uint64 `json:"credential_generation"`
+	JTI                  string `json:"jti"`
+	IssuedAt             int64  `json:"iat"`
+	NotBefore            int64  `json:"nbf"`
+	ExpiresAt            int64  `json:"exp"`
 }
 
 func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, error) {
@@ -341,7 +342,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 			return ResolveResult{}, fmt.Errorf("accept worker grant: %w", err)
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "kodex-system-subject", "kodex-installation"
-		callerCredentialRevision = grant.Revision
+		callerCredentialRevision = grant.CredentialGeneration
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
 	if err != nil {
@@ -400,8 +401,9 @@ func (service *Service) verifyWorkerGrant(compact string, producer proofProducer
 		return workerGrantClaims{}, errors.New("worker application grant claims are rejected")
 	}
 	now := service.now().UTC().Truncate(time.Second)
+	credentialGeneration, generationErr := internalrpcauth.KeyGeneration(key.KeyID)
 	if err := internalrpcauth.ValidateTimes(now, time.Unix(claims.IssuedAt, 0), time.Unix(claims.NotBefore, 0), time.Unix(claims.ExpiresAt, 0), workerGrantTTL, 5*time.Second); err != nil ||
-		claims.Version != 1 || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
+		generationErr != nil || claims.Version != 1 || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || claims.CredentialGeneration != credentialGeneration || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
 		return workerGrantClaims{}, errors.New("worker application grant binding is rejected")
 	}
 	return claims, nil

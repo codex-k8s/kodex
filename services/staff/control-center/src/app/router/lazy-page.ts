@@ -1,4 +1,7 @@
-const retryDelaysMs = [200, 600] as const;
+const retryDelaysMs = [200, 600, 1_500, 3_000] as const;
+const routeModuleRecoveryKey = "kodex:route-module-recovery";
+
+type RecoveryStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 export function lazyPage<T>(load: () => Promise<T>): () => Promise<T> {
   return async () => {
@@ -16,6 +19,32 @@ export function lazyPage<T>(load: () => Promise<T>): () => Promise<T> {
     }
     throw new Error("unreachable route module retry state");
   };
+}
+
+export function recoverLazyPageNavigation(
+  error: unknown,
+  targetPath: string,
+  storage: RecoveryStorage = window.sessionStorage,
+  navigate: (path: string) => void = (path) => window.location.replace(path),
+): boolean {
+  if (
+    !isTransientModuleLoadError(error) ||
+    !targetPath.startsWith("/") ||
+    targetPath.startsWith("//") ||
+    storage.getItem(routeModuleRecoveryKey) === targetPath
+  )
+    return false;
+  storage.setItem(routeModuleRecoveryKey, targetPath);
+  navigate(targetPath);
+  return true;
+}
+
+export function clearLazyPageRecovery(
+  targetPath: string,
+  storage: RecoveryStorage = window.sessionStorage,
+): void {
+  if (storage.getItem(routeModuleRecoveryKey) === targetPath)
+    storage.removeItem(routeModuleRecoveryKey);
 }
 
 function isTransientModuleLoadError(error: unknown): boolean {

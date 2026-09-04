@@ -3826,6 +3826,7 @@ components:
         recipe: { $ref: '#/components/schemas/RoleImageRecipe' }
         builds: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RoleImageBuild' } }
         activeArtifact: { $ref: '#/components/schemas/RoleImageArtifact' }
+        promotionCandidate: { $ref: '#/components/schemas/RoleImageArtifact' }
     RoleImageArtifactTool:
       type: object
       additionalProperties: false

@@ -697,6 +697,10 @@ func (service *Service) Execute(ctx context.Context, input command.Command) (com
 		return command.Result{}, err
 	}
 	input.Principal = principal
+	return service.executeResolved(ctx, input)
+}
+
+func (service *Service) executeResolved(ctx context.Context, input command.Command) (command.Result, error) {
 	if !knownCommand(input.Kind) || input.Payload == nil {
 		return command.Result{}, errs.ErrInvalid
 	}

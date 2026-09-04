@@ -23,6 +23,9 @@ done
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 "$script_directory/configure-ipv6-ingress-bridge.sh" --mode apply
 
+systemctl disable --now teleport.service >/dev/null 2>&1 || true
+rm -f -- /etc/systemd/system/teleport.service /etc/systemd/system/multi-user.target.wants/teleport.service
+
 systemctl disable --now kodex-local-api-address.service >/dev/null 2>&1 || true
 rm -f -- \
   /etc/systemd/system/kodex-local-api-address.service \
@@ -52,7 +55,10 @@ for path in \
   /etc/rancher/k3s \
   /run/flannel \
   /run/k3s \
+  /srv/kodex-dev \
+  /var/lib/teleport \
   /var/lib/cni \
+  /var/lib/kodex-dev \
   /var/lib/kubelet \
   /var/lib/rancher/k3s \
   /var/log/pods \
@@ -60,7 +66,11 @@ for path in \
   [[ "$path" == /* && "$path" != / ]] || fail 'unsafe reset path'
   rm -rf --one-file-system -- "$path"
 done
-rm -f -- /etc/systemd/system/k3s.service /etc/systemd/system/multi-user.target.wants/k3s.service
+rm -f -- /etc/teleport.yaml /etc/systemd/system/k3s.service \
+  /etc/systemd/system/multi-user.target.wants/k3s.service
+if getent passwd kodex-teleport >/dev/null; then
+  userdel --remove kodex-teleport >/dev/null 2>&1 || fail 'Teleport SSH login removal failed'
+fi
 systemctl daemon-reload
 
 for interface in cni0 flannel.1 flannel-v6.1; do
@@ -72,4 +82,6 @@ command -v iptables-save >/dev/null 2>&1 && iptables-save | grep -q 'KUBE-\|CNI-
 } || true
 command -v nft >/dev/null 2>&1 && nft list table inet kodex_fw >/dev/null 2>&1 &&
   fail 'legacy kodex_fw nftables policy remains active'
+[[ ! -e /var/lib/kodex-dev/cluster-identity.json ]] ||
+  fail 'disposable cluster identity marker remains after reset'
 printf 'Kodex host reset completed; all Kubernetes workloads and persistent data were removed\n'

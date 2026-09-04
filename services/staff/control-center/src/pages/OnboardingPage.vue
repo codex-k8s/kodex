@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import { openAssistantWorkspace } from "@/features/assistant/events";
@@ -39,9 +39,16 @@ async function finish(): Promise<void> {
   }
 }
 
-onMounted(async () => {
-  await platform.loadBootstrap();
-  if (platform.bootstrap?.onboardingComplete) await router.replace("/");
+watch(
+  () => platform.bootstrap?.onboardingComplete,
+  (complete) => {
+    if (complete) void router.replace("/");
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  void platform.loadBootstrap();
 });
 </script>
 

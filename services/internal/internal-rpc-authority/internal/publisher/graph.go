@@ -47,6 +47,8 @@ type rotatingKeySet struct {
 	previousGeneration uint64
 }
 
+const maximumSnapshotHistoryEntries = 32
+
 // NewGraph создаёт полный publisher graph из закрытого registry.
 func NewGraph(config GraphConfig) (*Graph, error) {
 	if config.Registry.Version != model.ContractVersion ||
@@ -131,19 +133,17 @@ func (graph *Graph) Publish(
 			"load durable same-input authority snapshot",
 		)
 	}
-	historyForBuild := history.Current
+	historyForBuild, err := snapshotHistoryForBuild(
+		history.Current,
+		graph.config.Registry.SourceRevision,
+		existing.SourceDigestSHA256,
+		found,
+	)
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, err
+	}
 	buildNow := now
 	if found {
-		if len(historyForBuild) == 0 ||
-			historyForBuild[len(historyForBuild)-1].Revision !=
-				existing.SourceRevision ||
-			historyForBuild[len(historyForBuild)-1].DigestSHA256 !=
-				existing.SourceDigestSHA256 {
-			return model.AuthoritySnapshotPublication{}, errors.New(
-				"durable authority snapshot history readback rejected",
-			)
-		}
-		historyForBuild = historyForBuild[:len(historyForBuild)-1]
 		buildNow = existing.PublishedAt
 	} else {
 		if len(historyForBuild) == 0 &&
@@ -255,13 +255,31 @@ func (graph *Graph) Publish(
 	}
 	persisted := publication
 	if found {
-		if existing.IntentID != publication.IntentID ||
-			existing.InputDigestSHA256 != publication.InputDigestSHA256 ||
-			existing.SourceDigestSHA256 != publication.SourceDigestSHA256 ||
-			existing.PolicyRevision != publication.PolicyRevision ||
-			existing.SignerGeneration != publication.SignerGeneration {
+		if existing.IntentID != publication.IntentID {
+			return model.AuthoritySnapshotPublication{}, fmt.Errorf(
+				"durable authority snapshot intent mutation rejected: stored content %s, desired content %s",
+				existing.SourceDigestSHA256,
+				publication.SourceDigestSHA256,
+			)
+		}
+		if existing.InputDigestSHA256 != publication.InputDigestSHA256 {
 			return model.AuthoritySnapshotPublication{}, errors.New(
-				"durable authority snapshot publication mutation rejected",
+				"durable authority snapshot input mutation rejected",
+			)
+		}
+		if existing.SourceDigestSHA256 != publication.SourceDigestSHA256 {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot content mutation rejected",
+			)
+		}
+		if existing.PolicyRevision != publication.PolicyRevision {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot policy mutation rejected",
+			)
+		}
+		if existing.SignerGeneration != publication.SignerGeneration {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"durable authority snapshot signer mutation rejected",
 			)
 		}
 		verifiedPayload, verifyErr := snapshot.VerifyPublisherSnapshotCompact(
@@ -334,6 +352,29 @@ func (graph *Graph) Publish(
 		)
 	}
 	return served, nil
+}
+
+func snapshotHistoryForBuild(
+	history []model.RevisionDigest,
+	sourceRevision uint64,
+	sourceDigest string,
+	found bool,
+) ([]model.RevisionDigest, error) {
+	result := append([]model.RevisionDigest(nil), history...)
+	if found {
+		if len(result) == 0 ||
+			result[len(result)-1].Revision != sourceRevision ||
+			result[len(result)-1].DigestSHA256 != sourceDigest {
+			return nil, errors.New(
+				"durable authority snapshot history readback rejected",
+			)
+		}
+		result = result[:len(result)-1]
+	}
+	if len(result) > maximumSnapshotHistoryEntries {
+		result = result[len(result)-maximumSnapshotHistoryEntries:]
+	}
+	return result, nil
 }
 
 func (graph *Graph) ensureWritable(ctx context.Context) error {

@@ -49,4 +49,10 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("<ViewModeToggle");
     expect(source).not.toContain("files-workspace__tabs");
   });
+
+  it("не сжимает фильтры в узкие нечитаемые кнопки на desktop", () => {
+    expect(source).toContain("@media (max-width: 1500px)");
+    expect(source).toContain("flex-basis: 100%");
+    expect(source).toContain("width: 148px");
+  });
 });

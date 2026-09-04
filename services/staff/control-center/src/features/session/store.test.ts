@@ -26,12 +26,17 @@ const oidc = vi.hoisted(() => ({
 const mutation = vi.hoisted(() => ({
   idempotencyKey: vi.fn(() => "00000000-0000-4000-8000-000000000000"),
 }));
+const oidcManagerSettings = vi.hoisted(() => vi.fn());
 
 vi.mock("oidc-client-ts", () => ({
   InMemoryWebStorage: class {
     readonly kind = "memory";
   },
   UserManager: class {
+    constructor(settings: unknown) {
+      oidcManagerSettings(settings);
+    }
+
     removeUser() {
       return oidc.removeUser();
     }
@@ -70,6 +75,7 @@ vi.mock("@/shared/api/mutation", () => ({
 vi.mock("@/shared/config/runtime", () => ({
   runtimeConfig: () => ({
     apiBaseUrl: "https://control.example.test",
+    requestTimeoutMs: 10_000,
     oidc: {
       authority: "https://identity.example.test/realms/kodex",
       clientId: "control-center",
@@ -127,6 +133,7 @@ describe("session renewal lifecycle", () => {
       state: undefined,
     });
     mutation.idempotencyKey.mockClear();
+    oidcManagerSettings.mockClear();
     const values = new Map<string, string>([["kodex.session.revision", "7"]]);
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -162,6 +169,53 @@ describe("session renewal lifecycle", () => {
     session.invalidate();
     await vi.advanceTimersByTimeAsync(10 * 60 * 1_000);
     expect(api.renewOwnerSession).toHaveBeenCalledTimes(2);
+  });
+
+  test("ограничивает OIDC metadata и token requests общим HTTP budget", async () => {
+    const session = useSessionStore();
+
+    await session.beginLogin();
+
+    expect(oidcManagerSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ requestTimeoutInSeconds: 10 }),
+    );
+  });
+
+  test("объединяет параллельный OIDC redirect и показывает busy state", async () => {
+    let finishRedirect!: () => void;
+    oidc.signinRedirect.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishRedirect = resolve;
+      }),
+    );
+    const session = useSessionStore();
+
+    const first = session.beginLogin();
+    const second = session.beginLogin();
+
+    expect(session.phase).toBe("checking");
+    expect(session.loginFailed).toBe(false);
+    expect(oidc.signinRedirect).toHaveBeenCalledOnce();
+    finishRedirect();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  test("публикует OIDC redirect failure через session error state", async () => {
+    const failure = Object.assign(new TypeError("Failed to fetch"), {
+      kind: "unavailable",
+      retryable: true,
+    });
+    oidc.signinRedirect.mockRejectedValueOnce(failure);
+    const session = useSessionStore();
+
+    await expect(session.beginLogin()).rejects.toBe(failure);
+
+    expect(session.phase).toBe("error");
+    expect(session.problem).toBe(failure);
+    expect(session.loginFailed).toBe(true);
   });
 
   test("повторяет retryable session probe и сохраняет авторизацию", async () => {

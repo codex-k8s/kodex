@@ -86,5 +86,5 @@ cd services/jobs/agent-runner
 GOWORK=off go test ./...
 ```
 
-Schema: `contracts/runtime-controller/v4/agent-runner-input.schema.json`.
+Schema: `contracts/runtime-controller/v6/agent-runner-input.schema.json`.
 Supply chain: `docs/domains/images-supply-chain.md`.

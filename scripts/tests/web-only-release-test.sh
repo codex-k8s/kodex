@@ -63,7 +63,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       any(.env[]; .name == "CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME" and
         .value == "secret-broker.kodex-system.svc.cluster.local") and
       any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TARGET" and
-        .value == "dns:///control-plane.kodex-system.svc:8443") and
+        .value == "dns:///127.0.0.1:8443") and
       any(.env[]; .name == "CONTROL_PLANE_PROVIDER_AUTHORITY_RESOLVER_TLS_SERVER_NAME" and
         .value == "control-plane.kodex-system.svc.cluster.local")) and
     any(.spec.template.spec.containers[];
@@ -232,6 +232,10 @@ yq -e 'select(.kind == "ValidatingAdmissionPolicy" and
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   map(select(.kind != null)) as $resources |
   any($resources[];
+    .kind == "ConfigMap" and
+    .metadata.name == "kodex-image-admission-policy" and
+    .data.providerAppArmorProfile == "") and
+  any($resources[];
     .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "runtime-execution-ticket-exact-projection" and
     .spec.failurePolicy == "Fail" and
@@ -284,6 +288,14 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       "mount.subPath in ['\''runtime.json'\'', '\''token'\'']")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "container.securityContext.allowPrivilegeEscalation == false")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''providerAppArmorProfile'\''] == '\'''\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "!has(variables.providerContainers[0].securityContext.appArmorProfile)")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "params.data['\''providerAppArmorProfile'\''] == '\''kodex-provider-runtime'\''")) and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "providerContainers[0].securityContext.appArmorProfile.localhostProfile")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "runtime-provider-credential-relay")) and
     ([.spec.validations[].expression] | join(" ") | contains(

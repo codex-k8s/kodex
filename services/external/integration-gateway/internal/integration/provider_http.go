@@ -29,7 +29,7 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	credential, err := adapter.readCredential(call.Credential)
+	credential, err := adapter.readCredential(ctx, call.Credential)
 	if err != nil {
 		return nil, err
 	}

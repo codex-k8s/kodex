@@ -2,11 +2,62 @@ package codex
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
+	t.Parallel()
+	err := protocolError("turn/start", json.RawMessage(`{"code":-32602,"message":"secret diagnostic"}`))
+	if err == nil || err.Error() != "Codex app-server returned a protocol error for turn/start (code -32602)" {
+		t.Fatalf("protocol error = %v", err)
+	}
+	if strings.Contains(err.Error(), "secret diagnostic") {
+		t.Fatal("protocol error exposed the upstream diagnostic")
+	}
+}
+
+func TestClassifyAccountReadResponse(t *testing.T) {
+	t.Parallel()
+
+	availabilityErr := errors.New("Codex app-server is unavailable")
+	protocolErr := protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"internal"}`))
+	tests := []struct {
+		name     string
+		raw      json.RawMessage
+		callErr  error
+		wantErr  bool
+		wantAuth bool
+	}{
+		{name: "explicit authentication required", raw: json.RawMessage(`{"account":null,"requiresOpenaiAuth":true}`), wantErr: true, wantAuth: true},
+		{name: "API key account", raw: json.RawMessage(`{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}`)},
+		{name: "ChatGPT account", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null,"planType":"pro"},"requiresOpenaiAuth":true}`)},
+		{name: "external Bedrock account", raw: json.RawMessage(`{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false}`)},
+		{name: "provider without OpenAI account", raw: json.RawMessage(`{"requiresOpenaiAuth":false}`)},
+		{name: "transport unavailable", callErr: availabilityErr, wantErr: true},
+		{name: "protocol failure", callErr: protocolErr, wantErr: true},
+		{name: "invalid top-level schema", raw: json.RawMessage(`{"account":null,"requiresOpenaiAuth":"true"}`), wantErr: true},
+		{name: "invalid account schema", raw: json.RawMessage(`{"account":{"type":"chatgpt","email":null},"requiresOpenaiAuth":false}`), wantErr: true},
+		{name: "unknown account field", raw: json.RawMessage(`{"account":{"type":"apiKey","token":"hidden"},"requiresOpenaiAuth":false}`), wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			err := classifyAccountReadResponse(test.raw, test.callErr)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("classifyAccountReadResponse() error = %v, wantErr %v", err, test.wantErr)
+			}
+			if got := errors.Is(err, ErrProviderAuthentication); got != test.wantAuth {
+				t.Fatalf("errors.Is(error, ErrProviderAuthentication) = %v, want %v; error = %v", got, test.wantAuth, err)
+			}
+		})
+	}
+}
 
 func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://egress-gateway:8080")
@@ -35,6 +86,24 @@ func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 		if method == "thread/tokenUsage/updated" {
 			t.Fatal("token usage notification is required for authoritative per-turn accounting")
 		}
+	}
+}
+
+func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
+	input := model.Input{SystemAssistant: true}
+	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
+	input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{})
+	actual := requiredMCPToolNames(input)
+	expected := []string{
+		"propose_run_metadata",
+		"get_configuration_catalog",
+		"propose_configuration_plan",
+		"propose_assistant_metadata",
+		"delegate_agent",
+		"invoke_integration",
+	}
+	if !sameStringSet(actual, expected) {
+		t.Fatalf("required MCP tools = %#v, want %#v", actual, expected)
 	}
 }
 

@@ -226,11 +226,11 @@ if [[ "$arguments" == *' get ingress kodex-headlamp -o json '* ]]; then
   exit 0
 fi
 if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
-  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd"}}}\n'
+  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"}}}\n'
   exit 0
 fi
 if [[ "$arguments" == *' get ingress staff-control-center-api -o json '* ]]; then
-  printf '%s\n' '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-auth@kubernetescrd","traefik.ingress.kubernetes.io/router.priority":"200"}},"spec":{"rules":[{"http":{"paths":[{"path":"/api/v1","pathType":"Prefix","backend":{"service":{"name":"staff-control-center","port":{"name":"https"}}}}]}}]}}'
+  printf '%s\n' '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-auth@kubernetescrd","traefik.ingress.kubernetes.io/router.priority":"200"}},"spec":{"rules":[{"http":{"paths":[{"path":"/api/v1","pathType":"Prefix","backend":{"service":{"name":"control-api-gateway","port":{"name":"https"}}}}]}}]}}'
   exit 0
 fi
 if [[ "$arguments" == *' get service staff-control-center -o json '* ]]; then

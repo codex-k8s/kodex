@@ -155,7 +155,6 @@ func (repository *Repository) proposeRunMetadata(ctx context.Context, tx pgx.Tx,
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	run.TitleSource, run.ActivitySummary = "AGENT_PROPOSED", activity
 	return commandOutcome{result: command.Result{Run: &run, Event: &event}, projectID: stringMap(lease, "projectID"),
 		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN", resourceRef: stringMap(lease, "runRef"),
 		summary: "i18n:RUN_METADATA_UPDATED"}, nil
@@ -1117,7 +1116,7 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 
 func runtimeSafeErrorCode(code string) bool {
 	switch code {
-	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED":
+	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED":
 		return true
 	default:
 		return false

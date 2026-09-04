@@ -99,12 +99,18 @@ seed_rootless_writes=$(rg -c --fixed-strings 'docker run --rm --network host --u
   "$source_root/tools/dev/seed-local-image-supply-chain.sh")
 [[ "$seed_rootless_writes" == 1 ]] ||
   fail 'rootless Docker registry seed must use container root for its private bind mount'
-rg -F '$gomodcache/cache/download/sumdb/sum.golang.org' \
+rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
+  "$source_root/tools/dev/seed-local-image-supply-chain.sh" ||
+  fail 'registry seed cleanup cannot remove container-owned temporary state'
+rg -Fq 'serverstransport.traefik.io/staff-control-center' \
+  "$source_root/tools/dev/deploy-local.sh" ||
+  fail 'local deploy does not remove the obsolete frontend ServersTransport'
+rg -F 'chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"' \
+  "$source_root/tools/dev/render-local.sh" >/dev/null ||
+  fail 'host priming does not make shared Go material read-only'
+rg -F 'test ! -w "$readonly_directory"' \
   "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
-  fail 'hot-reload bootstrap does not prepare the module-cache SumDB path'
-rg -F '$gopath/pkg/sumdb/sum.golang.org' \
-  "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
-  fail 'hot-reload bootstrap does not prepare the GOPATH SumDB path'
+  fail 'hot-reload bootstrap does not reject a writable shared Go path'
 configure_calls=$(rg -c --fixed-strings 'tools/deploy/configure-keycloak.sh' "$source_root/dev.sh")
 origin_argument_uses=$(rg -c --fixed-strings '"${keycloak_origin_arguments[@]}"' "$source_root/dev.sh")
 [[ "$configure_calls" == 2 && "$origin_argument_uses" == 2 ]] ||
@@ -123,6 +129,24 @@ for cleanup_contract in \
     fail "local admission revision cleanup omits contract: $cleanup_contract"
 done
 
+deployment_readback_filter="$source_root/tools/dev/readback-rendered-deployments.jq"
+[[ -f "$deployment_readback_filter" && ! -L "$deployment_readback_filter" ]] ||
+  fail 'rendered Deployment readback filter is unavailable'
+policy_fixture='{"policySHA256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+workloads_fixture='{"items":[
+  {"metadata":{"name":"runtime-controller"},"spec":{"template":{"metadata":{"annotations":{"kodex.dev/runtime-admission-policy-sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},"spec":{"containers":[{"name":"runtime-controller","env":[]}]}}}},
+  {"metadata":{"name":"oauth2-control-center"},"spec":{"template":{"metadata":{"annotations":{}},"spec":{"containers":[{"name":"oauth2-proxy","env":[]}]}}}}
+]}'
+jq -e --argjson policy "$policy_fixture" \
+  --argjson expected_deployments '["runtime-controller"]' \
+  -f "$deployment_readback_filter" <<<"$workloads_fixture" >/dev/null ||
+  fail 'rendered Deployment readback rejects an unrelated managed surface'
+if jq -e --argjson policy "$policy_fixture" \
+  --argjson expected_deployments '["runtime-controller","secret-broker"]' \
+  -f "$deployment_readback_filter" <<<"$workloads_fixture" >/dev/null; then
+  fail 'rendered Deployment readback accepts an absent expected workload'
+fi
+
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 install -d -m 0700 "$cache_root"
@@ -132,6 +156,7 @@ render="$temporary_directory/render.yaml"
   --source-root "$source_root" --cache-root "$cache_root" --output "$render" \
   --public-host control.127.0.0.1.nip.io \
   --oidc-host sso.127.0.0.1.nip.io \
+  --tls-mode public-acme \
   --kubernetes-service-cidr 10.43.0.1/32 \
   --kubernetes-endpoint-cidr 127.0.0.1/32 --kubernetes-endpoint-port 6443 \
   --runner-image registry.local.kodex/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
@@ -142,6 +167,7 @@ render="$temporary_directory/render.yaml"
   --image-admission-image registry.local.kodex/kodex/image-admission@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee \
   --image-admission-tools-image registry.local.kodex/kodex/image-admission-tools@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
   --authority-image registry.local.kodex/kodex/internal-rpc-authority@sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+  --provider-apparmor-profile kodex-provider-runtime \
   --authority-source-revision 1 \
   --role-image-input-manifest-digest sha256:2222222222222222222222222222222222222222222222222222222222222222 \
   --role-image-input-payload-sha256 3333333333333333333333333333333333333333333333333333333333333333 \
@@ -158,6 +184,72 @@ policy_json=$(yq -o=json -I=0 '
   select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy")
 ' "$render")
 [[ -n "$policy_json" && "$policy_json" != null ]] || fail 'rendered owner intent is absent'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  (first(.[] | select(.kind == "ConfigMap" and
+    .metadata.name == "kodex-image-admission-policy")) | .data) as $intent |
+  (first(.[] | select(.kind == "ImageAdmissionPolicyParameters" and
+    .metadata.name == "kodex-image-admission-policy")) | .spec) as $parameters |
+  $intent == $parameters and
+  $intent.providerAppArmorProfile == "kodex-provider-runtime"
+' >/dev/null || fail 'provider AppArmor profile is not projected into admission parameters'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "platform-postgresql-exact-clients" and
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      .matchLabels["app.kubernetes.io/component"] == "image-admission" and
+      any(.matchExpressions[]?;
+        .key == "kodex.dev/image-admission-phase" and
+        .operator == "In" and
+        (.values | sort) == (["admit","claim","promote"] | sort))))
+' >/dev/null || fail 'PostgreSQL ingress omits protected image-admission jobs'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths" and
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+      .matchLabels["app.kubernetes.io/component"] == "image-admission" and
+      any(.matchExpressions[]?;
+        .key == "kodex.dev/image-admission-phase" and
+        .operator == "In" and
+        (.values | sort) == (["admit","claim","promote"] | sort))))
+' >/dev/null || fail 'authority attestor ingress omits protected image-admission jobs'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  all(.[] | select(.kind == "NetworkPolicy");
+    all((
+      ([.spec.podSelector // empty] +
+       [.spec.ingress[]?.from[]?.podSelector // empty] +
+       [.spec.egress[]?.to[]?.podSelector // empty])[]
+    );
+      (((.matchLabels["kodex.dev/image-admission-phase"]? != null) or
+        any(.matchExpressions[]?;
+          .key == "kodex.dev/image-admission-phase")) | not) or
+      (.matchLabels["app.kubernetes.io/name"] == "kodex-image-admission" and
+       .matchLabels["app.kubernetes.io/component"] == "image-admission")))
+' >/dev/null || fail 'image-admission NetworkPolicy selector is based on phase without exact workload identity'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "kodex-image-registry-promotion" and
+    any(.spec.ingress[].from[]?.podSelector;
+      .matchLabels["app.kubernetes.io/name"] == "release-artifact-materializer" and
+      .matchLabels["app.kubernetes.io/component"] == "release-bootstrap" and
+      .matchLabels["kodex.dev/release-artifact-materializer"] == "true"))
+' >/dev/null || fail 'promotion registry ingress does not bind the materializer to its exact workload identity'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "kodex-image-admission-controller-jobs" and
+    any(.spec.validations[]?.expression;
+      contains("object.metadata.labels['"'"'app.kubernetes.io/name'"'"'] == '"'"'kodex-image-admission'"'"'") and
+      contains("object.metadata.labels['"'"'app.kubernetes.io/component'"'"'] == '"'"'image-admission'"'"'") and
+      contains("object.spec.template.metadata.labels['"'"'kodex.dev/image-admission-phase'"'"'] ==") and
+      contains("variables.phase") and
+      contains("object.spec.template.metadata.labels['"'"'kodex.dev/image-admission-id'"'"'] ==") and
+      contains("variables.admissionId")))
+' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
   jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
@@ -170,11 +262,55 @@ jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_cont
 ' <<<"$policy_json" >/dev/null ||
   fail 'local policy or role runtime contract identity is not content-addressed'
 source_revision=$(git -C "$source_root" rev-parse HEAD)
-source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
+source_digest=$(
+  cd -- "$source_root"
+  {
+    printf 'BASE_TREE\0%s\0' "$(git rev-parse 'HEAD^{tree}')"
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' path; do
+      printf 'UNTRACKED\0%s\0' "$path"
+      if [[ -L "$path" ]]; then
+        printf 'SYMLINK\0%s\0' "$(readlink -- "$path")"
+      elif [[ -f "$path" ]]; then
+        sha256sum -- "$path"
+      else
+        printf 'OTHER\0'
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+  } | sha256sum | awk '{print $1}'
+)
+source_dirty=false
+[[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
+yq -o=json -I=0 '.' "$render" | jq -s -e \
+  --arg source_revision "$source_revision" --arg source_digest "$source_digest" \
+  --arg source_dirty "$source_dirty" '
+    . as $resources |
+    (first($resources[] | select(.kind == "ConfigMap" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == "kodex-dev-source-provenance")) | .data) as $provenance |
+    $provenance == {
+      sourceRevision:$source_revision,
+      sourceContentSHA256:$source_digest,
+      sourceDirty:$source_dirty
+    } and
+    all($resources[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
+      .kind == "Job");
+      .spec.template.metadata.annotations["kodex.dev/source-revision"] ==
+        $source_revision and
+      .spec.template.metadata.annotations["kodex.dev/source-content-sha256"] ==
+        $source_digest)
+  ' >/dev/null || fail 'rendered source provenance is not bound to the actual worktree content'
 [[ "$actual_policy_digest" != "$source_digest" &&
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||
   fail 'policy, role runtime contract, and source revision identities unexpectedly collide'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
+  all(.[];
+    .kind != "ServersTransport" or .metadata.name != "staff-control-center") and
+  any(.[];
+    .kind == "Service" and .metadata.name == "staff-control-center" and
+    (.metadata.annotations // {} |
+      has("traefik.ingress.kubernetes.io/service.serverstransport") | not) and
+    .spec.ports == [{"name":"http","port":8080,"targetPort":"http","protocol":"TCP"}]) and
   any(.[];
     .kind == "Role" and .metadata.name == "image-admission-controller" and
     any(.rules[];
@@ -184,6 +320,19 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .apiGroups == [""] and .resources == ["persistentvolumeclaims"] and
       (.verbs | sort) == (["create","delete","get","list"] | sort)))
 ' >/dev/null || fail 'image admission controller cannot clean terminal jobs and workspaces'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd" and
+    .spec.rules[0].http.paths[0].backend.service.port.name == "http") and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      "kodex-system-oauth2-control-center-auth@kubernetescrd" and
+    .spec.rules[0].http.paths[0].backend.service ==
+      {name:"control-api-gateway",port:{name:"https"}})
+' >/dev/null || fail 'public hot-reload render does not enforce Control Center OAuth routing'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   all(.[] | select(.kind == "Deployment" or .kind == "StatefulSet" or
       .kind == "Job");
@@ -203,7 +352,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         (.spec.template.spec.containers // []))[];
       all((.env // [])[];
         .valueFrom.configMapKeyRef.name != "kodex-image-admission-policy"))) and
-  any(.[ ];
+  any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     .spec.template.metadata.annotations["kodex.dev/controller-image"] ==
       ([.spec.template.spec.containers[] |
@@ -240,11 +389,21 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       .name == "dev-go-tools" and (.hostPath.path | endswith("/go-tools"))) and
     any(.spec.template.spec.volumes[];
       .name == "dev-go-sumdb" and (.hostPath.path | endswith("/go-sumdb"))) and
+    any(.spec.template.spec.volumes[];
+      .name == "dev-build-publisher" and
+      (.hostPath.path | endswith("/go-build-v2/internal-rpc-authority-publisher-publisher"))) and
     any(.spec.template.spec.containers[];
       .name == "publisher" and .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
-      any(.volumeMounts[]; .name == "dev-go-tools" and .mountPath == "/go/tools") and
-      any(.volumeMounts[]; .name == "dev-go-sumdb" and .mountPath == "/go/pkg/sumdb") and
+      any(.volumeMounts[]; .name == "dev-go-tools" and .mountPath == "/go/tools" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-go-mod" and .mountPath == "/go/pkg/mod" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-go-sumdb" and .mountPath == "/go/pkg/sumdb" and
+        .readOnly == true) and
+      any(.volumeMounts[]; .name == "dev-build-publisher" and
+        .mountPath == "/go/build-cache" and (.readOnly // false) == false) and
       any(.env[]; .name == "GOMODCACHE" and .value == "/go/pkg/mod") and
+      any(.env[]; .name == "GOCACHE" and .value == "/go/build-cache/cache") and
       any(.env[]; .name == "GOTMPDIR" and (.value | startswith("/go/build-cache/"))) and
       all(.env[]; .name != "GOSUMDB" or .value != "off"))) and
   any(.[];
@@ -266,7 +425,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       any(.env[];
         .name == "READBACK_IMAGE" and
         .value == "pull.127.0.0.1.nip.io/kodex/control-plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
-' >/dev/null || fail 'hot-reload tool, evidence PVC, or pull readiness contract is invalid'
+' >/dev/null || fail 'hot-reload frontend, tool, evidence PVC, or pull readiness contract is invalid'
 expected_frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format digest)
 actual_frontend_sha256=$(jq -er '.data.frontendSHA256' <<<"$policy_json")

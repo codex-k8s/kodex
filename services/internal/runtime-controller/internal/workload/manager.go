@@ -71,6 +71,7 @@ type Config struct {
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret             string
 	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
 	ProviderHTTPSProxy                                                                 string
+	ProviderAppArmorProfile                                                            string
 	KubernetesAPIServiceIP                                                             string
 	PromotedRoleImageRepository, DefaultRoleImageReference                             string
 	RoleRuntimeContractSHA256                                                          string
@@ -119,6 +120,7 @@ func New(client kubernetes.Interface, config Config) (*Manager, error) {
 		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
 		config.CallbackClientTLSSecret == "" ||
 		config.ProviderHTTPSProxy == "" ||
+		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
 		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
 		(config.StorageClass != "" && !validDNSSubdomain(config.StorageClass)) ||
 		config.RunnerServiceAccount == "" ||
@@ -1421,7 +1423,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: manager.config.ProviderHTTPSProxy}, {Name: "HTTP_PROXY", Value: manager.config.ProviderHTTPSProxy},
-			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002),
+			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "session", MountPath: "/workspace"},
 			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime/runtime.json", SubPath: inputKey, ReadOnly: true},
@@ -1839,6 +1841,7 @@ func turnPodName(value string) string                            { return runtim
 func int64Pointer(value int64) *int64                            { return &value }
 func int32Pointer(value int32) *int32                            { return &value }
 func boolPointer(value bool) *bool                               { return &value }
+func stringPointer(value string) *string                         { return &value }
 func quantityPointer(value resource.Quantity) *resource.Quantity { return &value }
 
 func validDNSLabel(value string) bool {
@@ -1870,12 +1873,17 @@ func restrictedSecurityContext(uid int64) *corev1.SecurityContext {
 	return &corev1.SecurityContext{RunAsNonRoot: boolPointer(true), RunAsUser: int64Pointer(uid), RunAsGroup: int64Pointer(uid), AllowPrivilegeEscalation: boolPointer(false), ReadOnlyRootFilesystem: boolPointer(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}, SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}
 }
 
-func providerSandboxSecurityContext(uid int64) *corev1.SecurityContext {
+func providerSandboxSecurityContext(uid int64, appArmorProfile string) *corev1.SecurityContext {
 	securityContext := restrictedSecurityContext(uid)
 	// Codex строит внутреннюю файловую и сетевую границу через bubblewrap.
-	// Default seccomp/AppArmor профили Kubernetes блокируют создание его user namespace.
+	// Default seccomp блокирует создание его user namespace. Host-owned dev
+	// профиль может дополнительно назначить node-local AppArmor policy, но base
+	// профиль не предполагает наличие такого артефакта на чужих узлах.
 	securityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined}
-	securityContext.AppArmorProfile = &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined}
+	if appArmorProfile != "" {
+		securityContext.AppArmorProfile = &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeLocalhost,
+			LocalhostProfile: stringPointer(appArmorProfile)}
+	}
 	return securityContext
 }
 

@@ -28,8 +28,17 @@ type runtimeConfig struct {
 	CLIAuthCredentialStore string                       `toml:"cli_auth_credentials_store"`
 	History                historyConfig                `toml:"history"`
 	ShellEnvironmentPolicy shellEnvironmentPolicy       `toml:"shell_environment_policy"`
+	Features               runtimeFeatures              `toml:"features"`
 	MCPServers             map[string]mcpServerConfig   `toml:"mcp_servers"`
 	Permissions            map[string]permissionProfile `toml:"permissions"`
+}
+
+type runtimeFeatures struct {
+	CodeMode runtimeCodeModeConfig `toml:"code_mode"`
+}
+
+type runtimeCodeModeConfig struct {
+	DirectOnlyToolNamespaces []string `toml:"direct_only_tool_namespaces"`
 }
 
 type permissionProfile struct {
@@ -49,11 +58,12 @@ type shellEnvironmentPolicy struct {
 }
 
 type mcpServerConfig struct {
-	URL                   string `toml:"url"`
-	Required              bool   `toml:"required"`
-	BearerTokenEnvVar     string `toml:"bearer_token_env_var"`
-	StartupTimeoutSeconds int    `toml:"startup_timeout_sec"`
-	ToolTimeoutSeconds    int    `toml:"tool_timeout_sec"`
+	URL                      string `toml:"url"`
+	Required                 bool   `toml:"required"`
+	BearerTokenEnvVar        string `toml:"bearer_token_env_var"`
+	StartupTimeoutSeconds    int    `toml:"startup_timeout_sec"`
+	ToolTimeoutSeconds       int    `toml:"tool_timeout_sec"`
+	DefaultToolsApprovalMode string `toml:"default_tools_approval_mode"`
 }
 
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
@@ -110,6 +120,9 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
+		Features: runtimeFeatures{CodeMode: runtimeCodeModeConfig{
+			DirectOnlyToolNamespaces: []string{"mcp__kodex"},
+		}},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
 			Filesystem: map[string]string{
 				filepath.Join(input.CodexHome, "auth.json"): "deny",
@@ -119,8 +132,9 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
 			IncludeOnly: includeOnly, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,
-			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN",
-			Required:          true, StartupTimeoutSeconds: 15, ToolTimeoutSeconds: 60}}}
+			BearerTokenEnvVar: "KODEX_MCP_PROXY_TOKEN", DefaultToolsApprovalMode: "approve",
+			Required: true, StartupTimeoutSeconds: 15,
+			ToolTimeoutSeconds: runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds}}}
 	var raw bytes.Buffer
 	if err := toml.NewEncoder(&raw).Encode(config); err != nil {
 		return errors.New("encode Codex configuration")
@@ -130,6 +144,8 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 	if err != nil || len(metadata.Undecoded()) != 0 || decoded.Model != input.Model ||
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
+		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
+		!slices.Equal(decoded.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
 		decoded.Permissions[permissionProfileName].Filesystem[filepath.Join(input.CodexHome, "auth.json")] != "deny" {

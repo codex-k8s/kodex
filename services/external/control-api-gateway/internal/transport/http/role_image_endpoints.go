@@ -67,6 +67,10 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
 		result.ActiveArtifact = &artifact
 	}
+	if response.GetPromotionCandidate() != nil {
+		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
+		result.PromotionCandidate = &artifact
+	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
 	writeJSON(writer, http.StatusOK, result)
 }
@@ -257,6 +261,7 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
 		RecipeGeneration: int64(input.GetRecipeGeneration()), ManifestDigest: input.GetManifestDigest(),
+		ProvenanceSha256: input.GetProvenanceSha256(),
 		AdmissionVerdict: generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
 		Tools:            make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
 	}

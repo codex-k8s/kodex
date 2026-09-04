@@ -20,7 +20,7 @@ import (
 
 const (
 	providerCleanupTaskRef    = "pcct_cleanup1234"
-	providerCleanupAccountRef = "pacc_cleanup1234"
+	providerCleanupAccountRef = "pacc_cleanup_Account9Z"
 	providerCleanupGeneration = int64(7)
 	providerCleanupContent    = `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-cleanup-value"}`
 )

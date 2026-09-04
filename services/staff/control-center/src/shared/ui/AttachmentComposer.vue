@@ -17,6 +17,7 @@ import {
 } from "@/shared/api/attachment-artifacts";
 import { createAttachmentSetDraftStore } from "@/shared/api/attachment-set-store";
 import {
+  attachmentTerminalScanState,
   isAttachmentScopeAvailable,
   uploadCleanAttachmentArtifact,
 } from "@/shared/api/attachment-sets";
@@ -89,8 +90,18 @@ const queue = createAttachmentUploadQueue({
     ),
   disabled: () => effectivelyDisabled.value,
   reservedBytes: () => props.reservedBytes,
-  formatError: (error) =>
-    asProblem(error).detail || t("attachments.uploadFailed"),
+  classifyFailure: (error) => {
+    const scanState = attachmentTerminalScanState(error);
+    if (scanState === "FAILED") return "TERMINAL_FAILED";
+    if (scanState === "QUARANTINED") return "QUARANTINED";
+    return "RETRYABLE";
+  },
+  formatError: (error) => {
+    const scanState = attachmentTerminalScanState(error);
+    if (scanState === "FAILED") return t("attachments.scanFailed");
+    if (scanState === "QUARANTINED") return t("attachments.quarantinedReplace");
+    return asProblem(error).detail || t("attachments.uploadFailed");
+  },
 });
 const { items, state: uploadState } = queue;
 const dragActive = computed(() => dragDepth.value > 0);

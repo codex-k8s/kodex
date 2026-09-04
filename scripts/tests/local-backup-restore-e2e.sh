@@ -77,15 +77,16 @@ approval_id="e2e-approval-$suffix"
 target_prefix="$restore_id"
 job_name="backup-controller-$restore_id"
 job_selector="app.kubernetes.io/name=backup-controller,app.kubernetes.io/component=restore-drill,app.kubernetes.io/managed-by=kodex-local-e2e,kodex.dev/local-profile=hot-reload,kodex.dev/e2e-run=$suffix"
+failure_bundle="$state_directory/e2e/$suffix-backup-kubernetes"
 target_databases=()
 port_forward_pid=""
 cleanup() {
+  local exit_code=$?
+  trap - EXIT
   if [[ -n "$port_forward_pid" ]]; then
     kill "$port_forward_pid" >/dev/null 2>&1 || true
     wait "$port_forward_pid" >/dev/null 2>&1 || true
   fi
-  kodex_e2e_delete_owned_jobs kodex-system "$job_selector" \
-    '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' 2m >/dev/null 2>&1 || true
   kubectl -n kodex-system delete secret/backup-controller-repository \
     secret/backup-controller-restore-targets secret/backup-controller-restore-approval \
     --ignore-not-found --wait=false >/dev/null 2>&1 || true
@@ -97,6 +98,14 @@ cleanup() {
         --command "DROP DATABASE IF EXISTS \"$database\";" >/dev/null 2>&1 || true
   done
   rm -rf -- "$temporary_directory"
+  if ((exit_code == 0)); then
+    kodex_e2e_delete_owned_jobs kodex-system "$job_selector" \
+      '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' 2m >/dev/null 2>&1 || true
+  elif ! kodex_e2e_retain_owned_terminal_jobs_on_failure kodex-system "$job_selector" \
+    '^backup-controller-e2e-restore-[0-9]{14}-[0-9]+$' "$failure_bundle"; then
+    printf 'Local backup restore E2E failed to retain safe Kubernetes diagnostics\n' >&2
+  fi
+  exit "$exit_code"
 }
 trap cleanup EXIT
 
@@ -120,6 +129,24 @@ jq -e '
   .destination.bucket == "kodex-backups" and
   (.objectStores | length) > 0
 ' "$credentials" >/dev/null || fail 'local backup-controller credentials are invalid'
+
+jq -er '.destination.accessKeyId' "$credentials" >"$temporary_directory/access-key"
+jq -er '.destination.secretAccessKey' "$credentials" >"$temporary_directory/secret-key"
+chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
+port_forward_log="$temporary_directory/port-forward.log"
+kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
+  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
+port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
+endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
+(
+  cd "$repository_root/services/jobs/backup-controller"
+  BACKUP_RESTORE_E2E=1 \
+  BACKUP_RESTORE_E2E_ENDPOINT="$endpoint" \
+  BACKUP_RESTORE_E2E_ACCESS_KEY_FILE="$temporary_directory/access-key" \
+  BACKUP_RESTORE_E2E_SECRET_KEY_FILE="$temporary_directory/secret-key" \
+  BACKUP_RESTORE_E2E_LOCK_ID="e2e-lock-$suffix" \
+    go test ./internal/s3backup -run '^TestSeaweedFSOperationLockE2E$' -count=1 -timeout=2m
+)
 
 postgres_password=$(kubectl -n kodex-system get secret/kodex-postgresql-bootstrap -o json | \
   jq -er '.data.password | @base64d') || fail 'local PostgreSQL bootstrap credential is unavailable'
@@ -255,15 +282,6 @@ for database in "${target_databases[@]}"; do
   [[ "$exists" == 1 ]] || fail 'restored PostgreSQL database readback failed'
 done
 
-jq -er '.destination.accessKeyId' "$credentials" >"$temporary_directory/access-key"
-jq -er '.destination.secretAccessKey' "$credentials" >"$temporary_directory/secret-key"
-chmod 0600 "$temporary_directory/access-key" "$temporary_directory/secret-key"
-
-port_forward_log="$temporary_directory/port-forward.log"
-kodex_e2e_start_seaweedfs_port_forward kodex-system "$port_forward_log" ||
-  fail 'ready SeaweedFS Service endpoint or loopback port-forward is unavailable'
-port_forward_pid=$KODEX_E2E_PORT_FORWARD_PID
-endpoint=$KODEX_E2E_PORT_FORWARD_ENDPOINT
 (
   cd "$repository_root/services/jobs/backup-controller"
   BACKUP_RESTORE_E2E=1 \

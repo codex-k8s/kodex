@@ -114,12 +114,13 @@ func (repository *Repository) oidcGroupsMatch(
 	for rows.Next() {
 		var groupName string
 		var currentSessionRevision uint64
-		if err := rows.Scan(&groupName, &currentSessionRevision); err != nil {
+		var recentlyObserved bool
+		if err := rows.Scan(&groupName, &currentSessionRevision, &recentlyObserved); err != nil {
 			rows.Close()
 			return false, errs.ErrUnavailable
 		}
 		currentGroups = append(currentGroups, groupName)
-		if currentSessionRevision != sessionRevision {
+		if currentSessionRevision != sessionRevision || !recentlyObserved {
 			currentRevision = 0
 		}
 	}

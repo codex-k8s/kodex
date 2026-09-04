@@ -6,10 +6,29 @@ fail() {
   exit 1
 }
 
+calculate_source_content_fingerprint() {
+  (
+    cd -- "$source_root"
+    printf 'BASE_TREE\0%s\0' "$(git rev-parse 'HEAD^{tree}')"
+    git diff --no-ext-diff --binary HEAD --
+    while IFS= read -r -d '' path; do
+      printf 'UNTRACKED\0%s\0' "$path"
+      if [[ -L "$path" ]]; then
+        printf 'SYMLINK\0%s\0' "$(readlink -- "$path")"
+      elif [[ -f "$path" ]]; then
+        sha256sum -- "$path"
+      else
+        printf 'OTHER\0'
+      fi
+    done < <(git ls-files --others --exclude-standard -z)
+  ) | sha256sum | awk '{print $1}'
+}
+
 usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
+    '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
@@ -19,6 +38,7 @@ usage() {
     '  --image-admission-image <repository@sha256:digest>' \
     '  --image-admission-tools-image <repository@sha256:digest>' \
     '  --authority-image <repository@sha256:digest>' \
+    '  [--provider-apparmor-profile <name>]' \
     '  --authority-source-revision <positive integer>' \
     '  --role-image-input-manifest-digest <sha256:digest>' \
     '  --role-image-input-payload-sha256 <sha256>' \
@@ -30,6 +50,9 @@ cache_root=""
 output=""
 public_host=""
 oidc_host=""
+ingress_class=traefik
+cluster_issuer=kodex-local
+tls_mode=local-ca
 kubernetes_service_cidr=""
 kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
@@ -41,6 +64,7 @@ role_image_builder_image=""
 image_admission_image=""
 image_admission_tools_image=""
 authority_image=""
+provider_apparmor_profile=""
 authority_source_revision=""
 role_image_input_manifest_digest=""
 role_image_input_payload_sha256=""
@@ -52,6 +76,9 @@ while (($# > 0)); do
     --output) output=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
+    --ingress-class) ingress_class=${2:-}; shift 2 ;;
+    --cluster-issuer) cluster_issuer=${2:-}; shift 2 ;;
+    --tls-mode) tls_mode=${2:-}; shift 2 ;;
     --kubernetes-service-cidr) kubernetes_service_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-cidr) kubernetes_endpoint_cidr=${2:-}; shift 2 ;;
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
@@ -63,6 +90,7 @@ while (($# > 0)); do
     --image-admission-image) image_admission_image=${2:-}; shift 2 ;;
     --image-admission-tools-image) image_admission_tools_image=${2:-}; shift 2 ;;
     --authority-image) authority_image=${2:-}; shift 2 ;;
+    --provider-apparmor-profile) provider_apparmor_profile=${2:-}; shift 2 ;;
     --authority-source-revision) authority_source_revision=${2:-}; shift 2 ;;
     --role-image-input-manifest-digest) role_image_input_manifest_digest=${2:-}; shift 2 ;;
     --role-image-input-payload-sha256) role_image_input_payload_sha256=${2:-}; shift 2 ;;
@@ -81,6 +109,11 @@ for host in "$public_host" "$oidc_host"; do
     fail 'local host is invalid'
 done
 [[ "$public_host" != "$oidc_host" ]] || fail 'public and OIDC hosts must differ'
+[[ "$ingress_class" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'development ingress class is invalid'
+[[ "$cluster_issuer" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
+  fail 'development cluster issuer is invalid'
+case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 [[ "$kubernetes_service_cidr" =~ /32$ && "$kubernetes_endpoint_cidr" =~ /32$ ]] ||
   fail 'Kubernetes API CIDRs are invalid'
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
@@ -97,6 +130,8 @@ for exact_image in "$role_image_builder_image" "$image_admission_image" \
   [[ "$exact_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     fail 'local supply-chain image must use an exact manifest digest'
 done
+[[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
+  fail 'provider AppArmor profile is not approved'
 [[ "$authority_source_revision" =~ ^[1-9][0-9]*$ &&
   "$authority_source_revision" -le 9007199254740991 ]] ||
   fail 'local authority source revision is invalid'
@@ -131,31 +166,24 @@ air_module=$(jq -er '.tools.air.module' "$lock_file") || fail 'Air module lock i
 air_version=$(jq -er '.tools.air.version' "$lock_file") || fail 'Air version lock is absent'
 [[ "$air_module" == "github.com/air-verse/air" && "$air_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail 'Air tool lock is invalid'
-# These directories are mounted directly as hostPath volumes. k3s may remap
-# container root to an unprivileged host UID, so the local-only shared caches
-# must be writable independently of the private state directory permissions.
+# Module data and development tools are primed by the trusted host process and
+# mounted read-only. Only workload-specific build caches remain writable.
 go_module_cache="$cache_root/go-mod-v2"
 go_sumdb_cache="$cache_root/go-sumdb"
-go_prime_cache="$cache_root/go-build/host-prime"
-install -d -m 0777 \
+go_build_cache="$cache_root/go-build-v2"
+go_prime_cache="$go_build_cache/host-prime"
+install -d -m 0755 \
   "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache/sum.golang.org" \
-  "$go_prime_cache" \
-  "$cache_root/go-build" \
   "$cache_root/go-tools" \
   "$cache_root/node-modules"
-chmod 0777 \
+install -d -m 0777 "$go_prime_cache"
+install -d -m 0755 "$go_build_cache"
+chmod -R u+rwX \
   "$go_module_cache" \
-  "$go_module_cache/cache" \
-  "$go_module_cache/cache/download" \
-  "$go_module_cache/cache/download/sumdb" \
-  "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache" \
-  "$go_sumdb_cache/sum.golang.org" \
-  "$go_prime_cache" \
-  "$cache_root/go-build" \
-  "$cache_root/go-tools" \
-  "$cache_root/node-modules"
+  "$cache_root/go-tools"
+chmod 0777 "$go_prime_cache" "$cache_root/node-modules"
 install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
 chmod 0777 "$source_root/services/staff/control-center/node_modules"
 
@@ -191,9 +219,11 @@ if [[ ! -x "$air_binary" || "$current_air_contract" != "$air_contract" ]]; then
   [[ -x "$air_binary" ]] || fail 'Air installation did not produce an executable'
   printf '%s\n' "$air_contract" >"$air_contract_file"
 fi
-for owned_cache in "$go_module_cache" "$go_sumdb_cache" "$go_prime_cache"; do
-  find "$owned_cache" -user "$(id -u)" -exec chmod a+rwX {} +
-done
+air_digest=$(sha256sum -- "$air_binary" | awk '{print $1}')
+[[ "$air_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'Air executable digest is invalid'
+chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"
+find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type d -exec chmod a+rx {} +
+find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type f -exec chmod a+r {} +
 
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
@@ -208,7 +238,10 @@ render="$temporary_directory/local.yaml"
 } >"$render"
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
-source_digest=$(printf '%s' "$source_revision" | sha256sum | awk '{print $1}')
+source_digest=$(calculate_source_content_fingerprint)
+[[ "$source_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'source content fingerprint is invalid'
+source_dirty=false
+[[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
 oidc_issuer="https://$oidc_host/realms/kodex"
 oidc_jwks_url="$oidc_issuer/protocol/openid-connect/certs"
 public_origin="https://$public_host"
@@ -217,10 +250,12 @@ oidc_origin="https://$oidc_host"
 PUBLIC_HOST="$public_host" PUBLIC_ORIGIN="$public_origin" \
 OIDC_ISSUER="$oidc_issuer" OIDC_JWKS_URL="$oidc_jwks_url" \
 OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
+INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
 SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" \
-PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
+PROMOTED_PULL_HOST="$promoted_pull_host" \
+PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   (.. | select(tag == "!!str")) |= (
     sub("__KODEX_PUBLIC_HOST__"; strenv(PUBLIC_HOST)) |
     sub("__KODEX_PUBLIC_ORIGIN__"; strenv(PUBLIC_ORIGIN)) |
@@ -229,8 +264,8 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
     sub("__KODEX_OIDC_CONNECT_ADDRESS__"; "sso.identity.svc.cluster.local:443") |
     sub("__KODEX_OIDC_TLS_SERVER_NAME__"; strenv(OIDC_HOST)) |
     sub("__KODEX_OIDC_ORIGIN__"; strenv(OIDC_ORIGIN)) |
-    sub("__KODEX_INGRESS_CLASS__"; "traefik") |
-    sub("__KODEX_CLUSTER_ISSUER__"; "kodex-local") |
+    sub("__KODEX_INGRESS_CLASS__"; strenv(INGRESS_CLASS)) |
+    sub("__KODEX_CLUSTER_ISSUER__"; strenv(CLUSTER_ISSUER)) |
     sub("__KODEX_INGRESS_NAMESPACE__"; "kube-system") |
     sub("__KODEX_INGRESS_POD_NAME__"; "traefik") |
     sub("__KODEX_OIDC_NAMESPACE__"; "identity") |
@@ -244,6 +279,8 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
   with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
     .spec.template.metadata.labels."kodex.dev/environment" = "staging" |
     .spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.template.metadata.annotations."kodex.dev/source-revision" = strenv(SOURCE_REVISION) |
+    .spec.template.metadata.annotations."kodex.dev/source-content-sha256" = strenv(SOURCE_DIGEST) |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
@@ -255,13 +292,34 @@ PROMOTED_PULL_HOST="$promoted_pull_host" yq -i '
   )
 ' "$render"
 
+printf '\n---\n' >>"$render"
+SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+SOURCE_DIRTY="$source_dirty" yq -n '
+  {
+    "apiVersion":"v1",
+    "kind":"ConfigMap",
+    "metadata":{
+      "name":"kodex-dev-source-provenance",
+      "namespace":"kodex-system",
+      "labels":{
+        "app.kubernetes.io/part-of":"kodex",
+        "kodex.dev/environment":"staging",
+        "kodex.dev/local-profile":"hot-reload"
+      }
+    },
+    "data":{
+      "sourceRevision":strenv(SOURCE_REVISION),
+      "sourceContentSHA256":strenv(SOURCE_DIGEST),
+      "sourceDirty":strenv(SOURCE_DIRTY)
+    }
+  }
+' >>"$render"
+
 # Локальный профиль запускает полный RoleImage supply-chain. Наблюдаемость и
 # retention CronJob остаются за пределами hot-reload контура, но registry,
 # BuildKit, admission/promotion и builder должны быть реально достижимы.
 yq -i '
   select(
-    (.kind != "NetworkPolicy" or
-      (.metadata.name | test("^(artifact-retention|backup-controller|control-plane|seaweedfs|integration-gateway|integration-synthetic|session-archive|kodex-image|kodex-buildkit|role-image-builder|image-admission)"))) and
     .kind != "PodDisruptionBudget" and
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
@@ -320,7 +378,8 @@ RUNTIME_CONTRACT_DIGEST="$runtime_contract_digest" \
 FRONTEND_SHA256="$frontend_sha256" \
 ROLE_INPUT_MANIFEST_DIGEST="$role_image_input_manifest_digest" \
 ROLE_INPUT_PAYLOAD_SHA256="$role_image_input_payload_sha256" \
-ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
+ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" \
+PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   with(select(.kind == "PersistentVolumeClaim" and
       (.metadata.name == "kodex-image-registry-staging" or
        .metadata.name == "kodex-image-registry-promoted" or
@@ -371,7 +430,12 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
     .data.roleRuntimeContractRevision = "1" |
-    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
+    .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST) |
+    .data.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
+  ) |
+  with(select(.kind == "ImageAdmissionPolicyParameters" and
+      .metadata.name == "kodex-image-admission-policy");
+    .spec.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
     .data.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256 = strenv(ADMISSION_TOOLS_SHA256)
@@ -381,7 +445,21 @@ ROLE_INPUT_SOURCE_SHA256="$role_image_input_source_sha256" yq -i '
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" =
       "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(RUNNER_DIGEST) |
-    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)
+    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
+    with(.spec.template.spec.containers[] | select(.name == "buildkitd");
+      .resources.requests.cpu = "8" |
+      .resources.requests.memory = "8Gi" |
+      .resources.limits.cpu = "24" |
+      .resources.limits.memory = "64Gi"
+    )
+  ) |
+  with(select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap");
+    with(.spec.template.spec.containers[] | select(.name == "bootstrap");
+      .resources.requests.cpu = "500m" |
+      .resources.requests.memory = "256Mi" |
+      .resources.limits.cpu = "2" |
+      .resources.limits.memory = "512Mi"
+    )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "role-image-builder");
     .spec.template.metadata.annotations."kodex.dev/release-revision" = strenv(SOURCE_REVISION) |
@@ -477,8 +555,8 @@ OIDC_HOST="$oidc_host" yq -i '
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
     .data.oidcTlsServerName = strenv(OIDC_HOST)
   ) |
-  with(select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths");
-    (.spec.egress[].ports[] | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 8443
+  with(select(.kind == "NetworkPolicy");
+    (.spec.egress[]?.ports[]? | select(.port == "__KODEX_OIDC_TARGET_PORT__").port) = 8443
   ) |
   with(select(.kind == "NetworkPolicy");
     (.spec.egress[]? |
@@ -564,7 +642,6 @@ add_development_volumes() {
           {"name":"dev-source","hostPath":{"path":strenv(SOURCE_ROOT),"type":"Directory"}},
           {"name":"dev-go-mod","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-mod-v2"),"type":"Directory"}},
           {"name":"dev-go-sumdb","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-sumdb"),"type":"Directory"}},
-          {"name":"dev-go-build","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-build"),"type":"Directory"}},
           {"name":"dev-go-tools","hostPath":{"path":(strenv(CACHE_ROOT) + "/go-tools"),"type":"Directory"}}
         ]
       ) |
@@ -576,14 +653,24 @@ add_development_volumes() {
 patch_go_container() {
   local kind=$1 workload=$2 container=$3 module=$4 package=$5
   shift 5
-  local command_args
+  local command_args cache_key build_volume build_cache_path
   command_args=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$go_build_cache/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   add_development_volumes "$kind" "$workload"
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  COMMAND_ARGS="$command_args" CACHE_KEY="$workload-$container" \
+  COMMAND_ARGS="$command_args" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
+  AIR_DIGEST="$air_digest" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == strenv(KIND) and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       .spec.replicas = 1 |
       (.spec.template.spec.containers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
@@ -596,25 +683,26 @@ patch_go_container() {
         .securityContext.readOnlyRootFilesystem = false |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and .name != "HOME" and
-          .name != "KODEX_DEV_AIR_VERSION"))) +
+          .name != "KODEX_DEV_AIR_VERSION" and .name != "KODEX_DEV_AIR_SHA256"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")},
-            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"},
+            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"},
+            {"name":"KODEX_DEV_AIR_SHA256","value":strenv(AIR_DIGEST)}
           ])
       )
     )
@@ -623,11 +711,21 @@ patch_go_container() {
 
 patch_go_init_container() {
   local workload=$1 container=$2 module=$3 package=$4
+  local cache_key build_volume build_cache_path
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$go_build_cache/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  CACHE_KEY="$workload-$container" \
+  BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == "Deployment" and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       (.spec.template.spec.initContainers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
@@ -645,24 +743,24 @@ patch_go_init_container() {
         } |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
           .name != "HOME"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"}
           ])
       )
     )
@@ -672,14 +770,23 @@ patch_go_init_container() {
 patch_go_job() {
   local workload=$1 container=$2 module=$3 package=$4
   shift 4
-  local args_json
+  local args_json cache_key build_volume build_cache_path
   args_json=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(length > 0))')
+  cache_key="$workload-$container"
+  build_volume="dev-build-$container"
+  build_cache_path="$go_build_cache/$cache_key"
+  install -d -m 0777 "$build_cache_path"
   add_development_volumes Job "$workload"
   WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
-  COMMAND_ARGS="$args_json" CACHE_KEY="$workload-$container" \
+  COMMAND_ARGS="$args_json" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   GO_IMAGE='docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83' \
   yq -i '
     with(select(.kind == "Job" and .metadata.name == strenv(WORKLOAD));
+      .spec.template.spec.volumes = (((.spec.template.spec.volumes // []) |
+        map(select(.name != strenv(BUILD_VOLUME)))) + [{
+          "name":strenv(BUILD_VOLUME),
+          "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
+        }]) |
       (.spec.template.spec.containers[] | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
@@ -689,24 +796,24 @@ patch_go_job() {
         .resources = {"requests":{"cpu":"50m","memory":"128Mi"}} |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
-            .name != "dev-go-build" and .name != "dev-go-tools"))) +
+            .name != "dev-go-build" and .name != "dev-go-tools" and .name != strenv(BUILD_VOLUME)))) +
           [
             {"name":"dev-source","mountPath":"/workspace","readOnly":true},
-            {"name":"dev-go-mod","mountPath":"/go/pkg/mod"},
-            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb"},
-            {"name":"dev-go-build","mountPath":"/go/build-cache"},
-            {"name":"dev-go-tools","mountPath":"/go/tools"}
+            {"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true},
+            {"name":"dev-go-sumdb","mountPath":"/go/pkg/sumdb","readOnly":true},
+            {"name":strenv(BUILD_VOLUME),"mountPath":"/go/build-cache"},
+            {"name":"dev-go-tools","mountPath":"/go/tools","readOnly":true}
           ]) |
         .env = (((.env // []) | map(select(.name != "GOMODCACHE" and .name != "GOCACHE" and
           .name != "GOWORK" and .name != "GOTOOLCHAIN" and .name != "GOTMPDIR" and
           .name != "HOME"))) +
           [
             {"name":"GOMODCACHE","value":"/go/pkg/mod"},
-            {"name":"GOCACHE","value":("/go/build-cache/" + strenv(CACHE_KEY))},
+            {"name":"GOCACHE","value":"/go/build-cache/cache"},
             {"name":"GOWORK","value":"off"},
             {"name":"GOTOOLCHAIN","value":"local"},
-            {"name":"GOTMPDIR","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/tmp")},
-            {"name":"HOME","value":("/go/build-cache/" + strenv(CACHE_KEY) + "/home")}
+            {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
+            {"name":"HOME","value":"/go/build-cache/home"}
           ])
       )
     )
@@ -714,6 +821,8 @@ patch_go_job() {
 }
 
 patch_go_container Deployment control-plane control-plane services/internal/control-plane ./cmd/control-plane
+patch_go_container Deployment control-plane internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment control-plane control-plane-platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment control-plane internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
 patch_go_container Deployment secret-broker secret-broker services/internal/secret-broker ./cmd/secret-broker
 patch_go_container Deployment secret-broker internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
@@ -760,9 +869,24 @@ patch_go_job internal-rpc-authority-migrate migrate services/internal/internal-r
 patch_go_job control-plane-migrate migrate services/internal/control-plane ./cmd/cli up
 patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-plane ./cmd/cli broker bootstrap
 
+frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
+api_middlewares=""
+if [[ "$tls_mode" == public-acme ]]; then
+  frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
+  api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
+fi
 NODE_IMAGE='docker.io/library/node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1' \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
-SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
+SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
+FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" yq -i '
+  with(select(.kind == "ServersTransport" and .metadata.name == "staff-control-center");
+    .metadata.name = "control-api-gateway" |
+    .spec = {
+      "serverName":"control-api-gateway.kodex-system.svc",
+      "insecureSkipVerify":false,
+      "rootCAs":[{"secret":"control-api-gateway-public-tls-material"}]
+    }
+  ) |
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
     .spec.replicas = 1 |
     .spec.template.spec.securityContext.runAsNonRoot = false |
@@ -770,9 +894,11 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     .spec.template.spec.securityContext.runAsGroup = 0 |
     .spec.template.spec.volumes = (
       ((.spec.template.spec.volumes // []) |
-        map(select(.name != "dev-source" and .name != "dev-node-modules"))) +
+        map(select(.name != "dev-source" and .name != "dev-frontend-source" and
+          .name != "dev-frontend-runner" and .name != "dev-node-modules"))) +
       [
-        {"name":"dev-source","hostPath":{"path":strenv(SOURCE_ROOT),"type":"Directory"}},
+        {"name":"dev-frontend-source","hostPath":{"path":(strenv(SOURCE_ROOT) + "/services/staff/control-center"),"type":"Directory"}},
+        {"name":"dev-frontend-runner","hostPath":{"path":(strenv(SOURCE_ROOT) + "/tools/dev/run-frontend.sh"),"type":"File"}},
         {"name":"dev-node-modules","hostPath":{"path":(strenv(CACHE_ROOT) + "/node-modules"),"type":"Directory"}}
       ]
     ) |
@@ -789,7 +915,8 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
       .securityContext.runAsGroup = 0 |
       .securityContext.readOnlyRootFilesystem = false |
       .volumeMounts = [
-        {"name":"dev-source","mountPath":"/workspace","readOnly":true},
+        {"name":"dev-frontend-source","mountPath":"/workspace/services/staff/control-center","readOnly":true},
+        {"name":"dev-frontend-runner","mountPath":"/workspace/tools/dev/run-frontend.sh","readOnly":true},
         {"name":"dev-node-modules","mountPath":"/workspace/services/staff/control-center/node_modules"},
         (((.volumeMounts // [])[] | select(.name == "runtime-config")) |
           .mountPath = "/workspace/services/staff/control-center/public/config" |
@@ -805,10 +932,33 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     del(.metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport") |
     .spec.ports = [{"name":"http","port":8080,"targetPort":"http","protocol":"TCP"}]
   ) |
-  with(select(.kind == "Ingress" and
-      (.metadata.name == "staff-control-center" or .metadata.name == "staff-control-center-api"));
-    del(.metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares") |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "staff-control-center-ingress");
+    .spec.ingress[].ports = [{"protocol":"TCP","port":8080}]
+  ) |
+  with(select(.kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths");
+    .spec.ingress += [{
+      "from":[{
+        "namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},
+        "podSelector":{"matchLabels":{"app.kubernetes.io/name":"traefik"}}
+      }],
+      "ports":[{"protocol":"TCP","port":8443}]
+    }]
+  ) |
+  with(select(.kind == "Service" and .metadata.name == "control-api-gateway");
+    .metadata.annotations."traefik.ingress.kubernetes.io/service.serverstransport" =
+      "kodex-system-control-api-gateway@kubernetescrd"
+  ) |
+  with(select(.kind == "Ingress" and .metadata.name == "staff-control-center");
+    .metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" =
+      strenv(FRONTEND_MIDDLEWARES) |
     .spec.rules[].http.paths[].backend.service.port.name = "http"
+  ) |
+  with(select(.kind == "Ingress" and .metadata.name == "staff-control-center-api");
+    .metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" =
+      strenv(API_MIDDLEWARES) |
+    .spec.rules[].http.paths[].backend.service = {
+      "name":"control-api-gateway","port":{"name":"https"}
+    }
   ) |
   with(select(.kind == "ConfigMap" and (.metadata.name | test("^staff-control-center-runtime-")));
     .immutable = false |
@@ -828,6 +978,23 @@ SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" yq -i '
     } | to_json)
   )
 ' "$render"
+
+cat >>"$render" <<'YAML'
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: staff-control-center-retry
+  namespace: kodex-system
+  labels:
+    app.kubernetes.io/name: staff-control-center
+    app.kubernetes.io/part-of: kodex
+    kodex.dev/local-profile: hot-reload
+spec:
+  retry:
+    attempts: 4
+    initialInterval: 100ms
+YAML
 
 PUBLIC_HOST="$public_host" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
@@ -960,8 +1127,75 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
+  any(.[];
+    .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and
+    .metadata.namespace == "kodex-system" and
+    .spec.serverName == "control-api-gateway.kodex-system.svc" and
+    .spec.insecureSkipVerify == false and
+    .spec.rootCAs == [{secret:"control-api-gateway-public-tls-material"}] and
+    ((.spec.rootCAsSecrets // []) | length) == 0) and
+  any(.[];
+    .kind == "Service" and .metadata.name == "control-api-gateway" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/service.serverstransport"] ==
+      "kodex-system-control-api-gateway@kubernetescrd") and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center-api" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-auth@kubernetescrd"
+      else "" end) and
+    .spec.rules[0].http.paths == [{
+      path:"/api/v1",pathType:"Prefix",
+      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
+    }]) and
+  any(.[];
+    .kind == "Ingress" and .metadata.name == "staff-control-center" and
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
+      (if $tls_mode == "public-acme" then
+        "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
+      else "kodex-system-staff-control-center-retry@kubernetescrd" end)) and
+  any(.[];
+    .kind == "Middleware" and .metadata.name == "staff-control-center-retry" and
+    .metadata.namespace == "kodex-system" and
+    .spec.retry == {attempts:4,initialInterval:"100ms"}) and
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "staff-control-center-ingress" and
+    .metadata.namespace == "kodex-system" and
+    .spec.ingress == [{
+      from:[{
+        namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"kube-system"}},
+        podSelector:{matchLabels:{"app.kubernetes.io/name":"traefik"}}
+      }],
+      ports:[{protocol:"TCP",port:8080}]
+    }]) and
+  any(.[];
+    .kind == "NetworkPolicy" and .metadata.name == "control-api-gateway-exact-runtime-paths" and
+    .metadata.namespace == "kodex-system" and
+    any(.spec.ingress[];
+      .from == [{
+        namespaceSelector:{matchLabels:{"kubernetes.io/metadata.name":"kube-system"}},
+        podSelector:{matchLabels:{"app.kubernetes.io/name":"traefik"}}
+      }] and
+      .ports == [{protocol:"TCP",port:8443}]
+    ))
+' >/dev/null || fail 'local Control API direct Ingress transport is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "control-plane")' "$output" >/dev/null ||
   fail 'Control Plane development workload is absent'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  any(.[];
+    . as $deployment |
+    $deployment.kind == "Deployment" and $deployment.metadata.name == "control-plane" and
+    all(
+      "internal-rpc-authority-issuer",
+      "control-plane-platform-worker-grant-agent",
+      "internal-rpc-authority-verifier";
+      . as $containerName |
+      any($deployment.spec.template.spec.containers[]?;
+        .name == $containerName and
+        .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
+        .image == "docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83")))
+' >/dev/null || fail 'Control Plane authority sidecars do not share the hot-reload source revision'
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
   any(.[];
     .kind == "Deployment" and .metadata.name == "secret-broker" and
@@ -1206,8 +1440,16 @@ yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gatewa
   fail 'integration-gateway exact NetworkPolicy is absent from the local fixture path'
 yq -e 'select(.kind == "StatefulSet" and .metadata.name == "seaweedfs")' "$output" >/dev/null ||
   fail 'SeaweedFS local workload is absent'
-yq -e 'select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap")' "$output" >/dev/null ||
-  fail 'SeaweedFS bucket bootstrap is absent'
+yq -e '
+  select(.kind == "Job" and .metadata.name == "seaweedfs-bucket-bootstrap") |
+  .spec.template.spec.containers[] |
+  select(
+    .name == "bootstrap" and
+    .resources.requests.cpu == "500m" and
+    .resources.requests.memory == "256Mi" and
+    .resources.limits.cpu == "2" and
+    .resources.limits.memory == "512Mi")
+' "$output" >/dev/null || fail 'SeaweedFS bucket bootstrap dev resources are invalid'
 yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "control-plane-local-object-storage-egress")' "$output" >/dev/null ||
   fail 'Control Plane local object storage egress is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
@@ -1228,6 +1470,7 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   --arg admissionImage "$image_admission_image" \
   --arg toolsImage "$image_admission_tools_image" \
   --arg authorityImage "$authority_image" \
+  --arg providerAppArmorProfile "$provider_apparmor_profile" \
   --arg runnerDigest "$runner_digest" '
   . as $resources |
   (first($resources[] | select(.kind == "ConfigMap" and
@@ -1241,6 +1484,7 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   $intent.data.toolsImage == $toolsImage and
   $intent.data.admissionImage == $admissionImage and
   $intent.data.authorityImage == $authorityImage and
+  $intent.data.providerAppArmorProfile == $providerAppArmorProfile and
   $intent.data.pullRegistryHost == $pullHost and
   $intent.data.promotedPullRepository == ($pullHost + "/kodex/roles") and
   $intent.data.nodeReadbackImage ==
@@ -1266,11 +1510,38 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   any($resources[]; .kind == "Deployment" and .metadata.name == "kodex-buildkit" and
     .spec.replicas == 1 and .spec.template.spec.hostUsers == false and
     any(.spec.template.spec.containers[];
-      .name == "buildkitd" and .securityContext.privileged == true)) and
+      .name == "buildkitd" and .securityContext.privileged == true and
+      .resources.requests.cpu == "8" and
+      .resources.requests.memory == "8Gi" and
+      .resources.limits.cpu == "24" and
+      .resources.limits.memory == "64Gi")) and
   any($resources[]; .kind == "Deployment" and .metadata.name == "role-image-builder" and
     any(.spec.template.spec.containers[];
       .name == "role-image-builder" and .image == $builderImage))
 ' >/dev/null || fail 'local RoleImage supply-chain render contract is invalid'
+
+yq -o=json -I=0 '.' "$output" | jq -s -e '
+  . as $resources |
+  [$resources[] | select(.kind == "Deployment")] as $workloads |
+  [$resources[] | select(.kind == "NetworkPolicy")] as $policies |
+  def namespace: (.metadata.namespace // "default");
+  def selects($policy; $workload):
+    ($policy | namespace) == ($workload | namespace) and
+    all((($policy.spec.podSelector.matchLabels // {}) | to_entries)[];
+      $workload.spec.template.metadata.labels[.key] == .value);
+  def deny_all($policy):
+    (($policy.spec.policyTypes // []) | sort) == ["Egress", "Ingress"] and
+    (($policy.spec.ingress // []) | length) == 0 and
+    (($policy.spec.egress // []) | length) == 0;
+  all($workloads[];
+    . as $workload |
+    any($policies[]; selects(.; $workload) and deny_all(.))) and
+  all($policies[];
+    . as $policy |
+    all(($policy.spec.egress // [])[];
+      (($policy.metadata.name | test("egress-gateway")) or
+       ((.to // []) | length) > 0)))
+' >/dev/null || fail 'local workload NetworkPolicy boundary is incomplete or has destination-less egress'
 
 target_registry=$(yq -N -r '
   select(.kind == "ConfigMap" and

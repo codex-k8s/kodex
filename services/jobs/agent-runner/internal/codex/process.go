@@ -28,11 +28,17 @@ const (
 	maximumArchiveBytes   = 64 << 20
 	maximumDiagnosticSize = 1 << 20
 	maximumRequestBytes   = 2 << 20
+	mcpReadinessTimeout   = 15 * time.Second
+	mcpReadinessPoll      = 100 * time.Millisecond
 )
 
 var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
 
-var ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
+var (
+	ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
+	ErrRequiredMCPUnavailable      = errors.New("Codex required MCP runtime is unavailable")
+	errAccountReadResponseInvalid  = errors.New("Codex app-server account/read response is invalid")
+)
 
 type streamEvent struct {
 	message wireMessage
@@ -74,7 +80,8 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := server.notifyInitialized(); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	if _, err := server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false}); err != nil {
+	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
+	if err := classifyAccountReadResponse(raw, err); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
@@ -92,6 +99,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
+	if err := server.waitRequiredMCP(ctx, state, requiredMCPToolNames(input)); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := state.captureUsageBaseline(); err != nil {
@@ -132,6 +142,132 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	result.ArchiveSHA256 = digest
 	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
+}
+
+func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
+	if callErr != nil {
+		return callErr
+	}
+	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth"))
+	if err != nil {
+		return errAccountReadResponseInvalid
+	}
+	var requiresOpenAIAuth bool
+	if strictDecode(fields["requiresOpenaiAuth"], &requiresOpenAIAuth) != nil {
+		return errAccountReadResponseInvalid
+	}
+	account, present := fields["account"]
+	if !present || bytes.Equal(bytes.TrimSpace(account), []byte("null")) {
+		if requiresOpenAIAuth {
+			return ErrProviderAuthentication
+		}
+		return nil
+	}
+	if validateAccountReadAccount(account) != nil {
+		return errAccountReadResponseInvalid
+	}
+	return nil
+}
+
+func validateAccountReadAccount(raw json.RawMessage) error {
+	fields, err := decodeObject(raw, schema([]string{"type"}, "type", "email", "planType", "usesCodexManagedCredentials"))
+	if err != nil {
+		return err
+	}
+	accountType, err := decodeBoundedString(fields["type"], 64)
+	if err != nil {
+		return err
+	}
+	switch accountType {
+	case "apiKey":
+		if len(fields) != 1 {
+			return errors.New("Codex app-server API key account is invalid")
+		}
+	case "chatgpt":
+		email, hasEmail := fields["email"]
+		planType, hasPlanType := fields["planType"]
+		if len(fields) != 3 || !hasEmail || !hasPlanType || validateAccountEmail(email) != nil || !validAccountPlanType(planType) {
+			return errors.New("Codex app-server ChatGPT account is invalid")
+		}
+	case "amazonBedrock":
+		managed, hasManaged := fields["usesCodexManagedCredentials"]
+		if len(fields) > 2 || hasManaged && strictDecode(managed, new(bool)) != nil {
+			return errors.New("Codex app-server Amazon Bedrock account is invalid")
+		}
+	default:
+		return errors.New("Codex app-server account type is invalid")
+	}
+	return nil
+}
+
+func validateAccountEmail(raw json.RawMessage) error {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	var email string
+	if strictDecode(raw, &email) != nil || len(email) > 4096 {
+		return errors.New("Codex app-server account email is invalid")
+	}
+	return nil
+}
+
+func validAccountPlanType(raw json.RawMessage) bool {
+	planType, err := decodeBoundedString(raw, 64)
+	if err != nil {
+		return false
+	}
+	switch planType {
+	case "free", "go", "plus", "pro", "prolite", "team", "self_serve_business_prolite",
+		"self_serve_business_usage_based", "business", "ent26", "enterprise_cbp_automation",
+		"enterprise_cbp_usage_based", "enterprise", "edu", "edu_plus", "edu_pro", "unknown":
+		return true
+	default:
+		return false
+	}
+}
+
+func (server *appServer) waitRequiredMCP(ctx context.Context, state *protocolState, requiredTools []string) error {
+	readinessContext, cancel := context.WithTimeout(ctx, mcpReadinessTimeout)
+	defer cancel()
+	params := map[string]any{
+		"threadId": state.threadID,
+		"detail":   "toolsAndAuthOnly",
+		"limit":    uint32(128),
+	}
+	for {
+		raw, err := server.call(readinessContext, state, "mcpServerStatus/list", params)
+		if err != nil {
+			if readinessContext.Err() != nil {
+				return ErrRequiredMCPUnavailable
+			}
+			return err
+		}
+		ready, err := state.bindRequiredMCPStatus(raw, requiredTools)
+		if err != nil || ready {
+			return err
+		}
+		timer := time.NewTimer(mcpReadinessPoll)
+		select {
+		case <-readinessContext.Done():
+			timer.Stop()
+			return ErrRequiredMCPUnavailable
+		case <-timer.C:
+		}
+	}
+}
+
+func requiredMCPToolNames(input model.Input) []string {
+	result := []string{"propose_run_metadata"}
+	if input.SystemAssistant {
+		result = append(result, "get_configuration_catalog", "propose_configuration_plan", "propose_assistant_metadata")
+	}
+	if len(input.DelegationTargets) != 0 {
+		result = append(result, "delegate_agent")
+	}
+	if len(input.IntegrationGrants) != 0 {
+		result = append(result, "invoke_integration")
+	}
+	return result
 }
 
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {
@@ -249,7 +385,7 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 					return nil, errors.New("Codex app-server response correlation failed")
 				}
 				if event.message.kind == messageError {
-					return nil, errors.New("Codex app-server returned a protocol error")
+					return nil, protocolError(method, event.message.payload)
 				}
 				return event.message.payload, nil
 			default:
@@ -257,6 +393,14 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 			}
 		}
 	}
+}
+
+func protocolError(method string, raw json.RawMessage) error {
+	code, err := decodeRPCError(raw)
+	if err != nil {
+		return errors.New("Codex app-server returned an invalid protocol error")
+	}
+	return fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)
 }
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {

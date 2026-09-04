@@ -75,6 +75,11 @@ for wrapper in "$restore_wrapper" "$backup_wrapper"; do
 done
 rg -Fq '.spec.activeDeadlineSeconds = 900' "$restore_wrapper" ||
   fail 'restore E2E Job deadline is absent'
+lock_preflight_line=$(grep -n "TestSeaweedFSOperationLockE2E" "$restore_wrapper" | cut -d: -f1)
+restore_apply_line=$(grep -n 'kubectl -n kodex-system apply .*field-manager=kodex-local-e2e' "$restore_wrapper" | cut -d: -f1)
+[[ "$lock_preflight_line" =~ ^[0-9]+$ && "$restore_apply_line" =~ ^[0-9]+$ &&
+  "$lock_preflight_line" -lt "$restore_apply_line" ]] ||
+  fail 'SeaweedFS operation lock preflight must precede the restore Job'
 rg -Fq 'activeDeadlineSeconds: 900' "$backup_wrapper" ||
   fail 'backup E2E Job deadline is absent'
 rg -Fq 'kodex_e2e_delete_owned_jobs kodex-system "$stale_job_selector"' "$backup_wrapper" ||

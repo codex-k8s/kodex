@@ -24,6 +24,7 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import { assistantContextIdentity } from "@/features/assistant/context";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
   assistantEffectiveRuntimeState,
@@ -31,6 +32,10 @@ import {
   operationTargetLabel,
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
+import {
+  persistAssistantWorkspaceOpen,
+  restoreAssistantWorkspaceOpen,
+} from "@/features/assistant/workspace-state";
 import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
@@ -66,7 +71,7 @@ const props = withDefaults(
 const { t } = useI18n();
 const store = useAssistantStore();
 const platform = usePlatformStore();
-const open = ref(false);
+const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const message = ref("");
 const titleDraft = ref("");
@@ -101,43 +106,35 @@ const currentPlan = computed<AssistantPlan | undefined>(() => {
   }
   return undefined;
 });
-const canSend = computed(
-  () =>
-    props.live &&
-    !store.loading &&
-    !store.busy &&
-    !store.problem &&
-    Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
-    Boolean(
-      store.selectedConversation ||
-      store.assistant?.nextActions.includes("CREATE_CONVERSATION"),
-    ) &&
-    attachmentState.value.ready,
-);
-const canStartConversation = computed(
-  () =>
-    props.live &&
-    !store.loading &&
-    !store.busy &&
-    !store.problem &&
-    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
-);
 const assistantRuntimeState = computed(() =>
   store.assistant
     ? assistantEffectiveRuntimeState(store.assistant)
     : "RECOVERING",
 );
+const canCreateConversation = computed(
+  () =>
+    assistantRuntimeState.value === "READY" &&
+    Boolean(store.assistant?.nextActions.includes("CREATE_CONVERSATION")),
+);
+const canSend = computed(
+  () =>
+    props.live &&
+    !store.loading &&
+    !store.busy &&
+    assistantRuntimeState.value === "READY" &&
+    Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
+    Boolean(store.selectedConversation || canCreateConversation.value) &&
+    attachmentState.value.ready,
+);
+const canStartConversation = computed(
+  () =>
+    props.live && !store.loading && !store.busy && canCreateConversation.value,
+);
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 
-function contextKey(): string {
-  return [
-    props.projectRef ?? "",
-    props.context.route,
-    props.context.entityKind,
-    props.context.entityRef,
-    props.context.entityVersion ?? "",
-  ].join(":");
-}
+const contextIdentity = computed(() =>
+  assistantContextIdentity(props.context, props.projectRef),
+);
 
 function handleOpenAssistant(): void {
   void show();
@@ -145,6 +142,7 @@ function handleOpenAssistant(): void {
 
 async function show(): Promise<void> {
   open.value = true;
+  persistAssistantWorkspaceOpen(true);
   historyOpen.value = false;
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
@@ -156,6 +154,7 @@ async function show(): Promise<void> {
 function close(): void {
   if (store.busy) return;
   open.value = false;
+  persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
   openPlanRef.value = undefined;
   store.clearReceipt();
@@ -289,13 +288,24 @@ function documentPointerDown(event: PointerEvent): void {
     historyOpen.value = false;
 }
 
-watch(contextKey, () => {
+watch(contextIdentity, () => {
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
   attachmentComposer.value?.clear();
   if (open.value) void store.load(props.context, props.projectRef);
 });
+watch(
+  [() => props.context, () => props.projectRef] as const,
+  ([nextContext, nextProjectRef], [previousContext, previousProjectRef]) => {
+    if (
+      assistantContextIdentity(nextContext, nextProjectRef) !==
+      assistantContextIdentity(previousContext, previousProjectRef)
+    )
+      return;
+    store.setContext(nextContext, nextProjectRef);
+  },
+);
 watch(
   () => props.refreshRevision,
   (value, previous) => {
@@ -329,10 +339,12 @@ watch(
 onMounted(() => {
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
+  if (open.value) void show();
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", documentPointerDown);
   window.removeEventListener(openAssistantEvent, handleOpenAssistant);
+  persistAssistantWorkspaceOpen(false);
 });
 </script>
 

@@ -215,16 +215,27 @@ async function confirmMutation(): Promise<void> {
   }
 }
 
-function createBinding(subject?: AccessSubject): void {
+async function createBinding(subject?: AccessSubject): Promise<void> {
+  if (mutationBusy.value) return;
+  mutationBusy.value = true;
   selectedBinding.value = undefined;
   initialSubject.value = subject;
   editorAgentsProjectRef.value = projectRef.value;
   mutationProblem.value = undefined;
-  bindingDialog.value = true;
+  try {
+    await access.loadBindingRoles();
+    if (access.problems.bindingRoles) {
+      mutationProblem.value = access.problems.bindingRoles;
+      return;
+    }
+    bindingDialog.value = true;
+  } finally {
+    mutationBusy.value = false;
+  }
 }
 
 function createGroupBinding(group: OidcGroup): void {
-  createBinding({
+  void createBinding({
     ref: group.ref,
     kind: "OIDC_GROUP",
     displayName: group.displayName,
@@ -233,18 +244,29 @@ function createGroupBinding(group: OidcGroup): void {
   });
 }
 
-function editBinding(binding: AccessBinding): void {
+async function editBinding(binding: AccessBinding): Promise<void> {
+  if (mutationBusy.value) return;
+  mutationBusy.value = true;
   selectedBinding.value = binding;
   initialSubject.value = undefined;
   editorAgentsProjectRef.value = binding.scope.projectRef ?? "";
   mutationProblem.value = undefined;
-  bindingDialog.value = true;
-  if (
-    binding.scope.kind === "RESOURCE_INSTANCE" &&
-    ["AGENT", "WORKFLOW"].includes(binding.scope.resourceKind ?? "") &&
-    binding.scope.projectRef
-  )
-    void loadProjectResources(binding.scope.projectRef);
+  try {
+    await access.loadBindingRoles();
+    if (access.problems.bindingRoles) {
+      mutationProblem.value = access.problems.bindingRoles;
+      return;
+    }
+    bindingDialog.value = true;
+    if (
+      binding.scope.kind === "RESOURCE_INSTANCE" &&
+      ["AGENT", "WORKFLOW"].includes(binding.scope.resourceKind ?? "") &&
+      binding.scope.projectRef
+    )
+      void loadProjectResources(binding.scope.projectRef);
+  } finally {
+    mutationBusy.value = false;
+  }
 }
 
 async function saveBinding(
@@ -419,7 +441,7 @@ onMounted(() => void loadBaseline());
       :initial-subject="initialSubject"
       :default-project-ref="projectRef"
       :subjects="bindingSubjects"
-      :roles="access.roles"
+      :roles="access.bindingRoles"
       :permissions="access.permissions"
       :projects="access.projects"
       :agents="editorAgents"

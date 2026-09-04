@@ -30,6 +30,14 @@ spec:
                   - role-image-builder
                   - runtime-controller
                   - secret-broker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kodex-image-admission
+              app.kubernetes.io/component: image-admission
+            matchExpressions:
+              - key: kodex.dev/image-admission-phase
+                operator: In
+                values: [claim, admit, promote]
       ports:
         - protocol: TCP
           port: 5432

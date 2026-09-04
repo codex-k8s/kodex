@@ -911,6 +911,7 @@ export type RoleImageRecipeDetail = {
     recipe: RoleImageRecipe;
     builds: Array<RoleImageBuild>;
     activeArtifact?: RoleImageArtifact;
+    promotionCandidate?: RoleImageArtifact;
 };
 
 export type RoleImageArtifactTool = {

@@ -14,7 +14,7 @@ import (
 
 const (
 	cleanupTaskRef    = "pcct_61000000-0000-4000-8000-000000000001"
-	cleanupAccountRef = "pacc_cleanup_account"
+	cleanupAccountRef = "pacc_cleanup_Account9Z"
 	cleanupReceipt    = "provider-credential-cleanup:61000000-0000-4000-8000-000000000001:g7"
 )
 

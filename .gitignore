@@ -3,5 +3,6 @@
 /.kodex-env
 /.kodex-dev/
 /.kodex-dev-env
+/.kodex-remote-env
 /.kodex-material/
 /.agents/

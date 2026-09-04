@@ -1,5 +1,98 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+const retryableProviderTurnResults = new Map([
+  ["RUNTIMEPROVIDERUNAVAILABLE", "RUNTIME_PROVIDER_UNAVAILABLE"],
+  ["PROVIDERRESULTUNVERIFIABLE", "i18n:PROVIDER_RESULT_UNVERIFIABLE"],
+  ["PROVIDERRESULTUNKNOWN", "i18n:PROVIDER_RESULT_UNKNOWN"],
+  [
+    "PROVIDERRESPONSEINVALIDPROVIDERRESULTUNVERIFIABLE",
+    "PROVIDER_RESPONSE_INVALID / i18n:PROVIDER_RESULT_UNVERIFIABLE",
+  ],
+]);
+
+export type BrowserJsonReadback<T> = {
+  readonly body: T;
+  readonly status: number;
+};
+
+export function retryableProviderResult(
+  renderedResult: string,
+): string | undefined {
+  const normalized = renderedResult
+    .normalize("NFKC")
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase();
+  return retryableProviderTurnResults.get(normalized);
+}
+
+export async function readJsonWithNetworkRetry<T>(
+  page: Page,
+  path: string,
+): Promise<BrowserJsonReadback<T>> {
+  if (!path.startsWith("/api/")) {
+    throw new Error("Read-only browser JSON path must start with /api/");
+  }
+
+  return retryReadOnlyBrowserAction(page, () =>
+    page.evaluate(async (requestPath) => {
+      const response = await fetch(requestPath);
+      const rawBody = await response.text();
+      if (!rawBody) {
+        throw new Error(
+          `Read-only browser JSON response is empty: status=${String(response.status)}`,
+        );
+      }
+      return {
+        body: JSON.parse(rawBody) as T,
+        status: response.status,
+      };
+    }, path),
+  );
+}
+
+export async function retryReadOnlyBrowserAction<T>(
+  page: Page,
+  action: () => Promise<T>,
+): Promise<T> {
+  return retryTransientBrowserAction(page, action);
+}
+
+export async function retryIdempotentBrowserAction<T>(
+  page: Page,
+  action: () => Promise<T>,
+): Promise<T> {
+  return retryTransientBrowserAction(page, action);
+}
+
+async function retryTransientBrowserAction<T>(
+  page: Page,
+  action: () => Promise<T>,
+): Promise<T> {
+  const retryDelays = [0, 200, 600, 1_500, 3_000];
+  for (const [index, delay] of retryDelays.entries()) {
+    if (delay > 0) await page.waitForTimeout(delay);
+    try {
+      return await action();
+    } catch (error) {
+      if (
+        index === retryDelays.length - 1 ||
+        !isTransientBrowserFetchFailure(error)
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Read-only browser JSON retry budget exhausted");
+}
+
+function isTransientBrowserFetchFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /(?:TypeError: Failed to fetch|NetworkError when attempting to fetch resource|Load failed|net::ERR_(?:CONNECTION_RESET|NETWORK_CHANGED|CONNECTION_CLOSED))/.test(
+    error.message,
+  );
+}
+
 export async function gotoWithRetry(
   page: Page,
   url: string,
@@ -30,19 +123,57 @@ export async function gotoWithRetry(
       if (requirements.appShell !== false) {
         await expect(page.locator("#app")).toBeVisible();
         await expect(page.locator("#main-content")).toBeVisible();
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) => {
+              window.requestAnimationFrame(() =>
+                window.requestAnimationFrame(() => resolve()),
+              );
+            }),
+        );
+        if (!navigationReachedExpectedPath(url, page.url())) {
+          throw new Error(
+            `Navigation ended at unexpected path: expected=${requestedNavigationPath(url)} actual=${safeNavigationPath(page.url())}`,
+          );
+        }
       }
       return;
     } catch (error) {
       const emptyAppShell =
         requirements.appShell !== false && (await hasEmptyAppShell(page));
+      const unexpectedPath =
+        error instanceof Error &&
+        error.message.startsWith("Navigation ended at unexpected path:");
       if (
         index === retryDelays.length - 1 ||
         !(error instanceof Error) ||
-        (!error.message.includes("net::ERR_NETWORK_CHANGED") && !emptyAppShell)
+        (!error.message.includes("net::ERR_NETWORK_CHANGED") &&
+          !emptyAppShell &&
+          !unexpectedPath)
       ) {
         throw error;
       }
     }
+  }
+}
+
+export function navigationReachedExpectedPath(
+  requestedURL: string,
+  actualURL: string,
+): boolean {
+  const expected = requestedNavigationPath(requestedURL);
+  const actual = safeNavigationPath(actualURL);
+  if (expected === "/onboarding") {
+    return actual === expected || actual === "/";
+  }
+  return actual === expected;
+}
+
+function requestedNavigationPath(raw: string): string {
+  try {
+    return new URL(raw, "https://kodex.invalid").pathname.slice(0, 512);
+  } catch {
+    return "invalid-url";
   }
 }
 

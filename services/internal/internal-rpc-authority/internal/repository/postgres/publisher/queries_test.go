@@ -24,3 +24,11 @@ func TestPromoteSnapshotUsesExactRequiredTargets(t *testing.T) {
 		t.Fatal("publisher promote query still counts every snapshot readback")
 	}
 }
+
+func TestLoadSnapshotHistoryIncludesCurrentRevisionForRestart(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(loadSnapshotHistorySQL, "LIMIT 33") {
+		t.Fatal("snapshot history query must retain current revision plus 32 predecessors")
+	}
+}

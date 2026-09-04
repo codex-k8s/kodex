@@ -5,6 +5,7 @@ import type {
   Artifact,
   AuditEvent,
   IntegrationConnection,
+  IntegrationDefinition,
   Project,
   ProjectPage,
   Run,
@@ -49,6 +50,8 @@ const deleteIntegrationConnectionMock = vi.hoisted(() =>
     typeof import("@/shared/api/generated/openapi/sdk.gen").deleteIntegrationConnection
   >(),
 );
+const listIntegrationDefinitionsMock = vi.hoisted(() => vi.fn());
+const listIntegrationConnectionsMock = vi.hoisted(() => vi.fn());
 const uploadArtifactMock = vi.hoisted(() =>
   vi.fn<
     typeof import("@/shared/api/generated/openapi/sdk.gen").uploadArtifact
@@ -80,6 +83,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
     configureIntegrationConnectionCredentialMock,
   updateIntegrationConnection: updateIntegrationConnectionMock,
   deleteIntegrationConnection: deleteIntegrationConnectionMock,
+  listIntegrationDefinitions: listIntegrationDefinitionsMock,
+  listIntegrationConnections: listIntegrationConnectionsMock,
   uploadArtifact: uploadArtifactMock,
   uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
@@ -244,6 +249,24 @@ function integrationConnection(
   };
 }
 
+function integrationDefinition(): IntegrationDefinition {
+  return {
+    key: "github",
+    name: "GitHub",
+    description: "Репозитории и задачи",
+    category: "source-control",
+    builtIn: true,
+    available: true,
+    capabilities: [],
+    configurationFields: [],
+    schemaVersion: "integrations.kodex.io/v1",
+    definitionVersion: "1.0.0",
+    origin: "SHIPPED",
+    digest: "a".repeat(64),
+    adapter: "GITHUB",
+  };
+}
+
 function artifact(ref: string, projectRef?: string): Artifact {
   return {
     ref,
@@ -299,12 +322,15 @@ describe("platform store", () => {
     configureIntegrationConnectionCredentialMock.mockReset();
     updateIntegrationConnectionMock.mockReset();
     deleteIntegrationConnectionMock.mockReset();
+    listIntegrationDefinitionsMock.mockReset();
+    listIntegrationConnectionsMock.mockReset();
     uploadArtifactMock.mockReset();
     uploadOrganizationArtifactMock.mockReset();
     selectProjectRef(undefined);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -644,6 +670,27 @@ describe("platform store", () => {
     expect(store.loading.projects).toBe(false);
   });
 
+  it("восстанавливает безопасную загрузку после временного сетевого сбоя", async () => {
+    vi.useFakeTimers();
+    listProjectsMock
+      .mockResolvedValueOnce({
+        error: { status: 0, code: "UNKNOWN", retryable: true },
+      })
+      .mockResolvedValueOnce(response([project("project_recovered")]));
+    const store = usePlatformStore();
+
+    const loading = store.loadProjects();
+    await vi.runAllTimersAsync();
+    await loading;
+
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
+    expect(store.projectList.map((item) => item.ref)).toEqual([
+      "project_recovered",
+    ]);
+    expect(store.problems.projects).toBeUndefined();
+    expect(store.loading.projects).toBe(false);
+  });
+
   it("повторяет безопасное чтение artifact после временного сетевого сбоя", async () => {
     const expected = new Blob(["artifact"]);
     downloadArtifactMock
@@ -789,6 +836,35 @@ describe("platform store", () => {
     expect(store.projectList).toEqual([]);
     expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
+  });
+
+  it("сохраняет авторитетную готовность core независимо от списка подключений", async () => {
+    const definition = integrationDefinition();
+    const connection = integrationConnection(3, true);
+    listIntegrationDefinitionsMock.mockResolvedValue({
+      data: {
+        items: [definition],
+        coreReady: true,
+        nextActions: ["CREATE_CONNECTION"],
+        nextPageToken: "",
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    listIntegrationConnectionsMock.mockResolvedValue({
+      data: { items: [connection], nextPageToken: "" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadIntegrations();
+
+    expect(store.integrationCoreReady).toBe(true);
+    expect(store.definitions[definition.key]).toEqual(definition);
+    expect(store.connections[connection.ref]).toEqual(connection);
+    expect(store.integrationDefinitionActions).toEqual(["CREATE_CONNECTION"]);
+
+    store.clearOwnerState();
+    expect(store.integrationCoreReady).toBeUndefined();
   });
 
   it("настраивает credential отдельной versioned-командой и хранит только masked readback", async () => {

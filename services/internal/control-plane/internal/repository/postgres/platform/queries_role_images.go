@@ -11,6 +11,8 @@ var (
 	queryRoleImagesListBuilds string
 	//go:embed sql/role_images_get_active_artifact.sql
 	queryRoleImagesGetActiveArtifact string
+	//go:embed sql/role_images_get_promotion_candidate.sql
+	queryRoleImagesGetPromotionCandidate string
 	//go:embed sql/role_images_resolve_project_role.sql
 	queryRoleImagesResolveProjectRole string
 	//go:embed sql/role_images_lock_recipe.sql

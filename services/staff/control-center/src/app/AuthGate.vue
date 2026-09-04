@@ -3,6 +3,17 @@ import { useSessionStore } from "@/features/session/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const session = useSessionStore();
+
+function startLogin(): void {
+  void session.beginLogin().catch(() => {
+    // Store уже сохранил авторитетное состояние ошибки для пользователя.
+  });
+}
+
+function retryAuthentication(): void {
+  if (session.loginFailed) startLogin();
+  else void session.probe();
+}
 </script>
 
 <template>
@@ -20,12 +31,15 @@ const session = useSessionStore();
         v-else-if="session.phase === 'unauthenticated'"
         class="button button--primary button--large"
         type="button"
-        @click="session.beginLogin"
+        @click="startLogin"
       >
         {{ $t("auth.signIn") }}
       </button>
       <template v-else>
-        <ProblemNotice :problem="session.problem" @retry="session.probe" />
+        <ProblemNotice
+          :problem="session.problem"
+          @retry="retryAuthentication"
+        />
       </template>
     </section>
   </main>

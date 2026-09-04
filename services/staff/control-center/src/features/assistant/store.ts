@@ -232,8 +232,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         upsertConversation(conversation);
       }
       const appended = attachmentSetRef
-        ? await appendTurn(conversation.ref, normalized, attachmentSetRef)
-        : await appendTurn(conversation.ref, normalized);
+        ? await appendTurn(conversation, normalized, attachmentSetRef)
+        : await appendTurn(conversation, normalized);
       conversations.value = conversations.value.map((item) =>
         item.ref === conversation.ref
           ? { ...item, turns: item.turns.filter((turn) => !turn.plan) }

@@ -246,7 +246,7 @@ func (repository *Repository) authorizeProviderAccountActions(
 		return nil, nil, err
 	}
 	at := time.Now().UTC()
-	collectionTarget := entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"}
+	collectionTarget := providerAccountCollectionTarget()
 	collectionActions := []string{}
 	if accessservice.Evaluate(subject.AccessSubject, "provider.account.manage", collectionTarget, "", bindings, at).Allowed {
 		collectionActions = append(collectionActions, "CREATE_CONNECTION")
@@ -261,6 +261,10 @@ func (repository *Repository) authorizeProviderAccountActions(
 		items[index].NextActions = providerAccountActions(items[index], canManage, canAuthorize, canRevoke)
 	}
 	return items, collectionActions, nil
+}
+
+func providerAccountCollectionTarget() entity.AccessScope {
+	return entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "PROVIDER_ACCOUNT"}
 }
 
 func (repository *Repository) ListRoleImageRecipeRevisions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RoleImageRecipeRevision, string, error) {
@@ -557,7 +561,9 @@ func validStableKey(value string) bool {
 		return false
 	}
 	for _, character := range value[1:] {
-		if character < 'a' || character > 'z' && (character < '0' || character > '9') && character != '_' && character != '-' {
+		lowercaseLetter := character >= 'a' && character <= 'z'
+		digit := character >= '0' && character <= '9'
+		if !lowercaseLetter && !digit && character != '_' && character != '-' {
 			return false
 		}
 	}

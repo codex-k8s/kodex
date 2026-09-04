@@ -1,5 +1,19 @@
 {
   "schemaVersion": 1,
+  "host": {
+    "os": {
+      "id": "ubuntu",
+      "version": "24.04",
+      "codename": "noble"
+    },
+    "packages": {
+      "containerd": "2.2.1-0ubuntu1~24.04.3",
+      "docker-buildx": "0.30.1-0ubuntu1~24.04.1",
+      "docker-compose-v2": "2.40.3+ds1-0ubuntu1~24.04.1",
+      "docker.io": "29.1.3-0ubuntu3~24.04.2",
+      "runc": "1.3.4-0ubuntu1~24.04.1"
+    }
+  },
   "artifacts": [
     {
       "name": "k3s",
@@ -12,6 +26,24 @@
       "version": "1.26.6",
       "url": "https://go.dev/dl/go1.26.6.linux-amd64.tar.gz",
       "sha256": "708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
+    },
+    {
+      "name": "node",
+      "version": "24.17.0",
+      "url": "https://nodejs.org/dist/v24.17.0/node-v24.17.0-linux-x64.tar.xz",
+      "sha256": "ab343a1b747c7cbf3630dfd7dbf818c5423fab2eb4f5ad1afc896f6bd121a917"
+    },
+    {
+      "name": "codex-cli",
+      "version": "0.152.0",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0.tgz",
+      "integrity": "sha512-Vx0tg/J5SbxYYGJazTtL/XySK9Dlqc5KW1MZM71NMwVci/4F1ap+FfSKPFTlrICEtOTuq3KNcWSdv9oMGdPuRw=="
+    },
+    {
+      "name": "codex-linux-x64",
+      "version": "0.152.0-linux-x64",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0-linux-x64.tgz",
+      "integrity": "sha512-Isn/g5EZTaNbwZtaIuz67U1FNDEVVeMpS4xiR+c1dpOPL2xxrGNtdAothOW2YKsb96OsS+QfClziFb4qxesWDA=="
     },
     {
       "name": "helm",
@@ -36,6 +68,12 @@
       "version": "v2.15.0",
       "url": "https://github.com/nats-io/nsc/releases/download/v2.15.0/nsc-linux-amd64.zip",
       "sha256": "7d55eda757dc9f233675a3038fcf8779bcda99753b1603f7009fc8537e126b7e"
+    },
+    {
+      "name": "teleport-client",
+      "version": "18.11.0",
+      "url": "https://cdn.teleport.dev/teleport-v18.11.0-linux-amd64-bin.tar.gz",
+      "sha256": "8d3dba03ea6b6e0d72c97e190da0595e8f0d70f5573c3a26b1908cf60caf6e3f"
     }
   ],
   "charts": [

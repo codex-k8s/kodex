@@ -147,3 +147,106 @@ kodex_e2e_delete_owned_jobs() {
     --wait=true --timeout="$timeout" >/dev/null || return 1
   kubectl -n "$namespace" get jobs -l "$selector" -o json | jq -e '.items | length == 0' >/dev/null
 }
+
+kodex_e2e_sanitize_diagnostic_stream() {
+  sed -E \
+    -e 's#((postgres(ql)?|redis|https?|s3)://)[^/@[:space:]]+@#\1[REDACTED]@#Ig' \
+    -e 's#([Bb]earer[[:space:]]+)[^,;[:space:]]+#\1[REDACTED]#g' \
+    -e 's#((authorization|proxy-authorization|cookie|set-cookie)["'"'"'=:[:space:]]+)[^,;[:space:]]+#\1[REDACTED]#Ig' \
+    -e 's#((token|secret|password|passwd|api[-_]?key|access[-_]?key|private[-_]?key)["'"'"'=:[:space:]]+)[^,;[:space:]]+#\1[REDACTED]#Ig' \
+    -e 's#[A-Za-z0-9_+./=-]{48,}#[REDACTED]#g'
+}
+
+kodex_e2e_retain_owned_terminal_jobs_on_failure() {
+  local namespace=$1 selector=$2 name_pattern=$3 bundle_directory=$4
+  local inventory terminal_inventory job_count job_index job_name job_uid pods pod_count
+  local pod_index pod_name container_name log_file events_file temporary_file collected_at run_id
+
+  if [[ ",$selector," =~ ,kodex\.dev/e2e-run=([a-z0-9]([-a-z0-9.]{0,61}[a-z0-9])?), ]]; then
+    run_id=${BASH_REMATCH[1]}
+  else
+    return 1
+  fi
+
+  inventory=$(kubectl -n "$namespace" get jobs -l "$selector" -o json) || return 1
+  jq -e --arg namespace "$namespace" --arg name_pattern "$name_pattern" --arg run_id "$run_id" '
+    all(.items[]?;
+      .metadata.namespace == $namespace and
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["app.kubernetes.io/managed-by"] == "kodex-local-e2e" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+      .metadata.labels["kodex.dev/e2e-run"] == $run_id and
+      (.metadata.name | test($name_pattern)) and
+      (.spec.activeDeadlineSeconds | type == "number" and . > 0 and . <= 900))
+  ' <<<"$inventory" >/dev/null || return 1
+
+  terminal_inventory=$(jq -c '{items:[.items[]? | select(any(.status.conditions[]?;
+    .status == "True" and (.type == "Complete" or .type == "Failed")))]}' <<<"$inventory") || return 1
+  job_count=$(jq '.items | length' <<<"$terminal_inventory") || return 1
+  ((job_count > 0)) || return 0
+
+  kodex_e2e_ensure_private_directory "$bundle_directory" || return 1
+  mkdir -p -- "$bundle_directory/logs" "$bundle_directory/events"
+  chmod 0700 -- "$bundle_directory/logs" "$bundle_directory/events"
+  collected_at=$(date -u +%Y-%m-%dT%H:%M:%SZ) || return 1
+  for ((job_index = 0; job_index < job_count; job_index++)); do
+    job_name=$(jq -er --argjson index "$job_index" '.items[$index].metadata.name' <<<"$terminal_inventory") || return 1
+    job_uid=$(jq -er --argjson index "$job_index" '.items[$index].metadata.uid | select(type == "string" and length > 0)' <<<"$terminal_inventory") || return 1
+    pods=$(kubectl -n "$namespace" get pods -l "job-name=$job_name" -o json) || return 1
+    jq -e --arg namespace "$namespace" --arg job_uid "$job_uid" '
+      all(.items[]?;
+        .metadata.namespace == $namespace and
+        (.status.phase == "Succeeded" or .status.phase == "Failed") and
+        any(.metadata.ownerReferences[]?;
+          .apiVersion == "batch/v1" and .kind == "Job" and .uid == $job_uid and .controller == true))
+    ' <<<"$pods" >/dev/null || return 1
+    kubectl -n "$namespace" patch "job/$job_name" --type=merge \
+      -p '{"spec":{"ttlSecondsAfterFinished":1800}}' >/dev/null || return 1
+    pod_count=$(jq '.items | length' <<<"$pods") || return 1
+    for ((pod_index = 0; pod_index < pod_count; pod_index++)); do
+      pod_name=$(jq -er --argjson index "$pod_index" '.items[$index].metadata.name' <<<"$pods") || return 1
+      mkdir -p -- "$bundle_directory/logs/$pod_name"
+      chmod 0700 -- "$bundle_directory/logs/$pod_name"
+      while IFS= read -r container_name; do
+        [[ "$container_name" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || return 1
+        log_file="$bundle_directory/logs/$pod_name/$container_name.log"
+        kubectl -n "$namespace" logs "$pod_name" -c "$container_name" \
+          --tail=500 --limit-bytes=262144 2>&1 | kodex_e2e_sanitize_diagnostic_stream >"$log_file" || true
+        chmod 0600 -- "$log_file"
+      done < <(jq -r '.items['"$pod_index"'].spec.initContainers[]?.name,
+        .items['"$pod_index"'].spec.containers[]?.name' <<<"$pods")
+
+      events_file="$bundle_directory/events/$pod_name.json"
+      kubectl -n "$namespace" get events --field-selector "involvedObject.uid=$(jq -r --argjson index "$pod_index" '.items[$index].metadata.uid' <<<"$pods")" -o json 2>/dev/null | \
+        jq '{items:[.items[]? | {
+          type:(.type // null), reason:(.reason // null), action:(.action // null),
+          count:(.count // 0), firstTimestamp:(.firstTimestamp // null),
+          lastTimestamp:(.lastTimestamp // null), eventTime:(.eventTime // null)
+        }]}' >"$events_file" || printf '%s\n' '{"items":[]}' >"$events_file"
+      chmod 0600 -- "$events_file"
+    done
+  done
+
+  temporary_file=$(mktemp "$bundle_directory/.inventory.XXXXXX") || return 1
+  jq --arg namespace "$namespace" --arg selector "$selector" --arg collected_at "$collected_at" '
+    {
+      version:1,
+      namespace:$namespace,
+      selector:$selector,
+      collectedAt:$collected_at,
+      retentionSecondsAfterFinished:1800,
+      jobs:[.items[] | {
+        name:.metadata.name,
+        uid:.metadata.uid,
+        status:{
+          active:(.status.active // 0), failed:(.status.failed // 0),
+          succeeded:(.status.succeeded // 0),
+          conditions:[.status.conditions[]? | {type,status,reason}]
+        }
+      }]
+    }
+  ' <<<"$terminal_inventory" >"$temporary_file" || return 1
+  chmod 0600 -- "$temporary_file"
+  mv -- "$temporary_file" "$bundle_directory/inventory.json"
+  printf 'Private sanitized Kubernetes diagnostics: %s\n' "$bundle_directory" >&2
+}

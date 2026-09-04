@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -34,6 +35,40 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	}
 	if state.result.Outcome != "SUCCEEDED" || state.result.FinalMessage != "готово" {
 		t.Fatalf("unexpected result: %#v", state.result)
+	}
+}
+
+func TestTurnStartedNotificationMayPrecedeTurnResponse(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	state.result.SessionID = testThreadID
+
+	started := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` +
+		testTurnID + `","items":[],"status":"inProgress"}}`)
+	if err := state.notification("turn/started", started); err != nil {
+		t.Fatalf("early turn start notification rejected: %v", err)
+	}
+	if err := state.bindTurn(raw(`{"turn":{"id":"` + testTurnID + `","items":[],"status":"inProgress"}}`)); err != nil {
+		t.Fatalf("turn response after notification rejected: %v", err)
+	}
+	if state.turnID != testTurnID || state.turnStarted != 1 {
+		t.Fatalf("turn identity was not bound exactly once: %#v", state)
+	}
+}
+
+func TestTurnStartOrderingRejectsIdentityMismatch(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	state.result.SessionID = testThreadID
+	otherTurnID := "01980000-0000-7000-8000-000000000099"
+
+	started := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` +
+		testTurnID + `","items":[],"status":"inProgress"}}`)
+	if err := state.notification("turn/started", started); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.bindTurn(raw(`{"turn":{"id":"` + otherTurnID + `","items":[],"status":"inProgress"}}`)); err == nil {
+		t.Fatal("mismatched turn response was accepted")
 	}
 }
 
@@ -146,13 +181,92 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 		"instructionSources":[],"model":"codex","modelProvider":"openai",
 		"multiAgentMode":"explicitRequestOnly","reasoningEffort":null,
 		"runtimeWorkspaceRoots":["/workspace"],"sandbox":{"type":"readOnly"},"serviceTier":null,
-		"thread":{"cliVersion":"0.144.1","createdAt":1,"cwd":"/workspace","ephemeral":false,
+		"thread":{"canAcceptDirectInput":true,"cliVersion":"0.152.0","createdAt":1,"cwd":"/workspace","ephemeral":false,
 		"extra":null,"historyMode":"save-all","id":"` + testThreadID + `","modelProvider":"openai",
-		"preview":"","sessionId":"` + testThreadID + `","source":"startup",
+		"preview":"","projectId":null,"section":"default","sectionEnteredAt":null,
+		"sessionId":"` + testThreadID + `","source":"startup",
 		"status":{"type":"idle"},"turns":[],"updatedAt":1}}`)
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {
 		t.Fatalf("current app-server thread response was rejected: %v", err)
 	}
+}
+
+func TestRequiredMCPStatusBindsThreadCatalogBeforeTurn(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	required := []string{
+		"propose_run_metadata",
+		"get_configuration_catalog",
+		"propose_configuration_plan",
+		"propose_assistant_metadata",
+	}
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("connected", required), required)
+	if err != nil || !ready || !state.requiredMCPReady || state.requiredMCPStatus != "ready" {
+		t.Fatalf("required MCP was not bound: ready=%v state=%#v err=%v", ready, state, err)
+	}
+
+	failure := raw(`{"error":"startup failed","failureReason":null,"name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", failure); !errors.Is(err, ErrRequiredMCPUnavailable) {
+		t.Fatalf("required MCP degradation was accepted: %v", err)
+	}
+}
+
+func TestRequiredMCPStatusWaitsOnlyForStartupStates(t *testing.T) {
+	required := []string{"propose_run_metadata"}
+	state := newProtocolState(testThreadID)
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("starting", nil), required)
+	if err != nil || ready {
+		t.Fatalf("starting MCP status was not retained as pending: ready=%v err=%v", ready, err)
+	}
+	for _, status := range []string{"authenticationRequired", "failed", "cancelled", "disabled"} {
+		ready, err = state.bindRequiredMCPStatus(mcpStatusResponse(status, required), required)
+		if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+			t.Fatalf("terminal MCP status %q was accepted: ready=%v err=%v", status, ready, err)
+		}
+	}
+}
+
+func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
+	required := []string{"propose_run_metadata", "get_configuration_catalog"}
+	state := newProtocolState(testThreadID)
+	ready, err := state.bindRequiredMCPStatus(mcpStatusResponse("connected", required[:1]), required)
+	if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+		t.Fatalf("incomplete MCP catalog was accepted: ready=%v err=%v", ready, err)
+	}
+}
+
+func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	valid := raw(`{"error":"","failureReason":"reauthenticationRequired","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", valid); err != nil {
+		t.Fatalf("structured startup failure was rejected: %v", err)
+	}
+	if state.requiredMCPThread != testThreadID || state.requiredMCPStatus != "failed" {
+		t.Fatalf("structured startup failure was not retained: %#v", state)
+	}
+	invalid := raw(`{"failureReason":"futureReason","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
+	if err := state.notification("mcpServer/startupStatus/updated", invalid); err == nil {
+		t.Fatal("unknown MCP startup failure reason was accepted")
+	}
+}
+
+func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
+	catalog := make(map[string]map[string]any, len(tools))
+	for _, name := range tools {
+		catalog[name] = map[string]any{"name": name, "inputSchema": map[string]any{"type": "object"}}
+	}
+	encoded, err := json.Marshal(map[string]any{
+		"data": []map[string]any{{
+			"authStatus": "bearerToken", "name": "kodex", "pluginId": nil,
+			"resourceTemplates": []any{}, "resources": []any{}, "runtimeStatus": runtimeStatus,
+			"serverInfo": nil, "tools": catalog,
+		}},
+		"nextCursor": nil,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return encoded
 }
 
 func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
@@ -182,7 +296,7 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 	}
 	want := struct {
 		total, input, cached, cacheWrite, output, reasoning, window int64
-	}{70, 60, 40, 0, 10, 3, 200000}
+	}{70, 60, 40, 10, 10, 3, 200000}
 	if result.Usage.TotalTokens != want.total || result.Usage.InputTokens != want.input ||
 		result.Usage.CachedInputTokens != want.cached || result.Usage.CacheWriteInputTokens != want.cacheWrite ||
 		result.Usage.OutputTokens != want.output || result.Usage.ReasoningOutputTokens != want.reasoning ||
@@ -192,11 +306,11 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 }
 
 func TestTokenUsageDeltaNeverBecomesNegative(t *testing.T) {
-	baseline, err := parseTokenUsage(raw(`{"total":{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"outputTokens":20,"reasoningOutputTokens":5},"last":{"totalTokens":50,"inputTokens":40,"cachedInputTokens":10,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
+	baseline, err := parseTokenUsage(raw(`{"total":{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"cacheWriteInputTokens":10,"outputTokens":20,"reasoningOutputTokens":5},"last":{"totalTokens":50,"inputTokens":40,"cachedInputTokens":10,"cacheWriteInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	final, err := parseTokenUsage(raw(`{"total":{"totalTokens":90,"inputTokens":70,"cachedInputTokens":15,"outputTokens":20,"reasoningOutputTokens":4},"last":{"totalTokens":40,"inputTokens":30,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
+	final, err := parseTokenUsage(raw(`{"total":{"totalTokens":90,"inputTokens":70,"cachedInputTokens":15,"cacheWriteInputTokens":8,"outputTokens":20,"reasoningOutputTokens":4},"last":{"totalTokens":40,"inputTokens":30,"cachedInputTokens":5,"cacheWriteInputTokens":3,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,27 +324,28 @@ func TestTokenUsageDeltaNeverBecomesNegative(t *testing.T) {
 func TestTokenUsageNotificationRejectsInconsistentBreakdown(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
-	invalid := raw(`{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","tokenUsage":{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"outputTokens":10,"reasoningOutputTokens":0},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"outputTokens":10,"reasoningOutputTokens":0},"modelContextWindow":200000}}`)
+	invalid := raw(`{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","tokenUsage":{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":0},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":11,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":0},"modelContextWindow":200000}}`)
 	if err := state.notification("thread/tokenUsage/updated", invalid); err == nil {
 		t.Fatal("inconsistent token usage was accepted")
 	}
 }
 
 func tokenUsageNotification(turnID string, total, input, cached, cacheWrite, output, reasoning int64) json.RawMessage {
-	_ = cacheWrite
 	return raw(`{"threadId":"` + testThreadID + `","turnId":"` + turnID + `","tokenUsage":{"total":{"totalTokens":` +
 		itoa(total) + `,"inputTokens":` + itoa(input) + `,"cachedInputTokens":` + itoa(cached) +
+		`,"cacheWriteInputTokens":` + itoa(cacheWrite) +
 		`,"outputTokens":` + itoa(output) +
 		`,"reasoningOutputTokens":` + itoa(reasoning) + `},"last":{"totalTokens":` + itoa(total) +
 		`,"inputTokens":` + itoa(input) + `,"cachedInputTokens":` + itoa(cached) +
+		`,"cacheWriteInputTokens":` + itoa(cacheWrite) +
 		`,"outputTokens":` + itoa(output) +
 		`,"reasoningOutputTokens":` + itoa(reasoning) + `},"modelContextWindow":200000}}`)
 }
 
 func TestTokenUsageAllowsUnknownContextWindow(t *testing.T) {
 	for _, input := range []json.RawMessage{
-		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2}}`),
-		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":null}`),
+		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2}}`),
+		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":null}`),
 	} {
 		usage, err := parseTokenUsage(input)
 		if err != nil || usage.ModelContextWindow != 0 || usage.CacheWriteInputTokens != 0 {
@@ -305,6 +420,31 @@ func TestWireParserRejectsUnknownAndDuplicateFields(t *testing.T) {
 	} {
 		if _, err := parseWireMessage([]byte(value)); err == nil {
 			t.Fatalf("invalid wire value accepted: %s", value)
+		}
+	}
+}
+
+func TestWireParserAcceptsCurrentNotificationTimestampEnvelope(t *testing.T) {
+	message, err := parseWireMessage([]byte(`{"method":"remoteControl/status/changed","params":{"installationId":"installation","serverName":"server","status":"disabled"},"emittedAtMs":1788254519388}`))
+	if err != nil {
+		t.Fatalf("current notification envelope was rejected: %v", err)
+	}
+	if message.kind != messageNotification || message.method != "remoteControl/status/changed" {
+		t.Fatalf("unexpected notification: %#v", message)
+	}
+}
+
+func TestWireParserRejectsNotificationTimestampOutsideEnvelopeContract(t *testing.T) {
+	for _, value := range []string{
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":-1}`,
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":1.5}`,
+		`{"method":"remoteControl/status/changed","params":{},"emittedAtMs":"1"}`,
+		`{"id":1,"method":"mcpServer/elicitation/request","params":{},"emittedAtMs":1}`,
+		`{"id":1,"result":{},"emittedAtMs":1}`,
+		`{"id":1,"error":{"code":-32000,"message":"failed"},"emittedAtMs":1}`,
+	} {
+		if _, err := parseWireMessage([]byte(value)); err == nil {
+			t.Fatalf("invalid notification timestamp envelope accepted: %s", value)
 		}
 	}
 }

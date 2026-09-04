@@ -40,6 +40,9 @@ test("mobile shell, помощник и граф доступны без гор�
   await expect(
     page.getByLabel("Опишите, что нужно настроить или запустить"),
   ).toBeVisible();
+  const assistant = page.getByRole("dialog", { name: "Kodex" });
+  await assistant.getByRole("button", { name: "Закрыть" }).click();
+  await expect(assistant).toHaveCount(0);
 
   await gotoWithRetry(page, `/projects/${projectRef}/runs`);
   await expectNoHorizontalOverflow(page);

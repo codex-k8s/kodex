@@ -35,16 +35,20 @@ vi.mock("@/shared/api/client", () => ({
 vi.mock("@/shared/api/mutation", () => ({
   mutate: async (
     request: (headers: Record<string, string>) => Promise<{ data: unknown }>,
+    _version?: number,
+    idempotencyKey = "idem_test",
   ) =>
     request({
-      "Idempotency-Key": "idem_test",
+      "Idempotency-Key": idempotencyKey,
       "X-CSRF-Token": "csrf_test",
     }),
 }));
 
 import {
+  AttachmentTerminalScanError,
   createAttachmentDraft,
   uploadCleanAttachmentArtifact,
+  waitForCleanAttachmentArtifact,
 } from "@/shared/api/attachment-sets";
 
 function attachmentSet(purpose: AttachmentSet["purpose"]): AttachmentSet {
@@ -137,6 +141,7 @@ describe("AttachmentSet endpoint routing", () => {
 
     await expect(
       uploadCleanAttachmentArtifact(undefined, "ASSISTANT_MESSAGE", file, {
+        idempotencyKey: "stable-upload-key",
         signal: new AbortController().signal,
         onProgress,
         onScanning,
@@ -145,6 +150,7 @@ describe("AttachmentSet endpoint routing", () => {
 
     const uploadOptions = uploadOrganizationArtifactMock.mock.calls[0]?.[0];
     expect(uploadOptions?.body).toBe(file);
+    expect(uploadOptions?.headers["Idempotency-Key"]).toBe("stable-upload-key");
     expect(uploadOptions?.headers["X-File-Name"]).toBe("context.txt");
     expect(uploadProjectArtifactMock).not.toHaveBeenCalled();
     expect(onProgress).toHaveBeenCalledWith({
@@ -153,4 +159,20 @@ describe("AttachmentSet endpoint routing", () => {
     });
     expect(onScanning).not.toHaveBeenCalled();
   });
+
+  it.each(["FAILED", "QUARANTINED"] as const)(
+    "возвращает типизированный конечный результат сканирования %s",
+    async (scanState) => {
+      const terminal = { ...artifact(), scanState };
+
+      await expect(
+        waitForCleanAttachmentArtifact(terminal, new AbortController().signal),
+      ).rejects.toEqual(
+        expect.objectContaining<Partial<AttachmentTerminalScanError>>({
+          name: "AttachmentTerminalScanError",
+          scanState,
+        }),
+      );
+    },
+  );
 });

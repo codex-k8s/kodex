@@ -58,10 +58,8 @@ jq -e '
 
 frontend_directory="$repository_root/services/staff/control-center"
 storage_state="$state_directory/e2e/owner.json"
-ca_file="$state_directory/kodex-local-ca.crt"
 owner_username_file="$state_directory/inputs/owner-username"
 owner_password_file="$state_directory/inputs/owner-password"
-[[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'local HTTPS CA is absent'
 [[ -f "$owner_username_file" && -r "$owner_username_file" && ! -L "$owner_username_file" ]] ||
   fail 'local owner username is absent or unsafe'
 [[ -f "$owner_password_file" && -r "$owner_password_file" && ! -L "$owner_password_file" ]] ||
@@ -70,7 +68,23 @@ install -d -m 0700 "$state_directory/e2e"
 state="$state_directory/e2e/$resource_prefix-role-image.json"
 [[ ! -e "$state" && ! -L "$state" ]] || fail 'RoleImage E2E state already exists'
 
-base_url=https://control.127.0.0.1.nip.io/
+tls_mode=${KODEX_DEV_TLS_MODE:-local-ca}
+case "$tls_mode" in
+  local-ca)
+    base_url=https://control.127.0.0.1.nip.io/
+    ca_file="$state_directory/kodex-local-ca.crt"
+    [[ -f "$ca_file" && ! -L "$ca_file" ]] || fail 'local HTTPS CA is absent'
+    ;;
+  public-acme)
+    public_host=${KODEX_DEV_PUBLIC_HOST:-}
+    [[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
+      "$public_host" == *.* && "$public_host" != *..* ]] ||
+      fail 'public-acme RoleImage E2E host is invalid'
+    base_url="https://$public_host/"
+    ca_file=""
+    ;;
+  *) fail 'RoleImage E2E TLS mode is invalid' ;;
+esac
 KODEX_E2E_BASE_URL="${base_url%/}" \
   KODEX_E2E_OWNER_USERNAME="$(<"$owner_username_file")" \
   KODEX_E2E_OWNER_PASSWORD="$(<"$owner_password_file")" \
@@ -83,8 +97,14 @@ KODEX_E2E_BASE_URL="${base_url%/}" \
   fail 'authenticated owner storage state was not created'
 
 api_storage_state=$(mktemp "$state_directory/e2e/$resource_prefix-owner-api.XXXXXX.json")
+pod_watch_file=""
+pod_watch_pid=""
 cleanup() {
-  rm -f -- "$api_storage_state"
+  if [[ -n "$pod_watch_pid" ]]; then
+    kill "$pod_watch_pid" >/dev/null 2>&1 || true
+    wait "$pod_watch_pid" >/dev/null 2>&1 || true
+  fi
+  rm -f -- "$api_storage_state" ${pod_watch_file:+"$pod_watch_file"}
 }
 trap cleanup EXIT
 KODEX_E2E_BASE_URL="${base_url%/}" \
@@ -104,30 +124,50 @@ common_environment=(
 )
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" prepare
 
+select_exact_runtime_pod() {
+  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" '
+    [.[] |
+      select((.metadata.uid as $uid | $before | index($uid)) == null) |
+      select(
+        ([(.spec.initContainers[]? | select(.name == "workspace-init") | .image),
+          (.spec.containers[]? |
+            select(.name == "role-runtime" or .name == "provider-runtime") | .image)] |
+          length == 3 and all(. == $image)) and
+        ([(.status.initContainerStatuses[]? | select(.name == "workspace-init") | .imageID),
+          (.status.containerStatuses[]? |
+            select(.name == "role-runtime" or .name == "provider-runtime") | .imageID)] |
+          length == 3 and all(test("@sha256:[a-f0-9]{64}$")) and (unique | length == 1))
+      )] |
+    sort_by(.metadata.creationTimestamp) | last // empty
+  '
+}
+
 before_pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json |
   jq -c '[.items[].metadata.uid]')
+pod_watch_file=$(mktemp "$state.XXXXXX.pod-watch.json")
+chmod 0600 "$pod_watch_file"
+kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
+  --watch --output-watch-events -o json >"$pod_watch_file" 2>/dev/null &
+pod_watch_pid=$!
+sleep 1
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" launch
 
 promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
-manifest_digest=$(jq -er '.manifestDigest | select(test("^sha256:[a-f0-9]{64}$"))' "$state")
 deadline=$((SECONDS + timeout_seconds))
 pod_json=""
 while ((SECONDS < deadline)); do
   pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json)
-  pod_json=$(jq -c --argjson before "$before_pods" --arg image "$promoted_reference" --arg digest "$manifest_digest" '
-    [.items[] |
-      select((.metadata.uid as $uid | $before | index($uid)) == null) |
-      select(
-        ([.spec.initContainers[]?,.spec.containers[]?] |
-          length == 3 and all(.; .image == $image)) and
-        ([.status.initContainerStatuses[]?,.status.containerStatuses[]?] |
-          length == 3 and all(.; (.imageID // "") | endswith("@" + $digest)))
-      )] |
-    sort_by(.metadata.creationTimestamp) | last // empty
-  ' <<<"$pods")
+  pod_json=$(jq -c '.items' <<<"$pods" | select_exact_runtime_pod)
+  if [[ -z "$pod_json" ]]; then
+    pod_json=$(jq -cs '[.[] | .object // .]' "$pod_watch_file" 2>/dev/null |
+      select_exact_runtime_pod 2>/dev/null || true)
+  fi
   [[ -z "$pod_json" ]] || break
   sleep 1
 done
+kill "$pod_watch_pid" >/dev/null 2>&1 || true
+wait "$pod_watch_pid" >/dev/null 2>&1 || true
+pod_watch_pid=""
 if [[ -z "$pod_json" ]]; then
   kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
     -o custom-columns=NAME:.metadata.name,PHASE:.status.phase --no-headers >&2 || true

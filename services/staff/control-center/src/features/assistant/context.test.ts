@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 import {
+  assistantContextIdentity,
   conversationMatchesContext,
   resolveAssistantContext,
 } from "@/features/assistant/context";
@@ -48,6 +49,34 @@ const sources = {
 };
 
 describe("assistant route context", () => {
+  it("не меняет identity при version bump той же сущности", () => {
+    const descriptor = {
+      route: "/projects/prj_sales",
+      entityKind: "PROJECT",
+      entityRef: "prj_sales",
+      entityName: "Продажи",
+      allowedOperations: [],
+    };
+
+    expect(
+      assistantContextIdentity(
+        { ...descriptor, entityVersion: 1 },
+        "prj_sales",
+      ),
+    ).toBe(
+      assistantContextIdentity(
+        { ...descriptor, entityVersion: 2 },
+        "prj_sales",
+      ),
+    );
+    expect(
+      assistantContextIdentity(
+        { ...descriptor, entityRef: "prj_other" },
+        "prj_other",
+      ),
+    ).not.toBe(assistantContextIdentity(descriptor, "prj_sales"));
+  });
+
   it("связывает страницу сотрудника с точным agent и project", () => {
     const value = resolveAssistantContext(
       route("/projects/prj_sales/agents/agt_sales", {

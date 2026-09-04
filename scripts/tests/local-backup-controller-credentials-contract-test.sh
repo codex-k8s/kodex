@@ -30,5 +30,11 @@ grep -Fq 'GRANT SELECT ON ALL TABLES IN SCHEMA public, control_plane' \
 grep -Fq 'GRANT SELECT ON ALL TABLES IN SCHEMA public, internal_rpc_authority' \
   "$root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
   fail 'authority backup read grant reconciliation is absent'
+grep -Fq 'until pg_isready --timeout=2' \
+  "$root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
+  fail 'runtime credential reconciliation does not wait for the routable PostgreSQL endpoint'
+grep -Fq 'if [ "$attempt" -ge 90 ]' \
+  "$root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
+  fail 'runtime credential PostgreSQL readiness wait is not bounded'
 
 printf 'Local backup-controller credentials contract passed.\n'

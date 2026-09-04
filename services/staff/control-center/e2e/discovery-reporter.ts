@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -23,8 +25,20 @@ interface DiscoveryResult {
   readonly title: string;
 }
 
+interface VisualEvidence {
+  readonly bytes: number;
+  readonly name: string;
+  readonly project: string;
+  readonly sha256: string;
+  readonly sourceSHA: string;
+  readonly title: string;
+  readonly viewport: string;
+}
+
 class DiscoveryReporter implements Reporter {
   private readonly results: DiscoveryResult[] = [];
+  private readonly sourceSHA = process.env.KODEX_E2E_EXPECTED_SHA ?? "";
+  private readonly visualEvidence: VisualEvidence[] = [];
   private startedAt = new Date().toISOString();
 
   onBegin(): void {
@@ -32,16 +46,40 @@ class DiscoveryReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
+    const project = test.parent.project()?.name ?? "unknown";
+    const title = test.titlePath().slice(1).join(" > ");
     this.results.push({
       annotations: test.annotations
         .map((annotation) => annotation.description)
         .filter((description): description is string => Boolean(description)),
-      project: test.parent.project()?.name ?? "unknown",
-      title: test.titlePath().slice(1).join(" > "),
+      project,
+      title,
       status: result.status,
       durationMs: result.duration,
       errors: result.errors.map((error) => safeError(error.message)),
     });
+    for (const attachment of result.attachments) {
+      if (
+        attachment.contentType !== "image/png" ||
+        !attachment.name.startsWith("visual-")
+      )
+        continue;
+      const viewport = /^visual-(\d+x\d+)-/.exec(attachment.name)?.[1];
+      if (!viewport || !/^[a-f0-9]{40}$/.test(this.sourceSHA)) continue;
+      const body =
+        attachment.body ??
+        (attachment.path ? readFileSync(attachment.path) : undefined);
+      if (!body) continue;
+      this.visualEvidence.push({
+        bytes: body.byteLength,
+        name: attachment.name,
+        project,
+        sha256: createHash("sha256").update(body).digest("hex"),
+        sourceSHA: this.sourceSHA,
+        title,
+        viewport,
+      });
+    }
   }
 
   onEnd(result: FullResult): void {
@@ -62,7 +100,9 @@ class DiscoveryReporter implements Reporter {
       finishedAt: new Date().toISOString(),
       status: result.status,
       summary,
+      sourceSHA: /^[a-f0-9]{40}$/.test(this.sourceSHA) ? this.sourceSHA : null,
       results: this.results,
+      visualEvidence: this.visualEvidence,
     };
     try {
       writeFileSync(temporaryPath, `${JSON.stringify(report, null, 2)}\n`, {

@@ -56,7 +56,9 @@ const loading = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const overlayContent = ref("");
-const providerAccountsEligible = ref(false);
+const providerAccountEligibility = ref<"CONNECTING" | "READY" | "UNAVAILABLE">(
+  "CONNECTING",
+);
 const form = reactive<AgentRuntimeConfigurationInput>({
   runtimeProfileRef: "",
   model: "",
@@ -480,16 +482,14 @@ onMounted(() => void load());
               <strong>{{ $t("runtime.accounts") }}</strong>
               <p>{{ $t("runtime.accountCatalogHelp") }}</p>
             </div>
-            <StatusBadge
-              :state="providerAccountsEligible ? 'READY' : 'UNAVAILABLE'"
-            />
+            <StatusBadge :state="providerAccountEligibility" />
           </div>
           <ProviderAccountSelector
             v-model="form.providerAccounts"
             :definition-key="selectedProvider"
             :policy-mode="form.providerPolicyMode"
             :disabled="!canEdit || busy"
-            @eligibility-change="providerAccountsEligible = $event"
+            @eligibility-state-change="providerAccountEligibility = $event"
           />
         </section>
         <div v-if="canEdit" class="runtime-panel__actions">
@@ -504,7 +504,7 @@ onMounted(() => void load());
               !form.model ||
               !selectedRuntime?.ready ||
               !form.providerAccounts.length ||
-              !providerAccountsEligible
+              providerAccountEligibility !== 'READY'
             "
             @click="saveRuntime"
           >

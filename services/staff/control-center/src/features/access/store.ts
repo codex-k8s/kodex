@@ -32,6 +32,7 @@ export type AccessLoadKey =
   | "subjects"
   | "groups"
   | "roles"
+  | "bindingRoles"
   | "roleVersions"
   | "bindings"
   | "projects"
@@ -59,6 +60,7 @@ export const useAccessStore = defineStore("access", () => {
   const subjects = ref<AccessSubject[]>([]);
   const groups = ref<OidcGroup[]>([]);
   const roles = ref<AccessRole[]>([]);
+  const bindingRoles = ref<AccessRole[]>([]);
   const bindings = ref<AccessBinding[]>([]);
   const projects = ref<Project[]>([]);
   const agents = reactive<Record<string, Agent[]>>({});
@@ -79,6 +81,7 @@ export const useAccessStore = defineStore("access", () => {
     subjects: false,
     groups: false,
     roles: false,
+    bindingRoles: false,
     roleVersions: false,
     bindings: false,
     projects: false,
@@ -97,6 +100,7 @@ export const useAccessStore = defineStore("access", () => {
     subjects: 0,
     groups: 0,
     roles: 0,
+    bindingRoles: 0,
     roleVersions: 0,
     bindings: 0,
     projects: 0,
@@ -179,6 +183,33 @@ export const useAccessStore = defineStore("access", () => {
           ? appendUnique(roles.value, page.items, (item) => item.ref)
           : page.items;
         roleNextPageToken.value = page.nextPageToken;
+      },
+    );
+  }
+
+  async function loadBindingRoles(): Promise<void> {
+    await query(
+      "bindingRoles",
+      async () => {
+        const items: AccessRole[] = [];
+        const seenPageTokens = new Set<string>();
+        let pageToken: string | undefined;
+        do {
+          const page = await api.fetchAccessRoles({
+            includeArchived: false,
+            pageToken,
+          });
+          items.push(...page.items);
+          pageToken = page.nextPageToken;
+          if (pageToken && seenPageTokens.has(pageToken)) {
+            throw new Error("Access role pagination token was repeated");
+          }
+          if (pageToken) seenPageTokens.add(pageToken);
+        } while (pageToken);
+        return items;
+      },
+      (items) => {
+        bindingRoles.value = appendUnique([], items, (item) => item.ref);
       },
     );
   }
@@ -281,6 +312,7 @@ export const useAccessStore = defineStore("access", () => {
       ? await api.addAccessRoleVersion(current, input)
       : await api.addAccessRole(input);
     await loadRoles();
+    roles.value = appendUnique(roles.value, [role], (item) => item.ref);
     await loadRoleVersions(role.ref);
     return role;
   }
@@ -301,6 +333,11 @@ export const useAccessStore = defineStore("access", () => {
         )
       : await api.addAccessBinding(input as AccessBindingInput);
     await loadBindings();
+    bindings.value = appendUnique(
+      bindings.value,
+      [binding],
+      (item) => item.ref,
+    );
     return binding;
   }
 
@@ -353,6 +390,7 @@ export const useAccessStore = defineStore("access", () => {
     subjects,
     groups,
     roles,
+    bindingRoles,
     bindings,
     projects,
     agents,
@@ -374,6 +412,7 @@ export const useAccessStore = defineStore("access", () => {
     loadSubjects,
     loadGroups,
     loadRoles,
+    loadBindingRoles,
     loadRoleVersions,
     loadBindings,
     loadProjects,

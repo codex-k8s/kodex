@@ -2,6 +2,12 @@
 set -eu
 
 admission_phase=${1:-}
+CLAIM_RETRY_ATTEMPT_LIMIT=120
+CLAIM_RETRY_DELAY_SECONDS=5
+CLAIM_RETRY_DIAGNOSTIC_INTERVAL=12
+CLAIM_RETRY_DIAGNOSTIC_MAX_BYTES=160
+CLAIM_RETRY_DIAGNOSTIC_PREFIX='image admission bridge claim retry'
+CLAIM_RETRY_STORAGE_FAILURE='claim retry diagnostic storage is unavailable'
 
 fail() {
   if [ "$admission_phase" = scan ] || [ "$admission_phase" = sign ]; then
@@ -60,6 +66,22 @@ require_policy() {
   for tool in base64 cmp cosign grype image-admission-bridge jq regctl sha256sum syft wc; do
     command -v "$tool" >/dev/null || fail "admission image is incomplete"
   done
+}
+
+prepare_offline_signing_config() {
+  signing_config=/work/cosign-signing-config.json
+  umask 077
+  cosign signing-config create \
+    --no-default-fulcio \
+    --no-default-rekor \
+    --no-default-oidc \
+    --no-default-tsa \
+    --out "$signing_config" >/dev/null || fail "offline signing configuration failed"
+  jq -e '
+    (. | keys | sort) == ["mediaType","rekorTlogConfig","tsaConfig"] and
+    .mediaType == "application/vnd.dev.sigstore.signingconfig.v0.2+json" and
+    .rekorTlogConfig == {} and .tsaConfig == {}
+  ' "$signing_config" >/dev/null || fail "offline signing configuration is invalid"
 }
 
 verify_runtime_config() {
@@ -195,28 +217,79 @@ load_promotion_claim() {
   staging_host=${source_ref%%/*}
 }
 
-claim_promotion() {
-  remaining=120
-  while [ "$remaining" -gt 0 ]; do
-    if image-admission-bridge claim-promotion 2>/dev/null; then
+classify_claim_retry_error() {
+  error_file=$1
+  if grep -Eiq 'x509|tls|certificate|handshake' "$error_file"; then
+    printf '%s\n' transport-trust
+  elif grep -Eiq 'code = (Unauthenticated|PermissionDenied)' "$error_file"; then
+    printf '%s\n' authorization
+  elif grep -Eiq 'code = NotFound|no (image )?(admission|promotion) (work|claim)' "$error_file"; then
+    printf '%s\n' no-work
+  elif grep -Eiq 'code = (Unavailable|DeadlineExceeded|ResourceExhausted)|context deadline exceeded|connection refused|no such host|transport is closing' "$error_file"; then
+    printf '%s\n' dependency-unavailable
+  elif grep -Eiq 'code = (Aborted|FailedPrecondition|AlreadyExists)|conflict|stale|fence' "$error_file"; then
+    printf '%s\n' owner-state-conflict
+  elif grep -Eiq 'required image owner environment is invalid|image owner path is invalid|bounded image owner state' "$error_file"; then
+    printf '%s\n' local-configuration
+  else
+    printf '%s\n' unclassified
+  fi
+}
+
+emit_claim_retry_diagnostic() {
+  operation=$1
+  attempt=$2
+  classification=$3
+  diagnostic=$(printf '%s: operation=%s attempt=%s/%s class=%s' \
+    "$CLAIM_RETRY_DIAGNOSTIC_PREFIX" "$operation" "$attempt" \
+    "$CLAIM_RETRY_ATTEMPT_LIMIT" "$classification")
+  printf '%.*s\n' "$CLAIM_RETRY_DIAGNOSTIC_MAX_BYTES" "$diagnostic" >&2
+}
+
+claim_owner_work() {
+  operation=$1
+  unavailable_reason=$2
+  attempt=1
+  claim_retry_error_file="/tmp/image-admission-bridge-${operation}.$$.stderr"
+  rm -f -- "$claim_retry_error_file"
+  (umask 077 && : >"$claim_retry_error_file") || fail "$CLAIM_RETRY_STORAGE_FAILURE"
+  trap 'rm -f -- "$claim_retry_error_file"' EXIT HUP INT TERM
+  while [ "$attempt" -le "$CLAIM_RETRY_ATTEMPT_LIMIT" ]; do
+    : >"$claim_retry_error_file" || fail "$CLAIM_RETRY_STORAGE_FAILURE"
+    claim_succeeded=false
+    case "$operation" in
+      claim)
+        image-admission-bridge claim 2>"$claim_retry_error_file" && claim_succeeded=true
+        ;;
+      claim-promotion)
+        image-admission-bridge claim-promotion 2>"$claim_retry_error_file" && claim_succeeded=true
+        ;;
+      *) fail "claim retry operation is invalid" ;;
+    esac
+    if [ "$claim_succeeded" = true ]; then
+      rm -f -- "$claim_retry_error_file"
+      trap - EXIT HUP INT TERM
       return 0
     fi
-    remaining=$((remaining - 1))
-    sleep 5
+    if [ "$attempt" -eq 1 ] || [ "$attempt" -eq "$CLAIM_RETRY_ATTEMPT_LIMIT" ] ||
+      [ $((attempt % CLAIM_RETRY_DIAGNOSTIC_INTERVAL)) -eq 0 ]; then
+      classification=$(classify_claim_retry_error "$claim_retry_error_file")
+      emit_claim_retry_diagnostic "$operation" "$attempt" "$classification"
+    fi
+    attempt=$((attempt + 1))
+    sleep "$CLAIM_RETRY_DELAY_SECONDS"
   done
-  fail "owner promotion work is unavailable"
+  rm -f -- "$claim_retry_error_file"
+  trap - EXIT HUP INT TERM
+  fail "$unavailable_reason"
+}
+
+claim_promotion() {
+  claim_owner_work claim-promotion "owner promotion work is unavailable"
 }
 
 claim_admission() {
-  remaining=120
-  while [ "$remaining" -gt 0 ]; do
-    if image-admission-bridge claim 2>/dev/null; then
-      return 0
-    fi
-    remaining=$((remaining - 1))
-    sleep 5
-  done
-  fail "owner admission work is unavailable"
+  claim_owner_work claim "owner admission work is unavailable"
 }
 
 evidence_entries() {
@@ -376,7 +449,7 @@ verify_recovered_evidence() {
     for signed_name in image-digest provenance native-provenance sbom vulnerability; do
       signed_file="$evidence_directory/$signed_name.json"
       [ "$signed_name" = image-digest ] && signed_file="$evidence_directory/image-digest.subject"
-      cosign verify-blob --key "$evidence_directory/cosign.pub" \
+      cosign verify-blob --insecure-ignore-tlog --key "$evidence_directory/cosign.pub" \
         --bundle "$evidence_directory/$signed_name.sigstore.json" "$signed_file" >/dev/null 2>&1 ||
         fail "durable evidence signature verification failed"
     done
@@ -625,11 +698,14 @@ case "${1:-}" in
       verify_image_and_provenance
       COSIGN_PASSWORD=$(cat /identity/cosign.password)
       export COSIGN_PASSWORD
+      prepare_offline_signing_config
       printf '%s\n' "$image_digest" >/work/image-digest.subject
       cosign sign-blob --yes --key /identity/cosign.key \
+        --signing-config /work/cosign-signing-config.json \
         --bundle /work/image-digest.sigstore.json /work/image-digest.subject >/dev/null
       for evidence in provenance native-provenance sbom vulnerability; do
         cosign sign-blob --yes --key /identity/cosign.key \
+          --signing-config /work/cosign-signing-config.json \
           --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" >/dev/null
       done
     fi
@@ -642,10 +718,12 @@ case "${1:-}" in
     signature_identity=not-applicable-rejected
     if [ "$verdict" = ACCEPTED ]; then
       login_registry "$staging_host" /identity/username /identity/password
-      cosign verify-blob --key /identity/cosign.pub --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
+      cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
+        --bundle /work/image-digest.sigstore.json /work/image-digest.subject \
         >/work/signature-verification.json
       for evidence in provenance native-provenance sbom vulnerability; do
-        cosign verify-blob --key /identity/cosign.pub --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
+        cosign verify-blob --insecure-ignore-tlog --key /identity/cosign.pub \
+          --bundle "/work/$evidence.sigstore.json" "/work/$evidence.json" \
           >"/work/$evidence-verification.json"
       done
       signature_identity=$(sha256sum /identity/cosign.pub | awk '{print $1}')

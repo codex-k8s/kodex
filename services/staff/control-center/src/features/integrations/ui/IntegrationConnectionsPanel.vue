@@ -25,6 +25,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 defineProps<{
   connections: readonly IntegrationConnection[];
   definitions: Readonly<Record<string, IntegrationDefinition>>;
+  coreReady: boolean;
   busyRef: string;
   busyAction?: "TEST" | "ENABLE" | "DISABLE";
 }>();
@@ -58,6 +59,13 @@ const { t } = useI18n();
         })
       }}</span>
     </header>
+    <div v-if="coreReady" class="core-readiness" role="status">
+      <ShieldCheck :size="20" aria-hidden="true" />
+      <div>
+        <h3>{{ t("integrations.noConnectionsTitle") }}</h3>
+        <p>{{ t("integrations.webOnlyReady") }}</p>
+      </div>
+    </div>
     <div v-if="connections.length" class="connection-grid" role="list">
       <article
         v-for="connection in connections"
@@ -288,9 +296,8 @@ const { t } = useI18n();
     </div>
     <div v-else class="connection-empty">
       <PowerOff :size="28" aria-hidden="true" />
-      <h3>{{ t("integrations.noConnectionsTitle") }}</h3>
+      <h3>{{ t("integrationsRedesign.noConnectionsYet") }}</h3>
       <p>{{ t("integrations.noConnections") }}</p>
-      <p>{{ t("integrations.webOnlyReady") }}</p>
     </div>
   </section>
 </template>
@@ -334,6 +341,31 @@ const { t } = useI18n();
 .result-count,
 .connection-facts,
 .connection-empty p {
+  color: var(--muted);
+}
+.core-readiness {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--success) 6%, var(--surface));
+}
+.core-readiness > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--success);
+}
+.core-readiness > div {
+  display: grid;
+  gap: 3px;
+}
+.core-readiness h3,
+.core-readiness p {
+  margin: 0;
+}
+.core-readiness p {
   color: var(--muted);
 }
 .connection-grid {

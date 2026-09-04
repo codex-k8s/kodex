@@ -15,6 +15,40 @@ const environment = loadE2EEnvironment();
 const execFileAsync = promisify(execFile);
 const terminalStates = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
+function execFileWithInput(
+  file: string,
+  args: readonly string[],
+  input: string,
+  options: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly maxBuffer: number;
+    readonly timeout: number;
+  },
+): Promise<{ readonly stderr: string; readonly stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      file,
+      [...args],
+      { ...options, encoding: "utf8" },
+      (error, stdout, stderr) => {
+        if (error) {
+          const rejection = new Error(error.message, { cause: error });
+          Object.assign(rejection, { stderr, stdout });
+          reject(rejection);
+          return;
+        }
+        resolve({ stderr, stdout });
+      },
+    );
+    if (child.stdin === null) {
+      child.kill();
+      reject(new Error("child process stdin is unavailable"));
+      return;
+    }
+    child.stdin.end(input);
+  });
+}
+
 interface VersionedRef {
   readonly ref: string;
   readonly version: number;
@@ -33,6 +67,7 @@ interface ProviderAccount extends VersionedRef {
   readonly enabled: boolean;
   readonly externalAccountMasked: string;
   readonly name: string;
+  readonly nextActions: readonly string[];
   readonly ready: boolean;
   readonly state: string;
 }
@@ -105,12 +140,17 @@ interface GitHubIssue {
 test.describe("deployed local integration path", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("synthetic READ/WRITE, Human Gate и exact retry", async ({ page }) => {
+  test("synthetic READ/WRITE, Human Gate и exact retry", async ({
+    browserDiagnostics,
+    page,
+  }) => {
     const journal = `${environment.resourcePrefix}-journal`;
     const replayValue = `kodex-e2e-replay:${environment.resourcePrefix}`;
     const readbackURL = syntheticReadbackURL();
 
-    await gotoWithRetry(page, "/projects");
+    await browserDiagnostics.withExpectedNetworkInterruption(page, () =>
+      gotoWithRetry(page, "/projects"),
+    );
     const initial = await readSyntheticDiagnostic(readbackURL, journal);
     expect(initial).toMatchObject({ journal, count: 0, replay_count: 0 });
 
@@ -263,6 +303,8 @@ test.describe("deployed local integration path", () => {
     });
     expect(connection.name).toContain("synthetic updated");
     expect(connection.publicConfiguration).toEqual({ journal });
+    connection = await commandConnection(page, connection, "DISABLE");
+    expect(connection.state).toBe("DISABLED");
     connection = await deleteConnection(page, connection);
     expect(connection.state).toBe("DELETED");
   });
@@ -333,7 +375,7 @@ test.describe("deployed local integration path", () => {
         expectedStatus: 201,
       });
       connection = await mutateAPI<Connection>(page, {
-        method: "POST",
+        method: "PUT",
         path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/credential`,
         body: { value: token },
         version: connection.version,
@@ -433,6 +475,7 @@ test.describe("deployed local integration path", () => {
     );
     let apiKey: string | undefined = await readProviderAPIKey();
     let account: ProviderAccount | undefined;
+    let credentialActivated = false;
 
     try {
       await gotoWithRetry(page, "/administration/providers");
@@ -460,6 +503,12 @@ test.describe("deployed local integration path", () => {
         enabled: false,
         state: "PENDING_AUTHORIZATION",
       });
+      expect(account.nextActions).toContain("CONFIGURE_CREDENTIAL");
+      const accountReadback = await readAPI<ProviderAccount>(
+        page,
+        `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
+      );
+      expect(accountReadback.nextActions).toContain("CONFIGURE_CREDENTIAL");
 
       const authorizationDialog = page.getByRole("dialog", {
         name: new RegExp(`Авторизация: ${escapeRegExp(account.name)}`),
@@ -477,8 +526,9 @@ test.describe("deployed local integration path", () => {
         .click();
       apiKey = undefined;
       const authorized = await authorizationResponse;
-      expect(authorized.status()).toBe(200);
-      account = (await authorized.json()) as ProviderAccount;
+      const authorizedPayload = (await authorized.json()) as ProviderAccount;
+      expect(authorized.status(), JSON.stringify(authorizedPayload)).toBe(200);
+      account = authorizedPayload;
       expect(account).toMatchObject({
         authorization: { method: "API_KEY", state: "AUTHORIZED" },
         enabled: true,
@@ -486,12 +536,14 @@ test.describe("deployed local integration path", () => {
         state: "AUTHORIZED",
       });
       expect(account.externalAccountMasked).not.toBe("");
+      credentialActivated = true;
       await expect(
         authorizationDialog.getByText(
           "Учётная запись авторизована и готова к использованию.",
         ),
       ).toBeVisible();
       await authorizationDialog
+        .locator(".modal__footer")
         .getByRole("button", { name: "Закрыть", exact: true })
         .click();
 
@@ -549,12 +601,14 @@ test.describe("deployed local integration path", () => {
             ready: false,
             state: "REVOKED",
           });
-          await expect
-            .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
-              timeout: 180_000,
-              intervals: [250, 1_000, 2_000, 5_000],
-            })
-            .toBe(true);
+          if (credentialActivated) {
+            await expect
+              .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
+                timeout: 180_000,
+                intervals: [250, 1_000, 2_000, 5_000],
+              })
+              .toBe(true);
+          }
         }
       }
     }
@@ -592,10 +646,12 @@ async function testConnection(
   await expect
     .poll(
       async () => {
-        current = await readAPI<Connection>(
+        const observed = await readAPIDuringPoll<Connection>(
           page,
           `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
         );
+        if (!observed) return current.state;
+        current = observed;
         return current.state;
       },
       { timeout: 120_000, intervals: [250, 1_000, 2_000] },
@@ -786,15 +842,17 @@ async function waitForOpenGate(page: Page, runRef: string): Promise<OwnerGate> {
   await expect
     .poll(
       async () => {
-        const run = await readAPI<Run>(
+        const run = await readAPIDuringPoll<Run>(
           page,
           `/api/v1/runs/${encodeURIComponent(runRef)}`,
         );
+        if (!run) return false;
         for (const gateRef of run.gateRefs) {
-          const candidate = await readAPI<OwnerGate>(
+          const candidate = await readAPIDuringPoll<OwnerGate>(
             page,
             `/api/v1/owner-gates/${encodeURIComponent(gateRef)}`,
           );
+          if (!candidate) return false;
           if (candidate.runRef === runRef && candidate.state === "OPEN") {
             gate = candidate;
             return true;
@@ -833,10 +891,20 @@ async function waitForTerminalRun(
   await expect
     .poll(
       async () => {
-        current = await readAPI<Run>(
+        const observed = await readAPIDuringPoll<Run>(
           page,
           `/api/v1/runs/${encodeURIComponent(runRef)}`,
         );
+        if (!observed) return "PENDING";
+        current = observed;
+        if (
+          terminalStates.has(current.state) &&
+          current.state !== expectedState
+        ) {
+          throw new Error(
+            `Run ${runRef} reached ${current.state} instead of ${expectedState}: ${current.safeErrorCode ?? "UNKNOWN"}`,
+          );
+        }
         return terminalStates.has(current.state) ? current.state : "PENDING";
       },
       { timeout: environment.runTimeoutMs, intervals: [500, 1_000, 2_000] },
@@ -888,6 +956,19 @@ async function readAPI<T>(page: Page, path: string): Promise<T> {
     );
   }
   return result.body as T;
+}
+
+async function readAPIDuringPoll<T>(
+  page: Page,
+  path: string,
+): Promise<T | undefined> {
+  try {
+    return await readAPI<T>(page, path);
+  } catch (error) {
+    // Playwright does not retry expect.poll callback exceptions.
+    if (String(error).includes("TypeError: Failed to fetch")) return undefined;
+    throw error;
+  }
 }
 
 async function mutateAPI<T>(
@@ -1209,7 +1290,7 @@ async function verifyProviderCredentialCleanup(
     "ORDER BY task.created_at, task.id;",
     "COMMIT;",
   ].join("\n");
-  const result = await execFileAsync(
+  const result = await execFileWithInput(
     "kubectl",
     [
       "--context",
@@ -1231,9 +1312,10 @@ async function verifyProviderCredentialCleanup(
       "control_plane",
       "-v",
       `account_ref=${accountRef}`,
-      "-c",
-      query,
+      "-f",
+      "-",
     ],
+    `${query}\n`,
     { env: childEnvironment, timeout: 30_000, maxBuffer: 64 << 10 },
   );
   const tasks = result.stdout

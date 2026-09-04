@@ -351,7 +351,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 			return "", field.JSONName() == "content"
 		case "controlplane.v1.AgentRuntimeConfigurationView":
 			return "", field.JSONName() == "safeEffectiveConfig"
+		case "controlplane.v1.ProviderAccount":
+			return "", field.JSONName() == "externalAccountMasked"
 		}
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
 	}
 	return nil, false
 }

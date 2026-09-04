@@ -95,7 +95,7 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if err != nil || listed == nil {
 		t.Fatalf("project viewer list mismatch: items=%#v err=%v", items, err)
 	}
-	if _, _, _, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref); err != nil {
+	if _, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref); err != nil {
 		t.Fatalf("project viewer cannot read exact role image: %v", err)
 	}
 	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
@@ -109,7 +109,8 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	createRoleImageAccessBinding(t, ctx, service, owner, "role-image-builder-binding", subjects[0].Ref, builderRole.CurrentVersion.Ref,
 		entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: project.Ref, ResourceKind: "ROLE_IMAGE", ResourceRef: created.Recipe.Ref})
 
-	current, _, _, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref)
+	detail, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref)
+	current := detail.Recipe
 	if err != nil || !containsString(current.NextActions, "UPDATE") || !containsString(current.NextActions, "REQUEST_BUILD") {
 		t.Fatalf("exact builder actions mismatch: recipe=%#v err=%v", current, err)
 	}

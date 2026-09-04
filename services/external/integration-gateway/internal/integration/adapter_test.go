@@ -141,8 +141,40 @@ func TestCredentialRevisionDigestMismatchFailsClosed(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
 	credential.ContentSHA256 = strings.Repeat("0", 64)
-	if _, _, err := adapter.githubClient(credential); err == nil {
+	if _, _, err := adapter.githubClient(t.Context(), credential); err == nil {
 		t.Fatal("githubClient() accepted credential content digest mismatch")
+	}
+}
+
+func TestCredentialReadWaitsForProjectedSecretKey(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	root := t.TempDir()
+	store, err := credentialfs.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter.credentials = store
+	value := []byte("projected-token")
+	digest := sha256.Sum256(value)
+	credential := &CredentialRevision{
+		Ref: "icr_projected", Revision: 1,
+		SecretRef: "kodex-system/kodex-integration-credentials#projected-token",
+		SecretUID: "3f18ba8c-8829-4c7f-8350-b8ed65f80d41", SecretResourceVersion: "18",
+		ContentSHA256: hex.EncodeToString(digest[:]),
+	}
+	writeResult := make(chan error, 1)
+	go func() {
+		time.Sleep(25 * time.Millisecond)
+		writeResult <- os.WriteFile(filepath.Join(root, "projected-token"), value, 0o440)
+	}()
+	_, cleanup, err := adapter.githubClient(t.Context(), credential)
+	if err != nil {
+		t.Fatalf("githubClient() did not wait for projected credential: %v", err)
+	}
+	cleanup()
+	if err := <-writeResult; err != nil {
+		t.Fatalf("write projected credential: %v", err)
 	}
 }
 

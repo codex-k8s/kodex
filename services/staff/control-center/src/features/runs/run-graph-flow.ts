@@ -18,12 +18,22 @@ import type {
 
 export const runGraphMinimumZoom = 0.3;
 export const runGraphMaximumZoom = 1.8;
-export const runGraphFitViewOptions: FitViewParams = {
-  padding: 0.14,
-  minZoom: runGraphMinimumZoom,
-  maxZoom: 1.1,
-  duration: 180,
-};
+export function runGraphFitViewOptions(viewportWidth: number): FitViewParams {
+  return {
+    padding:
+      viewportWidth <= 760
+        ? 0.14
+        : {
+            top: "180px",
+            right: "210px",
+            bottom: "160px",
+            left: "380px",
+          },
+    minZoom: runGraphMinimumZoom,
+    maxZoom: 1.1,
+    duration: 180,
+  };
+}
 
 export type RunGraphNodeSurface = "session" | "control";
 

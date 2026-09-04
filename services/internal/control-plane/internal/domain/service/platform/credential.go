@@ -68,7 +68,7 @@ func (service *Service) ConfigureIntegrationCredential(
 		}
 		return entity.IntegrationConnection{}, errors.Join(errs.ErrUnavailable, err)
 	}
-	result, err := service.Execute(ctx, command.Command{
+	result, err := service.executeResolved(ctx, command.Command{
 		Kind: command.ConfigureConnectionCredential, Principal: principal, Mutation: mutation,
 		Payload: command.ConnectionInput{
 			Ref: connectionRef, MaterializationRef: materializationRef,

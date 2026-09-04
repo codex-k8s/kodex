@@ -10,7 +10,9 @@ usage() {
   printf '%s\n' \
     "Usage: $0 [--check] [--skip-build] --context <exact-context>" \
     '  [--kubeconfig <path>] [--state-directory <path>]' \
+    '  [--cluster-marker <root-owned-path>] [--expected-sha <40-hex-commit>]' \
     '  [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]' \
+    '  [--batch browser|integration|role-image|archive|backup|hot-reload]...' \
     '  [--target <test-make-target>]...' >&2
 }
 
@@ -20,9 +22,14 @@ context=""
 state_directory="$repository_root/.kodex-dev"
 resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
+cluster_marker=""
+expected_sha=""
 check_only=false
 skip_build=false
 targets=()
+batches=()
+canonical_batches=(hot-reload browser integration role-image archive backup)
+declare -A selected_batches=()
 
 while (($# > 0)); do
   case "$1" in
@@ -33,11 +40,34 @@ while (($# > 0)); do
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --resource-prefix) resource_prefix=${2:-}; shift 2 ;;
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
+    --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
+    --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --batch)
+      batch=${2:-}
+      case "$batch" in
+        browser|integration|role-image|archive|backup|hot-reload) ;;
+        *) usage; fail "unsupported E2E batch: $batch" ;;
+      esac
+      [[ -z "${selected_batches[$batch]:-}" ]] || fail "E2E batch is duplicated: $batch"
+      selected_batches[$batch]=1
+      batches+=("$batch")
+      shift 2
+      ;;
     --target) targets+=("${2:-}"); shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+if ((${#batches[@]} == 0)); then
+  for batch in "${canonical_batches[@]}"; do
+    selected_batches[$batch]=1
+  done
+fi
+
+batch_selected() {
+  [[ -n "${selected_batches[$1]:-}" ]]
+}
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 [[ -f "$kubeconfig" && -r "$kubeconfig" && ! -L "$kubeconfig" ]] ||
@@ -51,6 +81,13 @@ done
   fail 'E2E run timeout must be between 60000 and 1800000 milliseconds'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
+if [[ -n "$expected_sha" ]]; then
+  [[ "$expected_sha" =~ ^[a-f0-9]{40}$ &&
+    "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" ]] ||
+    fail 'source HEAD does not match the expected SHA'
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
+    fail 'acceptance E2E requires a clean source checkout'
+fi
 for command_name in bash date jq kubectl make npm; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -135,7 +172,7 @@ run_phase() {
 }
 
 write_summary() {
-  local exit_code=$1 status=failed finished_at browser_summary targets_json temporary_summary
+  local exit_code=$1 status=failed finished_at browser_summary targets_json batches_json temporary_summary
   [[ "$exit_code" -ne 0 ]] || status=passed
   finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   browser_summary=null
@@ -152,29 +189,40 @@ write_summary() {
   else
     targets_json=$(printf '%s\n' "${targets[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
   fi
+  batches_json=$(
+    for batch in "${canonical_batches[@]}"; do
+      if batch_selected "$batch"; then
+        printf '%s\n' "$batch"
+      fi
+    done | jq -Rsc 'split("\n") | map(select(length > 0))'
+  )
   temporary_summary=$(mktemp "$summary_path.XXXXXX")
   jq -n \
     --arg status "$status" \
     --arg context "$context" \
     --arg resource_prefix "$resource_prefix" \
+    --arg expected_sha "$expected_sha" \
     --arg started_at "$started_at" \
     --arg finished_at "$finished_at" \
     --arg build_mode "$([[ "$skip_build" == true ]] && printf reused || printf rebuilt)" \
     --argjson exit_code "$exit_code" \
     --argjson phases "$(<"$phases_file")" \
     --argjson browser "$browser_summary" \
+    --argjson batches "$batches_json" \
     --argjson targets "$targets_json" '
       {
         version:1,
         status:$status,
         context:$context,
         resourcePrefix:$resource_prefix,
+        expectedSHA:(if $expected_sha == "" then null else $expected_sha end),
         startedAt:$started_at,
         finishedAt:$finished_at,
         exitCode:$exit_code,
         buildMode:$build_mode,
         phases:$phases,
         browser:$browser,
+        batches:$batches,
         additionalTargets:$targets
       }
     ' >"$temporary_summary"
@@ -192,34 +240,94 @@ finalize() {
 }
 trap finalize EXIT
 
-common_arguments=(
+e2e_arguments=(
   --kubeconfig "$kubeconfig"
   --context "$context"
   --state-directory "$state_directory"
 )
+deployment_arguments=("${e2e_arguments[@]}")
+[[ -z "$cluster_marker" ]] || deployment_arguments+=(--cluster-marker "$cluster_marker")
+[[ -z "$expected_sha" ]] || deployment_arguments+=(--expected-sha "$expected_sha")
 if [[ "$skip_build" == true ]]; then
-  run_phase local-readback "$repository_root/dev.sh" status "${common_arguments[@]}"
+  run_phase local-readback "$repository_root/dev.sh" status "${deployment_arguments[@]}"
 else
-  run_phase local-render-deploy "$repository_root/dev.sh" up "${common_arguments[@]}"
+  run_phase local-render-deploy "$repository_root/dev.sh" up "${deployment_arguments[@]}"
 fi
-run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
-  "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
-  --run-timeout-ms "$run_timeout_ms"
-run_phase role-image-build-admit-promote-runtime-readback env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
-  "${common_arguments[@]}" --resource-prefix "$resource_prefix" \
-  --timeout-seconds "$((run_timeout_ms / 1000))"
-run_phase session-archive-write-restore-delete-readback env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
-  "${common_arguments[@]}"
-run_phase backup-and-disposable-restore-drill env \
-  KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
-  "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
-  "${common_arguments[@]}"
+hot_reload_arguments=(
+  --kubeconfig "$kubeconfig"
+  --context "$context"
+  --state-directory "$state_directory"
+  --resource-prefix "$resource_prefix"
+)
+[[ -z "$expected_sha" ]] || hot_reload_arguments+=(--expected-sha "$expected_sha")
+if batch_selected hot-reload; then
+  run_phase go-and-vue-hot-reload-readback \
+    "$repository_root/tools/dev/verify-hot-reload.sh" "${hot_reload_arguments[@]}"
+fi
+if batch_selected browser; then
+  run_phase browser-auth-and-full-e2e "$repository_root/dev.sh" e2e \
+    "${deployment_arguments[@]}" --resource-prefix "$resource_prefix" \
+    --run-timeout-ms "$run_timeout_ms"
+fi
+run_deployed_integration_e2e() {
+  local credentials_file="$state_directory/credentials.env" endpoint_ip dns_suffix public_host node_ca_file
+  [[ -f "$credentials_file" && ! -L "$credentials_file" &&
+    $((8#$(stat -c '%a' "$credentials_file") & 8#077)) == 0 ]] ||
+    fail 'local owner credentials are absent or unsafe'
+  # shellcheck disable=SC1090
+  source "$credentials_file"
+  endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
+  dns_suffix=${endpoint_ip//./.}.nip.io
+  public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}
+  node_ca_file=${NODE_EXTRA_CA_CERTS:-}
+  if [[ "${KODEX_DEV_TLS_MODE:-local-ca}" == local-ca ]]; then
+    node_ca_file="$state_directory/kodex-local-ca.crt"
+    [[ -f "$node_ca_file" && ! -L "$node_ca_file" ]] ||
+      fail 'local CA file is absent or unsafe'
+  fi
+  KODEX_E2E_BASE_URL="https://$public_host" \
+    KODEX_E2E_OWNER_USERNAME="$KODEX_LOCAL_OWNER_USERNAME" \
+    KODEX_E2E_OWNER_PASSWORD="$KODEX_LOCAL_OWNER_PASSWORD" \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    KODEX_E2E_RESOURCE_PREFIX="$resource_prefix" \
+    KODEX_E2E_KUBECONFIG="$kubeconfig" \
+    KODEX_E2E_KUBE_CONTEXT="$context" \
+    KODEX_E2E_REPOSITORY_ROOT="$repository_root" \
+    KODEX_E2E_STATE_DIRECTORY="$state_directory" \
+    KODEX_E2E_BASE_HOST_RESOLUTION="${KODEX_E2E_BASE_HOST_RESOLUTION:-}" \
+    NODE_EXTRA_CA_CERTS="$node_ca_file" \
+    "$repository_root/scripts/tests/integration-deployed-e2e.sh"
+}
+if batch_selected integration; then
+  run_phase deployed-integration-synthetic run_deployed_integration_e2e
+fi
+if batch_selected role-image; then
+  run_phase role-image-build-admit-promote-runtime-readback env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-role-image-supply-chain-e2e.sh" \
+    "${e2e_arguments[@]}" --resource-prefix "$resource_prefix" \
+    --timeout-seconds "$((run_timeout_ms / 1000))"
+fi
+if batch_selected archive; then
+  run_phase session-archive-write-restore-delete-readback env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-session-archive-e2e.sh" \
+    "${e2e_arguments[@]}"
+fi
+if batch_selected backup; then
+  run_phase backup-and-disposable-restore-drill env \
+    KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
+    "$repository_root/scripts/tests/local-backup-restore-e2e.sh" \
+    "${e2e_arguments[@]}"
+fi
 for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"
 done
+
+if [[ -n "$expected_sha" ]]; then
+  [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" &&
+    -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
+    fail 'source checkout changed during acceptance E2E'
+fi
 
 printf 'Kodex full local E2E completed: %s\n' "$resource_prefix"

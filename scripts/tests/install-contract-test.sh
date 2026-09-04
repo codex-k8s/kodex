@@ -60,7 +60,9 @@ for script in install.sh tools/install/bootstrap-cert-manager.sh \
   tools/install/reconcile-nats-runtime-users.sh \
   tools/install/reconcile-pull-docker-config.sh \
   tools/install/release-platform.sh tools/install/reset-host.sh \
-  tools/install/verify-oidc-target.sh tools/install/write-env-file.sh; do
+  tools/install/verify-oidc-target.sh tools/install/write-env-file.sh \
+  tools/dev/install-tsh-client.sh tools/dev/preflight-public-hosts.sh tools/dev/remote-dev.sh \
+  infra/teleport/bootstrap.sh infra/teleport/bootstrap-host.sh; do
   [[ -x "$repository_root/$script" ]] || fail "installer entrypoint is not executable: $script"
   bash -n "$repository_root/$script"
 done
@@ -480,9 +482,14 @@ for firewall_contract in \
   'nft delete table inet kodex_fw' \
   'ufw --force reset' \
   'ufw default deny routed' \
-  'ufw route allow from "$pod_cidr"' \
-  'ufw route allow proto tcp to "$pod_cidr" port 80' \
-  'ufw route allow proto tcp to "$pod_cidr" port 443'; do
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$api_address" port 6443' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$server_public_ip" port 10250' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 3080' \
+  'ufw allow in on cni0 proto tcp from "$pod_cidr" to "$host_service_address" port 18080' \
+  'ufw route allow proto tcp from any to "$pod_cidr" port 80' \
+  'ufw route allow proto tcp from any to "$pod_cidr" port 443' \
+  'ufw show added' \
+  'host firewall rules differ from the exact supported policy'; do
   rg -Fq "$firewall_contract" "$repository_root/tools/install/prepare-host.sh" ||
     fail "bare-metal firewall contract is absent: $firewall_contract"
 done
@@ -512,18 +519,105 @@ rg -Fq 'no ready Kubernetes node became available' \
   fail 'bare-metal installer does not report a node readiness timeout'
 rg -Fq 'dnsutils' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal installer does not install the DNS preflight client'
-rg -Fq 'for command_name in certutil cosign dig go helm kubectl nsc yq' \
+rg -Fq 'for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc tsh yq' \
   "$repository_root/tools/install/prepare-host.sh" ||
-  fail 'bare-metal host readback does not require DNS and browser trust clients'
-rg -Fq '  - traefik' "$repository_root/tools/install/prepare-host.sh" ||
+  fail 'bare-metal host readback does not require the development toolchain'
+for host_tool_contract in \
+  'locked_host_packages=(containerd docker-buildx docker-compose-v2 docker.io runc)' \
+  '"name": "node"' \
+  '"name": "teleport-client"' \
+  'tsh version --format=json' \
+  "'@openai/codex@0.152.0'" \
+  'systemctl enable --now docker'; do
+  rg -Fq -- "$host_tool_contract" \
+    "$repository_root/tools/install/prepare-host.sh" \
+    "$repository_root/tools/install/components.lock.json" ||
+    fail "bare-metal development tool contract is absent: $host_tool_contract"
+done
+for remote_contract in \
+  'KODEX_DEV_TLS_MODE=public-acme' \
+  'preflight-public-hosts.sh' \
+  'prepare-playwright-browser.sh' \
+  'KODEX_E2E_BASE_HOST_RESOLUTION=loopback' \
+  'cluster_marker=/var/lib/kodex-dev/cluster-identity.json' \
+  'sudo -n cat /etc/rancher/k3s/k3s.yaml' \
+  'trap cleanup EXIT' \
+  '--expected-sha <40-hex-commit>' \
+  'host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport'; do
+  rg -Fq -- "$remote_contract" \
+    "$repository_root/tools/dev/remote-dev.sh" "$repository_root/dev.sh" \
+    "$repository_root/.kodex-remote-env.example" ||
+    fail "remote development contract is absent: $remote_contract"
+done
+for browser_contract in \
+  'node_modules/.bin/playwright' \
+  'sudo -n "$playwright_cli" install-deps chromium' \
+  '"$playwright_cli" install chromium' \
+  'chromium.launch({ headless: true })'; do
+  rg -Fq -- "$browser_contract" \
+    "$repository_root/tools/dev/prepare-playwright-browser.sh" ||
+    fail "remote Playwright preparation contract is absent: $browser_contract"
+done
+for teleport_contract in \
+  'teleport-teleport-host@kubernetescrd' \
+  '.kind = "ServersTransport"' \
+  '.spec.serverName = strenv(HOST)' \
+  '.spec.insecureSkipVerify = false' \
+  '.spec.rootCAsSecrets = ["teleport-host-internal-ca"]' \
+  'kodex-teleport-dev-observer' \
+  'expected_role=$(render_kubernetes_role' \
+  '($actual | normalize_rules) == ($expected | normalize_rules)'; do
+  rg -Fq -- "$teleport_contract" "$repository_root/infra/teleport/bootstrap.sh" ||
+    fail "Teleport route contract is absent: $teleport_contract"
+done
+for teleport_host_contract in \
+  '/etc/systemd/system/teleport.service' \
+  'systemctl enable teleport' \
+  'kind:"role",version:"v8",metadata:{name:"kodex-dev-access"}' \
+  'kubernetes_groups:[env.KUBERNETES_GROUP]' \
+  '(.[0].spec | keys | sort) == ["allow","deny","options"]' \
+  '.[0].spec.allow.kubernetes_groups == [$group]' \
+  'jq -n --rawfile client_id "$github_client_id_file"' \
+  'https://$host/v1/webapi/github/callback' \
+  'SSL_CERT_FILE="$trust_bundle_file" tctl "$@"' \
+  'Environment=SSL_CERT_FILE=/var/lib/teleport/certs/trust-bundle.pem' \
+  'teleport_ctl --config="$config_file" get github/github --format=json --with-secrets'; do
+  rg -Fq -- "$teleport_host_contract" "$repository_root/infra/teleport/bootstrap-host.sh" ||
+    fail "Teleport host contract is absent: $teleport_host_contract"
+done
+if rg -n 'kubernetes_groups:\["system:masters"\]|kubectl -n teleport exec|teleport-cluster' \
+  "$repository_root/infra/teleport/bootstrap.sh" >/dev/null; then
+  fail 'retired in-cluster or owner-level Teleport access remains'
+fi
+for public_preflight_contract in \
+  'challenge_path="/.well-known/acme-challenge/$challenge_token"' \
+  '[[ "$body" == "$challenge_token" ]]' \
+  'socket.create_connection((sys.argv[1], 443)' \
+  'https://letsdebug.net' \
+  '.result.ok == true' \
+  'https://check-host.net/check-tcp' \
+  'successful >= 1'; do
+  rg -Fq -- "$public_preflight_contract" "$repository_root/tools/dev/preflight-public-hosts.sh" ||
+    fail "public certificate preflight contract is absent: $public_preflight_contract"
+done
+rg -Fq '.disable = ["traefik"]' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal k3s does not disable the bundled Traefik release'
 rg -Fq 'systemctl restart k3s' "$repository_root/tools/install/prepare-host.sh" ||
   fail 'bare-metal host apply does not activate changed k3s configuration'
+for stable_api_contract in \
+  'local_api_interface=kodex-api0' \
+  'local_api_service=kodex-local-api-address.service' \
+  'read_local_api_address' \
+  '."advertise-address" = strenv(LOCAL_API_ADDRESS)' \
+  '."tls-san" += [strenv(LOCAL_API_ADDRESS)]'; do
+  rg -Fq "$stable_api_contract" "$repository_root/tools/install/prepare-host.sh" ||
+    fail "bare-metal host apply does not preserve the stable API endpoint: $stable_api_contract"
+done
 for resolver_contract in \
   'k3s_resolver_file=/etc/rancher/k3s/resolv.conf' \
   'source_file=/run/systemd/resolve/resolv.conf' \
   'configure_k3s_resolver' \
-  'resolv-conf: "$k3s_resolver_file"' \
+  '."resolv-conf" = strenv(K3S_RESOLVER_FILE)' \
   'readback_k3s_resolver' \
   "\$1 == \"search\" || \$1 == \"domain\""; do
   rg -Fq "$resolver_contract" "$repository_root/tools/install/prepare-host.sh" ||
@@ -555,5 +649,7 @@ for surface in control-center grafana headlamp; do
   [[ "$(stat -c '%a' "$cookie_secret")" == 600 ]] ||
     fail "generated OAuth2 Proxy cookie Secret mode is invalid: $surface"
 done
+
+"$repository_root/scripts/tests/remote-disposable-cluster-contract-test.sh" >/dev/null
 
 printf 'Kodex install contract tests passed\n'

@@ -46,9 +46,7 @@ test("локальный OIDC, API и основные экраны доступ
   const logout = page.getByRole("button", { name: "Выйти", exact: true });
   await currentUserMenu.click();
   await expect(logout).toBeVisible();
-  await page
-    .getByRole("heading", { level: 1, name: /Добрый день/ })
-    .click();
+  await page.locator("main").getByRole("heading").first().click();
   await expect(logout).toBeHidden();
 
   const projectsReadback = await page.evaluate(async () => {
@@ -88,7 +86,7 @@ test("локальный OIDC, API и основные экраны доступ
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /^(Настроим Kodex|Проекты)$/,
+      name: /^(Настроим Kodex|Проекты|Добрый день, .+)$/,
     }),
   ).toBeVisible();
 
@@ -99,7 +97,11 @@ test("локальный OIDC, API и основные экраны доступ
     ).toBeVisible();
   }
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
-  await expect(page.getByRole("dialog", { name: "Kodex" })).toBeVisible();
+  const assistant = page.getByRole("dialog", { name: "Kodex" });
+  await expect(assistant).toBeVisible();
+  await expect(
+    assistant.getByRole("button", { name: "Новый диалог", exact: true }),
+  ).toBeEnabled();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

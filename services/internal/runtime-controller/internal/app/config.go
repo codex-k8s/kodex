@@ -49,6 +49,7 @@ type Config struct {
 	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
 	RoleRuntimeContractSHA256      string        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256"`
 	ProviderHTTPSProxy             string        `env:"RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY"`
+	ProviderAppArmorProfile        string        `env:"RUNTIME_CONTROLLER_PROVIDER_APPARMOR_PROFILE"`
 	KubernetesAPIServiceIP         string        `env:"KUBERNETES_SERVICE_HOST"`
 	StorageClass                   string        `env:"RUNTIME_CONTROLLER_STORAGE_CLASS"`
 	SessionPVCSize                 string        `env:"RUNTIME_CONTROLLER_SESSION_PVC_SIZE"`
@@ -79,6 +80,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
+		ProviderAppArmorProfile:     "",
 		KubernetesAPIServiceIP:      "10.43.0.1",
 		StorageClass:                "", SessionPVCSize: "20Gi",
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16,
@@ -122,6 +124,7 @@ func (config Config) validate() error {
 		proxyErr != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc:8080" || proxy.Path != "" || proxy.RawQuery != "" || proxy.Fragment != "" || proxy.User != nil ||
 		!strings.Contains(config.PromotedRoleImageRepository, "/") || strings.ContainsAny(config.PromotedRoleImageRepository, "@${}") ||
 		!validPinnedImageReference(config.DefaultRoleImageReference) ||
+		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
 		config.RoleRuntimeContractRevision == 0 || !sha256TextPattern.MatchString(config.RoleRuntimeContractSHA256) {
 		return errors.New("runtime role image policy is invalid")
 	}

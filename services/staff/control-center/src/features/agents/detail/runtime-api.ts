@@ -15,8 +15,13 @@ import type {
   RuntimeEnvironmentPage,
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { unwrap } from "@/shared/api/problem";
+import { mutateWithRetry, type MutationHeaders } from "@/shared/api/mutation";
+import { asProblem, unwrap } from "@/shared/api/problem";
+
+const readRetryDelaysMs = [0, 200, 600] as const;
+const runtimeConfigurationReadRetryDelaysMs = [
+  0, 200, 600, 1_500, 3_000,
+] as const;
 
 function versionHeaders(headers: MutationHeaders): {
   "If-Match": string;
@@ -35,19 +40,26 @@ function versionHeaders(headers: MutationHeaders): {
 export async function loadAgentRuntime(
   agentRef: string,
 ): Promise<AgentRuntimeConfigurationView> {
-  return (
-    await unwrap(
-      getAgentRuntimeConfiguration({
-        path: { agentRef },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  return readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          getAgentRuntimeConfiguration({
+            path: { agentRef },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+    runtimeConfigurationReadRetryDelaysMs,
+  );
 }
 
 export async function loadRuntimeCatalog(): Promise<RuntimeSelection[]> {
-  return (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
-    .items;
+  return readWithRetry(
+    async () =>
+      (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
+        .items,
+  );
 }
 
 export async function saveAgentRuntime(
@@ -56,7 +68,7 @@ export async function saveAgentRuntime(
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         publishAgentRuntimeConfiguration({
           path: { agentRef },
@@ -75,7 +87,7 @@ export async function saveOverlayDraft(
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         createConfigOverlayDraft({
           path: { agentRef },
@@ -98,7 +110,7 @@ export async function changeOverlay(
       ? validateConfigOverlayDraft
       : publishConfigOverlayDraft;
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         request({
           path: { agentRef },
@@ -116,7 +128,7 @@ export async function bindRuntimeEnvironment(
   agentVersion: number,
 ): Promise<AgentRuntimeConfigurationView> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         bindAgentRuntimeEnvironment({
           path: { agentRef },
@@ -134,17 +146,43 @@ export async function searchRuntimeEnvironments(
   search: string,
   pageToken?: string,
 ): Promise<RuntimeEnvironmentPage> {
-  return (
-    await unwrap(
-      listRuntimeEnvironmentSets({
-        path: { projectRef },
-        query: {
-          ...(search.trim() ? { query: search.trim() } : {}),
-          ...(pageToken ? { pageToken } : {}),
-          pageSize: 30,
-        },
-        signal: requestSignal(),
-      }),
-    )
-  ).data;
+  return readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          listRuntimeEnvironmentSets({
+            path: { projectRef },
+            query: {
+              ...(search.trim() ? { query: search.trim() } : {}),
+              ...(pageToken ? { pageToken } : {}),
+              pageSize: 30,
+            },
+            signal: requestSignal(),
+          }),
+        )
+      ).data,
+  );
+}
+
+async function readWithRetry<T>(
+  request: () => Promise<T>,
+  retryDelaysMs: readonly number[] = readRetryDelaysMs,
+): Promise<T> {
+  let lastProblem = asProblem(new Error("Runtime read did not start"));
+  for (const delayMs of retryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayMs),
+      );
+    }
+    try {
+      return await request();
+    } catch (error) {
+      lastProblem = asProblem(error);
+      if (!lastProblem.retryable || delayMs === retryDelaysMs.at(-1)) {
+        throw lastProblem;
+      }
+    }
+  }
+  throw lastProblem;
 }

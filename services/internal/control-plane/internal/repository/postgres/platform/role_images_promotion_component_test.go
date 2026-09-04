@@ -57,6 +57,12 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	}
 	artifact := seedAdmittedPromotionArtifact(t, ctx, repository, resolvedOwner,
 		created.Recipe, *created.Build)
+	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
+	if err != nil || admittedDetail.PromotionCandidate == nil ||
+		admittedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		!containsString(admittedDetail.Recipe.NextActions, "PROMOTE") {
+		t.Fatalf("admitted promotion candidate readback mismatch: detail=%#v err=%v", admittedDetail, err)
+	}
 	roleImages, err := roleimageservice.New(repository, catalog)
 	if err != nil {
 		t.Fatalf("construct role image service: %v", err)
@@ -99,6 +105,12 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if err != nil || receipt.State != "QUEUED" || receipt.Ref == "" || receipt.ReceiptSHA256 == "" ||
 		receipt.ImageArtifactRef != artifact.Ref || receipt.ProvenanceSHA256 != artifact.ProvenanceSHA256 {
 		t.Fatalf("request exact promotion: receipt=%#v err=%v", receipt, err)
+	}
+	queuedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
+	if err != nil || queuedDetail.PromotionCandidate == nil ||
+		queuedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		containsString(queuedDetail.Recipe.NextActions, "PROMOTE") {
+		t.Fatalf("queued promotion candidate readback mismatch: detail=%#v err=%v", queuedDetail, err)
 	}
 	replayed, err := roleImages.Promote(ctx, request)
 	if err != nil || !reflect.DeepEqual(replayed, receipt) {
@@ -196,9 +208,10 @@ WHERE ref = $1`, artifact.Ref); err != nil {
 		t.Fatalf("completion idempotency key reuse was accepted: %v", err)
 	}
 
-	readback, _, activeArtifact, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
-	if err != nil || activeArtifact == nil || readback.ActiveImageArtifactRef != artifact.Ref ||
-		readback.PromotedImageReference != promotedReference {
+	detail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
+	readback, activeArtifact := detail.Recipe, detail.ActiveArtifact
+	if err != nil || activeArtifact == nil || detail.PromotionCandidate != nil ||
+		readback.ActiveImageArtifactRef != artifact.Ref || readback.PromotedImageReference != promotedReference {
 		t.Fatalf("promoted active image readback mismatch: recipe=%#v artifact=%#v err=%v",
 			readback, activeArtifact, err)
 	}

@@ -1,16 +1,89 @@
 package callback
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+type rejectedIntegrationClient struct {
+	controlplanev1.RuntimeWorkServiceClient
+}
+
+type unavailableIntegrationClient struct {
+	controlplanev1.RuntimeWorkServiceClient
+}
+
+func (*rejectedIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
+	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: "inv_rejected1", State: "WAITING_APPROVAL"}, nil
+}
+
+func (*rejectedIntegrationClient) GetIntegrationInvocation(_ context.Context, _ *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
+	return &controlplanev1.GetIntegrationInvocationResponse{State: "REJECTED", SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
+}
+
+func (*unavailableIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
+	return nil, status.Error(codes.Unavailable, "transient control-plane failure")
+}
+
+func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
+	t.Parallel()
+	server := &Server{
+		config:  Config{RequestTimeout: time.Second},
+		control: &controlplaneclient.Client{Runtime: &rejectedIntegrationClient{}},
+	}
+	input := runtimecontract.RunnerInput{
+		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
+			Ref: "igr_12345678", ConnectionRef: "icon_12345678",
+			CapabilityKey: "synthetic.journal.write", Risk: "WRITE",
+		}},
+	}
+	result, err := server.invoke(t.Context(), input, map[string]any{
+		"connection_ref": "icon_12345678", "capability_key": "synthetic.journal.write",
+		"input": map[string]any{"value": "rejected"},
+	}, json.RawMessage(`"call-1"`))
+	if err != nil {
+		t.Fatalf("invoke rejected integration: %v", err)
+	}
+	values, ok := result.(map[string]any)
+	if !ok || values["ok"] != false || values["error_code"] != "INTEGRATION_REJECTED_BY_OWNER" {
+		t.Fatalf("unexpected rejected integration result: %#v", result)
+	}
+}
+
+func TestInvokePreservesIntegrationResolutionStatus(t *testing.T) {
+	t.Parallel()
+	server := &Server{
+		config:  Config{RequestTimeout: time.Second},
+		control: &controlplaneclient.Client{Runtime: &unavailableIntegrationClient{}},
+	}
+	input := runtimecontract.RunnerInput{
+		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
+			Ref: "igr_12345678", ConnectionRef: "icon_12345678",
+			CapabilityKey: "synthetic.journal.write", Risk: "WRITE",
+		}},
+	}
+	_, err := server.invoke(t.Context(), input, map[string]any{
+		"connection_ref": "icon_12345678", "capability_key": "synthetic.journal.write",
+		"input": map[string]any{"value": "unavailable"},
+	}, json.RawMessage(`"call-1"`))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("integration resolution status was lost: %v", err)
+	}
+}
 
 func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	t.Parallel()

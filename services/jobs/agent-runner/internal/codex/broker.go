@@ -16,7 +16,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -30,6 +32,7 @@ const (
 	ProviderSocketPath           = "/run/kodex/provider/provider.sock"
 	maximumBrokerBytes           = 4 << 20
 	providerRefreshCommitTimeout = 40 * time.Second
+	providerSandboxProbeTimeout  = 5 * time.Second
 )
 
 var ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
@@ -42,9 +45,19 @@ type brokerRequest struct {
 }
 
 type brokerResponse struct {
-	Result Result `json:"result"`
-	OK     bool   `json:"ok"`
+	Result  Result                `json:"result"`
+	Failure providerBrokerFailure `json:"failure,omitempty"`
+	OK      bool                  `json:"ok"`
 }
+
+type providerBrokerFailure string
+
+const (
+	providerBrokerFailureAuthentication providerBrokerFailure = "AUTHENTICATION"
+	providerBrokerFailureAuthority      providerBrokerFailure = "AUTHORITY"
+	providerBrokerFailureMCP            providerBrokerFailure = "MCP"
+	providerBrokerFailureProvider       providerBrokerFailure = "PROVIDER"
+)
 
 type providerAuthenticationSnapshot struct {
 	AuthMode     string          `json:"auth_mode"`
@@ -148,10 +161,44 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	decoder := json.NewDecoder(bufio.NewReaderSize(connection, 64<<10))
 	decoder.DisallowUnknownFields()
 	var response brokerResponse
-	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) || !response.OK {
+	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) {
 		return Result{}, errors.New("isolated Codex provider failed")
 	}
+	if !response.OK {
+		return Result{}, providerBrokerError(response.Failure)
+	}
+	if response.Failure != "" {
+		return Result{}, errors.New("isolated Codex provider response is invalid")
+	}
 	return response.Result, nil
+}
+
+func providerBrokerError(failure providerBrokerFailure) error {
+	switch failure {
+	case providerBrokerFailureAuthentication:
+		return ErrProviderAuthentication
+	case providerBrokerFailureAuthority:
+		return ErrAuthorityRequestUnsupported
+	case providerBrokerFailureMCP:
+		return ErrRequiredMCPUnavailable
+	case providerBrokerFailureProvider:
+		return errors.New("isolated Codex provider failed")
+	default:
+		return errors.New("isolated Codex provider response is invalid")
+	}
+}
+
+func classifyProviderBrokerFailure(err error) providerBrokerFailure {
+	switch {
+	case errors.Is(err, ErrProviderAuthentication):
+		return providerBrokerFailureAuthentication
+	case errors.Is(err, ErrAuthorityRequestUnsupported):
+		return providerBrokerFailureAuthority
+	case errors.Is(err, ErrRequiredMCPUnavailable):
+		return providerBrokerFailureMCP
+	default:
+		return providerBrokerFailureProvider
+	}
 }
 
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
@@ -162,6 +209,9 @@ func ServeProviderBroker(ctx context.Context) error {
 	}
 	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
 		return errors.New("disable provider broker process inspection")
+	}
+	if err := verifyProviderSandbox(ctx, func(command *exec.Cmd) error { return command.Run() }); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(ProviderSocketPath), 0o770); err != nil {
 		return errors.New("create provider broker socket directory")
@@ -193,6 +243,23 @@ func ServeProviderBroker(ctx context.Context) error {
 	}
 }
 
+func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) error {
+	if execute == nil {
+		return errors.New("Codex provider sandbox probe is unavailable")
+	}
+	probeContext, cancel := context.WithTimeout(ctx, providerSandboxProbeTimeout)
+	defer cancel()
+	uid := strconv.Itoa(os.Geteuid())
+	command := exec.CommandContext(probeContext, "/usr/bin/bwrap", "--unshare-user", "--uid", uid, "--gid", uid,
+		"--ro-bind", "/", "/", "/usr/bin/true")
+	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
+	command.Stdin, command.Stdout, command.Stderr = nil, io.Discard, io.Discard
+	if err := execute(command); err != nil {
+		return errors.New("Codex provider sandbox is unavailable")
+	}
+	return nil
+}
+
 func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
@@ -218,7 +285,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	defer clear(auth)
 	expectedDigest, err := pinnedProviderDigest(request.Input)
@@ -237,20 +304,27 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	defer bridge.Close()
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailure(connection, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
 	return json.NewEncoder(connection).Encode(brokerResponse{Result: result, OK: true})
+}
+
+func writeProviderBrokerFailure(connection io.Writer, err error) error {
+	return json.NewEncoder(connection).Encode(brokerResponse{
+		Failure: classifyProviderBrokerFailure(err),
+		OK:      false,
+	})
 }
 
 func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,

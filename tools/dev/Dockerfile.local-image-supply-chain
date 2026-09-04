@@ -26,7 +26,6 @@ RUN CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
       -o /out/registry-pull-authorizer ./cmd/registry-pull-authorizer
 
 FROM docker.io/library/alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f AS admission-tools
-ARG SOURCE_SHA=unknown
 ENV GRYPE_DB_CACHE_DIR=/var/lib/grype/db \
     GRYPE_DB_AUTO_UPDATE=false \
     GRYPE_DB_VALIDATE_AGE=true \
@@ -56,6 +55,7 @@ RUN install -d -m 0755 "$GRYPE_DB_CACHE_DIR" \
 RUN for tool in base64 bash cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
+ARG SOURCE_SHA=unknown
 LABEL org.opencontainers.image.title="Kodex local image admission tools" \
       org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
       org.opencontainers.image.revision="$SOURCE_SHA"

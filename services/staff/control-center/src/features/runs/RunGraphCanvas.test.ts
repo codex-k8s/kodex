@@ -4,7 +4,10 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
 
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
-import { createRunGraphFlowElements } from "@/features/runs/run-graph-flow";
+import {
+  createRunGraphFlowElements,
+  runGraphFitViewOptions,
+} from "@/features/runs/run-graph-flow";
 import type {
   RunEdge,
   RunNode,
@@ -106,6 +109,16 @@ async function render(): Promise<string> {
 }
 
 describe("RunGraphCanvas", () => {
+  it("резервирует место для detached-панелей при начальном fit", () => {
+    expect(runGraphFitViewOptions(1440).padding).toEqual({
+      top: "180px",
+      right: "210px",
+      bottom: "160px",
+      left: "380px",
+    });
+    expect(runGraphFitViewOptions(412).padding).toBe(0.14);
+  });
+
   it("держит контролы вне полотна и предоставляет доступное дерево", async () => {
     const html = await render();
 

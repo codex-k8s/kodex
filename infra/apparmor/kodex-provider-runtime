@@ -1,0 +1,9 @@
+abi <abi/4.0>,
+
+include <tunables/global>
+
+# Внешнюю границу контейнера сохраняют Kubernetes и NetworkPolicy, а
+# unprivileged user namespace нужен внутреннему bubblewrap sandbox Codex.
+profile kodex-provider-runtime flags=(unconfined) {
+  userns,
+}

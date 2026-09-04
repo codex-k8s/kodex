@@ -146,8 +146,9 @@ func New(config Config, manager *workload.Manager, control *controlplaneclient.C
 	}
 	server := &Server{config: config, manager: manager, control: control, coordinator: coordinator, logger: logger}
 	server.http = &http.Server{Addr: config.Listen, Handler: http.HandlerFunc(server.route), TLSConfig: tlsConfig,
-		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 35 * time.Second,
-		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 30 * time.Second,
+		WriteTimeout: time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+10) * time.Second,
+		IdleTimeout:  60 * time.Second, MaxHeaderBytes: 16 << 10}
 	return server, nil
 }
 
@@ -519,8 +520,25 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 		http.NotFound(writer, request)
 		return
 	}
+	server.serveMCP(writer, request, input)
+}
+
+func (server *Server) serveMCP(writer http.ResponseWriter, request *http.Request, input runtimecontract.RunnerInput) {
 	var rpc mcpRequest
-	if decode(request, &rpc, 1<<20) != nil || rpc.JSONRPC != "2.0" || len(rpc.ID) == 0 {
+	if decode(request, &rpc, 1<<20) != nil || rpc.JSONRPC != "2.0" || rpc.Method == "" {
+		http.Error(writer, "invalid MCP message", http.StatusBadRequest)
+		return
+	}
+	if len(rpc.ID) == 0 {
+		if rpc.Method == "notifications/initialized" && !emptyMCPParams(rpc.Params) {
+			http.Error(writer, "invalid MCP notification", http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Cache-Control", "no-store")
+		writer.WriteHeader(http.StatusAccepted)
+		return
+	}
+	if rpc.Method == "notifications/initialized" {
 		server.writeMCPError(writer, rpc.ID, -32600, "Invalid Request")
 		return
 	}
@@ -534,6 +552,16 @@ func (server *Server) mcp(writer http.ResponseWriter, request *http.Request, lea
 	default:
 		server.writeMCPError(writer, rpc.ID, -32601, "Method not found")
 	}
+}
+
+func emptyMCPParams(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var params struct{}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(&params) == nil && errors.Is(decoder.Decode(&struct{}{}), io.EOF)
 }
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
@@ -605,7 +633,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	}
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
-		failureClass := "tool_unavailable"
+		failureClass := controlFailureClass(err)
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
 			failureClass = "assistant_plan_" + planInputErr.reason
@@ -657,6 +685,8 @@ func controlFailureClass(err error) string {
 		return "operation_registry"
 	case "operation is not permitted":
 		return "domain_permission"
+	case "authorization snapshot rollback rejected":
+		return "authority_snapshot_rollback"
 	case "record tool call projection":
 		return "projection_" + strings.ToLower(status.Code(err).String())
 	default:
@@ -1172,7 +1202,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	capability, _ := arguments["capability_key"].(string)
 	allowed := false
 	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability && grant.Risk != "HIGH" {
+		if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
 			allowed = true
 			break
 		}
@@ -1188,8 +1218,11 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	resolved, err := server.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))})
 	cancel()
-	if err != nil || resolved.GetInvocationRef() == "" {
-		return nil, errors.New("resolve integration invocation")
+	if err != nil {
+		return nil, fmt.Errorf("resolve integration invocation: %w", err)
+	}
+	if resolved.GetInvocationRef() == "" {
+		return nil, errors.New("resolve integration invocation: empty reference")
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -1198,12 +1231,12 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		state, readErr := server.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: resolved.GetInvocationRef()})
 		readCancel()
 		if readErr != nil {
-			return nil, errors.New("read integration invocation")
+			return nil, fmt.Errorf("read integration invocation: %w", readErr)
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":
 			return map[string]any{"ok": true, "result": state.GetResultSummary()}, nil
-		case "FAILED", "CANCELLED":
+		case "FAILED", "REJECTED", "CANCELLED":
 			return map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()}, nil
 		}
 		select {

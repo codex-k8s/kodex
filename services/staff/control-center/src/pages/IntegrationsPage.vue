@@ -564,6 +564,7 @@ onBeforeUnmount(() => {
           v-if="activeSection === 'CONNECTIONS'"
           :connections="connections"
           :definitions="platform.definitions"
+          :core-ready="platform.integrationCoreReady === true"
           :busy-ref="commandRef"
           :busy-action="commandAction"
           @command="command"

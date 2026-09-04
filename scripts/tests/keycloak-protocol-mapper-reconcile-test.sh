@@ -73,8 +73,8 @@ keycloak_request() {
 
 extract_function() {
   local function_name=$1
-  awk -v signature="^${function_name}\\(\\) \\{$" '
-    $0 ~ signature { capture = 1 }
+  awk -v signature="${function_name}() {" '
+    $0 == signature { capture = 1 }
     capture { print }
     capture && /^}$/ { exit }
   ' "$bootstrap"
@@ -139,5 +139,7 @@ if rg -q 'replace_mapper' "$bootstrap"; then
 fi
 [[ "$(rg -c '^[[:space:]]*reconcile_mapper ' "$bootstrap")" == 7 ]] ||
   fail 'not every canonical mapper uses stable reconcile'
+[[ "$(rg -F -c '"claim.name":"groups","full.path":"false","multivalued":"true"' "$bootstrap")" == 2 ]] ||
+  fail 'group mapper apply and readback must require canonical multivalued output'
 
 printf 'Keycloak protocol mapper reconcile test completed\n'

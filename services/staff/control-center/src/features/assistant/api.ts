@@ -19,24 +19,32 @@ import type {
   AssistantPlanOperationInput,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate } from "@/shared/api/mutation";
-import { unwrap } from "@/shared/api/problem";
+import { mutate, mutateWithRetry } from "@/shared/api/mutation";
+import { asProblem, unwrap } from "@/shared/api/problem";
+
+const readRetryDelaysMs = [0, 200, 600] as const;
 
 export async function readAssistant(): Promise<SystemAssistant> {
-  return (await unwrap(getSystemAssistant({ signal: requestSignal() }))).data;
+  return readWithRetry(
+    async () =>
+      (await unwrap(getSystemAssistant({ signal: requestSignal() }))).data,
+  );
 }
 
 export async function readConversations(
   projectRef?: string,
 ): Promise<AssistantConversation[]> {
-  return (
-    await unwrap(
-      listAssistantConversations({
-        ...(projectRef ? { query: { projectRef } } : {}),
-        signal: requestSignal(),
-      }),
-    )
-  ).data.items;
+  return readWithRetry(
+    async () =>
+      (
+        await unwrap(
+          listAssistantConversations({
+            ...(projectRef ? { query: { projectRef } } : {}),
+            signal: requestSignal(),
+          }),
+        )
+      ).data.items,
+  );
 }
 
 export async function createConversation(
@@ -80,14 +88,14 @@ export async function renameConversation(
 }
 
 export async function appendTurn(
-  conversationRef: string,
+  conversation: AssistantConversation,
   content: string,
   attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
   return (
-    await mutate((headers) =>
+    await mutateWithRetry((headers) =>
       addAssistantTurn({
-        path: { conversationRef },
+        path: { conversationRef: conversation.ref },
         body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
@@ -97,6 +105,26 @@ export async function appendTurn(
       }),
     )
   ).data;
+}
+
+async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
+  let lastProblem = asProblem(new Error("Assistant read did not start"));
+  for (const delayMs of readRetryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) =>
+        globalThis.setTimeout(resolve, delayMs),
+      );
+    }
+    try {
+      return await request();
+    } catch (error) {
+      lastProblem = asProblem(error);
+      if (!lastProblem.retryable || delayMs === readRetryDelaysMs.at(-1)) {
+        throw lastProblem;
+      }
+    }
+  }
+  throw lastProblem;
 }
 
 export async function savePlanDraft(

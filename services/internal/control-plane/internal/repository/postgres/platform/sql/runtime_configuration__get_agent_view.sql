@@ -43,6 +43,15 @@ SELECT config.ref,
        environment_version.version_number,
        environment_version.non_secret_values,
        environment_version.secret_descriptors,
+       COALESCE(image_artifact.ref, ''),
+       COALESCE(image_recipe.ref, ''),
+       COALESCE(image_artifact.recipe_generation, 0),
+       COALESCE(image_artifact.promoted_reference, ''),
+       COALESCE(image_artifact.manifest_digest, ''),
+       COALESCE(image_artifact.role_runtime_contract_revision, 0),
+       COALESCE(image_artifact.role_runtime_contract_sha256, ''),
+       environment_version.selected_tools,
+       environment_version.core_digest,
        environment_version.resource_policy,
        environment_version.volume_policy,
        environment_version.network_policy,
@@ -69,6 +78,8 @@ LEFT JOIN LATERAL (
 JOIN control_plane.agent_runtime_environment_bindings binding ON binding.agent_id = agent.id
 JOIN control_plane.runtime_environment_sets environment ON environment.id = binding.environment_set_id
 JOIN control_plane.runtime_environment_versions environment_version ON environment_version.id = environment.current_version_id
+LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = environment_version.role_image_artifact_id
+LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id
 WHERE agent.organization_id = $1::uuid
   AND agent.ref = $2
   AND (agent.system_key = 'system-assistant' OR $3 IN ('OWNER', 'ADMINISTRATOR') OR EXISTS (
