@@ -98,6 +98,10 @@ PROVIDER_ACCOUNT_CREATED:
   other: Учётная запись модели создана
 PROVIDER_ACCOUNT_UPDATED:
   other: Учётная запись модели обновлена
+AGENT_AVATAR_UPDATED:
+  other: Аватар ИИ-сотрудника обновлён
+MANAGED_CONFIGURATION_CHANGED:
+  other: Конфигурация обновлена
 PROVIDER_DEVICE_AUTHORIZATION_STARTED:
   other: Авторизация учётной записи модели по коду устройства начата
 PROVIDER_ACCOUNT_AUTHORIZED:
