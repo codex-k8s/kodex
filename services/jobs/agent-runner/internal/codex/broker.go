@@ -56,6 +56,7 @@ const (
 	providerBrokerFailureAuthentication providerBrokerFailure = "AUTHENTICATION"
 	providerBrokerFailureAuthority      providerBrokerFailure = "AUTHORITY"
 	providerBrokerFailureMCP            providerBrokerFailure = "MCP"
+	providerBrokerFailureConfiguration  providerBrokerFailure = "CONFIGURATION"
 	providerBrokerFailureProvider       providerBrokerFailure = "PROVIDER"
 )
 
@@ -181,6 +182,8 @@ func providerBrokerError(failure providerBrokerFailure) error {
 		return ErrAuthorityRequestUnsupported
 	case providerBrokerFailureMCP:
 		return ErrRequiredMCPUnavailable
+	case providerBrokerFailureConfiguration:
+		return ErrRuntimeProfile
 	case providerBrokerFailureProvider:
 		return errors.New("isolated Codex provider failed")
 	default:
@@ -196,6 +199,8 @@ func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 		return providerBrokerFailureAuthority
 	case errors.Is(err, ErrRequiredMCPUnavailable):
 		return providerBrokerFailureMCP
+	case errors.Is(err, ErrRuntimeProfile):
+		return providerBrokerFailureConfiguration
 	default:
 		return providerBrokerFailureProvider
 	}
@@ -282,6 +287,9 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if decoder.Decode(&request) != nil || !decodeEOF(decoder) || request.Input.Validate() != nil ||
 		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 {
 		return errors.New("provider broker request is invalid")
+	}
+	if err := ValidateRuntimeProfile(request.Input); err != nil {
+		return writeProviderBrokerFailure(connection, err)
 	}
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {

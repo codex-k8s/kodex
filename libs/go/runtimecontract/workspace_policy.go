@@ -45,7 +45,12 @@ type RuntimeWorkspacePolicy struct {
 
 func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 	policy := RuntimeWorkspacePolicy{Revision: 1, Root: RuntimeWorkspaceRoot,
-		Rules:                []RuntimeWorkspacePathRule{{Path: RuntimeWorkspaceRoot + "/input", Access: RuntimeWorkspaceReadOnly}, {Path: RuntimeWorkspaceRoot + "/knowledge", Access: RuntimeWorkspaceReadOnly}, {Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable}},
+		Rules: []RuntimeWorkspacePathRule{
+			{Path: RuntimeWorkspaceRoot + "/input", Access: RuntimeWorkspaceReadOnly},
+			{Path: RuntimeWorkspaceRoot + "/knowledge", Access: RuntimeWorkspaceReadOnly},
+			{Path: RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json", Access: RuntimeWorkspaceReadOnly},
+			{Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable},
+		},
 		MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceMaximumFiles,
 		DenialReasons: append([]string(nil), runtimeWorkspaceDenialReasons[:]...)}
 	raw, _ := json.Marshal(policy)
@@ -57,13 +62,14 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 func (policy RuntimeWorkspacePolicy) Validate() error {
 	if policy.Revision != 1 || policy.Root != RuntimeWorkspaceRoot ||
 		policy.MaximumWritableBytes != RuntimeWorkspaceWritableBytes ||
-		policy.MaximumFileCount != RuntimeWorkspaceMaximumFiles || len(policy.Rules) != 3 {
+		policy.MaximumFileCount != RuntimeWorkspaceMaximumFiles || len(policy.Rules) != 4 {
 		return errors.New("runtime workspace policy is invalid")
 	}
 	expectedRules := map[string]string{
-		RuntimeWorkspaceRoot + "/input":     RuntimeWorkspaceReadOnly,
-		RuntimeWorkspaceRoot + "/knowledge": RuntimeWorkspaceReadOnly,
-		RuntimeWorkspaceRoot:                RuntimeWorkspaceWritable,
+		RuntimeWorkspaceRoot + "/input":                             RuntimeWorkspaceReadOnly,
+		RuntimeWorkspaceRoot + "/knowledge":                         RuntimeWorkspaceReadOnly,
+		RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json": RuntimeWorkspaceReadOnly,
+		RuntimeWorkspaceRoot:                                        RuntimeWorkspaceWritable,
 	}
 	seen := make(map[string]struct{}, len(policy.Rules))
 	for _, rule := range policy.Rules {

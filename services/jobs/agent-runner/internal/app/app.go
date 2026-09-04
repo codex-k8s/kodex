@@ -5,9 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net"
@@ -172,6 +170,15 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 1<<20 || !utf8.ValidString(result.FinalMessage) {
 		return completeFailure(ctx, input, client, "RUNTIME_RESULT_INVALID")
 	}
+	if input.CodexSandbox == "workspace-write" && hasCapability(input, runtimecontract.ArtifactCapability) {
+		if err := workspacepolicy.PublishResult(input.WorkspaceRoot, input.WorkspacePolicy, workspacepolicy.ResultProvenance{
+			Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: input.RuntimeRevisionRef,
+			RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
+			Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest,
+		}); err != nil {
+			return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
+		}
+	}
 	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_ARTIFACT_INVALID")
@@ -273,6 +280,8 @@ func runtimeExecutionFailureCode(err error) string {
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	case errors.Is(err, codex.ErrRequiredMCPUnavailable):
 		return "RUNTIME_MCP_UNAVAILABLE"
+	case errors.Is(err, codex.ErrRuntimeProfile):
+		return "RUNTIME_PROFILE_UNSUPPORTED"
 	default:
 		return "RUNTIME_PROVIDER_UNAVAILABLE"
 	}
@@ -287,7 +296,7 @@ func materializeWorkspace(input model.Input) error {
 	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
 		return err
 	}
-	if err := validateMaterializedInstructions(input.Instructions); err != nil {
+	if err := validateMaterializedInstructions(input); err != nil {
 		return err
 	}
 	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(strings.TrimSpace(input.Instructions)+"\n")); err != nil {
@@ -309,58 +318,113 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		return nil, errors.New("turn prompt is unavailable")
 	}
 	var builder strings.Builder
-	builder.WriteString("# Task\n\n")
 	builder.WriteString(strings.TrimSpace(input.Task))
 	builder.WriteString("\n")
-	if err := appendAttachmentNotice(&builder, input); err != nil {
-		return nil, err
-	}
-	if len(input.SessionContext) != 0 {
-		builder.WriteString("\n# Session context\n")
-		for _, message := range input.SessionContext {
-			builder.WriteString("\n## ")
-			builder.WriteString(message.Role)
-			builder.WriteString("\n")
-			builder.WriteString(message.Content)
-			builder.WriteString("\n")
+	if input.CodexSessionID != "" {
+		if err := appendContinuationRevision(&builder, input); err != nil {
+			return nil, err
 		}
-	}
-	if len(input.BoundedInput) != 0 {
-		raw, err := json.MarshalIndent(input.BoundedInput, "", "  ")
-		if err != nil {
-			return nil, errors.New("encode bounded turn input")
-		}
-		builder.WriteString("\n# Bounded input\n\n```json\n")
-		builder.Write(raw)
-		builder.WriteString("\n```\n")
-	}
-	if hasCapability(input, runtimecontract.ArtifactCapability) {
-		builder.WriteString("\n# File access\n")
-		if len(input.InputArtifacts) != 0 {
-			builder.WriteString("\nAll materialized files are read-only. The complete catalog is `/workspace/input/manifest.json`.\n")
-			for _, artifact := range input.InputArtifacts {
-				path, pathErr := runtimecontract.ArtifactWorkspacePath(input.AttachmentSetRef, artifact)
-				if pathErr != nil {
-					return nil, errors.New("resolve prompt artifact path")
-				}
-				builder.WriteString("\n- `")
-				builder.WriteString(path)
-				builder.WriteString("` — ")
-				builder.WriteString(fmt.Sprintf("%q", artifact.FileName))
-				builder.WriteString(" (")
-				builder.WriteString(artifact.MediaType)
-				builder.WriteString(")")
-			}
-			builder.WriteString("\n")
-		}
-		builder.WriteString("\nWrite every output file directly to `/workspace/.kodex/outbox/<safe-name>`. ")
-		builder.WriteString("The workspace root and all other paths are read-only; do not write output files to `/workspace` itself.\n")
 	}
 	result := []byte(builder.String())
 	if len(result) == 0 || len(result) > 1<<20 || !utf8.Valid(result) {
 		return nil, errors.New("turn prompt is invalid")
 	}
 	return result, nil
+}
+
+func appendContinuationRevision(builder *strings.Builder, input model.Input) error {
+	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
+	if err != nil {
+		return errors.New("continuation configuration is invalid")
+	}
+	toolNames := make([]string, 0, len(input.EnvironmentTools))
+	for _, tool := range input.EnvironmentTools {
+		toolNames = append(toolNames, tool.Name+":"+tool.Command)
+	}
+	sort.Strings(toolNames)
+	mcpTools := codex.RequiredMCPToolNames(input)
+	files := make([]string, 0, len(input.InputArtifacts))
+	for _, artifact := range input.InputArtifacts {
+		files = append(files, artifact.Ref+":"+artifact.Digest)
+	}
+	sort.Strings(files)
+	builder.WriteString("\n<runtime-revision-delta>\n")
+	builder.WriteString("revision=" + input.RuntimeRevisionRef + ":" + strconv.FormatInt(input.RuntimeRevisionVersion, 10) + ":" + input.RuntimeRevisionDigest + "\n")
+	builder.WriteString("attempt=" + strconv.FormatInt(int64(input.Attempt), 10) + "\n")
+	builder.WriteString("model=" + input.Model + "\nreasoning=" + overlay.ModelReasoningEffort + "\n")
+	builder.WriteString("image=" + input.ImageReference + ":" + input.ImageManifestDigest + "\n")
+	builder.WriteString("tools=" + strings.Join(toolNames, ",") + "\n")
+	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + "\n")
+	builder.WriteString("files=" + input.AttachmentSetManifestDigest + ":" + strings.Join(files, ",") + "\n")
+	builder.WriteString("config=" + input.RuntimeConfigRef + ":" + input.RuntimeConfigDigest + ":" + input.ConfigOverlayRef + ":" + input.ConfigOverlayDigest + "\n")
+	builder.WriteString("</runtime-revision-delta>\n")
+	for _, name := range []string{"workflow-stage", "automation", "session-continuation", "effective-capabilities"} {
+		block, blockErr := materializedServiceBlock(input.Instructions, name)
+		if blockErr != nil {
+			return blockErr
+		}
+		builder.WriteString(block)
+		builder.WriteByte('\n')
+	}
+	return nil
+}
+
+func validateMaterializedInstructions(input model.Input) error {
+	value := input.Instructions
+	if strings.TrimSpace(value) == "" || len(value) > 1<<20 || !utf8.ValidString(value) ||
+		strings.Contains(value, "{{") || strings.Contains(value, "}}") {
+		return errors.New("server-materialized instructions are invalid")
+	}
+	usedKinds := 0
+	for _, name := range []string{"workflow-stage", "automation", "session-continuation"} {
+		block, err := materializedServiceBlock(value, name)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(block, `used="true"`) {
+			usedKinds++
+		}
+	}
+	capabilities, err := materializedServiceBlock(value, "effective-capabilities")
+	if err != nil || usedKinds > 1 {
+		return errors.New("server-materialized service blocks are invalid")
+	}
+	expected := append([]string(nil), input.Capabilities...)
+	sort.Strings(expected)
+	want := `<effective-capabilities used="false">unused</effective-capabilities>`
+	if len(expected) != 0 {
+		want = `<effective-capabilities used="true">` + strings.Join(expected, ",") + `</effective-capabilities>`
+	}
+	if capabilities != want {
+		return errors.New("server-materialized capability block is invalid")
+	}
+	if input.CodexSessionID != "" {
+		continuation, _ := materializedServiceBlock(value, "session-continuation")
+		if !strings.Contains(continuation, `used="true"`) {
+			return errors.New("server-materialized continuation block is missing")
+		}
+	}
+	return nil
+}
+
+func materializedServiceBlock(value, name string) (string, error) {
+	trueOpen := "<" + name + ` used="true">`
+	falseOpen := "<" + name + ` used="false">`
+	closeTag := "</" + name + ">"
+	if strings.Count(value, trueOpen)+strings.Count(value, falseOpen) != 1 || strings.Count(value, closeTag) != 1 {
+		return "", errors.New("server-materialized service block is invalid")
+	}
+	start := strings.Index(value, trueOpen)
+	open := trueOpen
+	if start < 0 {
+		start, open = strings.Index(value, falseOpen), falseOpen
+	}
+	end := strings.Index(value[start+len(open):], closeTag)
+	if start < 0 || end < 0 {
+		return "", errors.New("server-materialized service block is invalid")
+	}
+	end += start + len(open) + len(closeTag)
+	return value[start:end], nil
 }
 
 func appendAttachmentNotice(builder *strings.Builder, input model.Input) error {
@@ -406,38 +470,10 @@ func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope stri
 }
 
 func renderInstructions(input model.Input) (string, error) {
-	parsed, err := template.New("instructions").Option("missingkey=error").Parse(input.Instructions)
-	if err != nil {
-		return "", errors.New("parse instruction template")
-	}
-	variables, err := promptTemplateVariables(input)
-	if err != nil {
+	if err := validateMaterializedInstructions(input); err != nil {
 		return "", err
 	}
-	var rendered strings.Builder
-	if err := parsed.Execute(&rendered, variables); err != nil {
-		return "", errors.New("render instruction template")
-	}
-	if len(input.EnvironmentTools) > 0 {
-		rendered.WriteString("\n\n# Verified runtime tools\n")
-		rendered.WriteString("Only the following environment-selected executables are declared available for this runtime revision:\n")
-		for _, tool := range input.EnvironmentTools {
-			rendered.WriteString("\n- `")
-			rendered.WriteString(tool.Command)
-			rendered.WriteString("` — ")
-			rendered.WriteString(tool.Description)
-			if tool.UsageHint != "" {
-				rendered.WriteString(" (")
-				rendered.WriteString(tool.UsageHint)
-				rendered.WriteString(")")
-			}
-		}
-		rendered.WriteString("\n")
-	}
-	if rendered.Len() == 0 || rendered.Len() > 1<<20 || !utf8.ValidString(rendered.String()) {
-		return "", errors.New("rendered instructions are invalid")
-	}
-	return rendered.String(), nil
+	return input.Instructions, nil
 }
 
 func promptTemplateVariables(input model.Input) (map[string]any, error) {

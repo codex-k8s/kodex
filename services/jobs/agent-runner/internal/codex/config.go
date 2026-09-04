@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -17,6 +19,29 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+var runtimeModelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var ErrRuntimeProfile = errors.New("Codex runtime profile is invalid")
+
+func ValidateRuntimeProfile(input model.Input) error {
+	if input.Validate() != nil || input.Provider != "openai" || !runtimeModelPattern.MatchString(input.Model) {
+		return ErrRuntimeProfile
+	}
+	if _, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay); err != nil {
+		return ErrRuntimeProfile
+	}
+	for _, tool := range input.EnvironmentTools {
+		path, err := exec.LookPath(tool.Command)
+		if err != nil {
+			return ErrRuntimeProfile
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			return ErrRuntimeProfile
+		}
+	}
+	return nil
+}
 
 type runtimeConfig struct {
 	Model                  string                       `toml:"model"`

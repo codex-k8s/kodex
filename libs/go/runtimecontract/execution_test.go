@@ -22,6 +22,7 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 		Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER", AttachmentSetRef: input.AttachmentSetRef,
 		AttachmentPurpose: input.AttachmentContext, Provenance: "CURRENT_TURN",
 	}}
+	refreshRunnerInputBindings(&input)
 	if _, err := EncodeRunnerInput(input); err != nil {
 		t.Fatalf("EncodeRunnerInput() rejected a valid artifact catalog: %v", err)
 	}
@@ -151,6 +152,44 @@ func TestRunnerInputRequiresExactRevisionAndSTTBindings(t *testing.T) {
 	}
 }
 
+func TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant(t *testing.T) {
+	base := validRunnerInputFixture()
+	base.Capabilities = []string{"crm.read"}
+	base.IntegrationGrants = []RunnerIntegrationGrant{{Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh",
+		DefinitionKey: "crm", ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM", Risk: "READ"}}
+	refreshRunnerInputBindings(&base)
+	for name, mutate := range map[string]func(*RunnerInput){
+		"model": func(input *RunnerInput) { input.Model = "caller-model" },
+		"reasoning": func(input *RunnerInput) {
+			input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
+			_, input.ConfigOverlayDigest, _ = CanonicalConfigOverlay(input.ConfigOverlay)
+		},
+		"prompt": func(input *RunnerInput) { input.Instructions += " caller text" },
+		"image": func(input *RunnerInput) {
+			input.ImageReference = "registry.example/roles@sha256:" + strings.Repeat("f", 64)
+			input.ImageManifestDigest = "sha256:" + strings.Repeat("f", 64)
+			input.EnvironmentImage.Reference, input.EnvironmentImage.Digest = input.ImageReference, input.ImageManifestDigest
+			input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+		},
+		"tool": func(input *RunnerInput) {
+			input.EnvironmentTools = []RuntimeEnvironmentTool{{Name: "Foreign", Command: "foreign", Description: "Foreign tool"}}
+			input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+		},
+		"MCP grant":     func(input *RunnerInput) { input.IntegrationGrants[0].CapabilityKey = "crm.write" },
+		"revoked grant": func(input *RunnerInput) { input.IntegrationGrants = nil },
+		"file":          func(input *RunnerInput) { input.AttachmentSetManifestDigest = strings.Repeat("f", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := base
+			input.IntegrationGrants = append([]RunnerIntegrationGrant(nil), base.IntegrationGrants...)
+			mutate(&input)
+			if input.Validate() == nil {
+				t.Fatal("mutable or caller-supplied RuntimeRevision drift was accepted")
+			}
+		})
+	}
+}
+
 func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 	valid := TokenUsage{TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
 		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5, ModelContextWindow: 200000}
@@ -174,7 +213,7 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 }
 
 func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
-	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Success: true,
+	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Attempt: 1, Success: true,
 		ResultSummary: "done", CodexSessionID: "00000000-0000-4000-8000-000000000001",
 		ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000001.jsonl",
 		ArchiveSHA256:       strings.Repeat("c", 64), ArchiveSizeBytes: 1024}

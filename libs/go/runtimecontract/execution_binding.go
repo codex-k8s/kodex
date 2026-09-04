@@ -34,48 +34,48 @@ type runtimeExecutionIdentity struct {
 }
 
 type runtimeMaterializationBinding struct {
-	Identity                       runtimeExecutionIdentity     `json:"identity"`
-	Provider                       string                       `json:"provider"`
-	Model                          string                       `json:"model"`
-	Instructions                   string                       `json:"instructions"`
-	InstructionRef                 string                       `json:"instruction_ref"`
-	InstructionDigest              string                       `json:"instruction_digest"`
-	PromptTemplateRef              string                       `json:"prompt_template_ref"`
-	PromptTemplateDigest           string                       `json:"prompt_template_digest"`
-	PromptMaterializationDigest    string                       `json:"prompt_materialization_digest"`
-	RuntimeConfigRef               string                       `json:"runtime_config_ref"`
-	RuntimeConfigVersion           int64                        `json:"runtime_config_version"`
-	RuntimeConfigDigest            string                       `json:"runtime_config_digest"`
-	ProviderPolicyRef              string                       `json:"provider_policy_ref"`
-	ProviderPolicyVersion          int64                        `json:"provider_policy_version"`
-	ProviderPolicyDigest           string                       `json:"provider_policy_digest"`
-	ConfigOverlayRef               string                       `json:"config_overlay_ref"`
-	ConfigOverlayVersion           int64                        `json:"config_overlay_version"`
-	ConfigOverlayDigest            string                       `json:"config_overlay_digest"`
-	ConfigOverlay                  string                       `json:"config_overlay"`
-	RuntimeEnvironmentRef          string                       `json:"runtime_environment_ref"`
-	RuntimeEnvironmentVersion      int64                        `json:"runtime_environment_version"`
-	RuntimeEnvironmentDigest       string                       `json:"runtime_environment_digest"`
-	EnvironmentBindingRef          string                       `json:"environment_binding_ref"`
-	EnvironmentBindingVersion      int64                        `json:"environment_binding_version"`
-	EnvironmentBindingDigest       string                       `json:"environment_binding_digest"`
-	ImageReference                 string                       `json:"image_reference"`
-	ImageManifestDigest            string                       `json:"image_manifest_digest"`
-	EnvironmentImage              RuntimeEnvironmentImage      `json:"environment_image"`
-	EnvironmentTools              []RuntimeEnvironmentTool     `json:"environment_tools"`
-	EnvironmentValues             []RuntimeEnvironmentValue    `json:"environment_values"`
-	SecretProjections             []RuntimeSecretProjection    `json:"secret_projections"`
-	Capabilities                  []string                      `json:"capabilities"`
-	DelegationTargets             []RunnerDelegationTarget     `json:"delegation_targets"`
-	IntegrationGrants             []RunnerIntegrationGrant     `json:"integration_grants"`
-	AttachmentSets                []RunnerAttachmentSet         `json:"attachment_sets"`
-	InputArtifacts                []RunnerInputArtifact         `json:"input_artifacts"`
-	SessionContext                []RunnerSessionMessage        `json:"session_context"`
-	BoundedInput                  map[string]any                 `json:"bounded_input"`
-	WorkspacePolicy               RuntimeWorkspacePolicy       `json:"workspace_policy"`
-	CodexSandbox                  string                        `json:"codex_sandbox"`
-	CodexApprovalPolicy           string                        `json:"codex_approval_policy"`
-	CodexSessionID                string                        `json:"codex_session_id"`
+	Identity                    runtimeExecutionIdentity  `json:"identity"`
+	Provider                    string                    `json:"provider"`
+	Model                       string                    `json:"model"`
+	Instructions                string                    `json:"instructions"`
+	InstructionRef              string                    `json:"instruction_ref"`
+	InstructionDigest           string                    `json:"instruction_digest"`
+	PromptTemplateRef           string                    `json:"prompt_template_ref"`
+	PromptTemplateDigest        string                    `json:"prompt_template_digest"`
+	PromptMaterializationDigest string                    `json:"prompt_materialization_digest"`
+	RuntimeConfigRef            string                    `json:"runtime_config_ref"`
+	RuntimeConfigVersion        int64                     `json:"runtime_config_version"`
+	RuntimeConfigDigest         string                    `json:"runtime_config_digest"`
+	ProviderPolicyRef           string                    `json:"provider_policy_ref"`
+	ProviderPolicyVersion       int64                     `json:"provider_policy_version"`
+	ProviderPolicyDigest        string                    `json:"provider_policy_digest"`
+	ConfigOverlayRef            string                    `json:"config_overlay_ref"`
+	ConfigOverlayVersion        int64                     `json:"config_overlay_version"`
+	ConfigOverlayDigest         string                    `json:"config_overlay_digest"`
+	ConfigOverlay               string                    `json:"config_overlay"`
+	RuntimeEnvironmentRef       string                    `json:"runtime_environment_ref"`
+	RuntimeEnvironmentVersion   int64                     `json:"runtime_environment_version"`
+	RuntimeEnvironmentDigest    string                    `json:"runtime_environment_digest"`
+	EnvironmentBindingRef       string                    `json:"environment_binding_ref"`
+	EnvironmentBindingVersion   int64                     `json:"environment_binding_version"`
+	EnvironmentBindingDigest    string                    `json:"environment_binding_digest"`
+	ImageReference              string                    `json:"image_reference"`
+	ImageManifestDigest         string                    `json:"image_manifest_digest"`
+	EnvironmentImage            RuntimeEnvironmentImage   `json:"environment_image"`
+	EnvironmentTools            []RuntimeEnvironmentTool  `json:"environment_tools"`
+	EnvironmentValues           []RuntimeEnvironmentValue `json:"environment_values"`
+	SecretProjections           []RuntimeSecretProjection `json:"secret_projections"`
+	Capabilities                []string                  `json:"capabilities"`
+	DelegationTargets           []RunnerDelegationTarget  `json:"delegation_targets"`
+	IntegrationGrants           []RunnerIntegrationGrant  `json:"integration_grants"`
+	AttachmentSets              []RunnerAttachmentSet     `json:"attachment_sets"`
+	InputArtifacts              []RunnerInputArtifact     `json:"input_artifacts"`
+	SessionContext              []RunnerSessionMessage    `json:"session_context"`
+	BoundedInput                map[string]any            `json:"bounded_input"`
+	WorkspacePolicy             RuntimeWorkspacePolicy    `json:"workspace_policy"`
+	CodexSandbox                string                    `json:"codex_sandbox"`
+	CodexApprovalPolicy         string                    `json:"codex_approval_policy"`
+	CodexSessionID              string                    `json:"codex_session_id"`
 }
 
 func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
@@ -95,7 +95,7 @@ func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
 		InstructionRef: input.InstructionRef, InstructionDigest: input.InstructionDigest,
 		PromptTemplateRef: input.PromptTemplateRef, PromptTemplateDigest: input.PromptTemplateDigest,
 		PromptMaterializationDigest: input.PromptMaterializationDigest,
-		RuntimeConfigRef: input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
+		RuntimeConfigRef:            input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
 		ProviderPolicyRef: input.ProviderPolicyRef, ProviderPolicyVersion: input.ProviderPolicyVersion, ProviderPolicyDigest: input.ProviderPolicyDigest,
 		ConfigOverlayRef: input.ConfigOverlayRef, ConfigOverlayVersion: input.ConfigOverlayVersion,
 		ConfigOverlayDigest: input.ConfigOverlayDigest, ConfigOverlay: input.ConfigOverlay,

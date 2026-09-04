@@ -101,7 +101,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	if err := server.waitRequiredMCP(ctx, state, requiredMCPToolNames(input)); err != nil {
+	if err := server.waitRequiredMCP(ctx, state, RequiredMCPToolNames(input)); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := state.captureUsageBaseline(); err != nil {
@@ -256,7 +256,7 @@ func (server *appServer) waitRequiredMCP(ctx context.Context, state *protocolSta
 	}
 }
 
-func requiredMCPToolNames(input model.Input) []string {
+func RequiredMCPToolNames(input model.Input) []string {
 	result := []string{"propose_run_metadata"}
 	if input.SystemAssistant {
 		result = append(result, "get_configuration_catalog", "propose_configuration_plan", "propose_assistant_metadata")

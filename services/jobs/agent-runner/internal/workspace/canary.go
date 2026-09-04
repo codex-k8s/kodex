@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -15,6 +16,15 @@ import (
 )
 
 type Denial struct{ Reason string }
+
+type ResultProvenance struct {
+	Schema                 string `json:"schema"`
+	RuntimeRevisionRef     string `json:"runtime_revision_ref"`
+	RuntimeRevisionVersion int64  `json:"runtime_revision_version"`
+	RuntimeRevisionDigest  string `json:"runtime_revision_digest"`
+	Attempt                int32  `json:"attempt"`
+	ExecutionBindingDigest string `json:"execution_binding_digest"`
+}
 
 func (denial *Denial) Error() string { return "workspace readiness denied: " + denial.Reason }
 
@@ -40,8 +50,9 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if err != nil {
 		return err
 	}
-	const payload = "kodex-workspace-readiness\n"
-	if !withinQuota(usage, files, int64(len(payload)), policy) {
+	const initialPayload = "kodex-workspace-create\n"
+	const replacementPayload = "kodex-workspace-replace\n"
+	if !withinQuota(usage, files, int64(len(initialPayload)+len(replacementPayload)), policy) {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
 	}
 	directory, err := openDirectory(root, ".kodex/outbox")
@@ -53,15 +64,25 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if _, err := rand.Read(nonce); err != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
-	temporary := ".readiness-next-" + stringHex(nonce)
-	committed := ".readiness-current-" + stringHex(nonce)
-	defer unix.Unlinkat(directory, temporary, 0)
-	defer unix.Unlinkat(directory, committed, 0)
-	file, err := unix.Openat(directory, temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	nested := ".readiness-" + stringHex(nonce)
+	if err := unix.Mkdirat(directory, nested, 0o700); err != nil {
+		return classify(err)
+	}
+	defer unix.Unlinkat(directory, nested, unix.AT_REMOVEDIR)
+	nestedDirectory, err := unix.Openat(directory, nested, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return classify(err)
 	}
-	if _, err = unix.Write(file, []byte(payload)); err == nil {
+	defer unix.Close(nestedDirectory)
+	const current = "current.txt"
+	const temporary = "current.txt.next"
+	defer unix.Unlinkat(nestedDirectory, temporary, 0)
+	defer unix.Unlinkat(nestedDirectory, current, 0)
+	file, err := unix.Openat(nestedDirectory, current, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return classify(err)
+	}
+	if _, err = unix.Write(file, []byte(initialPayload)); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr := unix.Close(file)
@@ -71,23 +92,95 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if closeErr != nil {
 		return classify(closeErr)
 	}
-	if err = unix.Renameat(directory, temporary, directory, committed); err != nil {
-		return classify(err)
+	if err := verifyFile(nestedDirectory, current, initialPayload); err != nil {
+		return err
 	}
-	if err = unix.Fsync(directory); err != nil {
-		return classify(err)
-	}
-	file, err = unix.Openat(directory, committed, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	file, err = unix.Openat(nestedDirectory, temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		return classify(err)
 	}
-	buffer := make([]byte, len(payload)+1)
-	read, readErr := unix.Read(file, buffer)
+	if _, err = unix.Write(file, []byte(replacementPayload)); err == nil {
+		err = unix.Fsync(file)
+	}
 	closeErr = unix.Close(file)
-	if readErr != nil || closeErr != nil || read != len(payload) || string(buffer[:read]) != payload {
+	if err != nil || closeErr != nil {
+		return classify(errors.Join(err, closeErr))
+	}
+	if err = unix.Renameat(nestedDirectory, temporary, nestedDirectory, current); err != nil {
+		return classify(err)
+	}
+	if err = unix.Fsync(nestedDirectory); err != nil {
+		return classify(err)
+	}
+	if err := verifyFile(nestedDirectory, current, replacementPayload); err != nil {
+		return err
+	}
+	if err = unix.Unlinkat(nestedDirectory, current, 0); err != nil {
+		return classify(err)
+	}
+	if err = unix.Fsync(nestedDirectory); err != nil {
+		return classify(err)
+	}
+	if err = unix.Close(nestedDirectory); err != nil {
+		return classify(err)
+	}
+	nestedDirectory = -1
+	if err = unix.Unlinkat(directory, nested, unix.AT_REMOVEDIR); err != nil {
+		return classify(err)
+	}
+	return nil
+}
+
+func verifyFile(directory int, name, expected string) error {
+	file, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return classify(err)
+	}
+	buffer := make([]byte, len(expected)+1)
+	read, readErr := unix.Read(file, buffer)
+	closeErr := unix.Close(file)
+	if readErr != nil || closeErr != nil || read != len(expected) || string(buffer[:read]) != expected {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
-	if err = unix.Unlinkat(directory, committed, 0); err != nil {
+	return nil
+}
+
+func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, provenance ResultProvenance) error {
+	if provenance.Schema != "kodex.workspace-write-result.v1" || provenance.RuntimeRevisionRef == "" ||
+		provenance.RuntimeRevisionVersion < 1 || len(provenance.RuntimeRevisionDigest) != 64 ||
+		provenance.Attempt < 1 || len(provenance.ExecutionBindingDigest) != 64 {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+	}
+	raw, err := json.Marshal(provenance)
+	if err != nil {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+	}
+	raw = append(raw, '\n')
+	if access, reason := policy.AccessForPath(".kodex/outbox/workspace-write-result.json"); reason != "" || access != runtimecontract.RuntimeWorkspaceWritable {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceReadOnly}
+	}
+	directory, err := openDirectory(root, ".kodex/outbox")
+	if err != nil {
+		return classify(err)
+	}
+	defer unix.Close(directory)
+	const temporary = ".workspace-write-result.next"
+	const committed = "workspace-write-result.json"
+	_ = unix.Unlinkat(directory, temporary, 0)
+	file, err := unix.Openat(directory, temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return classify(err)
+	}
+	if _, err = unix.Write(file, raw); err == nil {
+		err = unix.Fsync(file)
+	}
+	closeErr := unix.Close(file)
+	if err != nil || closeErr != nil {
+		_ = unix.Unlinkat(directory, temporary, 0)
+		return classify(errors.Join(err, closeErr))
+	}
+	if err = unix.Renameat(directory, temporary, directory, committed); err != nil {
+		_ = unix.Unlinkat(directory, temporary, 0)
 		return classify(err)
 	}
 	if err = unix.Fsync(directory); err != nil {

@@ -93,7 +93,7 @@ func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 	input := model.Input{SystemAssistant: true}
 	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})
 	input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{})
-	actual := requiredMCPToolNames(input)
+	actual := RequiredMCPToolNames(input)
 	expected := []string{
 		"propose_run_metadata",
 		"get_configuration_catalog",

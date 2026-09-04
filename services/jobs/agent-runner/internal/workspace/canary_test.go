@@ -1,9 +1,11 @@
 package workspace
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -30,6 +32,30 @@ func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 	}
 }
 
+func TestPublishResultCarriesExactAttemptProvenance(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	provenance := ResultProvenance{Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: "rrev_abcdefgh",
+		RuntimeRevisionVersion: 7, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3,
+		ExecutionBindingDigest: strings.Repeat("b", 64)}
+	if err := PublishResult(root, testPolicy(), provenance); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, ".kodex/outbox/workspace-write-result.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual ResultProvenance
+	if json.Unmarshal(raw, &actual) != nil || actual != provenance {
+		t.Fatalf("published provenance = %#v, want %#v", actual, provenance)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".kodex/outbox/.workspace-write-result.next")); !os.IsNotExist(err) {
+		t.Fatalf("temporary result survived atomic replace: %v", err)
+	}
+}
+
 func TestRunCanaryRejectsSymlinkEscape(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex"), 0o770); err != nil {
@@ -51,6 +77,16 @@ func TestWorkspaceDenialsAreExactAndDoNotContainPaths(t *testing.T) {
 	}
 	if _, reason := policy.AccessForPath("/workspace/../foreign"); reason != runtimecontract.RuntimeWorkspacePathOutsideWorkspace {
 		t.Fatalf("traversal reason=%q", reason)
+	}
+	for _, protected := range []string{"/workspace/input/file", "/workspace/knowledge/memory.md", "/workspace/.kodex/state/codex-home/auth.json"} {
+		if access, reason := policy.AccessForPath(protected); access != runtimecontract.RuntimeWorkspaceReadOnly || reason != "" {
+			t.Fatalf("protected path %q policy=(%q,%q)", protected, access, reason)
+		}
+	}
+	for _, escaped := range []string{"/foreign/workspace/result", "../foreign", "/workspace/out/../../credential"} {
+		if _, reason := policy.AccessForPath(escaped); reason != runtimecontract.RuntimeWorkspacePathOutsideWorkspace {
+			t.Fatalf("escape path %q reason=%q", escaped, reason)
+		}
 	}
 	if withinQuota(policy.MaximumWritableBytes, 0, 1, policy) || withinQuota(0, policy.MaximumFileCount, 1, policy) {
 		t.Fatal("quota overflow accepted")
