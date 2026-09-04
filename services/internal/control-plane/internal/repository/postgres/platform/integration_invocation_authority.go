@@ -14,6 +14,29 @@ import (
 //go:embed sql/integration_invocation_authorize_completion.sql
 var queryIntegrationInvocationAuthorizeCompletion string
 
+//go:embed sql/integration_test_authorize_completion.sql
+var queryIntegrationTestAuthorizeCompletion string
+
+func (repository *Repository) authorizeIntegrationTestCompletion(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
+	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
+		return err
+	}
+	payload, ok := input.Payload.(command.IntegrationConnectionTestInput)
+	if !ok {
+		return errs.ErrInvalid
+	}
+	digest := sha256.Sum256([]byte(payload.Fence))
+	var allowed bool
+	if err := tx.QueryRow(ctx, queryIntegrationTestAuthorizeCompletion, current.organizationID, payload.TestRef, input.Principal.CallerWorkload,
+		payload.LeaseRef, hex.EncodeToString(digest[:]), payload.Generation).Scan(&allowed); err != nil {
+		return errs.ErrUnavailable
+	}
+	if !allowed {
+		return errs.ErrForbidden
+	}
+	return nil
+}
+
 func (repository *Repository) authorizeIntegrationCompletion(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
 		return err

@@ -290,6 +290,7 @@ func TestBootstrapComponent(t *testing.T) {
 		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
 	})
 	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
+	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
 }
 
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {

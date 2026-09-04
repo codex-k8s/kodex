@@ -157,7 +157,31 @@ updated: 2026-09-05
   Полный PostgreSQL suite, render и race для этого checkpoint: NOT RUN.
   Внешнего Mattermost вызова тест не выполняет; consumer реализует root #1030.
 
-## Остаток полного unit
+## Шестая промежуточная передача: credentials и tests
+
+- `InteractionSource.credential_descriptor=11` и
+  `InteractionDeliveryClaim.credential_descriptor=19` имеют существующий тип
+  `IntegrationCredentialRevision`. SQL проверяет exact connection/organization
+  revision; source/delivery без descriptor не выдаётся. Legacy ref сохранён
+  только для wire compatibility, не как право чтения произвольного Secret key.
+- Policy revision 49 добавляет
+  `platform.interactions.connection-tests.claim/complete` для существующих
+  `RuntimeWorkService.ClaimIntegrationConnectionTests/CompleteIntegrationConnectionTest`.
+  Claim/expiry фильтруют server-derived workload/route; durable workload/lease/fence
+  проверяются перед idempotency replay. Generic и interaction worker разделены.
+- SQL RuntimeRevision, resolve и claim invocation исключают exact операции
+  `mattermost.inbound` и `mattermost.gate_decisions` из agent-callable набора,
+  сохраняя системные grants. Подключение общего Capability.CallableByAgent
+  ожидает shared registry checkpoint root #1030; этот файл здесь не дублируется.
+- Полный PostgreSQL suite с typed descriptor: PASS локально. Дополнительный
+  targeted `integration connection tests bind exact workload before replay`:
+  PASS; проверены claim изоляция, чужой workload с известным fence, success,
+  replay и отказ чужому workload на terminal receipt.
+- `lint-proto`, `check-proto-codegen`, `test-authority-policy-codegen`: PASS.
+  Targeted Go transport/domain/repository: PASS.
+  Render policy 49, race и actual HTTPS Mattermost: NOT RUN на этой передаче.
+
+## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
 revision impact и selected rebind secrets; проверка Git lifecycle;

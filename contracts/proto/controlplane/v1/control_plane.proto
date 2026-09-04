@@ -3137,6 +3137,7 @@ message InteractionSource {
   int64 connection_version = 8;
   string credential_revision_ref = 9;
   int64 credential_revision = 10;
+  IntegrationCredentialRevision credential_descriptor = 11;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3162,6 +3163,7 @@ message InteractionDeliveryClaim {
   string external_channel_ref = 16;
   string external_root_post_ref = 17;
   string acceptance_receipt_ref = 18;
+  IntegrationCredentialRevision credential_descriptor = 19;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;

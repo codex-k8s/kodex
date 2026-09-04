@@ -351,12 +351,14 @@ func IntegrationGatewayOperations() map[string]string {
 
 func InteractionGatewayOperations() map[string]string {
 	return map[string]string{
-		"platform.interactions.invocations.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
-		"platform.interactions.invocations.complete": controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
-		"platform.interactions.sources.list":         controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
-		"platform.interactions.deliveries.claim":     controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
-		"platform.interactions.deliveries.complete":  controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
-		"platform.interactions.messages.accept":      controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
+		"platform.interactions.connection-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
+		"platform.interactions.connection-tests.complete": controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
+		"platform.interactions.invocations.claim":         controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.interactions.invocations.complete":      controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+		"platform.interactions.sources.list":              controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
+		"platform.interactions.deliveries.claim":          controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
+		"platform.interactions.deliveries.complete":       controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
+		"platform.interactions.messages.accept":           controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
 	}
 }
 

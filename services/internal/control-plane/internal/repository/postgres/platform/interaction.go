@@ -63,12 +63,16 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 		var connectionRef, credentialRef, baseURL, teamName, channelName, locale string
 		var credentialRevisionRef string
 		var connectionVersion, credentialRevision int64
+		var credential entity.IntegrationCredentialRevision
 		var capabilities []string
 		if err := rows.Scan(&connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale, &capabilities,
-			&connectionVersion, &credentialRevisionRef, &credentialRevision); err != nil {
+			&connectionVersion, &credentialRevisionRef, &credentialRevision, &credential.SecretRef, &credential.SecretUID,
+			&credential.SecretResourceVersion, &credential.ContentSHA256, &credential.CreatedAt); err != nil {
 			return nil, errs.ErrUnavailable
 		}
+		credential.Ref, credential.Revision = credentialRevisionRef, credentialRevision
 		result = append(result, map[string]any{
+			"credential":    credential,
 			"connectionRef": connectionRef, "credentialRef": credentialRef,
 			"baseURL": baseURL, "teamName": teamName, "channelName": channelName,
 			"locale": locale, "capabilities": capabilities,
@@ -103,6 +107,7 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		var generation int64
 		var gateRef, runRef string
 		var externalTeam, externalChannel, externalRoot, receiptRef string
+		var credential entity.IntegrationCredentialRevision
 		var gateVersion int64
 		var expiresAt any
 		if err := rows.Scan(
@@ -110,6 +115,8 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 			&capabilityKey, &messageKey, &templateRaw, &leaseRef, &fence, &generation, &expiresAt,
 			&gateRef, &gateVersion, &runRef,
 			&externalTeam, &externalChannel, &externalRoot, &receiptRef,
+			&credential.Ref, &credential.Revision, &credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
+			&credential.ContentSHA256, &credential.CreatedAt,
 		); err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -119,7 +126,8 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		}
 		result = append(result, map[string]any{
 			"deliveryRef": deliveryRef, "connectionRef": connectionRef, "credentialRef": credentialRef,
-			"baseURL": baseURL, "teamName": teamName, "channelName": channelName, "locale": locale,
+			"credential": credential,
+			"baseURL":    baseURL, "teamName": teamName, "channelName": channelName, "locale": locale,
 			"capabilityKey": capabilityKey, "messageKey": messageKey, "templateData": templateData,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 			"gateRef": gateRef, "gateVersion": gateVersion, "runRef": runRef,

@@ -21,6 +21,11 @@ WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
       (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
   AND d.adapter_readiness='READY'
   AND EXISTS (
+      SELECT 1 FROM jsonb_array_elements(d.capabilities) capability
+      WHERE capability->>'key'=g.capability_key
+        AND capability->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
+  )
+  AND EXISTS (
     SELECT 1 FROM control_plane.runtime_revisions revision,
       jsonb_array_elements(COALESCE(revision.safe_snapshot->'integrationGrants','[]'::jsonb)) binding
     WHERE revision.node_id=n.id AND revision.organization_id=r.organization_id

@@ -19,11 +19,12 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask,
-		command.CompleteConnectionTest,
 		command.CompleteInteractionDelivery:
 		return nil
 	case command.CompleteIntegrationInvocation:
 		return repository.authorizeIntegrationCompletion(ctx, tx, current, input)
+	case command.CompleteConnectionTest:
+		return repository.authorizeIntegrationTestCompletion(ctx, tx, current, input)
 	case command.AcceptInteractionMessage:
 		payload, ok := input.Payload.(command.InteractionMessageInput)
 		if !ok {
