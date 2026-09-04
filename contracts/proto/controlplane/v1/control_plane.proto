@@ -12,6 +12,12 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
+  rpc GetSkillBundle(GetSkillBundleRequest) returns (GetSkillBundleResponse);
+  rpc ListSkillBundleRevisions(ListSkillBundleRevisionsRequest) returns (ListSkillBundleRevisionsResponse);
+  rpc ListMemoryRecords(ListMemoryRecordsRequest) returns (ListMemoryRecordsResponse);
+  rpc GetMemoryRecord(GetMemoryRecordRequest) returns (GetMemoryRecordResponse);
+  rpc ListMemoryRecordRevisions(ListMemoryRecordRevisionsRequest) returns (ListMemoryRecordRevisionsResponse);
   rpc GetBootstrapState(GetBootstrapStateRequest) returns (GetBootstrapStateResponse);
   rpc GetPlatformEventCursor(GetPlatformEventCursorRequest) returns (GetPlatformEventCursorResponse);
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
@@ -81,6 +87,24 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
+  rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
+  rpc ValidateSkillBundleDraft(ValidateSkillBundleDraftRequest) returns (ValidateSkillBundleDraftResponse);
+  rpc ReviewSkillBundleDraft(ReviewSkillBundleDraftRequest) returns (ReviewSkillBundleDraftResponse);
+  rpc PublishSkillBundleDraft(PublishSkillBundleDraftRequest) returns (PublishSkillBundleDraftResponse);
+  rpc DiscardSkillBundleDraft(DiscardSkillBundleDraftRequest) returns (DiscardSkillBundleDraftResponse);
+  rpc ArchiveSkillBundle(ArchiveSkillBundleRequest) returns (ArchiveSkillBundleResponse);
+  rpc RestoreSkillBundle(RestoreSkillBundleRequest) returns (RestoreSkillBundleResponse);
+  rpc PurgeSkillBundle(PurgeSkillBundleRequest) returns (PurgeSkillBundleResponse);
+  rpc BindAgentSkillBundle(BindAgentSkillBundleRequest) returns (BindAgentSkillBundleResponse);
+  rpc UnbindAgentSkillBundle(UnbindAgentSkillBundleRequest) returns (UnbindAgentSkillBundleResponse);
+  rpc CreateMemoryRecord(CreateMemoryRecordRequest) returns (CreateMemoryRecordResponse);
+  rpc ReviseMemoryRecord(ReviseMemoryRecordRequest) returns (ReviseMemoryRecordResponse);
+  rpc ArchiveMemoryRecord(ArchiveMemoryRecordRequest) returns (ArchiveMemoryRecordResponse);
+  rpc RestoreMemoryRecord(RestoreMemoryRecordRequest) returns (RestoreMemoryRecordResponse);
+  rpc PurgeMemoryRecord(PurgeMemoryRecordRequest) returns (PurgeMemoryRecordResponse);
+  rpc BindAgentMemoryRecord(BindAgentMemoryRecordRequest) returns (BindAgentMemoryRecordResponse);
+  rpc UnbindAgentMemoryRecord(UnbindAgentMemoryRecordRequest) returns (UnbindAgentMemoryRecordResponse);
   rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
   rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
   rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
@@ -4649,6 +4673,277 @@ message GetManagedConfigurationImpactRequest {
   string revision_ref = 2;
 }
 message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
+
+// Typed context отделяет Skill и Kodex memory от instructions и обычных artifacts.
+enum ContextResourceState {
+  CONTEXT_RESOURCE_STATE_UNSPECIFIED = 0;
+  CONTEXT_RESOURCE_STATE_ACTIVE = 1;
+  CONTEXT_RESOURCE_STATE_ARCHIVED = 2;
+  CONTEXT_RESOURCE_STATE_EXPIRED = 3;
+  CONTEXT_RESOURCE_STATE_PURGED = 4;
+}
+enum SkillRevisionState {
+  SKILL_REVISION_STATE_UNSPECIFIED = 0;
+  SKILL_REVISION_STATE_DRAFT = 1;
+  SKILL_REVISION_STATE_INVALID = 2;
+  SKILL_REVISION_STATE_VALIDATED = 3;
+  SKILL_REVISION_STATE_APPROVED = 4;
+  SKILL_REVISION_STATE_REJECTED = 5;
+  SKILL_REVISION_STATE_PUBLISHED = 6;
+  SKILL_REVISION_STATE_DISCARDED = 7;
+}
+enum SkillScanState {
+  SKILL_SCAN_STATE_UNSPECIFIED = 0;
+  SKILL_SCAN_STATE_PENDING = 1;
+  SKILL_SCAN_STATE_CLEAN = 2;
+  SKILL_SCAN_STATE_INFECTED = 3;
+  SKILL_SCAN_STATE_ERROR = 4;
+}
+enum SkillReviewDecision {
+  SKILL_REVIEW_DECISION_UNSPECIFIED = 0;
+  SKILL_REVIEW_DECISION_APPROVE = 1;
+  SKILL_REVIEW_DECISION_REJECT = 2;
+}
+// Provenance выводится из transport identity и проверенных owner records.
+message ContextProvenance {
+  string actor_ref = 1;
+  string source_kind = 2;
+  string source_ref = 3;
+  string source_revision = 4;
+  string digest = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+message SkillBundleFile {
+  string path = 1;
+  string artifact_ref = 2;
+  int64 artifact_revision = 3;
+  string digest = 4;
+  int64 size_bytes = 5;
+}
+message SkillBundleFileInput {
+  string path = 1;
+  string artifact_ref = 2;
+  int64 artifact_revision = 3;
+}
+message SkillBundleSpecification {
+  string name = 1;
+  string description = 2;
+  repeated SkillBundleFileInput files = 3;
+}
+message SkillBundleRevision {
+  string ref = 1;
+  int64 revision = 2;
+  SkillRevisionState state = 3;
+  string name = 4;
+  string description = 5;
+  repeated SkillBundleFile files = 6;
+  string digest = 7;
+  string parent_revision_ref = 8;
+  ContextProvenance provenance = 9;
+  SkillScanState scan_state = 10;
+  string scan_engine = 11;
+  string scan_digest = 12;
+  google.protobuf.Timestamp scanned_at = 13;
+  string reviewed_by = 14;
+  google.protobuf.Timestamp reviewed_at = 15;
+  repeated string diagnostics = 16;
+}
+message SkillBundle {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  ContextResourceState state = 4;
+  SkillBundleRevision current_revision = 5;
+  SkillBundleRevision draft_revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+message AgentContextBinding {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string resource_ref = 4;
+  string revision_ref = 5;
+  string digest = 6;
+}
+message MemoryRecordSpecification {
+  string title = 1;
+  string summary = 2;
+  string source_run_ref = 3;
+  google.protobuf.Timestamp retention_until = 4;
+}
+message MemoryRecordRevision {
+  string ref = 1;
+  int64 revision = 2;
+  string title = 3;
+  string summary = 4;
+  string digest = 5;
+  string parent_revision_ref = 6;
+  ContextProvenance provenance = 7;
+  google.protobuf.Timestamp retention_until = 8;
+  bool redacted = 9;
+}
+message KodexMemoryRecord {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string agent_ref = 4;
+  ContextResourceState state = 5;
+  MemoryRecordRevision current_revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListSkillBundlesRequest {
+  string project_ref = 1;
+  string agent_ref = 2;
+  string query = 3;
+  ContextResourceState state = 4;
+  PageRequest page = 5;
+}
+message ListSkillBundlesResponse {
+  repeated SkillBundle bundles = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+message GetSkillBundleRequest { string bundle_ref = 1; }
+message GetSkillBundleResponse { SkillBundle bundle = 1; }
+message ListSkillBundleRevisionsRequest {
+  string bundle_ref = 1;
+  PageRequest page = 2;
+}
+message ListSkillBundleRevisionsResponse {
+  repeated SkillBundleRevision revisions = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+
+message ListMemoryRecordsRequest {
+  string project_ref = 1;
+  string agent_ref = 2;
+  string query = 3;
+  ContextResourceState state = 4;
+  PageRequest page = 5;
+}
+message ListMemoryRecordsResponse {
+  repeated KodexMemoryRecord records = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+message GetMemoryRecordRequest { string record_ref = 1; }
+message GetMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ListMemoryRecordRevisionsRequest {
+  string record_ref = 1;
+  PageRequest page = 2;
+}
+message ListMemoryRecordRevisionsResponse {
+  repeated MemoryRecordRevision revisions = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+
+message CreateSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string bundle_ref = 3;
+  SkillBundleSpecification specification = 4;
+}
+message SaveSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  SkillBundleSpecification specification = 4;
+}
+message ReviewSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+  SkillReviewDecision decision = 5;
+  string comment = 6;
+}
+message CreateMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string agent_ref = 3;
+  MemoryRecordSpecification specification = 4;
+}
+message ReviseMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string record_ref = 2;
+  MemoryRecordSpecification specification = 3;
+}
+message ValidateSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message PublishSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message DiscardSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message ArchiveSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message RestoreSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message PurgeSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message BindAgentSkillBundleRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message BindAgentSkillBundleResponse { AgentContextBinding binding = 1; }
+message UnbindAgentSkillBundleRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message UnbindAgentSkillBundleResponse { AgentContextBinding binding = 1; }
+message ArchiveMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message RestoreMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message PurgeMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message BindAgentMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message BindAgentMemoryRecordResponse { AgentContextBinding binding = 1; }
+message UnbindAgentMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message UnbindAgentMemoryRecordResponse { AgentContextBinding binding = 1; }
+message CreateSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message SaveSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ValidateSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ReviewSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message PublishSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message DiscardSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ArchiveSkillBundleResponse { SkillBundle bundle = 1; }
+message RestoreSkillBundleResponse { SkillBundle bundle = 1; }
+message PurgeSkillBundleResponse { SkillBundle bundle = 1; }
+message CreateMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ReviseMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ArchiveMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message RestoreMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message PurgeMemoryRecordResponse { KodexMemoryRecord record = 1; }
+
 message SystemSTTParameters {
   repeated string languages = 1;
   repeated string keywords = 2;
