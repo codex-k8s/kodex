@@ -124,7 +124,7 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 		specification.Values = append(specification.Values, &controlplanev1.RuntimeEnvironmentValue{Name: value.Name, Value: value.Value})
 	}
 	for _, secret := range spec.SecretBindings {
-		specification.SecretBindings = append(specification.SecretBindings, &controlplanev1.RuntimeSecretBinding{Name: secret.Name, SecretRef: secret.SecretRef})
+		specification.SecretBindings = append(specification.SecretBindings, &controlplanev1.RuntimeSecretBinding{Name: secret.Name, SecretRef: secret.SecretRef, Revision: secret.Revision})
 	}
 	for _, tool := range spec.Tools {
 		specification.Tools = append(specification.Tools, &controlplanev1.RuntimeEnvironmentTool{Name: tool.Name, Command: tool.Command, Description: tool.Description, UsageHint: tool.UsageHint})

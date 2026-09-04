@@ -103,6 +103,7 @@ type RuntimeSecretDescriptor struct {
 type RuntimeSecretBinding struct {
 	Name      string
 	SecretRef string
+	Revision  int64
 }
 
 type RuntimeEnvironmentTool struct {

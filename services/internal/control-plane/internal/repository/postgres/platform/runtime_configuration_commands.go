@@ -753,7 +753,7 @@ func (repository *Repository) resolveEnvironmentPayload(
 	descriptors := make([]entity.RuntimeSecretDescriptor, 0, len(bindings))
 	for _, binding := range bindings {
 		if !strings.HasPrefix(binding.SecretRef, "sec_") || len(binding.SecretRef) > 96 ||
-			strings.TrimSpace(binding.Name) != binding.Name || binding.Name == "" {
+			strings.TrimSpace(binding.Name) != binding.Name || binding.Name == "" || binding.Revision < 0 {
 			return nil, nil, nil, nil, errs.ErrInvalid
 		}
 		if _, duplicate := seen[binding.Name]; duplicate {
@@ -763,6 +763,7 @@ func (repository *Repository) resolveEnvironmentPayload(
 		item := entity.RuntimeSecretDescriptor{Name: binding.Name}
 		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pgx.StrictNamedArgs{
 			"organization_id": organizationID, "project_id": projectID, "secret_ref": binding.SecretRef,
+			"revision": binding.Revision,
 		}).Scan(&item.SecretRef, &item.Namespace, &item.Revision, &item.SecretName, &item.SecretKey, &item.SecretUID, &item.SecretResourceVersion, &item.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, nil, nil, errs.ErrNotFound
 		} else if err != nil {

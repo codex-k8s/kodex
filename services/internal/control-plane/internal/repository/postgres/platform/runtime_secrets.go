@@ -597,13 +597,22 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	}
 	if locked.state == "COMPLETED" {
 		descriptor, descriptorErr := repository.runtimeSecretRevision(ctx, tx, locked.secretID, locked.targetRevision)
+		var retained bool
+		if err := tx.QueryRow(ctx, queryRuntimeSecretRevisionRetained, current.organizationID, locked.secretID, locked.targetRevision).Scan(&retained); err != nil {
+			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
+		}
 		if descriptorErr == nil && runtimeSecretMaterializationMatchesDescriptor(input.Materialization, descriptor) &&
-			locked.secretVersion >= locked.expectedSecretVersion && locked.secretStateIsActiveRevision() {
+			locked.secretVersion >= locked.expectedSecretVersion && retained {
 			secret, decodeErr := decodeRuntimeSecretSnapshot(locked.terminalSnapshot)
 			if decodeErr != nil {
 				return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
 			}
 			result.Action, result.Secret = "KEEP", &secret
+		}
+		if !retained && descriptorErr == nil && runtimeSecretMaterializationMatchesDescriptor(input.Materialization, descriptor) {
+			if _, err := tx.Exec(ctx, queryRuntimeSecretRetireRevision, locked.secretID, locked.targetRevision); err != nil {
+				return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrUnavailable
+			}
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return platformrepo.RuntimeSecretRecoveryResult{}, errs.ErrConflict
@@ -942,10 +951,6 @@ func (operation lockedRuntimeSecretOperation) runtimeSecret() entity.RuntimeSecr
 		Namespace: operation.namespace, Version: operation.secretVersion,
 		CurrentRevision: operation.secretCurrentRevision, CreatedAt: operation.secretCreatedAt, UpdatedAt: operation.secretUpdatedAt,
 	}
-}
-
-func (operation lockedRuntimeSecretOperation) secretStateIsActiveRevision() bool {
-	return operation.secretState == "ACTIVE" && operation.secretCurrentRevision == operation.targetRevision
 }
 
 func scanRuntimeSecret(scanner rowScanner) (entity.RuntimeSecret, error) {
