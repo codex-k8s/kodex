@@ -151,7 +151,7 @@ func ValidateScope(scope entity.AccessScope) error {
 		}
 	case "RESOURCE_INSTANCE":
 		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "PROVIDER_ACCOUNT" ||
-			scope.ResourceKind == "ARTIFACT" && scope.ProjectRef == ""
+			(scope.ResourceKind == "ARTIFACT" || scope.ResourceKind == "RUN") && scope.ProjectRef == ""
 		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
 			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||
 			!organizationScoped && scope.ProjectRef == "" {

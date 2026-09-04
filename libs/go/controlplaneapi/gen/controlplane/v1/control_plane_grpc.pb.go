@@ -79,6 +79,7 @@ const (
 	PlatformQueryService_ListManagedConfigurations_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
 	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
+	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -147,6 +148,7 @@ type PlatformQueryServiceClient interface {
 	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
+	GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -757,6 +759,16 @@ func (c *platformQueryServiceClient) GetSystemSTTConfiguration(ctx context.Conte
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
@@ -823,6 +835,7 @@ type PlatformQueryServiceServer interface {
 	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
+	GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -1012,6 +1025,9 @@ func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationImpact(con
 }
 func (UnimplementedPlatformQueryServiceServer) GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemSTTConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentDraft not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -2114,6 +2130,24 @@ func _PlatformQueryService_GetSystemSTTConfiguration_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentDraft(ctx, req.(*GetRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2361,12 +2395,21 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetSystemSTTConfiguration",
 			Handler:    _PlatformQueryService_GetSystemSTTConfiguration_Handler,
 		},
+		{
+			MethodName: "GetRuntimeEnvironmentDraft",
+			Handler:    _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 
 const (
+	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
+	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
+	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
+	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
+	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
 	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
 	PlatformCommandService_CreateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateProject"
 	PlatformCommandService_UpdateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateProject"
@@ -2472,6 +2515,11 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error)
+	SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error)
+	ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error)
+	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
+	DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error)
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
@@ -2584,6 +2632,56 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error) {
@@ -3598,6 +3696,11 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error)
+	SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error)
+	ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error)
+	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
+	DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error)
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
@@ -3712,6 +3815,21 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardRuntimeEnvironmentDraft not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteOnboarding not implemented")
 }
@@ -4029,6 +4147,96 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, req.(*CreateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveRuntimeEnvironmentDraft(ctx, req.(*SaveRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateRuntimeEnvironmentDraft(ctx, req.(*ValidateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentDraft(ctx, req.(*PublishRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardRuntimeEnvironmentDraft(ctx, req.(*DiscardRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_CompleteOnboarding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -5780,6 +5988,26 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.PlatformCommandService",
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "SaveRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_SaveRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "ValidateRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_ValidateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "PublishRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_PublishRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "DiscardRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler,
+		},
 		{
 			MethodName: "CompleteOnboarding",
 			Handler:    _PlatformCommandService_CompleteOnboarding_Handler,

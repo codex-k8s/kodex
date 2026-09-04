@@ -86,6 +86,16 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "", resolvedAccessTarget{}, err
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
+	case command.RuntimeEnvironmentDraftInput:
+		projectRef := payload.ProjectRef
+		if input.Kind != command.CreateRuntimeEnvironmentDraft {
+			draft, err := scanEnvironmentDraft(tx.QueryRow(ctx, queryEnvironmentDraftGet, current.organizationID, payload.DraftRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			projectRef = draft.ProjectRef
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.WorkflowInput:
 		if input.Kind == command.CreateWorkflow {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)

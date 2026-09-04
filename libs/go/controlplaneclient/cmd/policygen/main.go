@@ -176,7 +176,7 @@ func main() {
 		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
 		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
-	value := document{Version: 1, PolicyRevision: 45, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 46, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -294,6 +294,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "FORBIDDEN"}
 	}
 	resource := strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+		strings.Contains(operationID, ".save") || strings.Contains(operationID, ".discard") ||
 		strings.Contains(operationID, ".validate") || strings.Contains(operationID, ".publish") || strings.Contains(operationID, ".rebind") ||
 		strings.Contains(operationID, ".detach") || strings.Contains(operationID, ".copy") || strings.Contains(operationID, "device-")
 	version := strings.HasPrefix(operationID, "platform.command.") && !strings.Contains(operationID, ".create") && !strings.Contains(operationID, ".upload")

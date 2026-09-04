@@ -1081,6 +1081,106 @@ func (x *IssueAuthorizationContextResponse) GetAuthorityAbiVersion() uint32 {
 	return 0
 }
 
+type IssueContinuationAuthorizationContextResponse struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	CompactJws          string                 `protobuf:"bytes,1,opt,name=compact_jws,json=compactJws,proto3" json:"compact_jws,omitempty"`
+	ExpiresAt           *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	SourceRevision      uint64                 `protobuf:"varint,3,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	SourceDigestSha256  string                 `protobuf:"bytes,4,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
+	KeySetRevision      uint64                 `protobuf:"varint,5,opt,name=key_set_revision,json=keySetRevision,proto3" json:"key_set_revision,omitempty"`
+	PolicyRevision      uint64                 `protobuf:"varint,6,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	SignerGeneration    uint64                 `protobuf:"varint,7,opt,name=signer_generation,json=signerGeneration,proto3" json:"signer_generation,omitempty"`
+	AuthorityAbiVersion uint32                 `protobuf:"varint,8,opt,name=authority_abi_version,json=authorityAbiVersion,proto3" json:"authority_abi_version,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) Reset() {
+	*x = IssueContinuationAuthorizationContextResponse{}
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueContinuationAuthorizationContextResponse) ProtoMessage() {}
+
+func (x *IssueContinuationAuthorizationContextResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueContinuationAuthorizationContextResponse.ProtoReflect.Descriptor instead.
+func (*IssueContinuationAuthorizationContextResponse) Descriptor() ([]byte, []int) {
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetCompactJws() string {
+	if x != nil {
+		return x.CompactJws
+	}
+	return ""
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetSourceRevision() uint64 {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return 0
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetSourceDigestSha256() string {
+	if x != nil {
+		return x.SourceDigestSha256
+	}
+	return ""
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetKeySetRevision() uint64 {
+	if x != nil {
+		return x.KeySetRevision
+	}
+	return 0
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetSignerGeneration() uint64 {
+	if x != nil {
+		return x.SignerGeneration
+	}
+	return 0
+}
+
+func (x *IssueContinuationAuthorizationContextResponse) GetAuthorityAbiVersion() uint32 {
+	if x != nil {
+		return x.AuthorityAbiVersion
+	}
+	return 0
+}
+
 type ResolveAuthorityProofRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// operation_id выбирает exact preflight policy. application credential
@@ -1102,7 +1202,7 @@ type ResolveAuthorityProofRequest struct {
 
 func (x *ResolveAuthorityProofRequest) Reset() {
 	*x = ResolveAuthorityProofRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[6]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1114,7 +1214,7 @@ func (x *ResolveAuthorityProofRequest) String() string {
 func (*ResolveAuthorityProofRequest) ProtoMessage() {}
 
 func (x *ResolveAuthorityProofRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[6]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1127,7 +1227,7 @@ func (x *ResolveAuthorityProofRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveAuthorityProofRequest.ProtoReflect.Descriptor instead.
 func (*ResolveAuthorityProofRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{6}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResolveAuthorityProofRequest) GetOperationId() string {
@@ -1186,7 +1286,7 @@ type ResolveAuthorityProofResponse struct {
 
 func (x *ResolveAuthorityProofResponse) Reset() {
 	*x = ResolveAuthorityProofResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[7]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1198,7 +1298,7 @@ func (x *ResolveAuthorityProofResponse) String() string {
 func (*ResolveAuthorityProofResponse) ProtoMessage() {}
 
 func (x *ResolveAuthorityProofResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[7]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1211,7 +1311,7 @@ func (x *ResolveAuthorityProofResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveAuthorityProofResponse.ProtoReflect.Descriptor instead.
 func (*ResolveAuthorityProofResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{7}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ResolveAuthorityProofResponse) GetAuthorityProofCompactJws() string {
@@ -1264,7 +1364,7 @@ type AuthorityProofResolverServiceCheckReadinessRequest struct {
 
 func (x *AuthorityProofResolverServiceCheckReadinessRequest) Reset() {
 	*x = AuthorityProofResolverServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[8]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1276,7 +1376,7 @@ func (x *AuthorityProofResolverServiceCheckReadinessRequest) String() string {
 func (*AuthorityProofResolverServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *AuthorityProofResolverServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[8]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +1389,7 @@ func (x *AuthorityProofResolverServiceCheckReadinessRequest) ProtoReflect() prot
 
 // Deprecated: Use AuthorityProofResolverServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AuthorityProofResolverServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{8}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{9}
 }
 
 type AuthorityProofResolverServiceCheckReadinessResponse struct {
@@ -1306,7 +1406,7 @@ type AuthorityProofResolverServiceCheckReadinessResponse struct {
 
 func (x *AuthorityProofResolverServiceCheckReadinessResponse) Reset() {
 	*x = AuthorityProofResolverServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[9]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1418,7 @@ func (x *AuthorityProofResolverServiceCheckReadinessResponse) String() string {
 func (*AuthorityProofResolverServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *AuthorityProofResolverServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[9]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1431,7 @@ func (x *AuthorityProofResolverServiceCheckReadinessResponse) ProtoReflect() pro
 
 // Deprecated: Use AuthorityProofResolverServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AuthorityProofResolverServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{9}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AuthorityProofResolverServiceCheckReadinessResponse) GetReady() bool {
@@ -1389,7 +1489,7 @@ type DownstreamTransportPeer struct {
 
 func (x *DownstreamTransportPeer) Reset() {
 	*x = DownstreamTransportPeer{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[10]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1401,7 +1501,7 @@ func (x *DownstreamTransportPeer) String() string {
 func (*DownstreamTransportPeer) ProtoMessage() {}
 
 func (x *DownstreamTransportPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[10]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1414,7 +1514,7 @@ func (x *DownstreamTransportPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownstreamTransportPeer.ProtoReflect.Descriptor instead.
 func (*DownstreamTransportPeer) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{10}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DownstreamTransportPeer) GetSpiffeId() string {
@@ -1446,7 +1546,7 @@ type VerifyAuthorizationContextRequest struct {
 
 func (x *VerifyAuthorizationContextRequest) Reset() {
 	*x = VerifyAuthorizationContextRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[11]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1458,7 +1558,7 @@ func (x *VerifyAuthorizationContextRequest) String() string {
 func (*VerifyAuthorizationContextRequest) ProtoMessage() {}
 
 func (x *VerifyAuthorizationContextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[11]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1471,7 +1571,7 @@ func (x *VerifyAuthorizationContextRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use VerifyAuthorizationContextRequest.ProtoReflect.Descriptor instead.
 func (*VerifyAuthorizationContextRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{11}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *VerifyAuthorizationContextRequest) GetCompactJws() string {
@@ -1518,7 +1618,7 @@ type VerifyAuthorizationContextResponse struct {
 
 func (x *VerifyAuthorizationContextResponse) Reset() {
 	*x = VerifyAuthorizationContextResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[12]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1530,7 +1630,7 @@ func (x *VerifyAuthorizationContextResponse) String() string {
 func (*VerifyAuthorizationContextResponse) ProtoMessage() {}
 
 func (x *VerifyAuthorizationContextResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[12]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1543,7 +1643,7 @@ func (x *VerifyAuthorizationContextResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use VerifyAuthorizationContextResponse.ProtoReflect.Descriptor instead.
 func (*VerifyAuthorizationContextResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{12}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *VerifyAuthorizationContextResponse) GetContext() *VerifiedAuthorizationContext {
@@ -1598,7 +1698,7 @@ type VerifiedAuthorizationContext struct {
 
 func (x *VerifiedAuthorizationContext) Reset() {
 	*x = VerifiedAuthorizationContext{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[13]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1610,7 +1710,7 @@ func (x *VerifiedAuthorizationContext) String() string {
 func (*VerifiedAuthorizationContext) ProtoMessage() {}
 
 func (x *VerifiedAuthorizationContext) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[13]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1623,7 +1723,7 @@ func (x *VerifiedAuthorizationContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifiedAuthorizationContext.ProtoReflect.Descriptor instead.
 func (*VerifiedAuthorizationContext) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{13}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *VerifiedAuthorizationContext) GetContractVersion() uint32 {
@@ -1849,7 +1949,7 @@ type ContinuationLineage struct {
 
 func (x *ContinuationLineage) Reset() {
 	*x = ContinuationLineage{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[14]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1861,7 +1961,7 @@ func (x *ContinuationLineage) String() string {
 func (*ContinuationLineage) ProtoMessage() {}
 
 func (x *ContinuationLineage) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[14]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1874,7 +1974,7 @@ func (x *ContinuationLineage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContinuationLineage.ProtoReflect.Descriptor instead.
 func (*ContinuationLineage) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{14}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ContinuationLineage) GetRootJti() string {
@@ -1955,7 +2055,7 @@ type AuthorizationIssuerServiceCheckReadinessRequest struct {
 
 func (x *AuthorizationIssuerServiceCheckReadinessRequest) Reset() {
 	*x = AuthorizationIssuerServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[15]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1967,7 +2067,7 @@ func (x *AuthorizationIssuerServiceCheckReadinessRequest) String() string {
 func (*AuthorizationIssuerServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *AuthorizationIssuerServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[15]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1980,7 +2080,7 @@ func (x *AuthorizationIssuerServiceCheckReadinessRequest) ProtoReflect() protore
 
 // Deprecated: Use AuthorizationIssuerServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizationIssuerServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{15}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{16}
 }
 
 // AuthorizationIssuerServiceCheckReadinessResponse не содержит key material. snapshot_digest_sha256
@@ -2000,7 +2100,7 @@ type AuthorizationIssuerServiceCheckReadinessResponse struct {
 
 func (x *AuthorizationIssuerServiceCheckReadinessResponse) Reset() {
 	*x = AuthorizationIssuerServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[16]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2012,7 +2112,7 @@ func (x *AuthorizationIssuerServiceCheckReadinessResponse) String() string {
 func (*AuthorizationIssuerServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *AuthorizationIssuerServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[16]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2025,7 +2125,7 @@ func (x *AuthorizationIssuerServiceCheckReadinessResponse) ProtoReflect() protor
 
 // Deprecated: Use AuthorizationIssuerServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizationIssuerServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{16}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AuthorizationIssuerServiceCheckReadinessResponse) GetReady() bool {
@@ -2085,7 +2185,7 @@ type AuthorizationVerifierServiceCheckReadinessRequest struct {
 
 func (x *AuthorizationVerifierServiceCheckReadinessRequest) Reset() {
 	*x = AuthorizationVerifierServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[17]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2097,7 +2197,7 @@ func (x *AuthorizationVerifierServiceCheckReadinessRequest) String() string {
 func (*AuthorizationVerifierServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *AuthorizationVerifierServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[17]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2110,7 +2210,7 @@ func (x *AuthorizationVerifierServiceCheckReadinessRequest) ProtoReflect() proto
 
 // Deprecated: Use AuthorizationVerifierServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizationVerifierServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{17}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{18}
 }
 
 // AuthorizationVerifierServiceCheckReadinessResponse дополнительно подтверждает рабочий
@@ -2131,7 +2231,7 @@ type AuthorizationVerifierServiceCheckReadinessResponse struct {
 
 func (x *AuthorizationVerifierServiceCheckReadinessResponse) Reset() {
 	*x = AuthorizationVerifierServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[18]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2143,7 +2243,7 @@ func (x *AuthorizationVerifierServiceCheckReadinessResponse) String() string {
 func (*AuthorizationVerifierServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *AuthorizationVerifierServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[18]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2156,7 +2256,7 @@ func (x *AuthorizationVerifierServiceCheckReadinessResponse) ProtoReflect() prot
 
 // Deprecated: Use AuthorizationVerifierServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizationVerifierServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{18}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AuthorizationVerifierServiceCheckReadinessResponse) GetReady() bool {
@@ -2229,7 +2329,7 @@ type PrepareRestoreRequest struct {
 
 func (x *PrepareRestoreRequest) Reset() {
 	*x = PrepareRestoreRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[19]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2241,7 +2341,7 @@ func (x *PrepareRestoreRequest) String() string {
 func (*PrepareRestoreRequest) ProtoMessage() {}
 
 func (x *PrepareRestoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[19]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2254,7 +2354,7 @@ func (x *PrepareRestoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRestoreRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRestoreRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{19}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PrepareRestoreRequest) GetRestoreId() string {
@@ -2315,7 +2415,7 @@ type GetRestoreDirectiveRequest struct {
 
 func (x *GetRestoreDirectiveRequest) Reset() {
 	*x = GetRestoreDirectiveRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[20]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2327,7 +2427,7 @@ func (x *GetRestoreDirectiveRequest) String() string {
 func (*GetRestoreDirectiveRequest) ProtoMessage() {}
 
 func (x *GetRestoreDirectiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[20]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2340,7 +2440,7 @@ func (x *GetRestoreDirectiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRestoreDirectiveRequest.ProtoReflect.Descriptor instead.
 func (*GetRestoreDirectiveRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{20}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetRestoreDirectiveRequest) GetRoleCredentialCompactJws() string {
@@ -2379,7 +2479,7 @@ type NoRestoreDirective struct {
 
 func (x *NoRestoreDirective) Reset() {
 	*x = NoRestoreDirective{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[21]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2391,7 +2491,7 @@ func (x *NoRestoreDirective) String() string {
 func (*NoRestoreDirective) ProtoMessage() {}
 
 func (x *NoRestoreDirective) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[21]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2404,7 +2504,7 @@ func (x *NoRestoreDirective) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NoRestoreDirective.ProtoReflect.Descriptor instead.
 func (*NoRestoreDirective) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{21}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *NoRestoreDirective) GetCoordinationRevision() uint64 {
@@ -2449,7 +2549,7 @@ type RoleBoundRestoreDirective struct {
 
 func (x *RoleBoundRestoreDirective) Reset() {
 	*x = RoleBoundRestoreDirective{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[22]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2461,7 +2561,7 @@ func (x *RoleBoundRestoreDirective) String() string {
 func (*RoleBoundRestoreDirective) ProtoMessage() {}
 
 func (x *RoleBoundRestoreDirective) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[22]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2474,7 +2574,7 @@ func (x *RoleBoundRestoreDirective) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleBoundRestoreDirective.ProtoReflect.Descriptor instead.
 func (*RoleBoundRestoreDirective) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{22}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RoleBoundRestoreDirective) GetDirectiveCompactJws() string {
@@ -2518,7 +2618,7 @@ type GetRestoreDirectiveResponse struct {
 
 func (x *GetRestoreDirectiveResponse) Reset() {
 	*x = GetRestoreDirectiveResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[23]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2530,7 +2630,7 @@ func (x *GetRestoreDirectiveResponse) String() string {
 func (*GetRestoreDirectiveResponse) ProtoMessage() {}
 
 func (x *GetRestoreDirectiveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[23]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2543,7 +2643,7 @@ func (x *GetRestoreDirectiveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRestoreDirectiveResponse.ProtoReflect.Descriptor instead.
 func (*GetRestoreDirectiveResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{23}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetRestoreDirectiveResponse) GetResult() isGetRestoreDirectiveResponse_Result {
@@ -2608,7 +2708,7 @@ type AcknowledgeQuiescenceRequest struct {
 
 func (x *AcknowledgeQuiescenceRequest) Reset() {
 	*x = AcknowledgeQuiescenceRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[24]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2620,7 +2720,7 @@ func (x *AcknowledgeQuiescenceRequest) String() string {
 func (*AcknowledgeQuiescenceRequest) ProtoMessage() {}
 
 func (x *AcknowledgeQuiescenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[24]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2633,7 +2733,7 @@ func (x *AcknowledgeQuiescenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeQuiescenceRequest.ProtoReflect.Descriptor instead.
 func (*AcknowledgeQuiescenceRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{24}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AcknowledgeQuiescenceRequest) GetCorrelationId() string {
@@ -2685,7 +2785,7 @@ type CompleteRestoreRequest struct {
 
 func (x *CompleteRestoreRequest) Reset() {
 	*x = CompleteRestoreRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[25]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2697,7 +2797,7 @@ func (x *CompleteRestoreRequest) String() string {
 func (*CompleteRestoreRequest) ProtoMessage() {}
 
 func (x *CompleteRestoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[25]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2710,7 +2810,7 @@ func (x *CompleteRestoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteRestoreRequest.ProtoReflect.Descriptor instead.
 func (*CompleteRestoreRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{25}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CompleteRestoreRequest) GetRestoreId() string {
@@ -2769,7 +2869,7 @@ type RestoreTransition struct {
 
 func (x *RestoreTransition) Reset() {
 	*x = RestoreTransition{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[26]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2781,7 +2881,7 @@ func (x *RestoreTransition) String() string {
 func (*RestoreTransition) ProtoMessage() {}
 
 func (x *RestoreTransition) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[26]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2794,7 +2894,7 @@ func (x *RestoreTransition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreTransition.ProtoReflect.Descriptor instead.
 func (*RestoreTransition) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{26}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RestoreTransition) GetRestoreId() string {
@@ -2848,7 +2948,7 @@ type PrepareRestoreResponse struct {
 
 func (x *PrepareRestoreResponse) Reset() {
 	*x = PrepareRestoreResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[27]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2860,7 +2960,7 @@ func (x *PrepareRestoreResponse) String() string {
 func (*PrepareRestoreResponse) ProtoMessage() {}
 
 func (x *PrepareRestoreResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[27]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2873,7 +2973,7 @@ func (x *PrepareRestoreResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRestoreResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRestoreResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{27}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PrepareRestoreResponse) GetTransition() *RestoreTransition {
@@ -2893,7 +2993,7 @@ type AcknowledgeQuiescenceResponse struct {
 
 func (x *AcknowledgeQuiescenceResponse) Reset() {
 	*x = AcknowledgeQuiescenceResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[28]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2905,7 +3005,7 @@ func (x *AcknowledgeQuiescenceResponse) String() string {
 func (*AcknowledgeQuiescenceResponse) ProtoMessage() {}
 
 func (x *AcknowledgeQuiescenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[28]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2918,7 +3018,7 @@ func (x *AcknowledgeQuiescenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeQuiescenceResponse.ProtoReflect.Descriptor instead.
 func (*AcknowledgeQuiescenceResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{28}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *AcknowledgeQuiescenceResponse) GetTransition() *RestoreTransition {
@@ -2954,7 +3054,7 @@ type QuiescenceAckReceipt struct {
 
 func (x *QuiescenceAckReceipt) Reset() {
 	*x = QuiescenceAckReceipt{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[29]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2966,7 +3066,7 @@ func (x *QuiescenceAckReceipt) String() string {
 func (*QuiescenceAckReceipt) ProtoMessage() {}
 
 func (x *QuiescenceAckReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[29]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2979,7 +3079,7 @@ func (x *QuiescenceAckReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuiescenceAckReceipt.ProtoReflect.Descriptor instead.
 func (*QuiescenceAckReceipt) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{29}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *QuiescenceAckReceipt) GetReceiptId() string {
@@ -3047,7 +3147,7 @@ type CompleteRestoreResponse struct {
 
 func (x *CompleteRestoreResponse) Reset() {
 	*x = CompleteRestoreResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[30]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3059,7 +3159,7 @@ func (x *CompleteRestoreResponse) String() string {
 func (*CompleteRestoreResponse) ProtoMessage() {}
 
 func (x *CompleteRestoreResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[30]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3072,7 +3172,7 @@ func (x *CompleteRestoreResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteRestoreResponse.ProtoReflect.Descriptor instead.
 func (*CompleteRestoreResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{30}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *CompleteRestoreResponse) GetTransition() *RestoreTransition {
@@ -3090,7 +3190,7 @@ type RestoreControllerServiceCheckReadinessRequest struct {
 
 func (x *RestoreControllerServiceCheckReadinessRequest) Reset() {
 	*x = RestoreControllerServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[31]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3102,7 +3202,7 @@ func (x *RestoreControllerServiceCheckReadinessRequest) String() string {
 func (*RestoreControllerServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *RestoreControllerServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[31]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3115,7 +3215,7 @@ func (x *RestoreControllerServiceCheckReadinessRequest) ProtoReflect() protorefl
 
 // Deprecated: Use RestoreControllerServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*RestoreControllerServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{31}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{32}
 }
 
 type RestoreControllerServiceCheckReadinessResponse struct {
@@ -3138,7 +3238,7 @@ type RestoreControllerServiceCheckReadinessResponse struct {
 
 func (x *RestoreControllerServiceCheckReadinessResponse) Reset() {
 	*x = RestoreControllerServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[32]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3150,7 +3250,7 @@ func (x *RestoreControllerServiceCheckReadinessResponse) String() string {
 func (*RestoreControllerServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *RestoreControllerServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[32]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3163,7 +3263,7 @@ func (x *RestoreControllerServiceCheckReadinessResponse) ProtoReflect() protoref
 
 // Deprecated: Use RestoreControllerServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*RestoreControllerServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{32}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RestoreControllerServiceCheckReadinessResponse) GetReady() bool {
@@ -3271,7 +3371,7 @@ type AttestServedStateRequest struct {
 
 func (x *AttestServedStateRequest) Reset() {
 	*x = AttestServedStateRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3283,7 +3383,7 @@ func (x *AttestServedStateRequest) String() string {
 func (*AttestServedStateRequest) ProtoMessage() {}
 
 func (x *AttestServedStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[33]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3296,7 +3396,7 @@ func (x *AttestServedStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttestServedStateRequest.ProtoReflect.Descriptor instead.
 func (*AttestServedStateRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{33}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AttestServedStateRequest) GetPinnedIntentId() string {
@@ -3354,7 +3454,7 @@ type AttestServedStateResponse struct {
 
 func (x *AttestServedStateResponse) Reset() {
 	*x = AttestServedStateResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3366,7 +3466,7 @@ func (x *AttestServedStateResponse) String() string {
 func (*AttestServedStateResponse) ProtoMessage() {}
 
 func (x *AttestServedStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[34]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3379,7 +3479,7 @@ func (x *AttestServedStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttestServedStateResponse.ProtoReflect.Descriptor instead.
 func (*AttestServedStateResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{34}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AttestServedStateResponse) GetAttestationReceiptId() string {
@@ -3435,7 +3535,7 @@ type IssueAttestationChallengeRequest struct {
 
 func (x *IssueAttestationChallengeRequest) Reset() {
 	*x = IssueAttestationChallengeRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3447,7 +3547,7 @@ func (x *IssueAttestationChallengeRequest) String() string {
 func (*IssueAttestationChallengeRequest) ProtoMessage() {}
 
 func (x *IssueAttestationChallengeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[35]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3460,7 +3560,7 @@ func (x *IssueAttestationChallengeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueAttestationChallengeRequest.ProtoReflect.Descriptor instead.
 func (*IssueAttestationChallengeRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{35}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *IssueAttestationChallengeRequest) GetPinnedIntentId() string {
@@ -3512,7 +3612,7 @@ type IssueAttestationChallengeResponse struct {
 
 func (x *IssueAttestationChallengeResponse) Reset() {
 	*x = IssueAttestationChallengeResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3524,7 +3624,7 @@ func (x *IssueAttestationChallengeResponse) String() string {
 func (*IssueAttestationChallengeResponse) ProtoMessage() {}
 
 func (x *IssueAttestationChallengeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[36]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3537,7 +3637,7 @@ func (x *IssueAttestationChallengeResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use IssueAttestationChallengeResponse.ProtoReflect.Descriptor instead.
 func (*IssueAttestationChallengeResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{36}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *IssueAttestationChallengeResponse) GetChallengeId() string {
@@ -3639,7 +3739,7 @@ type AuthorityReadbackAttestorServiceCheckReadinessRequest struct {
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) Reset() {
 	*x = AuthorityReadbackAttestorServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3651,7 +3751,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) String() string 
 func (*AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[37]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3664,7 +3764,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessRequest) ProtoReflect() p
 
 // Deprecated: Use AuthorityReadbackAttestorServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*AuthorityReadbackAttestorServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{37}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{38}
 }
 
 type AuthorityReadbackAttestorServiceCheckReadinessResponse struct {
@@ -3692,7 +3792,7 @@ type AuthorityReadbackAttestorServiceCheckReadinessResponse struct {
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) Reset() {
 	*x = AuthorityReadbackAttestorServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3704,7 +3804,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) String() string
 func (*AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[38]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3717,7 +3817,7 @@ func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) ProtoReflect() 
 
 // Deprecated: Use AuthorityReadbackAttestorServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*AuthorityReadbackAttestorServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{38}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *AuthorityReadbackAttestorServiceCheckReadinessResponse) GetReady() bool {
@@ -3850,7 +3950,7 @@ type PublishRoleCredentialRequest struct {
 
 func (x *PublishRoleCredentialRequest) Reset() {
 	*x = PublishRoleCredentialRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3862,7 +3962,7 @@ func (x *PublishRoleCredentialRequest) String() string {
 func (*PublishRoleCredentialRequest) ProtoMessage() {}
 
 func (x *PublishRoleCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[39]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3875,7 +3975,7 @@ func (x *PublishRoleCredentialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRoleCredentialRequest.ProtoReflect.Descriptor instead.
 func (*PublishRoleCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{39}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PublishRoleCredentialRequest) GetIssuanceDirectiveCompactJws() string {
@@ -3911,7 +4011,7 @@ type PublishRoleCredentialResponse struct {
 
 func (x *PublishRoleCredentialResponse) Reset() {
 	*x = PublishRoleCredentialResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3923,7 +4023,7 @@ func (x *PublishRoleCredentialResponse) String() string {
 func (*PublishRoleCredentialResponse) ProtoMessage() {}
 
 func (x *PublishRoleCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[40]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3936,7 +4036,7 @@ func (x *PublishRoleCredentialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRoleCredentialResponse.ProtoReflect.Descriptor instead.
 func (*PublishRoleCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{40}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *PublishRoleCredentialResponse) GetDeliveryReceiptCompactJws() string {
@@ -3975,7 +4075,7 @@ type RestoreRoleCredentialPublisherServiceCheckReadinessRequest struct {
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) Reset() {
 	*x = RestoreRoleCredentialPublisherServiceCheckReadinessRequest{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3987,7 +4087,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) String() st
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoMessage() {}
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[41]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4000,7 +4100,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessRequest) ProtoReflec
 
 // Deprecated: Use RestoreRoleCredentialPublisherServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{41}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{42}
 }
 
 type RestoreRoleCredentialPublisherServiceCheckReadinessResponse struct {
@@ -4017,7 +4117,7 @@ type RestoreRoleCredentialPublisherServiceCheckReadinessResponse struct {
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) Reset() {
 	*x = RestoreRoleCredentialPublisherServiceCheckReadinessResponse{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[42]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4029,7 +4129,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) String() s
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoMessage() {}
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[42]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4042,7 +4142,7 @@ func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) ProtoRefle
 
 // Deprecated: Use RestoreRoleCredentialPublisherServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*RestoreRoleCredentialPublisherServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{42}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *RestoreRoleCredentialPublisherServiceCheckReadinessResponse) GetReady() bool {
@@ -4101,7 +4201,7 @@ type AuthorizationErrorDetail struct {
 
 func (x *AuthorizationErrorDetail) Reset() {
 	*x = AuthorizationErrorDetail{}
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[43]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4113,7 +4213,7 @@ func (x *AuthorizationErrorDetail) String() string {
 func (*AuthorizationErrorDetail) ProtoMessage() {}
 
 func (x *AuthorizationErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[43]
+	mi := &file_internalrpcauthority_v1_authority_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4126,7 +4226,7 @@ func (x *AuthorizationErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizationErrorDetail.ProtoReflect.Descriptor instead.
 func (*AuthorizationErrorDetail) Descriptor() ([]byte, []int) {
-	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{43}
+	return file_internalrpcauthority_v1_authority_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *AuthorizationErrorDetail) GetReason() AuthorizationErrorReason {
@@ -4191,6 +4291,17 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationId\x122\n" +
 	"\x15request_digest_sha256\x18\x05 \x01(\tR\x13requestDigestSha256\"\x8e\x03\n" +
 	"!IssueAuthorizationContextResponse\x12\x1f\n" +
+	"\vcompact_jws\x18\x01 \x01(\tR\n" +
+	"compactJws\x129\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12'\n" +
+	"\x0fsource_revision\x18\x03 \x01(\x04R\x0esourceRevision\x120\n" +
+	"\x14source_digest_sha256\x18\x04 \x01(\tR\x12sourceDigestSha256\x12(\n" +
+	"\x10key_set_revision\x18\x05 \x01(\x04R\x0ekeySetRevision\x12'\n" +
+	"\x0fpolicy_revision\x18\x06 \x01(\x04R\x0epolicyRevision\x12+\n" +
+	"\x11signer_generation\x18\a \x01(\x04R\x10signerGeneration\x122\n" +
+	"\x15authority_abi_version\x18\b \x01(\rR\x13authorityAbiVersion\"\x9a\x03\n" +
+	"-IssueContinuationAuthorizationContextResponse\x12\x1f\n" +
 	"\vcompact_jws\x18\x01 \x01(\tR\n" +
 	"compactJws\x129\n" +
 	"\n" +
@@ -4589,10 +4700,10 @@ const file_internalrpcauthority_v1_authority_proto_rawDesc = "" +
 	"6AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REJECTED\x103\x12A\n" +
 	"=AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_REPLAY_DETECTED\x104\x12=\n" +
 	"9AUTHORIZATION_ERROR_REASON_READBACK_CHALLENGE_UNAVAILABLE\x105\x127\n" +
-	"3AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED\x1062\x86\x04\n" +
+	"3AUTHORIZATION_ERROR_REASON_READBACK_RECEIPT_EXPIRED\x1062\x92\x04\n" +
 	"\x1aAuthorizationIssuerService\x12\x92\x01\n" +
-	"\x19IssueAuthorizationContext\x129.internalrpcauthority.v1.IssueAuthorizationContextRequest\x1a:.internalrpcauthority.v1.IssueAuthorizationContextResponse\x12\xaa\x01\n" +
-	"%IssueContinuationAuthorizationContext\x12E.internalrpcauthority.v1.IssueContinuationAuthorizationContextRequest\x1a:.internalrpcauthority.v1.IssueAuthorizationContextResponse\x12\xa5\x01\n" +
+	"\x19IssueAuthorizationContext\x129.internalrpcauthority.v1.IssueAuthorizationContextRequest\x1a:.internalrpcauthority.v1.IssueAuthorizationContextResponse\x12\xb6\x01\n" +
+	"%IssueContinuationAuthorizationContext\x12E.internalrpcauthority.v1.IssueContinuationAuthorizationContextRequest\x1aF.internalrpcauthority.v1.IssueContinuationAuthorizationContextResponse\x12\xa5\x01\n" +
 	"\x0eCheckReadiness\x12H.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest\x1aI.internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse2\xe2\x02\n" +
 	"\x1cAuthorizationVerifierService\x12\x95\x01\n" +
 	"\x1aVerifyAuthorizationContext\x12:.internalrpcauthority.v1.VerifyAuthorizationContextRequest\x1a;.internalrpcauthority.v1.VerifyAuthorizationContextResponse\x12\xa9\x01\n" +
@@ -4627,7 +4738,7 @@ func file_internalrpcauthority_v1_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_internalrpcauthority_v1_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_internalrpcauthority_v1_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_internalrpcauthority_v1_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_internalrpcauthority_v1_authority_proto_goTypes = []any{
 	(ActorKind)(0),                                                      // 0: internalrpcauthority.v1.ActorKind
 	(AuthoritySource)(0),                                                // 1: internalrpcauthority.v1.AuthoritySource
@@ -4642,45 +4753,46 @@ var file_internalrpcauthority_v1_authority_proto_goTypes = []any{
 	(*IssueAuthorizationContextRequest)(nil),                            // 10: internalrpcauthority.v1.IssueAuthorizationContextRequest
 	(*IssueContinuationAuthorizationContextRequest)(nil),                // 11: internalrpcauthority.v1.IssueContinuationAuthorizationContextRequest
 	(*IssueAuthorizationContextResponse)(nil),                           // 12: internalrpcauthority.v1.IssueAuthorizationContextResponse
-	(*ResolveAuthorityProofRequest)(nil),                                // 13: internalrpcauthority.v1.ResolveAuthorityProofRequest
-	(*ResolveAuthorityProofResponse)(nil),                               // 14: internalrpcauthority.v1.ResolveAuthorityProofResponse
-	(*AuthorityProofResolverServiceCheckReadinessRequest)(nil),          // 15: internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
-	(*AuthorityProofResolverServiceCheckReadinessResponse)(nil),         // 16: internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
-	(*DownstreamTransportPeer)(nil),                                     // 17: internalrpcauthority.v1.DownstreamTransportPeer
-	(*VerifyAuthorizationContextRequest)(nil),                           // 18: internalrpcauthority.v1.VerifyAuthorizationContextRequest
-	(*VerifyAuthorizationContextResponse)(nil),                          // 19: internalrpcauthority.v1.VerifyAuthorizationContextResponse
-	(*VerifiedAuthorizationContext)(nil),                                // 20: internalrpcauthority.v1.VerifiedAuthorizationContext
-	(*ContinuationLineage)(nil),                                         // 21: internalrpcauthority.v1.ContinuationLineage
-	(*AuthorizationIssuerServiceCheckReadinessRequest)(nil),             // 22: internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
-	(*AuthorizationIssuerServiceCheckReadinessResponse)(nil),            // 23: internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
-	(*AuthorizationVerifierServiceCheckReadinessRequest)(nil),           // 24: internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
-	(*AuthorizationVerifierServiceCheckReadinessResponse)(nil),          // 25: internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
-	(*PrepareRestoreRequest)(nil),                                       // 26: internalrpcauthority.v1.PrepareRestoreRequest
-	(*GetRestoreDirectiveRequest)(nil),                                  // 27: internalrpcauthority.v1.GetRestoreDirectiveRequest
-	(*NoRestoreDirective)(nil),                                          // 28: internalrpcauthority.v1.NoRestoreDirective
-	(*RoleBoundRestoreDirective)(nil),                                   // 29: internalrpcauthority.v1.RoleBoundRestoreDirective
-	(*GetRestoreDirectiveResponse)(nil),                                 // 30: internalrpcauthority.v1.GetRestoreDirectiveResponse
-	(*AcknowledgeQuiescenceRequest)(nil),                                // 31: internalrpcauthority.v1.AcknowledgeQuiescenceRequest
-	(*CompleteRestoreRequest)(nil),                                      // 32: internalrpcauthority.v1.CompleteRestoreRequest
-	(*RestoreTransition)(nil),                                           // 33: internalrpcauthority.v1.RestoreTransition
-	(*PrepareRestoreResponse)(nil),                                      // 34: internalrpcauthority.v1.PrepareRestoreResponse
-	(*AcknowledgeQuiescenceResponse)(nil),                               // 35: internalrpcauthority.v1.AcknowledgeQuiescenceResponse
-	(*QuiescenceAckReceipt)(nil),                                        // 36: internalrpcauthority.v1.QuiescenceAckReceipt
-	(*CompleteRestoreResponse)(nil),                                     // 37: internalrpcauthority.v1.CompleteRestoreResponse
-	(*RestoreControllerServiceCheckReadinessRequest)(nil),               // 38: internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
-	(*RestoreControllerServiceCheckReadinessResponse)(nil),              // 39: internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
-	(*AttestServedStateRequest)(nil),                                    // 40: internalrpcauthority.v1.AttestServedStateRequest
-	(*AttestServedStateResponse)(nil),                                   // 41: internalrpcauthority.v1.AttestServedStateResponse
-	(*IssueAttestationChallengeRequest)(nil),                            // 42: internalrpcauthority.v1.IssueAttestationChallengeRequest
-	(*IssueAttestationChallengeResponse)(nil),                           // 43: internalrpcauthority.v1.IssueAttestationChallengeResponse
-	(*AuthorityReadbackAttestorServiceCheckReadinessRequest)(nil),       // 44: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
-	(*AuthorityReadbackAttestorServiceCheckReadinessResponse)(nil),      // 45: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
-	(*PublishRoleCredentialRequest)(nil),                                // 46: internalrpcauthority.v1.PublishRoleCredentialRequest
-	(*PublishRoleCredentialResponse)(nil),                               // 47: internalrpcauthority.v1.PublishRoleCredentialResponse
-	(*RestoreRoleCredentialPublisherServiceCheckReadinessRequest)(nil),  // 48: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
-	(*RestoreRoleCredentialPublisherServiceCheckReadinessResponse)(nil), // 49: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
-	(*AuthorizationErrorDetail)(nil),                                    // 50: internalrpcauthority.v1.AuthorizationErrorDetail
-	(*timestamppb.Timestamp)(nil),                                       // 51: google.protobuf.Timestamp
+	(*IssueContinuationAuthorizationContextResponse)(nil),               // 13: internalrpcauthority.v1.IssueContinuationAuthorizationContextResponse
+	(*ResolveAuthorityProofRequest)(nil),                                // 14: internalrpcauthority.v1.ResolveAuthorityProofRequest
+	(*ResolveAuthorityProofResponse)(nil),                               // 15: internalrpcauthority.v1.ResolveAuthorityProofResponse
+	(*AuthorityProofResolverServiceCheckReadinessRequest)(nil),          // 16: internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
+	(*AuthorityProofResolverServiceCheckReadinessResponse)(nil),         // 17: internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
+	(*DownstreamTransportPeer)(nil),                                     // 18: internalrpcauthority.v1.DownstreamTransportPeer
+	(*VerifyAuthorizationContextRequest)(nil),                           // 19: internalrpcauthority.v1.VerifyAuthorizationContextRequest
+	(*VerifyAuthorizationContextResponse)(nil),                          // 20: internalrpcauthority.v1.VerifyAuthorizationContextResponse
+	(*VerifiedAuthorizationContext)(nil),                                // 21: internalrpcauthority.v1.VerifiedAuthorizationContext
+	(*ContinuationLineage)(nil),                                         // 22: internalrpcauthority.v1.ContinuationLineage
+	(*AuthorizationIssuerServiceCheckReadinessRequest)(nil),             // 23: internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
+	(*AuthorizationIssuerServiceCheckReadinessResponse)(nil),            // 24: internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
+	(*AuthorizationVerifierServiceCheckReadinessRequest)(nil),           // 25: internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
+	(*AuthorizationVerifierServiceCheckReadinessResponse)(nil),          // 26: internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
+	(*PrepareRestoreRequest)(nil),                                       // 27: internalrpcauthority.v1.PrepareRestoreRequest
+	(*GetRestoreDirectiveRequest)(nil),                                  // 28: internalrpcauthority.v1.GetRestoreDirectiveRequest
+	(*NoRestoreDirective)(nil),                                          // 29: internalrpcauthority.v1.NoRestoreDirective
+	(*RoleBoundRestoreDirective)(nil),                                   // 30: internalrpcauthority.v1.RoleBoundRestoreDirective
+	(*GetRestoreDirectiveResponse)(nil),                                 // 31: internalrpcauthority.v1.GetRestoreDirectiveResponse
+	(*AcknowledgeQuiescenceRequest)(nil),                                // 32: internalrpcauthority.v1.AcknowledgeQuiescenceRequest
+	(*CompleteRestoreRequest)(nil),                                      // 33: internalrpcauthority.v1.CompleteRestoreRequest
+	(*RestoreTransition)(nil),                                           // 34: internalrpcauthority.v1.RestoreTransition
+	(*PrepareRestoreResponse)(nil),                                      // 35: internalrpcauthority.v1.PrepareRestoreResponse
+	(*AcknowledgeQuiescenceResponse)(nil),                               // 36: internalrpcauthority.v1.AcknowledgeQuiescenceResponse
+	(*QuiescenceAckReceipt)(nil),                                        // 37: internalrpcauthority.v1.QuiescenceAckReceipt
+	(*CompleteRestoreResponse)(nil),                                     // 38: internalrpcauthority.v1.CompleteRestoreResponse
+	(*RestoreControllerServiceCheckReadinessRequest)(nil),               // 39: internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
+	(*RestoreControllerServiceCheckReadinessResponse)(nil),              // 40: internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
+	(*AttestServedStateRequest)(nil),                                    // 41: internalrpcauthority.v1.AttestServedStateRequest
+	(*AttestServedStateResponse)(nil),                                   // 42: internalrpcauthority.v1.AttestServedStateResponse
+	(*IssueAttestationChallengeRequest)(nil),                            // 43: internalrpcauthority.v1.IssueAttestationChallengeRequest
+	(*IssueAttestationChallengeResponse)(nil),                           // 44: internalrpcauthority.v1.IssueAttestationChallengeResponse
+	(*AuthorityReadbackAttestorServiceCheckReadinessRequest)(nil),       // 45: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
+	(*AuthorityReadbackAttestorServiceCheckReadinessResponse)(nil),      // 46: internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
+	(*PublishRoleCredentialRequest)(nil),                                // 47: internalrpcauthority.v1.PublishRoleCredentialRequest
+	(*PublishRoleCredentialResponse)(nil),                               // 48: internalrpcauthority.v1.PublishRoleCredentialResponse
+	(*RestoreRoleCredentialPublisherServiceCheckReadinessRequest)(nil),  // 49: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
+	(*RestoreRoleCredentialPublisherServiceCheckReadinessResponse)(nil), // 50: internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
+	(*AuthorizationErrorDetail)(nil),                                    // 51: internalrpcauthority.v1.AuthorizationErrorDetail
+	(*timestamppb.Timestamp)(nil),                                       // 52: google.protobuf.Timestamp
 }
 var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	1,  // 0: internalrpcauthority.v1.AuthorityProvenance.source:type_name -> internalrpcauthority.v1.AuthoritySource
@@ -4689,78 +4801,79 @@ var file_internalrpcauthority_v1_authority_proto_depIdxs = []int32{
 	8,  // 3: internalrpcauthority.v1.CallerAuthority.actor:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	8,  // 4: internalrpcauthority.v1.CallerAuthority.tenant:type_name -> internalrpcauthority.v1.AuthorityIdentity
 	8,  // 5: internalrpcauthority.v1.CallerAuthority.project:type_name -> internalrpcauthority.v1.AuthorityIdentity
-	51, // 6: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
-	51, // 7: internalrpcauthority.v1.ResolveAuthorityProofResponse.expires_at:type_name -> google.protobuf.Timestamp
-	17, // 8: internalrpcauthority.v1.VerifyAuthorizationContextRequest.downstream_peer:type_name -> internalrpcauthority.v1.DownstreamTransportPeer
-	20, // 9: internalrpcauthority.v1.VerifyAuthorizationContextResponse.context:type_name -> internalrpcauthority.v1.VerifiedAuthorizationContext
-	9,  // 10: internalrpcauthority.v1.VerifiedAuthorizationContext.authority:type_name -> internalrpcauthority.v1.CallerAuthority
-	51, // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
-	51, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
-	51, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
-	51, // 14: internalrpcauthority.v1.VerifiedAuthorizationContext.credential_authenticated_at:type_name -> google.protobuf.Timestamp
-	21, // 15: internalrpcauthority.v1.VerifiedAuthorizationContext.continuation:type_name -> internalrpcauthority.v1.ContinuationLineage
-	51, // 16: internalrpcauthority.v1.PrepareRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
-	51, // 17: internalrpcauthority.v1.NoRestoreDirective.retry_not_before:type_name -> google.protobuf.Timestamp
-	33, // 18: internalrpcauthority.v1.NoRestoreDirective.verified_transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	33, // 19: internalrpcauthority.v1.RoleBoundRestoreDirective.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	51, // 20: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
-	28, // 21: internalrpcauthority.v1.GetRestoreDirectiveResponse.no_directive:type_name -> internalrpcauthority.v1.NoRestoreDirective
-	29, // 22: internalrpcauthority.v1.GetRestoreDirectiveResponse.directive:type_name -> internalrpcauthority.v1.RoleBoundRestoreDirective
-	51, // 23: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
-	3,  // 24: internalrpcauthority.v1.RestoreTransition.phase:type_name -> internalrpcauthority.v1.RestorePhase
-	51, // 25: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
-	33, // 26: internalrpcauthority.v1.PrepareRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	33, // 27: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	36, // 28: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.receipt:type_name -> internalrpcauthority.v1.QuiescenceAckReceipt
-	3,  // 29: internalrpcauthority.v1.QuiescenceAckReceipt.resulting_phase:type_name -> internalrpcauthority.v1.RestorePhase
-	51, // 30: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
-	33, // 31: internalrpcauthority.v1.CompleteRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
-	4,  // 32: internalrpcauthority.v1.AttestServedStateResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
-	51, // 33: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
-	51, // 34: internalrpcauthority.v1.IssueAttestationChallengeResponse.issued_at:type_name -> google.protobuf.Timestamp
-	51, // 35: internalrpcauthority.v1.IssueAttestationChallengeResponse.expires_at:type_name -> google.protobuf.Timestamp
-	4,  // 36: internalrpcauthority.v1.IssueAttestationChallengeResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
-	6,  // 37: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
-	5,  // 38: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
-	10, // 39: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
-	11, // 40: internalrpcauthority.v1.AuthorizationIssuerService.IssueContinuationAuthorizationContext:input_type -> internalrpcauthority.v1.IssueContinuationAuthorizationContextRequest
-	22, // 41: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
-	18, // 42: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
-	24, // 43: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
-	13, // 44: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
-	15, // 45: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
-	26, // 46: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
-	27, // 47: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
-	31, // 48: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
-	32, // 49: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
-	38, // 50: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
-	42, // 51: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:input_type -> internalrpcauthority.v1.IssueAttestationChallengeRequest
-	40, // 52: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
-	44, // 53: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
-	46, // 54: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
-	48, // 55: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
-	12, // 56: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
-	12, // 57: internalrpcauthority.v1.AuthorizationIssuerService.IssueContinuationAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
-	23, // 58: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
-	19, // 59: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
-	25, // 60: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
-	14, // 61: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
-	16, // 62: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
-	34, // 63: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
-	30, // 64: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
-	35, // 65: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
-	37, // 66: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
-	39, // 67: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
-	43, // 68: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:output_type -> internalrpcauthority.v1.IssueAttestationChallengeResponse
-	41, // 69: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
-	45, // 70: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
-	47, // 71: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
-	49, // 72: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
-	56, // [56:73] is the sub-list for method output_type
-	39, // [39:56] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	52, // 6: internalrpcauthority.v1.IssueAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
+	52, // 7: internalrpcauthority.v1.IssueContinuationAuthorizationContextResponse.expires_at:type_name -> google.protobuf.Timestamp
+	52, // 8: internalrpcauthority.v1.ResolveAuthorityProofResponse.expires_at:type_name -> google.protobuf.Timestamp
+	18, // 9: internalrpcauthority.v1.VerifyAuthorizationContextRequest.downstream_peer:type_name -> internalrpcauthority.v1.DownstreamTransportPeer
+	21, // 10: internalrpcauthority.v1.VerifyAuthorizationContextResponse.context:type_name -> internalrpcauthority.v1.VerifiedAuthorizationContext
+	9,  // 11: internalrpcauthority.v1.VerifiedAuthorizationContext.authority:type_name -> internalrpcauthority.v1.CallerAuthority
+	52, // 12: internalrpcauthority.v1.VerifiedAuthorizationContext.issued_at:type_name -> google.protobuf.Timestamp
+	52, // 13: internalrpcauthority.v1.VerifiedAuthorizationContext.not_before:type_name -> google.protobuf.Timestamp
+	52, // 14: internalrpcauthority.v1.VerifiedAuthorizationContext.expires_at:type_name -> google.protobuf.Timestamp
+	52, // 15: internalrpcauthority.v1.VerifiedAuthorizationContext.credential_authenticated_at:type_name -> google.protobuf.Timestamp
+	22, // 16: internalrpcauthority.v1.VerifiedAuthorizationContext.continuation:type_name -> internalrpcauthority.v1.ContinuationLineage
+	52, // 17: internalrpcauthority.v1.PrepareRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
+	52, // 18: internalrpcauthority.v1.NoRestoreDirective.retry_not_before:type_name -> google.protobuf.Timestamp
+	34, // 19: internalrpcauthority.v1.NoRestoreDirective.verified_transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	34, // 20: internalrpcauthority.v1.RoleBoundRestoreDirective.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	52, // 21: internalrpcauthority.v1.RoleBoundRestoreDirective.expires_at:type_name -> google.protobuf.Timestamp
+	29, // 22: internalrpcauthority.v1.GetRestoreDirectiveResponse.no_directive:type_name -> internalrpcauthority.v1.NoRestoreDirective
+	30, // 23: internalrpcauthority.v1.GetRestoreDirectiveResponse.directive:type_name -> internalrpcauthority.v1.RoleBoundRestoreDirective
+	52, // 24: internalrpcauthority.v1.CompleteRestoreRequest.recovery_target_time:type_name -> google.protobuf.Timestamp
+	3,  // 25: internalrpcauthority.v1.RestoreTransition.phase:type_name -> internalrpcauthority.v1.RestorePhase
+	52, // 26: internalrpcauthority.v1.RestoreTransition.safe_window_not_before:type_name -> google.protobuf.Timestamp
+	34, // 27: internalrpcauthority.v1.PrepareRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	34, // 28: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	37, // 29: internalrpcauthority.v1.AcknowledgeQuiescenceResponse.receipt:type_name -> internalrpcauthority.v1.QuiescenceAckReceipt
+	3,  // 30: internalrpcauthority.v1.QuiescenceAckReceipt.resulting_phase:type_name -> internalrpcauthority.v1.RestorePhase
+	52, // 31: internalrpcauthority.v1.QuiescenceAckReceipt.accepted_at:type_name -> google.protobuf.Timestamp
+	34, // 32: internalrpcauthority.v1.CompleteRestoreResponse.transition:type_name -> internalrpcauthority.v1.RestoreTransition
+	4,  // 33: internalrpcauthority.v1.AttestServedStateResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
+	52, // 34: internalrpcauthority.v1.AttestServedStateResponse.expires_at:type_name -> google.protobuf.Timestamp
+	52, // 35: internalrpcauthority.v1.IssueAttestationChallengeResponse.issued_at:type_name -> google.protobuf.Timestamp
+	52, // 36: internalrpcauthority.v1.IssueAttestationChallengeResponse.expires_at:type_name -> google.protobuf.Timestamp
+	4,  // 37: internalrpcauthority.v1.IssueAttestationChallengeResponse.kind:type_name -> internalrpcauthority.v1.ReadbackAttestationKind
+	6,  // 38: internalrpcauthority.v1.AuthorizationErrorDetail.reason:type_name -> internalrpcauthority.v1.AuthorizationErrorReason
+	5,  // 39: internalrpcauthority.v1.AuthorizationErrorDetail.stage:type_name -> internalrpcauthority.v1.AuthorizationFailureStage
+	10, // 40: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:input_type -> internalrpcauthority.v1.IssueAuthorizationContextRequest
+	11, // 41: internalrpcauthority.v1.AuthorizationIssuerService.IssueContinuationAuthorizationContext:input_type -> internalrpcauthority.v1.IssueContinuationAuthorizationContextRequest
+	23, // 42: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessRequest
+	19, // 43: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:input_type -> internalrpcauthority.v1.VerifyAuthorizationContextRequest
+	25, // 44: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessRequest
+	14, // 45: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:input_type -> internalrpcauthority.v1.ResolveAuthorityProofRequest
+	16, // 46: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessRequest
+	27, // 47: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:input_type -> internalrpcauthority.v1.PrepareRestoreRequest
+	28, // 48: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:input_type -> internalrpcauthority.v1.GetRestoreDirectiveRequest
+	32, // 49: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:input_type -> internalrpcauthority.v1.AcknowledgeQuiescenceRequest
+	33, // 50: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:input_type -> internalrpcauthority.v1.CompleteRestoreRequest
+	39, // 51: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessRequest
+	43, // 52: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:input_type -> internalrpcauthority.v1.IssueAttestationChallengeRequest
+	41, // 53: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:input_type -> internalrpcauthority.v1.AttestServedStateRequest
+	45, // 54: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:input_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessRequest
+	47, // 55: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:input_type -> internalrpcauthority.v1.PublishRoleCredentialRequest
+	49, // 56: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:input_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessRequest
+	12, // 57: internalrpcauthority.v1.AuthorizationIssuerService.IssueAuthorizationContext:output_type -> internalrpcauthority.v1.IssueAuthorizationContextResponse
+	13, // 58: internalrpcauthority.v1.AuthorizationIssuerService.IssueContinuationAuthorizationContext:output_type -> internalrpcauthority.v1.IssueContinuationAuthorizationContextResponse
+	24, // 59: internalrpcauthority.v1.AuthorizationIssuerService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationIssuerServiceCheckReadinessResponse
+	20, // 60: internalrpcauthority.v1.AuthorizationVerifierService.VerifyAuthorizationContext:output_type -> internalrpcauthority.v1.VerifyAuthorizationContextResponse
+	26, // 61: internalrpcauthority.v1.AuthorizationVerifierService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorizationVerifierServiceCheckReadinessResponse
+	15, // 62: internalrpcauthority.v1.AuthorityProofResolverService.ResolveAuthorityProof:output_type -> internalrpcauthority.v1.ResolveAuthorityProofResponse
+	17, // 63: internalrpcauthority.v1.AuthorityProofResolverService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityProofResolverServiceCheckReadinessResponse
+	35, // 64: internalrpcauthority.v1.RestoreControllerService.PrepareRestore:output_type -> internalrpcauthority.v1.PrepareRestoreResponse
+	31, // 65: internalrpcauthority.v1.RestoreControllerService.GetRestoreDirective:output_type -> internalrpcauthority.v1.GetRestoreDirectiveResponse
+	36, // 66: internalrpcauthority.v1.RestoreControllerService.AcknowledgeQuiescence:output_type -> internalrpcauthority.v1.AcknowledgeQuiescenceResponse
+	38, // 67: internalrpcauthority.v1.RestoreControllerService.CompleteRestore:output_type -> internalrpcauthority.v1.CompleteRestoreResponse
+	40, // 68: internalrpcauthority.v1.RestoreControllerService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreControllerServiceCheckReadinessResponse
+	44, // 69: internalrpcauthority.v1.AuthorityReadbackAttestorService.IssueAttestationChallenge:output_type -> internalrpcauthority.v1.IssueAttestationChallengeResponse
+	42, // 70: internalrpcauthority.v1.AuthorityReadbackAttestorService.AttestServedState:output_type -> internalrpcauthority.v1.AttestServedStateResponse
+	46, // 71: internalrpcauthority.v1.AuthorityReadbackAttestorService.CheckReadiness:output_type -> internalrpcauthority.v1.AuthorityReadbackAttestorServiceCheckReadinessResponse
+	48, // 72: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.PublishRoleCredential:output_type -> internalrpcauthority.v1.PublishRoleCredentialResponse
+	50, // 73: internalrpcauthority.v1.RestoreRoleCredentialPublisherService.CheckReadiness:output_type -> internalrpcauthority.v1.RestoreRoleCredentialPublisherServiceCheckReadinessResponse
+	57, // [57:74] is the sub-list for method output_type
+	40, // [40:57] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_internalrpcauthority_v1_authority_proto_init() }
@@ -4768,7 +4881,7 @@ func file_internalrpcauthority_v1_authority_proto_init() {
 	if File_internalrpcauthority_v1_authority_proto != nil {
 		return
 	}
-	file_internalrpcauthority_v1_authority_proto_msgTypes[23].OneofWrappers = []any{
+	file_internalrpcauthority_v1_authority_proto_msgTypes[24].OneofWrappers = []any{
 		(*GetRestoreDirectiveResponse_NoDirective)(nil),
 		(*GetRestoreDirectiveResponse_Directive)(nil),
 	}
@@ -4778,7 +4891,7 @@ func file_internalrpcauthority_v1_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internalrpcauthority_v1_authority_proto_rawDesc), len(file_internalrpcauthority_v1_authority_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   44,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   6,
 		},
