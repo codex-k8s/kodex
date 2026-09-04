@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -55,6 +56,9 @@ type appServer struct {
 }
 
 func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (Result, error) {
+	if err := validateRuntimeSelection(input); err != nil {
+		return Result{}, err
+	}
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, err
 	}
@@ -107,8 +111,10 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.captureUsageBaseline(); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
-	turnParams := map[string]any{"threadId": state.threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
-		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
+	turnParams, err := turnStartParams(input, state.threadID, prompt)
+	if err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
 	raw, err = server.call(ctx, state, "turn/start", turnParams)
 	if err != nil {
 		return Result{}, server.abort(ctx, state, err)
@@ -142,6 +148,23 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	result.ArchiveSHA256 = digest
 	result.ArchiveSizeBytes = sizeBytes
 	return result, nil
+}
+
+func turnStartParams(input model.Input, threadID string, prompt []byte) (map[string]any, error) {
+	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
+	if err != nil {
+		return nil, ErrRuntimeProfile
+	}
+	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
+		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
+	// Resume не должен сохранять reasoning/personality предыдущей attempt.
+	if overlay.ModelReasoningEffort != "" {
+		params["effort"] = overlay.ModelReasoningEffort
+	}
+	if overlay.Personality != "" {
+		params["personality"] = overlay.Personality
+	}
+	return params, nil
 }
 
 func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {

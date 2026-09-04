@@ -3,6 +3,8 @@ package workspace
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -82,7 +84,7 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if err != nil {
 		return classify(err)
 	}
-	if _, err = unix.Write(file, []byte(initialPayload)); err == nil {
+	if err = writeFull(file, []byte(initialPayload)); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr := unix.Close(file)
@@ -99,7 +101,7 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if err != nil {
 		return classify(err)
 	}
-	if _, err = unix.Write(file, []byte(replacementPayload)); err == nil {
+	if err = writeFull(file, []byte(replacementPayload)); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr = unix.Close(file)
@@ -121,10 +123,6 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if err = unix.Fsync(nestedDirectory); err != nil {
 		return classify(err)
 	}
-	if err = unix.Close(nestedDirectory); err != nil {
-		return classify(err)
-	}
-	nestedDirectory = -1
 	if err = unix.Unlinkat(directory, nested, unix.AT_REMOVEDIR); err != nil {
 		return classify(err)
 	}
@@ -137,7 +135,7 @@ func verifyFile(directory int, name, expected string) error {
 		return classify(err)
 	}
 	buffer := make([]byte, len(expected)+1)
-	read, readErr := unix.Read(file, buffer)
+	read, readErr := readBounded(file, buffer)
 	closeErr := unix.Close(file)
 	if readErr != nil || closeErr != nil || read != len(expected) || string(buffer[:read]) != expected {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
@@ -147,8 +145,8 @@ func verifyFile(directory int, name, expected string) error {
 
 func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, provenance ResultProvenance) error {
 	if provenance.Schema != "kodex.workspace-write-result.v1" || provenance.RuntimeRevisionRef == "" ||
-		provenance.RuntimeRevisionVersion < 1 || len(provenance.RuntimeRevisionDigest) != 64 ||
-		provenance.Attempt < 1 || len(provenance.ExecutionBindingDigest) != 64 {
+		provenance.RuntimeRevisionVersion < 1 || !validSHA256(provenance.RuntimeRevisionDigest) ||
+		provenance.Attempt < 1 || !validSHA256(provenance.ExecutionBindingDigest) {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	raw, err := json.Marshal(provenance)
@@ -164,6 +162,13 @@ func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, p
 		return classify(err)
 	}
 	defer unix.Close(directory)
+	usage, files, err := writableUsage(root, policy)
+	if err != nil {
+		return err
+	}
+	if !withinQuota(usage, files, int64(len(raw)), policy) {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
+	}
 	const temporary = ".workspace-write-result.next"
 	const committed = "workspace-write-result.json"
 	_ = unix.Unlinkat(directory, temporary, 0)
@@ -171,7 +176,7 @@ func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, p
 	if err != nil {
 		return classify(err)
 	}
-	if _, err = unix.Write(file, raw); err == nil {
+	if err = writeFull(file, raw); err == nil {
 		err = unix.Fsync(file)
 	}
 	closeErr := unix.Close(file)
@@ -187,6 +192,43 @@ func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, p
 		return classify(err)
 	}
 	return nil
+}
+
+func validSHA256(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size
+}
+
+func writeFull(file int, payload []byte) error {
+	for len(payload) != 0 {
+		written, err := unix.Write(file, payload)
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if err != nil || written <= 0 {
+			return errors.New("workspace write is incomplete")
+		}
+		payload = payload[written:]
+	}
+	return nil
+}
+
+func readBounded(file int, buffer []byte) (int, error) {
+	total := 0
+	for total < len(buffer) {
+		read, err := unix.Read(file, buffer[total:])
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if err != nil {
+			return total, err
+		}
+		if read == 0 {
+			return total, nil
+		}
+		total += read
+	}
+	return total, nil
 }
 
 func writableUsage(root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, error) {

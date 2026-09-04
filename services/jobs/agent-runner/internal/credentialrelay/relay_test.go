@@ -107,6 +107,7 @@ func TestValidateRequestRequiresExactExecutionBinding(t *testing.T) {
 func TestValidateRequestAcceptsOnlyCompatibleWarmTurn(t *testing.T) {
 	turn, payload := validRelayFixture()
 	turn.SystemAssistant = true
+	turn.ExecutionBindingDigest, turn.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(turn)
 	payload.Input = turn
 	warm := turn
 	warm.Mode = runtimecontract.RunnerModeWarm

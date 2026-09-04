@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -20,14 +19,31 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
-var runtimeModelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 var ErrRuntimeProfile = errors.New("Codex runtime profile is invalid")
 
+var runtimeModelEfforts = map[string][]string{
+	"gpt-6-astra":         {"", "low", "medium", "high", "xhigh", "max"},
+	"gpt-5.6-sol":         {"", "none", "low", "medium", "high", "xhigh", "max"},
+	"gpt-5.6-terra":       {"", "none", "low", "medium", "high", "xhigh", "max"},
+	"gpt-5.6-luna":        {"", "none", "low", "medium", "high", "xhigh", "max"},
+	"gpt-5.5":             {"", "low", "medium", "high", "xhigh"},
+	"gpt-5.4":             {"", "none", "low", "medium", "high", "xhigh"},
+	"gpt-5.4-mini":        {"", "none", "low", "medium", "high", "xhigh"},
+	"gpt-5.3-codex":       {"", "low", "medium", "high", "xhigh"},
+	"gpt-5.3-codex-spark": {"", "low", "medium", "high", "xhigh"},
+}
+
 func ValidateRuntimeProfile(input model.Input) error {
-	if input.Validate() != nil || input.Provider != "openai" || !runtimeModelPattern.MatchString(input.Model) {
+	if input.Validate() != nil {
 		return ErrRuntimeProfile
 	}
-	if _, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay); err != nil {
+	return validateRuntimeSelection(input)
+}
+
+func validateRuntimeSelection(input model.Input) error {
+	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
+	efforts, knownModel := runtimeModelEfforts[input.Model]
+	if err != nil || input.Provider != "openai" || !knownModel || !slices.Contains(efforts, overlay.ModelReasoningEffort) {
 		return ErrRuntimeProfile
 	}
 	for _, tool := range input.EnvironmentTools {

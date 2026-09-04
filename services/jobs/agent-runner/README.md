@@ -4,8 +4,8 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 2.0.0
-updated: 2026-08-23
+version: 2.1.0
+updated: 2026-09-04
 ---
 
 # agent-runner
@@ -19,10 +19,12 @@ updated: 2026-08-23
 
 Runner:
 
-- читает и валидирует immutable `kodex.agent-runner-input.v4`;
-- подтверждает exact turn/attempt/fence через runtime-controller callback;
-- материализует bounded instructions, files, provider binding и MCP config;
-- запускает provider runtime прямым `exec.CommandContext` без shell workflow;
+- читает и строго валидирует immutable `kodex.agent-runner-input.v6`;
+- подтверждает exact organization/project/run/node/session/turn/attempt/fence,
+  полный execution binding и MCP binding через execution-scoped callback;
+- применяет готовые server-materialized instructions без повторного rendering;
+- материализует exact VFS manifests/files, provider binding и MCP config;
+- запускает provider runtime прямым `exec` без shell workflow;
 - передаёт coalesced safe progress;
 - завершает child processes и формирует signed bounded terminal handoff.
 
@@ -79,12 +81,104 @@ values не публикуются в logs, NATS или WebSocket. Runtime во�
 safe code/message key и bounded status. Пользовательский текст локализуется по
 проверенной locale из YAML i18n, а runtime diagnostics остаются на английском.
 
+## Immutable RuntimeRevision
+
+Execution binding охватывает identity и все применимые поля materialization:
+exact model/reasoning overlay, runtime/provider policy, готовый prompt и его
+version/digests, promoted image, image tools, environment/secret descriptors,
+effective capabilities, grants, delegation targets, VFS attachment sets и
+files, session context, workspace policy и Codex session. Изменение одного поля
+без новой server-owned binding отклоняется до provider process.
+
+Runner не разрешает `latest` refs и не вычисляет permissions из локального или
+caller state. Config overlay проходит strict TOML decode с запретом unknown и
+authority keys. Model и reasoning проверяются по закрытому runtime catalog,
+каждый image tool обязан существовать как executable в exact image, а MCP
+readiness требует точного каталога tools, соответствующего RuntimeRevision.
+
+Для initial Agent, Process stage и Automation task передаётся как точное user
+message, а готовый prompt хранится в `AGENTS.md`. Для Continuation и Retry user
+message дополнительно содержит exact revision/attempt и текущие
+model/reasoning/image/tools/MCP/files/config bindings, а также обязательные
+`workflow-stage`, `automation`, `session-continuation` и
+`effective-capabilities` blocks.
+
+VFS inputs материализуются только после digest verification. Skills
+представлены exact `environment_tools` выбранного promoted image, memories —
+version-pinned knowledge artifacts в read-only `/workspace/knowledge`. Эти
+проекции не дополняются из mutable catalogs во время turn.
+
+## Workspace и результат
+
+`/workspace/input`, `/workspace/knowledge` и provider credential snapshot
+read-only; запись разрешена только в attempt workspace с bounded quota.
+Readiness выполняет реальный create/read/atomic replace/read/delete canary через
+те же `openat`/`O_NOFOLLOW` primitives, что и рабочий outbox. При успешном
+`workspace-write` runner атомарно публикует
+`workspace-write-result.json` с exact RuntimeRevision, attempt и execution
+binding provenance, затем включает файл в bounded completion artifacts.
+
+Runner является процессом внутри ephemeral либо warm role Pod. Отдельных
+Deployment, Service и Kubernetes RBAC у него нет. ServiceAccount не получает
+token; default-deny и warm exact egress находятся в `runtime-workloads`, а
+per-attempt NetworkPolicy/RBAC materializes runtime-controller из immutable
+environment policy. Наблюдаемость процесса использует общий Go runtime;
+готовность workload и terminal safe codes наблюдаются владельцем lifecycle —
+runtime-controller.
+
 ## Локальная проверка
 
 ```bash
-cd services/jobs/agent-runner
-GOWORK=off go test ./...
+make test-agent-runner
 ```
+
+Требуются Go, jq, kubectl, yq и bubblewrap с доступным user namespace.
+Проверка не использует API credentials и не обращается к живому кластеру.
+
+## Карта критериев #1026
+
+| Критерий | Конкретное доказательство |
+| --- | --- |
+| Immutable input, отсутствие caller authority | `runtimecontract.TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant`: изменение task/model/prompt/image/tool/file/credential/grant нарушает binding |
+| Initial, workflow, automation, continuation, retry | `app.TestMaterializedPromptCoversAllRunnerLaunchKinds`; `TestBuildInitialPromptUsesExactServerTask`; `TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks` |
+| Exact model/reasoning/config | `codex.TestPrepareHomeMaterializesOnlyBoundEnvironment`; `TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt`: `gpt-6-astra`, effort/personality передаются в `turn/start`, включая resume |
+| Отказ до процесса | `codex.TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess`; `readiness.TestCheckMCPRejectsUnknownMissingAndDuplicateToolsBeforeProviderStart` |
+| VFS и session isolation | `app.TestWriteInputManifestsUsesCanonicalFullCatalog`; `TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation`; `TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink`; `runtimecontract.TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift` |
+| MVP-UI-61, положительная запись | `app.TestWorkspaceSubprocessWriteAndCompletionProvenance`: отдельный детерминированный процесс в bubblewrap создаёт вложенный файл, читает, заменяет inode через rename, читает и удаляет; runner собирает result и exact revision/attempt provenance в валидный completion |
+| Отдельные отрицательные записи | `app.TestWorkspaceSubprocessRejectsProtectedWrites`: immutable, credential, foreign, symlink, traversal; `workspace.TestRunCanaryRejectsSymlinkEscape` |
+| Bounded completion | `app.TestCompletionKeepsProvenanceAtArtifactLimit`; `TestCollectArtifactsDoesNotBlockOnFIFO`; `callback.TestCompleteRejectsMismatchedAttemptBeforeTransport` |
+| Readiness/deploy | `make test-agent-runner`: runtimecontract, runner, v6 schema assertions и локальный render `runtime-workloads`, ServiceAccount/RBAC/default-deny/exact warm egress |
+
+Subprocess acceptance проверяет реальные операции файловой системы, но заменяет
+недетерминированную модель тестовым процессом. Это не live Codex/API smoke и не
+доказательство полного развёрнутого пути UI → controller → role Pod → storage.
+Полный baseline и общее product/security/architecture review выполняются
+отдельно на интегрированном SHA после #1025. Сохранённые overlapping изменения
+`runtimecontract` должны быть согласованы с ABI владельца #1025 при интеграции;
+новый альтернативный input contract runner не вводит.
+
+## Жизненный цикл и полномочия
+
+| Переход | Producer → runner → авторитетный результат |
+| --- | --- |
+| Initial Agent | Проверенный actor/grant у владельца → immutable revision/input → exact task и готовый `AGENTS.md` → execution-scoped completion |
+| Workflow stage | Опубликованная стадия и server-materialized service block → тот же runner path → completion конкретной node/attempt |
+| Automation | Владелец запуска materializes automation block/revision → тот же runner path → completion конкретной attempt |
+| Continuation | Владелец закрывает прежнюю attempt и назначает новую revision → явное user message с bindings и service blocks → новый completion |
+| Retry | Новая attempt/grant/revision от владельца → свежий outbox, прежняя session только по pinned archive → новый completion; старые artifacts не переиздаются |
+| Revoked/cancel/expiry | Авторитетный callback/MCP отказывает по lease/grant; runner не создаёт replacement grant и не вычисляет permissions из prompt |
+| Terminal | Broker завершает provider, runner собирает bounded artifacts → callback с execution binding, revision и attempt → owner transaction и дальнейшие события принадлежат runtime-controller |
+
+Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal events.
+Его граница: immutable input → validated profile → MCP readiness тем же
+авторизованным путём → provider → `/v1/executions/{lease}/complete`.
+Серверный отзыв действующего grant проверяется callback, а не локальным
+пересчётом immutable snapshot.
+
+Через Context7 проверена документация OpenAI Codex: `config.toml`,
+`CODEX_HOME`, MCP configuration и app-server `thread/resume`/`turn/start`
+(`effort`, `personality`). Источник:
+https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
 Schema: `contracts/runtime-controller/v6/agent-runner-input.schema.json`.
 Supply chain: `docs/domains/images-supply-chain.md`.

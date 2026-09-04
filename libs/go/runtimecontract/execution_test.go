@@ -59,13 +59,22 @@ func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *tes
 		t.Fatalf("compatible warm and turn digests differ: %s != %s", warmDigest, turnDigest)
 	}
 
-	turn.Model = "different-model"
-	driftedDigest, err := WarmCompatibilityDigest(turn)
-	if err != nil {
-		t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
-	}
-	if driftedDigest == warmDigest {
-		t.Fatal("runtime drift retained the warm compatibility digest")
+	for name, mutate := range map[string]func(*RunnerInput){
+		"model":     func(input *RunnerInput) { input.Model = "different-model" },
+		"session":   func(input *RunnerInput) { input.SessionRef = "session_other123" },
+		"workspace": func(input *RunnerInput) { input.WorkspacePolicy.Digest = strings.Repeat("e", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			drifted := turn
+			mutate(&drifted)
+			driftedDigest, err := WarmCompatibilityDigest(drifted)
+			if err != nil {
+				t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
+			}
+			if driftedDigest == warmDigest {
+				t.Fatal("runtime drift retained the warm compatibility digest")
+			}
+		})
 	}
 }
 
@@ -160,6 +169,11 @@ func TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant(t *testing
 	refreshRunnerInputBindings(&base)
 	for name, mutate := range map[string]func(*RunnerInput){
 		"model": func(input *RunnerInput) { input.Model = "caller-model" },
+		"task":  func(input *RunnerInput) { input.Task = "Caller task" },
+		"credential": func(input *RunnerInput) {
+			input.ProviderCredentialRevision++
+		},
+		"role definition": func(input *RunnerInput) { input.RoleDefinitionRef = "role_other123" },
 		"reasoning": func(input *RunnerInput) {
 			input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
 			_, input.ConfigOverlayDigest, _ = CanonicalConfigOverlay(input.ConfigOverlay)

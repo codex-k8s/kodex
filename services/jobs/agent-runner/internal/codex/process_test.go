@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -10,6 +11,32 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
+	for _, session := range []string{"", "existing-thread"} {
+		input := model.Input{Model: "gpt-6-astra", CodexSessionID: session, WorkspaceRoot: "/workspace",
+			CodexApprovalPolicy: "never", ConfigOverlay: "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n"}
+		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
+		if err != nil || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
+			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
+			t.Fatalf("turn parameters = %#v, error = %v", params, err)
+		}
+	}
+}
+
+func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *testing.T) {
+	for _, input := range []model.Input{
+		{Provider: "openai", Model: "unknown"},
+		{Provider: "openai", Model: "gpt-6-astra", ConfigOverlay: "unknown = true"},
+		{Provider: "openai", Model: "gpt-6-astra", ConfigOverlay: "model_reasoning_effort = \"none\""},
+		{Provider: "openai", Model: "gpt-6-astra", EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Command: "missing-kodex-tool"}}},
+		{Provider: "openai", Model: "gpt-6-astra", ConfigOverlay: "[mcp_servers.foreign]\nurl = \"https://example.invalid\""},
+	} {
+		if _, err := executeLocal(context.Background(), input, []byte("task"), ""); !errors.Is(err, ErrRuntimeProfile) {
+			t.Fatalf("selection reached credential/process boundary: %v", err)
+		}
+	}
+}
 
 func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	t.Parallel()

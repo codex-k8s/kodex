@@ -172,7 +172,7 @@ func ParseConfigOverlay(raw string) (ConfigOverlay, error) {
 	if undecoded := metadata.Undecoded(); len(undecoded) != 0 {
 		return ConfigOverlay{}, errors.New("config overlay contains unsupported keys")
 	}
-	if !containsString([]string{"", "minimal", "low", "medium", "high", "xhigh"}, overlay.ModelReasoningEffort) ||
+	if !containsString([]string{"", "none", "low", "medium", "high", "xhigh", "max"}, overlay.ModelReasoningEffort) ||
 		!containsString([]string{"", "none", "friendly", "pragmatic"}, overlay.Personality) ||
 		!containsString([]string{"", "save-all", "none"}, overlay.History.Persistence) ||
 		(overlay.AllowLoginShell != nil && *overlay.AllowLoginShell) {

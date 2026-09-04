@@ -119,22 +119,26 @@ func materializedInstructions(kind string, capabilities []string) string {
 }
 
 func TestBuildInitialPromptUsesExactServerTask(t *testing.T) {
-	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Analyze the attached customer brief."}
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "  Analyze the attached customer brief.\n"}
 	prompt, err := buildPrompt(input)
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
 	}
-	if string(prompt) != input.Task+"\n" {
+	if string(prompt) != input.Task {
 		t.Fatalf("initial prompt was rebuilt: %q", prompt)
 	}
 }
 
 func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *testing.T) {
-	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", CodexSessionID: "session-codex",
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", CodexSessionID: "00000000-0000-4000-8000-000000000001",
 		Attempt: 2, RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: 3, RuntimeRevisionDigest: strings.Repeat("a", 64),
 		Model: "gpt-5-codex", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64), ImageManifestDigest: "sha256:" + strings.Repeat("b", 64),
-		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigDigest: strings.Repeat("c", 64), ConfigOverlayRef: "cover_abcdefgh",
+		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 4, RuntimeConfigDigest: strings.Repeat("c", 64),
+		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 5, ProviderPolicyDigest: strings.Repeat("f", 64),
+		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 6,
 		ConfigOverlayDigest: strings.Repeat("d", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 7, RuntimeEnvironmentDigest: strings.Repeat("1", 64),
+		EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingVersion: 8, EnvironmentBindingDigest: strings.Repeat("2", 64),
 		MCPBindingDigest: strings.Repeat("e", 64), Capabilities: []string{"platform.artifact.manage"},
 		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Name: "Shell", Command: "sh", Description: "Shell"}},
 		Instructions:     materializedInstructions("session-continuation", []string{"platform.artifact.manage"}),
@@ -145,7 +149,8 @@ func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *te
 	}
 	for _, expected := range []string{
 		"<runtime-revision-delta>", "attempt=2", "model=gpt-5-codex", "reasoning=high",
-		"tools=Shell:sh", "mcp=" + input.MCPBindingDigest, "files=:",
+		"tools=Shell:sh", "mcp=" + input.MCPBindingDigest, "files=::",
+		"config=rconf_abcdefgh:4:", "environment=renv_abcdefgh:7:",
 		`<session-continuation used="true">configured</session-continuation>`,
 		`<effective-capabilities used="true">platform.artifact.manage</effective-capabilities>`,
 	} {
@@ -155,21 +160,61 @@ func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *te
 	}
 }
 
-func TestRenderInstructionsAcceptsOnlyServerMaterializedPrompt(t *testing.T) {
-	input := model.Input{Instructions: materializedInstructions("workflow-stage", []string{"project.read"}), Capabilities: []string{"project.read"}}
-	rendered, err := renderInstructions(input)
-	if err != nil {
-		t.Fatalf("renderInstructions() error = %v", err)
+func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
+	tests := []struct {
+		name, kind   string
+		attempt      int32
+		continued    bool
+		resumeThread bool
+	}{
+		{name: "initial Agent", attempt: 1},
+		{name: "Process stage", kind: "workflow-stage", attempt: 1},
+		{name: "Automation", kind: "automation", attempt: 1},
+		{name: "Continuation", kind: "session-continuation", attempt: 1, continued: true, resumeThread: true},
+		{name: "Retry", kind: "session-continuation", attempt: 2, continued: true},
 	}
-	if rendered != input.Instructions {
-		t.Fatalf("server prompt was changed: %q", rendered)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := model.Input{
+				Mode: runtimecontract.RunnerModeTurn, Task: "Exact server task.", Attempt: test.attempt,
+				Instructions: materializedInstructions(test.kind, []string{"project.read"}), Capabilities: []string{"project.read"},
+				RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: int64(test.attempt), RuntimeRevisionDigest: strings.Repeat("a", 64),
+				Model: "gpt-5.4", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64),
+				ImageManifestDigest: "sha256:" + strings.Repeat("b", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+				MCPBindingDigest: strings.Repeat("c", 64), RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigDigest: strings.Repeat("d", 64),
+				ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyDigest: strings.Repeat("e", 64), ConfigOverlayRef: "cover_abcdefgh",
+				ConfigOverlayDigest: strings.Repeat("f", 64), RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentDigest: strings.Repeat("1", 64),
+				EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingDigest: strings.Repeat("2", 64),
+			}
+			if test.resumeThread {
+				input.CodexSessionID = "00000000-0000-4000-8000-000000000001"
+			}
+			if err := validateMaterializedInstructions(input); err != nil {
+				t.Fatalf("launch prompt rejected: %v", err)
+			}
+			prompt, err := buildPrompt(input)
+			if err != nil {
+				t.Fatalf("buildPrompt() error = %v", err)
+			}
+			hasDelta := strings.Contains(string(prompt), "<runtime-revision-delta>")
+			if hasDelta != test.continued {
+				t.Fatalf("continuation delta presence = %v, want %v: %s", hasDelta, test.continued, prompt)
+			}
+		})
+	}
+}
+
+func TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt(t *testing.T) {
+	input := model.Input{Instructions: materializedInstructions("workflow-stage", []string{"project.read"}), Capabilities: []string{"project.read"}}
+	if err := validateMaterializedInstructions(input); err != nil {
+		t.Fatalf("validateMaterializedInstructions() error = %v", err)
 	}
 	for _, invalid := range []string{
 		"{{.task}}", "plain text",
 		strings.Replace(input.Instructions, `<automation used="false">unused</automation>`, `<automation used="true">configured</automation>`, 1),
 		strings.Replace(input.Instructions, "project.read", "foreign.write", 1),
 	} {
-		if _, err := renderInstructions(model.Input{Instructions: invalid, Capabilities: input.Capabilities}); err == nil {
+		if err := validateMaterializedInstructions(model.Input{Instructions: invalid, Capabilities: input.Capabilities}); err == nil {
 			t.Fatalf("invalid materialized instructions were accepted: %q", invalid)
 		}
 	}
@@ -206,6 +251,9 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		t.Fatalf("BuildAttachmentManifest(history) error = %v", err)
 	}
 	input.WorkspaceRoot = root
+	if err := os.MkdirAll(filepath.Join(root, "knowledge"), 0o770); err != nil {
+		t.Fatalf("MkdirAll(knowledge) error = %v", err)
+	}
 	for _, set := range input.AttachmentSets {
 		if err := os.MkdirAll(filepath.Join(root, "input", set.Ref), 0o750); err != nil {
 			t.Fatalf("MkdirAll() error = %v", err)
@@ -216,6 +264,9 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		"aset_history1":        history,
 	}, workspace); err != nil {
 		t.Fatalf("writeInputManifests() error = %v", err)
+	}
+	if err := protectReadOnlyWorkspaceTrees(root, "input", "knowledge"); err != nil {
+		t.Fatalf("protectReadOnlyWorkspaceTrees() error = %v", err)
 	}
 	for path, expected := range map[string][]byte{
 		filepath.Join(root, "input", input.AttachmentSetRef, "manifest.json"): direct.Bytes,
@@ -234,6 +285,18 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		}
 		if info.Mode().Perm() != 0o440 {
 			t.Fatalf("manifest %s mode = %v", path, info.Mode().Perm())
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(root, "input"), filepath.Join(root, "input", input.AttachmentSetRef),
+		filepath.Join(root, "input", "aset_history1"), filepath.Join(root, "knowledge"),
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("Stat(%s) error = %v", path, err)
+		}
+		if info.Mode().Perm() != 0o750 || info.Mode()&os.ModeSetgid == 0 {
+			t.Fatalf("read-only directory mode for %s = %v", path, info.Mode())
 		}
 	}
 }

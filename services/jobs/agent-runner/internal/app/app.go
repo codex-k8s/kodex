@@ -101,18 +101,18 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return err
 	}
 	defer client.Close()
-	state.ready.Store(true)
 	if mode == "runtime-session" {
-		resultErr = runTurn(lifecycleContext, input, client)
+		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) })
 		return resultErr
 	}
+	state.ready.Store(true)
 	for {
 		turn, available, nextErr := client.NextWarm(lifecycleContext, input)
 		if nextErr != nil {
 			return nextErr
 		}
 		if available {
-			if err := runTurn(lifecycleContext, turn, client); err != nil {
+			if err := runTurn(lifecycleContext, turn, client, nil); err != nil {
 				return err
 			}
 		}
@@ -127,7 +127,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 }
 
-func runTurn(ctx context.Context, input model.Input, client *callback.Client) error {
+func runTurn(ctx context.Context, input model.Input, client *callback.Client, workingPathReady func()) error {
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return errors.New("runtime turn input is invalid")
 	}
@@ -137,7 +137,13 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err := materializeInputArtifacts(ctx, input, client); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
 	}
-	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token())
+	if err := codex.ValidateRuntimeProfile(input); err != nil {
+		return completeFailure(ctx, input, client, runtimeExecutionFailureCode(err))
+	}
+	if err := resetWorkspaceDirectory(input.WorkspaceRoot, ".kodex/outbox"); err != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
+	}
+	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token(), codex.RequiredMCPToolNames(input))
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_MCP_UNAVAILABLE")
 	}
@@ -146,6 +152,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 		defer cancel()
 		_ = mcpProxy.Close(shutdown)
 	}()
+	if workingPathReady != nil {
+		workingPathReady()
+	}
 	if err := client.Progress(ctx, input, "MODEL_REQUEST_RUNNING"); err != nil {
 		return err
 	}
@@ -167,7 +176,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
 		return completeResultFailure(ctx, input, client, result, message)
 	}
-	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 1<<20 || !utf8.ValidString(result.FinalMessage) {
+	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 64<<10 || !utf8.ValidString(result.FinalMessage) {
 		return completeFailure(ctx, input, client, "RUNTIME_RESULT_INVALID")
 	}
 	if input.CodexSandbox == "workspace-write" && hasCapability(input, runtimecontract.ArtifactCapability) {
@@ -184,6 +193,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 		return completeFailure(ctx, input, client, "RUNTIME_ARTIFACT_INVALID")
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	if payload.Validate() != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_RESULT_INVALID")
+	}
 	return client.Complete(ctx, input, payload)
 }
 
@@ -299,7 +311,7 @@ func materializeWorkspace(input model.Input) error {
 	if err := validateMaterializedInstructions(input); err != nil {
 		return err
 	}
-	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(strings.TrimSpace(input.Instructions)+"\n")); err != nil {
+	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(input.Instructions)); err != nil {
 		return err
 	}
 	prompt, err := buildPrompt(input)
@@ -318,9 +330,8 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		return nil, errors.New("turn prompt is unavailable")
 	}
 	var builder strings.Builder
-	builder.WriteString(strings.TrimSpace(input.Task))
-	builder.WriteString("\n")
-	if input.CodexSessionID != "" {
+	builder.WriteString(input.Task)
+	if input.CodexSessionID != "" || strings.Contains(input.Instructions, `<session-continuation used="true">`) {
 		if err := appendContinuationRevision(&builder, input); err != nil {
 			return nil, err
 		}
@@ -343,6 +354,11 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 	}
 	sort.Strings(toolNames)
 	mcpTools := codex.RequiredMCPToolNames(input)
+	grants := make([]string, 0, len(input.IntegrationGrants))
+	for _, grant := range input.IntegrationGrants {
+		grants = append(grants, grant.Ref+":"+grant.ConnectionRef+":"+grant.CapabilityKey)
+	}
+	sort.Strings(grants)
 	files := make([]string, 0, len(input.InputArtifacts))
 	for _, artifact := range input.InputArtifacts {
 		files = append(files, artifact.Ref+":"+artifact.Digest)
@@ -354,9 +370,14 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 	builder.WriteString("model=" + input.Model + "\nreasoning=" + overlay.ModelReasoningEffort + "\n")
 	builder.WriteString("image=" + input.ImageReference + ":" + input.ImageManifestDigest + "\n")
 	builder.WriteString("tools=" + strings.Join(toolNames, ",") + "\n")
-	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + "\n")
-	builder.WriteString("files=" + input.AttachmentSetManifestDigest + ":" + strings.Join(files, ",") + "\n")
-	builder.WriteString("config=" + input.RuntimeConfigRef + ":" + input.RuntimeConfigDigest + ":" + input.ConfigOverlayRef + ":" + input.ConfigOverlayDigest + "\n")
+	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + ":" + strings.Join(grants, ",") + "\n")
+	builder.WriteString("files=" + input.AttachmentSetRef + ":" + input.AttachmentSetManifestDigest + ":" + strings.Join(files, ",") + "\n")
+	builder.WriteString("config=" + input.RuntimeConfigRef + ":" + strconv.FormatInt(input.RuntimeConfigVersion, 10) + ":" + input.RuntimeConfigDigest +
+		":" + input.ProviderPolicyRef + ":" + strconv.FormatInt(input.ProviderPolicyVersion, 10) + ":" + input.ProviderPolicyDigest +
+		":" + input.ConfigOverlayRef + ":" + strconv.FormatInt(input.ConfigOverlayVersion, 10) + ":" + input.ConfigOverlayDigest + "\n")
+	builder.WriteString("environment=" + input.RuntimeEnvironmentRef + ":" + strconv.FormatInt(input.RuntimeEnvironmentVersion, 10) + ":" +
+		input.RuntimeEnvironmentDigest + ":" + input.EnvironmentBindingRef + ":" + strconv.FormatInt(input.EnvironmentBindingVersion, 10) +
+		":" + input.EnvironmentBindingDigest + "\n")
 	builder.WriteString("</runtime-revision-delta>\n")
 	for _, name := range []string{"workflow-stage", "automation", "session-continuation", "effective-capabilities"} {
 		block, blockErr := materializedServiceBlock(input.Instructions, name)
@@ -427,37 +448,6 @@ func materializedServiceBlock(value, name string) (string, error) {
 	return value[start:end], nil
 }
 
-func appendAttachmentNotice(builder *strings.Builder, input model.Input) error {
-	inputFiles := scopedArtifacts(input.InputArtifacts, "INPUT")
-	if len(inputFiles) == 0 {
-		return nil
-	}
-	builder.WriteString("\n# Platform attachment notice\n\n")
-	builder.WriteString("The user attached ")
-	builder.WriteString(strconv.Itoa(len(inputFiles)))
-	builder.WriteString(" read-only file(s) to this turn. The authoritative manifest is `/workspace/input/")
-	builder.WriteString(input.AttachmentSetRef)
-	builder.WriteString("/manifest.json` and the files directory is `/workspace/input/")
-	builder.WriteString(input.AttachmentSetRef)
-	builder.WriteString("/files`.\n")
-	if len(inputFiles) <= 20 {
-		for _, artifact := range inputFiles {
-			path, err := runtimecontract.ArtifactWorkspacePath(input.AttachmentSetRef, artifact)
-			if err != nil {
-				return errors.New("resolve attachment notice path")
-			}
-			builder.WriteString("\n- `")
-			builder.WriteString(path)
-			builder.WriteString("`")
-		}
-		builder.WriteString("\n")
-	}
-	if input.CodexSessionID != "" || input.AttachmentContext == "SESSION_TURN" || input.AttachmentContext == "OWNER_GATE_MESSAGE" {
-		builder.WriteString("These files were added with a continuation. Treat them as new input for the current turn even when earlier session context does not mention them.\n")
-	}
-	return nil
-}
-
 func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope string) []runtimecontract.RunnerInputArtifact {
 	result := make([]runtimecontract.RunnerInputArtifact, 0, len(artifacts))
 	for _, artifact := range artifacts {
@@ -466,91 +456,6 @@ func scopedArtifacts(artifacts []runtimecontract.RunnerInputArtifact, scope stri
 		}
 	}
 	sort.Slice(result, func(left, right int) bool { return result[left].Position < result[right].Position })
-	return result
-}
-
-func renderInstructions(input model.Input) (string, error) {
-	if err := validateMaterializedInstructions(input); err != nil {
-		return "", err
-	}
-	return input.Instructions, nil
-}
-
-func promptTemplateVariables(input model.Input) (map[string]any, error) {
-	manifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
-	if err != nil {
-		return nil, errors.New("build instruction attachment manifest")
-	}
-	fileScope := func(files []runtimecontract.AttachmentManifestFile, directory, manifestPath string) map[string]any {
-		items := make([]map[string]any, 0, len(files))
-		for _, file := range files {
-			items = append(items, map[string]any{
-				"ref": file.ArtifactRef, "name": file.FileName, "media_type": file.MediaType,
-				"size": file.SizeBytes, "sha256": file.SHA256,
-				"path": file.Path, "source": file.Source, "version": file.Version,
-				"revision": file.Revision, "purpose": file.Purpose,
-			})
-		}
-		return map[string]any{"files": items, "files_count": len(items), "files_dir": directory, "manifest_path": manifestPath}
-	}
-	inputs := scopedManifestFiles(manifest.Manifest.Files, runtimecontract.AttachmentScopeInput)
-	sessionInputs := append(scopedManifestFiles(manifest.Manifest.Files, runtimecontract.AttachmentScopeSession), inputs...)
-	knowledge := scopedManifestFiles(manifest.Manifest.Files, runtimecontract.AttachmentScopeKnowledge)
-	inputDirectory, inputManifest := "", "/workspace/input/manifest.json"
-	if input.AttachmentSetRef != "" {
-		inputDirectory = "/workspace/input/" + input.AttachmentSetRef + "/files"
-		inputManifest = "/workspace/input/" + input.AttachmentSetRef + "/manifest.json"
-	}
-	inputScope := fileScope(inputs, inputDirectory, inputManifest)
-	emptyScope := fileScope(nil, "", "")
-	sessionScope := fileScope(sessionInputs, "/workspace", "/workspace/input/manifest.json")
-	projectScope := fileScope(knowledge, "/workspace/knowledge", "/workspace/input/manifest.json")
-	tools := make([]map[string]any, 0, len(input.EnvironmentTools))
-	for _, tool := range input.EnvironmentTools {
-		tools = append(tools, map[string]any{
-			"name": tool.Name, "command": tool.Command, "description": tool.Description, "usage_hint": tool.UsageHint,
-		})
-	}
-	image := map[string]any{"reference": input.EnvironmentImage.Reference, "digest": input.EnvironmentImage.Digest}
-	variables := map[string]any{
-		"agent":   map[string]any{"ref": input.AgentRef},
-		"project": mergeFileScope(map[string]any{"ref": input.ProjectRef}, projectScope),
-		"run":     mergeFileScope(map[string]any{"ref": input.RunRef}, inputScope),
-		"session": mergeFileScope(map[string]any{"ref": input.SessionRef}, sessionScope),
-		"turn":    map[string]any{"ref": input.TurnRef},
-		"runtime": map[string]any{"environment": map[string]any{
-			"ref": input.RuntimeEnvironmentRef, "image": image, "tools": tools,
-		}},
-		"tools":    tools,
-		"input":    inputScope,
-		"files":    inputScope["files"],
-		"inputs":   input.BoundedInput,
-		"workflow": emptyScope,
-		"gate":     emptyScope,
-	}
-	if input.AttachmentContext == "WORKFLOW_INPUT" {
-		variables["workflow"] = inputScope
-	}
-	if input.AttachmentContext == "OWNER_GATE_MESSAGE" {
-		variables["gate"] = inputScope
-	}
-	return variables, nil
-}
-
-func mergeFileScope(base, scope map[string]any) map[string]any {
-	for key, value := range scope {
-		base[key] = value
-	}
-	return base
-}
-
-func scopedManifestFiles(files []runtimecontract.AttachmentManifestFile, scope string) []runtimecontract.AttachmentManifestFile {
-	result := make([]runtimecontract.AttachmentManifestFile, 0, len(files))
-	for _, file := range files {
-		if file.Scope == scope {
-			result = append(result, file)
-		}
-	}
 	return result
 }
 
@@ -608,7 +513,10 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 			return err
 		}
 	}
-	return writeInputManifests(input, setManifests, workspaceManifest)
+	if err := writeInputManifests(input, setManifests, workspaceManifest); err != nil {
+		return err
+	}
+	return protectReadOnlyWorkspaceTrees(input.WorkspaceRoot, "input", "knowledge")
 }
 
 func writeInputManifests(input model.Input, sets map[string]runtimecontract.CanonicalAttachmentManifest, workspace runtimecontract.CanonicalWorkspaceAttachmentManifest) error {
@@ -631,6 +539,10 @@ func writeInputManifests(input model.Input, sets map[string]runtimecontract.Cano
 
 func resetWorkspaceDirectory(root, relative string) error {
 	directory := filepath.Join(root, relative)
+	info, err := os.Lstat(directory)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("runtime artifact directory is unsafe")
+	}
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		return errors.New("read runtime artifact directory")
@@ -642,6 +554,31 @@ func resetWorkspaceDirectory(root, relative string) error {
 		}
 		if err := os.RemoveAll(path); err != nil {
 			return errors.New("clear runtime artifact directory")
+		}
+	}
+	return nil
+}
+
+func protectReadOnlyWorkspaceTrees(root string, relatives ...string) error {
+	for _, relative := range relatives {
+		tree := filepath.Join(root, relative)
+		if filepath.Clean(tree) != tree || !strings.HasPrefix(tree, root+string(os.PathSeparator)) {
+			return errors.New("workspace input tree is invalid")
+		}
+		if err := filepath.WalkDir(tree, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.Type()&os.ModeSymlink != 0 || !strings.HasPrefix(filepath.Clean(path), tree) {
+				return errors.New("workspace input tree is unsafe")
+			}
+			mode := os.FileMode(0o440)
+			if entry.IsDir() {
+				mode = 0o750 | os.ModeSetgid
+			}
+			if err := os.Chmod(path, mode); err != nil {
+				return errors.New("protect workspace input tree")
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -722,7 +659,15 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 	if err != nil {
 		return nil, errors.New("read runtime outbox")
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Name() == "workspace-write-result.json" && entries[j].Name() != entries[i].Name() {
+			return true
+		}
+		if entries[j].Name() == "workspace-write-result.json" {
+			return false
+		}
+		return entries[i].Name() < entries[j].Name()
+	})
 	for _, entry := range entries {
 		if len(artifacts) >= 16 {
 			break
@@ -731,7 +676,7 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		if entry.IsDir() || name == "result.md" || safeFileName(name) != name {
 			continue
 		}
-		descriptor, err := unix.Openat(int(directory.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		descriptor, err := unix.Openat(int(directory.Fd()), name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err != nil {
 			return nil, errors.New("open runtime artifact")
 		}

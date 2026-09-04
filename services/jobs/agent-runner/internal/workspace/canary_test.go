@@ -32,10 +32,13 @@ func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 	}
 }
 
-func TestPublishResultCarriesExactAttemptProvenance(t *testing.T) {
+func TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
 		t.Fatal(err)
+	}
+	if err := RunCanary(root, testPolicy()); err != nil {
+		t.Fatalf("positive create/read/replace/read/delete path failed: %v", err)
 	}
 	provenance := ResultProvenance{Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: "rrev_abcdefgh",
 		RuntimeRevisionVersion: 7, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3,
@@ -53,6 +56,29 @@ func TestPublishResultCarriesExactAttemptProvenance(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".kodex/outbox/.workspace-write-result.next")); !os.IsNotExist(err) {
 		t.Fatalf("temporary result survived atomic replace: %v", err)
+	}
+}
+
+func TestPublishResultRejectsInvalidOrIncompleteProvenance(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	valid := ResultProvenance{Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: "rrev_abcdefgh",
+		RuntimeRevisionVersion: 7, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3,
+		ExecutionBindingDigest: strings.Repeat("b", 64)}
+	for name, mutate := range map[string]func(*ResultProvenance){
+		"revision":          func(value *ResultProvenance) { value.RuntimeRevisionDigest = strings.Repeat("z", 64) },
+		"attempt":           func(value *ResultProvenance) { value.Attempt = 0 },
+		"execution binding": func(value *ResultProvenance) { value.ExecutionBindingDigest = "caller" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := valid
+			mutate(&value)
+			if err := PublishResult(root, testPolicy(), value); err == nil {
+				t.Fatal("invalid result provenance was accepted")
+			}
+		})
 	}
 }
 
