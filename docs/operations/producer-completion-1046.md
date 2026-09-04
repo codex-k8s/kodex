@@ -129,12 +129,40 @@ updated: 2026-09-05
   INTERACTION adapter path и connection-test consumer ещё не завершены.
   Эта передача не объявляет #1030 или полный #1046 готовыми.
 
-## Остаток unit
+## Пятая промежуточная передача: ACK
+
+- `InteractionDeliveryClaim.external_team_ref=15`, `external_channel_ref=16`,
+  `external_root_post_ref=17`, `acceptance_receipt_ref=18`. Внутренняя capability
+  `mattermost.acknowledgements` не является самостоятельно выдаваемым grant:
+  delivery создаётся только из owner acceptance receipt с project/run/grant.
+- Receipt и ACK вставляются одной owner transaction. Уникальность receipt
+  исключает второй ACK при повторном accept. Target team/channel берутся из
+  проверенного identity mapping, root/thread — из принятого сообщения.
+  IGNORED без маршрута и project/run не создаёт ACK.
+- `CompleteInteractionDeliveryRequest.external_team_ref=12`,
+  `external_channel_ref=13` обязательны для успешного completion. ACK completion
+  сверяет exact channel/team/thread. Gate reply теперь дополнительно сверяет
+  сохранённые team/channel delivery; legacy delivery без этих полей закрыто
+  отклоняется. UNKNOWN_OUTCOME/retry semantics общие с остальными deliveries.
+- `InteractionSource.connection_version=8`, `credential_revision_ref=9`,
+  `credential_revision=10`: listener может обнаружить смену immutable projection,
+  даже если legacy materialization ref остаётся тем же. Активация credential
+  повышает connection.version и переводит connection в NOT_CONNECTED.
+- Исправлен недостижимый inbound Agent route: PUBLISHED отсутствует в enum
+  Agent. Теперь используется READY с опубликованной instruction, как у launch.
+- `testInteractionACK`: PASS в disposable PostgreSQL через реальный accept,
+  replay, один ACK, exact claim, wrong-channel/root rejection, complete/replay.
+  Identity source test подтверждает смену version при стабильном credential ref.
+- Targeted Go transport/repository, `lint-proto`, `check-proto-codegen`: PASS.
+  Полный PostgreSQL suite, render и race для этого checkpoint: NOT RUN.
+  Внешнего Mattermost вызова тест не выполняет; consumer реализует root #1030.
+
+## Остаток полного unit
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
 revision impact и selected rebind secrets; проверка Git lifecycle;
 полные STT model params и immutable projection; mail authorization producer #1037;
-сквозная проверка external subject mapping и INTERACTION routing/ACK #1030;
+сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов
 выполняют eligibility до SQL LIMIT, с дополнительной per-result проверкой Go.
 Это не завершённый unit. UNKNOWN_OUTCOME запрещает автоповтор; отдельный owner

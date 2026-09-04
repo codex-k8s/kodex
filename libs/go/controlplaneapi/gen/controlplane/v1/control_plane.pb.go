@@ -27857,6 +27857,9 @@ type InteractionSource struct {
 	ChannelName                  string                 `protobuf:"bytes,5,opt,name=channel_name,json=channelName,proto3" json:"channel_name,omitempty"`
 	Locale                       string                 `protobuf:"bytes,6,opt,name=locale,proto3" json:"locale,omitempty"`
 	EnabledCapabilities          []string               `protobuf:"bytes,7,rep,name=enabled_capabilities,json=enabledCapabilities,proto3" json:"enabled_capabilities,omitempty"`
+	ConnectionVersion            int64                  `protobuf:"varint,8,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
+	CredentialRevisionRef        string                 `protobuf:"bytes,9,opt,name=credential_revision_ref,json=credentialRevisionRef,proto3" json:"credential_revision_ref,omitempty"`
+	CredentialRevision           int64                  `protobuf:"varint,10,opt,name=credential_revision,json=credentialRevision,proto3" json:"credential_revision,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -27938,6 +27941,27 @@ func (x *InteractionSource) GetEnabledCapabilities() []string {
 		return x.EnabledCapabilities
 	}
 	return nil
+}
+
+func (x *InteractionSource) GetConnectionVersion() int64 {
+	if x != nil {
+		return x.ConnectionVersion
+	}
+	return 0
+}
+
+func (x *InteractionSource) GetCredentialRevisionRef() string {
+	if x != nil {
+		return x.CredentialRevisionRef
+	}
+	return ""
+}
+
+func (x *InteractionSource) GetCredentialRevision() int64 {
+	if x != nil {
+		return x.CredentialRevision
+	}
+	return 0
 }
 
 type ListInteractionSourcesRequest struct {
@@ -28036,6 +28060,10 @@ type InteractionDeliveryClaim struct {
 	GateRef                      string                 `protobuf:"bytes,12,opt,name=gate_ref,json=gateRef,proto3" json:"gate_ref,omitempty"`
 	GateVersion                  int64                  `protobuf:"varint,13,opt,name=gate_version,json=gateVersion,proto3" json:"gate_version,omitempty"`
 	RunRef                       string                 `protobuf:"bytes,14,opt,name=run_ref,json=runRef,proto3" json:"run_ref,omitempty"`
+	ExternalTeamRef              string                 `protobuf:"bytes,15,opt,name=external_team_ref,json=externalTeamRef,proto3" json:"external_team_ref,omitempty"`
+	ExternalChannelRef           string                 `protobuf:"bytes,16,opt,name=external_channel_ref,json=externalChannelRef,proto3" json:"external_channel_ref,omitempty"`
+	ExternalRootPostRef          string                 `protobuf:"bytes,17,opt,name=external_root_post_ref,json=externalRootPostRef,proto3" json:"external_root_post_ref,omitempty"`
+	AcceptanceReceiptRef         string                 `protobuf:"bytes,18,opt,name=acceptance_receipt_ref,json=acceptanceReceiptRef,proto3" json:"acceptance_receipt_ref,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -28168,6 +28196,34 @@ func (x *InteractionDeliveryClaim) GetRunRef() string {
 	return ""
 }
 
+func (x *InteractionDeliveryClaim) GetExternalTeamRef() string {
+	if x != nil {
+		return x.ExternalTeamRef
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetExternalChannelRef() string {
+	if x != nil {
+		return x.ExternalChannelRef
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetExternalRootPostRef() string {
+	if x != nil {
+		return x.ExternalRootPostRef
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetAcceptanceReceiptRef() string {
+	if x != nil {
+		return x.AcceptanceReceiptRef
+	}
+	return ""
+}
+
 type ClaimInteractionDeliveriesRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	WorkloadInstance string                 `protobuf:"bytes,1,opt,name=workload_instance,json=workloadInstance,proto3" json:"workload_instance,omitempty"`
@@ -28265,20 +28321,22 @@ func (x *ClaimInteractionDeliveriesResponse) GetClaims() []*InteractionDeliveryC
 }
 
 type CompleteInteractionDeliveryRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Mutation          *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	DeliveryRef       string                 `protobuf:"bytes,2,opt,name=delivery_ref,json=deliveryRef,proto3" json:"delivery_ref,omitempty"`
-	LeaseRef          string                 `protobuf:"bytes,3,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
-	Fence             string                 `protobuf:"bytes,4,opt,name=fence,proto3" json:"fence,omitempty"`
-	Generation        int64                  `protobuf:"varint,5,opt,name=generation,proto3" json:"generation,omitempty"`
-	Success           bool                   `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
-	ExternalPostRef   string                 `protobuf:"bytes,7,opt,name=external_post_ref,json=externalPostRef,proto3" json:"external_post_ref,omitempty"`
-	ExternalThreadRef string                 `protobuf:"bytes,8,opt,name=external_thread_ref,json=externalThreadRef,proto3" json:"external_thread_ref,omitempty"`
-	SafeErrorCode     string                 `protobuf:"bytes,9,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
-	UnknownOutcome    bool                   `protobuf:"varint,10,opt,name=unknown_outcome,json=unknownOutcome,proto3" json:"unknown_outcome,omitempty"`
-	ConfirmedNoEffect bool                   `protobuf:"varint,11,opt,name=confirmed_no_effect,json=confirmedNoEffect,proto3" json:"confirmed_no_effect,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Mutation           *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	DeliveryRef        string                 `protobuf:"bytes,2,opt,name=delivery_ref,json=deliveryRef,proto3" json:"delivery_ref,omitempty"`
+	LeaseRef           string                 `protobuf:"bytes,3,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence              string                 `protobuf:"bytes,4,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation         int64                  `protobuf:"varint,5,opt,name=generation,proto3" json:"generation,omitempty"`
+	Success            bool                   `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
+	ExternalPostRef    string                 `protobuf:"bytes,7,opt,name=external_post_ref,json=externalPostRef,proto3" json:"external_post_ref,omitempty"`
+	ExternalThreadRef  string                 `protobuf:"bytes,8,opt,name=external_thread_ref,json=externalThreadRef,proto3" json:"external_thread_ref,omitempty"`
+	SafeErrorCode      string                 `protobuf:"bytes,9,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
+	UnknownOutcome     bool                   `protobuf:"varint,10,opt,name=unknown_outcome,json=unknownOutcome,proto3" json:"unknown_outcome,omitempty"`
+	ConfirmedNoEffect  bool                   `protobuf:"varint,11,opt,name=confirmed_no_effect,json=confirmedNoEffect,proto3" json:"confirmed_no_effect,omitempty"`
+	ExternalTeamRef    string                 `protobuf:"bytes,12,opt,name=external_team_ref,json=externalTeamRef,proto3" json:"external_team_ref,omitempty"`
+	ExternalChannelRef string                 `protobuf:"bytes,13,opt,name=external_channel_ref,json=externalChannelRef,proto3" json:"external_channel_ref,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CompleteInteractionDeliveryRequest) Reset() {
@@ -28386,6 +28444,20 @@ func (x *CompleteInteractionDeliveryRequest) GetConfirmedNoEffect() bool {
 		return x.ConfirmedNoEffect
 	}
 	return false
+}
+
+func (x *CompleteInteractionDeliveryRequest) GetExternalTeamRef() string {
+	if x != nil {
+		return x.ExternalTeamRef
+	}
+	return ""
+}
+
+func (x *CompleteInteractionDeliveryRequest) GetExternalChannelRef() string {
+	if x != nil {
+		return x.ExternalChannelRef
+	}
+	return ""
 }
 
 type CompleteInteractionDeliveryResponse struct {
@@ -47154,7 +47226,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" \x01(\bR\x0eunknownOutcome\"\x80\x01\n" +
 	"%CompleteIntegrationInvocationResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
-	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xa6\x02\n" +
+	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xbe\x03\n" +
 	"\x11InteractionSource\x12%\n" +
 	"\x0econnection_ref\x18\x01 \x01(\tR\rconnectionRef\x12D\n" +
 	"\x1ecredential_materialization_ref\x18\x02 \x01(\tR\x1ccredentialMaterializationRef\x12\x19\n" +
@@ -47162,10 +47234,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tteam_name\x18\x04 \x01(\tR\bteamName\x12!\n" +
 	"\fchannel_name\x18\x05 \x01(\tR\vchannelName\x12\x16\n" +
 	"\x06locale\x18\x06 \x01(\tR\x06locale\x121\n" +
-	"\x14enabled_capabilities\x18\a \x03(\tR\x13enabledCapabilities\"\x1f\n" +
+	"\x14enabled_capabilities\x18\a \x03(\tR\x13enabledCapabilities\x12-\n" +
+	"\x12connection_version\x18\b \x01(\x03R\x11connectionVersion\x126\n" +
+	"\x17credential_revision_ref\x18\t \x01(\tR\x15credentialRevisionRef\x12/\n" +
+	"\x13credential_revision\x18\n" +
+	" \x01(\x03R\x12credentialRevision\"\x1f\n" +
 	"\x1dListInteractionSourcesRequest\"^\n" +
 	"\x1eListInteractionSourcesResponse\x12<\n" +
-	"\asources\x18\x01 \x03(\v2\".controlplane.v1.InteractionSourceR\asources\"\xac\x04\n" +
+	"\asources\x18\x01 \x03(\v2\".controlplane.v1.InteractionSourceR\asources\"\xf5\x05\n" +
 	"\x18InteractionDeliveryClaim\x12!\n" +
 	"\fdelivery_ref\x18\x01 \x01(\tR\vdeliveryRef\x12%\n" +
 	"\x0econnection_ref\x18\x02 \x01(\tR\rconnectionRef\x12D\n" +
@@ -47182,12 +47258,16 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05lease\x18\v \x01(\v2\x1a.controlplane.v1.WorkLeaseR\x05lease\x12\x19\n" +
 	"\bgate_ref\x18\f \x01(\tR\agateRef\x12!\n" +
 	"\fgate_version\x18\r \x01(\x03R\vgateVersion\x12\x17\n" +
-	"\arun_ref\x18\x0e \x01(\tR\x06runRef\"f\n" +
+	"\arun_ref\x18\x0e \x01(\tR\x06runRef\x12*\n" +
+	"\x11external_team_ref\x18\x0f \x01(\tR\x0fexternalTeamRef\x120\n" +
+	"\x14external_channel_ref\x18\x10 \x01(\tR\x12externalChannelRef\x123\n" +
+	"\x16external_root_post_ref\x18\x11 \x01(\tR\x13externalRootPostRef\x124\n" +
+	"\x16acceptance_receipt_ref\x18\x12 \x01(\tR\x14acceptanceReceiptRef\"f\n" +
 	"!ClaimInteractionDeliveriesRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"g\n" +
 	"\"ClaimInteractionDeliveriesResponse\x12A\n" +
-	"\x06claims\x18\x01 \x03(\v2).controlplane.v1.InteractionDeliveryClaimR\x06claims\"\xcf\x03\n" +
+	"\x06claims\x18\x01 \x03(\v2).controlplane.v1.InteractionDeliveryClaimR\x06claims\"\xad\x04\n" +
 	"\"CompleteInteractionDeliveryRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12!\n" +
 	"\fdelivery_ref\x18\x02 \x01(\tR\vdeliveryRef\x12\x1b\n" +
@@ -47202,7 +47282,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0fsafe_error_code\x18\t \x01(\tR\rsafeErrorCode\x12'\n" +
 	"\x0funknown_outcome\x18\n" +
 	" \x01(\bR\x0eunknownOutcome\x12.\n" +
-	"\x13confirmed_no_effect\x18\v \x01(\bR\x11confirmedNoEffect\"\x8a\x01\n" +
+	"\x13confirmed_no_effect\x18\v \x01(\bR\x11confirmedNoEffect\x12*\n" +
+	"\x11external_team_ref\x18\f \x01(\tR\x0fexternalTeamRef\x120\n" +
+	"\x14external_channel_ref\x18\r \x01(\tR\x12externalChannelRef\"\x8a\x01\n" +
 	"#CompleteInteractionDeliveryResponse\x12!\n" +
 	"\fdelivery_ref\x18\x01 \x01(\tR\vdeliveryRef\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12*\n" +
