@@ -32,6 +32,7 @@ usage() {
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
+    '  --stt-hot-reload-image <repository@sha256:digest>' \
     '  --backup-controller-image <repository@sha256:digest>' \
     '  --promoted-pull-host <dns>' \
     '  --role-image-builder-image <repository@sha256:digest>' \
@@ -58,6 +59,7 @@ kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
 runner_image=""
 session_archive_image=""
+stt_hot_reload_image=""
 backup_controller_image=""
 promoted_pull_host=""
 role_image_builder_image=""
@@ -84,6 +86,7 @@ while (($# > 0)); do
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
     --runner-image) runner_image=${2:-}; shift 2 ;;
     --session-archive-image) session_archive_image=${2:-}; shift 2 ;;
+    --stt-hot-reload-image) stt_hot_reload_image=${2:-}; shift 2 ;;
     --backup-controller-image) backup_controller_image=${2:-}; shift 2 ;;
     --promoted-pull-host) promoted_pull_host=${2:-}; shift 2 ;;
     --role-image-builder-image) role_image_builder_image=${2:-}; shift 2 ;;
@@ -121,6 +124,9 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
   fail 'local runner image must use an exact manifest digest'
 [[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local session archive image must use an exact manifest digest'
+[[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
+  "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local STT hot-reload image must use an exact manifest digest'
 [[ "$backup_controller_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local backup-controller image must use an exact manifest digest'
 [[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
@@ -193,6 +199,7 @@ chmod 0777 "$source_root/services/staff/control-center/node_modules"
 go_modules=(
   services/internal/control-plane
   services/internal/secret-broker
+  services/internal/stt-tts-service
   services/internal/internal-rpc-authority
   services/internal/runtime-controller
   services/external/control-api-gateway
@@ -332,6 +339,7 @@ yq -i '
     (.kind != "IngressRouteTCP" or .metadata.name == "kodex-image-registry-pull") and
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
+      .metadata.name == "stt-tts-service" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
@@ -827,6 +835,9 @@ patch_go_container Deployment control-plane internal-rpc-authority-verifier serv
 patch_go_container Deployment secret-broker secret-broker services/internal/secret-broker ./cmd/secret-broker
 patch_go_container Deployment secret-broker internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment secret-broker platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+patch_go_container Deployment stt-tts-service stt-tts-service services/internal/stt-tts-service ./cmd/stt-tts-service
+patch_go_container Deployment stt-tts-service internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment stt-tts-service internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
@@ -860,7 +871,20 @@ yq -i '
   )
 ' "$render"
 
-for workload in control-plane secret-broker control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
+STT_IMAGE="$stt_hot_reload_image" yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "stt-tts-service");
+    (.spec.template.spec.containers[] | select(.name == "stt-tts-service")) |= (
+      .image = strenv(STT_IMAGE) |
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .startupProbe.failureThreshold = 150 |
+      .volumeMounts += [{"name":"dev-stt-tmp","mountPath":"/tmp"}]
+    ) |
+    .spec.template.spec.volumes += [{"name":"dev-stt-tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+  )
+' "$render"
+
+for workload in control-plane secret-broker stt-tts-service control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
@@ -1022,6 +1046,7 @@ AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
         .workload_id == "integration-gateway" or
         .workload_id == "role-image-builder" or
         .workload_id == "secret-broker" or
+        .workload_id == "stt-tts-service" or
         .workload_id == "session-archive" or
         .workload_id == "runtime-controller"
       )) |
@@ -1127,6 +1152,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
+"$repository_root/tools/dev/verify-local-stt-render.sh" "$output" "$stt_hot_reload_image"
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and

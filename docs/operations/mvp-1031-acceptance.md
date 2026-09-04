@@ -37,6 +37,46 @@ CI-входом и не добавляется в Git.
   провайдеров. QA не получает SRE/root credentials; операции установки
   выполняет разрешённый оператор. В отчёте остаются только имена secret keys.
 
+## Локальная подготовка STT
+
+`dev.sh up` собирает `tools/dev/Dockerfile.local-stt` через
+`tools/dev/build-local-stt.sh` и передаёт в renderer точный
+`--stt-hot-reload-image repository@sha256:digest`. Образ содержит закреплённые
+Go 1.26.6 и FFmpeg 8.0.1; изменение Go-кода не требует повторной сборки образа.
+OCI archive кэшируется по содержимому Dockerfile и повторно импортируется при
+`up` и `e2e`, в том числе после очистки node image cache. Это локальный образ,
+не артефакт production promotion.
+
+Renderer сохраняет STT Deployment, issuer, verifier, socket init и оба
+обязательных key-delivery назначения. Модули заранее загружаются доверенным
+host-процессом; исходники, Go modules, sumdb и Air монтируются read-only.
+У каждого контейнера отдельный writable build cache. Основной STT-контейнер
+остаётся non-root с read-only root filesystem и отдельным ограниченным `/tmp`;
+spool, TLS, authority и точный egress через порт 8081 сохраняются из base.
+Лимит памяти development-контейнера 2 GiB учитывает компиляцию Go; production
+лимиты не меняются.
+
+`tools/dev/verify-local-stt-render.sh` проверяет итоговый render до apply.
+Потеря сервиса, sidecar или key-delivery, лишний handler пробы, writable общий
+кэш, другой образ и подмена STT egress отклоняются. Существующий deploy entrypoint
+ожидает readiness всех Deployment из render, поэтому STT не исключается из
+ожидания отдельным списком.
+
+Локальная точка проверки:
+
+```bash
+timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
+  --cache-root /tmp/kodex-1031-render-cache
+make test-local-go-cache-contract test-local-image-cache-import-contract \
+  test-local-kubernetes-api-egress-contract
+```
+
+Render-проверка использует синтетические image digests и не обращается к
+Kubernetes API; она не доказывает успешный deploy. Импорт в k3s, запуск Pod,
+protected availability и реальная OpenAI-транскрипция остаются отдельными
+пунктами сквозной приёмки. Для OCI export проверена документация Docker через
+Context7: [OCI exporter](https://docs.docker.com/build/exporters/oci-docker/).
+
 ## Fixtures и наблюдение
 
 - [ ] Две организации, минимум три проекта: доступный полностью, доступный с

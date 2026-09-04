@@ -511,6 +511,8 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
     "$repository_root/tools/dev/build-local-session-archive.sh" \
       --source-root "$repository_root" --state-directory "$state_directory"
+    "$repository_root/tools/dev/build-local-stt.sh" \
+      --source-root "$repository_root" --state-directory "$state_directory"
   fi
   "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
     --render "$state_directory/render.yaml" --state-directory "$state_directory" \
@@ -700,6 +702,9 @@ runner_image=$(<"$state_directory/agent-runner-image")
 "$repository_root/tools/dev/build-local-session-archive.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 session_archive_image=$(<"$state_directory/session-archive-image")
+"$repository_root/tools/dev/build-local-stt.sh" \
+  --source-root "$repository_root" --state-directory "$state_directory"
+stt_hot_reload_image=$(<"$state_directory/stt-hot-reload-image")
 "$repository_root/tools/dev/build-local-backup-controller.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 backup_controller_image=$(<"$state_directory/backup-controller-image")
@@ -745,6 +750,7 @@ api_endpoint_port=$(jq -er '
   --kubernetes-endpoint-port "$api_endpoint_port" \
   --runner-image "$runner_image" \
   --session-archive-image "$session_archive_image" \
+  --stt-hot-reload-image "$stt_hot_reload_image" \
   --backup-controller-image "$backup_controller_image" \
   --promoted-pull-host "$promoted_pull_host" \
   --role-image-builder-image "$role_image_builder_image" \

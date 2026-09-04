@@ -162,6 +162,7 @@ render="$temporary_directory/render.yaml"
   --kubernetes-endpoint-cidr 127.0.0.1/32 --kubernetes-endpoint-port 6443 \
   --runner-image registry.local.kodex/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   --session-archive-image registry.local.kodex/kodex/session-archive@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  --stt-hot-reload-image registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555 \
   --backup-controller-image registry.local.kodex/kodex/backup-controller@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
   --promoted-pull-host pull.127.0.0.1.nip.io \
   --role-image-builder-image registry.local.kodex/kodex/role-image-builder@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \
@@ -174,6 +175,23 @@ render="$temporary_directory/render.yaml"
   --role-image-input-payload-sha256 3333333333333333333333333333333333333333333333333333333333333333 \
   --role-image-input-source-sha256 4444444444444444444444444444444444444444444444444444444444444444 \
   >/dev/null
+
+stt_image=registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555
+"$source_root/tools/dev/verify-local-stt-render.sh" "$render" "$stt_image"
+stt_negative="$temporary_directory/stt-negative.yaml"
+for mutation in \
+  'select(.kind != "Deployment" or .metadata.name != "stt-tts-service")' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers) |= map(select(.name != "internal-rpc-authority-issuer"))' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | select(.name == "stt-tts-service") | .readinessProbe.exec) = {"command":["true"]}' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | .volumeMounts[] | select(.name == "dev-go-mod") | .readOnly) = false' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | select(.name == "stt-tts-service") | .image) = "golang:latest"' \
+  '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "stt-tts-service")) | to_yaml)' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "stt-tts-service-exact-runtime-paths") | .spec.egress[].ports[] | select(.port == 8081) | .port) = 8080'; do
+  yq "$mutation" "$render" >"$stt_negative"
+  if "$source_root/tools/dev/verify-local-stt-render.sh" "$stt_negative" "$stt_image" >/dev/null 2>&1; then
+    fail "local STT verifier accepted a broken render: $mutation"
+  fi
+done
 
 air_binary="$cache_root/go-tools/air"
 [[ -x "$air_binary" ]] || fail 'pinned Air executable is absent from the local tool cache'
