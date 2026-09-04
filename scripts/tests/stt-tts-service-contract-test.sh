@@ -19,6 +19,19 @@ for profile in web-only web-with-mattermost; do
   fi
 done
 
+for render_name in staging production web-only web-with-mattermost; do
+  yq -o=json -I=0 '.' "$temporary_root/$render_name.yaml" | jq -s -e '
+    all(.[] | select(.kind == "Deployment") |
+      .spec.template.spec | (.containers[]?, .initContainers[]?);
+      all((.startupProbe, .readinessProbe, .livenessProbe) | select(. != null);
+        ([keys[] | select(. == "exec" or . == "httpGet" or
+          . == "tcpSocket" or . == "grpc")] | length) == 1))
+  ' >/dev/null || {
+    printf 'Kubernetes probe must contain exactly one handler in %s\n' "$render_name" >&2
+    exit 1
+  }
+done
+
 jq -e '[.images[] | select(.component == "stt-tts-service")] | length == 1' "$repository_root/tools/release/images.json" >/dev/null
 yq -e '[.targets[] | select(.workload_id == "stt-tts-service" and .startup_readback_required == true)] | length == 2' \
   "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml" >/dev/null
