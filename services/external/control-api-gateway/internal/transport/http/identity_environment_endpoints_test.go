@@ -184,7 +184,8 @@ func TestIdentityEnvironmentAuthorityErrorsRemainClosed(t *testing.T) {
 			client := &identityEnvironmentRecorder{failure: status.Error(code, "private upstream detail")}
 			w := httptest.NewRecorder()
 			identityEnvironmentHandler(client).ServeHTTP(w, managedTestRequest(http.MethodPost, identityCollectionPath, identityBindBody()))
-			if w.Code < 400 || strings.Contains(w.Body.String(), "private upstream detail") {
+			want := map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.Aborted: 412, codes.Unauthenticated: 401, codes.Unavailable: 503}[code]
+			if w.Code != want || strings.Contains(w.Body.String(), "private upstream detail") {
 				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 			}
 		})

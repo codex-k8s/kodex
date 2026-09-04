@@ -6946,10 +6946,60 @@ type RuntimeSecretDisplayHint struct {
 	Suffix string `json:"suffix"`
 }
 
+// RuntimeSecretImpact defines model for RuntimeSecretImpact.
+type RuntimeSecretImpact struct {
+	Consumers      []RuntimeSecretImpactConsumer `json:"consumers"`
+	NextPageToken  string                        `json:"nextPageToken"`
+	SecretRef      OpaqueRef                     `json:"secretRef"`
+	SecretVersion  int64                         `json:"secretVersion"`
+	TargetRevision int64                         `json:"targetRevision"`
+	Total          int64                         `json:"total"`
+}
+
+// RuntimeSecretImpactConsumer defines model for RuntimeSecretImpactConsumer.
+type RuntimeSecretImpactConsumer struct {
+	// Consumer Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
+	Consumer              *RuntimeEnvironmentConsumer `json:"consumer,omitempty"`
+	EnvironmentRef        OpaqueRef                   `json:"environmentRef"`
+	EnvironmentVersion    int64                       `json:"environmentVersion"`
+	EnvironmentVersionRef OpaqueRef                   `json:"environmentVersionRef"`
+	ProjectRef            OpaqueRef                   `json:"projectRef"`
+	SecretRevisions       []int64                     `json:"secretRevisions"`
+}
+
 // RuntimeSecretPage defines model for RuntimeSecretPage.
 type RuntimeSecretPage struct {
 	Items         []RuntimeSecret `json:"items"`
 	NextPageToken string          `json:"nextPageToken"`
+}
+
+// RuntimeSecretRebindInput defines model for RuntimeSecretRebindInput.
+type RuntimeSecretRebindInput struct {
+	// Selections Уникальные environments; суммарно не более 100 consumers.
+	Selections []RuntimeSecretRebindSelection `json:"selections"`
+}
+
+// RuntimeSecretRebindResult defines model for RuntimeSecretRebindResult.
+type RuntimeSecretRebindResult struct {
+	Bindings     []AgentRuntimeEnvironmentBinding  `json:"bindings"`
+	Environments []RuntimeSecretReboundEnvironment `json:"environments"`
+}
+
+// RuntimeSecretRebindSelection defines model for RuntimeSecretRebindSelection.
+type RuntimeSecretRebindSelection struct {
+	Consumers                  []RuntimeEnvironmentConsumer `json:"consumers"`
+	EnvironmentRef             OpaqueRef                    `json:"environmentRef"`
+	ExpectedEnvironmentVersion int64                        `json:"expectedEnvironmentVersion"`
+	SourceVersionRef           OpaqueRef                    `json:"sourceVersionRef"`
+}
+
+// RuntimeSecretReboundEnvironment defines model for RuntimeSecretReboundEnvironment.
+type RuntimeSecretReboundEnvironment struct {
+	Digest             string    `json:"digest"`
+	EnvironmentRef     OpaqueRef `json:"environmentRef"`
+	EnvironmentVersion int64     `json:"environmentVersion"`
+	ProjectRef         OpaqueRef `json:"projectRef"`
+	VersionRef         OpaqueRef `json:"versionRef"`
 }
 
 // RuntimeSecretReveal defines model for RuntimeSecretReveal.
@@ -7652,6 +7702,9 @@ type RuntimeEnvironmentRef = OpaqueRef
 
 // RuntimeEnvironmentVersionRef defines model for RuntimeEnvironmentVersionRef.
 type RuntimeEnvironmentVersionRef = OpaqueRef
+
+// RuntimeSecretRevision defines model for RuntimeSecretRevision.
+type RuntimeSecretRevision = int64
 
 // ScheduleRef defines model for ScheduleRef.
 type ScheduleRef = OpaqueRef
@@ -8796,6 +8849,19 @@ type RevealRuntimeSecretParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// RebindRuntimeSecretParams defines parameters for RebindRuntimeSecret.
+type RebindRuntimeSecretParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetRuntimeSecretImpactParams defines parameters for GetRuntimeSecretImpact.
+type GetRuntimeSecretImpactParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // RotateRuntimeSecretParams defines parameters for RotateRuntimeSecret.
 type RotateRuntimeSecretParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -9198,6 +9264,9 @@ type PublishRuntimeEnvironmentVersionJSONRequestBody = RuntimeEnvironmentInput
 
 // RebindRuntimeEnvironmentJSONRequestBody defines body for RebindRuntimeEnvironment for application/json ContentType.
 type RebindRuntimeEnvironmentJSONRequestBody = RuntimeEnvironmentRebindInput
+
+// RebindRuntimeSecretJSONRequestBody defines body for RebindRuntimeSecret for application/json ContentType.
+type RebindRuntimeSecretJSONRequestBody = RuntimeSecretRebindInput
 
 // RotateRuntimeSecretJSONRequestBody defines body for RotateRuntimeSecret for application/json ContentType.
 type RotateRuntimeSecretJSONRequestBody = RuntimeSecretRotateInput
@@ -9762,6 +9831,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/runtime-secrets/{secretRef}/reveal)
 	RevealRuntimeSecret(w http.ResponseWriter, r *http.Request, secretRef SecretRef, params RevealRuntimeSecretParams)
+
+	// (POST /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings)
+	RebindRuntimeSecret(w http.ResponseWriter, r *http.Request, secretRef SecretRef, revision RuntimeSecretRevision, params RebindRuntimeSecretParams)
+
+	// (GET /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact)
+	GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Request, secretRef SecretRef, revision RuntimeSecretRevision, params GetRuntimeSecretImpactParams)
 
 	// (POST /api/v1/runtime-secrets/{secretRef}/rotations)
 	RotateRuntimeSecret(w http.ResponseWriter, r *http.Request, secretRef SecretRef, params RotateRuntimeSecretParams)
@@ -24342,6 +24417,191 @@ func (siw *ServerInterfaceWrapper) RevealRuntimeSecret(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// RebindRuntimeSecret operation middleware
+func (siw *ServerInterfaceWrapper) RebindRuntimeSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "secretRef" -------------
+	var secretRef SecretRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "secretRef", r.PathValue("secretRef"), &secretRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "secretRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revision" -------------
+	var revision RuntimeSecretRevision
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revision", r.PathValue("revision"), &revision, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revision", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RebindRuntimeSecretParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RebindRuntimeSecret(w, r, secretRef, revision, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRuntimeSecretImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "secretRef" -------------
+	var secretRef SecretRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "secretRef", r.PathValue("secretRef"), &secretRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "secretRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revision" -------------
+	var revision RuntimeSecretRevision
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revision", r.PathValue("revision"), &revision, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revision", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRuntimeSecretImpactParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeSecretImpact(w, r, secretRef, revision, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RotateRuntimeSecret operation middleware
 func (siw *ServerInterfaceWrapper) RotateRuntimeSecret(w http.ResponseWriter, r *http.Request) {
 
@@ -26947,6 +27207,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.RevokeRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.GetRuntimeSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/reveal", wrapper.RevealRuntimeSecret)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings", wrapper.RebindRuntimeSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact", wrapper.GetRuntimeSecretImpact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/rotations", wrapper.RotateRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/schedules", wrapper.ListOrganizationSchedules)

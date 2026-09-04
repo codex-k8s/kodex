@@ -20,6 +20,8 @@ func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 		{"DELETE", "/api/v1/interaction-identities/iid_fixture01"},
 		{"GET", "/api/v1/runtime-environments/env_fixture01/versions/ever_fixture02/impact"},
 		{"POST", "/api/v1/runtime-environments/env_fixture01/versions/ever_fixture02/consumer-bindings"},
+		{"GET", "/api/v1/runtime-secrets/sec_fixture01/revisions/2/impact"},
+		{"POST", "/api/v1/runtime-secrets/sec_fixture01/revisions/2/consumer-bindings"},
 	} {
 		for _, scenario := range []string{"valid", "no-session", "wrong-organization", "revoked", "no-csrf"} {
 			t.Run(route.method+route.path+scenario, func(t *testing.T) {
@@ -44,6 +46,9 @@ func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 				w := httptest.NewRecorder()
 				security.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					called = true
+					if deadline, ok := r.Context().Deadline(); !ok || time.Until(deadline) > 5*time.Second {
+						t.Fatal("bounded request deadline was lost")
+					}
 					identity, ok := IdentityFromContext(r.Context())
 					if !ok || identity.OrganizationID != claims.OrganizationID || identity.Subject != claims.Subject {
 						t.Fatal("verified authority was lost")

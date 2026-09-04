@@ -4,7 +4,7 @@ title: HTTP-контракты завершения MVP
 type: operations
 status: approved
 owner: developer
-version: 0.1.0
+version: 0.2.0
 updated: 2026-09-05
 ---
 
@@ -47,7 +47,37 @@ Rebind body: `consumers` (1..100), каждый содержит `agentRef`, `ag
 Problem mapping без upstream detail. Изменения session/CSRF/readiness policy
 для этих операций не требуются.
 
-## Локальные проверки
+## Secret revision impact и rebind
+
+Producer: `b3375dfa64e6f404df83ce7b05904a5143e2e6e3`.
+
+- GET `/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact`,
+  SDK `getRuntimeSecretImpact` -> CP `GetRuntimeSecretImpact`.
+  `revision` — точное положительное число, не implicit latest. Authority:
+  `secret.rotate` и CP eligibility окружений/agents. Ответ `secretVersion`
+  и ETag используются для последующей мутации; pagination 1..100/512.
+  Read path не создаёт события. Строка без agent binding сохраняется:
+  `consumer` отсутствует, environment/version/project/secretRevisions остаются.
+- POST того же префикса `/consumer-bindings`, SDK `rebindRuntimeSecret` ->
+  CP `RebindRuntimeSecret`. `If-Match` = secretVersion, CSRF и idempotency
+  обязательны. Body `selections` содержит 1..32 уникальных environments с
+  `environmentRef`, `expectedEnvironmentVersion`, `sourceVersionRef`,
+  `consumers` (обязательный массив, может быть пустым). В сумме <=100 уникальных
+  agents. Их старый `versionRef` должен совпадать с sourceVersionRef.
+  CP проверяет secret/project/agent permissions, owner и OCC, атомарно
+  публикует новые environment revisions с нужной secret revision, связывает
+  только выбранных consumers и фиксирует platform events публикации/bindings.
+  Старые immutable execution snapshots не меняются.
+- HTTP возвращает `environments` — безопасные квитанции
+  environmentRef/environmentVersion/projectRef/versionRef/digest — и
+  `bindings`. Полная конфигурация читается существующим
+  `getRuntimeEnvironmentSet`; конфигурационные values в ответ мутации не
+  копируются. Возвращённые refs/versions/secret descriptors сверяются с
+  selections и target до выдачи. Headers всегда no-store/no-cache.
+- Runtime-каталог gateway содержит новые CP message IDs для identity,
+  неизвестного delivery outcome, reconciliation и обоих selected rebind.
+
+## Проверки HTTP
 
 Из `services/external/control-api-gateway`:
 
@@ -68,9 +98,28 @@ PWA Schedule и IntegrationDefinition fixtures/editor, которые ещё н�
 основание ослаблять схемы или readiness. Сгенерированный SDK проверяется
 отдельно; локальный fake test не заменяет этот общий результат.
 
+## Сверка остального scope
+
+| Критерий #1045 | HTTP mapping / локальное evidence |
+|---|---|
+| Managed lifecycle четырёх kinds | `managed_configuration_endpoints.go`, typed views, `TestManagedConfigurationRoutesCallExactTypedRPC`; 21 операция, source ownership остаётся CP |
+| Глобальные каталоги и группировка | `organization_catalog_endpoints.go`, `managed_catalog_endpoints.go`, соответствующие route tests; optional project только filter, не authority |
+| VFS/search | `vfs_endpoints.go`, bounded query/cursor; ownership и eligibility проверяет CP |
+| Prompt/preview/materialization | `mvp_endpoints.go`: ListPromptTemplateVariables, ValidatePromptTemplate, PreviewPromptTemplate с targetKind/targetRef, template и includeFullMaterialization; preview не заменяет публикацию |
+| Continuation | `command_endpoints.go`: LaunchRun передаёт sessionRef, AddSessionTurn — session/run/node/task/attachmentSetRef; origin CONTROL_CENTER назначает HTTP, lineage проверяет CP |
+| Model/configuration | `runtime_configuration_endpoints.go`: PublishAgentRuntimeConfiguration и overlay draft/validate/publish; model/provider candidates передаются явно, не выбираются gateway |
+| Provider lifecycle | `mvp_endpoints.go`: create, API key/device authorization, observe/refresh/reauthorize, enable/revoke/delete; secret key не возвращается и не логируется |
+| STT bootstrap | `stt_availability.go` + tests: eligibility CP и authenticated protected check, stage READY + fresh validUntil <=31s, TTL30s; условие не ослаблялось |
+| Environment draft | `environment_draft_endpoints.go` + tests: create/save/validate/publish/discard/get |
+| Identity, environment/secret impact/rebind | Новые typed endpoints и `TestIdentityEnvironment*`, `TestSecretImpact*`, `TestSecretRebind*`, exact app authority method tests |
+
+Текущий producer не содержит отдельного поля reasoning в
+`PublishAgentRuntimeConfigurationRequest`: расширять HTTP вымышленным полем
+нельзя. Настройки исполнения через существующий overlay проходят CP validation.
+Новые профильные producer возможности требуют отдельного checkpoint.
+
 ## Незавершённые зависимости
 
-- Secret revision impact/rebind потребляет отдельный CP checkpoint.
 - Настоящий SkillBundle/MemoryRecord CRUD и полный STT parameters требуют
   producer checkpoint #1046; подмена tools/knowledge artifacts запрещена.
 - Полный PR body и итоговая матрица criterion/evidence оформляются после

@@ -1108,6 +1108,32 @@ paths:
           description: Synthetic safe preview; полный prompt только с exact prompt.full.view
           content: { application/json: { schema: { $ref: '#/components/schemas/PromptTemplatePreview' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact:
+    get:
+      tags: [Agents]
+      operationId: getRuntimeSecretImpact
+      description: Влияние точной secret revision; secret.rotate и eligibility окружений проверяет CP. ETag содержит secret version. Значения секрета не возвращаются.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Точные старые revisions и доступные consumers
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretImpact' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings:
+    post:
+      tags: [Agents]
+      operationId: rebindRuntimeSecret
+      description: Публикует новые environment revisions и выборочно меняет bindings атомарно в CP. If-Match содержит secret version; текущие исполнения неизменны.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretRebindInput' } } }
+      responses:
+        '200':
+          description: Безопасные квитанции публикации; полное окружение читается через getRuntimeEnvironmentSet
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretRebindResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections/{connectionRef}/interaction-identities:
     get:
       tags: [Integrations]
@@ -3215,6 +3241,11 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeSecretRevision:
+      name: revision
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     InteractionIdentityRef:
       name: identityRef
       in: path
@@ -4452,6 +4483,67 @@ components:
         ready: { type: boolean }
         blockers: { type: array, maxItems: 32, items: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 } }
         observedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretImpactConsumer:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, environmentVersion, environmentVersionRef, projectRef, secretRevisions]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        environmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRevisions: { type: array, minItems: 1, maxItems: 128, uniqueItems: true, items: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 } }
+        consumer:
+          allOf: [{ $ref: '#/components/schemas/RuntimeEnvironmentConsumer' }]
+          description: Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
+    RuntimeSecretImpact:
+      type: object
+      additionalProperties: false
+      required: [secretRef, secretVersion, targetRevision, consumers, total, nextPageToken]
+      properties:
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        targetRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSecretImpactConsumer' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeSecretRebindSelection:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, expectedEnvironmentVersion, sourceVersionRef, consumers]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedEnvironmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeEnvironmentConsumer' } }
+    RuntimeSecretRebindInput:
+      type: object
+      additionalProperties: false
+      required: [selections]
+      properties:
+        selections:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Уникальные environments; суммарно не более 100 consumers.
+          items: { $ref: '#/components/schemas/RuntimeSecretRebindSelection' }
+    RuntimeSecretReboundEnvironment:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, environmentVersion, projectRef, versionRef, digest]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        versionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    RuntimeSecretRebindResult:
+      type: object
+      additionalProperties: false
+      required: [environments, bindings]
+      properties:
+        environments: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/RuntimeSecretReboundEnvironment' } }
+        bindings: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' } }
     InteractionIdentityBindInput:
       type: object
       additionalProperties: false
