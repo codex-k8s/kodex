@@ -4,17 +4,17 @@ title: Диагностика stt-tts-service
 type: runbook
 status: approved
 owner: sre
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-04
 ---
 
 # Диагностика stt-tts-service
 
-`stt-tts-service` не входит в shipped profiles до завершения
-#1021/#1023. Policy foundation #1019 и credential producer #1024 уже
-материализованы. Этот runbook описывает неактивный base deployable и не
-разрешает его deployment. Не копируйте в evidence audio, transcript, API key,
-authority proof/grant или provider body.
+`stt-tts-service` не входит в shipped profiles до завершения #1021. Policy
+foundation #1019/#1032, continuation proof #1023 и credential projection #1024
+через PR #1034 уже материализованы. Этот runbook описывает неактивный base
+deployable и не разрешает его deployment. Не копируйте в evidence audio,
+transcript, API key, authority proof/grant или provider body.
 
 ## Сигналы
 
@@ -44,16 +44,12 @@ audio, transcript, credential и grant не логируются.
 
 Успешный `/readyz` означает лишь способность Pod безопасно принять RPC. Он не
 проверяет и не обещает доступность control-plane, secret-broker, egress-gateway
-или OpenAI. В текущей ревизии `/diagnostics/protected-path` закрыто возвращает
-  `stage=delegated_authority`: approved primitive server-owned continuation
-  proof ещё не материализован #1023, поэтому оба projection adapter
-  останавливаются до сетевого RPC. Secret-broker уже реализует exact
-  config/account/generation validation и не является этим блокером.
-
-После materialization последовательно диагностируются policy, credential,
-egress и provider. Diagnostic не должен выполнять transcription/provider
-  effect; live provider проверяется только provider smoke с отдельным owner
-разрешением.
+или OpenAI. `/diagnostics/protected-path` проверяет локальный issuer через его
+`CheckReadiness` и exact authority ABI 2. При недоступности или ABI mismatch он
+закрыто возвращает `stage=delegated_authority`, иначе — `stage=ready`.
+Diagnostic намеренно не вызывает policy/credential projection, egress или
+provider и не выполняет transcription/provider effect; live provider
+проверяется только provider smoke с отдельным owner разрешением.
 
 ## Проверка инцидента
 
@@ -83,16 +79,16 @@ egress и provider. Diagnostic не должен выполнять transcriptio
 Job не запускать без отдельного owner OK.
 
 Этот launcher вызывает OpenAI adapter напрямую и не является end-to-end
-acceptance. Полная gRPC acceptance обязательна после materialization
-#1019/#1021/#1023/#1024; до этого зависимость Issue #1020/#1031 имеет результат
-`NOT RUN`, а успешный provider smoke не превращает её в `PASS`.
+acceptance. Полная gRPC acceptance обязательна после materialization #1021;
+до этого зависимость Issue #1020/#1031 имеет результат `NOT RUN`, а успешный
+provider smoke не превращает её в `PASS`.
 
 ## Восстановление
 
 Исправления выполняются только в owning unit: policy projection — #1019,
 browser/gateway stream — #1021, continuation proof — #1023, credential
-projection — #1024. До materialization #1021/#1023 STT нельзя добавлять
-в active profile, release image set, owner-side ingress или общую certificate
+projection — #1024/PR #1034. До materialization #1021 STT нельзя добавлять в
+active profile, release image set, owner-side ingress или общую certificate
 выдачу. Ручные Secret, direct provider egress и ослабление TLS/NetworkPolicy
 запрещены. При config publish, account disable/revoke или credential rotation
 старый projection закрыто отклоняется по exact revision+digest+generation.

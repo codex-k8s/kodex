@@ -25,5 +25,5 @@ Proto/gRPC.
 - [`secret-broker`](secret-broker/README.md) — единственная plaintext boundary
   Runtime Secrets и producer exact runtime/STT credential projections.
 - [`stt-tts-service`](stt-tts-service/README.md) — неактивный base deployable
-  stateless STT; до материализации #1021/#1023 не входит в shipped profiles и
-  закрыто отказывает до projection RPC.
+  stateless STT; continuation proof #1023 и credential projection PR #1034
+  материализованы, но до #1021 сервис не входит в shipped profiles.

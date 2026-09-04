@@ -4,7 +4,7 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-04
 ---
 
@@ -13,8 +13,8 @@ updated: 2026-09-04
 `stt-tts-service` — подготовленный, но неактивный stateless-владелец
 server-side распознавания речи. TTS отсутствует. #1019 и #1032 материализовали
 сервис и producer RPC, а #1023 — единый continuation proof и authority
-sidecars. Пока #1021 и #1024 не материализовали gateway route и владельцев
-policy/credential projection, unit не входит в `web-only`,
+sidecars. Credential projection #1024 материализован в PR #1034. Пока #1021 не
+материализовал gateway route, unit не входит в `web-only`,
 `web-with-mattermost` и release image set. Base и owner overlays существуют
 только для contract/render-проверки; развёртывать их сейчас нельзя.
 
@@ -92,8 +92,8 @@ fixture/Secret; в этом remediation deploy не выполняется.
 
 Эта проверка не является end-to-end acceptance: она обходит gRPC, authority,
 policy и credential projection. Полная gRPC acceptance остаётся обязательной,
-но `NOT RUN` до materialization #1021/#1024; зависимость результата
-Issue #1020 отслеживается в #1031, и provider smoke не может дать ей `PASS`.
+но `NOT RUN` до materialization #1021; зависимость результата Issue #1020
+отслеживается в #1031, и provider smoke не может дать ей `PASS`.
 
 ## Проверенные внешние документы
 
