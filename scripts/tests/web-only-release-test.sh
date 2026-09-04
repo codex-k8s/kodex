@@ -180,7 +180,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["key-delivery-targets.yaml"]
 ' "$render" | yq -e '
-  .source_revision == 5 and
+  .source_revision == 6 and
   ([.targets[] | select(.workload_id == "control-plane" and
     .role == "AUTHORIZATION_ISSUER" and
     .database_identity.login_principal == "ira_control_plane_issuer_g1" and
@@ -497,10 +497,11 @@ yq -o=json -I=0 '.' "$render" | jq -sr '
 yq -o=json -I=0 '.' "$render" | jq -sr '
   .[] |
   select(.kind == "NetworkPolicy" and
-    .metadata.name == "platform-postgresql-exact-clients") |
-  .spec.ingress[].from[].podSelector.matchExpressions[] |
-  select(.key == "app.kubernetes.io/name" and .operator == "In") |
-  .values[]
+    .spec.podSelector.matchLabels["app.kubernetes.io/name"] == "kodex-postgresql") |
+  .spec.ingress[]? | select(any(.ports[]?; .port == 5432)) |
+  .from[]?.podSelector |
+  .matchLabels["app.kubernetes.io/name"] //
+  (.matchExpressions[]? | select(.key == "app.kubernetes.io/name" and .operator == "In") | .values[])
 ' | sort -u >"$postgres_allowed_clients"
 missing_postgres_clients=$(comm -23 "$postgres_clients" "$postgres_allowed_clients")
 [[ -z "$missing_postgres_clients" ]] ||
@@ -519,13 +520,14 @@ yq -N -r '
   select(.startup_readback_required == true) |
   .workload_id
 ' | sort -u >"$startup_readback_targets"
-yq -N -r '
-  select(.kind == "NetworkPolicy" and
-    .metadata.name == "internal-rpc-authority-readback-attestor-exact-paths") |
-  .spec.ingress[].from[].podSelector.matchExpressions[]? |
-  select(.key == "app.kubernetes.io/name" and .operator == "In") |
-  .values[]
-' "$render" | sort -u >"$attestor_ingress_clients"
+yq -o=json -I=0 '.' "$render" | jq -sr '
+  .[] | select(.kind == "NetworkPolicy" and
+    .spec.podSelector.matchLabels["app.kubernetes.io/name"] == "internal-rpc-authority-readback-attestor") |
+  .spec.ingress[]? | select(any(.ports[]?; .port == 8443)) |
+  .from[]?.podSelector |
+  .matchLabels["app.kubernetes.io/name"] //
+  (.matchExpressions[]? | select(.key == "app.kubernetes.io/name" and .operator == "In") | .values[])
+' | sort -u >"$attestor_ingress_clients"
 missing_readback_clients=$(comm -23 "$startup_readback_targets" "$attestor_ingress_clients")
 [[ -z "$missing_readback_clients" ]] ||
   fail "startup readback targets are denied by attestor NetworkPolicy: ${missing_readback_clients//$'\n'/,}"

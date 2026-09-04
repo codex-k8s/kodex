@@ -44,13 +44,15 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: EGRESS_GATEWAY_POLICY_FILE, value: /var/run/config/kodex/egress-gateway/policy.json}
-            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-08-28.1}
-            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-09-05.1}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218}
             - {name: EGRESS_GATEWAY_CONNECT_LISTEN, value: ":8080"}
+            - {name: EGRESS_GATEWAY_STT_CONNECT_LISTEN, value: ":8081"}
             - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}
           ports:
             - {name: connect, containerPort: 8080, protocol: TCP}
+            - {name: stt-connect, containerPort: 8081, protocol: TCP}
             - {name: metrics, containerPort: 9090, protocol: TCP}
           startupProbe:
             httpGet: {path: /healthz, port: metrics}
