@@ -490,11 +490,28 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	if err != nil {
 		return nil, err
 	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	var now time.Time
+	if err := tx.QueryRow(ctx, queryWorkersScheduleClock).Scan(&now); err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	deadRows, err := tx.Query(ctx, queryWorkersScheduleOccurrenceExpireDeadLetter, scope.organizationID, limit)
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	deadIDs, err := pgx.CollectRows(deadRows, pgx.RowTo[string])
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	for _, occurrenceID := range deadIDs {
+		if err := repository.emitScheduleOccurrenceChange(ctx, tx, scope, occurrenceID); err != nil {
+			return nil, err
+		}
+	}
 	result := make([]map[string]any, 0, limit)
 	expiredRows, err := tx.Query(ctx, queryWorkersClaimdueschedulesSelectExpiredOccurrences, scope.organizationID, limit)
 	if err != nil {
@@ -502,14 +519,17 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	}
 	type expiredOccurrence struct {
 		id, ref, scheduleRef, inputDigest, scheduleRevisionRef, scheduleRevisionDigest string
+		targetRef, targetDigest, automationTextDigest, promptInputsDigest              string
 		scheduledFor                                                                   time.Time
-		scheduleVersion, generation, scheduleRevision                                  int64
+		scheduleVersion, generation, scheduleRevision, targetVersion                   int64
+		attempt                                                                        int32
 	}
 	expired := make([]expiredOccurrence, 0, limit)
 	for expiredRows.Next() {
 		var item expiredOccurrence
 		if err := expiredRows.Scan(&item.id, &item.ref, &item.scheduleRef, &item.scheduledFor, &item.scheduleVersion,
-			&item.inputDigest, &item.generation, &item.scheduleRevisionRef, &item.scheduleRevision, &item.scheduleRevisionDigest); err != nil {
+			&item.inputDigest, &item.generation, &item.attempt, &item.scheduleRevisionRef, &item.scheduleRevision, &item.scheduleRevisionDigest,
+			&item.targetRef, &item.targetVersion, &item.targetDigest, &item.automationTextDigest, &item.promptInputsDigest); err != nil {
 			expiredRows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -523,16 +543,32 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
-		expires := time.Now().UTC().Add(30 * time.Second)
+		expires := now.Add(30 * time.Second)
+		if _, err := tx.Exec(ctx, queryWorkersScheduleAttemptFinish, item.id, "EXPIRED", "SCHEDULE_LEASE_EXPIRED", item.attempt, item.generation); err != nil {
+			return nil, errs.ErrUnavailable
+		}
 		var generation int64
-		if err := tx.QueryRow(ctx, queryWorkersClaimdueschedulesReclaimExpiredOccurrence, item.id, leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.generation).Scan(&generation); errors.Is(err, pgx.ErrNoRows) {
+		var attempt int32
+		if err := tx.QueryRow(ctx, queryWorkersClaimdueschedulesReclaimExpiredOccurrence, item.id, leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.generation).Scan(&generation, &attempt); errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrConflict
 		} else if err != nil {
 			return nil, errs.ErrUnavailable
 		}
+		attemptRef, _ := newRef("satt")
+		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertAttempt, attemptRef, scope.organizationID, item.id,
+			attempt, generation, leaseRef, hex.EncodeToString(digest[:]), instance, item.inputDigest,
+			item.scheduleRevisionDigest, expires, principal.CredentialRevision); err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if err := repository.emitScheduleOccurrenceChange(ctx, tx, scope, item.id); err != nil {
+			return nil, err
+		}
 		result = append(result, map[string]any{"scheduleRef": item.scheduleRef, "occurrenceRef": item.ref, "scheduledFor": item.scheduledFor,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expires,
-			"scheduleVersion": item.scheduleVersion, "scheduleRevisionRef": item.scheduleRevisionRef,
+			"attempt": attempt, "targetRef": item.targetRef, "targetVersion": item.targetVersion,
+			"targetDigest": item.targetDigest, "automationTextDigest": item.automationTextDigest,
+			"promptInputsDigest": item.promptInputsDigest,
+			"scheduleVersion":    item.scheduleVersion, "scheduleRevisionRef": item.scheduleRevisionRef,
 			"scheduleRevision": item.scheduleRevision, "scheduleRevisionDigest": item.scheduleRevisionDigest,
 			"inputDigest": item.inputDigest})
 	}
@@ -550,16 +586,21 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	type dueSchedule struct {
 		id, ref, preset, cron, timezone, name, targetType, targetRef string
 		currentRevisionID, currentRevisionRef, currentRevisionDigest string
-		input                                                        []byte
+		input, promptInputs                                          []byte
+		dstGapPolicy, dstFoldPolicy, misfirePolicy, overlapPolicy    string
+		targetDigest, automationText                                 string
+		initiatedBy                                                  string
 		scheduledFor                                                 time.Time
-		version, currentRevision                                     int64
+		version, currentRevision, targetVersion                      int64
 	}
 	due := make([]dueSchedule, 0, limit)
 	for rows.Next() {
 		var item dueSchedule
 		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone,
 			&item.name, &item.targetType, &item.targetRef, &item.input, &item.currentRevisionID,
-			&item.currentRevisionRef, &item.currentRevision, &item.currentRevisionDigest); err != nil {
+			&item.currentRevisionRef, &item.currentRevision, &item.currentRevisionDigest,
+			&item.dstGapPolicy, &item.dstFoldPolicy, &item.misfirePolicy, &item.overlapPolicy,
+			&item.targetVersion, &item.targetDigest, &item.automationText, &item.promptInputs, &item.initiatedBy); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -569,13 +610,12 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	if err := rows.Err(); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	now := time.Now().UTC()
 	for _, item := range due {
-		after := item.scheduledFor
-		if now.After(after) {
-			after = now
-		}
-		next, nextErr := scheduleservice.Next(item.preset, item.cron, item.timezone, after)
+		occurrence, next, nextErr := scheduleservice.ResolveDue(scheduleservice.Spec{
+			Preset: item.preset, CronExpression: item.cron, Timezone: item.timezone,
+			DSTGapPolicy: item.dstGapPolicy, DSTFoldPolicy: item.dstFoldPolicy,
+			MisfirePolicy: item.misfirePolicy, OverlapPolicy: item.overlapPolicy,
+		}, item.scheduledFor, now)
 		if nextErr != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -583,18 +623,43 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		if updateErr != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
+		skipped := occurrence == nil
+		if skipped {
+			occurrence = &item.scheduledFor
+		}
 		occurrenceRef, _ := newRef("occ")
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
 		inputDigest := sha256.Sum256(item.input)
-		expires := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID); err != nil {
+		automationTextDigest := sha256.Sum256([]byte(item.automationText))
+		promptInputsDigest := sha256.Sum256(item.promptInputs)
+		expires := now.Add(30 * time.Second)
+		var occurrenceID string
+		if err := tx.QueryRow(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, *occurrence, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID, item.targetVersion, item.targetDigest, item.automationText, hex.EncodeToString(automationTextDigest[:]), item.promptInputs, hex.EncodeToString(promptInputsDigest[:]), item.initiatedBy, skipped).Scan(&occurrenceID); err != nil {
 			return nil, mapWriteError(err)
 		}
-		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": item.scheduledFor,
+		if skipped {
+			if err := repository.emitScheduleOccurrenceChange(ctx, tx, scope, occurrenceID); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		attemptRef, _ := newRef("satt")
+		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertAttempt, attemptRef, scope.organizationID, occurrenceID,
+			int32(1), int64(1), leaseRef, hex.EncodeToString(digest[:]), instance,
+			hex.EncodeToString(inputDigest[:]), item.currentRevisionDigest, expires, principal.CredentialRevision); err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if err := repository.emitScheduleOccurrenceChange(ctx, tx, scope, occurrenceID); err != nil {
+			return nil, err
+		}
+		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": *occurrence,
 			"leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires,
-			"scheduleVersion": item.version, "scheduleRevisionRef": item.currentRevisionRef,
+			"attempt": int32(1), "targetRef": item.targetRef, "targetVersion": item.targetVersion,
+			"targetDigest": item.targetDigest, "automationTextDigest": hex.EncodeToString(automationTextDigest[:]),
+			"promptInputsDigest": hex.EncodeToString(promptInputsDigest[:]),
+			"scheduleVersion":    item.version, "scheduleRevisionRef": item.currentRevisionRef,
 			"scheduleRevision": item.currentRevision, "scheduleRevisionDigest": item.currentRevisionDigest,
 			"inputDigest": hex.EncodeToString(inputDigest[:])})
 	}
@@ -604,26 +669,90 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	return result, nil
 }
 
+func (repository *Repository) RenewScheduleOccurrence(ctx context.Context, principal value.Principal, input command.OccurrenceInput) (map[string]any, error) {
+	if input.OccurrenceRef == "" || input.LeaseRef == "" || input.Fence == "" || input.Generation < 1 {
+		return nil, errs.ErrInvalid
+	}
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	digest := sha256.Sum256([]byte(input.Fence))
+	var leaseRef string
+	var generation int64
+	var expiresAt time.Time
+	if err := tx.QueryRow(ctx, queryWorkersScheduleOccurrenceRenew, scope.organizationID, input.OccurrenceRef,
+		input.LeaseRef, hex.EncodeToString(digest[:]), input.Generation, principal.CredentialRevision).Scan(&leaseRef, &generation, &expiresAt); errors.Is(err, pgx.ErrNoRows) {
+		return nil, errs.ErrForbidden
+	} else if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errs.ErrConflict
+	}
+	return map[string]any{"leaseRef": leaseRef, "fence": input.Fence, "generation": generation, "expiresAt": expiresAt}, nil
+}
+
 func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.OccurrenceInput)
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var occurrenceID, scheduleID, projectID, projectRef, state, storedDigest, targetType, targetRef, name, storedInputDigest string
-	var scheduleVersion, generation int64
-	var occurrenceInput []byte
+	var revisionDigest, targetDigest, automationText, automationTextDigest, promptInputsDigest string
+	var initiatedBy, initiatorRef, initiatorName string
+	var sessionPolicy, continueSessionRef string
+	var scheduleVersion, generation, targetVersion int64
+	var attempt int32
+	var occurrenceInput, promptInputs []byte
 	var expires time.Time
-	err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name, &occurrenceInput, &scheduleVersion, &storedInputDigest)
+	err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef, input.Principal.CredentialRevision).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name, &occurrenceInput, &scheduleVersion, &storedInputDigest, &attempt, &revisionDigest, &targetVersion, &targetDigest, &automationText, &automationTextDigest, &promptInputs, &promptInputsDigest, &initiatedBy, &initiatorRef, &initiatorName, &sessionPolicy, &continueSessionRef)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(payload.Fence))
-	if storedDigest != hex.EncodeToString(digest[:]) || generation != payload.Generation || time.Now().After(expires) {
+	var now time.Time
+	if err := tx.QueryRow(ctx, queryWorkersScheduleClock).Scan(&now); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if storedDigest != hex.EncodeToString(digest[:]) || generation != payload.Generation || !now.Before(expires) {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	inputDigest := sha256.Sum256(occurrenceInput)
-	if storedInputDigest != hex.EncodeToString(inputDigest[:]) || scheduleVersion < 1 {
+	storedAutomationDigest := sha256.Sum256([]byte(automationText))
+	storedPromptInputsDigest := sha256.Sum256(promptInputs)
+	if storedInputDigest != hex.EncodeToString(inputDigest[:]) ||
+		automationTextDigest != hex.EncodeToString(storedAutomationDigest[:]) ||
+		promptInputsDigest != hex.EncodeToString(storedPromptInputsDigest[:]) ||
+		scheduleVersion < 1 || targetVersion < 1 || revisionDigest == "" || initiatedBy == "" {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if state != "CLAIMED" {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if input.Kind == command.FailScheduleOccurrence {
+		if !validScheduleErrorCode(payload.SafeErrorCode) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if _, err := tx.Exec(ctx, queryWorkersScheduleAttemptFinish, occurrenceID, "FAILED", payload.SafeErrorCode, attempt, generation); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		var nextState string
+		var nextAttempt int32
+		if err := tx.QueryRow(ctx, queryWorkersScheduleOccurrenceFail, occurrenceID, payload.Retryable, payload.SafeErrorCode).Scan(&nextState, &nextAttempt); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.emitScheduleOccurrenceChange(ctx, tx, scope, occurrenceID); err != nil {
+			return commandOutcome{}, err
+		}
+		return commandOutcome{result: command.Result{Runtime: map[string]any{"state": nextState, "attempt": nextAttempt}},
+			projectID: projectID, projectRef: projectRef, resourceKind: "SCHEDULE_OCCURRENCE",
+			resourceRef: payload.OccurrenceRef, summary: "i18n:SCHEDULE_OCCURRENCE_FAILED"}, nil
 	}
 	var schedule entity.Schedule
 	var scheduleInput []byte
@@ -637,28 +766,73 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	schedule.NextActions = scheduleActions(schedule, true)
-	if state != "CLAIMED" {
+	currentTargetVersion, currentTargetDigest, err := repository.validateScheduleTarget(ctx, tx, scope.organizationID, projectID, entity.RunTarget{Type: targetType, Ref: targetRef})
+	if err != nil || currentTargetVersion != targetVersion || currentTargetDigest != targetDigest {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	var immutableInput map[string]any
-	if json.Unmarshal(occurrenceInput, &immutableInput) != nil {
+	var immutablePromptInputs map[string]any
+	if json.Unmarshal(occurrenceInput, &immutableInput) != nil || json.Unmarshal(promptInputs, &immutablePromptInputs) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	nested := input
 	nested.Kind = command.LaunchRun
-	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: "i18n:SCHEDULED_RUN_TASK", Source: "SCHEDULE", Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: immutableInput}
-	outcome, err := repository.launchRun(ctx, tx, scope, nested)
+	if sessionPolicy != "CONTINUE_ONE" {
+		continueSessionRef = ""
+	}
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: name, Task: automationText, Source: "SCHEDULE", SessionRef: continueSessionRef, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: immutableInput}
+	ownerScope := scope
+	ownerScope.actorID, ownerScope.actorRef, ownerScope.actorName = initiatedBy, initiatorRef, initiatorName
+	if err := repository.authorizeCommand(ctx, tx, ownerScope, nested); err != nil {
+		return commandOutcome{}, err
+	}
+	outcome, err := repository.launchRun(ctx, tx, ownerScope, nested)
 	if err != nil {
 		return commandOutcome{}, err
 	}
 	var runID string
-	_ = tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectRunsRef, outcome.result.Run.Ref).Scan(&runID)
-	_, _ = tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion, occurrenceID, runID)
+	if err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectRunsRef, outcome.result.Run.Ref).Scan(&runID); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if tag, updateErr := tx.Exec(ctx, queryWorkersChangeoccurrenceUpdateScheduleOccurrencesStateRunIdVersion, occurrenceID, runID); updateErr != nil || tag.RowsAffected() != 1 {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if _, err := tx.Exec(ctx, queryWorkersScheduleAttemptFinish, occurrenceID, "MATERIALIZED", "", attempt, generation); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	schedule, err = scanSchedule(tx.QueryRow(ctx, queryQueriesGetscheduleSelectSchedulesOrganizationIdRef, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "schedule_ref": schedule.Ref,
+		"role": scope.role, "actor_id": initiatedBy,
+	}))
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	outcome.resourceKind = "SCHEDULE_OCCURRENCE"
 	outcome.resourceRef = payload.OccurrenceRef
 	outcome.summary = "i18n:SCHEDULE_OCCURRENCE_MATERIALIZED"
 	outcome.result.Schedule = &schedule
 	return outcome, nil
+}
+
+func (repository *Repository) emitScheduleOccurrenceChange(ctx context.Context, tx pgx.Tx, scope scope, occurrenceID string) error {
+	var scheduleRef, projectRef string
+	var version int64
+	if err := tx.QueryRow(ctx, queryWorkersScheduleEventScope, occurrenceID, scope.organizationID).Scan(&scheduleRef, &projectRef, &version); err != nil {
+		return errs.ErrUnavailable
+	}
+	return repository.emitPlatformEventSnapshot(ctx, tx, scope, "SCHEDULE_CHANGED", projectRef, scheduleRef, "i18n:SCHEDULE_UPDATED", version, "")
+}
+
+func validScheduleErrorCode(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, character := range value {
+		if character != '_' && (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {

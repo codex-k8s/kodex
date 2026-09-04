@@ -200,6 +200,10 @@ gen-openapi-ts:
 lint-proto: check-proto-toolchain
 	buf lint
 
+.PHONY: test-automation-scheduler
+test-automation-scheduler:
+	bash scripts/tests/automation-scheduler-test.sh
+
 build-proto: check-proto-toolchain
 	buf build
 

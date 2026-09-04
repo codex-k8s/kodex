@@ -7,4 +7,4 @@ metadata:
     app.kubernetes.io/name: automation-scheduler
 data:
   automation-scheduler.json: |
-    {"uid":"kodex-automation-scheduler","title":"Kodex automation-scheduler","schemaVersion":39,"panels":[{"type":"timeseries","title":"Reconciliation cycles","targets":[{"expr":"sum by (outcome) (rate(kodex_automation_scheduler_cycles_total[5m]))"}]},{"type":"timeseries","title":"Occurrence operations","targets":[{"expr":"sum by (operation, outcome) (rate(kodex_automation_scheduler_occurrences_total[5m]))"}]},{"type":"stat","title":"Transient claims","targets":[{"expr":"sum(kodex_automation_scheduler_tracked_claims)"}]}]}
+    {"uid":"kodex-automation-scheduler","title":"Kodex automation-scheduler","schemaVersion":39,"panels":[{"type":"timeseries","title":"Циклы планировщика","targets":[{"expr":"sum by (outcome) (rate(kodex_automation_scheduler_cycles_total[5m]))"}]},{"type":"timeseries","title":"Исходы обработки","targets":[{"expr":"sum by (outcome) (rate(kodex_automation_scheduler_occurrences_total[5m]))"}]},{"type":"stat","title":"Удерживаемые leases","targets":[{"expr":"sum(kodex_automation_scheduler_tracked_claims)"}]}]}

@@ -5,7 +5,8 @@ SET state = 'CANCELLED',
     fence_digest = NULL,
     workload_instance = NULL,
     lease_expires_at = NULL,
+    completed_at = clock_timestamp(),
     version = version + 1,
     updated_at = clock_timestamp()
 WHERE schedule_id = @schedule_id::uuid
-  AND state IN ('DUE', 'CLAIMED')
+  AND state IN ('DUE', 'CLAIMED', 'RETRY_WAIT', 'DEAD_LETTER')

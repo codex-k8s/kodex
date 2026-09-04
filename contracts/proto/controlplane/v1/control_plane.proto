@@ -1090,6 +1090,7 @@ message Schedule {
   string session_policy = 11;
   string notification_policy = 12;
   google.protobuf.Timestamp next_run_at = 13;
+  // Авторитетный исход последнего occurrence: STATE либо STATE:SAFE_ERROR_CODE.
   string last_outcome = 14;
   repeated NextAction next_actions = 15;
   string time_of_day = 16;

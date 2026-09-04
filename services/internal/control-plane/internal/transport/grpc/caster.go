@@ -491,6 +491,11 @@ func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 		TimeOfDay: value.TimeOfDay, DayOfWeek: value.DayOfWeek,
 		CurrentRevision:    castScheduleRevision(value.CurrentRevision),
 		ContinueSessionRef: value.ContinueSessionRef,
+		LastOutcome:        value.LastOutcome,
+		DstGapPolicy:       value.DSTGapPolicy, DstFoldPolicy: value.DSTFoldPolicy,
+		MisfirePolicy: value.MisfirePolicy, OverlapPolicy: value.OverlapPolicy,
+		TargetVersion: value.TargetVersion, TargetDigest: value.TargetDigest,
+		AutomationText: value.AutomationText, PromptInputs: structure(value.PromptInputs),
 	}
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {

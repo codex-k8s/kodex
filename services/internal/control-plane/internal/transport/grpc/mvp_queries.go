@@ -3,8 +3,10 @@ package grpc
 import (
 	"context"
 	"strings"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
@@ -187,7 +189,39 @@ func castScheduleRevision(value entity.ScheduleRevision) *controlplanev1.Schedul
 		Target: castRunTarget(value.Target), Preset: value.Preset, CronExpression: value.CronExpression,
 		Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy,
 		NotificationPolicy: value.NotificationPolicy, CreatedAt: timestamp(value.CreatedAt),
+		DstGapPolicy: value.DSTGapPolicy, DstFoldPolicy: value.DSTFoldPolicy,
+		MisfirePolicy: value.MisfirePolicy, OverlapPolicy: value.OverlapPolicy,
+		TargetVersion: value.TargetVersion, TargetDigest: value.TargetDigest,
+		AutomationText: value.AutomationText, PromptInputs: structure(value.PromptInputs),
 	}
+}
+
+func (server *Server) PreviewSchedule(ctx context.Context, request *controlplanev1.PreviewScheduleRequest) (*controlplanev1.PreviewScheduleResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_PreviewSchedule_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	var after time.Time
+	if request.GetAfter() != nil {
+		after = request.GetAfter().AsTime()
+	}
+	normalized, occurrences, err := server.service.PreviewSchedule(ctx, p, scheduleservice.Spec{
+		Preset: request.GetPreset(), CronExpression: request.GetCronExpression(), TimeOfDay: request.GetTimeOfDay(),
+		DayOfWeek: request.GetDayOfWeek(), Timezone: request.GetTimezone(), DSTGapPolicy: request.GetDstGapPolicy(),
+		DSTFoldPolicy: request.GetDstFoldPolicy(), MisfirePolicy: request.GetMisfirePolicy(), OverlapPolicy: request.GetOverlapPolicy(),
+	}, after, request.GetLimit())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.PreviewScheduleResponse{
+		NormalizedCronExpression: normalized.CronExpression, DstGapPolicy: normalized.DSTGapPolicy,
+		DstFoldPolicy: normalized.DSTFoldPolicy, MisfirePolicy: normalized.MisfirePolicy,
+		OverlapPolicy: normalized.OverlapPolicy,
+	}
+	for _, occurrence := range occurrences {
+		response.Occurrences = append(response.Occurrences, timestamp(occurrence))
+	}
+	return response, nil
 }
 
 func (server *Server) ListScheduleRuns(ctx context.Context, request *controlplanev1.ListScheduleRunsRequest) (*controlplanev1.ListScheduleRunsResponse, error) {

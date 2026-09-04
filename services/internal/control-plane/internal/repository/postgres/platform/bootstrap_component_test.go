@@ -219,6 +219,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("durable schedule materializes immutable occurrence", func(t *testing.T) {
 		testScheduleLifecycle(t, ctx, repository)
 	})
+	t.Run("schedule race retry prompt snapshot and expiry", func(t *testing.T) {
+		testAutomationScheduler(t, ctx, repository)
+	})
 	t.Run("integration configuration and grants", func(t *testing.T) {
 		testIntegrationConfigurationAndGrants(t, ctx, repository, pool)
 	})

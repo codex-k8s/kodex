@@ -454,9 +454,10 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	writeMessage(w, http.StatusOK, response, "", "")
 }
 
-func scheduleInput(body generated.ScheduleInput) (*controlplanev1.RunTarget, *structpb.Struct) {
+func scheduleInput(body generated.ScheduleInput) (*controlplanev1.RunTarget, *structpb.Struct, *structpb.Struct) {
 	input, _ := structpb.NewStruct(body.Input)
-	return targetProto(string(body.TargetType), body.TargetRef), input
+	promptInputs, _ := structpb.NewStruct(body.PromptInputs)
+	return targetProto(string(body.TargetType), body.TargetRef), input, promptInputs
 }
 func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateScheduleParams) {
 	r, ok := withProjectReference(w, r, projectRef)
@@ -468,8 +469,8 @@ func (server *Server) CreateSchedule(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	target, input := scheduleInput(body)
-	response, err := server.control.Command.CreateSchedule(r.Context(), &controlplanev1.CreateScheduleRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Target: target, Preset: string(body.Preset), TimeOfDay: body.TimeOfDay, DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
+	target, input, promptInputs := scheduleInput(body)
+	response, err := server.control.Command.CreateSchedule(r.Context(), &controlplanev1.CreateScheduleRequest{Mutation: m, ProjectRef: projectRef, Name: body.Name, Target: target, Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay), DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy), DstGapPolicy: string(body.DstGapPolicy), DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy), OverlapPolicy: string(body.OverlapPolicy), AutomationText: body.AutomationText, PromptInputs: promptInputs})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -485,8 +486,8 @@ func (server *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, ref
 	if !ok {
 		return
 	}
-	target, input := scheduleInput(body)
-	response, err := server.control.Command.UpdateSchedule(r.Context(), &controlplanev1.UpdateScheduleRequest{Mutation: m, ScheduleRef: ref, Name: body.Name, Target: target, Preset: string(body.Preset), TimeOfDay: body.TimeOfDay, DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy)})
+	target, input, promptInputs := scheduleInput(body)
+	response, err := server.control.Command.UpdateSchedule(r.Context(), &controlplanev1.UpdateScheduleRequest{Mutation: m, ScheduleRef: ref, Name: body.Name, Target: target, Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay), DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, Input: input, SessionPolicy: string(body.SessionPolicy), NotificationPolicy: string(body.NotificationPolicy), DstGapPolicy: string(body.DstGapPolicy), DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy), OverlapPolicy: string(body.OverlapPolicy), AutomationText: body.AutomationText, PromptInputs: promptInputs})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

@@ -5,6 +5,7 @@ SET state = 'CANCELLED',
     fence_digest = NULL,
     workload_instance = NULL,
     lease_expires_at = NULL,
+    completed_at = clock_timestamp(),
     version = version + 1,
     updated_at = clock_timestamp()
 WHERE run_id = $1::uuid

@@ -524,10 +524,13 @@ func (repository *Repository) ListScheduleRevisions(ctx context.Context, princip
 	items := make([]entity.ScheduleRevision, 0, limit+1)
 	for rows.Next() {
 		var item entity.ScheduleRevision
-		var input []byte
+		var input, promptInputs []byte
 		if err := rows.Scan(&item.Ref, &item.Revision, &item.Digest, &item.Name, &item.Target.Type,
 			&item.Target.Ref, &item.Preset, &item.CronExpression, &item.Timezone, &input,
-			&item.SessionPolicy, &item.NotificationPolicy, &item.CreatedAt); err != nil || json.Unmarshal(input, &item.Input) != nil {
+			&item.SessionPolicy, &item.NotificationPolicy, &item.DSTGapPolicy, &item.DSTFoldPolicy,
+			&item.MisfirePolicy, &item.OverlapPolicy, &item.TargetVersion, &item.TargetDigest,
+			&item.AutomationText, &promptInputs, &item.CreatedAt); err != nil ||
+			json.Unmarshal(input, &item.Input) != nil || json.Unmarshal(promptInputs, &item.PromptInputs) != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		items = append(items, item)
