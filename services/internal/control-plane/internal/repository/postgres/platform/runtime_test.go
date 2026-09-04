@@ -191,9 +191,24 @@ func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 
 func TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities(t *testing.T) {
 	t.Parallel()
-	grants := []map[string]string{{"capabilityKey": "read"}, {"capabilityKey": "write"}}
+	grants := []map[string]string{{"capabilityKey": "read", "operation": "mattermost.post.read"}, {"capabilityKey": "write", "operation": "mattermost.post.send"}}
 	filtered := filterIntegrationGrants(grants, []string{"read"})
 	if len(filtered) != 1 || filtered[0]["capabilityKey"] != "read" {
 		t.Fatalf("filtered grants = %#v", filtered)
+	}
+}
+
+func TestRuntimeIntegrationGrantsExcludeSystemSubscriptions(t *testing.T) {
+	t.Parallel()
+	grants := []map[string]string{
+		{"capabilityKey": "read", "operation": "mattermost.post.read"},
+		{"capabilityKey": "read", "operation": "mattermost.inbound"},
+		{"capabilityKey": "read", "operation": "mattermost.gate_decisions"},
+		{"capabilityKey": "read", "operation": ""},
+	}
+	for _, filtered := range [][]map[string]string{callableIntegrationGrants(grants), filterIntegrationGrants(grants, []string{"read"})} {
+		if len(filtered) != 1 || filtered[0]["operation"] != "mattermost.post.read" {
+			t.Fatalf("system subscription reached runtime capabilities: %#v", filtered)
+		}
 	}
 }

@@ -215,6 +215,25 @@ updated: 2026-09-05
   Runtime projection полного credential flow, race и render policy 50:
   NOT RUN на этой передаче. Live Kubernetes не использовался.
 
+## Подключение registry #1030
+
+- Из `6649449a4f143e180298d54a95e6429b8e2e38d1` приняты только Mattermost
+  manifest 2.2.0 и общий integrationpackage registry/tests. Generated каталог
+  пересоздан штатным `make gen-integration-packages`. Gateway не изменялся.
+- RuntimeRevision вызывает `Capability.CallableByAgent()` до prompt capability
+  intersection и перед сохранением effective grants; SQL resolve/claim сохраняет
+  закрытое исключение двух system operations. Tests
+  `TestRuntimeIntegrationGrantsExcludeSystemSubscriptions` и
+  `TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities`: PASS.
+- `testInteractionHealthRouting` проверяет READY/18 capabilities, создание
+  connection, typed credential fixture, только INTERACTION claim/completion и
+  отказ generic worker с известным fence. Полный PostgreSQL suite: PASS.
+  Прежнее NOT_READY assertion было stale после принятия executable registry.
+  Отдельный subtest без предшествующей общей fixture: FAIL (`no rows`),
+  не выдаётся за независимую поддержанную проверку.
+- integrationpackage Go и `check-integration-package-codegen`: PASS.
+  Actual HTTPS Mattermost, race и render на этой передаче: NOT RUN.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -452,7 +453,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
-		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
+		if err := jsonUnmarshal(rawIntegrationGrants, &integrationGrants); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		integrationGrants = callableIntegrationGrants(integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var attachmentSets []map[string]string
@@ -912,13 +916,23 @@ func promptUserCapabilities(platformRole string, projectPermissions, agentCapabi
 	return result
 }
 
+func callableIntegrationGrants(grants []map[string]string) []map[string]string {
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if (integrationpackage.Capability{Operation: grant["operation"]}).CallableByAgent() {
+			result = append(result, grant)
+		}
+	}
+	return result
+}
+
 func filterIntegrationGrants(grants []map[string]string, capabilities []string) []map[string]string {
 	allowed := make(map[string]struct{}, len(capabilities))
 	for _, capability := range capabilities {
 		allowed[capability] = struct{}{}
 	}
 	result := make([]map[string]string, 0, len(grants))
-	for _, grant := range grants {
+	for _, grant := range callableIntegrationGrants(grants) {
 		if _, ok := allowed[grant["capabilityKey"]]; ok {
 			result = append(result, grant)
 		}
