@@ -3,8 +3,10 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type shutdownServer struct {
@@ -22,9 +24,12 @@ func (server *shutdownServer) Stop() {
 
 func TestGracefulStopUsesStopFallbackAndJoins(t *testing.T) {
 	server := &shutdownServer{started: make(chan struct{}), release: make(chan struct{})}
-	ctx, cancel := context.WithCancel(t.Context())
+	gracefulCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	forceCtx, cancelForce := context.WithTimeout(t.Context(), time.Second)
+	defer cancelForce()
 	result := make(chan error, 1)
-	go func() { result <- GracefulStop(ctx, server) }()
+	go func() { result <- GracefulStop(gracefulCtx, forceCtx, server) }()
 	<-server.started
 	cancel()
 	err := <-result
@@ -36,7 +41,54 @@ func TestGracefulStopUsesStopFallbackAndJoins(t *testing.T) {
 func TestGracefulStopReturnsAfterGracefulCompletion(t *testing.T) {
 	server := &shutdownServer{started: make(chan struct{}), release: make(chan struct{})}
 	close(server.release)
-	if err := GracefulStop(t.Context(), server); err != nil || server.stopped {
+	gracefulCtx, cancelGraceful := context.WithTimeout(t.Context(), time.Second)
+	defer cancelGraceful()
+	forceCtx, cancelForce := context.WithTimeout(t.Context(), time.Second)
+	defer cancelForce()
+	if err := GracefulStop(gracefulCtx, forceCtx, server); err != nil || server.stopped {
 		t.Fatalf("graceful result: stopped=%v err=%v", server.stopped, err)
+	}
+}
+
+type blockingStopServer struct {
+	gracefulStarted chan struct{}
+	stopStarted     chan struct{}
+	release         chan struct{}
+}
+
+func (server *blockingStopServer) GracefulStop() { close(server.gracefulStarted); <-server.release }
+func (server *blockingStopServer) Stop()         { close(server.stopStarted); <-server.release }
+
+func TestGracefulStopDoesNotWaitForBlockingStop(t *testing.T) {
+	server := &blockingStopServer{
+		gracefulStarted: make(chan struct{}),
+		stopStarted:     make(chan struct{}),
+		release:         make(chan struct{}),
+	}
+	t.Cleanup(func() { close(server.release) })
+	gracefulCtx, cancelGraceful := context.WithTimeout(t.Context(), time.Second)
+	defer cancelGraceful()
+	forceCtx, cancelForce := context.WithTimeout(t.Context(), time.Second)
+	defer cancelForce()
+	result := make(chan error, 1)
+	go func() { result <- GracefulStop(gracefulCtx, forceCtx, server) }()
+	<-server.gracefulStarted
+	cancelGraceful()
+	<-server.stopStarted
+	cancelForce()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "forced gRPC shutdown did not join") {
+			t.Fatalf("неверный bounded результат: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("блокирующий Stop задержал следующий cleanup")
+	}
+}
+
+func TestGracefulStopRejectsUnboundedContexts(t *testing.T) {
+	server := &shutdownServer{started: make(chan struct{}), release: make(chan struct{})}
+	if err := GracefulStop(context.Background(), context.Background(), server); err == nil {
+		t.Fatal("неограниченные shutdown contexts приняты")
 	}
 }

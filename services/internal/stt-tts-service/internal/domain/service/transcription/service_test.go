@@ -140,6 +140,22 @@ func TestTranscribeCapsDeadlineByAuthorityExpiry(t *testing.T) {
 	}
 }
 
+func TestTranscribeDoesNotWidenTransportDeadline(t *testing.T) {
+	now := time.Now().UTC()
+	policy := validPolicy(now)
+	provider := &deadlineProvider{}
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
+	service.now = func() time.Time { return now }
+	raw := pcmWAV(time.Second)
+	transportDeadline := time.Now().Add(200 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(t.Context(), transportDeadline)
+	defer cancel()
+	_, _ = service.Transcribe(ctx, validInput(now, raw))
+	if provider.deadline.IsZero() || provider.deadline.After(transportDeadline) {
+		t.Fatalf("provider deadline=%v шире transport deadline=%v", provider.deadline, transportDeadline)
+	}
+}
+
 func TestReadinessAndDiagnosticHaveNoRemoteEffect(t *testing.T) {
 	now := time.Now().UTC()
 	policy := validPolicy(now)

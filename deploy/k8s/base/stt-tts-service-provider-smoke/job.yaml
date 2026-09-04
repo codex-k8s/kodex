@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: stt-acceptance
+  name: stt-provider-smoke
   labels:
-    app.kubernetes.io/name: stt-acceptance
-    app.kubernetes.io/component: acceptance
+    app.kubernetes.io/name: stt-provider-smoke
+    app.kubernetes.io/component: provider-smoke
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 90
@@ -12,24 +12,24 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: stt-acceptance
-        app.kubernetes.io/component: acceptance
+        app.kubernetes.io/name: stt-provider-smoke
+        app.kubernetes.io/component: provider-smoke
     spec:
       restartPolicy: Never
-      serviceAccountName: stt-acceptance
+      serviceAccountName: stt-provider-smoke
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
       containers:
-        - name: acceptance
+        - name: provider-smoke
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/stt-tts-service@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
-          command: [/usr/local/bin/stt-acceptance]
+          command: [/usr/local/bin/stt-provider-smoke]
           env:
             - {name: KODEX_STT_ACCEPTANCE_FIXTURE, value: /fixtures/1-2-3-4-5.mp3}
-            - {name: KODEX_STT_ACCEPTANCE_OPENAI_API_KEY_FILE, value: /var/run/secrets/kodex/stt-acceptance/api-key}
+            - {name: KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY_FILE, value: /var/run/secrets/kodex/stt-provider-smoke/api-key}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
             limits: {cpu: 500m, memory: 96Mi}
@@ -42,9 +42,9 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: fixture, mountPath: /fixtures, readOnly: true}
-            - {name: credential, mountPath: /var/run/secrets/kodex/stt-acceptance, readOnly: true}
+            - {name: credential, mountPath: /var/run/secrets/kodex/stt-provider-smoke, readOnly: true}
       volumes:
         - name: fixture
-          persistentVolumeClaim: {claimName: stt-acceptance-fixture, readOnly: true}
+          persistentVolumeClaim: {claimName: stt-provider-smoke-fixture, readOnly: true}
         - name: credential
-          secret: {secretName: stt-acceptance-openai, defaultMode: 0440, items: [{key: api-key, path: api-key}]}
+          secret: {secretName: stt-provider-smoke-openai, defaultMode: 0440, items: [{key: api-key, path: api-key}]}

@@ -21,6 +21,7 @@ type Metrics struct {
 	allowedMethods map[string]string
 	requests       *prometheus.CounterVec
 	duration       *prometheus.HistogramVec
+	streamInFlight *prometheus.GaugeVec
 	readiness      *prometheus.GaugeVec
 }
 
@@ -48,6 +49,12 @@ func NewMetrics(
 		Help:      "Duration of completed gRPC requests in seconds.",
 		Buckets:   prometheus.DefBuckets,
 	}, []string{"operation"})
+	streamInFlight := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "kodex",
+		Subsystem: serviceName,
+		Name:      "grpc_streams_in_flight",
+		Help:      "Current number of in-flight gRPC streams.",
+	}, []string{"operation"})
 	readiness := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "kodex",
 		Subsystem: serviceName,
@@ -64,6 +71,7 @@ func NewMetrics(
 	registry.MustRegister(
 		requests,
 		duration,
+		streamInFlight,
 		readiness,
 		buildInfo,
 		collectors.NewGoCollector(),
@@ -74,7 +82,28 @@ func NewMetrics(
 		allowedMethods: normalizedMethods,
 		requests:       requests,
 		duration:       duration,
+		streamInFlight: streamInFlight,
 		readiness:      readiness,
+	}
+}
+
+// StreamServerInterceptor учитывает полный streaming RPC, включая ранний
+// отказ до первого сообщения, и поддерживает bounded in-flight gauge.
+func (metrics *Metrics) StreamServerInterceptor() grpc.StreamServerInterceptor {
+	return func(
+		service any,
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		started := time.Now()
+		operation := metrics.operation(info.FullMethod)
+		metrics.streamInFlight.WithLabelValues(operation).Inc()
+		defer metrics.streamInFlight.WithLabelValues(operation).Dec()
+		err := handler(service, stream)
+		metrics.duration.WithLabelValues(operation).Observe(time.Since(started).Seconds())
+		metrics.requests.WithLabelValues(operation, status.Code(err).String()).Inc()
+		return err
 	}
 }
 

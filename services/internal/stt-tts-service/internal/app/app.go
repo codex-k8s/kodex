@@ -21,10 +21,11 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
-	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/openai"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/projection"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/protectedrpc"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 	servicemetrics "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/observability/metrics"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc"
 	"google.golang.org/grpc"
@@ -67,6 +68,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := metrics.Register(outcomes.Collector()); err != nil {
 		return errors.New("register STT service metrics")
 	}
+	readiness := serviceruntime.NewReadiness()
+	readiness.Set(false, "local_runtime_starting")
+	metrics.SetReady(false)
 	dependencies, err := protectedrpc.Dial(startup, protectedrpc.Config{
 		Policy:          protectedrpc.TargetConfig{Target: config.PolicyTarget, TLSServerName: config.PolicyTLSServerName, CAFile: config.DependencyCAFile},
 		Credential:      protectedrpc.TargetConfig{Target: config.CredentialTarget, TLSServerName: config.CredentialTLSServerName, CAFile: config.DependencyCAFile},
@@ -104,7 +108,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = dependencies.Close()
 		return errors.New("connect STT authorization verifier")
 	}
-	handler, err := transportgrpc.New(domain, config.SpoolDirectory)
+	handler, err := transportgrpc.New(domain, config.SpoolDirectory, readiness, config.RequestTimeout)
 	if err != nil {
 		_ = verifier.Close()
 		_ = dependencies.Close()
@@ -116,17 +120,19 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = dependencies.Close()
 		return err
 	}
-	errorObserver := grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
-		logger.Error("unexpected gRPC failure", "method", normalizeMethod(methods, method), "code", code.String())
+	errorObserver := grpcserver.ErrorObserverFunc(func(ctx context.Context, method string, code codes.Code, _ error) {
+		logger.ErrorContext(ctx, "unexpected gRPC failure", "method", normalizeMethod(methods, method), "code", code.String(),
+			"correlation_id", normalizeCorrelation(sharedobservability.CorrelationID(ctx)))
 	})
 	grpcServer := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), telemetry.UnaryServerInterceptor(methods),
 			authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()), grpcserver.RejectMalformedUnary,
 			grpcserver.ErrorBoundary(errorObserver)),
-		grpc.ChainStreamInterceptor(authorityclient.VerifierStreamServerInterceptor(verifier.Verifier()),
-			grpcserver.RejectMalformedStream, grpcserver.StreamErrorBoundary(errorObserver)),
-		grpc.MaxRecvMsgSize(68<<10), grpc.MaxSendMsgSize(1<<20),
+		grpc.ChainStreamInterceptor(metrics.StreamServerInterceptor(), sharedobservability.StreamCorrelationServerInterceptor(),
+			telemetry.StreamServerInterceptor(methods), authorityclient.VerifierStreamServerInterceptor(verifier.Verifier()),
+			handler.StreamServerInterceptor(), grpcserver.RejectMalformedStream, grpcserver.StreamErrorBoundary(errorObserver)),
+		grpc.MaxConcurrentStreams(uint32(value.MaximumConcurrentStreams)), grpc.MaxRecvMsgSize(68<<10), grpc.MaxSendMsgSize(1<<20),
 	)
 	sttv1.RegisterSpeechToTextServiceServer(grpcServer, handler)
 	grpcListener, err := net.Listen("tcp", config.GRPCListen)
@@ -135,9 +141,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = dependencies.Close()
 		return errors.New("listen for STT gRPC")
 	}
-	readiness := serviceruntime.NewReadiness()
-	readiness.Set(false, "local_runtime_starting")
-	metrics.SetReady(false)
 	technical, err := httpserver.New(httpserver.Config{
 		Address: config.TechnicalListen, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second,
 		WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second,
@@ -153,15 +156,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return errors.New("listen for STT technical HTTP")
 	}
 	localChecks := []checker{domainLocalCheck{domain}, verifierReadiness{verifier.Verifier()}, spoolReadiness{config.SpoolDirectory}}
-	if err := checkAll(startup, localChecks...); err != nil {
+	if _, err := updateLocalReadiness(startup, readiness, metrics, localChecks...); err != nil {
 		_ = grpcListener.Close()
 		_ = technical.Shutdown(shutdownBase)
 		_ = verifier.Close()
 		_ = dependencies.Close()
 		return errors.Join(errors.New("STT local startup barrier failed"), err)
 	}
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
 	workers := serviceruntime.StartWorkers(lifecycle, serveGRPC(grpcServer, grpcListener), serveHTTP(technical),
 		monitorReadiness(readiness, metrics, logger, config.ReadinessTimeout, localChecks...))
 	workerDone := make(chan error, 1)
@@ -175,9 +176,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	workers.Stop()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
 		serviceruntime.ShutdownOperation{Name: "STT gRPC server", Timeout: grpcShutdownBudget, Run: func(ctx context.Context) error {
-			graceful, cancel := context.WithTimeout(ctx, 21*time.Second)
-			defer cancel()
-			return grpcserver.GracefulStop(graceful, grpcServer)
+			graceful, cancelGraceful := context.WithTimeout(ctx, 20*time.Second)
+			defer cancelGraceful()
+			force, cancelForce := context.WithTimeout(shutdownBase, grpcShutdownBudget)
+			defer cancelForce()
+			return grpcserver.GracefulStop(graceful, force, grpcServer)
 		}},
 		serviceruntime.ShutdownOperation{Name: "STT technical HTTP server", Timeout: 2 * time.Second, Run: technical.Shutdown},
 		serviceruntime.ShutdownOperation{Name: "STT workers", Timeout: 2 * time.Second, Run: workers.Wait},
@@ -226,6 +229,19 @@ func checkAll(ctx context.Context, checkers ...checker) error {
 	return result
 }
 
+type readinessMetrics interface{ SetReady(bool) }
+
+func updateLocalReadiness(ctx context.Context, readiness *serviceruntime.Readiness, metrics readinessMetrics, checkers ...checker) (bool, error) {
+	err := checkAll(ctx, checkers...)
+	ready := err == nil
+	reason := "ready"
+	if !ready {
+		reason = "local_runtime_unavailable"
+	}
+	metrics.SetReady(ready)
+	return readiness.Set(ready, reason), err
+}
+
 func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, timeout time.Duration, checkers ...checker) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(10 * time.Second)
@@ -237,16 +253,14 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 			case <-ticker.C:
 			}
 			check, cancel := context.WithTimeout(ctx, timeout)
-			err := checkAll(check, checkers...)
+			changed, err := updateLocalReadiness(check, readiness, metrics, checkers...)
 			cancel()
 			if err == nil {
-				metrics.SetReady(true)
-				if readiness.Set(true, "ready") {
+				if changed {
 					logger.InfoContext(ctx, "STT readiness restored")
 				}
 			} else {
-				metrics.SetReady(false)
-				if readiness.Set(false, "local_runtime_unavailable") {
+				if changed {
 					logger.WarnContext(ctx, "STT readiness lost", "error_class", "local_runtime")
 				}
 			}
@@ -334,4 +348,11 @@ func normalizeMethod(methods map[string]string, method string) string {
 		return name
 	}
 	return "unknown"
+}
+
+func normalizeCorrelation(correlationID string) string {
+	if correlationID == "" {
+		return "unknown"
+	}
+	return correlationID
 }

@@ -1,5 +1,5 @@
-// Package acceptance реализует code-first проверку внешнего fixture.
-package acceptance
+// Package providersmoke реализует прямую code-first проверку OpenAI adapter.
+package providersmoke
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/openai"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 )
 
 const (
@@ -79,18 +79,18 @@ func (fixture *Fixture) Close() error {
 
 func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 	if fixture == nil || fixture.file == nil || len(apiKey) == 0 {
-		return errors.New("STT acceptance configuration is incomplete")
+		return errors.New("STT provider smoke configuration is incomplete")
 	}
 	client, err := openai.New()
 	if err != nil {
-		return errors.New("configure STT acceptance client")
+		return errors.New("configure STT provider smoke client")
 	}
 	text, err := client.Transcribe(ctx, value.ProviderRequest{Audio: fixture.audio, Model: value.DefaultModel, Language: value.DefaultLanguage, APIKey: apiKey})
 	if err != nil {
-		return errors.New("live STT acceptance failed")
+		return errors.New("live STT provider smoke failed")
 	}
 	if normalizeRussian(text) != "раз два три четыре пять" {
-		return errors.New("live STT acceptance transcript mismatch")
+		return errors.New("live STT provider smoke transcript mismatch")
 	}
 	return nil
 }

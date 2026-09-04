@@ -26,7 +26,7 @@ updated: 2026-09-04
 - `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
 - `secret-broker.md` — Runtime Secret operations, recovery и exact cleanup;
 - `stt-tts-service.md` — локальная STT readiness, отдельный protected-path
-  diagnostic и неактивный acceptance launcher без вывода аудио, transcript
+  diagnostic и неактивный provider smoke launcher без вывода аудио, transcript
   или credential;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 

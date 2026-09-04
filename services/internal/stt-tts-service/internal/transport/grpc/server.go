@@ -12,15 +12,18 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc/casters"
-	"github.com/google/uuid"
+	googlegrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Service interface {
@@ -29,18 +32,60 @@ type Service interface {
 	CheckProtectedPath(context.Context) error
 }
 
+type Readiness interface {
+	Ready() (bool, string)
+}
+
+type principalResolver func(context.Context, string) (value.Principal, error)
+
 type Server struct {
 	sttv1.UnimplementedSpeechToTextServiceServer
 	service        Service
 	spoolDirectory string
+	readiness      Readiness
+	requestTimeout time.Duration
+	principal      principalResolver
 	admission      *byteAdmission
 }
 
-func New(service Service, spoolDirectory string) (*Server, error) {
-	if service == nil || !filepath.IsAbs(spoolDirectory) || filepath.Clean(spoolDirectory) != spoolDirectory {
+func New(service Service, spoolDirectory string, readiness Readiness, requestTimeout time.Duration) (*Server, error) {
+	if service == nil || readiness == nil || !filepath.IsAbs(spoolDirectory) || filepath.Clean(spoolDirectory) != spoolDirectory ||
+		requestTimeout < time.Second || requestTimeout > 20*time.Second {
 		return nil, errors.New("transcription transport configuration is invalid")
 	}
-	return &Server{service: service, spoolDirectory: spoolDirectory, admission: &byteAdmission{}}, nil
+	return &Server{
+		service: service, spoolDirectory: spoolDirectory, readiness: readiness,
+		requestTimeout: requestTimeout, principal: authorization.Principal,
+		admission: &byteAdmission{},
+	}, nil
+}
+
+// StreamServerInterceptor проверяет server-owned authority, резервирует общий
+// stream slot до первого Recv и задаёт deadline на полный handler.
+func (server *Server) StreamServerInterceptor() googlegrpc.StreamServerInterceptor {
+	return func(service any, stream googlegrpc.ServerStream, info *googlegrpc.StreamServerInfo, handler googlegrpc.StreamHandler) error {
+		principal, err := server.principal(stream.Context(), info.FullMethod)
+		if err != nil {
+			return statusError(codes.Unauthenticated, "verified STT authorization context is required", "UNAUTHENTICATED")
+		}
+		now := time.Now()
+		deadline := now.Add(server.requestTimeout)
+		if principal.ExpiresAt.Before(deadline) {
+			deadline = principal.ExpiresAt
+		}
+		if !now.Before(deadline) {
+			return transportError(context.DeadlineExceeded)
+		}
+		reservation, ok := server.admission.acquireStream()
+		if !ok {
+			return statusError(codes.ResourceExhausted, "transcription capacity is exhausted", "RATE_LIMITED")
+		}
+		defer reservation.release()
+		ctx, cancel := context.WithDeadline(stream.Context(), deadline)
+		defer cancel()
+		ctx = context.WithValue(ctx, streamReservationContextKey{}, reservation)
+		return handler(service, &deadlineServerStream{ServerStream: stream, ctx: ctx})
+	}
 }
 
 func (server *Server) Transcribe(stream sttv1.SpeechToTextService_TranscribeServer) error {
@@ -49,16 +94,25 @@ func (server *Server) Transcribe(stream sttv1.SpeechToTextService_TranscribeServ
 	if err != nil {
 		return statusError(codes.Unauthenticated, "verified STT authorization context is required", "UNAUTHENTICATED")
 	}
+	reservation, ok := ctx.Value(streamReservationContextKey{}).(*streamReservation)
+	if !ok || reservation == nil {
+		return statusError(codes.Internal, "transcription admission is missing", "INTERNAL")
+	}
 	metadataMessage, err := stream.Recv()
-	if err != nil || metadataMessage.GetMetadata() == nil || metadataMessage.GetMetadata().GetSizeBytes() == 0 ||
+	if err != nil {
+		if ctx.Err() != nil {
+			return transportError(ctx.Err())
+		}
+		return transportError(errs.ErrInvalidRequest)
+	}
+	if metadataMessage.GetMetadata() == nil || metadataMessage.GetMetadata().GetSizeBytes() == 0 ||
 		metadataMessage.GetMetadata().GetSizeBytes() > uint64(value.MaximumAbsoluteBytes) {
 		return transportError(errs.ErrInvalidRequest)
 	}
 	sizeBytes := int64(metadataMessage.GetMetadata().GetSizeBytes())
-	if !server.admission.acquire(sizeBytes) {
+	if !reservation.reserveBytes(sizeBytes) {
 		return statusError(codes.ResourceExhausted, "transcription capacity is exhausted", "RATE_LIMITED")
 	}
-	defer server.admission.release(sizeBytes)
 	spool, err := os.CreateTemp(server.spoolDirectory, "request-*.audio")
 	if err != nil {
 		return statusError(codes.Unavailable, "transcription spool is unavailable", "UNAVAILABLE")
@@ -79,7 +133,7 @@ func (server *Server) Transcribe(stream sttv1.SpeechToTextService_TranscribeServ
 		return statusError(codes.Unavailable, "transcription spool is unavailable", "UNAVAILABLE")
 	}
 	result, err := server.service.Transcribe(ctx, casters.TranscriptionInput(
-		principal, uuid.NewString(), spool, sizeBytes, metadataMessage.GetMetadata().GetMediaType(),
+		principal, sharedobservability.CorrelationID(ctx), spool, sizeBytes, metadataMessage.GetMetadata().GetMediaType(),
 	))
 	if err != nil {
 		return transportError(err)
@@ -94,6 +148,9 @@ func receiveAudio(stream sttv1.SpeechToTextService_TranscribeServer, output io.W
 	for {
 		message, err := stream.Recv()
 		if err != nil {
+			if stream.Context().Err() != nil {
+				return 0, "", stream.Context().Err()
+			}
 			return 0, "", errs.ErrInvalidRequest
 		}
 		if chunk := message.GetChunk(); chunk != nil {
@@ -128,7 +185,8 @@ func matchesDigest(digest hash.Hash, declared string) bool {
 }
 
 func (server *Server) CheckReadiness(ctx context.Context, _ *sttv1.CheckReadinessRequest) (*sttv1.CheckReadinessResponse, error) {
-	if err := server.service.CheckLocal(ctx); err != nil {
+	ready, _ := server.readiness.Ready()
+	if !ready {
 		return &sttv1.CheckReadinessResponse{Ready: false}, statusError(codes.Unavailable, "STT local runtime is unavailable", "UNAVAILABLE")
 	}
 	return &sttv1.CheckReadinessResponse{Ready: true}, nil
@@ -148,21 +206,80 @@ type byteAdmission struct {
 	bytes   int64
 }
 
-func (admission *byteAdmission) acquire(size int64) bool {
+type streamReservationContextKey struct{}
+
+type streamReservation struct {
+	admission *byteAdmission
+	once      sync.Once
+	bytes     int64
+}
+
+func (admission *byteAdmission) acquireStream() (*streamReservation, bool) {
 	admission.mu.Lock()
 	defer admission.mu.Unlock()
-	if size <= 0 || size > value.MaximumAbsoluteBytes || admission.streams >= value.MaximumConcurrentStreams ||
-		admission.bytes > value.MaximumInflightBytes-size {
-		return false
+	if admission.streams >= value.MaximumConcurrentStreams {
+		return nil, false
 	}
 	admission.streams++
+	return &streamReservation{admission: admission}, true
+}
+
+func (admission *byteAdmission) snapshot() (int, int64) {
+	admission.mu.Lock()
+	defer admission.mu.Unlock()
+	return admission.streams, admission.bytes
+}
+
+func (reservation *streamReservation) reserveBytes(size int64) bool {
+	if reservation == nil || reservation.admission == nil || reservation.bytes != 0 {
+		return false
+	}
+	admission := reservation.admission
+	admission.mu.Lock()
+	defer admission.mu.Unlock()
+	if size <= 0 || size > value.MaximumAbsoluteBytes || admission.bytes > value.MaximumInflightBytes-size {
+		return false
+	}
 	admission.bytes += size
+	reservation.bytes = size
 	return true
 }
 
-func (admission *byteAdmission) release(size int64) {
-	admission.mu.Lock()
-	defer admission.mu.Unlock()
-	admission.streams--
-	admission.bytes -= size
+func (reservation *streamReservation) release() {
+	if reservation == nil || reservation.admission == nil {
+		return
+	}
+	reservation.once.Do(func() {
+		admission := reservation.admission
+		admission.mu.Lock()
+		defer admission.mu.Unlock()
+		admission.streams--
+		admission.bytes -= reservation.bytes
+	})
+}
+
+type deadlineServerStream struct {
+	googlegrpc.ServerStream
+	ctx context.Context
+}
+
+func (stream *deadlineServerStream) Context() context.Context { return stream.ctx }
+
+func (stream *deadlineServerStream) RecvMsg(message any) error {
+	return awaitStreamOperation(stream.ctx, func() error { return stream.ServerStream.RecvMsg(message) })
+}
+
+func (stream *deadlineServerStream) SendMsg(message any) error {
+	return awaitStreamOperation(stream.ctx, func() error { return stream.ServerStream.SendMsg(message) })
+}
+
+func awaitStreamOperation(ctx context.Context, operation func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- operation() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return status.FromContextError(ctx.Err()).Err()
+	}
 }

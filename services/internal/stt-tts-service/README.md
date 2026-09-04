@@ -4,7 +4,7 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-04
 ---
 
@@ -23,7 +23,7 @@ proof и authority sidecars, unit не входит в `web-only`,
 | --- | --- | --- |
 | 1 | #1021 принимает bounded browser multipart и создаёт client-stream `Transcribe` | browser payload не назначает actor/tenant/project |
 | 2 | local `internalrpcauth` verifier проверяет mTLS, exact caller/target/full method/operation, permission, expiry и root actor/tenant/project provenance | transport передаёт домену только `VerifiedAuthorizationContext` |
-| 3 | stream metadata резервирует до копии один из двух slots и весь заявленный byte budget; chunks не больше 64 KiB пишутся в bounded spool; commit сверяет exact size и SHA-256 | trailing message/data и mismatch закрыто отклоняются |
+| 3 | stream interceptor до первого `Recv` резервирует один из двух slots и задаёт server-owned deadline `min(20s, authority expiry)`; metadata затем резервирует весь заявленный byte budget | stalled stream, trailing message/data и mismatch закрыто отклоняются, slot/bytes освобождаются |
 | 4 | policy adapter обязан получить server-owned delegated/continuation proof для root actor/tenant/project, request/correlation, source revision+digest/provenance и exact RPC | до реализации #1023 adapter возвращает ошибку до сетевого RPC; locator/echo не authority |
 | 5 | домен проверяет server-pinned `gpt-transcribe`, `ru`, limits и MP3/WAV frames/chunks | FLAC отклоняется: подменяемый STREAMINFO `total_samples` не доказывает frames |
 | 6 | credential adapter применяет тот же proof/locator contract и сверяет config/account/generation/expiry | #1024 выдаёт краткоживущий key; key очищается после вызова |
@@ -54,35 +54,45 @@ Readiness не зависит от control-plane, secret-broker, DNS/egress ил
 - максимум одного файла — 25 MiB, одновременно — два stream и 50 MiB
   зарезервированных audio bytes;
 - spool `emptyDir` — 64 MiB, Pod memory limit — 256 MiB;
-- request deadline — 20 s, provider timeout — не более 15 s;
+- deadline всего handler/upload/provider — `min(20 s, authority expiry)`, provider timeout — не более 15 s и не шире transport deadline;
 - shutdown budget — 30 s, Kubernetes grace — 35 s;
 - gRPC сначала выполняет deadline-aware `GracefulStop`, после deadline —
-  `Stop` и bounded join;
+  асинхронный `Stop` и bounded join обеих операций;
 - один provider effect, автоматического retry нет.
 
 ## Наблюдаемость
 
-`kodex_stt_tts_service_transcription_stage_total{stage,error_class}` использует
+`kodex_stt_tts_service_grpc_streams_in_flight{operation}` и общие completed/
+duration stream-метрики учитывают весь RPC, включая ранний auth, malformed,
+admission и spool failure. Каждый stream получает server-owned correlation UUID
+для trace, безопасного error observation и success receipt. Correlation не
+является metric label. `kodex_stt_tts_service_transcription_stage_total{stage,error_class}` использует
 только закрытые stage `authority|policy|audio|credential|egress|provider|success`
 и error class `none|denied|invalid|unavailable|timeout|rejected`; неизвестные
 значения нормализуются в `unknown`. Логи и receipt не содержат audio,
 transcript, API key или authority grant.
 
-## Acceptance fixture
+## Прямая provider smoke-проверка
 
-`make test-stt-acceptance` использует внешний
+`make test-stt-provider-smoke` проверяет только прямой OpenAI adapter и использует внешний
 `KODEX_STT_ACCEPTANCE_FIXTURE` (по умолчанию
 `/home/s/projects/matter-codex/.agents/mvp-finish/1-2-3-4-5.mp3`) и до live
 вызова требует exact SHA-256
 `56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e`.
 Credential для локального теста задаётся только
-`KODEX_STT_ACCEPTANCE_OPENAI_API_KEY`; без него результат — честный `NOT RUN`.
+`KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY`; без него после проверки checksum
+результат — честный `NOT RUN`.
 
 Неактивный code-first launcher расположен в
-`deploy/k8s/base/stt-tts-service-acceptance`: Job использует тот же
+`deploy/k8s/base/stt-tts-service-provider-smoke`: Job использует тот же
 `egress-gateway`, внешний PVC fixture и Secret file без значения в Git,
 `backoffLimit: 0`. Его запуск требует отдельного owner OK и materialized
 fixture/Secret; в этом remediation deploy не выполняется.
+
+Эта проверка не является end-to-end acceptance: она обходит gRPC, authority,
+policy и credential projection. Полная gRPC acceptance остаётся обязательной,
+но `NOT RUN` до materialization #1019/#1021/#1023/#1024; зависимость результата
+Issue #1020 отслеживается в #1031, и provider smoke не может дать ей `PASS`.
 
 ## Проверенные внешние документы
 

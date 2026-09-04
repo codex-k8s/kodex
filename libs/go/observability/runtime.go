@@ -222,6 +222,48 @@ func (runtime *Runtime) UnaryServerInterceptor(
 	}
 }
 
+// StreamServerInterceptor создаёт server span для полного streaming RPC и
+// сообщает неожиданную ошибку ровно один раз в общий error reporter.
+func (runtime *Runtime) StreamServerInterceptor(
+	allowedMethods map[string]string,
+) grpc.StreamServerInterceptor {
+	normalized := make(map[string]string, len(allowedMethods))
+	for method, operation := range allowedMethods {
+		normalized[method] = operation
+	}
+	return func(
+		service any,
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		operation := unknownMethod
+		if allowed, ok := normalized[info.FullMethod]; ok {
+			operation = allowed
+		}
+		attributes := []attribute.KeyValue{attribute.String("rpc.system", "grpc")}
+		if correlationID := CorrelationID(stream.Context()); correlationID != "" {
+			attributes = append(attributes, attribute.String("correlation_id", correlationID))
+		}
+		traceCtx, span := runtime.tracer.Start(
+			stream.Context(),
+			operation,
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attributes...),
+		)
+		err := handler(service, &contextServerStream{ServerStream: stream, ctx: traceCtx})
+		if err != nil {
+			span.RecordError(err)
+			span.SetAttributes(attribute.String("rpc.grpc.status_code", status.Code(err).String()))
+			if grpcserver.IsUnexpectedCode(status.Code(err)) {
+				runtime.CaptureException(traceCtx, err)
+			}
+		}
+		span.End()
+		return err
+	}
+}
+
 // UnaryClientInterceptor создаёт client span и сообщает неожиданные ошибки.
 func (runtime *Runtime) UnaryClientInterceptor(
 	allowedMethods map[string]string,
@@ -272,6 +314,9 @@ func (runtime *Runtime) CaptureException(ctx context.Context, err error) {
 	if spanContext := trace.SpanContextFromContext(ctx); spanContext.IsValid() {
 		scope.SetTag("trace_id", spanContext.TraceID().String())
 		scope.SetTag("span_id", spanContext.SpanID().String())
+	}
+	if correlationID := CorrelationID(ctx); correlationID != "" {
+		scope.SetTag("correlation_id", correlationID)
 	}
 	runtime.sentry.CaptureException(err, &sentry.EventHint{Context: ctx}, scope)
 }

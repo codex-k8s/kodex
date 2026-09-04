@@ -4,7 +4,7 @@ title: Диагностика stt-tts-service
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-04
 ---
 
@@ -23,16 +23,21 @@ authority proof/grant или provider body.
   `ready` и `stage`; не является Kubernetes readiness и не вызывает provider;
 - `kodex_stt_tts_service_readiness` — local readiness;
 - `kodex_stt_tts_service_grpc_requests_total{operation,code}` и
-  `kodex_stt_tts_service_grpc_request_duration_seconds{operation}` — unary RPC;
+  `kodex_stt_tts_service_grpc_request_duration_seconds{operation}` — все
+  завершённые unary/stream RPC, включая ранние отказы;
+- `kodex_stt_tts_service_grpc_streams_in_flight{operation}` — текущие stream от
+  начала общей технической цепочки, включая раннюю проверку authority и
+  admission;
 - `kodex_stt_tts_service_transcription_stage_total{stage,error_class}` — один
   итог каждого transcription path. `stage` ограничен
   `authority|policy|audio|credential|egress|provider|success|unknown`,
   `error_class` —
   `none|denied|invalid|unavailable|timeout|rejected|unknown`.
 
-Лог `unexpected gRPC failure` содержит только bounded `method` и canonical
-`code`; edge local readiness — только `error_class=local_runtime`. Request и
-correlation доступны в success receipt, но намеренно не логируются.
+Лог `unexpected gRPC failure` содержит только bounded `method`, canonical
+`code` и server-owned `correlation_id`; edge local readiness — только
+`error_class=local_runtime`. Correlation не является metric label. Payload,
+audio, transcript, credential и grant не логируются.
 
 ## Разделение readiness и protected path
 
@@ -45,7 +50,7 @@ correlation доступны в success receipt, но намеренно не л
 
 После materialization последовательно диагностируются policy, credential,
 egress и provider. Diagnostic не должен выполнять transcription/provider
-effect; live provider проверяется только acceptance harness с отдельным owner
+  effect; live provider проверяется только provider smoke с отдельным owner
 разрешением.
 
 ## Проверка инцидента
@@ -66,14 +71,19 @@ effect; live provider проверяется только acceptance harness с 
 6. Success receipt можно сверять по безопасным provenance/config/account/stage
    полям, но transcript в evidence переносить нельзя.
 
-## Acceptance launcher
+## Provider smoke launcher
 
-`deploy/k8s/base/stt-tts-service-acceptance` — неактивный Job с
+`deploy/k8s/base/stt-tts-service-provider-smoke` — неактивный Job с
 `backoffLimit: 0`, внешним PVC fixture и Secret file. Перед live effect бинарь
 проверяет exact fixture SHA-256
 `56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e` и идёт
 через тот же egress-gateway. Fixture и credential values в Git отсутствуют.
 Job не запускать без отдельного owner OK.
+
+Этот launcher вызывает OpenAI adapter напрямую и не является end-to-end
+acceptance. Полная gRPC acceptance обязательна после materialization
+#1019/#1021/#1023/#1024; до этого зависимость Issue #1020/#1031 имеет результат
+`NOT RUN`, а успешный provider smoke не превращает её в `PASS`.
 
 ## Восстановление
 

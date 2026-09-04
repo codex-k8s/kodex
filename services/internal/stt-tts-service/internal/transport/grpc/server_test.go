@@ -10,11 +10,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -33,20 +37,40 @@ type fakeStream struct {
 	messages []*sttv1.TranscribeRequest
 	index    int
 	response *sttv1.TranscribeResponse
+	block    <-chan struct{}
 }
 
 func (stream *fakeStream) Context() context.Context { return stream.ctx }
 func (*fakeStream) SetHeader(metadata.MD) error     { return nil }
 func (*fakeStream) SendHeader(metadata.MD) error    { return nil }
 func (*fakeStream) SetTrailer(metadata.MD)          {}
-func (*fakeStream) SendMsg(any) error               { return nil }
-func (*fakeStream) RecvMsg(any) error               { return nil }
-func (stream *fakeStream) Recv() (*sttv1.TranscribeRequest, error) {
-	if stream.index >= len(stream.messages) {
-		return nil, io.EOF
+func (stream *fakeStream) SendMsg(message any) error {
+	response, ok := message.(*sttv1.TranscribeResponse)
+	if ok {
+		stream.response = response
 	}
-	message := stream.messages[stream.index]
+	return nil
+}
+func (stream *fakeStream) RecvMsg(message any) error {
+	if stream.index >= len(stream.messages) {
+		if stream.block != nil {
+			<-stream.block
+		}
+		return io.EOF
+	}
+	request, ok := message.(*sttv1.TranscribeRequest)
+	if !ok {
+		return errors.New("unexpected receive type")
+	}
+	*request = *stream.messages[stream.index]
 	stream.index++
+	return nil
+}
+func (stream *fakeStream) Recv() (*sttv1.TranscribeRequest, error) {
+	message := &sttv1.TranscribeRequest{}
+	if err := stream.RecvMsg(message); err != nil {
+		return nil, err
+	}
 	return message, nil
 }
 func (stream *fakeStream) SendAndClose(response *sttv1.TranscribeResponse) error {
@@ -55,11 +79,8 @@ func (stream *fakeStream) SendAndClose(response *sttv1.TranscribeResponse) error
 }
 
 func TestTranscribeRejectsMissingVerifiedContext(t *testing.T) {
-	server, err := New(fakeService{}, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = server.Transcribe(&fakeStream{ctx: t.Context()})
+	server := newTestServer(t)
+	err := server.Transcribe(&fakeStream{ctx: t.Context()})
 	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("code=%s err=%v", status.Code(err), err)
 	}
@@ -67,17 +88,20 @@ func TestTranscribeRejectsMissingVerifiedContext(t *testing.T) {
 
 func TestServerBoundsConcurrentTranscriptions(t *testing.T) {
 	admission := &byteAdmission{}
-	if !admission.acquire(value.MaximumAbsoluteBytes) {
+	first, ok := admission.acquireStream()
+	if !ok || !first.reserveBytes(value.MaximumAbsoluteBytes) {
 		t.Fatal("первый максимальный запрос должен укладываться в byte budget")
 	}
-	if !admission.acquire(value.MaximumAbsoluteBytes) {
+	second, ok := admission.acquireStream()
+	if !ok || !second.reserveBytes(value.MaximumAbsoluteBytes) {
 		t.Fatal("второй максимальный запрос должен укладываться в byte budget")
 	}
-	if admission.acquire(1) || admission.bytes != value.MaximumInflightBytes || admission.streams != value.MaximumConcurrentStreams {
+	streams, bytes := admission.snapshot()
+	if third, acquired := admission.acquireStream(); acquired || third != nil || bytes != value.MaximumInflightBytes || streams != value.MaximumConcurrentStreams {
 		t.Fatal("запрос сверх concurrent byte/stream budget принят")
 	}
-	admission.release(value.MaximumAbsoluteBytes)
-	admission.release(value.MaximumAbsoluteBytes)
+	first.release()
+	second.release()
 	_, file, _, _ := runtime.Caller(0)
 	manifest, err := os.ReadFile(filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../../../deploy/k8s/base/stt-tts-service/deployment.yaml")))
 	if err != nil {
@@ -85,6 +109,135 @@ func TestServerBoundsConcurrentTranscriptions(t *testing.T) {
 	}
 	if !strings.Contains(string(manifest), "limits: {cpu: \"2\", memory: 256Mi}") || value.MaximumInflightBytes >= 256<<20 {
 		t.Fatal("code memory budget не согласован с Pod memory limit")
+	}
+}
+
+func TestStreamAdmissionReservesBeforeFirstMessageAndReleasesOnTimeout(t *testing.T) {
+	server := newTestServer(t)
+	server.requestTimeout = 40 * time.Millisecond
+	server.principal = func(context.Context, string) (value.Principal, error) {
+		return value.Principal{ExpiresAt: time.Now().Add(time.Second)}, nil
+	}
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	entered := make(chan struct{})
+	result := make(chan error, 1)
+	stream := &fakeStream{ctx: t.Context(), block: release}
+	go func() {
+		result <- server.StreamServerInterceptor()(nil, stream, &grpc.StreamServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(_ any, admitted grpc.ServerStream) error {
+			close(entered)
+			var message sttv1.TranscribeRequest
+			return admitted.RecvMsg(&message)
+		})
+	}()
+	<-entered
+	streams, _ := server.admission.snapshot()
+	if streams != 1 {
+		t.Fatalf("slot до первого Recv не зарезервирован: %d", streams)
+	}
+	if err := <-result; status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("code=%s err=%v", status.Code(err), err)
+	}
+	streams, reservedBytes := server.admission.snapshot()
+	if streams != 0 || reservedBytes != 0 {
+		t.Fatalf("slot после timeout не освобождён: streams=%d bytes=%d", streams, reservedBytes)
+	}
+}
+
+func TestStreamAdmissionCapsStalledStreamsBeforeHandler(t *testing.T) {
+	server := newTestServer(t)
+	server.principal = func(context.Context, string) (value.Principal, error) {
+		return value.Principal{ExpiresAt: time.Now().Add(2 * time.Second)}, nil
+	}
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseStreams := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(releaseStreams)
+	entered := make(chan struct{}, value.MaximumConcurrentStreams)
+	results := make(chan error, value.MaximumConcurrentStreams)
+	for range value.MaximumConcurrentStreams {
+		stream := &fakeStream{ctx: t.Context(), block: release}
+		go func() {
+			results <- server.StreamServerInterceptor()(nil, stream, &grpc.StreamServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(_ any, admitted grpc.ServerStream) error {
+				entered <- struct{}{}
+				var message sttv1.TranscribeRequest
+				return admitted.RecvMsg(&message)
+			})
+		}()
+	}
+	for range value.MaximumConcurrentStreams {
+		<-entered
+	}
+	thirdHandlerCalled := false
+	err := server.StreamServerInterceptor()(nil, &fakeStream{ctx: t.Context()}, &grpc.StreamServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(any, grpc.ServerStream) error {
+		thirdHandlerCalled = true
+		return nil
+	})
+	if status.Code(err) != codes.ResourceExhausted || thirdHandlerCalled {
+		t.Fatalf("stream cap не сработал до handler: called=%v code=%s", thirdHandlerCalled, status.Code(err))
+	}
+	releaseStreams()
+	for range value.MaximumConcurrentStreams {
+		if result := <-results; !errors.Is(result, io.EOF) {
+			t.Fatalf("stalled stream result=%v", result)
+		}
+	}
+	streams, bytes := server.admission.snapshot()
+	if streams != 0 || bytes != 0 {
+		t.Fatalf("slots после завершения не освобождены: streams=%d bytes=%d", streams, bytes)
+	}
+}
+
+func TestStreamAdmissionReleasesBytesWhenStalledAfterMetadata(t *testing.T) {
+	server := newTestServer(t)
+	server.requestTimeout = 40 * time.Millisecond
+	server.principal = func(context.Context, string) (value.Principal, error) {
+		return value.Principal{ExpiresAt: time.Now().Add(time.Second)}, nil
+	}
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	stream := &fakeStream{ctx: t.Context(), messages: []*sttv1.TranscribeRequest{{Body: &sttv1.TranscribeRequest_Metadata{Metadata: &sttv1.TranscribeMetadata{SizeBytes: 1024}}}}, block: release}
+	err := server.StreamServerInterceptor()(nil, stream, &grpc.StreamServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(_ any, admitted grpc.ServerStream) error {
+		var metadata sttv1.TranscribeRequest
+		if receiveErr := admitted.RecvMsg(&metadata); receiveErr != nil {
+			return receiveErr
+		}
+		reservation := admitted.Context().Value(streamReservationContextKey{}).(*streamReservation)
+		if !reservation.reserveBytes(int64(metadata.GetMetadata().GetSizeBytes())) {
+			return errors.New("reserve metadata bytes")
+		}
+		var chunk sttv1.TranscribeRequest
+		return admitted.RecvMsg(&chunk)
+	})
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("code=%s err=%v", status.Code(err), err)
+	}
+	streams, bytes := server.admission.snapshot()
+	if streams != 0 || bytes != 0 {
+		t.Fatalf("reservation после timeout не освобождена: streams=%d bytes=%d", streams, bytes)
+	}
+}
+
+func TestStreamAdmissionDeadlineIsCappedByAuthorityExpiry(t *testing.T) {
+	server := newTestServer(t)
+	server.requestTimeout = time.Second
+	expiresAt := time.Now().Add(50 * time.Millisecond)
+	server.principal = func(context.Context, string) (value.Principal, error) {
+		return value.Principal{ExpiresAt: expiresAt}, nil
+	}
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	stream := &fakeStream{ctx: t.Context(), block: release}
+	err := server.StreamServerInterceptor()(nil, stream, &grpc.StreamServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(_ any, admitted grpc.ServerStream) error {
+		deadline, ok := admitted.Context().Deadline()
+		if !ok || deadline.After(expiresAt) {
+			t.Fatalf("deadline=%v authority expiry=%v", deadline, expiresAt)
+		}
+		var message sttv1.TranscribeRequest
+		return admitted.RecvMsg(&message)
+	})
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("code=%s err=%v", status.Code(err), err)
 	}
 }
 
@@ -150,4 +303,15 @@ func cloneMessages(input []*sttv1.TranscribeRequest) []*sttv1.TranscribeRequest 
 		result[index] = &sttv1.TranscribeRequest{Body: &sttv1.TranscribeRequest_Commit{Commit: &sttv1.TranscribeCommit{SizeBytes: commit.GetSizeBytes(), Sha256: commit.GetSha256()}}}
 	}
 	return result
+}
+
+func newTestServer(t *testing.T) *Server {
+	t.Helper()
+	readiness := serviceruntime.NewReadiness()
+	readiness.Set(true, "ready")
+	server, err := New(fakeService{}, t.TempDir(), readiness, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return server
 }
