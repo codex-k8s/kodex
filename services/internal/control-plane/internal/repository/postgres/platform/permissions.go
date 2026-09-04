@@ -177,8 +177,10 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		if input.Kind == command.CreateSystemSTTDraft {
 			return "organization.manage", organization, nil
 		}
-		if (input.Kind == command.CreatePromptTemplateDraft || input.Kind == command.CreateRoleImageRevisionDraft ||
-			input.Kind == command.CreateIntegrationDefinition) && payload.ConfigurationRef == "" {
+		if input.Kind == command.CreateIntegrationDefinition && payload.ConfigurationRef == "" {
+			return "organization.manage", organization, nil
+		}
+		if (input.Kind == command.CreatePromptTemplateDraft || input.Kind == command.CreateRoleImageRevisionDraft) && payload.ConfigurationRef == "" {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		if payload.ConfigurationRef != "" {

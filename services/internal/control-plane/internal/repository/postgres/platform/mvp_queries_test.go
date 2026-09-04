@@ -434,3 +434,35 @@ func TestProviderAccountActionsForViewOnlyMember(t *testing.T) {
 		t.Fatalf("view-only provider account actions = %v, want [OPEN]", got)
 	}
 }
+
+func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T) {
+	t.Parallel()
+	if !strings.Contains(queryPromptPreviewSnapshot, "run.ref = @target_ref") ||
+		strings.Contains(queryPromptPreviewSnapshot, "requested.root_run_id") {
+		t.Fatal("RUN prompt preview is not pinned to the exact requested run")
+	}
+	for _, fragment := range []string{
+		"WHEN NOT n.human_gate_after THEN NULL::text[]",
+		"WHEN workflow_version.id IS NULL THEN '{}'::text[]",
+		"step.value ->> 'Key' = n.workflow_step_key",
+	} {
+		if !strings.Contains(queryRuntimeClaimExecutionSelectClaimableAgentExecutions, fragment) {
+			t.Fatalf("runtime Human Gate capability layer lacks %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		"binding.run_id = run.id",
+		"turn.run_id = run.id",
+		"artifact.source IN ('AGENT_RESULT', 'INTEGRATION_RESULT')",
+		"artifact.ref = item.artifact_ref",
+		"artifact.revision = item.artifact_revision",
+	} {
+		if !strings.Contains(queryVFSListNodes, fragment) {
+			t.Fatalf("VFS provenance query lacks %q", fragment)
+		}
+	}
+	if strings.Contains(queryQueriesSearchSelectEligibleResources, "membership.permissions") ||
+		!strings.Contains(queryQueriesSearchSelectEligibleResources, "created_at AS order_time") {
+		t.Fatal("global search still trusts legacy membership or mutable ordering")
+	}
+}

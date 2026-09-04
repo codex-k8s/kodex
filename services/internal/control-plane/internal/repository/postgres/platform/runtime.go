@@ -278,38 +278,38 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 }
 
 type claimableExecution struct {
-	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                      string
-	initiatorRef, initiatorName, organizationRef, organizationName, projectName           string
-	sessionID, sessionRef, task, source, workflowRef, automationRef, workflowStepKey      string
-	agentRef, agentName, runtimeKey                                                       string
-	runtimeRevision                                                                       string
-	provider, model, providerAccountID, providerAccountRef                                string
-	providerCredentialID, providerCredentialRef                                           string
-	providerSecretName, providerSecretUID, providerSecretResourceVersion                  string
-	providerCredentialSHA256, instructionRef, instructionDigest, instructions             string
-	turnRef, stableKey, callbackEdgeRef, turnID, agentID                                  string
-	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef            string
-	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest        string
-	roleRuntimeContractSHA256                                                             string
-	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                                string
-	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode         string
-	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay                 string
-	environmentBindingID, environmentBindingRef, environmentBindingDigest                 string
-	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                 string
-	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext       string
-	codexSessionID                                                                        string
-	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber   int64
-	roleRuntimeContractRevision                                                           int64
-	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                     int64
-	environmentBindingVersion, runtimeEnvironmentVersion                                  int64
-	attempt                                                                               int32
-	capabilities, userProjectPermissions, workflowCapabilities, knowledge                 []string
-	userPlatformRole                                                                      string
-	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets []byte
-	rawSessionContext                                                                     []byte
-	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                       []byte
-	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile      []byte
-	resourcesDigest, volumesDigest, networkDigest, rbacDigest                             string
+	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                             string
+	initiatorRef, initiatorName, organizationRef, organizationName, projectName                  string
+	sessionID, sessionRef, task, source, workflowRef, automationRef, workflowStepKey             string
+	agentRef, agentName, runtimeKey                                                              string
+	runtimeRevision                                                                              string
+	provider, model, providerAccountID, providerAccountRef                                       string
+	providerCredentialID, providerCredentialRef                                                  string
+	providerSecretName, providerSecretUID, providerSecretResourceVersion                         string
+	providerCredentialSHA256, instructionRef, instructionDigest, instructions                    string
+	turnRef, stableKey, callbackEdgeRef, turnID, agentID                                         string
+	roleDefinitionID, roleDefinitionRef, roleImageRecipeID, roleImageRecipeRef                   string
+	roleImageArtifactID, roleImageArtifactRef, imageReference, imageManifestDigest               string
+	roleRuntimeContractSHA256                                                                    string
+	runtimeConfigID, runtimeConfigRef, runtimeConfigDigest                                       string
+	providerPolicyID, providerPolicyRef, providerPolicyDigest, providerPolicyMode                string
+	configOverlayID, configOverlayRef, configOverlayDigest, configOverlay                        string
+	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
+	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
+	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
+	codexSessionID                                                                               string
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
+	roleRuntimeContractRevision                                                                  int64
+	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
+	environmentBindingVersion, runtimeEnvironmentVersion                                         int64
+	attempt                                                                                      int32
+	capabilities, userProjectPermissions, workflowCapabilities, humanGateCapabilities, knowledge []string
+	userPlatformRole                                                                             string
+	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets        []byte
+	rawSessionContext                                                                            []byte
+	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                              []byte
+	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile             []byte
+	resourcesDigest, volumesDigest, networkDigest, rbacDigest                                    string
 }
 
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
@@ -343,7 +343,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
 			&candidate.instructions, &candidate.capabilities, &candidate.userPlatformRole,
-			&candidate.userProjectPermissions, &candidate.workflowCapabilities, &candidate.knowledge, &candidate.rawInput,
+			&candidate.userProjectPermissions, &candidate.workflowCapabilities, &candidate.humanGateCapabilities, &candidate.knowledge, &candidate.rawInput,
 			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext,
 			&candidate.rawAttachmentSets, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
@@ -533,6 +533,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if candidate.workflowRef != "" {
 			workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
 		}
+		humanGateCapabilities := candidate.humanGateCapabilities
 		targetRef := agentRef
 		if targetKind == promptservice.TargetWorkflowStage {
 			targetRef = candidate.workflowStepKey
@@ -572,7 +573,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			StructuredVariables: structuredPromptVariables,
 			UserCapabilities:    userCapabilities, AgentCapabilities: capabilities,
 			WorkflowCapabilities: workflowCapabilities, ConnectionCapabilities: connectionCapabilities,
-			WorkflowStage: workflowStage, Automation: automation,
+			HumanGateCapabilities: humanGateCapabilities,
+			WorkflowStage:         workflowStage, Automation: automation,
 			SessionContinuation: continuation,
 		}
 		materializedPrompt, err := promptservice.Materialize(instructions, promptservice.Snapshot{
@@ -646,7 +648,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"promptSnapshot":              promptSnapshot,
 			"promptAuthority": map[string]any{
 				"user": userCapabilities, "agent": promptSnapshot.AgentCapabilities, "workflow": workflowCapabilities,
-				"connection": connectionCapabilities, "humanGate": nil,
+				"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
 			},
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
 			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,

@@ -2322,6 +2322,7 @@ const (
 	PlatformCommandService_CancelRun_FullMethodName                                = "/controlplane.v1.PlatformCommandService/CancelRun"
 	PlatformCommandService_RetryRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/RetryRun"
 	PlatformCommandService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_UploadAgentAvatar_FullMethodName                        = "/controlplane.v1.PlatformCommandService/UploadAgentAvatar"
 	PlatformCommandService_UploadArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UploadArtifact"
 	PlatformCommandService_UploadOrganizationArtifact_FullMethodName               = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
 	PlatformCommandService_DownloadArtifact_FullMethodName                         = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
@@ -2429,6 +2430,9 @@ type PlatformCommandServiceClient interface {
 	CancelRun(ctx context.Context, in *CancelRunRequest, opts ...grpc.CallOption) (*CancelRunResponse, error)
 	RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error)
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
+	// UploadAgentAvatar резервирует object key до materialization и атомарно
+	// публикует Artifact, binding и новую версию Agent либо компенсирует object.
+	UploadAgentAvatar(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadAgentAvatarRequest, UploadAgentAvatarResponse], error)
 	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
 	UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse], error)
 	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
@@ -2816,9 +2820,22 @@ func (c *platformCommandServiceClient) ResolveOwnerGate(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) UploadAgentAvatar(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadAgentAvatarRequest, UploadAgentAvatarResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[0], PlatformCommandService_UploadAgentAvatar_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadAgentAvatarRequest, UploadAgentAvatarResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadAgentAvatarClient = grpc.ClientStreamingClient[UploadAgentAvatarRequest, UploadAgentAvatarResponse]
+
 func (c *platformCommandServiceClient) UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[0], PlatformCommandService_UploadArtifact_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_UploadArtifact_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2831,7 +2848,7 @@ type PlatformCommandService_UploadArtifactClient = grpc.ClientStreamingClient[Up
 
 func (c *platformCommandServiceClient) UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[1], PlatformCommandService_UploadOrganizationArtifact_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[2], PlatformCommandService_UploadOrganizationArtifact_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2844,7 +2861,7 @@ type PlatformCommandService_UploadOrganizationArtifactClient = grpc.ClientStream
 
 func (c *platformCommandServiceClient) DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[2], PlatformCommandService_DownloadArtifact_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[3], PlatformCommandService_DownloadArtifact_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3539,6 +3556,9 @@ type PlatformCommandServiceServer interface {
 	CancelRun(context.Context, *CancelRunRequest) (*CancelRunResponse, error)
 	RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error)
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
+	// UploadAgentAvatar резервирует object key до materialization и атомарно
+	// публикует Artifact, binding и новую версию Agent либо компенсирует object.
+	UploadAgentAvatar(grpc.ClientStreamingServer[UploadAgentAvatarRequest, UploadAgentAvatarResponse]) error
 	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
 	UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]) error
 	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
@@ -3708,6 +3728,9 @@ func (UnimplementedPlatformCommandServiceServer) RetryRun(context.Context, *Retr
 }
 func (UnimplementedPlatformCommandServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UploadAgentAvatar(grpc.ClientStreamingServer[UploadAgentAvatarRequest, UploadAgentAvatarResponse]) error {
+	return status.Error(codes.Unimplemented, "method UploadAgentAvatar not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadArtifact not implemented")
@@ -4489,6 +4512,13 @@ func _PlatformCommandService_ResolveOwnerGate_Handler(srv interface{}, ctx conte
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _PlatformCommandService_UploadAgentAvatar_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PlatformCommandServiceServer).UploadAgentAvatar(&grpc.GenericServerStream[UploadAgentAvatarRequest, UploadAgentAvatarResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_UploadAgentAvatarServer = grpc.ClientStreamingServer[UploadAgentAvatarRequest, UploadAgentAvatarResponse]
 
 func _PlatformCommandService_UploadArtifact_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(PlatformCommandServiceServer).UploadArtifact(&grpc.GenericServerStream[UploadArtifactRequest, UploadArtifactResponse]{ServerStream: stream})
@@ -6056,6 +6086,11 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadAgentAvatar",
+			Handler:       _PlatformCommandService_UploadAgentAvatar_Handler,
+			ClientStreams: true,
+		},
 		{
 			StreamName:    "UploadArtifact",
 			Handler:       _PlatformCommandService_UploadArtifact_Handler,

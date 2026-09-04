@@ -77,6 +77,63 @@ func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandServic
 	return server.uploadArtifact(stream, controlplanev1.PlatformCommandService_UploadArtifact_FullMethodName, true)
 }
 
+func (server *Server) UploadAgentAvatar(stream controlplanev1.PlatformCommandService_UploadAgentAvatarServer) error {
+	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_UploadAgentAvatar_FullMethodName)
+	if err != nil {
+		return err
+	}
+	adapter := &agentAvatarUploadAdapter{stream: stream}
+	upload, err := receiveArtifactUpload(adapter)
+	if err != nil {
+		return err
+	}
+	defer upload.close()
+	metadata := adapter.metadata
+	if metadata == nil || metadata.GetProjectRef() == "" || metadata.GetAgentRef() == "" ||
+		metadata.GetMutation() == nil || metadata.GetMutation().ExpectedVersion == nil || metadata.GetSizeBytes() > 5<<20 {
+		return status.Error(codes.InvalidArgument, "agent avatar upload metadata is invalid")
+	}
+	agent, err := server.service.UploadAgentAvatar(stream.Context(), p, mutation(metadata.GetMutation()), repository.AgentAvatarUpload{
+		ArtifactUpload: repository.ArtifactUpload{
+			ProjectRef: metadata.GetProjectRef(), FileName: metadata.GetFileName(), MediaType: metadata.GetMediaType(),
+			SizeBytes: metadata.GetSizeBytes(), Digest: "sha256:" + upload.sha256, Reader: upload.file,
+		},
+		AgentRef: metadata.GetAgentRef(), ExpectedVersion: metadata.GetMutation().GetExpectedVersion(),
+	})
+	if err != nil {
+		return transportError(err)
+	}
+	return stream.SendAndClose(&controlplanev1.UploadAgentAvatarResponse{Agent: castAgent(agent)})
+}
+
+type agentAvatarUploadAdapter struct {
+	stream   controlplanev1.PlatformCommandService_UploadAgentAvatarServer
+	metadata *controlplanev1.UploadAgentAvatarMetadata
+}
+
+func (adapter *agentAvatarUploadAdapter) Recv() (*controlplanev1.UploadArtifactRequest, error) {
+	request, err := adapter.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	converted := &controlplanev1.UploadArtifactRequest{}
+	switch part := request.GetPart().(type) {
+	case *controlplanev1.UploadAgentAvatarRequest_Metadata:
+		adapter.metadata = part.Metadata
+		if part.Metadata != nil {
+			converted.Part = &controlplanev1.UploadArtifactRequest_Metadata{Metadata: &controlplanev1.UploadArtifactMetadata{
+				Mutation: part.Metadata.GetMutation(), ProjectRef: part.Metadata.GetProjectRef(),
+				FileName: part.Metadata.GetFileName(), MediaType: part.Metadata.GetMediaType(), SizeBytes: part.Metadata.GetSizeBytes(),
+			}}
+		}
+	case *controlplanev1.UploadAgentAvatarRequest_Chunk:
+		converted.Part = &controlplanev1.UploadArtifactRequest_Chunk{Chunk: part.Chunk}
+	case *controlplanev1.UploadAgentAvatarRequest_Commit:
+		converted.Part = &controlplanev1.UploadArtifactRequest_Commit{Commit: part.Commit}
+	}
+	return converted, nil
+}
+
 func (server *Server) UploadOrganizationArtifact(stream controlplanev1.PlatformCommandService_UploadOrganizationArtifactServer) error {
 	return server.uploadArtifact(organizationArtifactUploadServer{stream: stream}, controlplanev1.PlatformCommandService_UploadOrganizationArtifact_FullMethodName, false)
 }

@@ -49,6 +49,21 @@ func TestExplicitEmptyAuthorityLayerFailsClosed(t *testing.T) {
 	}
 }
 
+func TestApplicableEmptyHumanGateRemovesIntegrationGrant(t *testing.T) {
+	result, err := Materialize("Agent {{ .target.ref }}", Snapshot{
+		TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example",
+		TemplateDigest: strings.Repeat("e", 64), UserCapabilities: []string{"integration.write"},
+		AgentCapabilities: []string{}, ConnectionCapabilities: []string{"integration.write"},
+		HumanGateCapabilities: []string{},
+	})
+	if err != nil {
+		t.Fatalf("materialize gated prompt: %v", err)
+	}
+	if len(result.EffectiveCapabilities) != 0 || !strings.Contains(result.Prompt, "<effective-capabilities used=\"false\">") {
+		t.Fatalf("empty applicable Human Gate expanded integration grant: %#v", result.EffectiveCapabilities)
+	}
+}
+
 func TestMaterializeRejectsUnknownAndUnclosedVariables(t *testing.T) {
 	snapshot := Snapshot{TargetKind: TargetAgent, TargetRef: "agt_example", TemplateRef: "ins_example", TemplateDigest: strings.Repeat("b", 64)}
 	for _, template := range []string{

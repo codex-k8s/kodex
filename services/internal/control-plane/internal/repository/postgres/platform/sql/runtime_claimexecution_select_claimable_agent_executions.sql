@@ -94,6 +94,31 @@ SELECT n.id::text,
                LIMIT 1
            ), '{}'::text[])
        END,
+       CASE
+           WHEN NOT n.human_gate_after THEN NULL::text[]
+           WHEN workflow_version.id IS NULL THEN '{}'::text[]
+           ELSE COALESCE((
+               SELECT ARRAY(
+                   SELECT capability.value
+                   FROM jsonb_array_elements_text(
+                       CASE
+                           WHEN jsonb_typeof(step.value -> 'RequiredCapabilityKeys') = 'array'
+                               THEN step.value -> 'RequiredCapabilityKeys'
+                           ELSE '[]'::jsonb
+                       END
+                   ) capability(value)
+               )
+               FROM jsonb_array_elements(
+                   CASE
+                       WHEN jsonb_typeof(workflow_version.spec -> 'Steps') = 'array'
+                           THEN workflow_version.spec -> 'Steps'
+                       ELSE '[]'::jsonb
+                   END
+               ) step(value)
+               WHERE step.value ->> 'Key' = n.workflow_step_key
+               LIMIT 1
+           ), '{}'::text[])
+       END,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN
        COALESCE((SELECT array_agg(knowledge_artifact.ref ORDER BY knowledge_binding.created_at)
                  FROM control_plane.artifact_bindings knowledge_binding

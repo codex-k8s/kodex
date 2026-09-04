@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -827,7 +828,7 @@ func (repository *Repository) admitRuntimeEnvironmentPolicy(
 			return runtimecontract.RuntimeEnvironmentPolicy{}, accessErr
 		}
 		now := time.Now().UTC()
-		if !runtimeEnvironmentAuthenticationIsFresh(current.credentialAuthenticatedAt, now) {
+		if !(value.Principal{CredentialAuthenticatedAt: current.credentialAuthenticatedAt}).AuthenticationIsFresh(now, 5*time.Minute) {
 			return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrFreshAuthenticationRequired
 		}
 	}
@@ -835,12 +836,7 @@ func (repository *Repository) admitRuntimeEnvironmentPolicy(
 }
 
 func runtimeEnvironmentAuthenticationIsFresh(authenticatedAt, now time.Time) bool {
-	if authenticatedAt.IsZero() || now.IsZero() {
-		return false
-	}
-	authenticatedAt = authenticatedAt.UTC()
-	now = now.UTC()
-	return !authenticatedAt.After(now.Add(30*time.Second)) && now.Sub(authenticatedAt) <= 5*time.Minute
+	return (value.Principal{CredentialAuthenticatedAt: authenticatedAt}).AuthenticationIsFresh(now, 5*time.Minute)
 }
 
 func validProviderPolicy(mode string, candidates []entity.ProviderAccountCandidate) bool {

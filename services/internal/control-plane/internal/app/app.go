@@ -269,6 +269,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
+		runAgentAvatarCleanup(repository, slog.Default()),
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()
@@ -285,6 +286,25 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		serviceruntime.ShutdownOperation{Name: "workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(workerErr, shutdownErr)
+}
+
+func runAgentAvatarCleanup(repository interface {
+	CleanupExpiredAgentAvatarUploads(context.Context, int32) error
+}, logger *slog.Logger) serviceruntime.Worker {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			if err := repository.CleanupExpiredAgentAvatarUploads(ctx, 50); err != nil && !errors.Is(err, context.Canceled) {
+				logger.WarnContext(ctx, "agent avatar cleanup iteration failed", "error_class", "avatar_cleanup")
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+			}
+		}
+	}
 }
 
 func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {

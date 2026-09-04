@@ -109,6 +109,9 @@ service PlatformCommandService {
   rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
   rpc RetryRun(RetryRunRequest) returns (RetryRunResponse);
   rpc ResolveOwnerGate(ResolveOwnerGateRequest) returns (ResolveOwnerGateResponse);
+  // UploadAgentAvatar резервирует object key до materialization и атомарно
+  // публикует Artifact, binding и новую версию Agent либо компенсирует object.
+  rpc UploadAgentAvatar(stream UploadAgentAvatarRequest) returns (UploadAgentAvatarResponse);
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
   rpc UploadOrganizationArtifact(stream UploadOrganizationArtifactRequest) returns (UploadOrganizationArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
@@ -2060,6 +2063,24 @@ message UploadArtifactRequest {
 }
 message UploadArtifactResponse {
   Artifact artifact = 1;
+}
+message UploadAgentAvatarMetadata {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string agent_ref = 3;
+  string file_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+}
+message UploadAgentAvatarRequest {
+  oneof part {
+    UploadAgentAvatarMetadata metadata = 1;
+    bytes chunk = 2;
+    UploadArtifactCommit commit = 3;
+  }
+}
+message UploadAgentAvatarResponse {
+  Agent agent = 1;
 }
 message UploadOrganizationArtifactRequest {
   oneof part {

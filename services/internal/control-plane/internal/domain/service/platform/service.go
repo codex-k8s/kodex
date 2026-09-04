@@ -29,6 +29,8 @@ type Service struct {
 	providerCredentialMaterializer ProviderCredentialMaterializer
 }
 
+const promptFullMaterializationMaximumAuthenticationAge = 5 * time.Minute
+
 type Option func(*Service)
 
 func WithCredentialMaterializer(materializer CredentialMaterializer) Option {
@@ -400,6 +402,9 @@ func (service *Service) PreviewPromptTemplate(ctx context.Context, p value.Princ
 		if accessErr != nil || len(access.Decisions) != 1 || !access.Decisions[0].Allowed {
 			return promptservice.Materialization{}, errs.ErrForbidden
 		}
+		if !p.InteractiveAuthenticationIsFresh(time.Now().UTC(), promptFullMaterializationMaximumAuthenticationAge) {
+			return promptservice.Materialization{}, errs.ErrFreshAuthenticationRequired
+		}
 	}
 	return materialized, nil
 }
@@ -669,6 +674,51 @@ func (service *Service) UploadArtifact(ctx context.Context, p value.Principal, m
 		return entity.Artifact{}, errs.ErrInvalid
 	}
 	return service.repository.UploadArtifact(ctx, p, mutation, input)
+}
+
+func (service *Service) UploadAgentAvatar(ctx context.Context, p value.Principal, mutation value.Mutation, input repository.AgentAvatarUpload) (entity.Agent, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.Agent{}, err
+	}
+	if strings.TrimSpace(input.ProjectRef) == "" || strings.TrimSpace(input.AgentRef) == "" ||
+		input.ExpectedVersion < 1 || input.SizeBytes < 1 || input.SizeBytes > 5<<20 || input.Reader == nil {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	contentDigest := sha256.New()
+	written, err := io.Copy(contentDigest, io.LimitReader(input.Reader, 5<<20+1))
+	if err != nil || written != input.SizeBytes {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	actualDigest := "sha256:" + hex.EncodeToString(contentDigest.Sum(nil))
+	if input.Digest != "" && input.Digest != actualDigest {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	input.Digest = actualDigest
+	verdict, err := artifactpolicy.InspectReader(input.FileName, input.MediaType, input.Reader, input.SizeBytes)
+	if err != nil {
+		return entity.Agent{}, errs.ErrUnavailable
+	}
+	if verdict.ScanState != "CLEAN" || verdict.PreviewState != "AVAILABLE" ||
+		!containsString([]string{"image/jpeg", "image/png", "image/webp"}, verdict.MediaType) {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	input.MediaType, input.ScanState, input.PreviewState = verdict.MediaType, verdict.ScanState, verdict.PreviewState
+	if _, err := input.Reader.Seek(0, io.SeekStart); err != nil {
+		return entity.Agent{}, errs.ErrUnavailable
+	}
+	mutation.Operation = "agent.avatar.upload"
+	mutation.IntentDigest = digest(struct {
+		ProjectRef, AgentRef, FileName, MediaType, Digest string
+		SizeBytes, ExpectedVersion                        int64
+	}{input.ProjectRef, input.AgentRef, input.FileName, input.MediaType, input.Digest, input.SizeBytes, input.ExpectedVersion})
+	if err := mutation.Validate(); err != nil {
+		return entity.Agent{}, errs.ErrInvalid
+	}
+	return service.repository.UploadAgentAvatar(ctx, p, mutation, input)
 }
 
 func (service *Service) PurgeArtifact(ctx context.Context, p value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {

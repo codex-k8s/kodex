@@ -152,9 +152,18 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			}
 			expectedDefinitionKey := ""
 			if kind == revisionservice.KindIntegrationDefinition {
+				if configuration.projectID != "" {
+					return commandOutcome{}, errs.ErrConflict
+				}
 				expectedDefinitionKey, err = revisionservice.IntegrationDefinitionKey(locked.ContentFormat, locked.Content)
 				if err != nil {
 					return commandOutcome{}, errs.ErrInvalid
+				}
+				connection, resolveErr := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+					Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: consumer.Ref,
+				})
+				if resolveErr != nil || repository.requireAccess(ctx, tx, current, "integration.manage", connection) != nil {
+					return commandOutcome{}, errs.ErrNotFound
 				}
 			}
 			var allowed bool
@@ -389,6 +398,23 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.view", "organization.view"); err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrNotFound
 	}
+	includeContent := true
+	if set.Kind == revisionservice.KindPromptTemplate {
+		var fullTarget any = organizationTarget(current.organizationRef)
+		if set.ProjectRef != "" {
+			resolved, resolveErr := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+				Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef,
+			})
+			if resolveErr != nil {
+				includeContent = false
+			} else {
+				fullTarget = resolved
+			}
+		}
+		if includeContent && repository.requireAccess(ctx, tx, current, "prompt.full.view", fullTarget) != nil {
+			includeContent = false
+		}
+	}
 	cursor, err := decodeManagedHistoryCursor(page.Token, ref)
 	if err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", err
@@ -407,6 +433,9 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 		if scanErr := rows.Scan(&item.internalID, &item.Ref, &item.Revision, &item.State, &item.ContentFormat, &item.Content,
 			&item.Digest, &item.ParentRevisionRef, &raw, &item.CreatedAt, &item.ValidatedAt, &item.PublishedAt, &total); scanErr != nil || json.Unmarshal(raw, &item.ValidationDiagnostics) != nil {
 			return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrUnavailable
+		}
+		if !includeContent {
+			item.Content = ""
 		}
 		items = append(items, item.ManagedConfigurationRevision)
 	}

@@ -32,7 +32,7 @@ var definitions = []entity.PermissionDefinition{
 	permission("run.cancel.own", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, true),
 	permission("run.cancel", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUN"}, false),
 	permission("session.cancel", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"SESSION"}, false),
-	permission("prompt.full.view", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "AGENT", "WORKFLOW", "RUN", "SESSION", "SCHEDULE"}, false),
+	permission("prompt.full.view", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "AGENT", "WORKFLOW", "RUN", "SESSION", "SCHEDULE"}, false),
 	permission("gate.resolve", "APPROVE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"OWNER_GATE"}, false),
 	permission("artifact.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.download", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),

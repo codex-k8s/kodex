@@ -6,13 +6,7 @@ JOIN control_plane.sessions session ON session.id = revision.session_id
 WHERE revision.organization_id = @organization_id::uuid
   AND revision.safe_snapshot ? 'promptSnapshot'
   AND (
-      (@target_kind = 'RUN' AND EXISTS (
-          SELECT 1
-          FROM control_plane.runs requested
-          WHERE requested.organization_id = revision.organization_id
-            AND requested.ref = @target_ref
-            AND requested.root_run_id = revision.root_run_id
-      ))
+      (@target_kind = 'RUN' AND run.ref = @target_ref)
       OR (@target_kind = 'SESSION' AND session.ref = @target_ref)
   )
   AND (

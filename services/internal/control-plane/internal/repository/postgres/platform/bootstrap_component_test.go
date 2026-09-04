@@ -429,6 +429,16 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || len(search) != 1 || total < 2 || nextPageToken == "" {
 		t.Fatalf("search first page: items=%#v total=%d next=%q err=%v", search, total, nextPageToken, err)
 	}
+	for _, statement := range []string{
+		`UPDATE control_plane.agents SET updated_at = clock_timestamp() WHERE ref = $1`,
+		`UPDATE control_plane.workflows SET updated_at = clock_timestamp() WHERE ref = $1`,
+		`UPDATE control_plane.projects SET updated_at = clock_timestamp() WHERE ref = $1`,
+		`UPDATE control_plane.runs SET updated_at = clock_timestamp() WHERE ref = $1`,
+	} {
+		if _, err := pool.Exec(ctx, statement, search[0].Ref); err != nil {
+			t.Fatalf("mutate search display timestamp between pages: %v", err)
+		}
+	}
 	secondPage, secondTotal, _, err := service.Search(ctx, owner, query.Filter{
 		ProjectRef: projectResult.Project.Ref, Query: "Managed", Page: query.Page{Size: 1, Token: nextPageToken},
 	})
@@ -474,10 +484,16 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || configuration.Ref != created.ManagedConfiguration.Ref || len(history) != 2 || historyTotal != 3 || next == "" {
 		t.Fatalf("read managed prompt history: configuration=%#v history=%#v total=%d next=%q err=%v", configuration, history, historyTotal, next, err)
 	}
+	for _, revision := range history {
+		if revision.Content == "" {
+			t.Fatalf("owner managed prompt history was unexpectedly redacted: %#v", revision)
+		}
+	}
 	_, remainingHistory, remainingTotal, remainingNext, err := service.ListManagedConfigurationHistory(ctx, owner, created.ManagedConfiguration.Ref, query.Page{Size: 2, Token: next})
 	if err != nil || len(remainingHistory) != 1 || remainingTotal != historyTotal || remainingNext != "" {
 		t.Fatalf("continue managed prompt history: history=%#v total=%d next=%q err=%v", remainingHistory, remainingTotal, remainingNext, err)
 	}
+	testManagedPromptHistoryRedaction(t, ctx, repository, service, owner, projectResult.Project.Ref, created.ManagedConfiguration.Ref)
 	var sttProviderAccountRef string
 	if err := pool.QueryRow(ctx, `
 		SELECT account.ref
@@ -569,9 +585,10 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	integrationDefinition := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-integration-definition", command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
-		command.ManagedConfigurationInput{ProjectRef: projectResult.Project.Ref, Name: "Synthetic managed definition",
+		command.ManagedConfigurationInput{Name: "Synthetic managed definition",
 			ContentFormat: "JSON", Content: `{"name":"Synthetic managed definition","definition":{"key":"synthetic","version":"1.0.0","adapter":"synthetic","operations":[{"key":"synthetic.journal.read","operation":"READ_JOURNAL","risk":"READ","approval":"NONE","resourceKind":"SYNTHETIC_JOURNAL"}]}}`},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref})
+	testIntegrationDefinitionRebindAuthority(t, ctx, repository, service, owner, integrationDefinition, *connection.Connection)
 	integrationReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integration-definition.get",
@@ -636,6 +653,114 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM control_plane.managed_configuration_revisions WHERE ref = $1`, created.ManagedRevision.Ref); err == nil {
 		t.Fatal("published managed prompt was deletable")
+	}
+}
+
+func testManagedPromptHistoryRedaction(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	service *platformservice.Service,
+	owner value.Principal,
+	projectRef, configurationRef string,
+) {
+	t.Helper()
+	input := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009994", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Prompt history reader", CallerWorkload: "control-api-gateway",
+		Operation: "platform.query.managed-configurations.history.list", ProjectRef: projectRef,
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, input); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("unbound prompt history reader received authority: %v", err)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{
+		Query: input.ExternalDisplayName, Page: query.Page{Size: 20},
+	}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("resolve prompt history reader subject: subjects=%#v err=%v", subjects, err)
+	}
+	role, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-history-reader-role"}, Payload: command.AccessRoleInput{
+			Name: "Prompt metadata reader", PermissionKeys: []string{"project.view"},
+			AllowedScopes: []string{"PROJECT"}, ChangeComment: "component prompt history redaction",
+		}})
+	if err != nil || role.AccessRole == nil {
+		t.Fatalf("create prompt history role: role=%#v err=%v", role.AccessRole, err)
+	}
+	binding, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-history-reader-binding"}, Payload: command.AccessBindingInput{
+			SubjectKind: "USER", SubjectRef: subjects[0].Ref, RoleVersionRef: role.AccessRole.CurrentVersion.Ref,
+			Scope: entity.AccessScope{Kind: "PROJECT", ProjectRef: projectRef},
+		}})
+	if err != nil || binding.AccessBinding == nil {
+		t.Fatalf("bind prompt history reader: binding=%#v err=%v", binding.AccessBinding, err)
+	}
+	reader := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
+	_, history, total, _, err := service.ListManagedConfigurationHistory(ctx, reader, configurationRef, query.Page{Size: 20})
+	if err != nil || total < 1 || len(history) < 1 {
+		t.Fatalf("read redacted prompt history: history=%#v total=%d err=%v", history, total, err)
+	}
+	for _, revision := range history {
+		if revision.Content != "" {
+			t.Fatalf("prompt history content leaked without prompt.full.view: %#v", revision)
+		}
+	}
+}
+
+func testIntegrationDefinitionRebindAuthority(
+	t *testing.T,
+	ctx context.Context,
+	repository *Repository,
+	service *platformservice.Service,
+	owner value.Principal,
+	definition command.Result,
+	connection entity.IntegrationConnection,
+) {
+	t.Helper()
+	input := platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000009995", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		ExternalDisplayName: "Definition scope manager", CallerWorkload: "control-api-gateway",
+		Operation: "platform.command.integration-definitions.rebind",
+	}
+	if _, err := repository.ResolveProofAuthority(ctx, input); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("unbound definition manager received authority: %v", err)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{
+		Query: input.ExternalDisplayName, Page: query.Page{Size: 20},
+	}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("resolve definition manager subject: subjects=%#v err=%v", subjects, err)
+	}
+	role, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "definition-scope-manager-role"}, Payload: command.AccessRoleInput{
+			Name: "Definition scope manager", PermissionKeys: []string{"organization.manage", "project.manage"},
+			AllowedScopes: []string{"ORGANIZATION"}, ChangeComment: "component definition rebind authority",
+		}})
+	if err != nil || role.AccessRole == nil {
+		t.Fatalf("create definition scope manager role: role=%#v err=%v", role.AccessRole, err)
+	}
+	binding, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "definition-scope-manager-binding"}, Payload: command.AccessBindingInput{
+			SubjectKind: "USER", SubjectRef: subjects[0].Ref, RoleVersionRef: role.AccessRole.CurrentVersion.Ref,
+			Scope: entity.AccessScope{Kind: "ORGANIZATION"},
+		}})
+	if err != nil || binding.AccessBinding == nil {
+		t.Fatalf("bind definition scope manager: binding=%#v err=%v", binding.AccessBinding, err)
+	}
+	manager := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, definition.ManagedConfiguration.Ref, definition.ManagedRevision.Ref)
+	if err != nil {
+		t.Fatalf("read definition impact for authority test: %v", err)
+	}
+	version := definition.ManagedConfiguration.Version
+	_, err = service.Execute(ctx, command.Command{Kind: command.RebindIntegrationDefinition, Principal: manager,
+		Mutation: value.Mutation{IdempotencyKey: "definition-scope-manager-rebind", ExpectedVersion: &version},
+		Payload: command.ManagedConfigurationInput{ConfigurationRef: definition.ManagedConfiguration.Ref,
+			RevisionRef: definition.ManagedRevision.Ref, ImpactDigest: impact.Digest,
+			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "INTEGRATION_CONNECTION", Ref: connection.Ref}}},
+	})
+	if !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("definition rebind without exact integration.manage error = %v", err)
 	}
 }
 
@@ -1284,6 +1409,9 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		ExternalDisplayName: "Provider affinity owner", CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",
 	}, "control-api-gateway")
+	owner.CredentialAuthenticatedAt = time.Now().UTC()
+	owner.CredentialACR = "urn:kodex:acr:interactive"
+	owner.CredentialAMR = []string{"pwd"}
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
@@ -1446,6 +1574,15 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		stringMap(recovered.RuntimeItems[0], "runRef") != continued.Run.Ref ||
 		stringMap(recovered.RuntimeItems[0], "providerAccountRef") != primaryAccountRef {
 		t.Fatalf("restored Session did not retain provider account: claims=%#v err=%v", recovered.RuntimeItems, err)
+	}
+	originalRunPreview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", launched.Run.Ref, false)
+	if err != nil || originalRunPreview.Digest != preview.Digest {
+		t.Fatalf("exact original Run preview selected another root revision: preview=%#v err=%v", originalRunPreview, err)
+	}
+	continuedRunPreview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", continued.Run.Ref, false)
+	if err != nil || continuedRunPreview.Digest != stringMap(recovered.RuntimeItems[0], "promptMaterializationDigest") ||
+		continuedRunPreview.Digest == originalRunPreview.Digest {
+		t.Fatalf("exact continuation Run preview selected another root revision: preview=%#v err=%v", continuedRunPreview, err)
 	}
 	completeClaimedExecution(t, ctx, service, worker, recovered.RuntimeItems[0], "provider-affinity-restored", false)
 }
@@ -3011,13 +3148,14 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("create foreign project: project=%#v err=%v", foreign.Project, err)
 	}
 	visibleSearch, _, _, err := service.Search(ctx, candidate, query.Filter{Query: "Readback", Limit: 20})
-	if err != nil || len(visibleSearch) < 3 {
-		t.Fatalf("search eligible project resources: results=%#v err=%v", visibleSearch, err)
+	if err != nil || len(visibleSearch) != 0 {
+		t.Fatalf("legacy project VIEW leaked resource metadata: results=%#v err=%v", visibleSearch, err)
 	}
-	for _, result := range visibleSearch {
-		if result.ProjectRef != projectRef {
-			t.Fatalf("search leaked foreign project result: %#v", result)
-		}
+	legacyVFS, legacyVFSTotal, _, err := service.ListVFSNodes(ctx, candidate, query.Filter{
+		ProjectRef: projectRef, ResourceRef: "/projects/" + projectRef + "/entities/agents", Page: query.Page{Size: 20},
+	})
+	if err != nil || legacyVFSTotal != 0 || len(legacyVFS) != 0 {
+		t.Fatalf("legacy project VIEW leaked VFS agent metadata: nodes=%#v total=%d err=%v", legacyVFS, legacyVFSTotal, err)
 	}
 	foreignSearch, _, _, err := service.Search(ctx, candidate, query.Filter{Query: "Foreign access", Limit: 20})
 	if err != nil || len(foreignSearch) != 0 {
@@ -4046,6 +4184,12 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	}
 	if len(childSessions) != 2 || regularChildLease == nil || gatedChildLease == nil {
 		t.Fatalf("parallel children did not receive distinct attributable sessions: sessions=%#v claims=%#v", childSessions, claimedChildren.RuntimeItems)
+	}
+	regularPrompt, regularOK := regularChildLease["promptSnapshot"].(entity.PromptMaterializationSnapshot)
+	gatedPrompt, gatedOK := gatedChildLease["promptSnapshot"].(entity.PromptMaterializationSnapshot)
+	if !regularOK || !gatedOK || regularPrompt.HumanGateCapabilities != nil ||
+		gatedPrompt.HumanGateCapabilities == nil || len(gatedPrompt.HumanGateCapabilities) != 0 {
+		t.Fatalf("claim did not preserve exact Human Gate authority layers: regular=%#v gated=%#v", regularPrompt, gatedPrompt)
 	}
 	coordinatorCompleted := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "delegation-coordinator", false)
 	if coordinatorCompleted.Run == nil || coordinatorCompleted.Run.State != "RUNNING" || coordinatorCompleted.Graph == nil {
@@ -5093,12 +5237,35 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if readErr != nil || closeErr != nil || string(body) != "Customer response is ready.\n" {
 		t.Fatalf("download generated artifact: body=%q read_err=%v close_err=%v", string(body), readErr, closeErr)
 	}
+	outputAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, project.Project.Ref,
+		"SESSION_TURN", "lifecycle-output-reuse-set", completed.CreatedRefs[0])
 	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "lifecycle-continuation-1"}, Payload: command.SessionTurnInput{
 			SessionRef: launch.Run.SessionRef, RunRef: launch.Run.Ref, Task: "Add a concise follow-up for the customer.",
+			AttachmentSetRef: outputAttachmentSetRef,
 		}})
 	if err != nil || continued.Run == nil || continued.Graph == nil || continued.Run.State != "RUNNING" {
 		t.Fatalf("continue session: run=%#v graph=%#v err=%v", continued.Run, continued.Graph, err)
+	}
+	resultPath := "/projects/" + project.Project.Ref + "/runs/" + launch.Run.Ref + "/workspace/results"
+	inputPath := "/projects/" + project.Project.Ref + "/runs/" + continued.Run.Ref + "/workspace/inputs"
+	results, resultTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, ResourceRef: resultPath, Page: query.Page{Size: 20},
+	})
+	if err != nil || resultTotal != 1 || len(results) != 1 || results[0].EntityRef != completed.CreatedRefs[0] || results[0].Kind != "RESULT" {
+		t.Fatalf("VFS lost producer Run output classification: nodes=%#v total=%d err=%v", results, resultTotal, err)
+	}
+	inputs, inputTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, ResourceRef: inputPath, Page: query.Page{Size: 20},
+	})
+	if err != nil || inputTotal != 1 || len(inputs) != 1 || inputs[0].EntityRef != completed.CreatedRefs[0] || inputs[0].Kind != "INPUT" {
+		t.Fatalf("VFS did not resolve exact continuation AttachmentSet input: nodes=%#v total=%d err=%v", inputs, inputTotal, err)
+	}
+	results, resultTotal, _, err = service.ListVFSNodes(ctx, owner, query.Filter{
+		ProjectRef: project.Project.Ref, ResourceRef: resultPath, Page: query.Page{Size: 20},
+	})
+	if err != nil || resultTotal != 1 || len(results) != 1 || results[0].Kind != "RESULT" {
+		t.Fatalf("VFS input reuse changed producer classification: nodes=%#v total=%d err=%v", results, resultTotal, err)
 	}
 	continuedVersion := continued.Run.Version
 	cancelled, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,

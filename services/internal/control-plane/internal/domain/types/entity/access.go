@@ -48,13 +48,13 @@ type AccessConditions struct {
 }
 
 type AccessBinding struct {
-	Ref, State           string
-	Version              int64
-	Subject              AccessSubject
-	RoleVersion          AccessRoleVersion
-	Scope                AccessScope
-	Conditions           AccessConditions
-	CreatedAt, UpdatedAt time.Time
+	Ref, State, PresentationKind string
+	Version                      int64
+	Subject                      AccessSubject
+	RoleVersion                  AccessRoleVersion
+	Scope                        AccessScope
+	Conditions                   AccessConditions
+	CreatedAt, UpdatedAt         time.Time
 }
 
 type AccessExplanationStep struct {

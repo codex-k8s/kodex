@@ -208,6 +208,7 @@ func main() {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
+		"platform.command.agents.avatar.upload":                "agent.avatar.manage",
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
 		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
 		"platform.query.runtime-secrets.list":                  "secret.view",

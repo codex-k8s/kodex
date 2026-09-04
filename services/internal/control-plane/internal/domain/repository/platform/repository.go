@@ -55,6 +55,12 @@ type ArtifactUpload struct {
 	Reader                                          ArtifactReader
 }
 
+type AgentAvatarUpload struct {
+	ArtifactUpload
+	AgentRef        string
+	ExpectedVersion int64
+}
+
 type ArtifactDownload struct {
 	Artifact entity.Artifact
 	Reader   io.ReadCloser
@@ -218,6 +224,8 @@ type Repository interface {
 	GetArtifactImpact(context.Context, value.Principal, string, string) (entity.ArtifactImpact, error)
 	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
+	UploadAgentAvatar(context.Context, value.Principal, value.Mutation, AgentAvatarUpload) (entity.Agent, error)
+	CleanupExpiredAgentAvatarUploads(context.Context, int32) error
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	PurgeArtifact(context.Context, value.Principal, value.Mutation, string, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
