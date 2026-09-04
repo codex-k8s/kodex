@@ -19,20 +19,27 @@ import (
 type sourceSession struct {
 	fingerprint string
 	cancel      context.CancelFunc
+	done        <-chan struct{}
+}
+
+type sourceListener interface {
+	Listen(context.Context, *controlplanev1.InteractionSource, mattermost.MessageHandler) error
 }
 
 type sourceManager struct {
-	control *controlplaneclient.Client
-	adapter *mattermost.Adapter
-	logger  *slog.Logger
-	config  Config
-	mu      sync.Mutex
-	sources map[string]sourceSession
-	wait    sync.WaitGroup
+	control  controlplanev1.InteractionWorkServiceClient
+	adapter  sourceListener
+	logger   *slog.Logger
+	config   Config
+	mu       sync.Mutex
+	sources  map[string]sourceSession
+	draining map[string]<-chan struct{}
+	wait     sync.WaitGroup
+	closed   bool
 }
 
-func newSourceManager(control *controlplaneclient.Client, adapter *mattermost.Adapter, logger *slog.Logger, config Config) *sourceManager {
-	return &sourceManager{control: control, adapter: adapter, logger: logger, config: config, sources: map[string]sourceSession{}}
+func newSourceManager(control controlplanev1.InteractionWorkServiceClient, adapter sourceListener, logger *slog.Logger, config Config) *sourceManager {
+	return &sourceManager{control: control, adapter: adapter, logger: logger, config: config, sources: map[string]sourceSession{}, draining: map[string]<-chan struct{}{}}
 }
 
 func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client, logger *slog.Logger, config Config) serviceruntime.Worker {
@@ -73,6 +80,16 @@ func (manager *sourceManager) Reconcile(parent context.Context, desired []*contr
 	}
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
+	if manager.closed || parent.Err() != nil {
+		return
+	}
+	for reference, done := range manager.draining {
+		select {
+		case <-done:
+			delete(manager.draining, reference)
+		default:
+		}
+	}
 	for reference, session := range manager.sources {
 		source, ok := wanted[reference]
 		if ok && session.fingerprint == sourceFingerprint(source) {
@@ -80,22 +97,35 @@ func (manager *sourceManager) Reconcile(parent context.Context, desired []*contr
 			continue
 		}
 		session.cancel()
+		manager.draining[reference] = session.done
 		delete(manager.sources, reference)
 	}
 	for reference, source := range wanted {
 		child, cancel := context.WithCancel(parent)
-		manager.sources[reference] = sourceSession{fingerprint: sourceFingerprint(source), cancel: cancel}
+		done := make(chan struct{})
+		manager.sources[reference] = sourceSession{fingerprint: sourceFingerprint(source), cancel: cancel, done: done}
 		manager.wait.Add(1)
-		go manager.run(child, source)
+		go func(previous <-chan struct{}) {
+			defer manager.wait.Done()
+			defer close(done)
+			if previous != nil {
+				// Отменённое промежуточное поколение тоже дожидается предшественника.
+				<-previous
+			}
+			if child.Err() == nil {
+				manager.run(child, source)
+			}
+		}(manager.draining[reference])
 	}
 }
 
 func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.InteractionSource) {
-	defer manager.wait.Done()
 	degraded := false
 	for {
 		err := manager.adapter.Listen(ctx, source, func(messageContext context.Context, message mattermost.Message) (string, error) {
-			response, err := manager.control.Interaction.AcceptInteractionMessage(messageContext, &controlplanev1.AcceptInteractionMessageRequest{
+			acceptContext, cancel := context.WithTimeout(messageContext, manager.config.RequestTimeout)
+			defer cancel()
+			response, err := manager.control.AcceptInteractionMessage(acceptContext, &controlplanev1.AcceptInteractionMessageRequest{
 				Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(source.GetConnectionRef(), message.EventRef)},
 				ConnectionRef: source.GetConnectionRef(), ExternalEventRef: message.EventRef,
 				ExternalPostRef: message.PostRef, ExternalRootPostRef: message.RootPostRef,
@@ -128,6 +158,7 @@ func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.In
 
 func (manager *sourceManager) Close(ctx context.Context) error {
 	manager.mu.Lock()
+	manager.closed = true
 	for _, session := range manager.sources {
 		session.cancel()
 	}

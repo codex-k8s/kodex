@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,7 +65,7 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		return nil, errConfiguration
 	}
 	proxy, err := url.Parse(config.ProxyURL)
-	if err != nil || proxy.Scheme != "http" || proxy.Host == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" {
+	if err != nil || proxy.Scheme != "http" || proxy.Host != egressProxyHost || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.ForceQuery || proxy.Fragment != "" || proxy.Opaque != "" {
 		return nil, errConfiguration
 	}
 	hosts := map[string]struct{}{}
@@ -75,7 +74,7 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		if host == "" {
 			continue
 		}
-		if net.ParseIP(host) != nil || strings.ContainsAny(host, "*/:@ ") {
+		if !validHostname(host) {
 			return nil, errConfiguration
 		}
 		hosts[host] = struct{}{}
@@ -83,7 +82,13 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text}, nil
 }
 
-func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (string, string, error) {
+func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (postRef, threadRef string, resultErr error) {
+	dispatched := false
+	defer func() {
+		if resultErr != nil && !dispatched {
+			resultErr = &noEffectError{cause: resultErr}
+		}
+	}()
 	if claim == nil || claim.GetMessageKey() == "" {
 		return "", "", errConfiguration
 	}
@@ -103,14 +108,11 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	if message == claim.GetMessageKey() || strings.TrimSpace(message) == "" || len(message) > 16<<10 {
 		return "", "", errResponse
 	}
-	post, _, err := client.CreatePost(ctx, &model.Post{ChannelId: channel.Id, Message: message})
-	if err != nil {
-		return "", "", classify(err)
+	if err := ctx.Err(); err != nil {
+		return "", "", err
 	}
-	if post == nil || post.Id == "" {
-		return "", "", errResponse
-	}
-	return post.Id, post.Id, nil
+	dispatched = true
+	return createPost(ctx, client, channel.Id, "", message)
 }
 
 func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.InteractionSource, handler MessageHandler) error {
@@ -123,7 +125,7 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	}
 	defer closeClient()
 	me, _, err := client.GetMe(ctx, "")
-	if err != nil || me == nil || me.Id == "" {
+	if err != nil || me == nil || !model.IsValidId(me.Id) {
 		return classify(err)
 	}
 	base, err := adapter.baseURL(source.GetBaseUrl())
@@ -141,16 +143,20 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	if err != nil {
 		return errUnavailable
 	}
-	defer socket.Close()
-	go socket.Listen()
+	socket.Conn.SetReadLimit(maximumWebsocketBytes)
+	socket.Listen()
+	defer closeSocket(socket)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-socket.PingTimeoutChannel:
 			return errUnavailable
-		case <-socket.ResponseChannel:
+		case _, ok := <-socket.ResponseChannel:
 			// Канал обязательно дренируется по контракту официального клиента.
+			if !ok {
+				return errUnavailable
+			}
 		case event, ok := <-socket.EventChannel:
 			if !ok {
 				return errUnavailable
@@ -159,6 +165,14 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 			if !ok {
 				continue
 			}
+			verified, _, verifyErr := client.GetPost(ctx, post.Id, "")
+			if verifyErr != nil {
+				return classify(verifyErr)
+			}
+			if !sameInboundPost(post, verified, channel.Id, me.Id) {
+				continue
+			}
+			post = verified
 			messageKey, handleErr := handler(ctx, Message{
 				EventRef: post.Id, PostRef: post.Id, RootPostRef: post.RootId,
 				ChannelRef: post.ChannelId, UserDigest: digest(post.UserId),
@@ -209,21 +223,16 @@ func (adapter *Adapter) client(ctx context.Context, source source) (*model.Clien
 		ResponseHeaderTimeout: adapter.timeout,
 	}
 	client := model.NewAPIv4Client(strings.TrimRight(base.String(), "/"))
-	client.HTTPClient = &http.Client{Transport: transport, Timeout: adapter.timeout}
+	client.HTTPClient = scopedHTTPClient(base, transport, adapter.timeout)
 	client.SetToken(token)
 	closeClient := func() {
 		client.AuthToken = ""
 		transport.CloseIdleConnections()
 	}
-	team, _, err := client.GetTeamByName(ctx, source.GetTeamName(), "")
-	if err != nil || team == nil || team.Id == "" {
+	channel, err := resolveChannel(ctx, client, source)
+	if err != nil {
 		closeClient()
-		return nil, "", nil, func() {}, classify(err)
-	}
-	channel, _, err := client.GetChannelByName(ctx, source.GetChannelName(), team.Id, "")
-	if err != nil || channel == nil || channel.Id == "" {
-		closeClient()
-		return nil, "", nil, func() {}, classify(err)
+		return nil, "", nil, func() {}, err
 	}
 	return client, token, channel, closeClient, nil
 }
@@ -237,11 +246,11 @@ type source interface {
 
 func (adapter *Adapter) baseURL(value string) (*url.URL, error) {
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.Port() != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "" || parsed.RawPath != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.Port() != "" {
 		return nil, errConfiguration
 	}
 	host := strings.ToLower(parsed.Hostname())
-	if _, ok := adapter.allowedHosts[host]; !ok {
+	if _, ok := adapter.allowedHosts[host]; !ok || !validHostname(host) {
 		return nil, errConfiguration
 	}
 	parsed.Host = host
@@ -258,7 +267,7 @@ func postedMessage(event *model.WebSocketEvent, channelID, botUserID string) (*m
 		return nil, false
 	}
 	var post model.Post
-	if json.Unmarshal([]byte(raw), &post) != nil || post.Id == "" || post.ChannelId != channelID || post.UserId == "" || post.UserId == botUserID || post.DeleteAt != 0 {
+	if json.Unmarshal([]byte(raw), &post) != nil || !validInboundPost(&post, channelID, botUserID) {
 		return nil, false
 	}
 	return &post, true

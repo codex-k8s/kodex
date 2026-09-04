@@ -1,0 +1,81 @@
+---
+id: OPS-INTERACTION-1030
+title: Доставка Mattermost и привязка внешнего пользователя
+type: operational-contract
+status: approved
+owner: platform
+version: 1.0.0
+updated: 2026-09-05
+---
+
+# Контракт #1030
+
+Источник: эпик #1018, `MVP-UI-42`, Issue #1030. Владельцем подключения,
+пользовательской привязки, grants, receipts и переходов Run остаётся
+`control-plane`; `interaction-gateway` исполняет только точные Mattermost
+операции. Значения credentials в документе отсутствуют.
+
+## Карта доставки
+
+| Фаза | Инициатор и полномочия | Команда и состояние владельца | Результат и потребитель |
+| --- | --- | --- | --- |
+| Создание | Core lifecycle и активный connection grant | Сервер создаёт delivery в своей транзакции | Авторитетная очередь control-plane |
+| Claim | Проверенный workload interaction-gateway | `ClaimInteractionDeliveries`, точный lease/fence/generation | Одна доставка непосредственно перед исполнением |
+| Подготовка | Только выданный connection snapshot | Exact credential file, HTTPS origin, team/channel lookup | Нет внешнего изменяющего действия |
+| Отправка | Активная арендованная попытка | Mattermost `POST /api/v4/posts` в точном канале | Только HTTP 201 и совпадающие post/channel/thread образуют success |
+| Completion | Тот же workload и lease | `CompleteInteractionDelivery`; idempotency key включает lease и generation | `SUCCEEDED`, `FAILED` при confirmed-no-effect либо `UNKNOWN_OUTCOME` |
+| Истечение | Время БД владельца | Неоконченная claimed delivery становится `UNKNOWN_OUTCOME` | Не возвращается в автоматическую очередь отправки |
+| Сверка | Авторитетный read path control-plane | Incident и сохранённый delivery outcome | Ошибка optional delivery не меняет core Run на FAILED |
+
+Для перечисленных delivery-переходов отдельное доменное событие consumer не
+требуется: очередь и incidents читаются через защищённые RPC владельца.
+События core Run не подменяются событиями доставки Mattermost.
+
+Тайм-аут или HTTP 5xx после попытки отправки не доказывает отсутствие post.
+Только ошибка до отправки либо документированный отказ HTTP 400/401/403/404/
+413/429 разрешает отметить confirmed-no-effect. Неизвестный результат и
+несовпадение readback не превращаются в success.
+
+Внешний вызов ограничен меньшим из срока цикла и lease с резервом на
+completion. Gateway не арендует сразу несколько последовательных сообщений,
+которые могли бы протухнуть, ожидая предыдущую отправку.
+
+## Сеть и входящие события
+
+Все HTTP-запросы идут через deployment-owned egress proxy и TLS 1.3 к точному
+origin из allowlist. Перенаправления запрещены, ответ ограничен 4 MiB,
+WebSocket frame ограничен 1 MiB, входящий текст ограничен 16 KiB.
+Названия и идентификаторы team/channel сверяются с authoritative vendor
+readback. Событие WebSocket подтверждается `GetPost`: другой канал, автор,
+thread, изменённый текст либо удалённый post не принимаются.
+
+Замена или удаление подключения отменяет старый listener. Новое поколение,
+включая быстро отменённое промежуточное, ждёт завершения всей цепочки
+предшественников. При shutdown SDK reader дренируется до закрытия каналов.
+
+## Проверка checkpoint
+
+Локальная точка входа из каталога unit:
+
+```bash
+go test ./... -count=1 -race
+go vet ./...
+go build ./...
+```
+
+Тесты проверяют exact team/channel, отсутствие redirect, ограниченный body,
+HTTP success/error/timeout, lease deadline, отдельную identity каждой попытки,
+readback без `core_run_affected` и последовательную смену WebSocket listeners. Сетевой
+WebSocket fixture работает только на loopback без реальных credentials.
+
+Это промежуточная реализация полного unit, не объявление готовности #1030.
+До полного PR остаются typed MCP catalog для teams/channels/posts/threads/
+search/files/reactions/send/update, подключение server-owned identity и gate
+tuple, durable inbound acknowledgement, readiness рабочего пути и сквозной
+component-сценарий. Live Mattermost и staging не запускались.
+
+Проверена официальная спецификация
+[Mattermost posts API](https://github.com/mattermost/mattermost-api-reference/blob/master/v4/source/posts.yaml)
+и установленный официальный Go SDK `server/public v0.4.3`.
+Context7 не вернул описание требуемой гарантии идемпотентности; гарантия
+дедупликации `CreatePost` не предполагается.
