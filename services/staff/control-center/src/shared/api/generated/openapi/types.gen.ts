@@ -565,6 +565,32 @@ export type InstructionCommand = {
     publishedInstructionRef?: OpaqueRef;
 };
 
+export type VfsNode = {
+    ref: string;
+    path: string;
+    parentPath: string;
+    name: string;
+    kind: 'DIRECTORY' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'INPUT' | 'RESULT' | 'SKILL' | 'MEMORY';
+    directory: boolean;
+    projectRef: string;
+    entityRef: string;
+    runRef: string;
+    sizeBytes: number;
+    digest: string;
+    modifiedAt?: Timestamp;
+};
+
+export type VfsNodePage = {
+    items: Array<VfsNode>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type SchedulePage = {
+    items: Array<Schedule>;
+    nextPageToken: string;
+};
+
 export type AgentPage = {
     items: Array<Agent>;
     nextPageToken?: string;
@@ -2067,6 +2093,8 @@ export type PageSize = number;
 
 export type PageToken = string;
 
+export type VfsPageToken = string;
+
 export type DeleteOwnerSessionData = {
     body?: never;
     headers: {
@@ -2814,6 +2842,216 @@ export type CreateAgentResponses = {
 };
 
 export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type ListOrganizationAgentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents';
+};
+
+export type ListOrganizationAgentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationAgentsError = ListOrganizationAgentsErrors[keyof ListOrganizationAgentsErrors];
+
+export type ListOrganizationAgentsResponses = {
+    /**
+     * ИИ-сотрудники доступных проектов
+     */
+    200: AgentPage;
+};
+
+export type ListOrganizationAgentsResponse = ListOrganizationAgentsResponses[keyof ListOrganizationAgentsResponses];
+
+export type ListOrganizationWorkflowsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/workflows';
+};
+
+export type ListOrganizationWorkflowsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationWorkflowsError = ListOrganizationWorkflowsErrors[keyof ListOrganizationWorkflowsErrors];
+
+export type ListOrganizationWorkflowsResponses = {
+    /**
+     * Процессы доступных проектов
+     */
+    200: WorkflowPage;
+};
+
+export type ListOrganizationWorkflowsResponse = ListOrganizationWorkflowsResponses[keyof ListOrganizationWorkflowsResponses];
+
+export type ListOrganizationSchedulesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules';
+};
+
+export type ListOrganizationSchedulesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationSchedulesError = ListOrganizationSchedulesErrors[keyof ListOrganizationSchedulesErrors];
+
+export type ListOrganizationSchedulesResponses = {
+    /**
+     * Автоматизации доступных проектов
+     */
+    200: SchedulePage;
+};
+
+export type ListOrganizationSchedulesResponse = ListOrganizationSchedulesResponses[keyof ListOrganizationSchedulesResponses];
+
+export type ListOrganizationRuntimeEnvironmentSetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments';
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsError = ListOrganizationRuntimeEnvironmentSetsErrors[keyof ListOrganizationRuntimeEnvironmentSetsErrors];
+
+export type ListOrganizationRuntimeEnvironmentSetsResponses = {
+    /**
+     * Окружения доступных проектов
+     */
+    200: RuntimeEnvironmentPage;
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsResponse = ListOrganizationRuntimeEnvironmentSetsResponses[keyof ListOrganizationRuntimeEnvironmentSetsResponses];
+
+export type ListOrganizationRuntimeSecretsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secrets';
+};
+
+export type ListOrganizationRuntimeSecretsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationRuntimeSecretsError = ListOrganizationRuntimeSecretsErrors[keyof ListOrganizationRuntimeSecretsErrors];
+
+export type ListOrganizationRuntimeSecretsResponses = {
+    /**
+     * Безопасные описания секретов доступных проектов
+     */
+    200: RuntimeSecretPage;
+};
+
+export type ListOrganizationRuntimeSecretsResponse = ListOrganizationRuntimeSecretsResponses[keyof ListOrganizationRuntimeSecretsResponses];
+
+export type ListVfsNodesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        path?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/vfs/nodes';
+};
+
+export type ListVfsNodesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListVfsNodesError = ListVfsNodesErrors[keyof ListVfsNodesErrors];
+
+export type ListVfsNodesResponses = {
+    /**
+     * Разрешённые элементы виртуального каталога
+     */
+    200: VfsNodePage;
+};
+
+export type ListVfsNodesResponse = ListVfsNodesResponses[keyof ListVfsNodesResponses];
+
+export type SearchVfsData = {
+    body?: never;
+    path?: never;
+    query: {
+        projectRef?: OpaqueRef;
+        query: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/vfs/search';
+};
+
+export type SearchVfsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SearchVfsError = SearchVfsErrors[keyof SearchVfsErrors];
+
+export type SearchVfsResponses = {
+    /**
+     * Результаты поиска доступных виртуальных файлов
+     */
+    200: VfsNodePage;
+};
+
+export type SearchVfsResponse = SearchVfsResponses[keyof SearchVfsResponses];
 
 export type GetAgentData = {
     body?: never;

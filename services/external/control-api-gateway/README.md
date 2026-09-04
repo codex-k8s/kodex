@@ -133,6 +133,38 @@ producer response закрыто отклоняется. Source content и name 
 eligibility зависят от завершения #1046. Этот раздел не заявляет готовность
 всего #1045 до подключения этих producer contracts.
 
+## Общие каталоги и виртуальные файлы (#1045)
+
+| HTTP GET /api/v1/ | RPC | Результат для PWA |
+| --- | --- | --- |
+| agents | ListAgents | ИИ-сотрудники доступных проектов |
+| workflows | ListWorkflows | Процессы доступных проектов |
+| schedules | ListSchedules | Автоматизации доступных проектов |
+| runtime-environments | ListRuntimeEnvironmentSets | Безопасные описания окружений |
+| runtime-secrets | ListRuntimeSecrets | Метаданные без значений секретов |
+| vfs/nodes | ListVFSNodes | Типизированные элементы виртуальной папки |
+| vfs/search | SearchVFS | Серверный поиск разрешённых виртуальных ресурсов |
+
+Источник actor/organization тот же проверенный browser context. Optional
+projectRef лишь сужает owner query; отсутствие фильтра не даёт доступа к чужим
+проектам. Одна HTTP-операция вызывает один RPC, без обхода проектов через fanout.
+Control-plane разрешает eligibility, lifecycle и scan state; путь VFS не
+используется как authority или ключ физического хранилища. Чтения не создают
+события или mutable state, ответ и cursor являются авторитетным read path.
+
+Query, pageSize и pageToken ограничены до RPC, включая защиту от переполнения
+при преобразовании int в int32. Names/paths VFS сохраняются дословно, enum
+переводится только из закрытого реестра kind. Пустые списки представлены [];
+secret metadata всегда no-store. Unknown kind и повреждённый producer response
+отклоняются с 502. Глобальная выборка и bounded SQL pagination владельца
+дорабатываются в #1046; HTTP mapping не является доказательством этой части.
+
+Проверки: TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout,
+TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC,
+TestOrganizationCatalogPropagatesAuthoritativeDenial,
+TestVFSRoutesPreserveTypedSourceAndPagination,
+TestVFSRejectsMalformedPathAndUnknownProducerKind.
+
 ## Контракты и проверка
 
 - OpenAPI: `contracts/openapi/control-api-gateway/v1/openapi.yaml`;
@@ -140,7 +172,9 @@ eligibility зависят от завершения #1046. Этот разде�
 - deploy: `deploy/k8s/base/control-api-gateway`.
 
 Проверенная документация внешних библиотек: gRPC-Go client streaming/flow
-control/context cancellation и oidc-client-ts session/events.
+control/context cancellation и oidc-client-ts session/events. Через Context7
+`/oapi-codegen/oapi-codegen` проверена stdhttp generation: generated handler
+не заменяет валидацию ограничений query/request на границе.
 
 ```bash
 cd services/external/control-api-gateway

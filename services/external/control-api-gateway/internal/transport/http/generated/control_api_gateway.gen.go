@@ -3972,6 +3972,45 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 	}
 }
 
+// Defines values for VFSNodeKind.
+const (
+	AGENT     VFSNodeKind = "AGENT"
+	DIRECTORY VFSNodeKind = "DIRECTORY"
+	INPUT     VFSNodeKind = "INPUT"
+	MEMORY    VFSNodeKind = "MEMORY"
+	PROJECT   VFSNodeKind = "PROJECT"
+	RESULT    VFSNodeKind = "RESULT"
+	RUN       VFSNodeKind = "RUN"
+	SKILL     VFSNodeKind = "SKILL"
+	WORKFLOW  VFSNodeKind = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the VFSNodeKind enum.
+func (e VFSNodeKind) Valid() bool {
+	switch e {
+	case AGENT:
+		return true
+	case DIRECTORY:
+		return true
+	case INPUT:
+		return true
+	case MEMORY:
+		return true
+	case PROJECT:
+		return true
+	case RESULT:
+		return true
+	case RUN:
+		return true
+	case SKILL:
+		return true
+	case WORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkflowState.
 const (
 	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
@@ -6724,6 +6763,12 @@ type ScheduleInputSessionPolicy string
 // ScheduleInputTargetType defines model for ScheduleInput.TargetType.
 type ScheduleInputTargetType string
 
+// SchedulePage defines model for SchedulePage.
+type SchedulePage struct {
+	Items         []Schedule `json:"items"`
+	NextPageToken string     `json:"nextPageToken"`
+}
+
 // SchedulePreview defines model for SchedulePreview.
 type SchedulePreview struct {
 	DstFoldPolicy            SchedulePreviewDstFoldPolicy `json:"dstFoldPolicy"`
@@ -7012,6 +7057,32 @@ type UserSummary struct {
 	Ref         OpaqueRef `json:"ref"`
 }
 
+// VFSNode defines model for VFSNode.
+type VFSNode struct {
+	Digest     string      `json:"digest"`
+	Directory  bool        `json:"directory"`
+	EntityRef  string      `json:"entityRef"`
+	Kind       VFSNodeKind `json:"kind"`
+	ModifiedAt *Timestamp  `json:"modifiedAt,omitempty"`
+	Name       string      `json:"name"`
+	ParentPath string      `json:"parentPath"`
+	Path       string      `json:"path"`
+	ProjectRef string      `json:"projectRef"`
+	Ref        string      `json:"ref"`
+	RunRef     string      `json:"runRef"`
+	SizeBytes  int64       `json:"sizeBytes"`
+}
+
+// VFSNodeKind defines model for VFSNode.Kind.
+type VFSNodeKind string
+
+// VFSNodePage defines model for VFSNodePage.
+type VFSNodePage struct {
+	Items         []VFSNode `json:"items"`
+	NextPageToken string    `json:"nextPageToken"`
+	Total         int64     `json:"total"`
+}
+
 // Workflow defines model for Workflow.
 type Workflow struct {
 	CompletionCriteria  *string              `json:"completionCriteria,omitempty"`
@@ -7229,6 +7300,9 @@ type SecretRef = OpaqueRef
 // SessionRef defines model for SessionRef.
 type SessionRef = OpaqueRef
 
+// VFSPageToken defines model for VFSPageToken.
+type VFSPageToken = string
+
 // WorkflowRef defines model for WorkflowRef.
 type WorkflowRef = OpaqueRef
 
@@ -7348,6 +7422,14 @@ type ListPlatformMembershipCandidatesParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListOrganizationAgentsParams defines parameters for ListOrganizationAgents.
+type ListOrganizationAgentsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // UpdateAgentParams defines parameters for UpdateAgent.
@@ -8188,6 +8270,14 @@ type ListRunEventsParams struct {
 	Limit         *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListOrganizationRuntimeEnvironmentSetsParams defines parameters for ListOrganizationRuntimeEnvironmentSets.
+type ListOrganizationRuntimeEnvironmentSetsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // DeleteRuntimeEnvironmentParams defines parameters for DeleteRuntimeEnvironment.
 type DeleteRuntimeEnvironmentParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -8229,6 +8319,14 @@ type PublishRuntimeEnvironmentVersionParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListOrganizationRuntimeSecretsParams defines parameters for ListOrganizationRuntimeSecrets.
+type ListOrganizationRuntimeSecretsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // RevokeRuntimeSecretParams defines parameters for RevokeRuntimeSecret.
 type RevokeRuntimeSecretParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -8247,6 +8345,14 @@ type RotateRuntimeSecretParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListOrganizationSchedulesParams defines parameters for ListOrganizationSchedules.
+type ListOrganizationSchedulesParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // PreviewScheduleParams defines parameters for PreviewSchedule.
@@ -8371,6 +8477,30 @@ type ValidateSystemSTTConfigurationDraftParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ListVFSNodesParams defines parameters for ListVFSNodes.
+type ListVFSNodesParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Path       *string          `form:"path,omitempty" json:"path,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *VFSPageToken    `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// SearchVFSParams defines parameters for SearchVFS.
+type SearchVFSParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      string           `form:"query" json:"query"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *VFSPageToken    `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListOrganizationWorkflowsParams defines parameters for ListOrganizationWorkflows.
+type ListOrganizationWorkflowsParams struct {
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // UpdateWorkflowDraftParams defines parameters for UpdateWorkflowDraft.
@@ -8689,6 +8819,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/administration/membership-candidates)
 	ListPlatformMembershipCandidates(w http.ResponseWriter, r *http.Request, params ListPlatformMembershipCandidatesParams)
+
+	// (GET /api/v1/agents)
+	ListOrganizationAgents(w http.ResponseWriter, r *http.Request, params ListOrganizationAgentsParams)
 
 	// (GET /api/v1/agents/{agentRef})
 	GetAgent(w http.ResponseWriter, r *http.Request, agentRef AgentRef)
@@ -9068,6 +9201,9 @@ type ServerInterface interface {
 	// (GET /api/v1/runs/{runRef}/graph)
 	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
 
+	// (GET /api/v1/runtime-environments)
+	ListOrganizationRuntimeEnvironmentSets(w http.ResponseWriter, r *http.Request, params ListOrganizationRuntimeEnvironmentSetsParams)
+
 	// (DELETE /api/v1/runtime-environments/{environmentRef})
 	DeleteRuntimeEnvironment(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, params DeleteRuntimeEnvironmentParams)
 
@@ -9092,6 +9228,9 @@ type ServerInterface interface {
 	// (POST /api/v1/runtime-environments/{environmentRef}/versions)
 	PublishRuntimeEnvironmentVersion(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, params PublishRuntimeEnvironmentVersionParams)
 
+	// (GET /api/v1/runtime-secrets)
+	ListOrganizationRuntimeSecrets(w http.ResponseWriter, r *http.Request, params ListOrganizationRuntimeSecretsParams)
+
 	// (DELETE /api/v1/runtime-secrets/{secretRef})
 	RevokeRuntimeSecret(w http.ResponseWriter, r *http.Request, secretRef SecretRef, params RevokeRuntimeSecretParams)
 
@@ -9106,6 +9245,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runtime-selections)
 	ListRuntimeSelections(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/schedules)
+	ListOrganizationSchedules(w http.ResponseWriter, r *http.Request, params ListOrganizationSchedulesParams)
 
 	// (POST /api/v1/schedules/preview)
 	PreviewSchedule(w http.ResponseWriter, r *http.Request, params PreviewScheduleParams)
@@ -9166,6 +9308,15 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation)
 	ValidateSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params ValidateSystemSTTConfigurationDraftParams)
+
+	// (GET /api/v1/vfs/nodes)
+	ListVFSNodes(w http.ResponseWriter, r *http.Request, params ListVFSNodesParams)
+
+	// (GET /api/v1/vfs/search)
+	SearchVFS(w http.ResponseWriter, r *http.Request, params SearchVFSParams)
+
+	// (GET /api/v1/workflows)
+	ListOrganizationWorkflows(w http.ResponseWriter, r *http.Request, params ListOrganizationWorkflowsParams)
 
 	// (GET /api/v1/workflows/{workflowRef})
 	GetWorkflow(w http.ResponseWriter, r *http.Request, workflowRef WorkflowRef)
@@ -10638,6 +10789,84 @@ func (siw *ServerInterfaceWrapper) ListPlatformMembershipCandidates(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPlatformMembershipCandidates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationAgentsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationAgents(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21379,6 +21608,84 @@ func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListOrganizationRuntimeEnvironmentSets operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationRuntimeEnvironmentSets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationRuntimeEnvironmentSetsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationRuntimeEnvironmentSets(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteRuntimeEnvironment operation middleware
 func (siw *ServerInterfaceWrapper) DeleteRuntimeEnvironment(w http.ResponseWriter, r *http.Request) {
 
@@ -22002,6 +22309,84 @@ func (siw *ServerInterfaceWrapper) PublishRuntimeEnvironmentVersion(w http.Respo
 	handler.ServeHTTP(w, r)
 }
 
+// ListOrganizationRuntimeSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationRuntimeSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationRuntimeSecretsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationRuntimeSecrets(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RevokeRuntimeSecret operation middleware
 func (siw *ServerInterfaceWrapper) RevokeRuntimeSecret(w http.ResponseWriter, r *http.Request) {
 
@@ -22340,6 +22725,84 @@ func (siw *ServerInterfaceWrapper) ListRuntimeSelections(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRuntimeSelections(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationSchedules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationSchedulesParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationSchedules(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23904,6 +24367,240 @@ func (siw *ServerInterfaceWrapper) ValidateSystemSTTConfigurationDraft(w http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListVFSNodes operation middleware
+func (siw *ServerInterfaceWrapper) ListVFSNodes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListVFSNodesParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVFSNodes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchVFS operation middleware
+func (siw *ServerInterfaceWrapper) SearchVFS(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchVFSParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchVFS(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganizationWorkflows operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganizationWorkflows(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganizationWorkflowsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganizationWorkflows(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkflow operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 
@@ -24289,6 +24986,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.RemovePlatformMembership)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/administration/members/{membershipRef}", wrapper.ChangePlatformMembership)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/administration/membership-candidates", wrapper.ListPlatformMembershipCandidates)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents", wrapper.ListOrganizationAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/agents/{agentRef}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/agents/{agentRef}/avatar", wrapper.RemoveAgentAvatar)
@@ -24415,6 +25113,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments", wrapper.ListOrganizationRuntimeEnvironmentSets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}", wrapper.DeleteRuntimeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}", wrapper.GetRuntimeEnvironmentSet)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/agents", wrapper.ListRuntimeEnvironmentAgents)
@@ -24423,11 +25122,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/rollbacks", wrapper.RollbackRuntimeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions", wrapper.ListRuntimeEnvironmentVersions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions", wrapper.PublishRuntimeEnvironmentVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets", wrapper.ListOrganizationRuntimeSecrets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.RevokeRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.GetRuntimeSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/reveal", wrapper.RevealRuntimeSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/rotations", wrapper.RotateRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/schedules", wrapper.ListOrganizationSchedules)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/schedules/preview", wrapper.PreviewSchedule)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.DeleteSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.GetSchedule)
@@ -24448,6 +25149,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings", wrapper.RebindSystemSTTConsumers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateSystemSTTConfigurationDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/nodes", wrapper.ListVFSNodes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/search", wrapper.SearchVFS)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/workflows", wrapper.ListOrganizationWorkflows)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}", wrapper.GetWorkflow)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}", wrapper.UpdateWorkflowDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/workflows/{workflowRef}/commands", wrapper.CommandWorkflow)
