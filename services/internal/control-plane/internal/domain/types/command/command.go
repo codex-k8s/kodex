@@ -357,6 +357,7 @@ type IntegrationConnectionTestInput struct {
 	Success                                                bool
 }
 type InteractionDeliveryInput struct {
+	ExternalTeamRef, ExternalChannelRef                                             string
 	DeliveryRef, LeaseRef, Fence, ExternalPostRef, ExternalThreadRef, SafeErrorCode string
 	Generation                                                                      int64
 	Success                                                                         bool

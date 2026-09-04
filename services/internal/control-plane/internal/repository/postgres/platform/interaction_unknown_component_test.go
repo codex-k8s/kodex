@@ -59,6 +59,7 @@ WHERE run.project_id IS NOT NULL ORDER BY run.id LIMIT 1 RETURNING id::text,orga
 		err := tx.QueryRow(ctx, queryInteractionCompleteDeliveryUpdate, pgx.StrictNamedArgs{
 			"delivery_id": id, "success": test.success, "confirmed_no_effect": test.noEffect, "external_post_ref": "post-fixture",
 			"external_thread_ref": "", "safe_error_code": "INTERACTION_UNAVAILABLE", "attempt": 1,
+			"external_team_ref": "team-fixture", "external_channel_ref": "channel-fixture",
 		}).Scan(&ref, &state)
 		if err != nil || state != test.state {
 			t.Fatalf("completion state=%s, want %s: %v", state, test.state, err)

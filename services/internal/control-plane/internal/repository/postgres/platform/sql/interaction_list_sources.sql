@@ -6,7 +6,8 @@ SELECT
     c.public_configuration->>'team_name',
     c.public_configuration->>'channel_name',
     min(project.language),
-    array_agg(DISTINCT g.capability_key ORDER BY g.capability_key)
+    array_agg(DISTINCT g.capability_key ORDER BY g.capability_key),
+    c.version,COALESCE(max(credential_revision.ref),''),COALESCE(max(credential_revision.revision),0)
 FROM control_plane.integration_connections c
 LEFT JOIN control_plane.integration_credential_revisions credential_revision
   ON credential_revision.id = c.credential_revision_id

@@ -71,6 +71,7 @@ FROM control_plane.integration_definitions WHERE stable_key='mattermost'`, conne
 	if err != nil || human.actorID != current.actorID || human.interactionIdentityID == "" || !human.credentialAuthenticatedAt.IsZero() {
 		t.Fatalf("mapped identity: %v", err)
 	}
+	testInteractionACK(t, ctx, repository, pool, owner, connectionRef)
 	for _, field := range []string{"team", "channel", "user", "connection"} {
 		other := message
 		switch field {
@@ -89,6 +90,22 @@ FROM control_plane.integration_definitions WHERE stable_key='mattermost'`, conne
 	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET version=version+1 WHERE ref=$1`, connectionRef); err != nil {
 		t.Fatal(err)
+	}
+	sources, err := service.ListInteractionSources(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundSource := false
+	for _, source := range sources {
+		if stringMap(source, "connectionRef") == connectionRef {
+			foundSource = true
+			if source["connectionVersion"] != int64(2) || stringMap(source, "credentialRef") != "ack_fixture_credential" {
+				t.Fatal("source version did not change with a stable credential reference")
+			}
+		}
+	}
+	if !foundSource {
+		t.Fatal("interaction source not projected")
 	}
 	if _, err := resolve(message); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("changed connection retained identity authority: %v", err)

@@ -24,6 +24,7 @@ func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplan
 			BaseUrl: itemString(item, "baseURL"), TeamName: itemString(item, "teamName"),
 			ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			EnabledCapabilities: itemStrings(item, "capabilities"),
+			ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: itemString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
 		})
 	}
 	return response, nil
@@ -48,6 +49,8 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 			CapabilityKey: itemString(item, "capabilityKey"), MessageKey: itemString(item, "messageKey"),
 			TemplateData: structure(templateData), Lease: castLease(item),
 			GateRef: itemString(item, "gateRef"), GateVersion: mapInt64(item, "gateVersion"), RunRef: itemString(item, "runRef"),
+			ExternalTeamRef: itemString(item, "externalTeamRef"), ExternalChannelRef: itemString(item, "externalChannelRef"),
+			ExternalRootPostRef: itemString(item, "externalRootPostRef"), AcceptanceReceiptRef: itemString(item, "acceptanceReceiptRef"),
 		})
 	}
 	return response, nil
@@ -59,6 +62,7 @@ func (server *Server) CompleteInteractionDelivery(ctx context.Context, request *
 		Generation: request.GetGeneration(), Success: request.GetSuccess(), ExternalPostRef: request.GetExternalPostRef(),
 		ExternalThreadRef: request.GetExternalThreadRef(), SafeErrorCode: request.GetSafeErrorCode(),
 		UnknownOutcome: request.GetUnknownOutcome(), ConfirmedNoEffect: request.GetConfirmedNoEffect(),
+		ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(),
 	}
 	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload)
 	if err != nil {

@@ -27,6 +27,14 @@ WITH expired AS (
       AND c.enabled
       AND c.state IN ('CONNECTED', 'DEGRADED')
       AND g.enabled
+      AND (d.acceptance_receipt_id IS NULL OR EXISTS (
+          SELECT 1 FROM control_plane.interaction_message_receipts receipt
+          JOIN control_plane.interaction_identities identity ON identity.id=receipt.identity_id
+          JOIN control_plane.subjects subject ON subject.id=receipt.subject_id
+          WHERE receipt.id=d.acceptance_receipt_id AND identity.state='ACTIVE' AND subject.active
+            AND identity.connection_id=c.id AND identity.connection_version=c.version
+            AND identity.external_team_ref=d.external_team_ref AND identity.external_channel_ref=d.external_channel_ref
+      ))
       AND (d.gate_id IS NULL OR gate.state = 'OPEN')
       AND (SELECT count(*) FROM expired) >= 0
     ORDER BY d.available_at, d.created_at
@@ -63,7 +71,8 @@ SELECT
     claimed.fence,
     claimed.generation,
     claimed.lease_expires_at,
-    COALESCE(gate.ref,''),COALESCE(gate.version,0),run.ref
+    COALESCE(gate.ref,''),COALESCE(gate.version,0),run.ref,
+    claimed.external_team_ref,claimed.external_channel_ref,claimed.target_root_post_ref,COALESCE(receipt.ref,'')
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
 LEFT JOIN control_plane.integration_credential_revisions credential_revision
@@ -71,4 +80,5 @@ LEFT JOIN control_plane.integration_credential_revisions credential_revision
 JOIN control_plane.projects project ON project.id = claimed.project_id
 JOIN control_plane.runs run ON run.id=claimed.root_run_id
 LEFT JOIN control_plane.owner_gates gate ON gate.id=claimed.gate_id
+LEFT JOIN control_plane.interaction_message_receipts receipt ON receipt.id=claimed.acceptance_receipt_id
 ORDER BY claimed.created_at
