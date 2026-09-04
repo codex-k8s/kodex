@@ -246,6 +246,12 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime environment lifecycle returns a complete terminal snapshot", func(t *testing.T) {
 		testRuntimeEnvironmentLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("runtime environment draft publication is validated and version pinned", func(t *testing.T) {
+		testEnvironmentDraft(t, ctx, repository, pool)
+	})
+	t.Run("catalog SQL eligibility matches authoritative evaluator", func(t *testing.T) {
+		testCatalogSQLParity(t, ctx, repository, pool)
+	})
 	t.Run("managed configuration lifecycle is immutable and selectively rebound", func(t *testing.T) {
 		testManagedConfigurationLifecycle(t, ctx, repository, pool)
 	})
@@ -5216,13 +5222,17 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	firstPage, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
-	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != quarantined.Ref || nextPageToken == "" {
+	firstRef, secondRef := quarantined.Ref, uploaded.Ref
+	if firstRef > secondRef {
+		firstRef, secondRef = secondRef, firstRef
+	}
+	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
 	}
 	secondPage, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1, Token: nextPageToken},
 	})
-	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != uploaded.Ref || finalPageToken != "" {
+	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
 		t.Fatalf("second artifact cursor page is unstable: artifacts=%#v next=%q err=%v", secondPage, finalPageToken, err)
 	}
 	if _, _, err := service.ListArtifacts(ctx, owner, query.Filter{

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -30,11 +29,14 @@ func (repository *Repository) SearchVFS(ctx context.Context, principal value.Pri
 }
 
 func (repository *Repository) vfs(ctx context.Context, principal value.Principal, mode string, filter query.Filter) ([]entity.VFSNode, int64, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	cursor, err := decodeVFSCursor(filter.Page.Token, mode, filter)
+	cursorScope := strings.Join([]string{mode, current.organizationID, current.actorID, current.authorityProjectID}, ":")
+	cursor, err := decodeVFSCursor(filter.Page.Token, cursorScope, filter)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -44,71 +46,32 @@ func (repository *Repository) vfs(ctx context.Context, principal value.Principal
 		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, queryVFSListNodes, pgx.StrictNamedArgs{
+	var raw []byte
+	var total int64
+	err = tx.QueryRow(ctx, queryVFSListNodes, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,
 		"project_ref":     strings.TrimSpace(filter.ProjectRef), "mode": mode, "path": filter.ResourceRef,
-		"query": filter.Query,
-	})
+		"query": filter.Query, "actor_id": current.actorID, "authority_project": current.authorityProjectID,
+		"evaluated_at": time.Now().UTC(), "cursor_path": cursor.Path, "cursor_ref": cursor.Ref, "page_size": limit + 1,
+	}).Scan(&raw, &total)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("query VFS nodes: %w: %v", errs.ErrUnavailable, err)
 	}
-	defer rows.Close()
-	type candidate struct {
-		entity.VFSNode
-		accessKind, accessRef string
+	var stored []vfsNodeRow
+	if json.Unmarshal(raw, &stored) != nil || len(stored) > int(limit+1) {
+		return nil, 0, "", errs.ErrUnavailable
 	}
-	candidates := make([]candidate, 0)
-	for rows.Next() {
-		var item candidate
-		if err := rows.Scan(&item.Ref, &item.Path, &item.ParentPath, &item.Name, &item.Kind, &item.Directory,
-			&item.ProjectRef, &item.EntityRef, &item.RunRef, &item.SizeBytes, &item.Digest, &item.ModifiedAt,
-			&item.accessKind, &item.accessRef); err != nil {
-			return nil, 0, "", fmt.Errorf("scan VFS node: %w: %v", errs.ErrUnavailable, err)
-		}
-		candidates = append(candidates, item)
-	}
-	if rows.Err() != nil {
-		return nil, 0, "", fmt.Errorf("iterate VFS nodes: %w: %v", errs.ErrUnavailable, rows.Err())
-	}
-	rows.Close()
-	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	bindings, err := repository.loadAccessBindings(ctx, tx, current.organizationID, subject)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	evaluatedAt := time.Now().UTC()
-	visibleItems := make([]entity.VFSNode, 0, len(candidates))
-	for _, candidate := range candidates {
-		visible, visibilityErr := repository.resourceVisible(ctx, tx, current, subject.AccessSubject, bindings,
-			candidate.accessKind, candidate.accessRef, candidate.ProjectRef, evaluatedAt)
-		if visibilityErr != nil {
-			return nil, 0, "", visibilityErr
-		}
-		if visible {
-			visibleItems = append(visibleItems, candidate.VFSNode)
-		}
-	}
-	sort.Slice(visibleItems, func(i, j int) bool {
-		return visibleItems[i].Path+"\x00"+visibleItems[i].Ref < visibleItems[j].Path+"\x00"+visibleItems[j].Ref
-	})
-	total := int64(len(visibleItems))
-	items := visibleItems
-	if cursor.Path != "" {
-		items = make([]entity.VFSNode, 0, len(visibleItems))
-		for _, item := range visibleItems {
-			if item.Path > cursor.Path || item.Path == cursor.Path && item.Ref > cursor.Ref {
-				items = append(items, item)
-			}
-		}
+	items := make([]entity.VFSNode, 0, len(stored))
+	for _, row := range stored {
+		items = append(items, entity.VFSNode{Ref: row.Ref, Path: row.Path, ParentPath: row.ParentPath,
+			Name: row.Name, Kind: row.Kind, Directory: row.Directory, ProjectRef: row.ProjectRef, EntityRef: row.EntityRef,
+			RunRef: row.RunRef, SizeBytes: row.SizeBytes, Digest: row.Digest, ModifiedAt: row.ModifiedAt})
 	}
 	next := ""
 	if len(items) > int(limit) {
 		items = items[:limit]
 		last := items[len(items)-1]
-		next = encodeVFSCursor(vfsCursor{Path: last.Path, Ref: last.Ref}, mode, filter)
+		next = encodeVFSCursor(vfsCursor{Path: last.Path, Ref: last.Ref}, cursorScope, filter)
 		if next == filter.Page.Token {
 			return nil, 0, "", errs.ErrConflict
 		}
@@ -117,6 +80,17 @@ func (repository *Repository) vfs(ctx context.Context, principal value.Principal
 		return nil, 0, "", errs.ErrConflict
 	}
 	return items, total, next, nil
+}
+
+type vfsNodeRow struct {
+	Ref, Path, Name, Kind, Digest string
+	Directory                     bool
+	ParentPath                    string    `json:"parent_path"`
+	ProjectRef                    string    `json:"project_ref"`
+	EntityRef                     string    `json:"entity_ref"`
+	RunRef                        string    `json:"run_ref"`
+	SizeBytes                     int64     `json:"size_bytes"`
+	ModifiedAt                    time.Time `json:"modified_at"`
 }
 
 func vfsFilterDigest(mode string, filter query.Filter) string {
@@ -131,6 +105,9 @@ func encodeVFSCursor(cursor vfsCursor, mode string, filter query.Filter) string 
 func decodeVFSCursor(token, mode string, filter query.Filter) (vfsCursor, error) {
 	if strings.TrimSpace(token) == "" {
 		return vfsCursor{}, nil
+	}
+	if len(token) > 2048 {
+		return vfsCursor{}, errs.ErrInvalid
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) > 1024 {

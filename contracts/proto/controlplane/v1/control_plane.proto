@@ -74,9 +74,15 @@ service PlatformQueryService {
   rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
+  rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
 }
 
 service PlatformCommandService {
+  rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
+  rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
+  rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
+  rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
+  rpc DiscardRuntimeEnvironmentDraft(DiscardRuntimeEnvironmentDraftRequest) returns (DiscardRuntimeEnvironmentDraftResponse);
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
@@ -646,6 +652,7 @@ message Membership {
   bool active = 6;
   google.protobuf.Timestamp updated_at = 7;
   repeated NextAction next_actions = 8;
+  string project_ref = 9;
 }
 
 message Project {
@@ -1544,6 +1551,9 @@ enum VFSNodeKind {
   VFS_NODE_KIND_RESULT = 7;
   VFS_NODE_KIND_SKILL = 8;
   VFS_NODE_KIND_MEMORY = 9;
+  VFS_NODE_KIND_AUTOMATION = 10;
+  VFS_NODE_KIND_ENVIRONMENT = 11;
+  VFS_NODE_KIND_AVATAR = 12;
 }
 
 message VFSNode {
@@ -3535,6 +3545,62 @@ message CreateRuntimeEnvironmentSetRequest {
   repeated RuntimeEnvironmentTool tools = 8;
   RuntimeEnvironmentPolicyInput policy = 9;
 }
+
+message RuntimeEnvironmentDraftSpecification {
+  string name = 1;
+  string description = 2;
+  repeated RuntimeEnvironmentValue values = 3;
+  repeated RuntimeSecretBinding secret_bindings = 4;
+  string image_artifact_ref = 5;
+  repeated RuntimeEnvironmentTool tools = 6;
+  RuntimeEnvironmentPolicyInput policy = 7;
+}
+message RuntimeEnvironmentDraft {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string environment_ref = 4;
+  int64 expected_environment_version = 5;
+  string state = 6;
+  RuntimeEnvironmentDraftSpecification specification = 7;
+  string validation_digest = 8;
+  repeated string diagnostics = 9;
+  string published_environment_ref = 10;
+}
+message GetRuntimeEnvironmentDraftRequest { string draft_ref = 1; }
+message GetRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message CreateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string environment_ref = 3;
+  int64 expected_environment_version = 4;
+  RuntimeEnvironmentDraftSpecification specification = 5;
+}
+message CreateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message SaveRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+  RuntimeEnvironmentDraftSpecification specification = 3;
+}
+message SaveRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message ValidateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message ValidateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message PublishRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PublishRuntimeEnvironmentDraftResponse {
+  RuntimeEnvironmentDraft draft = 1;
+  RuntimeEnvironmentSet environment = 2;
+}
+message DiscardRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message DiscardRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
 message CreateRuntimeEnvironmentSetResponse {
   RuntimeEnvironmentSet environment = 1;
 }

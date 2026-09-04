@@ -1322,48 +1322,64 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	if sourceKind != "" && !contains([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, sourceKind) {
 		return nil, "", errs.ErrInvalid
 	}
-	cursorCreatedAt, cursorRef, err := decodeArtifactCursor(filter.Page.Token)
-	if err != nil {
-		return nil, "", err
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"project_ref":     strings.TrimSpace(filter.ProjectRef),
-		"run_ref":         strings.TrimSpace(filter.ResourceRef),
-		"role":            scope.role,
-		"actor_id":        scope.actorID,
-		"query":           strings.TrimSpace(filter.Query),
-		"lifecycle_state": lifecycleState,
-		"artifact_type":   artifactType,
-		"scan_state":      scanState,
-		"source_kind":     sourceKind,
-		"cursor_created":  cursorCreatedAt,
-		"cursor_ref":      cursorRef,
-		"limit":           limit + 1,
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.Artifact
-	for rows.Next() {
-		item, scanErr := scanArtifact(rows)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(result) > int(limit) {
-		result = result[:limit]
-		last := result[len(result)-1]
-		next = encodeArtifactCursor(last.CreatedAt, last.Ref)
-	}
-	return result, next, nil
+	return authorizedCatalog(ctx, repository, scope, "ARTIFACT", filter,
+		func(ctx context.Context, tx pgx.Tx, cursorRef string, limit int32) ([]entity.Artifact, error) {
+			rows, err := tx.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
+				"organization_id": scope.organizationID,
+				"project_ref":     strings.TrimSpace(filter.ProjectRef),
+				"run_ref":         strings.TrimSpace(filter.ResourceRef),
+				"role":            scope.role,
+				"actor_id":        scope.actorID,
+				"query":           strings.TrimSpace(filter.Query),
+				"lifecycle_state": lifecycleState,
+				"artifact_type":   artifactType,
+				"scan_state":      scanState,
+				"source_kind":     sourceKind,
+				"cursor_ref":      cursorRef,
+				"limit":           limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var result []entity.Artifact
+			for rows.Next() {
+				item, scanErr := scanArtifact(rows)
+				if scanErr != nil {
+					return nil, scanErr
+				}
+				result = append(result, item)
+			}
+			if rows.Err() != nil {
+				return nil, errs.ErrUnavailable
+			}
+			return result, nil
+		}, func(item entity.Artifact) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ARTIFACT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Artifact, allowed func(string) bool) error {
+			item.NextActions = nil
+			if item.LifecycleState == "DELETED" {
+				if allowed("artifact.restore") {
+					item.NextActions = append(item.NextActions, "RESTORE")
+				}
+				if allowed("artifact.purge") {
+					item.NextActions = append(item.NextActions, "PURGE")
+				}
+			} else if item.LifecycleState == "ACTIVE" {
+				if item.ScanState == "CLEAN" {
+					if allowed("artifact.download") {
+						item.NextActions = append(item.NextActions, "DOWNLOAD")
+					}
+					if allowed("artifact.bind") {
+						item.NextActions = append(item.NextActions, "BIND")
+					}
+				}
+				if allowed("artifact.delete") {
+					item.NextActions = append(item.NextActions, "DELETE")
+				}
+			}
+			return nil
+		})
 }
 
 const artifactCursorVersion = "v1"
