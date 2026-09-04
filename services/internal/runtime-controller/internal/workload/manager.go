@@ -76,6 +76,7 @@ const (
 	memoryManifestKey                       = "memories.json"
 	mcpManifestKey                          = "mcp.json"
 	callbackManifestKey                     = "callback.json"
+	maximumKubernetesProjectionBytes        = 900 << 10
 )
 
 // ErrProviderCredentialRefreshRejected отделяет stale/invalid lineage от
@@ -407,6 +408,9 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
+	if err := validateRuntimeRevisionDigest(input, binding); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	return input, binding, validateRunnerInput(input)
 }
 
@@ -424,7 +428,20 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
+	if err := validateRuntimeRevisionDigest(input, binding); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	return input, binding, validateRunnerInput(input)
+}
+
+func validateRuntimeRevisionDigest(input runtimecontract.RunnerInput, binding ProviderSecretBinding) error {
+	digest, err := runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: binding.Name, SecretUID: binding.UID, SecretResourceVersion: binding.ResourceVersion,
+	})
+	if err != nil || subtle.ConstantTimeCompare([]byte(digest), []byte(input.RuntimeRevisionDigest)) != 1 {
+		return errors.New("runtime revision digest mismatch")
+	}
+	return nil
 }
 
 func validateRunnerInput(input runtimecontract.RunnerInput) error {
@@ -1453,6 +1470,9 @@ func (manager *Manager) ensureProjection(ctx context.Context, podName, mode stri
 	if err != nil {
 		return err
 	}
+	if stringDataSize(data) > maximumKubernetesProjectionBytes {
+		return errors.New("runtime revision projection exceeds Kubernetes object limit")
+	}
 	immutable := true
 	desired := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: runtimeProjectionName(input), Namespace: manager.config.RuntimeNamespace,
 		Labels: map[string]string{managedLabel: "true", modeLabel: mode}, Annotations: runtimeProjectionAnnotations(input, podName)},
@@ -1481,6 +1501,9 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 	for key, value := range environmentSecrets {
 		data[key] = append([]byte(nil), value...)
 	}
+	if byteDataSize(data) > maximumKubernetesProjectionBytes {
+		return errors.New("runtime execution ticket exceeds Kubernetes object limit")
+	}
 	annotations := runtimeProjectionAnnotations(input, podName)
 	if providerBinding != nil {
 		annotations[providerSecretNameAnnotation] = providerBinding.Name
@@ -1505,6 +1528,22 @@ func (manager *Manager) ensureTicket(ctx context.Context, name, podName, mode st
 		return errors.New("create immutable runtime ticket")
 	}
 	return nil
+}
+
+func stringDataSize(data map[string]string) int {
+	result := 0
+	for key, value := range data {
+		result += len(key) + len(value)
+	}
+	return result
+}
+
+func byteDataSize(data map[string][]byte) int {
+	result := 0
+	for key, value := range data {
+		result += len(key) + len(value)
+	}
+	return result
 }
 
 func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input runtimecontract.RunnerInput, token string, environmentSecrets map[string][]byte, providerBinding *ProviderSecretBinding) bool {

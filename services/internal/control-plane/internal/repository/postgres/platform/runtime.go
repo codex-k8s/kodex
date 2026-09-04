@@ -444,9 +444,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		leaseRef, _ := newRef("lea")
 		podName := runtimecontract.RuntimeTurnPodName(leaseRef)
 		serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
-		inputDigest := sha256.Sum256(rawInput)
 		var inputMap map[string]any
 		_ = jsonUnmarshal(rawInput, &inputMap)
+		inputDigestHex, err := runtimecontract.RuntimeBoundedInputDigest(inputMap)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
@@ -625,28 +628,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 		}
 		workspacePolicy := runtimeWorkspacePolicy()
-		revisionDigestHex := runtimeRevisionDigest(runtimeEnvironmentDigest,
-			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
-			providerAccountRef, providerCredentialRef, providerSecretName,
-			providerSecretUID, providerSecretResourceVersion, providerCredentialSHA256,
-			strings.Join(capabilities, ","), strings.Join(knowledge, ","),
-			integrationGrantsDigestHex, inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext,
-			string(rawAttachmentSets),
-			string(rawArtifacts), string(rawDelegationTargets), string(rawSessionContext), string(rawAssistantContext),
-			roleDefinitionRef, roleImageRecipeRef, roleImageArtifactRef, imageReference,
-			imageManifestDigest, roleRuntimeContractSHA256, hex.EncodeToString(inputDigest[:]),
-			runtimeConfigRef, strconv.FormatInt(runtimeConfigVersion, 10), runtimeConfigDigest,
-			providerPolicyRef, strconv.FormatInt(providerPolicyVersion, 10), providerPolicyDigest,
-			configOverlayRef, strconv.FormatInt(configOverlayVersion, 10), configOverlayDigest,
-			runtimeEnvironmentRef, strconv.FormatInt(runtimeEnvironmentVersion, 10),
-			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
-			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
-			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
-			workspacePolicy.Digest,
-			candidate.organizationRef, sttConfiguration.ConfigurationRef, sttConfiguration.RevisionRef,
-			strconv.FormatInt(sttConfiguration.Revision, 10), sttConfiguration.Digest,
-			codexSessionID,
-		)
 		revisionRef, err := newRef("rrev")
 		if err != nil {
 			return commandOutcome{}, err
@@ -681,8 +662,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"attachmentSets":    attachmentSets,
 			"delegationTargets": delegationTargets,
 			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
-			"input": inputMap, "inputDigest": hex.EncodeToString(inputDigest[:]),
-			"revisionDigest": revisionDigestHex, "runtimeRevisionRef": revisionRef,
+			"input": inputMap, "inputDigest": inputDigestHex,
+			"runtimeRevisionRef":     revisionRef,
 			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
 			"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
 			"roleImageRecipeGeneration": roleImageRecipeGeneration,
@@ -710,6 +691,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
 		}
+		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		snapshot["revisionDigest"] = revisionDigestHex
 		rawSnapshot, err := json.Marshal(snapshot)
 		if err != nil || len(rawSnapshot) > 256<<10 {
 			return commandOutcome{}, errs.ErrConflict
@@ -723,7 +709,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			providerAccountRef, providerCredentialRef, providerCredentialRevisionNumber,
 			providerSecretName, providerSecretUID, providerSecretResourceVersion,
 			providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
-			hex.EncodeToString(inputDigest[:]), capabilities, integrationGrantsDigestHex,
+			inputDigestHex, capabilities, integrationGrantsDigestHex,
 			imageReference, imageManifestDigest, roleRuntimeContractRevision,
 			roleRuntimeContractSHA256, runtimeConfigID, providerPolicyID, configOverlayID,
 			runtimeEnvironmentID, environmentBindingID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest,
@@ -966,10 +952,187 @@ func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
 	return policy
 }
 
-func runtimeRevisionDigest(runtimeEnvironmentDigest string, parts ...string) string {
-	material := append(append([]string(nil), parts...), "runtime-environment", runtimeEnvironmentDigest)
-	digest := sha256.Sum256([]byte(strings.Join(material, "\x00")))
-	return hex.EncodeToString(digest[:])
+func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
+	profileRevision := stringMap(values, "profileRevision")
+	if profileRevision == "" {
+		profileRevision = stringMap(values, "runtimeRevision")
+	}
+	input := runtimecontract.RunnerInput{
+		OrganizationRef: stringMap(values, "organizationRef"), RunRef: stringMap(values, "runRef"),
+		ProjectRef: stringMap(values, "projectRef"), NodeRef: stringMap(values, "nodeRef"),
+		SessionRef: stringMap(values, "sessionRef"), TurnRef: stringMap(values, "turnRef"),
+		AgentRef: stringMap(values, "agentRef"), Attempt: int32(runtimeRevisionMapInt64(values, "attempt")),
+		InputDigest: stringMap(values, "inputDigest"), RuntimeRevisionRef: stringMap(values, "runtimeRevisionRef"),
+		RuntimeRevisionVersion: runtimeRevisionMapInt64(values, "runtimeRevisionVersion"),
+		ImageReference:         stringMap(values, "imageReference"), ImageManifestDigest: stringMap(values, "imageManifestDigest"),
+		RoleRuntimeContractRevision: uint64(runtimeRevisionMapInt64(values, "roleRuntimeContractRevision")),
+		RoleRuntimeContractSHA256:   stringMap(values, "roleRuntimeContractSHA256"),
+		RoleDefinitionRef:           stringMap(values, "roleDefinitionRef"),
+		RuntimeProfileRef:           stringMap(values, "runtimeKey"), RuntimeProfileRevision: profileRevision,
+		InstructionRef: stringMap(values, "instructionRef"), InstructionDigest: stringMap(values, "instructionDigest"),
+		PromptTemplateRef: stringMap(values, "promptTemplateRef"), PromptTemplateDigest: stringMap(values, "promptTemplateDigest"),
+		PromptMaterializationDigest:       stringMap(values, "promptMaterializationDigest"),
+		SystemSTTConfigurationRef:         stringMap(values, "systemSTTConfigurationRef"),
+		SystemSTTConfigurationRevisionRef: stringMap(values, "systemSTTConfigurationRevisionRef"),
+		SystemSTTConfigurationVersion:     runtimeRevisionMapInt64(values, "systemSTTConfigurationVersion"),
+		SystemSTTConfigurationDigest:      stringMap(values, "systemSTTConfigurationDigest"),
+		SystemAssistant:                   stringMap(values, "stableKey") == "system-assistant",
+		Instructions:                      stringMap(values, "instructions"), Task: stringMap(values, "task"),
+		AttachmentSetRef: stringMap(values, "attachmentSetRef"), AttachmentSetManifestDigest: stringMap(values, "attachmentSetManifestDigest"),
+		AttachmentContext: stringMap(values, "attachmentContext"), Capabilities: runtimeRevisionStringSlice(values["capabilities"]),
+		Provider: stringMap(values, "runtimeProvider"), Model: stringMap(values, "runtimeModel"),
+		ProviderAccountRef: stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
+		ProviderCredentialRevision: runtimeRevisionMapInt64(values, "providerCredentialRevisionNumber"),
+		ProviderCredentialSHA256:   stringMap(values, "providerCredentialSHA256"),
+		RuntimeConfigRef:           stringMap(values, "runtimeConfigRef"), RuntimeConfigVersion: runtimeRevisionMapInt64(values, "runtimeConfigVersion"), RuntimeConfigDigest: stringMap(values, "runtimeConfigDigest"),
+		ProviderPolicyRef: stringMap(values, "providerPolicyRef"), ProviderPolicyVersion: runtimeRevisionMapInt64(values, "providerPolicyVersion"), ProviderPolicyDigest: stringMap(values, "providerPolicyDigest"),
+		ConfigOverlayRef: stringMap(values, "configOverlayRef"), ConfigOverlayVersion: runtimeRevisionMapInt64(values, "configOverlayVersion"), ConfigOverlayDigest: stringMap(values, "configOverlayDigest"), ConfigOverlay: stringMap(values, "configOverlay"),
+		RuntimeEnvironmentRef: stringMap(values, "runtimeEnvironmentRef"), RuntimeEnvironmentVersion: runtimeRevisionMapInt64(values, "runtimeEnvironmentVersion"), RuntimeEnvironmentDigest: stringMap(values, "runtimeEnvironmentDigest"),
+		EnvironmentBindingRef: stringMap(values, "environmentBindingRef"), EnvironmentBindingVersion: runtimeRevisionMapInt64(values, "environmentBindingVersion"), EnvironmentBindingDigest: stringMap(values, "environmentBindingDigest"),
+		CodexSessionID: stringMap(values, "codexSessionID"),
+	}
+	if value, ok := values["input"].(map[string]any); ok {
+		input.BoundedInput = value
+	}
+	if value, ok := values["environmentImage"].(runtimecontract.RuntimeEnvironmentImage); ok {
+		input.EnvironmentImage = value
+	}
+	if value, ok := values["environmentTools"].([]runtimecontract.RuntimeEnvironmentTool); ok {
+		input.EnvironmentTools = value
+	}
+	if value, ok := values["environmentValues"].([]runtimecontract.RuntimeEnvironmentValue); ok {
+		input.EnvironmentValues = value
+	}
+	if value, ok := values["secretProjections"].([]runtimecontract.RuntimeSecretProjection); ok {
+		input.SecretProjections = value
+	}
+	if value, ok := values["environmentPolicy"].(runtimecontract.RuntimeEnvironmentPolicy); ok {
+		input.EnvironmentPolicy = value
+	}
+	if value, ok := values["effectiveKubernetesAccess"].(runtimecontract.RuntimeKubernetesAccess); ok {
+		input.EffectiveKubernetesAccess = value
+	}
+	if value, ok := values["workspacePolicy"].(entity.RuntimeWorkspacePolicy); ok {
+		input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicy{
+			Revision: value.Revision, Root: value.Root, MaximumWritableBytes: value.MaximumWritableBytes,
+			MaximumFileCount: value.MaximumFileCount, DenialReasons: append([]string(nil), value.DenialReasons...), Digest: value.Digest,
+		}
+		for _, rule := range value.Rules {
+			input.WorkspacePolicy.Rules = append(input.WorkspacePolicy.Rules, runtimecontract.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+		}
+	}
+	input.IntegrationGrants = runtimeRevisionGrants(values["integrationGrants"])
+	input.AttachmentSets = runtimeRevisionAttachmentSets(values["attachmentSets"])
+	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
+	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
+	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
+		context := &runtimecontract.RunnerAssistantContext{
+			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),
+			EntityName: stringMap(value, "entityName"), AllowedOperations: runtimeRevisionStringSlice(value["allowedOperations"]),
+		}
+		if version := runtimeRevisionMapInt64(value, "entityVersion"); version > 0 {
+			context.EntityVersion = &version
+		}
+		input.AssistantContext = context
+	}
+	return runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: stringMap(values, "providerSecretName"), SecretUID: stringMap(values, "providerSecretUID"),
+		SecretResourceVersion: stringMap(values, "providerSecretResourceVersion"),
+	})
+}
+
+func runtimeRevisionMapInt64(values map[string]any, key string) int64 {
+	switch value := values[key].(type) {
+	case int64:
+		return value
+	case int32:
+		return int64(value)
+	case int:
+		return int64(value)
+	case uint64:
+		return int64(value)
+	case uint32:
+		return int64(value)
+	case float64:
+		return int64(value)
+	default:
+		return 0
+	}
+}
+
+func runtimeRevisionStringSlice(value any) []string {
+	switch typed := value.(type) {
+	case []string:
+		return append([]string(nil), typed...)
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				result = append(result, text)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func runtimeRevisionGrants(value any) []runtimecontract.RunnerIntegrationGrant {
+	values, _ := value.([]map[string]string)
+	result := make([]runtimecontract.RunnerIntegrationGrant, 0, len(values))
+	for _, item := range values {
+		result = append(result, runtimecontract.RunnerIntegrationGrant{Ref: item["ref"], ConnectionRef: item["connectionRef"],
+			DefinitionKey: item["definitionKey"], ConnectionName: item["connectionName"], CapabilityKey: item["capabilityKey"],
+			CapabilityName: item["capabilityName"], CapabilityDescription: item["capabilityDescription"], Risk: item["risk"]})
+	}
+	return result
+}
+
+func runtimeRevisionAttachmentSets(value any) []runtimecontract.RunnerAttachmentSet {
+	values, _ := value.([]map[string]string)
+	result := make([]runtimecontract.RunnerAttachmentSet, 0, len(values))
+	for _, item := range values {
+		result = append(result, runtimecontract.RunnerAttachmentSet{Ref: item["ref"], ManifestDigest: item["manifestDigest"],
+			Purpose: item["purpose"], Scope: item["scope"], Provenance: item["provenance"], TurnRef: item["turnRef"]})
+	}
+	return result
+}
+
+func runtimeRevisionArtifacts(value any) []runtimecontract.RunnerInputArtifact {
+	values, _ := value.([]map[string]any)
+	result := make([]runtimecontract.RunnerInputArtifact, 0, len(values))
+	for _, item := range values {
+		result = append(result, runtimecontract.RunnerInputArtifact{
+			Ref: stringMap(item, "ref"), FileName: stringMap(item, "fileName"), MediaType: stringMap(item, "mediaType"),
+			Digest: stringMap(item, "digest"), SizeBytes: runtimeRevisionMapInt64(item, "sizeBytes"),
+			Revision: runtimeRevisionMapInt64(item, "revision"), Version: runtimeRevisionMapInt64(item, "version"),
+			Scope: stringMap(item, "scope"), Position: runtimeRevisionMapInt64(item, "position"), Source: stringMap(item, "source"),
+			AttachmentSetRef: stringMap(item, "attachmentSetRef"), AttachmentPurpose: stringMap(item, "attachmentPurpose"),
+			Provenance: stringMap(item, "provenance"),
+		})
+	}
+	return result
+}
+
+func runtimeRevisionDelegationTargets(value any) []runtimecontract.RunnerDelegationTarget {
+	values, _ := value.([]map[string]string)
+	result := make([]runtimecontract.RunnerDelegationTarget, 0, len(values))
+	for _, item := range values {
+		result = append(result, runtimecontract.RunnerDelegationTarget{Ref: item["ref"], Name: item["name"], Purpose: item["purpose"],
+			RoleDescription: item["roleDescription"], WorkflowStepKey: item["workflowStepKey"], WorkflowStepName: item["workflowStepName"],
+			Instructions: item["instructions"], ExpectedResult: item["expectedResult"]})
+	}
+	return result
+}
+
+func runtimeRevisionSessionContext(value any) []runtimecontract.RunnerSessionMessage {
+	values, _ := value.([]map[string]string)
+	result := make([]runtimecontract.RunnerSessionMessage, 0, len(values))
+	for _, item := range values {
+		result = append(result, runtimecontract.RunnerSessionMessage{Role: item["role"], Content: item["content"]})
+	}
+	return result
 }
 
 func decodeStoredRuntimeEnvironment(rawValues, rawSecrets []byte, values *[]runtimecontract.RuntimeEnvironmentValue, secrets *[]runtimecontract.RuntimeSecretProjection) error {

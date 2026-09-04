@@ -14,9 +14,7 @@ spec:
     - name: runtime-controller-ticket
       expression: >-
         object.metadata.namespace == 'kodex-runtime' &&
-        (object.metadata.name.startsWith('runtime-ticket-') ||
-         (has(object.metadata.labels) &&
-          object.metadata.labels['runtime.kodex.dev/managed'] == 'true'))
+        object.metadata.name.startsWith('runtime-ticket-')
   validations:
     - expression: request.operation == 'CREATE'
       message: runtime execution tickets are immutable and cannot be updated
@@ -340,9 +338,7 @@ spec:
     - name: runtime-revision-projection
       expression: >-
         object.metadata.namespace == 'kodex-runtime' &&
-        (object.metadata.name.startsWith('runtime-projection-') ||
-         (has(object.metadata.labels) &&
-          object.metadata.labels['runtime.kodex.dev/managed'] == 'true'))
+        object.metadata.name.startsWith('runtime-projection-')
   validations:
     - expression: >-
         request.userInfo.username ==
@@ -422,9 +418,7 @@ spec:
       expression: >-
         object.metadata.namespace == 'kodex-runtime' &&
         (object.metadata.name == 'system-assistant-warm' ||
-         object.metadata.name.matches('^runtime-turn-[a-f0-9]{16}$') ||
-         (has(object.metadata.labels) &&
-          object.metadata.labels['runtime.kodex.dev/managed'] == 'true'))
+         object.metadata.name.matches('^runtime-turn-[a-f0-9]{16}$'))
   variables:
     - name: ticketVolumes
       expression: >-

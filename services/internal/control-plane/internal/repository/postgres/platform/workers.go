@@ -151,19 +151,6 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	resolvedInstructionsSum := sha256.Sum256([]byte(resolvedInstructions))
 	resolvedInstructionsDigest := hex.EncodeToString(resolvedInstructionsSum[:])
 	workspacePolicy := runtimeWorkspacePolicy()
-	revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
-		scope.organizationRef, assistant.DesiredRuntimeRevision, profileRevision, provider, model, promptRef, promptDigest,
-		resolvedInstructionsDigest,
-		providerAccountRef, providerCredentialRef, providerSecretName, providerSecretUID,
-		providerSecretResourceVersion, providerCredentialSHA256,
-		ownerInstructions, roleDefinitionRef, repository.roleImages.DefaultImageReference,
-		repository.roleImages.DefaultImageDigest, repository.roleImages.RoleRuntimeContractSHA256,
-		runtimeConfigRef, runtimeConfigDigest, providerPolicyRef, providerPolicyDigest,
-		configOverlayRef, configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentDigest,
-		environmentBindingRef, environmentBindingDigest,
-		environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
-		environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest, workspacePolicy.Digest,
-	}, "\x00")))
 	snapshot := map[string]any{
 		"organizationRef": scope.organizationRef, "assistantRef": assistant.Ref, "agentRef": assistant.Ref,
 		"stableKey": assistant.StableKey, "sessionRef": systemSessionRef,
@@ -214,8 +201,12 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"environmentPolicy":           environmentPolicy,
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"workspacePolicy":             workspacePolicy,
-		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),
 	}
+	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	snapshot["revisionDigest"] = revisionDigest
 	if err := tx.Commit(ctx); err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}

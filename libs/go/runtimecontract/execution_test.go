@@ -290,6 +290,7 @@ func validRunnerInputFixture() RunnerInput {
 	}
 	input.EffectiveKubernetesAccess, _ = RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
 		RuntimeServiceAccountName(input.LeaseRef), RuntimeTurnPodName(input.LeaseRef))
+	input.InputDigest, _ = RuntimeBoundedInputDigest(input.BoundedInput)
 	refreshRunnerInputBindings(&input)
 	return input
 }

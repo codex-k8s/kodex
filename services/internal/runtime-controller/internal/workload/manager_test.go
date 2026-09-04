@@ -394,6 +394,7 @@ func managedOAuthRefreshFixture(t *testing.T) (*fake.Clientset, *Manager, runtim
 	}
 	execution := testExecution(false)
 	execution.Revision.ProviderCredential.ContentSha256 = oldDigestHex
+	sealTestTurnExecution(execution)
 	input, binding, err := manager.BuildTurnInput(execution)
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
@@ -453,6 +454,7 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
 	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
+	sealTestTurnExecution(execution)
 	input, binding, err := manager.BuildTurnInput(execution)
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
@@ -534,6 +536,7 @@ func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
 		t.Fatalf("RuntimeEnvironmentDigest() error = %v", err)
 	}
 	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
+	sealTestTurnExecution(execution)
 	input, binding, err := manager.BuildTurnInput(execution)
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
@@ -646,6 +649,7 @@ func TestBuildTurnInputCarriesSessionHistoryTurnLineage(t *testing.T) {
 		Scope: runtimecontract.AttachmentScopeSession, Provenance: "SESSION_HISTORY", TurnRef: "turn_history1",
 	})
 	execution.Revision.InputArtifacts = append(execution.Revision.InputArtifacts, historyArtifact)
+	sealTestTurnExecution(execution)
 
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(execution)
@@ -747,6 +751,7 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 				execution.Revision.AttachmentSets = nil
 				execution.Revision.InputArtifacts = nil
 			}
+			sealTestTurnExecution(execution)
 			manager := newTestManager(t, fake.NewSimpleClientset())
 			input, _, err := manager.BuildTurnInput(execution)
 			if err != nil {
@@ -1147,6 +1152,51 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	}
 }
 
+func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
+	t.Parallel()
+	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
+		"missing digest": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RevisionDigest = "" },
+		"revision":       func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.Ref = "rrev_ijklmnop" },
+		"image":          func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RoleImageRecipeGeneration++ },
+		"environment": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.EnvironmentTools[0].UsageHint = "changed"
+		},
+		"provider": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.ProviderCredential.CredentialRevision++
+		},
+		"role": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RoleRuntimeContractRevision++ },
+		"prompt": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.PromptTemplateDigest = strings.Repeat("e", 64)
+		},
+		"workspace": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.WorkspacePolicy.MaximumFileCount-- },
+		"MCP grant": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.IntegrationGrants = append(revision.IntegrationGrants, &controlplanev1.IntegrationGrant{
+				Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "calendar",
+				ConnectionName: "Calendar", CapabilityKey: "calendar.read", CapabilityName: "Read calendar", Enabled: true,
+			})
+		},
+		"STT": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
+			revision.Capabilities = append(revision.Capabilities, &controlplanev1.PlatformCapability{Key: "platform.stt.use"})
+			revision.SystemSttConfigurationRef = "sttcfg_abcdefgh"
+			revision.SystemSttConfigurationRevisionRef = "sttrev_abcdefgh"
+			revision.SystemSttConfigurationVersion = 1
+			revision.SystemSttConfigurationDigest = strings.Repeat("9", 64)
+		},
+	}
+	for name, mutate := range tests {
+		name, mutate := name, mutate
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			execution := testExecution(false)
+			mutate(execution.Revision)
+			manager := newTestManager(t, fake.NewSimpleClientset())
+			if _, _, err := manager.BuildTurnInput(execution); err == nil || !strings.Contains(err.Error(), "runtime revision digest mismatch") {
+				t.Fatalf("BuildTurnInput() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1171,6 +1221,17 @@ func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
 	}
 	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeTurnPodName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("Pod was created from a stale projection: %v", err)
+	}
+}
+
+func TestKubernetesMaterializationPayloadLimitFailsClosed(t *testing.T) {
+	t.Parallel()
+	oversized := strings.Repeat("x", maximumKubernetesProjectionBytes)
+	if stringDataSize(map[string]string{"runtime.json": oversized}) <= maximumKubernetesProjectionBytes {
+		t.Fatal("oversized ConfigMap projection was accepted")
+	}
+	if byteDataSize(map[string][]byte{"runtime.json": []byte(oversized)}) <= maximumKubernetesProjectionBytes {
+		t.Fatal("oversized Secret projection was accepted")
 	}
 }
 
@@ -1209,12 +1270,12 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	retryExecution.Revision.Ref = "revision_ijklmnop"
 	retryExecution.Revision.Version = 2
 	retryExecution.Revision.Attempt = 2
-	retryExecution.Revision.RevisionDigest = strings.Repeat("f", 64)
 	retryExecution.Lease = &controlplanev1.WorkLease{Ref: "lease_ijklmnop", Fence: "fence-2", Generation: 2}
 	policy, _ := runtimeEnvironmentPolicyFromProto(retryExecution.Revision.EnvironmentPolicy)
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
 		runtimecontract.RuntimeServiceAccountName(retryExecution.Lease.Ref), runtimecontract.RuntimeTurnPodName(retryExecution.Lease.Ref))
 	retryExecution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
+	sealTestTurnExecution(retryExecution)
 	retry, retryBinding, err := manager.BuildTurnInput(retryExecution)
 	if err != nil || manager.EnsureTurn(context.Background(), retry, retryBinding) != nil {
 		t.Fatalf("materialize retry attempt: %v", err)
@@ -1387,7 +1448,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
 			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "runtime_abcdefgh", Revision: "revision-1", Provider: "openai", Model: "codex"},
-			InputDigest: strings.Repeat("0", 64), RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
+			RevisionDigest: strings.Repeat("a", 64), SystemAssistant: systemAssistant,
 			RoleDefinitionRef: "roledef_abcdefgh", InstructionRef: "instruction_abcdefgh", InstructionDigest: strings.Repeat("4", 64),
 			PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("5", 64), PromptMaterializationDigest: strings.Repeat("6", 64),
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
@@ -1434,6 +1495,8 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: hex.EncodeToString(workspaceDigest[:]), DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}, Rules: []*controlplanev1.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/knowledge", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE}}}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
 	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools, policy)
+	execution.Revision.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(map[string]any{})
+	sealTestTurnExecution(execution)
 	return execution
 }
 
@@ -1453,7 +1516,57 @@ func testWarmRevision() *controlplanev1.RuntimeRevisionSnapshot {
 		panic(err)
 	}
 	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
+	sealTestWarmRevision(execution.Revision)
 	return execution.Revision
+}
+
+func sealTestTurnExecution(execution *controlplanev1.ClaimedExecution) {
+	manager := &Manager{config: testManagerConfig()}
+	input, err := manager.baseInput(execution.Revision, runtimecontract.RunnerModeTurn)
+	if err != nil {
+		panic(err)
+	}
+	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef = execution.Run.Ref, execution.Node.Ref, execution.Revision.SessionRef, execution.Revision.TurnRef
+	input.ProjectRef, input.AgentRef, input.Attempt = execution.Run.ProjectRef, execution.Revision.AgentRef, execution.Revision.Attempt
+	input.InputDigest = execution.Revision.InputDigest
+	input.LeaseRef, input.LeaseFence, input.LeaseGeneration = execution.Lease.Ref, execution.Lease.Fence, execution.Lease.Generation
+	input.Task, input.BoundedInput = execution.Task, map[string]any{}
+	if execution.Revision.BoundedInput != nil {
+		input.BoundedInput = execution.Revision.BoundedInput.AsMap()
+	}
+	manager.addCatalog(&input, execution.Revision)
+	binding, err := providerSecretBinding(execution.Revision)
+	if err != nil {
+		panic(err)
+	}
+	digest, err := runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: binding.Name, SecretUID: binding.UID, SecretResourceVersion: binding.ResourceVersion,
+	})
+	if err != nil {
+		panic(err)
+	}
+	execution.Revision.RevisionDigest = digest
+}
+
+func sealTestWarmRevision(revision *controlplanev1.RuntimeRevisionSnapshot) {
+	manager := &Manager{config: testManagerConfig()}
+	input, err := manager.baseInput(revision, runtimecontract.RunnerModeWarm)
+	if err != nil {
+		panic(err)
+	}
+	input.SessionRef, input.AgentRef = revision.SessionRef, revision.AgentRef
+	manager.addCatalog(&input, revision)
+	binding, err := providerSecretBinding(revision)
+	if err != nil {
+		panic(err)
+	}
+	digest, err := runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: binding.Name, SecretUID: binding.UID, SecretResourceVersion: binding.ResourceVersion,
+	})
+	if err != nil {
+		panic(err)
+	}
+	revision.RevisionDigest = digest
 }
 
 func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {

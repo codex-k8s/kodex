@@ -305,6 +305,10 @@ func (input RunnerInput) Validate() error {
 			strings.TrimSpace(input.Task) == "" || len(input.Task) > 1<<20 {
 			return errors.New("runner turn binding is invalid")
 		}
+		inputDigest, err := RuntimeBoundedInputDigest(input.BoundedInput)
+		if err != nil || inputDigest != input.InputDigest {
+			return errors.New("runner bounded input digest is invalid")
+		}
 		executionDigest, mcpDigest, err := RuntimeExecutionBindingDigests(input)
 		if err != nil || input.ExecutionBindingDigest != executionDigest || input.MCPBindingDigest != mcpDigest {
 			return errors.New("runner execution binding digest is invalid")

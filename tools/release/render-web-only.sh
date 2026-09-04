@@ -622,6 +622,10 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
   any(.[];
     .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
+  any(.[];
+    .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-runtime") and
   all(.[];
