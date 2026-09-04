@@ -414,6 +414,9 @@ func retryOperationLockRelease(ctx context.Context, retryInterval time.Duration,
 	}
 	var lastErr error
 	for {
+		if lastErr != nil && ctx.Err() != nil {
+			return lastErr
+		}
 		if err := release(ctx); err == nil {
 			return nil
 		} else {
