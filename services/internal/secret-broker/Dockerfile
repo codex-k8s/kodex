@@ -13,6 +13,7 @@ COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/secretbrokerapi/ libs/go/secretbrokerapi/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sttapi/ libs/go/sttapi/
 COPY services/internal/secret-broker/ services/internal/secret-broker/
 WORKDIR /workspace/services/internal/secret-broker
 RUN test "$(go env GOVERSION)" = "go1.26.6"
