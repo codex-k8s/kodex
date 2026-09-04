@@ -16,6 +16,7 @@ const maximumBindingWindow = 366 * 24 * time.Hour
 
 var definitions = []entity.PermissionDefinition{
 	permission("organization.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
+	permission("platform.stt.use", "WRITE", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("organization.manage", "ADMIN", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),

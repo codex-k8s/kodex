@@ -12,7 +12,7 @@ JOIN control_plane.projects project ON project.id = secret.project_id
 LEFT JOIN control_plane.runtime_secret_revisions revision
   ON revision.secret_id = secret.id AND revision.revision = secret.current_revision
 WHERE secret.organization_id = @organization_id::uuid
-  AND project.ref = @project_ref
+  AND (@project_ref = '' OR project.ref = @project_ref)
   AND secret.state <> 'PROVISIONING'
   AND (@query = '' OR secret.name ILIKE '%' || @query || '%' OR secret.description ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR secret.ref > @cursor_ref)

@@ -142,7 +142,7 @@ func main() {
 		{
 			ProducerID: "control-plane.oidc-stt", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
 			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
-			Operations: controlplaneclient.STTGatewayOperations(), ProjectRequired: requiredProjects(controlplaneclient.STTGatewayOperations()),
+			Operations:       controlplaneclient.STTGatewayOperations(),
 			AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"}, TargetWorkloadID: sttID,
 			TargetSPIFFEID: sttPeer, TargetAudience: sttAudience, TargetTLSServerName: sttTLS,
 		},
@@ -176,7 +176,7 @@ func main() {
 		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
 		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
-	value := document{Version: 1, PolicyRevision: 44, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 45, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -259,7 +259,7 @@ func main() {
 func continuationWorker(producerID string, operations map[string]string, targetID, targetPeer, targetAudience, targetTLS string) profile {
 	result := targetedWorker(sttID, producerID, operations, targetID, targetPeer, targetAudience, targetTLS)
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
-	result.ProjectRequired = requiredProjects(operations)
+	result.ProjectRequired = map[string]struct{}{}
 	result.Continuation = &continuationProfile{ParentOperationID: "platform.stt.transcribe", ParentFullMethod: sttTranscribeMethod}
 	return result
 }
@@ -304,6 +304,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
+		"platform.stt.transcribe":                              "stt.transcribe",
 		"platform.command.agents.avatar.upload":                "agent.avatar.manage",
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
 		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
@@ -362,7 +363,9 @@ func delegatedTargetedWorker(
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
 	result.ProjectRequired = make(map[string]struct{}, len(operations))
 	for operation := range operations {
-		result.ProjectRequired[operation] = struct{}{}
+		if operation != "platform.runtime.credentials.system-assistant.materialize" {
+			result.ProjectRequired[operation] = struct{}{}
+		}
 	}
 	return result
 }

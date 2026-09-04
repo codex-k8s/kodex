@@ -35,20 +35,9 @@ JOIN control_plane.runtime_environment_versions current_version ON current_versi
 LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = current_version.role_image_artifact_id
 LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id
 WHERE environment.organization_id = @organization_id::uuid
-  AND project.ref = @project_ref
+  AND (@project_ref = '' OR project.ref = @project_ref)
   AND environment.state <> 'DELETED'
   AND (@query = '' OR environment.name ILIKE '%' || @query || '%' OR environment.description ILIKE '%' || @query || '%')
-  AND (@cursor_ref = '' OR (lower(environment.name), environment.ref) > (
-      SELECT lower(cursor.name), cursor.ref
-      FROM control_plane.runtime_environment_sets cursor
-      WHERE cursor.organization_id = @organization_id::uuid AND cursor.ref = @cursor_ref
-  ))
-  AND (@platform_role IN ('OWNER', 'ADMINISTRATOR') OR EXISTS (
-      SELECT 1 FROM control_plane.memberships membership
-      WHERE membership.project_id = environment.project_id
-        AND membership.subject_id = @actor_id::uuid
-        AND membership.active
-        AND 'VIEW' = ANY(membership.permissions)
-  ))
-ORDER BY lower(environment.name), environment.ref
+  AND (@cursor_ref = '' OR environment.ref > @cursor_ref)
+ORDER BY environment.ref
 LIMIT @page_size;

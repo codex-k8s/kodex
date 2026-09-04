@@ -76,6 +76,7 @@ const (
 	PlatformQueryService_ListRuntimeSecrets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
 	PlatformQueryService_GetRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
 	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
+	PlatformQueryService_ListManagedConfigurations_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
 	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
 )
@@ -143,6 +144,7 @@ type PlatformQueryServiceClient interface {
 	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
+	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
 }
@@ -725,6 +727,16 @@ func (c *platformQueryServiceClient) ListManagedConfigurationHistory(ctx context
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListManagedConfigurationsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListManagedConfigurations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetManagedConfigurationImpactResponse)
@@ -808,6 +820,7 @@ type PlatformQueryServiceServer interface {
 	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
+	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
@@ -990,6 +1003,9 @@ func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context,
 }
 func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurationHistory not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurations not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetManagedConfigurationImpact not implemented")
@@ -2044,6 +2060,24 @@ func _PlatformQueryService_ListManagedConfigurationHistory_Handler(srv interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListManagedConfigurations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListManagedConfigurationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListManagedConfigurations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurations(ctx, req.(*ListManagedConfigurationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetManagedConfigurationImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetManagedConfigurationImpactRequest)
 	if err := dec(in); err != nil {
@@ -2314,6 +2348,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListManagedConfigurationHistory",
 			Handler:    _PlatformQueryService_ListManagedConfigurationHistory_Handler,
+		},
+		{
+			MethodName: "ListManagedConfigurations",
+			Handler:    _PlatformQueryService_ListManagedConfigurations_Handler,
 		},
 		{
 			MethodName: "GetManagedConfigurationImpact",

@@ -460,6 +460,23 @@ func (service *Service) ListModelCapabilities(ctx context.Context, p value.Princ
 	filter.Query = strings.TrimSpace(filter.Query)
 	return service.repository.ListModelCapabilities(ctx, p, strings.TrimSpace(definitionKey), strings.TrimSpace(accountRef), filter)
 }
+func (service *Service) ListManagedConfigurations(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if len(filter.Query) > 200 {
+		return nil, 0, "", errs.ErrInvalid
+	}
+	switch filter.Category {
+	case "", "PROMPT_TEMPLATE", "ROLE_IMAGE", "INTEGRATION_DEFINITION", "SYSTEM_STT":
+	default:
+		return nil, 0, "", errs.ErrInvalid
+	}
+	return service.repository.ListManagedConfigurations(ctx, p, filter)
+}
+
 func (service *Service) ListManagedConfigurationHistory(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

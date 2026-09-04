@@ -14,10 +14,19 @@ JOIN control_plane.runs root_run ON root_run.id = revision.root_run_id
 JOIN control_plane.sessions session ON session.id = revision.session_id
 LEFT JOIN control_plane.session_turns turn ON turn.id = revision.turn_id
 JOIN control_plane.provider_accounts account ON account.id = revision.provider_account_id
+JOIN control_plane.agents agent ON agent.id = revision.agent_id AND agent.organization_id = revision.organization_id
 WHERE lease.organization_id = @organization_id::uuid
   AND revision.organization_id = @organization_id::uuid
   AND root_run.initiated_by = @actor_id::uuid
-  AND revision.project_id = @project_id::uuid
+  AND ((NOT @system_assistant::boolean AND revision.project_id = @project_id::uuid)
+    OR (@system_assistant::boolean AND @project_id::uuid IS NULL
+      AND revision.project_id IS NULL AND root_run.project_id IS NULL AND session.project_id IS NULL
+      AND agent.system_key = 'system-assistant' AND agent.project_id IS NULL
+      AND session.target_type = 'SYSTEM_ASSISTANT' AND session.target_ref = 'system-assistant'
+      AND session.created_by = @actor_id::uuid AND session.state = 'ACTIVE'
+      AND session.organization_id = revision.organization_id AND root_run.organization_id = revision.organization_id
+      AND revision.run_id = root_run.id AND root_run.session_id = session.id
+      AND turn.session_id = session.id AND turn.run_id = root_run.id AND turn.organization_id = revision.organization_id))
   AND lease.ref = @lease_ref
   AND lease.workload_instance = @workload_instance
   AND lease.generation = @generation

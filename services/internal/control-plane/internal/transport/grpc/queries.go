@@ -156,11 +156,11 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
+	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Memberships = append(response.Memberships, castMembership(item))
 	}
