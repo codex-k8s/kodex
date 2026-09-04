@@ -495,6 +495,9 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 			OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor"),
 			InputDigest: mapString(item, "inputDigest"), ScheduleRevisionRef: mapString(item, "scheduleRevisionRef"),
 			ScheduleRevision: mapInt64(item, "scheduleRevision"), ScheduleRevisionDigest: mapString(item, "scheduleRevisionDigest"),
+			Attempt: int32(mapInt64(item, "attempt")), TargetRef: mapString(item, "targetRef"),
+			TargetVersion: mapInt64(item, "targetVersion"), TargetDigest: mapString(item, "targetDigest"),
+			AutomationTextDigest: mapString(item, "automationTextDigest"), PromptInputsDigest: mapString(item, "promptInputsDigest"),
 		})
 	}
 	return response, nil
@@ -507,6 +510,33 @@ func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request
 		return nil, err
 	}
 	return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}, nil
+}
+
+func (server *Server) RenewScheduleOccurrence(ctx context.Context, request *controlplanev1.RenewScheduleOccurrenceRequest) (*controlplanev1.RenewScheduleOccurrenceResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_RenewScheduleOccurrence_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.RenewScheduleOccurrence(ctx, p, command.OccurrenceInput{
+		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.RenewScheduleOccurrenceResponse{Lease: castLease(result)}, nil
+}
+
+func (server *Server) FailScheduleOccurrence(ctx context.Context, request *controlplanev1.FailScheduleOccurrenceRequest) (*controlplanev1.FailScheduleOccurrenceResponse, error) {
+	payload := command.OccurrenceInput{
+		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
+		Generation: request.GetGeneration(), SafeErrorCode: request.GetSafeErrorCode(), Retryable: request.GetRetryable(),
+	}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_FailScheduleOccurrence_FullMethodName,
+		command.FailScheduleOccurrence, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.FailScheduleOccurrenceResponse{State: mapString(result.Runtime, "state"), Attempt: int32(mapInt64(result.Runtime, "attempt"))}, nil
 }
 
 func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {

@@ -106,6 +106,7 @@ const (
 	CompleteSessionObjectDeletion Kind = "COMPLETE_SESSION_OBJECT_DELETION"
 	FailSessionArchiveTask        Kind = "FAIL_SESSION_ARCHIVE_TASK"
 	MaterializeOccurrence         Kind = "MATERIALIZE_SCHEDULE_OCCURRENCE"
+	FailScheduleOccurrence        Kind = "FAIL_SCHEDULE_OCCURRENCE"
 	CompleteConnectionTest        Kind = "COMPLETE_INTEGRATION_CONNECTION_TEST"
 	CompleteIntegrationInvocation Kind = "COMPLETE_INTEGRATION_INVOCATION"
 	CompleteInteractionDelivery   Kind = "COMPLETE_INTERACTION_DELIVERY"
@@ -216,8 +217,11 @@ type AttachmentSetDraftInput struct {
 }
 type ScheduleInput struct {
 	Ref, ProjectRef, Name, Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone, SessionPolicy, NotificationPolicy string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, AutomationText                                        string
 	Target                                                                                                           entity.RunTarget
-	Input                                                                                                            map[string]any
+	TargetVersion                                                                                                    int64
+	TargetDigest                                                                                                     string
+	Input, PromptInputs                                                                                              map[string]any
 	Enabled                                                                                                          bool
 }
 type ProviderAccountInput struct {
@@ -318,8 +322,9 @@ type SessionArchiveTaskInput struct {
 }
 type WarmRuntimeInput struct{ WorkloadInstance, RuntimeRevision, State, SafeErrorCode string }
 type OccurrenceInput struct {
-	OccurrenceRef, LeaseRef, Fence string
-	Generation                     int64
+	OccurrenceRef, LeaseRef, Fence, SafeErrorCode string
+	Generation                                    int64
+	Retryable                                     bool
 }
 type IntegrationInvocationInput struct {
 	InvocationRef, LeaseRef, Fence, ResultSummary, SafeErrorCode          string

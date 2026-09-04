@@ -15,7 +15,7 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
 		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
-		command.ProposeRunMetadata, command.RecordRunToolCall, command.MaterializeOccurrence,
+		command.ProposeRunMetadata, command.RecordRunToolCall, command.MaterializeOccurrence, command.FailScheduleOccurrence,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask,

@@ -1451,7 +1451,7 @@ func (repository *Repository) GetSchedule(ctx context.Context, principal value.P
 
 func scanSchedule(row rowScanner) (entity.Schedule, error) {
 	var item entity.Schedule
-	var input, currentRevisionInput []byte
+	var input, currentRevisionInput, currentRevisionPromptInputs []byte
 	var continueSessionExpected bool
 	var continueSessionRef *string
 	var canManage bool
@@ -1464,8 +1464,12 @@ func scanSchedule(row rowScanner) (entity.Schedule, error) {
 		&item.CurrentRevision.Name, &item.CurrentRevision.Target.Type, &item.CurrentRevision.Target.Ref,
 		&item.CurrentRevision.Preset, &item.CurrentRevision.CronExpression, &item.CurrentRevision.Timezone,
 		&currentRevisionInput, &item.CurrentRevision.SessionPolicy,
-		&item.CurrentRevision.NotificationPolicy, &item.CurrentRevision.CreatedAt,
-		&continueSessionExpected, &continueSessionRef, &canManage,
+		&item.CurrentRevision.NotificationPolicy, &item.CurrentRevision.DSTGapPolicy,
+		&item.CurrentRevision.DSTFoldPolicy, &item.CurrentRevision.MisfirePolicy,
+		&item.CurrentRevision.OverlapPolicy, &item.CurrentRevision.TargetVersion,
+		&item.CurrentRevision.TargetDigest, &item.CurrentRevision.AutomationText,
+		&currentRevisionPromptInputs, &item.CurrentRevision.CreatedAt,
+		&continueSessionExpected, &continueSessionRef, &item.LastOutcome, &canManage,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Schedule{}, errs.ErrNotFound
@@ -1474,9 +1478,14 @@ func scanSchedule(row rowScanner) (entity.Schedule, error) {
 	}
 	if err := attachScheduleDisplay(&item); err != nil ||
 		json.Unmarshal(input, &item.Input) != nil ||
-		json.Unmarshal(currentRevisionInput, &item.CurrentRevision.Input) != nil {
+		json.Unmarshal(currentRevisionInput, &item.CurrentRevision.Input) != nil ||
+		json.Unmarshal(currentRevisionPromptInputs, &item.CurrentRevision.PromptInputs) != nil {
 		return entity.Schedule{}, errs.ErrUnavailable
 	}
+	item.DSTGapPolicy, item.DSTFoldPolicy = item.CurrentRevision.DSTGapPolicy, item.CurrentRevision.DSTFoldPolicy
+	item.MisfirePolicy, item.OverlapPolicy = item.CurrentRevision.MisfirePolicy, item.CurrentRevision.OverlapPolicy
+	item.TargetVersion, item.TargetDigest = item.CurrentRevision.TargetVersion, item.CurrentRevision.TargetDigest
+	item.AutomationText, item.PromptInputs = item.CurrentRevision.AutomationText, item.CurrentRevision.PromptInputs
 	if continueSessionExpected {
 		if continueSessionRef == nil || strings.TrimSpace(*continueSessionRef) == "" {
 			return entity.Schedule{}, errs.ErrUnavailable

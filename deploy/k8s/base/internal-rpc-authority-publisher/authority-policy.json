@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 43,
+  "policy_revision": 44,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -39,7 +39,9 @@
         ],
         "allowed_operation_ids": [
           "platform.runtime.schedules.claim",
-          "platform.runtime.schedules.materialize"
+          "platform.runtime.schedules.fail",
+          "platform.runtime.schedules.materialize",
+          "platform.runtime.schedules.renew"
         ],
         "server_resolved_fields": [
           "actor",
@@ -421,6 +423,7 @@
           "platform.query.schedule-runs.list",
           "platform.query.schedules.get",
           "platform.query.schedules.list",
+          "platform.query.schedules.preview",
           "platform.query.search",
           "platform.query.system-stt.get",
           "platform.query.template-variables.list",
@@ -7586,6 +7589,42 @@
         }
       },
       {
+        "operation_id": "platform.query.schedules.preview",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/PreviewSchedule",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.schedules.preview",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.query.search",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -9281,6 +9320,41 @@
         }
       },
       {
+        "operation_id": "platform.runtime.schedules.fail",
+        "caller_workload_id": "automation-scheduler",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/FailScheduleOccurrence",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.schedules.fail",
+        "authority_proof_producer_id": "control-plane.automation",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.runtime.schedules.materialize",
         "caller_workload_id": "automation-scheduler",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
@@ -9292,6 +9366,41 @@
         "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.runtime.schedules.materialize",
+        "authority_proof_producer_id": "control-plane.automation",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime.schedules.renew",
+        "caller_workload_id": "automation-scheduler",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/RenewScheduleOccurrence",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime.schedules.renew",
         "authority_proof_producer_id": "control-plane.automation",
         "authority_sources": [
           "DOMAIN_STATE"

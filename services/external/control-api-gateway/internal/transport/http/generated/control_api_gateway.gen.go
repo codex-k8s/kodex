@@ -2934,6 +2934,57 @@ func (e ScheduleDayOfWeek) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleDstFoldPolicy.
+const (
+	ScheduleDstFoldPolicyRUNONCEEARLIEST ScheduleDstFoldPolicy = "RUN_ONCE_EARLIEST"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleDstFoldPolicy enum.
+func (e ScheduleDstFoldPolicy) Valid() bool {
+	switch e {
+	case ScheduleDstFoldPolicyRUNONCEEARLIEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleDstGapPolicy.
+const (
+	ScheduleDstGapPolicySHIFTFORWARD ScheduleDstGapPolicy = "SHIFT_FORWARD"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleDstGapPolicy enum.
+func (e ScheduleDstGapPolicy) Valid() bool {
+	switch e {
+	case ScheduleDstGapPolicySHIFTFORWARD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleMisfirePolicy.
+const (
+	ScheduleMisfirePolicyCATCHUPONE ScheduleMisfirePolicy = "CATCH_UP_ONE"
+	ScheduleMisfirePolicyCOALESCE   ScheduleMisfirePolicy = "COALESCE"
+	ScheduleMisfirePolicySKIP       ScheduleMisfirePolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleMisfirePolicy enum.
+func (e ScheduleMisfirePolicy) Valid() bool {
+	switch e {
+	case ScheduleMisfirePolicyCATCHUPONE:
+		return true
+	case ScheduleMisfirePolicyCOALESCE:
+		return true
+	case ScheduleMisfirePolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleNotificationPolicy.
 const (
 	ScheduleNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
@@ -2946,6 +2997,24 @@ func (e ScheduleNotificationPolicy) Valid() bool {
 	case ScheduleNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS:
 		return true
 	case ScheduleNotificationPolicyCONTROLCENTERONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleOverlapPolicy.
+const (
+	ScheduleOverlapPolicyALLOW  ScheduleOverlapPolicy = "ALLOW"
+	ScheduleOverlapPolicyFORBID ScheduleOverlapPolicy = "FORBID"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleOverlapPolicy enum.
+func (e ScheduleOverlapPolicy) Valid() bool {
+	switch e {
+	case ScheduleOverlapPolicyALLOW:
+		return true
+	case ScheduleOverlapPolicyFORBID:
 		return true
 	default:
 		return false
@@ -3051,6 +3120,57 @@ func (e ScheduleInputDayOfWeek) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleInputDstFoldPolicy.
+const (
+	ScheduleInputDstFoldPolicyRUNONCEEARLIEST ScheduleInputDstFoldPolicy = "RUN_ONCE_EARLIEST"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputDstFoldPolicy enum.
+func (e ScheduleInputDstFoldPolicy) Valid() bool {
+	switch e {
+	case ScheduleInputDstFoldPolicyRUNONCEEARLIEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleInputDstGapPolicy.
+const (
+	ScheduleInputDstGapPolicySHIFTFORWARD ScheduleInputDstGapPolicy = "SHIFT_FORWARD"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputDstGapPolicy enum.
+func (e ScheduleInputDstGapPolicy) Valid() bool {
+	switch e {
+	case ScheduleInputDstGapPolicySHIFTFORWARD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleInputMisfirePolicy.
+const (
+	ScheduleInputMisfirePolicyCATCHUPONE ScheduleInputMisfirePolicy = "CATCH_UP_ONE"
+	ScheduleInputMisfirePolicyCOALESCE   ScheduleInputMisfirePolicy = "COALESCE"
+	ScheduleInputMisfirePolicySKIP       ScheduleInputMisfirePolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputMisfirePolicy enum.
+func (e ScheduleInputMisfirePolicy) Valid() bool {
+	switch e {
+	case ScheduleInputMisfirePolicyCATCHUPONE:
+		return true
+	case ScheduleInputMisfirePolicyCOALESCE:
+		return true
+	case ScheduleInputMisfirePolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleInputNotificationPolicy.
 const (
 	ScheduleInputNotificationPolicyCONTROLCENTERANDOPTIONALCHANNELS ScheduleInputNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
@@ -3069,24 +3189,45 @@ func (e ScheduleInputNotificationPolicy) Valid() bool {
 	}
 }
 
+// Defines values for ScheduleInputOverlapPolicy.
+const (
+	ScheduleInputOverlapPolicyALLOW  ScheduleInputOverlapPolicy = "ALLOW"
+	ScheduleInputOverlapPolicyFORBID ScheduleInputOverlapPolicy = "FORBID"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleInputOverlapPolicy enum.
+func (e ScheduleInputOverlapPolicy) Valid() bool {
+	switch e {
+	case ScheduleInputOverlapPolicyALLOW:
+		return true
+	case ScheduleInputOverlapPolicyFORBID:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleInputPreset.
 const (
-	DAILY    ScheduleInputPreset = "DAILY"
-	HOURLY   ScheduleInputPreset = "HOURLY"
-	WEEKDAYS ScheduleInputPreset = "WEEKDAYS"
-	WEEKLY   ScheduleInputPreset = "WEEKLY"
+	ScheduleInputPresetCUSTOM   ScheduleInputPreset = "CUSTOM"
+	ScheduleInputPresetDAILY    ScheduleInputPreset = "DAILY"
+	ScheduleInputPresetHOURLY   ScheduleInputPreset = "HOURLY"
+	ScheduleInputPresetWEEKDAYS ScheduleInputPreset = "WEEKDAYS"
+	ScheduleInputPresetWEEKLY   ScheduleInputPreset = "WEEKLY"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleInputPreset enum.
 func (e ScheduleInputPreset) Valid() bool {
 	switch e {
-	case DAILY:
+	case ScheduleInputPresetCUSTOM:
 		return true
-	case HOURLY:
+	case ScheduleInputPresetDAILY:
 		return true
-	case WEEKDAYS:
+	case ScheduleInputPresetHOURLY:
 		return true
-	case WEEKLY:
+	case ScheduleInputPresetWEEKDAYS:
+		return true
+	case ScheduleInputPresetWEEKLY:
 		return true
 	default:
 		return false
@@ -3129,6 +3270,255 @@ func (e ScheduleInputTargetType) Valid() bool {
 	}
 }
 
+// Defines values for SchedulePreviewDstFoldPolicy.
+const (
+	SchedulePreviewDstFoldPolicyRUNONCEEARLIEST SchedulePreviewDstFoldPolicy = "RUN_ONCE_EARLIEST"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewDstFoldPolicy enum.
+func (e SchedulePreviewDstFoldPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewDstFoldPolicyRUNONCEEARLIEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewDstGapPolicy.
+const (
+	SchedulePreviewDstGapPolicySHIFTFORWARD SchedulePreviewDstGapPolicy = "SHIFT_FORWARD"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewDstGapPolicy enum.
+func (e SchedulePreviewDstGapPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewDstGapPolicySHIFTFORWARD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewMisfirePolicy.
+const (
+	SchedulePreviewMisfirePolicyCATCHUPONE SchedulePreviewMisfirePolicy = "CATCH_UP_ONE"
+	SchedulePreviewMisfirePolicyCOALESCE   SchedulePreviewMisfirePolicy = "COALESCE"
+	SchedulePreviewMisfirePolicySKIP       SchedulePreviewMisfirePolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewMisfirePolicy enum.
+func (e SchedulePreviewMisfirePolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewMisfirePolicyCATCHUPONE:
+		return true
+	case SchedulePreviewMisfirePolicyCOALESCE:
+		return true
+	case SchedulePreviewMisfirePolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewOverlapPolicy.
+const (
+	SchedulePreviewOverlapPolicyALLOW  SchedulePreviewOverlapPolicy = "ALLOW"
+	SchedulePreviewOverlapPolicyFORBID SchedulePreviewOverlapPolicy = "FORBID"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewOverlapPolicy enum.
+func (e SchedulePreviewOverlapPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewOverlapPolicyALLOW:
+		return true
+	case SchedulePreviewOverlapPolicyFORBID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputDayOfWeek.
+const (
+	FRIDAY    SchedulePreviewInputDayOfWeek = "FRIDAY"
+	MONDAY    SchedulePreviewInputDayOfWeek = "MONDAY"
+	SATURDAY  SchedulePreviewInputDayOfWeek = "SATURDAY"
+	SUNDAY    SchedulePreviewInputDayOfWeek = "SUNDAY"
+	THURSDAY  SchedulePreviewInputDayOfWeek = "THURSDAY"
+	TUESDAY   SchedulePreviewInputDayOfWeek = "TUESDAY"
+	WEDNESDAY SchedulePreviewInputDayOfWeek = "WEDNESDAY"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputDayOfWeek enum.
+func (e SchedulePreviewInputDayOfWeek) Valid() bool {
+	switch e {
+	case FRIDAY:
+		return true
+	case MONDAY:
+		return true
+	case SATURDAY:
+		return true
+	case SUNDAY:
+		return true
+	case THURSDAY:
+		return true
+	case TUESDAY:
+		return true
+	case WEDNESDAY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputDstFoldPolicy.
+const (
+	SchedulePreviewInputDstFoldPolicyRUNONCEEARLIEST SchedulePreviewInputDstFoldPolicy = "RUN_ONCE_EARLIEST"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputDstFoldPolicy enum.
+func (e SchedulePreviewInputDstFoldPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewInputDstFoldPolicyRUNONCEEARLIEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputDstGapPolicy.
+const (
+	SchedulePreviewInputDstGapPolicySHIFTFORWARD SchedulePreviewInputDstGapPolicy = "SHIFT_FORWARD"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputDstGapPolicy enum.
+func (e SchedulePreviewInputDstGapPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewInputDstGapPolicySHIFTFORWARD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputMisfirePolicy.
+const (
+	SchedulePreviewInputMisfirePolicyCATCHUPONE SchedulePreviewInputMisfirePolicy = "CATCH_UP_ONE"
+	SchedulePreviewInputMisfirePolicyCOALESCE   SchedulePreviewInputMisfirePolicy = "COALESCE"
+	SchedulePreviewInputMisfirePolicySKIP       SchedulePreviewInputMisfirePolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputMisfirePolicy enum.
+func (e SchedulePreviewInputMisfirePolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewInputMisfirePolicyCATCHUPONE:
+		return true
+	case SchedulePreviewInputMisfirePolicyCOALESCE:
+		return true
+	case SchedulePreviewInputMisfirePolicySKIP:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputOverlapPolicy.
+const (
+	SchedulePreviewInputOverlapPolicyALLOW  SchedulePreviewInputOverlapPolicy = "ALLOW"
+	SchedulePreviewInputOverlapPolicyFORBID SchedulePreviewInputOverlapPolicy = "FORBID"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputOverlapPolicy enum.
+func (e SchedulePreviewInputOverlapPolicy) Valid() bool {
+	switch e {
+	case SchedulePreviewInputOverlapPolicyALLOW:
+		return true
+	case SchedulePreviewInputOverlapPolicyFORBID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchedulePreviewInputPreset.
+const (
+	CUSTOM   SchedulePreviewInputPreset = "CUSTOM"
+	DAILY    SchedulePreviewInputPreset = "DAILY"
+	HOURLY   SchedulePreviewInputPreset = "HOURLY"
+	WEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
+	WEEKLY   SchedulePreviewInputPreset = "WEEKLY"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewInputPreset enum.
+func (e SchedulePreviewInputPreset) Valid() bool {
+	switch e {
+	case CUSTOM:
+		return true
+	case DAILY:
+		return true
+	case HOURLY:
+		return true
+	case WEEKDAYS:
+		return true
+	case WEEKLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleRevisionDstFoldPolicy.
+const (
+	RUNONCEEARLIEST ScheduleRevisionDstFoldPolicy = "RUN_ONCE_EARLIEST"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRevisionDstFoldPolicy enum.
+func (e ScheduleRevisionDstFoldPolicy) Valid() bool {
+	switch e {
+	case RUNONCEEARLIEST:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleRevisionDstGapPolicy.
+const (
+	SHIFTFORWARD ScheduleRevisionDstGapPolicy = "SHIFT_FORWARD"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRevisionDstGapPolicy enum.
+func (e ScheduleRevisionDstGapPolicy) Valid() bool {
+	switch e {
+	case SHIFTFORWARD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleRevisionMisfirePolicy.
+const (
+	CATCHUPONE ScheduleRevisionMisfirePolicy = "CATCH_UP_ONE"
+	COALESCE   ScheduleRevisionMisfirePolicy = "COALESCE"
+	SKIP       ScheduleRevisionMisfirePolicy = "SKIP"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRevisionMisfirePolicy enum.
+func (e ScheduleRevisionMisfirePolicy) Valid() bool {
+	switch e {
+	case CATCHUPONE:
+		return true
+	case COALESCE:
+		return true
+	case SKIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduleRevisionNotificationPolicy.
 const (
 	CONTROLCENTERANDOPTIONALCHANNELS ScheduleRevisionNotificationPolicy = "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
@@ -3141,6 +3531,24 @@ func (e ScheduleRevisionNotificationPolicy) Valid() bool {
 	case CONTROLCENTERANDOPTIONALCHANNELS:
 		return true
 	case CONTROLCENTERONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduleRevisionOverlapPolicy.
+const (
+	ALLOW  ScheduleRevisionOverlapPolicy = "ALLOW"
+	FORBID ScheduleRevisionOverlapPolicy = "FORBID"
+)
+
+// Valid indicates whether the value is a known member of the ScheduleRevisionOverlapPolicy enum.
+func (e ScheduleRevisionOverlapPolicy) Valid() bool {
+	switch e {
+	case ALLOW:
+		return true
+	case FORBID:
 		return true
 	default:
 		return false
@@ -3293,49 +3701,49 @@ func (e TemplateVariableItemValueType) Valid() bool {
 
 // Defines values for TemplateVariableSource.
 const (
-	TemplateVariableSourceAGENT         TemplateVariableSource = "AGENT"
-	TemplateVariableSourceENVIRONMENT   TemplateVariableSource = "ENVIRONMENT"
-	TemplateVariableSourceINPUTFILES    TemplateVariableSource = "INPUT_FILES"
-	TemplateVariableSourceORGANIZATION  TemplateVariableSource = "ORGANIZATION"
-	TemplateVariableSourcePROJECT       TemplateVariableSource = "PROJECT"
-	TemplateVariableSourcePROJECTFILES  TemplateVariableSource = "PROJECT_FILES"
-	TemplateVariableSourceRUNFILES      TemplateVariableSource = "RUN_FILES"
-	TemplateVariableSourceRUNTIME       TemplateVariableSource = "RUNTIME"
-	TemplateVariableSourceSESSIONFILES  TemplateVariableSource = "SESSION_FILES"
-	TemplateVariableSourceSYSTEM        TemplateVariableSource = "SYSTEM"
-	TemplateVariableSourceTOOLS         TemplateVariableSource = "TOOLS"
-	TemplateVariableSourceUSER          TemplateVariableSource = "USER"
-	TemplateVariableSourceWORKFLOWFILES TemplateVariableSource = "WORKFLOW_FILES"
+	AGENT         TemplateVariableSource = "AGENT"
+	ENVIRONMENT   TemplateVariableSource = "ENVIRONMENT"
+	INPUTFILES    TemplateVariableSource = "INPUT_FILES"
+	ORGANIZATION  TemplateVariableSource = "ORGANIZATION"
+	PROJECT       TemplateVariableSource = "PROJECT"
+	PROJECTFILES  TemplateVariableSource = "PROJECT_FILES"
+	RUNFILES      TemplateVariableSource = "RUN_FILES"
+	RUNTIME       TemplateVariableSource = "RUNTIME"
+	SESSIONFILES  TemplateVariableSource = "SESSION_FILES"
+	SYSTEM        TemplateVariableSource = "SYSTEM"
+	TOOLS         TemplateVariableSource = "TOOLS"
+	USER          TemplateVariableSource = "USER"
+	WORKFLOWFILES TemplateVariableSource = "WORKFLOW_FILES"
 )
 
 // Valid indicates whether the value is a known member of the TemplateVariableSource enum.
 func (e TemplateVariableSource) Valid() bool {
 	switch e {
-	case TemplateVariableSourceAGENT:
+	case AGENT:
 		return true
-	case TemplateVariableSourceENVIRONMENT:
+	case ENVIRONMENT:
 		return true
-	case TemplateVariableSourceINPUTFILES:
+	case INPUTFILES:
 		return true
-	case TemplateVariableSourceORGANIZATION:
+	case ORGANIZATION:
 		return true
-	case TemplateVariableSourcePROJECT:
+	case PROJECT:
 		return true
-	case TemplateVariableSourcePROJECTFILES:
+	case PROJECTFILES:
 		return true
-	case TemplateVariableSourceRUNFILES:
+	case RUNFILES:
 		return true
-	case TemplateVariableSourceRUNTIME:
+	case RUNTIME:
 		return true
-	case TemplateVariableSourceSESSIONFILES:
+	case SESSIONFILES:
 		return true
-	case TemplateVariableSourceSYSTEM:
+	case SYSTEM:
 		return true
-	case TemplateVariableSourceTOOLS:
+	case TOOLS:
 		return true
-	case TemplateVariableSourceUSER:
+	case USER:
 		return true
-	case TemplateVariableSourceWORKFLOWFILES:
+	case WORKFLOWFILES:
 		return true
 	default:
 		return false
@@ -5943,22 +6351,30 @@ type RuntimeVolumeKind string
 
 // Schedule defines model for Schedule.
 type Schedule struct {
+	AutomationText     string                     `json:"automationText"`
 	ContinueSessionRef *OpaqueRef                 `json:"continueSessionRef,omitempty"`
-	CronExpression     *string                    `json:"cronExpression,omitempty"`
+	CronExpression     string                     `json:"cronExpression"`
 	CurrentRevision    ScheduleRevision           `json:"currentRevision"`
 	DayOfWeek          *ScheduleDayOfWeek         `json:"dayOfWeek,omitempty"`
-	Input              *map[string]interface{}    `json:"input,omitempty"`
+	DstFoldPolicy      ScheduleDstFoldPolicy      `json:"dstFoldPolicy"`
+	DstGapPolicy       ScheduleDstGapPolicy       `json:"dstGapPolicy"`
+	Input              map[string]interface{}     `json:"input"`
 	LastOutcome        *string                    `json:"lastOutcome,omitempty"`
+	MisfirePolicy      ScheduleMisfirePolicy      `json:"misfirePolicy"`
 	Name               string                     `json:"name"`
 	NextActions        []NextAction               `json:"nextActions"`
 	NextRunAt          *Timestamp                 `json:"nextRunAt,omitempty"`
 	NotificationPolicy ScheduleNotificationPolicy `json:"notificationPolicy"`
+	OverlapPolicy      ScheduleOverlapPolicy      `json:"overlapPolicy"`
 	Preset             string                     `json:"preset"`
 	ProjectRef         OpaqueRef                  `json:"projectRef"`
+	PromptInputs       map[string]interface{}     `json:"promptInputs"`
 	Ref                OpaqueRef                  `json:"ref"`
 	SessionPolicy      ScheduleSessionPolicy      `json:"sessionPolicy"`
 	State              ScheduleState              `json:"state"`
 	Target             RunTarget                  `json:"target"`
+	TargetDigest       string                     `json:"targetDigest"`
+	TargetVersion      int64                      `json:"targetVersion"`
 	TimeOfDay          *string                    `json:"timeOfDay,omitempty"`
 	Timezone           string                     `json:"timezone"`
 	Version            int64                      `json:"version"`
@@ -5967,8 +6383,20 @@ type Schedule struct {
 // ScheduleDayOfWeek defines model for Schedule.DayOfWeek.
 type ScheduleDayOfWeek string
 
+// ScheduleDstFoldPolicy defines model for Schedule.DstFoldPolicy.
+type ScheduleDstFoldPolicy string
+
+// ScheduleDstGapPolicy defines model for Schedule.DstGapPolicy.
+type ScheduleDstGapPolicy string
+
+// ScheduleMisfirePolicy defines model for Schedule.MisfirePolicy.
+type ScheduleMisfirePolicy string
+
 // ScheduleNotificationPolicy defines model for Schedule.NotificationPolicy.
 type ScheduleNotificationPolicy string
+
+// ScheduleOverlapPolicy defines model for Schedule.OverlapPolicy.
+type ScheduleOverlapPolicy string
 
 // ScheduleSessionPolicy defines model for Schedule.SessionPolicy.
 type ScheduleSessionPolicy string
@@ -5986,23 +6414,42 @@ type ScheduleCommandAction string
 
 // ScheduleInput defines model for ScheduleInput.
 type ScheduleInput struct {
+	AutomationText     string                          `json:"automationText"`
+	CronExpression     *string                         `json:"cronExpression,omitempty"`
 	DayOfWeek          *ScheduleInputDayOfWeek         `json:"dayOfWeek,omitempty"`
+	DstFoldPolicy      ScheduleInputDstFoldPolicy      `json:"dstFoldPolicy"`
+	DstGapPolicy       ScheduleInputDstGapPolicy       `json:"dstGapPolicy"`
 	Input              map[string]interface{}          `json:"input"`
+	MisfirePolicy      ScheduleInputMisfirePolicy      `json:"misfirePolicy"`
 	Name               string                          `json:"name"`
 	NotificationPolicy ScheduleInputNotificationPolicy `json:"notificationPolicy"`
+	OverlapPolicy      ScheduleInputOverlapPolicy      `json:"overlapPolicy"`
 	Preset             ScheduleInputPreset             `json:"preset"`
+	PromptInputs       map[string]interface{}          `json:"promptInputs"`
 	SessionPolicy      ScheduleInputSessionPolicy      `json:"sessionPolicy"`
 	TargetRef          OpaqueRef                       `json:"targetRef"`
 	TargetType         ScheduleInputTargetType         `json:"targetType"`
-	TimeOfDay          string                          `json:"timeOfDay"`
+	TimeOfDay          *string                         `json:"timeOfDay,omitempty"`
 	Timezone           string                          `json:"timezone"`
 }
 
 // ScheduleInputDayOfWeek defines model for ScheduleInput.DayOfWeek.
 type ScheduleInputDayOfWeek string
 
+// ScheduleInputDstFoldPolicy defines model for ScheduleInput.DstFoldPolicy.
+type ScheduleInputDstFoldPolicy string
+
+// ScheduleInputDstGapPolicy defines model for ScheduleInput.DstGapPolicy.
+type ScheduleInputDstGapPolicy string
+
+// ScheduleInputMisfirePolicy defines model for ScheduleInput.MisfirePolicy.
+type ScheduleInputMisfirePolicy string
+
 // ScheduleInputNotificationPolicy defines model for ScheduleInput.NotificationPolicy.
 type ScheduleInputNotificationPolicy string
+
+// ScheduleInputOverlapPolicy defines model for ScheduleInput.OverlapPolicy.
+type ScheduleInputOverlapPolicy string
 
 // ScheduleInputPreset defines model for ScheduleInput.Preset.
 type ScheduleInputPreset string
@@ -6013,24 +6460,99 @@ type ScheduleInputSessionPolicy string
 // ScheduleInputTargetType defines model for ScheduleInput.TargetType.
 type ScheduleInputTargetType string
 
+// SchedulePreview defines model for SchedulePreview.
+type SchedulePreview struct {
+	DstFoldPolicy            SchedulePreviewDstFoldPolicy `json:"dstFoldPolicy"`
+	DstGapPolicy             SchedulePreviewDstGapPolicy  `json:"dstGapPolicy"`
+	MisfirePolicy            SchedulePreviewMisfirePolicy `json:"misfirePolicy"`
+	NormalizedCronExpression string                       `json:"normalizedCronExpression"`
+	Occurrences              []Timestamp                  `json:"occurrences"`
+	OverlapPolicy            SchedulePreviewOverlapPolicy `json:"overlapPolicy"`
+}
+
+// SchedulePreviewDstFoldPolicy defines model for SchedulePreview.DstFoldPolicy.
+type SchedulePreviewDstFoldPolicy string
+
+// SchedulePreviewDstGapPolicy defines model for SchedulePreview.DstGapPolicy.
+type SchedulePreviewDstGapPolicy string
+
+// SchedulePreviewMisfirePolicy defines model for SchedulePreview.MisfirePolicy.
+type SchedulePreviewMisfirePolicy string
+
+// SchedulePreviewOverlapPolicy defines model for SchedulePreview.OverlapPolicy.
+type SchedulePreviewOverlapPolicy string
+
+// SchedulePreviewInput defines model for SchedulePreviewInput.
+type SchedulePreviewInput struct {
+	After          *Timestamp                        `json:"after,omitempty"`
+	CronExpression *string                           `json:"cronExpression,omitempty"`
+	DayOfWeek      *SchedulePreviewInputDayOfWeek    `json:"dayOfWeek,omitempty"`
+	DstFoldPolicy  SchedulePreviewInputDstFoldPolicy `json:"dstFoldPolicy"`
+	DstGapPolicy   SchedulePreviewInputDstGapPolicy  `json:"dstGapPolicy"`
+	Limit          *int32                            `json:"limit,omitempty"`
+	MisfirePolicy  SchedulePreviewInputMisfirePolicy `json:"misfirePolicy"`
+	OverlapPolicy  SchedulePreviewInputOverlapPolicy `json:"overlapPolicy"`
+	Preset         SchedulePreviewInputPreset        `json:"preset"`
+	TimeOfDay      *string                           `json:"timeOfDay,omitempty"`
+	Timezone       string                            `json:"timezone"`
+}
+
+// SchedulePreviewInputDayOfWeek defines model for SchedulePreviewInput.DayOfWeek.
+type SchedulePreviewInputDayOfWeek string
+
+// SchedulePreviewInputDstFoldPolicy defines model for SchedulePreviewInput.DstFoldPolicy.
+type SchedulePreviewInputDstFoldPolicy string
+
+// SchedulePreviewInputDstGapPolicy defines model for SchedulePreviewInput.DstGapPolicy.
+type SchedulePreviewInputDstGapPolicy string
+
+// SchedulePreviewInputMisfirePolicy defines model for SchedulePreviewInput.MisfirePolicy.
+type SchedulePreviewInputMisfirePolicy string
+
+// SchedulePreviewInputOverlapPolicy defines model for SchedulePreviewInput.OverlapPolicy.
+type SchedulePreviewInputOverlapPolicy string
+
+// SchedulePreviewInputPreset defines model for SchedulePreviewInput.Preset.
+type SchedulePreviewInputPreset string
+
 // ScheduleRevision defines model for ScheduleRevision.
 type ScheduleRevision struct {
+	AutomationText     string                             `json:"automationText"`
 	CreatedAt          Timestamp                          `json:"createdAt"`
 	CronExpression     string                             `json:"cronExpression"`
 	Digest             string                             `json:"digest"`
+	DstFoldPolicy      ScheduleRevisionDstFoldPolicy      `json:"dstFoldPolicy"`
+	DstGapPolicy       ScheduleRevisionDstGapPolicy       `json:"dstGapPolicy"`
 	Input              map[string]interface{}             `json:"input"`
+	MisfirePolicy      ScheduleRevisionMisfirePolicy      `json:"misfirePolicy"`
 	Name               string                             `json:"name"`
 	NotificationPolicy ScheduleRevisionNotificationPolicy `json:"notificationPolicy"`
+	OverlapPolicy      ScheduleRevisionOverlapPolicy      `json:"overlapPolicy"`
 	Preset             string                             `json:"preset"`
+	PromptInputs       map[string]interface{}             `json:"promptInputs"`
 	Ref                OpaqueRef                          `json:"ref"`
 	Revision           int64                              `json:"revision"`
 	SessionPolicy      ScheduleRevisionSessionPolicy      `json:"sessionPolicy"`
 	Target             RunTarget                          `json:"target"`
+	TargetDigest       string                             `json:"targetDigest"`
+	TargetVersion      int64                              `json:"targetVersion"`
 	Timezone           string                             `json:"timezone"`
 }
 
+// ScheduleRevisionDstFoldPolicy defines model for ScheduleRevision.DstFoldPolicy.
+type ScheduleRevisionDstFoldPolicy string
+
+// ScheduleRevisionDstGapPolicy defines model for ScheduleRevision.DstGapPolicy.
+type ScheduleRevisionDstGapPolicy string
+
+// ScheduleRevisionMisfirePolicy defines model for ScheduleRevision.MisfirePolicy.
+type ScheduleRevisionMisfirePolicy string
+
 // ScheduleRevisionNotificationPolicy defines model for ScheduleRevision.NotificationPolicy.
 type ScheduleRevisionNotificationPolicy string
+
+// ScheduleRevisionOverlapPolicy defines model for ScheduleRevision.OverlapPolicy.
+type ScheduleRevisionOverlapPolicy string
 
 // ScheduleRevisionSessionPolicy defines model for ScheduleRevision.SessionPolicy.
 type ScheduleRevisionSessionPolicy string
@@ -7332,6 +7854,11 @@ type RotateRuntimeSecretParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// PreviewScheduleParams defines parameters for PreviewSchedule.
+type PreviewScheduleParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // DeleteScheduleParams defines parameters for DeleteSchedule.
 type DeleteScheduleParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -7619,6 +8146,9 @@ type PublishRuntimeEnvironmentVersionJSONRequestBody = RuntimeEnvironmentInput
 
 // RotateRuntimeSecretJSONRequestBody defines body for RotateRuntimeSecret for application/json ContentType.
 type RotateRuntimeSecretJSONRequestBody = RuntimeSecretRotateInput
+
+// PreviewScheduleJSONRequestBody defines body for PreviewSchedule for application/json ContentType.
+type PreviewScheduleJSONRequestBody = SchedulePreviewInput
 
 // UpdateScheduleJSONRequestBody defines body for UpdateSchedule for application/json ContentType.
 type UpdateScheduleJSONRequestBody = ScheduleInput
@@ -8078,6 +8608,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runtime-selections)
 	ListRuntimeSelections(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/schedules/preview)
+	PreviewSchedule(w http.ResponseWriter, r *http.Request, params PreviewScheduleParams)
 
 	// (DELETE /api/v1/schedules/{scheduleRef})
 	DeleteSchedule(w http.ResponseWriter, r *http.Request, scheduleRef ScheduleRef, params DeleteScheduleParams)
@@ -19675,6 +20208,57 @@ func (siw *ServerInterfaceWrapper) ListRuntimeSelections(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewSchedule operation middleware
+func (siw *ServerInterfaceWrapper) PreviewSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewScheduleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewSchedule(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteSchedule operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 
@@ -21229,6 +21813,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/reveal", wrapper.RevealRuntimeSecret)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}/rotations", wrapper.RotateRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-selections", wrapper.ListRuntimeSelections)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/schedules/preview", wrapper.PreviewSchedule)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.DeleteSchedule)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.GetSchedule)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/schedules/{scheduleRef}", wrapper.UpdateSchedule)

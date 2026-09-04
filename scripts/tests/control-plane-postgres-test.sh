@@ -8,7 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
-test_pattern=${1:-'^TestBootstrapComponent$'}
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^TestBootstrapComponent$'}}
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
@@ -49,13 +49,21 @@ run_migration() {
 
 (
   cd -- "$repository_root/services/internal/control-plane"
+  if [[ -n "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
+    psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
+      -c 'CREATE DATABASE control_plane_scheduler_upgrade OWNER control_plane_owner' >/dev/null
+    psql "postgresql://postgres@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" --no-password -v ON_ERROR_STOP=1 \
+      -c 'GRANT USAGE, CREATE ON SCHEMA public TO control_plane_migrator' >/dev/null
+    KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
+  fi
   run_migration up
   run_migration status >/dev/null
   run_migration up
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
-  if [[ $# -eq 0 ]]; then
+  if [[ $# -eq 0 && -z "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
       env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
         ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'

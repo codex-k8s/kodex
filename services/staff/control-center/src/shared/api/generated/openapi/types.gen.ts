@@ -1458,15 +1458,25 @@ export type Schedule = {
     target: RunTarget;
     state: 'ACTIVE' | 'PAUSED' | 'NEEDS_ATTENTION' | 'ARCHIVED' | 'DELETED';
     preset: string;
-    cronExpression?: string;
+    cronExpression: string;
     timeOfDay?: string;
     dayOfWeek?: '' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
     timezone: string;
-    input?: {
+    input: {
         [key: string]: unknown;
     };
     sessionPolicy: 'NEW_EACH_RUN' | 'CONTINUE_ONE';
     notificationPolicy: 'CONTROL_CENTER_ONLY' | 'CONTROL_CENTER_AND_OPTIONAL_CHANNELS';
+    dstGapPolicy: 'SHIFT_FORWARD';
+    dstFoldPolicy: 'RUN_ONCE_EARLIEST';
+    misfirePolicy: 'COALESCE' | 'CATCH_UP_ONE' | 'SKIP';
+    overlapPolicy: 'FORBID' | 'ALLOW';
+    targetVersion: number;
+    targetDigest: string;
+    automationText: string;
+    promptInputs: {
+        [key: string]: unknown;
+    };
     nextRunAt?: Timestamp;
     lastOutcome?: string;
     nextActions: Array<NextAction>;
@@ -1488,6 +1498,16 @@ export type ScheduleRevision = {
     };
     sessionPolicy: 'NEW_EACH_RUN' | 'CONTINUE_ONE';
     notificationPolicy: 'CONTROL_CENTER_ONLY' | 'CONTROL_CENTER_AND_OPTIONAL_CHANNELS';
+    dstGapPolicy: 'SHIFT_FORWARD';
+    dstFoldPolicy: 'RUN_ONCE_EARLIEST';
+    misfirePolicy: 'COALESCE' | 'CATCH_UP_ONE' | 'SKIP';
+    overlapPolicy: 'FORBID' | 'ALLOW';
+    targetVersion: number;
+    targetDigest: string;
+    automationText: string;
+    promptInputs: {
+        [key: string]: unknown;
+    };
     createdAt: Timestamp;
 };
 
@@ -1512,8 +1532,9 @@ export type ScheduleInput = {
     name: string;
     targetRef: OpaqueRef;
     targetType: 'AGENT' | 'WORKFLOW';
-    preset: 'HOURLY' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY';
-    timeOfDay: string;
+    preset: 'HOURLY' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'CUSTOM';
+    cronExpression?: string;
+    timeOfDay?: string;
     dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
     timezone: string;
     input: {
@@ -1521,6 +1542,37 @@ export type ScheduleInput = {
     };
     sessionPolicy: 'NEW_EACH_RUN' | 'CONTINUE_ONE';
     notificationPolicy: 'CONTROL_CENTER_ONLY' | 'CONTROL_CENTER_AND_OPTIONAL_CHANNELS';
+    dstGapPolicy: 'SHIFT_FORWARD';
+    dstFoldPolicy: 'RUN_ONCE_EARLIEST';
+    misfirePolicy: 'COALESCE' | 'CATCH_UP_ONE' | 'SKIP';
+    overlapPolicy: 'FORBID' | 'ALLOW';
+    automationText: string;
+    promptInputs: {
+        [key: string]: unknown;
+    };
+};
+
+export type SchedulePreviewInput = {
+    preset: 'HOURLY' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'CUSTOM';
+    cronExpression?: string;
+    timeOfDay?: string;
+    dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+    timezone: string;
+    dstGapPolicy: 'SHIFT_FORWARD';
+    dstFoldPolicy: 'RUN_ONCE_EARLIEST';
+    misfirePolicy: 'COALESCE' | 'CATCH_UP_ONE' | 'SKIP';
+    overlapPolicy: 'FORBID' | 'ALLOW';
+    after?: Timestamp;
+    limit?: number;
+};
+
+export type SchedulePreview = {
+    normalizedCronExpression: string;
+    occurrences: Array<Timestamp>;
+    dstGapPolicy: 'SHIFT_FORWARD';
+    dstFoldPolicy: 'RUN_ONCE_EARLIEST';
+    misfirePolicy: 'COALESCE' | 'CATCH_UP_ONE' | 'SKIP';
+    overlapPolicy: 'FORBID' | 'ALLOW';
 };
 
 export type ScheduleCommand = {
@@ -1607,6 +1659,9 @@ export type IntegrationDefinition = {
     origin: 'SHIPPED';
     digest: string;
     adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION';
+    adapterOwner: 'integration-gateway' | 'interaction-gateway';
+    executionRoute: 'MANAGED_MCP' | 'INTERACTION';
+    adapterReadiness: 'READY' | 'NOT_READY';
     credentialSecretKey?: string;
 };
 
@@ -5561,6 +5616,34 @@ export type CreateScheduleResponses = {
 };
 
 export type CreateScheduleResponse = CreateScheduleResponses[keyof CreateScheduleResponses];
+
+export type PreviewScheduleData = {
+    body: SchedulePreviewInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/schedules/preview';
+};
+
+export type PreviewScheduleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PreviewScheduleError = PreviewScheduleErrors[keyof PreviewScheduleErrors];
+
+export type PreviewScheduleResponses = {
+    /**
+     * Нормализованный cron и следующие occurrence с серверной timezone/DST семантикой
+     */
+    200: SchedulePreview;
+};
+
+export type PreviewScheduleResponse = PreviewScheduleResponses[keyof PreviewScheduleResponses];
 
 export type DeleteScheduleData = {
     body?: never;

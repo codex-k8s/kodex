@@ -514,13 +514,21 @@ type Schedule struct {
 	NextActions                                                                   []string
 	CurrentRevision                                                               ScheduleRevision
 	ContinueSessionRef                                                            string
+	LastOutcome                                                                   string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, TargetDigest       string
+	TargetVersion                                                                 int64
+	AutomationText                                                                string
+	PromptInputs                                                                  map[string]any
 }
 
 type ScheduleRevision struct {
 	Ref, Digest, Name, Preset, CronExpression, Timezone, SessionPolicy, NotificationPolicy string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, TargetDigest                string
 	Revision                                                                               int64
+	TargetVersion                                                                          int64
 	Target                                                                                 RunTarget
-	Input                                                                                  map[string]any
+	Input, PromptInputs                                                                    map[string]any
+	AutomationText                                                                         string
 	CreatedAt                                                                              time.Time
 }
 

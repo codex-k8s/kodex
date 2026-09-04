@@ -47,6 +47,7 @@ service PlatformQueryService {
   rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
   rpc ListScheduleRevisions(ListScheduleRevisionsRequest) returns (ListScheduleRevisionsResponse);
   rpc ListScheduleRuns(ListScheduleRunsRequest) returns (ListScheduleRunsResponse);
+  rpc PreviewSchedule(PreviewScheduleRequest) returns (PreviewScheduleResponse);
   rpc ListProviderAccounts(ListProviderAccountsRequest) returns (ListProviderAccountsResponse);
   rpc GetProviderAccount(GetProviderAccountRequest) returns (GetProviderAccountResponse);
   rpc ListIntegrationDefinitions(ListIntegrationDefinitionsRequest) returns (ListIntegrationDefinitionsResponse);
@@ -228,7 +229,9 @@ service RuntimeWorkService {
   rpc ReconcileWarmRuntime(ReconcileWarmRuntimeRequest) returns (ReconcileWarmRuntimeResponse);
   rpc ReportWarmRuntime(ReportWarmRuntimeRequest) returns (ReportWarmRuntimeResponse);
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
+  rpc RenewScheduleOccurrence(RenewScheduleOccurrenceRequest) returns (RenewScheduleOccurrenceResponse);
   rpc MaterializeScheduleOccurrence(MaterializeScheduleOccurrenceRequest) returns (MaterializeScheduleOccurrenceResponse);
+  rpc FailScheduleOccurrence(FailScheduleOccurrenceRequest) returns (FailScheduleOccurrenceResponse);
   rpc ClaimIntegrationConnectionTests(ClaimIntegrationConnectionTestsRequest) returns (ClaimIntegrationConnectionTestsResponse);
   // GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
   // payload consumer и разрешает её по opaque Connection ref внутри tenant.
@@ -1087,12 +1090,21 @@ message Schedule {
   string session_policy = 11;
   string notification_policy = 12;
   google.protobuf.Timestamp next_run_at = 13;
+  // Авторитетный исход последнего occurrence: STATE либо STATE:SAFE_ERROR_CODE.
   string last_outcome = 14;
   repeated NextAction next_actions = 15;
   string time_of_day = 16;
   string day_of_week = 17;
   ScheduleRevision current_revision = 18;
   string continue_session_ref = 19;
+  string dst_gap_policy = 20;
+  string dst_fold_policy = 21;
+  string misfire_policy = 22;
+  string overlap_policy = 23;
+  int64 target_version = 24;
+  string target_digest = 25;
+  string automation_text = 26;
+  google.protobuf.Struct prompt_inputs = 27;
 }
 
 message ScheduleRevision {
@@ -1108,6 +1120,14 @@ message ScheduleRevision {
   string session_policy = 10;
   string notification_policy = 11;
   google.protobuf.Timestamp created_at = 12;
+  string dst_gap_policy = 13;
+  string dst_fold_policy = 14;
+  string misfire_policy = 15;
+  string overlap_policy = 16;
+  int64 target_version = 17;
+  string target_digest = 18;
+  string automation_text = 19;
+  google.protobuf.Struct prompt_inputs = 20;
 }
 
 message ScheduleRunOccurrence {
@@ -2177,6 +2197,12 @@ message CreateScheduleRequest {
   string notification_policy = 10;
   string time_of_day = 11;
   string day_of_week = 12;
+  string dst_gap_policy = 13;
+  string dst_fold_policy = 14;
+  string misfire_policy = 15;
+  string overlap_policy = 16;
+  string automation_text = 17;
+  google.protobuf.Struct prompt_inputs = 18;
 }
 message CreateScheduleResponse {
   Schedule schedule = 1;
@@ -2194,6 +2220,12 @@ message UpdateScheduleRequest {
   string notification_policy = 10;
   string time_of_day = 11;
   string day_of_week = 12;
+  string dst_gap_policy = 13;
+  string dst_fold_policy = 14;
+  string misfire_policy = 15;
+  string overlap_policy = 16;
+  string automation_text = 17;
+  google.protobuf.Struct prompt_inputs = 18;
 }
 message UpdateScheduleResponse {
   Schedule schedule = 1;
@@ -2888,6 +2920,12 @@ message ScheduleClaim {
   string schedule_revision_ref = 6;
   int64 schedule_revision = 7;
   string schedule_revision_digest = 8;
+  int32 attempt = 9;
+  string target_ref = 10;
+  int64 target_version = 11;
+  string target_digest = 12;
+  string automation_text_digest = 13;
+  string prompt_inputs_digest = 14;
 }
 message ClaimDueSchedulesRequest {
   string workload_instance = 1;
@@ -2906,6 +2944,50 @@ message MaterializeScheduleOccurrenceRequest {
 message MaterializeScheduleOccurrenceResponse {
   Run run = 1;
   Schedule schedule = 2;
+}
+message RenewScheduleOccurrenceRequest {
+  string occurrence_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+}
+message RenewScheduleOccurrenceResponse {
+  WorkLease lease = 1;
+}
+message FailScheduleOccurrenceRequest {
+  MutationContext mutation = 1;
+  string occurrence_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string safe_error_code = 6;
+  bool retryable = 7;
+}
+message FailScheduleOccurrenceResponse {
+  string state = 1;
+  int32 attempt = 2;
+}
+
+message PreviewScheduleRequest {
+  string preset = 1;
+  string cron_expression = 2;
+  string time_of_day = 3;
+  string day_of_week = 4;
+  string timezone = 5;
+  string dst_gap_policy = 6;
+  string dst_fold_policy = 7;
+  string misfire_policy = 8;
+  string overlap_policy = 9;
+  google.protobuf.Timestamp after = 10;
+  int32 limit = 11;
+}
+message PreviewScheduleResponse {
+  string normalized_cron_expression = 1;
+  repeated google.protobuf.Timestamp occurrences = 2;
+  string dst_gap_policy = 3;
+  string dst_fold_policy = 4;
+  string misfire_policy = 5;
+  string overlap_policy = 6;
 }
 message IntegrationConnectionTestClaim {
   string test_ref = 1;

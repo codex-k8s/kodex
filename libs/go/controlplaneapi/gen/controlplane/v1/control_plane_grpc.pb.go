@@ -52,6 +52,7 @@ const (
 	PlatformQueryService_GetSchedule_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetSchedule"
 	PlatformQueryService_ListScheduleRevisions_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListScheduleRevisions"
 	PlatformQueryService_ListScheduleRuns_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListScheduleRuns"
+	PlatformQueryService_PreviewSchedule_FullMethodName                       = "/controlplane.v1.PlatformQueryService/PreviewSchedule"
 	PlatformQueryService_ListProviderAccounts_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListProviderAccounts"
 	PlatformQueryService_GetProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetProviderAccount"
 	PlatformQueryService_ListIntegrationDefinitions_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
@@ -118,6 +119,7 @@ type PlatformQueryServiceClient interface {
 	GetSchedule(ctx context.Context, in *GetScheduleRequest, opts ...grpc.CallOption) (*GetScheduleResponse, error)
 	ListScheduleRevisions(ctx context.Context, in *ListScheduleRevisionsRequest, opts ...grpc.CallOption) (*ListScheduleRevisionsResponse, error)
 	ListScheduleRuns(ctx context.Context, in *ListScheduleRunsRequest, opts ...grpc.CallOption) (*ListScheduleRunsResponse, error)
+	PreviewSchedule(ctx context.Context, in *PreviewScheduleRequest, opts ...grpc.CallOption) (*PreviewScheduleResponse, error)
 	ListProviderAccounts(ctx context.Context, in *ListProviderAccountsRequest, opts ...grpc.CallOption) (*ListProviderAccountsResponse, error)
 	GetProviderAccount(ctx context.Context, in *GetProviderAccountRequest, opts ...grpc.CallOption) (*GetProviderAccountResponse, error)
 	ListIntegrationDefinitions(ctx context.Context, in *ListIntegrationDefinitionsRequest, opts ...grpc.CallOption) (*ListIntegrationDefinitionsResponse, error)
@@ -483,6 +485,16 @@ func (c *platformQueryServiceClient) ListScheduleRuns(ctx context.Context, in *L
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) PreviewSchedule(ctx context.Context, in *PreviewScheduleRequest, opts ...grpc.CallOption) (*PreviewScheduleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreviewScheduleResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_PreviewSchedule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListProviderAccounts(ctx context.Context, in *ListProviderAccountsRequest, opts ...grpc.CallOption) (*ListProviderAccountsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProviderAccountsResponse)
@@ -772,6 +784,7 @@ type PlatformQueryServiceServer interface {
 	GetSchedule(context.Context, *GetScheduleRequest) (*GetScheduleResponse, error)
 	ListScheduleRevisions(context.Context, *ListScheduleRevisionsRequest) (*ListScheduleRevisionsResponse, error)
 	ListScheduleRuns(context.Context, *ListScheduleRunsRequest) (*ListScheduleRunsResponse, error)
+	PreviewSchedule(context.Context, *PreviewScheduleRequest) (*PreviewScheduleResponse, error)
 	ListProviderAccounts(context.Context, *ListProviderAccountsRequest) (*ListProviderAccountsResponse, error)
 	GetProviderAccount(context.Context, *GetProviderAccountRequest) (*GetProviderAccountResponse, error)
 	ListIntegrationDefinitions(context.Context, *ListIntegrationDefinitionsRequest) (*ListIntegrationDefinitionsResponse, error)
@@ -905,6 +918,9 @@ func (UnimplementedPlatformQueryServiceServer) ListScheduleRevisions(context.Con
 }
 func (UnimplementedPlatformQueryServiceServer) ListScheduleRuns(context.Context, *ListScheduleRunsRequest) (*ListScheduleRunsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListScheduleRuns not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) PreviewSchedule(context.Context, *PreviewScheduleRequest) (*PreviewScheduleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreviewSchedule not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListProviderAccounts(context.Context, *ListProviderAccountsRequest) (*ListProviderAccountsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProviderAccounts not implemented")
@@ -1596,6 +1612,24 @@ func _PlatformQueryService_ListScheduleRuns_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_PreviewSchedule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewScheduleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).PreviewSchedule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_PreviewSchedule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).PreviewSchedule(ctx, req.(*PreviewScheduleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListProviderAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListProviderAccountsRequest)
 	if err := dec(in); err != nil {
@@ -2184,6 +2218,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListScheduleRuns",
 			Handler:    _PlatformQueryService_ListScheduleRuns_Handler,
+		},
+		{
+			MethodName: "PreviewSchedule",
+			Handler:    _PlatformQueryService_PreviewSchedule_Handler,
 		},
 		{
 			MethodName: "ListProviderAccounts",
@@ -7060,7 +7098,9 @@ const (
 	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
 	RuntimeWorkService_ReportWarmRuntime_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
 	RuntimeWorkService_ClaimDueSchedules_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
+	RuntimeWorkService_RenewScheduleOccurrence_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/RenewScheduleOccurrence"
 	RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/MaterializeScheduleOccurrence"
+	RuntimeWorkService_FailScheduleOccurrence_FullMethodName                          = "/controlplane.v1.RuntimeWorkService/FailScheduleOccurrence"
 	RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationConnectionTests"
 	RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName = "/controlplane.v1.RuntimeWorkService/GetIntegrationConnectionDefinitionConfiguration"
 	RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName               = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest"
@@ -7091,7 +7131,9 @@ type RuntimeWorkServiceClient interface {
 	ReconcileWarmRuntime(ctx context.Context, in *ReconcileWarmRuntimeRequest, opts ...grpc.CallOption) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(ctx context.Context, in *ReportWarmRuntimeRequest, opts ...grpc.CallOption) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
+	RenewScheduleOccurrence(ctx context.Context, in *RenewScheduleOccurrenceRequest, opts ...grpc.CallOption) (*RenewScheduleOccurrenceResponse, error)
 	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
+	FailScheduleOccurrence(ctx context.Context, in *FailScheduleOccurrenceRequest, opts ...grpc.CallOption) (*FailScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(ctx context.Context, in *ClaimIntegrationConnectionTestsRequest, opts ...grpc.CallOption) (*ClaimIntegrationConnectionTestsResponse, error)
 	// GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
 	// payload consumer и разрешает её по opaque Connection ref внутри tenant.
@@ -7261,10 +7303,30 @@ func (c *runtimeWorkServiceClient) ClaimDueSchedules(ctx context.Context, in *Cl
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) RenewScheduleOccurrence(ctx context.Context, in *RenewScheduleOccurrenceRequest, opts ...grpc.CallOption) (*RenewScheduleOccurrenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewScheduleOccurrenceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_RenewScheduleOccurrence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MaterializeScheduleOccurrenceResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) FailScheduleOccurrence(ctx context.Context, in *FailScheduleOccurrenceRequest, opts ...grpc.CallOption) (*FailScheduleOccurrenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailScheduleOccurrenceResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_FailScheduleOccurrence_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -7362,7 +7424,9 @@ type RuntimeWorkServiceServer interface {
 	ReconcileWarmRuntime(context.Context, *ReconcileWarmRuntimeRequest) (*ReconcileWarmRuntimeResponse, error)
 	ReportWarmRuntime(context.Context, *ReportWarmRuntimeRequest) (*ReportWarmRuntimeResponse, error)
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
+	RenewScheduleOccurrence(context.Context, *RenewScheduleOccurrenceRequest) (*RenewScheduleOccurrenceResponse, error)
 	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
+	FailScheduleOccurrence(context.Context, *FailScheduleOccurrenceRequest) (*FailScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error)
 	// GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
 	// payload consumer и разрешает её по opaque Connection ref внутри tenant.
@@ -7427,8 +7491,14 @@ func (UnimplementedRuntimeWorkServiceServer) ReportWarmRuntime(context.Context, 
 func (UnimplementedRuntimeWorkServiceServer) ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimDueSchedules not implemented")
 }
+func (UnimplementedRuntimeWorkServiceServer) RenewScheduleOccurrence(context.Context, *RenewScheduleOccurrenceRequest) (*RenewScheduleOccurrenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewScheduleOccurrence not implemented")
+}
 func (UnimplementedRuntimeWorkServiceServer) MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MaterializeScheduleOccurrence not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) FailScheduleOccurrence(context.Context, *FailScheduleOccurrenceRequest) (*FailScheduleOccurrenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailScheduleOccurrence not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimIntegrationConnectionTests not implemented")
@@ -7742,6 +7812,24 @@ func _RuntimeWorkService_ClaimDueSchedules_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_RenewScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewScheduleOccurrenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).RenewScheduleOccurrence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_RenewScheduleOccurrence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).RenewScheduleOccurrence(ctx, req.(*RenewScheduleOccurrenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_MaterializeScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MaterializeScheduleOccurrenceRequest)
 	if err := dec(in); err != nil {
@@ -7756,6 +7844,24 @@ func _RuntimeWorkService_MaterializeScheduleOccurrence_Handler(srv interface{}, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).MaterializeScheduleOccurrence(ctx, req.(*MaterializeScheduleOccurrenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_FailScheduleOccurrence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailScheduleOccurrenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).FailScheduleOccurrence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_FailScheduleOccurrence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).FailScheduleOccurrence(ctx, req.(*FailScheduleOccurrenceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7954,8 +8060,16 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RuntimeWorkService_ClaimDueSchedules_Handler,
 		},
 		{
+			MethodName: "RenewScheduleOccurrence",
+			Handler:    _RuntimeWorkService_RenewScheduleOccurrence_Handler,
+		},
+		{
 			MethodName: "MaterializeScheduleOccurrence",
 			Handler:    _RuntimeWorkService_MaterializeScheduleOccurrence_Handler,
+		},
+		{
+			MethodName: "FailScheduleOccurrence",
+			Handler:    _RuntimeWorkService_FailScheduleOccurrence_Handler,
 		},
 		{
 			MethodName: "ClaimIntegrationConnectionTests",
