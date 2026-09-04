@@ -11,6 +11,8 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,6 +51,47 @@ func TestSourceFingerprintIncludesImmutableConnectionAndCredential(t *testing.T)
 	source.EnabledCapabilities[0], source.EnabledCapabilities[1] = source.EnabledCapabilities[1], source.EnabledCapabilities[0]
 	if sourceFingerprint(source) != fingerprint {
 		t.Fatal("capability order restarted unchanged listener")
+	}
+}
+
+func TestRejectedSenderDoesNotDisconnectChannel(t *testing.T) {
+	for _, code := range []codes.Code{codes.InvalidArgument, codes.PermissionDenied, codes.NotFound, codes.FailedPrecondition, codes.Unauthenticated, codes.Unavailable} {
+		t.Run(code.String(), func(t *testing.T) {
+			calls := 0
+			control := messageControl{accept: func(context.Context, *controlplanev1.AcceptInteractionMessageRequest) (*controlplanev1.AcceptInteractionMessageResponse, error) {
+				calls++
+				if calls == 1 {
+					return nil, status.Error(code, "synthetic rejection")
+				}
+				return &controlplanev1.AcceptInteractionMessageResponse{Outcome: controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_RUN_STARTED}, nil
+			}}
+			finished := make(chan error, 1)
+			listener := listenFunc(func(ctx context.Context, _ *controlplanev1.InteractionSource, handler mattermost.MessageHandler) error {
+				err := handler(ctx, mattermost.Message{EventRef: "rejected"})
+				if err == nil {
+					err = handler(ctx, mattermost.Message{EventRef: "accepted"})
+				}
+				finished <- err
+				<-ctx.Done()
+				return ctx.Err()
+			})
+			manager := newSourceManager(control, listener, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{RequestTimeout: time.Second, PollInterval: time.Millisecond})
+			manager.Reconcile(t.Context(), []*controlplanev1.InteractionSource{testSource("same")})
+			select {
+			case err := <-finished:
+				unavailable := code == codes.Unauthenticated || code == codes.Unavailable
+				if (err != nil) != unavailable || !unavailable && calls != 2 {
+					t.Fatalf("calls=%d err=%v", calls, err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("channel handler did not finish")
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			if err := manager.Close(ctx); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

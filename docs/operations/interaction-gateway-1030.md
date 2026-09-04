@@ -63,6 +63,11 @@ team/channel/root. Gateway сверяет канал и читает root пер
 completion передаёт team/channel/post/thread владельцу. Повреждённый readback
 после возможной отправки закрывается как `UNKNOWN_OUTCOME`.
 
+Отклонённое владельцем сообщение не создаёт ACK и не разрывает подписку
+канала: неправильный input, недоступный resource, отсутствие permission и
+неприменимое состояние относятся к конкретному сообщению. Ошибка аутентификации
+workload или недоступность владельца по-прежнему переводит listener в degraded.
+
 ## Human Gate
 
 Серверная delivery несёт `gate_ref`, `gate_version` и `run_ref`. Gateway пишет
@@ -139,9 +144,10 @@ ACK и readiness подключения. Fixture подменяет только
 workload-local границу `GUIDE-DOC-003`; доступность конкретного подключения
 проверяется реальной typed connection-test операцией.
 
-До полного PR остаются согласованный PostgreSQL-прогон с актуальным
-control-plane и зависимые HTTP/PWA управления identity. Live Mattermost и
-staging не запускались.
+Целевой PostgreSQL-прогон включает health routing, identity/revoke, durable ACK,
+UNKNOWN_OUTCOME и exact workload для connection tests. Зависимые HTTP/PWA
+управления identity и финальная общая приёмка остаются отдельными unit эпика.
+Live Mattermost и staging не запускались.
 
 Проверена официальная спецификация
 [Mattermost posts API](https://github.com/mattermost/mattermost-api-reference/blob/master/v4/source/posts.yaml)

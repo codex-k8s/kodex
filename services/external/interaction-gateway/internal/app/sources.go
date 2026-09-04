@@ -13,6 +13,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -135,6 +137,11 @@ func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.In
 				ExpectedGateVersion: message.GateVersion, RunRef: message.RunRef,
 			})
 			if err != nil {
+				// Отказ отдельному отправителю не разрывает подписку всего канала.
+				switch status.Code(err) {
+				case codes.InvalidArgument, codes.PermissionDenied, codes.NotFound, codes.FailedPrecondition:
+					return nil
+				}
 				return err
 			}
 			switch response.GetOutcome() {
