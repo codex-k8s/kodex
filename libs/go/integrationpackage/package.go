@@ -370,7 +370,7 @@ func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
-		!validKey(result.Spec.Category) || !oneOf(result.Spec.Adapter, "SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION") ||
+		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) ||
 		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
 		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 48 {
 		return errors.New("integration package metadata or bounds are invalid")
@@ -417,13 +417,12 @@ func validate(result *Package) error {
 	for _, capability := range result.Spec.Capabilities {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
-			!oneOf(capability.Risk, "READ", "WRITE", "SENSITIVE", "DESTRUCTIVE") ||
-			!oneOf(capability.ApprovalPolicy, "NONE", "HUMAN_EACH_EFFECT") ||
+			!validRisk(capability.Risk) || !validApprovalPolicy(capability.ApprovalPolicy) ||
 			(capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") ||
-			!oneOf(capability.ResourceScope.Kind, "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL") ||
+			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
-			!oneOf(capability.Execution.Idempotency, "READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE") ||
+			!validIdempotency(capability.Execution.Idempotency) ||
 			capability.Execution.TimeoutSeconds < 1 || capability.Execution.TimeoutSeconds > 120 ||
 			capability.Execution.MaxAttempts < 1 || capability.Execution.MaxAttempts > 4 ||
 			capability.Execution.RetryBackoffMilliseconds < 50 || capability.Execution.RetryBackoffMilliseconds > 5000 ||
@@ -466,8 +465,7 @@ func validate(result *Package) error {
 func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
-		if !validKey(field.Key) || !oneOf(field.Type, "STRING", "INTEGER", "BOOLEAN") ||
-			(field.Format != "" && !oneOf(field.Format, "PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER")) ||
+		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||

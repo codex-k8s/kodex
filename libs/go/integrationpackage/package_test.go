@@ -95,6 +95,23 @@ func TestParseRejectsUnknownDuplicateAliasAndTrailingDocument(t *testing.T) {
 	}
 }
 
+func TestParseRejectsUnknownClosedRegistryValues(t *testing.T) {
+	t.Parallel()
+	base := shippedYAML["synthetic.yaml"]
+	for _, replacement := range []struct{ old, new string }{
+		{"adapter: SYNTHETIC_HTTP", "adapter: UNKNOWN"},
+		{"risk: READ", "risk: UNKNOWN"},
+		{"approvalPolicy: NONE", "approvalPolicy: UNKNOWN"},
+		{"kind: SYNTHETIC_JOURNAL", "kind: UNKNOWN"},
+		{"type: STRING", "type: UNKNOWN"},
+		{"idempotency: READ_ONLY", "idempotency: UNKNOWN"},
+	} {
+		if _, err := Parse([]byte(strings.Replace(base, replacement.old, replacement.new, 1))); err == nil {
+			t.Fatalf("Parse() accepted unknown registry value %q", replacement.new)
+		}
+	}
+}
+
 func TestDigestIsStableAndContentBound(t *testing.T) {
 	t.Parallel()
 	first, err := Parse([]byte(shippedYAML["synthetic.yaml"]))
