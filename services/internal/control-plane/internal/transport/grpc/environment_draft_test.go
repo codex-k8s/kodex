@@ -37,9 +37,20 @@ func TestPublishedEnvironmentDraftRejectsIncompleteOwnerResult(t *testing.T) {
 			t.Fatalf("incomplete owner result was accepted: %v", err)
 		}
 	}
-	response, err := castPublishedEnvironmentDraft(command.Result{RuntimeEnvironment: &entity.RuntimeEnvironmentSet{Ref: "environment-test"},
-		RuntimeEnvironmentDraft: &entity.RuntimeEnvironmentDraft{State: "PUBLISHED", PublishedEnvironmentRef: "environment-test"}})
+	response, err := castPublishedEnvironmentDraft(command.Result{RuntimeEnvironment: &entity.RuntimeEnvironmentSet{Ref: "environment-test", Version: 1},
+		RuntimeEnvironmentDraft: &entity.RuntimeEnvironmentDraft{State: "PUBLISHED", Version: 1, ValidationDigest: "validated", PublishedEnvironmentRef: "environment-test"}})
 	if err != nil || response.Environment.Ref != "environment-test" {
 		t.Fatalf("complete owner result: %v", err)
+	}
+}
+
+func TestEnvironmentDraftPreservesAbsentPolicy(t *testing.T) {
+	draft := castEnvironmentDraft(&entity.RuntimeEnvironmentDraft{})
+	if draft.Specification.Policy != nil {
+		t.Fatal("absent policy was materialized")
+	}
+	spec, err := domainEnvironmentDraftSpecification(draft.Specification)
+	if err != nil || !reflect.DeepEqual(spec.Policy, runtimecontract.RuntimeEnvironmentPolicy{}) {
+		t.Fatalf("absent policy round trip: %v", err)
 	}
 }

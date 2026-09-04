@@ -47,6 +47,7 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 			TeamName: itemString(item, "teamName"), ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			CapabilityKey: itemString(item, "capabilityKey"), MessageKey: itemString(item, "messageKey"),
 			TemplateData: structure(templateData), Lease: castLease(item),
+			GateRef: itemString(item, "gateRef"), GateVersion: mapInt64(item, "gateVersion"), RunRef: itemString(item, "runRef"),
 		})
 	}
 	return response, nil
@@ -79,6 +80,7 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 		ExternalPostRef: request.GetExternalPostRef(), ExternalRootPostRef: request.GetExternalRootPostRef(),
 		ExternalChannelRef: request.GetExternalChannelRef(), ExternalUserDigest: request.GetExternalUserDigest(),
 		Message: request.GetMessage(), Decision: decision,
+		ExternalTeamRef: request.GetExternalTeamRef(), GateRef: request.GetGateRef(), RunRef: request.GetRunRef(), ExpectedGateVersion: request.GetExpectedGateVersion(),
 	}
 	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload)
 	if err != nil {
