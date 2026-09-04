@@ -73,14 +73,20 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 		"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION": "2026-08-07.1",
 		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":   strings.Repeat("a", 64),
 		"EGRESS_GATEWAY_CONNECT_LISTEN":           ":8080",
+		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":       ":8081",
 		"EGRESS_GATEWAY_TECHNICAL_LISTEN":         ":9090",
 		"EGRESS_GATEWAY_RESOLV_CONF":              "/etc/resolv.conf",
 	}
 	for key, value := range values {
 		t.Setenv(key, value)
 	}
-	if _, err := loadConfig(); err != nil {
+	config, err := loadConfig()
+	if err != nil {
 		t.Fatal(err)
+	}
+	config.ConnectAddress, config.STTConnectAddress = config.STTConnectAddress, config.ConnectAddress
+	if err := config.validate(); err == nil {
+		t.Fatal("listener configuration must not exchange CNI-bound profiles")
 	}
 	t.Setenv("EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST", strings.Repeat("A", 64))
 	if _, err := loadConfig(); err == nil {
@@ -101,6 +107,7 @@ func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T)
 	go func() {
 		done <- runTechnicalOnly(lifecycle, context.Background(), Config{
 			TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0",
+			STTConnectAddress: "127.0.0.1:0",
 		}, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 	}()
 	select {
@@ -143,7 +150,7 @@ func loadRepositoryPolicy(t *testing.T) *policy.Active {
 	if err != nil {
 		t.Fatal(err)
 	}
-	active, err := policy.Load(value, "2026-08-28.1", "68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89")
+	active, err := policy.Load(value, "2026-09-05.1", "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218")
 	if err != nil {
 		t.Fatal(err)
 	}

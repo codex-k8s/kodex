@@ -92,3 +92,46 @@ func newStrictDecoder(reader *strings.Reader) *json.Decoder {
 	decoder.DisallowUnknownFields()
 	return decoder
 }
+
+func TestProfileIsClosedAndCoveredByDigest(t *testing.T) {
+	var document Document
+	if err := json.Unmarshal([]byte(validPolicy), &document); err != nil {
+		t.Fatal(err)
+	}
+	_, oldDigest, err := parseAndDigest([]byte(validPolicy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	document.Spec.Profiles = []Profile{{Name: STTProfileName, Workload: STTWorkload, Operation: STTOperation,
+		Destinations: []Destination{{Hostname: "api.openai.com", Port: 443}}}}
+	value, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, digest, err := parseAndDigest(value)
+	if err != nil || digest == oldDigest {
+		t.Fatalf("profile must change canonical digest: %v", err)
+	}
+	if _, err := Load(value, document.Metadata.Revision, oldDigest); err == nil {
+		t.Fatal("previous generation accepted changed profile")
+	}
+	for _, change := range []func(*Document){
+		func(d *Document) { d.Spec.Profiles[0].Name = "unknown" },
+		func(d *Document) { d.Spec.Profiles[0].Workload = "agent-runner" },
+		func(d *Document) { d.Spec.Profiles[0].Operation = "openai.chat" },
+		func(d *Document) { d.Spec.Profiles[0].Destinations[0].Hostname = "auth.openai.com" },
+		func(d *Document) { d.Spec.Profiles[0].Destinations[0].Port = 587 },
+		func(d *Document) { d.Spec.Profiles[0].Destinations = nil },
+		func(d *Document) { d.Spec.Profiles = append(d.Spec.Profiles, d.Spec.Profiles[0]) },
+	} {
+		var modified Document
+		if err := json.Unmarshal(value, &modified); err != nil {
+			t.Fatal(err)
+		}
+		change(&modified)
+		invalid, _ := json.Marshal(modified)
+		if _, _, err := parseAndDigest(invalid); err == nil {
+			t.Fatal("invalid profile accepted")
+		}
+	}
+}

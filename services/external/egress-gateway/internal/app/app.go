@@ -33,7 +33,7 @@ const MinimumTerminationGrace = maximumShutdown + workerShutdown + technicalShut
 type runtime struct {
 	state     *state
 	technical *httpserver.Server
-	connect   *gateway.Server
+	connects  []*gateway.Server
 	workers   *serviceruntime.WorkerGroup
 	policy    *policy.Active
 	cancelRun context.CancelFunc
@@ -54,6 +54,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	activePolicy, policyErr := policy.LoadFile(config.PolicyFile, config.ExpectedRevision, config.ExpectedDigest)
 	if policyErr != nil {
+		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+	}
+	if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
 		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 	}
 	servers, err := dnsresolver.LoadSystemServers(config.ResolverConfig)
@@ -115,15 +118,31 @@ func runActive(
 		}
 	}
 
-	current.connect, err = gateway.New(runContext, config.ConnectAddress, activePolicy, resolver, &gateway.NetDialer{}, current.state, business)
+	sttPolicy, err := activePolicy.ForProfile(policy.STTProfileName)
 	if err != nil {
 		return err
 	}
-	if err := current.connect.Listen(); err != nil {
+	for index, profile := range []*policy.Active{activePolicy, sttPolicy} {
+		address := config.ConnectAddress
+		if index == 1 {
+			address = config.STTConnectAddress
+		}
+		server, err := gateway.New(runContext, address, profile, resolver, &gateway.NetDialer{}, current.state, business)
+		if err != nil {
+			return err
+		}
+		current.connects = append(current.connects, server)
+	}
+	if err := current.connects[1].ShareConnectionLimit(current.connects[0]); err != nil {
 		return err
 	}
-	connectResult := make(chan error, 1)
-	go func() { connectResult <- current.connect.Serve() }()
+	connectResult := make(chan error, len(current.connects))
+	for _, server := range current.connects {
+		if err := server.Listen(); err != nil {
+			return err
+		}
+		go func() { connectResult <- server.Serve() }()
+	}
 	current.workers = serviceruntime.StartWorkers(runContext, refresh(activePolicy, resolver, current.state))
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(runContext) }()
@@ -159,43 +178,36 @@ func runTechnicalOnly(
 	metrics *sharedobservability.Metrics,
 	business *internalobservability.Metrics,
 ) (resultErr error) {
+	runContext, cancelRun := context.WithCancel(lifecycle)
+	current := &runtime{state: currentState, cancelRun: cancelRun}
+	defer func() { resultErr = errors.Join(resultErr, current.shutdown(context.WithoutCancel(shutdownBase))) }()
 	technical, err := newTechnicalServer(config.TechnicalAddress, currentState, metrics)
 	if err != nil {
 		return err
 	}
+	current.technical = technical
 	if err := technical.Listen(); err != nil {
 		return err
 	}
 	technicalResult := make(chan error, 1)
 	go func() { technicalResult <- technical.Serve() }()
-	compatibility, err := gateway.NewReadinessOnly(lifecycle, config.ConnectAddress, currentState, business)
-	if err != nil {
-		currentState.setProcess(processDraining)
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(shutdownBase), technicalShutdown)
-		defer cancel()
-		shutdownErr := technical.Shutdown(shutdownCtx)
-		currentState.setProcess(processStopped)
-		return errors.Join(err, shutdownErr)
+	for _, address := range []string{config.ConnectAddress, config.STTConnectAddress} {
+		compatibility, err := gateway.NewReadinessOnly(runContext, address, currentState, business)
+		if err != nil {
+			return err
+		}
+		current.connects = append(current.connects, compatibility)
 	}
-	if err := compatibility.Listen(); err != nil {
-		currentState.setProcess(processDraining)
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(shutdownBase), technicalShutdown)
-		defer cancel()
-		shutdownErr := technical.Shutdown(shutdownCtx)
-		currentState.setProcess(processStopped)
-		return errors.Join(err, shutdownErr)
+	if err := current.connects[1].ShareConnectionLimit(current.connects[0]); err != nil {
+		return err
 	}
-	defer func() {
-		currentState.setProcess(processDraining)
-		shutdownErr := serviceruntime.RunShutdown(context.WithoutCancel(shutdownBase),
-			serviceruntime.ShutdownOperation{Name: "compatibility readiness", Timeout: technicalShutdown, Run: compatibility.Shutdown},
-			serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: technicalShutdown, Run: technical.Shutdown},
-		)
-		currentState.setProcess(processStopped)
-		resultErr = errors.Join(resultErr, shutdownErr)
-	}()
-	compatibilityResult := make(chan error, 1)
-	go func() { compatibilityResult <- compatibility.Serve() }()
+	compatibilityResult := make(chan error, len(current.connects))
+	for _, server := range current.connects {
+		if err := server.Listen(); err != nil {
+			return err
+		}
+		go func() { compatibilityResult <- server.Serve() }()
+	}
 	select {
 	case <-lifecycle.Done():
 		return nil
@@ -228,6 +240,9 @@ func (current *runtime) shutdown(base context.Context) error {
 	}
 	current.state.setProcess(processDraining)
 	current.cancelRun()
+	for _, server := range current.connects {
+		server.Drain()
+	}
 	if current.workers != nil {
 		current.workers.Stop()
 	}
@@ -237,10 +252,11 @@ func (current *runtime) shutdown(base context.Context) error {
 	}
 	result := serviceruntime.RunShutdown(base,
 		serviceruntime.ShutdownOperation{Name: "CONNECT server", Timeout: shutdownTimeout, Run: func(ctx context.Context) error {
-			if current.connect == nil {
-				return nil
+			var result error
+			for _, server := range current.connects {
+				result = errors.Join(result, server.Shutdown(ctx))
 			}
-			return current.connect.Shutdown(ctx)
+			return result
 		}},
 		serviceruntime.ShutdownOperation{Name: "readiness worker", Timeout: workerShutdown, Run: func(ctx context.Context) error {
 			if current.workers == nil {
