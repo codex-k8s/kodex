@@ -33,6 +33,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/skillscanclient"
 	platformgrpc "github.com/codex-k8s/kodex/services/internal/control-plane/internal/transport/grpc"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
@@ -79,6 +80,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	}
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
+	}
+	skillScanner, err := skillscanclient.New(config.SkillScannerSocket, config.SkillScannerTimeout)
+	if err != nil {
+		return fmt.Errorf("construct skill scanner: %w", err)
+	}
+	if err := repository.ConfigureSkillScanner(skillScanner); err != nil {
+		return fmt.Errorf("configure skill scanner: %w", err)
 	}
 	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
 		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,

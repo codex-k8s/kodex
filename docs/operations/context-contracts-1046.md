@@ -13,8 +13,9 @@ updated: 2026-09-05
 Источник: MVP-UI-37, Issue #1046. Это согласованная передача Proto/generated/policy
 внутри одного полного CP unit, не готовая реализация всего owner lifecycle.
 Memory create/revise/archive/restore/purge и list/get/history уже подключены к
-owner SQL/domain. Skill и agent bindings пока наследуют gRPC Unimplemented;
-их нельзя считать PASS по codegen.
+owner SQL/domain. Skill lifecycle и list/get/history также подключены;
+agent bindings пока наследуют gRPC Unimplemented. Реальный scanner deploy и
+runtime materialization нельзя считать PASS по codegen или PostgreSQL fixture.
 
 ## Общие правила
 
@@ -99,7 +100,9 @@ Memory CRUD/history: локальный targeted PostgreSQL PASS, точка в�
 Проверены immutable history, version conflict, page cursor, archive/restore,
 terminal purge и отсутствие summary в replay после purge. Migration 00611
 применена штатным runner в disposable PostgreSQL; live-проверки не выполнялись.
-Skill lifecycle, agent bindings и runtime materialization ещё не реализованы.
+Skill lifecycle/list/history: локальный targeted PostgreSQL PASS с явно тестовым
+scanner port; production Unix-socket client проверен Go/race protocol fixtures.
+Agent bindings и runtime materialization ещё не реализованы.
 STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.
 
@@ -120,3 +123,41 @@ upgrade существующих системных ролей находитс�
 read path — GetMemoryRecord/ListMemoryRecords/ListMemoryRecordRevisions. Команды
 не запускают фонового consumer; дальнейшая runtime materialization должна
 проверять активное состояние и retention заново перед каждым attempt.
+
+## Skill limits и передача HTTP
+
+Proto shape не изменён относительно `d97753154`. Доступны все девять команд
+Skill lifecycle и три query RPC; bind/unbind ещё не подключены.
+
+- Не более 128 файлов; каждый до 32 MiB, суммарно до 64 MiB.
+- `SKILL.md` до 256 KiB, UTF-8, обязательные YAML name/description и непустые
+  инструкции; frontmatter должен совпадать с specification.
+- Name: 1–160 символов, description: до 2000; manifest description непустой.
+- Path: до 240 UTF-8 bytes, относительный canonical path; запрещены traversal,
+  dotfiles, backslash, colon, NUL, CR/LF, whitespace по краям сегментов и
+  регистронезависимые дубли. Ровно один root `SKILL.md` с точным регистром.
+- Supporting files: `.md`, `.txt`, `.json`, `.csv`, `.png`, `.jpg`, `.jpeg`, `.webp`.
+  Executable scripts, HTML, архивы и другие расширения не разрешены.
+- Save сбрасывает scan/review. Validate требует exact digest; проверяет object
+  receipt и фактический SHA-256, structural manifest и malware scanner.
+- Review: только VALIDATED с CLEAN scan digest не старше суток. Publish:
+  только APPROVED с тем же scan digest, exact file revisions и действующим
+  artifact access. Публикация без review закрыто отклоняется.
+- Archive отключает bindings и завершает открытую draft как DISCARDED;
+  restore не включает прежние bindings; purge необратим и удаляет file refs.
+- Команды атомарно сохраняют audit/receipt. Domain event отсутствует;
+  авторитетный read path — GetSkillBundle/ListSkillBundles/ListSkillBundleRevisions.
+
+Реальный адаптер использует только Unix socket из
+`CONTROL_PLANE_SKILL_SCANNER_SOCKET` (default
+`/run/kodex-skill-scanner/clamd.sock`) и bounded timeout
+`CONTROL_PLANE_SKILL_SCANNER_TIMEOUT` (default 15s). TCP fallback отсутствует.
+INSTREAM framing и VERSION provenance реализованы по
+[официальному протоколу ClamAV](https://docs.clamav.net/manual/Usage/ClamdProtocol.html).
+Смена engine/database revision во время scan, ошибка, неизвестный ответ или база
+старше семи суток закрыто отклоняются. Verdict не выдаётся за runtime readiness.
+
+CP-owned scanner container, signature database delivery и его readiness ещё
+не подключены. Без них Validate возвращает INVALID/ERROR с
+`SKILL_MALWARE_SCANNER_UNAVAILABLE`, а не фиктивный CLEAN. Реальный ClamAV: NOT RUN.
+Структурный artifact scan не заменяет malware scanner.
