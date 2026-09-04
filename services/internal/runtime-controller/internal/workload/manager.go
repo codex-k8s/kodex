@@ -63,6 +63,10 @@ const (
 	providerSecretResourceVersionAnnotation = "runtime.kodex.dev/provider-secret-resource-version"
 	providerCredentialRefAnnotation         = "runtime.kodex.dev/provider-credential-ref"
 	providerCredentialDigestAnnotation      = "runtime.kodex.dev/provider-credential-digest"
+	credentialProjectionNameAnnotation      = "runtime.kodex.dev/credential-projection-name"
+	credentialProjectionUIDAnnotation       = "runtime.kodex.dev/credential-projection-uid"
+	credentialProjectionVersionAnnotation   = "runtime.kodex.dev/credential-projection-resource-version"
+	credentialProjectionDigestAnnotation    = "runtime.kodex.dev/credential-projection-digest"
 	providerAccountRefAnnotation            = "runtime.kodex.dev/provider-account-ref"
 	previousCredentialRefAnnotation         = "runtime.kodex.dev/previous-provider-credential-ref"
 	previousCredentialDigestAnnotation      = "runtime.kodex.dev/previous-provider-credential-digest"
@@ -76,6 +80,7 @@ const (
 	memoryManifestKey                       = "memories.json"
 	mcpManifestKey                          = "mcp.json"
 	callbackManifestKey                     = "callback.json"
+	providerDigestKey                       = "provider-auth.sha256"
 	maximumKubernetesProjectionBytes        = 900 << 10
 )
 
@@ -99,6 +104,14 @@ type Config struct {
 // не сериализуется в runtime.json, доступный role image.
 type ProviderSecretBinding struct {
 	Name, UID, ResourceVersion, ContentSHA256 string
+}
+
+// CredentialProjection содержит только exact metadata broker-owned Secret.
+// Значения credentials runtime-controller не читает и не копирует в ticket.
+type CredentialProjection struct {
+	Namespace, SecretName, SecretUID, SecretResourceVersion, ContentSHA256 string
+	ProviderAuthKey                                                        string
+	RuntimeSecretKeys                                                      map[string]string
 }
 
 type managedChatGPTAuthentication struct {
@@ -689,6 +702,24 @@ func providerSecretBinding(revision *controlplanev1.RuntimeRevisionSnapshot) (Pr
 		ResourceVersion: binding.GetSecretResourceVersion(), ContentSHA256: binding.GetContentSha256()}, nil
 }
 
+func validateCredentialProjection(input runtimecontract.RunnerInput, projection CredentialProjection, namespace string) error {
+	if namespace != "kodex-runtime" || projection.Namespace != namespace || !validDNSLabel(projection.SecretName) ||
+		projection.SecretUID == "" || projection.SecretResourceVersion == "" || projection.ProviderAuthKey != "provider-auth.json" {
+		return errors.New("runtime credential projection binding is invalid")
+	}
+	digest, err := hex.DecodeString(projection.ContentSHA256)
+	if err != nil || len(digest) != sha256.Size || projection.ContentSHA256 != hex.EncodeToString(digest) ||
+		len(projection.RuntimeSecretKeys) != len(input.SecretProjections) {
+		return errors.New("runtime credential projection binding is invalid")
+	}
+	for _, item := range input.SecretProjections {
+		if projection.RuntimeSecretKeys[item.Name] != item.Name {
+			return errors.New("runtime credential projection key set mismatch")
+		}
+	}
+	return nil
+}
+
 func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision *controlplanev1.RuntimeRevisionSnapshot) {
 	for _, capability := range revision.GetCapabilities() {
 		input.Capabilities = append(input.Capabilities, capability.GetKey())
@@ -749,16 +780,15 @@ func runnerArtifactSource(source controlplanev1.ArtifactSource) string {
 	}
 }
 
-func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding) error {
+func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials CredentialProjection) error {
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || manager.validateImage(input) != nil {
 		return errors.New("runtime turn input is invalid")
 	}
-	if err := manager.validateProviderSecret(ctx, input, providerBinding); err != nil {
-		return fmt.Errorf("validate provider credential projection: %w", err)
+	if err := validateRuntimeRevisionDigest(input, providerBinding); err != nil {
+		return err
 	}
-	environmentSecrets, err := manager.materializeEnvironmentSecrets(ctx, input)
-	if err != nil {
-		return fmt.Errorf("materialize runtime environment secrets: %w", err)
+	if err := validateCredentialProjection(input, credentials, manager.config.RuntimeNamespace); err != nil {
+		return err
 	}
 	if err := manager.ensureSessionPVC(ctx, input); err != nil {
 		return fmt.Errorf("ensure runtime session volume: %w", err)
@@ -775,10 +805,10 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if err := manager.ensureProjection(ctx, podName, "turn", input); err != nil {
 		return fmt.Errorf("ensure runtime VFS projection: %w", err)
 	}
-	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, environmentSecrets, &providerBinding); err != nil {
+	if err := manager.ensureTicket(ctx, secretName, podName, "turn", input, token, nil, &providerBinding); err != nil {
 		return fmt.Errorf("ensure runtime execution ticket: %w", err)
 	}
-	pod := manager.runtimePod(input, providerBinding, secretName, podName, "turn")
+	pod := manager.runtimePod(input, providerBinding, &credentials, secretName, podName, "turn")
 	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
@@ -1035,7 +1065,7 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		if projectionErr := manager.ensureProjection(ctx, podName, "warm", input); projectionErr != nil {
 			return false, projectionErr
 		}
-		pod := manager.runtimePod(input, providerBinding, secretName, podName, "warm")
+		pod := manager.runtimePod(input, providerBinding, nil, secretName, podName, "warm")
 		existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
 		if apierrors.IsAlreadyExists(err) {
 			existing, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
@@ -1357,6 +1387,10 @@ func terminalContainerDiagnostic(pod *corev1.Pod) string {
 func runtimePodMatches(existing, desired *corev1.Pod) bool {
 	if existing == nil || desired == nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
 		existing.Spec.ServiceAccountName != desired.Spec.ServiceAccountName ||
+		existing.Spec.HostNetwork || existing.Spec.HostPID || existing.Spec.HostIPC ||
+		!apiequality.Semantic.DeepEqual(existing.Spec.SecurityContext, desired.Spec.SecurityContext) ||
+		!apiequality.Semantic.DeepEqual(existing.Spec.EnableServiceLinks, desired.Spec.EnableServiceLinks) ||
+		existing.Spec.RestartPolicy != desired.Spec.RestartPolicy ||
 		!apiequality.Semantic.DeepEqual(existing.Spec.AutomountServiceAccountToken, desired.Spec.AutomountServiceAccountToken) ||
 		!apiequality.Semantic.DeepEqual(canonicalRuntimeContainers(existing.Spec.InitContainers), canonicalRuntimeContainers(desired.Spec.InitContainers)) ||
 		!apiequality.Semantic.DeepEqual(canonicalRuntimeContainers(existing.Spec.Containers), canonicalRuntimeContainers(desired.Spec.Containers)) ||
@@ -1447,7 +1481,7 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 	return map[string]string{
 		inputKey: string(runtimeRaw), workspacePolicyKey: string(workspaceRaw), inputManifestKey: string(inputs.Bytes),
 		resultManifestKey: results, skillManifestKey: skills, memoryManifestKey: memory,
-		mcpManifestKey: mcp, callbackManifestKey: callback,
+		mcpManifestKey: mcp, callbackManifestKey: callback, providerDigestKey: input.ProviderCredentialSHA256,
 	}, nil
 }
 
@@ -1590,22 +1624,6 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 	if err != nil {
 		return err
 	}
-	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
-	if err == nil {
-		request := existing.Spec.Resources.Requests[corev1.ResourceStorage]
-		if existing.Labels[managedLabel] != "true" || existing.Labels[sessionHashAnnotation] != shortHash(input.SessionRef) ||
-			existing.Annotations[organizationHashAnnotation] != shortHash(input.OrganizationRef) ||
-			existing.Annotations[projectHashAnnotation] != shortHash(input.ProjectRef) || request.Cmp(manager.pvcRequest) != 0 ||
-			len(existing.Spec.AccessModes) != 1 || existing.Spec.AccessModes[0] != corev1.ReadWriteOnce ||
-			existing.Spec.Selector != nil || existing.Spec.DataSource != nil || existing.Spec.DataSourceRef != nil ||
-			(manager.config.StorageClass != "" && (existing.Spec.StorageClassName == nil || *existing.Spec.StorageClassName != manager.config.StorageClass)) {
-			return errors.New("existing runtime session volume conflicts with exact session binding")
-		}
-		return nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return errors.New("read runtime session volume")
-	}
 	var storageClassName *string
 	if manager.config.StorageClass != "" {
 		storageClassName = &manager.config.StorageClass
@@ -1615,20 +1633,60 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 		Annotations: map[string]string{organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef)}},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
+	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		if !sessionPVCMatches(existing, pvc, manager.config.StorageClass) {
+			return errors.New("existing runtime session volume conflicts with exact session binding")
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return errors.New("read runtime session volume")
+	}
 	_, err = manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Create(ctx, pvc, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
+	if apierrors.IsAlreadyExists(err) {
+		// Победитель гонки проходит ту же проверку scope до создания Pod.
+		existing, readErr := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+		if readErr != nil || !sessionPVCMatches(existing, pvc, manager.config.StorageClass) {
+			return errors.New("existing runtime session volume conflicts with exact session binding")
+		}
+		return nil
+	}
+	if err != nil {
 		return errors.New("create runtime session volume")
 	}
 	return nil
 }
 
-func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, ticketSecret, podName, mode string) *corev1.Pod {
+func sessionPVCMatches(existing, desired *corev1.PersistentVolumeClaim, storageClass string) bool {
+	if existing == nil || existing.DeletionTimestamp != nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
+		!apiequality.Semantic.DeepEqual(existing.Spec.AccessModes, desired.Spec.AccessModes) ||
+		existing.Spec.Selector != nil || existing.Spec.DataSource != nil || existing.Spec.DataSourceRef != nil ||
+		existing.Spec.VolumeMode != nil && *existing.Spec.VolumeMode != corev1.PersistentVolumeFilesystem ||
+		storageClass != "" && (existing.Spec.StorageClassName == nil || *existing.Spec.StorageClassName != storageClass) {
+		return false
+	}
+	actual := existing.Spec.Resources.Requests[corev1.ResourceStorage]
+	expected := desired.Spec.Resources.Requests[corev1.ResourceStorage]
+	return actual.Cmp(expected) == 0
+}
+
+func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials *CredentialProjection, ticketSecret, podName, mode string) *corev1.Pod {
 	roleArgs := []string{"runtime-session"}
 	if mode == "warm" {
 		roleArgs = []string{"runtime-warm"}
 	}
 	sessionVolumeName, _ := runtimecontract.SessionPVCName(input.SessionRef)
 	workspaceLimit := *resource.NewQuantity(input.WorkspacePolicy.MaximumWritableBytes, resource.BinarySI)
+	providerSecretName, providerAuthKey, runtimeSecretName := providerBinding.Name, "auth.json", ticketSecret
+	runtimeSecretKeys := make(map[string]string, len(input.SecretProjections))
+	for _, item := range input.SecretProjections {
+		runtimeSecretKeys[item.Name] = environmentProjectionKey(item.Name)
+	}
+	if credentials != nil {
+		providerSecretName, providerAuthKey, runtimeSecretName = credentials.SecretName, credentials.ProviderAuthKey, credentials.SecretName
+		runtimeSecretKeys = credentials.RuntimeSecretKeys
+	}
 	volumes := []corev1.Volume{
 		{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: sessionVolumeName}}},
 		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
@@ -1638,7 +1696,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "runtime-ticket", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-client", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientTLSSecret, DefaultMode: int32Pointer(0o440)}}},
-		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerBinding.Name, DefaultMode: int32Pointer(0o400)}}},
+		{Name: "provider-auth", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: providerSecretName, DefaultMode: int32Pointer(0o400)}}},
 		{Name: "provider-socket", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "provider-credential-relay", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("8Mi"))}}},
 		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("512Mi"))}}},
@@ -1656,10 +1714,16 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "vfs-input", MountPath: "/workspace/input", ReadOnly: true},
 		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge", ReadOnly: true},
 	}
-	roleMounts := append([]corev1.VolumeMount(nil), materializerWorkspaceMounts...)
+	roleMounts := append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...)
 	roleMounts = append(roleMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, corev1.VolumeMount{Name: "provider-socket", MountPath: "/run/kodex/provider"}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})
 	initMounts := append([]corev1.VolumeMount(nil), materializerWorkspaceMounts...)
-	initMounts = append(initMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})
+	initMounts = append(initMounts,
+		corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
+		corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true},
+		corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true},
+		corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true},
+		corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"},
+	)
 	for _, item := range input.EnvironmentPolicy.Volumes {
 		volumeName := "environment-" + shortHash(item.Name)
 		source := &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(*resource.NewQuantity(item.SizeMiB<<20, resource.BinarySI))}
@@ -1700,8 +1764,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 			{Name: "NO_PROXY", Value: "127.0.0.1,localhost"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}, {Name: "DEPLOYMENT_ENVIRONMENT", Value: manager.config.Environment}}, SecurityContext: providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile),
 		VolumeMounts: append(append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...), []corev1.VolumeMount{
 			{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true},
-			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.json", SubPath: "auth.json", ReadOnly: true},
-			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.sha256", SubPath: "auth.sha256", ReadOnly: true},
+			{Name: "provider-auth", MountPath: "/run/secrets/kodex/runtime/provider/auth.json", SubPath: providerAuthKey, ReadOnly: true},
+			{Name: "runtime-input", MountPath: "/run/secrets/kodex/runtime/provider/auth.sha256", SubPath: providerDigestKey, ReadOnly: true},
 			{Name: "provider-socket", MountPath: "/run/kodex/provider"},
 			{Name: "provider-credential-relay", MountPath: "/run/kodex/provider-credential-relay"},
 			{Name: "provider-tmp", MountPath: "/tmp"},
@@ -1728,7 +1792,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	}
 	for _, item := range input.SecretProjections {
 		provider.Env = append(provider.Env, corev1.EnvVar{Name: item.Name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: ticketSecret}, Key: environmentProjectionKey(item.Name), Optional: boolPointer(false),
+			LocalObjectReference: corev1.LocalObjectReference{Name: runtimeSecretName}, Key: runtimeSecretKeys[item.Name], Optional: boolPointer(false),
 		}}})
 	}
 	annotations := runtimeProjectionAnnotations(input, podName)
@@ -1736,6 +1800,12 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	if mode == "turn" {
 		annotations[leaseAnnotation] = input.LeaseRef
 		labels[executionHashLabel] = shortHash(input.LeaseRef)
+		if credentials != nil {
+			annotations[credentialProjectionNameAnnotation] = credentials.SecretName
+			annotations[credentialProjectionUIDAnnotation] = credentials.SecretUID
+			annotations[credentialProjectionVersionAnnotation] = credentials.SecretResourceVersion
+			annotations[credentialProjectionDigestAnnotation] = credentials.ContentSHA256
+		}
 	}
 	if mode == "warm" {
 		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)

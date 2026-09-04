@@ -40,24 +40,27 @@ func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
 		LeaseGeneration: input.LeaseGeneration, RuntimeRevisionRef: input.RuntimeRevisionRef,
 		RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 		InputDigest: input.InputDigest}
-	if identity.OrganizationRef == "" || identity.ProjectRef == "" || identity.RunRef == "" || identity.NodeRef == "" || identity.SessionRef == "" ||
+	if input.Mode != RunnerModeTurn || input.WorkloadInstance == "" || identity.OrganizationRef == "" || identity.ProjectRef == "" && !input.SystemAssistant || identity.RunRef == "" || identity.NodeRef == "" || identity.SessionRef == "" ||
 		identity.TurnRef == "" || identity.Attempt < 1 || identity.LeaseRef == "" || identity.LeaseFence == "" || identity.LeaseGeneration < 1 ||
 		identity.RuntimeRevisionRef == "" || identity.RuntimeRevisionVersion < 1 || identity.RuntimeRevisionDigest == "" || identity.InputDigest == "" {
 		return "", "", errors.New("runtime execution identity is incomplete")
 	}
+	// Одинаковая JSON-модель materialization и wire input сохраняет семантику
+	// пустых optional collections после encode/decode без второго списка полей.
+	materialization := input
+	materialization.ExecutionBindingDigest, materialization.MCPBindingDigest = "", ""
 	executionRaw, err := json.Marshal(struct {
-		Identity runtimeExecutionIdentity `json:"identity"`
-		Methods  []string                 `json:"methods"`
-	}{Identity: identity, Methods: runtimeCallbackMethods[:]})
+		Materialization RunnerInput `json:"materialization"`
+		Methods         []string    `json:"methods"`
+	}{Materialization: materialization, Methods: runtimeCallbackMethods[:]})
 	if err != nil {
 		return "", "", errors.New("encode runtime execution binding")
 	}
 	executionSum := sha256.Sum256(executionRaw)
 	mcpRaw, err := json.Marshal(struct {
-		Identity     runtimeExecutionIdentity `json:"identity"`
-		Capabilities []string                 `json:"capabilities"`
-		Grants       []RunnerIntegrationGrant `json:"grants"`
-	}{Identity: identity, Capabilities: input.Capabilities, Grants: input.IntegrationGrants})
+		Materialization RunnerInput `json:"materialization"`
+		Method          string      `json:"method"`
+	}{Materialization: materialization, Method: "POST mcp"})
 	if err != nil {
 		return "", "", errors.New("encode runtime MCP binding")
 	}

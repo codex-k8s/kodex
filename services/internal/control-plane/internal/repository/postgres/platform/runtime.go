@@ -941,6 +941,7 @@ func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
 		Rules: []entity.RuntimeWorkspacePathRule{
 			{Path: "/workspace/input", Access: "READ_ONLY"},
 			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
+			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
 			{Path: "/workspace", Access: "WRITABLE"},
 		},
 		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},

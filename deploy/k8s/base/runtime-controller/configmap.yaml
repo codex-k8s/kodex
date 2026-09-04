@@ -19,6 +19,9 @@ data:
   RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE: "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.crt"
   RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE: "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.key"
   RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE: "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws"
+  RUNTIME_CONTROLLER_SECRET_BROKER_TARGET: "dns:///secret-broker.kodex-system.svc:8443"
+  RUNTIME_CONTROLLER_SECRET_BROKER_TLS_SERVER_NAME: "secret-broker.kodex-system.svc.cluster.local"
+  RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE: "/var/run/config/kodex/runtime-controller/control-plane/ca.pem"
   RUNTIME_CONTROLLER_PROVIDER_HTTPS_PROXY: "http://egress-gateway.kodex-system.svc:8080"
   # Empty means the installation-selected default StorageClass.
   RUNTIME_CONTROLLER_STORAGE_CLASS: ""

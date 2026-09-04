@@ -633,6 +633,42 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .metadata.namespace == "kodex-runtime")
 ' >/dev/null || fail 'release runtime namespace boundary is invalid'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
+  map(select(.kind != null)) as $resources |
+  any($resources[];
+    .kind == "ConfigMap" and .metadata.name == "runtime-controller-runtime" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_TARGET ==
+      "dns:///secret-broker.kodex-system.svc:8443" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_TLS_SERVER_NAME ==
+      "secret-broker.kodex-system.svc.cluster.local" and
+    .data.RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE ==
+      "/var/run/config/kodex/runtime-controller/control-plane/ca.pem") and
+  any($resources[];
+    .kind == "NetworkPolicy" and
+    .metadata.name == "runtime-controller-exact-paths" and
+    any(.spec.egress[];
+      any(.to[]?.podSelector.matchLabels?;
+        .["app.kubernetes.io/name"] == "secret-broker" and
+        .["app.kubernetes.io/component"] == "secret-broker") and
+      any(.ports[]?; .protocol == "TCP" and .port == 8443))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-execution-ticket-exact-projection" and
+    ([.spec.validations[].expression] | join(" ") |
+      contains("size(object.data) == 2"))) and
+  any($resources[];
+    .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "runtime-revision-exact-configmap-projection" and
+    ([.spec.validations[].expression] | join(" ") |
+      contains("provider-auth.sha256")) and
+    ([.spec.validations[].expression] | join(" ") |
+      contains("size(object.data) == 9"))) and
+  any($resources[];
+    .kind == "PrometheusRule" and .metadata.name == "runtime-controller" and
+    any(.spec.groups[].rules[];
+      .alert == "RuntimeWorkspaceCanaryFailed" and
+      (.annotations.runbook_url | startswith("https://"))))
+' >/dev/null || fail 'release runtime credential projection boundary is incomplete'
+yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "NetworkPolicy" and .metadata.name == "control-plane-exact-runtime-paths" and
     ([.spec.ingress[0].from[]? | .podSelector.matchLabels["app.kubernetes.io/name"] // empty] |

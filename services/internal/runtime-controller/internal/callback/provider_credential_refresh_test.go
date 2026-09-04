@@ -181,7 +181,7 @@ func TestProviderCredentialRefreshReadbackRequiresExactNewRevision(t *testing.T)
 	}
 }
 
-func providerCredentialRefreshRouteFixture(t *testing.T) (*workload.Manager, *fake.Clientset, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest, string) {
+func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runtimecontract.RunnerInput)) (*workload.Manager, *fake.Clientset, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest, string) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
@@ -232,9 +232,18 @@ func providerCredentialRefreshRouteFixture(t *testing.T) (*workload.Manager, *fa
 	}
 	input.EffectiveKubernetesAccess = access
 	input.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, input.EnvironmentImage, nil, policy)
+	for _, apply := range configure {
+		apply(&input)
+	}
+	input.RuntimeRevisionDigest, _ = runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: source.Name, SecretUID: string(source.UID), SecretResourceVersion: source.ResourceVersion,
+	})
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
 	binding := workload.ProviderSecretBinding{Name: source.Name, UID: string(source.UID), ResourceVersion: source.ResourceVersion, ContentSHA256: oldDigestHex}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	projection := workload.CredentialProjection{Namespace: "kodex-runtime", SecretName: "runtime-credentials-0123456789abcdef0123456789abcdef01234567",
+		SecretUID: "40000000-0000-4000-8000-000000000001", SecretResourceVersion: "19", ContentSHA256: strings.Repeat("c", 64),
+		ProviderAuthKey: "provider-auth.json", RuntimeSecretKeys: map[string]string{}}
+	if err := manager.EnsureTurn(context.Background(), input, binding, projection); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 	ticketName := callbackTicketName(input.LeaseRef)

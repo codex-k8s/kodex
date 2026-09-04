@@ -114,7 +114,7 @@ func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	if err := client.Complete(context.Background(), input, payload); err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -199,7 +199,7 @@ func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	err = client.Complete(context.Background(), input, payload)
 	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
 		t.Fatalf("Complete() error = %v", err)

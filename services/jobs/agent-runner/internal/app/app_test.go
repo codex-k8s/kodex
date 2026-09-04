@@ -323,6 +323,28 @@ func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation
 	}
 }
 
+func TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "private-manifest.json")
+	if err := os.WriteFile(target, manifest.Bytes, 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "input", "manifest.json")); err != nil {
+		t.Fatal(err)
+	}
+	err = verifyInputArtifacts(model.Input{WorkspaceRoot: root})
+	if err == nil || strings.Contains(err.Error(), target) {
+		t.Fatalf("verifyInputArtifacts() error = %v", err)
+	}
+}
+
 func TestRenderInstructionsDoesNotMaterializeUnpromisedNames(t *testing.T) {
 	for _, instructions := range []string{"{{ .agent.name }}", "{{ .project.name }}"} {
 		if _, err := renderInstructions(model.Input{Instructions: instructions}); err == nil {

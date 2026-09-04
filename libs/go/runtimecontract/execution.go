@@ -294,6 +294,11 @@ func (input RunnerInput) Validate() error {
 	if len(input.InputArtifacts) > 0 && !containsString(input.Capabilities, ArtifactCapability) {
 		return errors.New("runner artifact capability is missing")
 	}
+	for _, grant := range input.IntegrationGrants {
+		if !containsString(input.Capabilities, grant.CapabilityKey) {
+			return errors.New("runner integration grant is outside effective capabilities")
+		}
+	}
 	if input.ProjectRef != "" && !opaqueReferencePattern.MatchString(input.ProjectRef) {
 		return errors.New("runner project binding is invalid")
 	}
@@ -383,6 +388,8 @@ func validSessionContext(messages []RunnerSessionMessage) bool {
 }
 
 func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
+	refs := make(map[string]struct{}, len(grants))
+	bindings := make(map[string]struct{}, len(grants))
 	for _, grant := range grants {
 		if !opaqueReferencePattern.MatchString(grant.Ref) || !opaqueReferencePattern.MatchString(grant.ConnectionRef) ||
 			grant.DefinitionKey == "" || len(grant.DefinitionKey) > 128 ||
@@ -393,6 +400,15 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 			!containsString([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, grant.Risk) {
 			return false
 		}
+		binding := grant.ConnectionRef + "\x00" + grant.CapabilityKey
+		if _, duplicate := refs[grant.Ref]; duplicate {
+			return false
+		}
+		if _, duplicate := bindings[binding]; duplicate {
+			return false
+		}
+		refs[grant.Ref] = struct{}{}
+		bindings[binding] = struct{}{}
 	}
 	return true
 }
@@ -439,8 +455,8 @@ func DecodeRunnerInput(raw []byte) (RunnerInput, error) {
 }
 
 // WarmCompatibilityDigest связывает always-hot runtime только с полями,
-// которые определяют его неизменяемое окружение. Идентификаторы Session,
-// Turn и execution input остаются частью полного RuntimeRevisionDigest.
+// которые определяют его неизменяемое окружение и session boundary. Turn и
+// execution input остаются частью полного RuntimeRevisionDigest.
 func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	if !input.SystemAssistant {
 		return "", errors.New("warm runtime compatibility requires system assistant")
@@ -448,13 +464,28 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	capabilities := append([]string(nil), input.Capabilities...)
 	sort.Strings(capabilities)
 	payload := struct {
+		OrganizationRef             string
+		SessionRef                  string
+		AgentRef                    string
 		ImageReference              string
 		ImageManifestDigest         string
 		EnvironmentImage            RuntimeEnvironmentImage
 		EnvironmentTools            []RuntimeEnvironmentTool
 		RoleRuntimeContractRevision uint64
 		RoleRuntimeContractSHA256   string
+		RoleDefinitionRef           string
+		RuntimeProfileRef           string
+		RuntimeProfileRevision      string
 		Instructions                string
+		InstructionRef              string
+		InstructionDigest           string
+		PromptTemplateRef           string
+		PromptTemplateDigest        string
+		PromptMaterializationDigest string
+		SystemSTTConfigurationRef   string
+		SystemSTTRevisionRef        string
+		SystemSTTVersion            int64
+		SystemSTTDigest             string
 		Provider                    string
 		Model                       string
 		ProviderAccountRef          string
@@ -483,12 +514,22 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		EnvironmentValues           []RuntimeEnvironmentValue
 		SecretProjections           []RuntimeSecretProjection
 		EnvironmentPolicy           RuntimeEnvironmentPolicy
+		WorkspacePolicy             RuntimeWorkspacePolicy
+		KubernetesAccessProfile     RuntimeKubernetesAccessProfile
 	}{
+		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
 		EnvironmentImage: input.EnvironmentImage, EnvironmentTools: input.EnvironmentTools,
 		RoleRuntimeContractRevision: input.RoleRuntimeContractRevision,
 		RoleRuntimeContractSHA256:   input.RoleRuntimeContractSHA256,
-		Instructions:                input.Instructions, Provider: input.Provider, Model: input.Model,
+		RoleDefinitionRef:           input.RoleDefinitionRef, RuntimeProfileRef: input.RuntimeProfileRef,
+		RuntimeProfileRevision: input.RuntimeProfileRevision, Instructions: input.Instructions,
+		InstructionRef: input.InstructionRef, InstructionDigest: input.InstructionDigest,
+		PromptTemplateRef: input.PromptTemplateRef, PromptTemplateDigest: input.PromptTemplateDigest,
+		PromptMaterializationDigest: input.PromptMaterializationDigest,
+		SystemSTTConfigurationRef:   input.SystemSTTConfigurationRef, SystemSTTRevisionRef: input.SystemSTTConfigurationRevisionRef,
+		SystemSTTVersion: input.SystemSTTConfigurationVersion, SystemSTTDigest: input.SystemSTTConfigurationDigest,
+		Provider: input.Provider, Model: input.Model,
 		ProviderAccountRef: input.ProviderAccountRef, ProviderCredentialRef: input.ProviderCredentialRef,
 		ProviderCredentialRevision: input.ProviderCredentialRevision,
 		ProviderCredentialSHA256:   input.ProviderCredentialSHA256,
@@ -500,7 +541,8 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		RuntimeEnvironmentRef: input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
-		EnvironmentPolicy: input.EnvironmentPolicy,
+		EnvironmentPolicy: input.EnvironmentPolicy, WorkspacePolicy: input.WorkspacePolicy,
+		KubernetesAccessProfile: input.EffectiveKubernetesAccess.Profile,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -579,6 +621,7 @@ func (usage TokenUsage) Validate() error {
 
 type RunnerCompletionRequest struct {
 	RuntimeRevisionDigest string           `json:"runtime_revision_digest"`
+	Attempt               int32            `json:"attempt"`
 	Success               bool             `json:"success"`
 	ResultSummary         string           `json:"result_summary"`
 	SafeErrorCode         string           `json:"safe_error_code,omitempty"`
@@ -591,7 +634,7 @@ type RunnerCompletionRequest struct {
 }
 
 func (request RunnerCompletionRequest) Validate() error {
-	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || len(request.ResultSummary) > 64<<10 ||
+	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || request.Attempt < 1 || len(request.ResultSummary) > 64<<10 ||
 		len(request.SafeErrorCode) > 128 || len(request.Artifacts) > MaximumCompletionFiles ||
 		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") ||
 		request.Usage.Validate() != nil {

@@ -71,7 +71,8 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	credentials := testCredentialProjection(input)
+	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
@@ -96,6 +97,7 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	role := containerByName(t, pod.Spec.Containers, "role-runtime")
 	provider := containerByName(t, pod.Spec.Containers, "provider-runtime")
 	relay := containerByName(t, pod.Spec.Containers, "provider-credential-relay")
+	init := containerByName(t, pod.Spec.InitContainers, "workspace-init")
 	if relay.Image != testManagerConfig().DefaultRoleImageReference || relay.Image == provider.Image {
 		t.Fatalf("provider credential relay image = %q, provider image = %q", relay.Image, provider.Image)
 	}
@@ -134,8 +136,8 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 			providerMounts[mount.MountPath] = mount.SubPath
 		}
 	}
-	if providerMounts[input.ProviderAuthFile] != "auth.json" ||
-		providerMounts[input.ProviderAuthSHA256File] != "auth.sha256" || len(providerMounts) != 2 {
+	if providerMounts[input.ProviderAuthFile] != credentials.ProviderAuthKey || len(providerMounts) != 1 ||
+		!hasMountAt(provider, "runtime-input", input.ProviderAuthSHA256File) {
 		t.Fatalf("provider credentials are not mounted as exact subPath files: %#v", providerMounts)
 	}
 	providerSecurity := pod.Spec.Containers[1].SecurityContext
@@ -170,11 +172,14 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	if bytes.Contains(secret.Data[inputKey], []byte(binding.Name)) || bytes.Contains(secret.Data[inputKey], []byte(binding.UID)) {
 		t.Fatal("Kubernetes provider Secret locator leaked into role-visible runtime input")
 	}
+	if len(secret.Data) != 2 {
+		t.Fatalf("execution ticket contains credential values: keys=%d", len(secret.Data))
+	}
 	projection, err := client.CoreV1().ConfigMaps("kodex-runtime").Get(context.Background(), runtimeProjectionName(input), metav1.GetOptions{})
 	if err != nil || projection.Immutable == nil || !*projection.Immutable || len(projection.BinaryData) != 0 {
 		t.Fatalf("immutable runtime projection is invalid: err=%v projection=%#v", err, projection)
 	}
-	expectedProjectionKeys := []string{inputKey, workspacePolicyKey, inputManifestKey, resultManifestKey, skillManifestKey, memoryManifestKey, mcpManifestKey, callbackManifestKey}
+	expectedProjectionKeys := []string{inputKey, workspacePolicyKey, inputManifestKey, resultManifestKey, skillManifestKey, memoryManifestKey, mcpManifestKey, callbackManifestKey, providerDigestKey}
 	if len(projection.Data) != len(expectedProjectionKeys) {
 		t.Fatalf("runtime projection keys = %#v", projection.Data)
 	}
@@ -182,6 +187,13 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		if projection.Data[key] == "" {
 			t.Fatalf("runtime projection key %q is empty", key)
 		}
+	}
+	if projection.Data[providerDigestKey] != input.ProviderCredentialSHA256 ||
+		pod.Annotations[credentialProjectionNameAnnotation] != credentials.SecretName ||
+		pod.Annotations[credentialProjectionUIDAnnotation] != credentials.SecretUID ||
+		pod.Annotations[credentialProjectionVersionAnnotation] != credentials.SecretResourceVersion ||
+		pod.Annotations[credentialProjectionDigestAnnotation] != credentials.ContentSHA256 {
+		t.Fatal("runtime Pod is not bound to the exact credential projection")
 	}
 	if projection.Annotations[executionBindingAnnotation] != input.ExecutionBindingDigest ||
 		projection.Annotations[mcpBindingAnnotation] != input.MCPBindingDigest ||
@@ -209,8 +221,25 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		t.Fatalf("runtime Pod fsGroup matrix = %#v", pod.Spec.SecurityContext)
 	}
 	for _, volume := range []string{"vfs-input", "vfs-knowledge"} {
-		if !mountReadOnly(provider, volume, true) || !mountReadOnly(role, volume, false) {
+		if !mountReadOnly(provider, volume, true) || !mountReadOnly(role, volume, true) {
 			t.Fatalf("runtime VFS mount mode %q is invalid", volume)
+		}
+		if !mountReadOnly(init, volume, false) {
+			t.Fatalf("workspace materializer cannot populate %q", volume)
+		}
+	}
+	for _, volume := range []string{"runtime-input", "runtime-ticket", "callback-ca", "callback-client"} {
+		if !mountReadOnly(init, volume, true) {
+			t.Fatalf("workspace materializer is missing read-only authority mount %q", volume)
+		}
+	}
+	for _, container := range []corev1.Container{init, role, relay} {
+		security := container.SecurityContext
+		if security == nil || security.RunAsNonRoot == nil || !*security.RunAsNonRoot ||
+			security.ReadOnlyRootFilesystem == nil || !*security.ReadOnlyRootFilesystem ||
+			security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation ||
+			security.SeccompProfile == nil || security.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+			t.Fatalf("restricted container security matrix is invalid: name=%q context=%#v", container.Name, security)
 		}
 	}
 	if !hasMountAt(provider, "workspace", "/workspace") || !hasMountAt(provider, "session", "/workspace/.kodex/state") || hasMountAt(provider, "session", "/workspace") {
@@ -288,7 +317,7 @@ func TestEnsureTurnRejectsProviderCredentialOutsideRuntimeRevision(t *testing.T)
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
 	binding.ResourceVersion = "2"
-	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err == nil {
 		t.Fatal("EnsureTurn() accepted a provider Secret outside the immutable credential revision")
 	}
 }
@@ -399,7 +428,7 @@ func managedOAuthRefreshFixture(t *testing.T) (*fake.Clientset, *Manager, runtim
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 	return client, manager, input, runtimecontract.RunnerProviderCredentialRefreshRequest{
@@ -414,7 +443,7 @@ func managedOAuthAuthentication(accountID, accessToken, refreshToken string) []b
 	return []byte(fmt.Sprintf(`{"auth_mode":"chatgpt","tokens":{"account_id":%q,"access_token":%q,"refresh_token":%q}}`, accountID, accessToken, refreshToken))
 }
 
-func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testing.T) {
+func TestEnsureTurnMountsExactBrokerEnvironmentSecretOutsideTicket(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
 	immutable := true
@@ -459,7 +488,8 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	credentials := testCredentialProjection(input)
+	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 
@@ -470,9 +500,8 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 	if bytes.Contains(ticket.Data[inputKey], secretValue) {
 		t.Fatal("runtime.json contains a Secret value")
 	}
-	projectionKey := environmentProjectionKey("SERVICE_TOKEN")
-	if !bytes.Equal(ticket.Data[projectionKey], secretValue) {
-		t.Fatal("execution ticket does not contain the exact verified Secret projection")
+	if len(ticket.Data) != 2 {
+		t.Fatalf("execution ticket contains copied Secret values: %#v", ticket.Data)
 	}
 	bound, err := runtimecontract.DecodeRunnerInput(ticket.Data[inputKey])
 	if err != nil || len(bound.SecretProjections) != 1 || bound.SecretProjections[0] != projections[0] {
@@ -496,13 +525,13 @@ func TestEnsureTurnMaterializesExactEnvironmentSecretOutsideRunnerInput(t *testi
 			projected = item.ValueFrom.SecretKeyRef
 		}
 	}
-	if projected == nil || projected.Name != ticket.Name || projected.Key != projectionKey ||
+	if projected == nil || projected.Name != credentials.SecretName || projected.Key != "SERVICE_TOKEN" ||
 		projected.Optional == nil || *projected.Optional {
 		t.Fatalf("provider runtime Secret projection is not exact: %#v", projected)
 	}
 }
 
-func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
+func TestEnsureTurnRejectsCredentialProjectionKeySetMismatch(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
 	immutable := true
@@ -541,8 +570,10 @@ func TestEnsureTurnRejectsStaleEnvironmentSecretRevision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
-		t.Fatal("EnsureTurn() accepted a stale runtime Secret resourceVersion")
+	credentials := testCredentialProjection(input)
+	credentials.RuntimeSecretKeys["SERVICE_TOKEN"] = "OTHER_TOKEN"
+	if err := manager.EnsureTurn(context.Background(), input, binding, credentials); err == nil {
+		t.Fatal("EnsureTurn() accepted a credential projection with another key set")
 	}
 }
 
@@ -788,7 +819,7 @@ func TestTurnPodStateUsesColdPodForSystemAssistantFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 	state, err := manager.TurnPodState(context.Background(), input, false)
@@ -855,7 +886,8 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			if err != nil {
 				t.Fatalf("BuildTurnInput() error = %v", err)
 			}
-			pod := manager.runtimePod(input, binding, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+			credentials := testCredentialProjection(input)
+			pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
 			pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: test.statuses, Conditions: test.conditions}
 			if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Create(cold runtime Pod) error = %v", err)
@@ -884,7 +916,7 @@ func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T
 	}
 	turn.RuntimeRevisionRef = "revision_turn1234"
 	turn.RuntimeRevisionDigest = strings.Repeat("e", 64)
-	turn.SessionRef = "session_turn1234"
+	turn.SessionRef = warm.SessionRef
 	turn.Task = "A different bounded turn input."
 	warmDigest, err := runtimecontract.WarmCompatibilityDigest(warm)
 	if err != nil {
@@ -914,7 +946,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
-	terminal := manager.runtimePod(input, binding, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
+	terminal := manager.runtimePod(input, binding, nil, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodFailed
 	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
@@ -952,7 +984,7 @@ func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
-	terminal := manager.runtimePod(input, binding, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
+	terminal := manager.runtimePod(input, binding, nil, manager.warmTicketName(input.RuntimeRevisionRef, input.RuntimeRevisionDigest), "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodRunning
 	terminal.Status.ContainerStatuses = []corev1.ContainerStatus{
 		{Name: "role-runtime", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
@@ -1005,7 +1037,7 @@ func TestEnsureWarmRotatesTerminalTicketAndDeletesStaleWarmTickets(t *testing.T)
 	if err := manager.ensureTicket(context.Background(), manager.warmTicketName(staleInput.RuntimeRevisionRef, staleInput.RuntimeRevisionDigest), "system-assistant-warm", "warm", staleInput, strings.Repeat("b", 64), nil, &binding); err != nil {
 		t.Fatalf("ensure stale ticket error = %v", err)
 	}
-	terminal := manager.runtimePod(input, binding, secretName, "system-assistant-warm", "warm")
+	terminal := manager.runtimePod(input, binding, nil, secretName, "system-assistant-warm", "warm")
 	terminal.Status.Phase = corev1.PodFailed
 	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), terminal, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(terminal warm Pod) error = %v", err)
@@ -1142,12 +1174,13 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	conflict := manager.runtimePod(input, binding, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
+	credentials := testCredentialProjection(input)
+	conflict := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
 	conflict.Annotations[revisionAnnotation] = strings.Repeat("c", 64)
 	if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), conflict, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(conflict Pod) error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err == nil {
 		t.Fatal("EnsureTurn() accepted a Pod from another immutable revision")
 	}
 }
@@ -1216,7 +1249,7 @@ func TestEnsureTurnRejectsStaleImmutableProjection(t *testing.T) {
 	if _, err := client.CoreV1().ConfigMaps("kodex-runtime").Create(context.Background(), projection, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create(stale projection) error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err == nil || !strings.Contains(err.Error(), "conflicts with immutable revision") {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err == nil || !strings.Contains(err.Error(), "conflicts with immutable revision") {
 		t.Fatalf("EnsureTurn(stale projection) error = %v", err)
 	}
 	if _, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), runtimecontract.RuntimeTurnPodName(input.LeaseRef), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
@@ -1263,7 +1296,7 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
 	first, firstBinding, err := manager.BuildTurnInput(testExecution(false))
-	if err != nil || manager.EnsureTurn(context.Background(), first, firstBinding) != nil {
+	if err != nil || manager.EnsureTurn(context.Background(), first, firstBinding, testCredentialProjection(first)) != nil {
 		t.Fatalf("materialize first attempt: %v", err)
 	}
 	retryExecution := testExecution(false)
@@ -1277,7 +1310,7 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	retryExecution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
 	sealTestTurnExecution(retryExecution)
 	retry, retryBinding, err := manager.BuildTurnInput(retryExecution)
-	if err != nil || manager.EnsureTurn(context.Background(), retry, retryBinding) != nil {
+	if err != nil || manager.EnsureTurn(context.Background(), retry, retryBinding, testCredentialProjection(retry)) != nil {
 		t.Fatalf("materialize retry attempt: %v", err)
 	}
 	if first.RuntimeRevisionDigest == retry.RuntimeRevisionDigest || first.ExecutionBindingDigest == retry.ExecutionBindingDigest || runtimeProjectionName(first) == runtimeProjectionName(retry) {
@@ -1316,6 +1349,73 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	}
 }
 
+func TestSessionPVCCreateRaceChecksWinnerBeforePod(t *testing.T) {
+	for _, foreign := range []bool{false, true} {
+		t.Run(fmt.Sprintf("foreign-%t", foreign), func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			manager := newTestManager(t, client)
+			input, binding, err := manager.BuildTurnInput(testExecution(false))
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.PrependReactor("create", "persistentvolumeclaims", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+				pvc := action.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim).DeepCopy()
+				if foreign {
+					pvc.Annotations[projectHashAnnotation] = "foreign-project"
+				}
+				if err := client.Tracker().Add(pvc); err != nil {
+					t.Fatal(err)
+				}
+				return true, nil, apierrors.NewAlreadyExists(schema.GroupResource{Resource: "persistentvolumeclaims"}, pvc.Name)
+			})
+			err = manager.EnsureTurn(t.Context(), input, binding, testCredentialProjection(input))
+			if (err != nil) != foreign {
+				t.Fatalf("EnsureTurn() error = %v, foreign = %t", err, foreign)
+			}
+			pods, err := client.CoreV1().Pods("kodex-runtime").List(t.Context(), metav1.ListOptions{})
+			if err != nil || foreign && len(pods.Items) != 0 || !foreign && len(pods.Items) != 1 {
+				t.Fatal("Pod creation did not follow exact PVC readback")
+			}
+		})
+	}
+}
+
+func TestExistingRuntimePodRejectsSecurityDrift(t *testing.T) {
+	for name, mutate := range map[string]func(*corev1.Pod){
+		"fsGroup": func(pod *corev1.Pod) { pod.Spec.SecurityContext.FSGroup = int64Pointer(0) },
+		"seccomp": func(pod *corev1.Pod) {
+			pod.Spec.SecurityContext.SeccompProfile.Type = corev1.SeccompProfileTypeUnconfined
+		},
+		"host network":  func(pod *corev1.Pod) { pod.Spec.HostNetwork = true },
+		"host PID":      func(pod *corev1.Pod) { pod.Spec.HostPID = true },
+		"host IPC":      func(pod *corev1.Pod) { pod.Spec.HostIPC = true },
+		"service links": func(pod *corev1.Pod) { pod.Spec.EnableServiceLinks = boolPointer(true) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			manager := newTestManager(t, client)
+			input, binding, err := manager.BuildTurnInput(testExecution(false))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.EnsureTurn(t.Context(), input, binding, testCredentialProjection(input)); err != nil {
+				t.Fatal(err)
+			}
+			pod, err := client.CoreV1().Pods("kodex-runtime").Get(t.Context(), turnPodName(input.LeaseRef), metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate(pod)
+			if _, err := client.CoreV1().Pods("kodex-runtime").Update(t.Context(), pod, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.EnsureTurn(t.Context(), input, binding, testCredentialProjection(input)); err == nil {
+				t.Fatal("security drift accepted")
+			}
+		})
+	}
+}
+
 func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
@@ -1323,7 +1423,7 @@ func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err != nil {
 		t.Fatalf("EnsureTurn(first) error = %v", err)
 	}
 	pod, err := client.CoreV1().Pods("kodex-runtime").Get(context.Background(), turnPodName(input.LeaseRef), metav1.GetOptions{})
@@ -1349,7 +1449,7 @@ func TestEnsureTurnAcceptsAPIServerContainerDefaults(t *testing.T) {
 	if _, err := client.CoreV1().Pods("kodex-runtime").Update(context.Background(), pod, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("Update(defaulted runtime Pod) error = %v", err)
 	}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	if err := manager.EnsureTurn(context.Background(), input, binding, testCredentialProjection(input)); err != nil {
 		t.Fatalf("EnsureTurn(defaulted existing Pod) error = %v", err)
 	}
 }
@@ -1414,6 +1514,18 @@ func testManagerConfig() Config {
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
 		RoleRuntimeContractRevision: 1,
 		RoleRuntimeContractSHA256:   testContractDigest,
+	}
+}
+
+func testCredentialProjection(input runtimecontract.RunnerInput) CredentialProjection {
+	keys := make(map[string]string, len(input.SecretProjections))
+	for _, item := range input.SecretProjections {
+		keys[item.Name] = item.Name
+	}
+	return CredentialProjection{
+		Namespace: "kodex-runtime", SecretName: "runtime-credentials-0123456789abcdef0123456789abcdef01234567",
+		SecretUID: "40000000-0000-4000-8000-000000000001", SecretResourceVersion: "19",
+		ContentSHA256: strings.Repeat("c", 64), ProviderAuthKey: "provider-auth.json", RuntimeSecretKeys: keys,
 	}
 }
 
@@ -1489,10 +1601,10 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, serviceAccountName, podName)
 	execution.Revision.EnvironmentPolicy = testRuntimeEnvironmentPolicyProto(policy)
 	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
-	workspace := runtimecontract.RuntimeWorkspacePolicy{Revision: 1, Root: "/workspace", Rules: []runtimecontract.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: "READ_ONLY"}, {Path: "/workspace/knowledge", Access: "READ_ONLY"}, {Path: "/workspace", Access: "WRITABLE"}}, MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000, DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"}}
+	workspace := runtimecontract.RuntimeWorkspacePolicy{Revision: 1, Root: "/workspace", Rules: []runtimecontract.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: "READ_ONLY"}, {Path: "/workspace/knowledge", Access: "READ_ONLY"}, {Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"}, {Path: "/workspace", Access: "WRITABLE"}}, MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000, DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"}}
 	rawWorkspace, _ := json.Marshal(workspace)
 	workspaceDigest := sha256.Sum256(rawWorkspace)
-	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: hex.EncodeToString(workspaceDigest[:]), DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}, Rules: []*controlplanev1.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/knowledge", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE}}}
+	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: hex.EncodeToString(workspaceDigest[:]), DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}, Rules: []*controlplanev1.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/knowledge", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/.kodex/state/codex-home/auth.json", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE}}}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
 	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools, policy)
 	execution.Revision.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(map[string]any{})

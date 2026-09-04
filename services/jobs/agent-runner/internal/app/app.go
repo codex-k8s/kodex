@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -64,7 +65,18 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
-		return materializeWorkspace(input)
+		if err := materializeWorkspace(input); err != nil {
+			return err
+		}
+		if input.Mode == runtimecontract.RunnerModeWarm {
+			return materializeInputArtifacts(lifecycleContext, input, nil)
+		}
+		client, err := callback.New(input)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		return materializeInputArtifacts(lifecycleContext, input, client)
 	}
 	if os.Geteuid() != 10001 {
 		return errors.New("agent-runner runtime UID is invalid")
@@ -137,7 +149,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err := materializeWorkspace(input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
-	if err := materializeInputArtifacts(ctx, input, client); err != nil {
+	if err := verifyInputArtifacts(input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
 	}
 	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token())
@@ -177,7 +189,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	return client.Complete(ctx, input, payload)
 }
 
@@ -201,7 +213,7 @@ func recordNativeToolTimeline(ctx context.Context, input model.Input, recorder n
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary,
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
 		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
@@ -230,7 +242,7 @@ func completeFailureWithSummary(ctx context.Context, input model.Input, client *
 	return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, runtimecontract.TokenUsage{})
 }
 func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, client *callback.Client, code, summary string, usage runtimecontract.TokenUsage) error {
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
 	if err := client.Complete(context.WithoutCancel(ctx), input, payload); err != nil {
 		return err
 	}
@@ -575,6 +587,134 @@ func materializeInputArtifacts(ctx context.Context, input model.Input, client *c
 		}
 	}
 	return writeInputManifests(input, setManifests, workspaceManifest)
+}
+
+func verifyInputArtifacts(input model.Input) error {
+	sets := make(map[string]runtimecontract.CanonicalAttachmentManifest, len(input.AttachmentSets))
+	for _, set := range input.AttachmentSets {
+		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
+		for _, artifact := range input.InputArtifacts {
+			if artifact.AttachmentSetRef != set.Ref {
+				continue
+			}
+			canonical := artifact
+			canonical.Scope = runtimecontract.AttachmentScopeInput
+			canonical.AttachmentSetRef = ""
+			canonical.AttachmentPurpose = ""
+			canonical.Provenance = ""
+			artifacts = append(artifacts, canonical)
+		}
+		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
+		if err != nil || manifest.Digest != set.ManifestDigest {
+			return errors.New("runtime attachment manifest digest is invalid")
+		}
+		sets[set.Ref] = manifest
+	}
+	workspaceManifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts)
+	if err != nil {
+		return errors.New("build runtime workspace manifest")
+	}
+	if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", "manifest.json"), workspaceManifest.Bytes, int64(len(workspaceManifest.Bytes))); err != nil {
+		return err
+	}
+	for _, set := range input.AttachmentSets {
+		manifest := sets[set.Ref]
+		if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "manifest.json"), manifest.Bytes, int64(len(manifest.Bytes))); err != nil {
+			return err
+		}
+		readme := []byte("This directory contains a read-only, server-owned AttachmentSet. Read manifest.json before using files.\n")
+		if err := verifyWorkspaceFile(input.WorkspaceRoot, filepath.Join("input", set.Ref, "README.md"), readme, int64(len(readme))); err != nil {
+			return err
+		}
+	}
+	for _, artifact := range input.InputArtifacts {
+		path, err := runtimecontract.ArtifactWorkspacePath(input.AttachmentSetRef, artifact)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(input.WorkspaceRoot, path)
+		if err != nil || relative == "." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+			return errors.New("workspace artifact path is invalid")
+		}
+		if err := verifyWorkspaceDigest(input.WorkspaceRoot, relative, artifact); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifyWorkspaceFile(root, relative string, expected []byte, expectedSize int64) error {
+	file, info, err := openWorkspaceFile(root, relative)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if info.Size() != expectedSize || info.Mode().Perm() != 0o440 {
+		return errors.New("runtime input file metadata is invalid")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, expectedSize+1))
+	if err != nil || int64(len(raw)) != expectedSize || subtle.ConstantTimeCompare(raw, expected) != 1 {
+		return errors.New("runtime input file content is invalid")
+	}
+	return nil
+}
+
+func verifyWorkspaceDigest(root, relative string, artifact runtimecontract.RunnerInputArtifact) error {
+	file, info, err := openWorkspaceFile(root, relative)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if info.Size() != artifact.SizeBytes || info.Mode().Perm() != 0o440 {
+		return errors.New("runtime artifact metadata is invalid")
+	}
+	digest := sha256.New()
+	written, err := io.Copy(digest, io.LimitReader(file, runtimecontract.MaximumInputArtifactBytes+1))
+	actual := "sha256:" + hex.EncodeToString(digest.Sum(nil))
+	if err != nil || written != artifact.SizeBytes || subtle.ConstantTimeCompare([]byte(actual), []byte(artifact.Digest)) != 1 {
+		return errors.New("runtime artifact content is invalid")
+	}
+	return nil
+}
+
+func openWorkspaceFile(root, relative string) (*os.File, os.FileInfo, error) {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.IsAbs(relative) || filepath.Clean(relative) != relative ||
+		relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		return nil, nil, errors.New("workspace input path is invalid")
+	}
+	current, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, nil, errors.New("open workspace input root")
+	}
+	parts := strings.Split(relative, string(os.PathSeparator))
+	for _, part := range parts[:len(parts)-1] {
+		if part == "" || part == "." || part == ".." {
+			_ = unix.Close(current)
+			return nil, nil, errors.New("workspace input path is invalid")
+		}
+		next, openErr := unix.Openat(current, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		_ = unix.Close(current)
+		if openErr != nil {
+			return nil, nil, errors.New("open workspace input directory")
+		}
+		current = next
+	}
+	descriptor, err := unix.Openat(current, parts[len(parts)-1], unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	_ = unix.Close(current)
+	if err != nil {
+		return nil, nil, errors.New("open workspace input file")
+	}
+	file := os.NewFile(uintptr(descriptor), "runtime-input")
+	if file == nil {
+		_ = unix.Close(descriptor)
+		return nil, nil, errors.New("open workspace input file")
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		_ = file.Close()
+		return nil, nil, errors.New("workspace input file is invalid")
+	}
+	return file, info, nil
 }
 
 func writeInputManifests(input model.Input, sets map[string]runtimecontract.CanonicalAttachmentManifest, workspace runtimecontract.CanonicalWorkspaceAttachmentManifest) error {

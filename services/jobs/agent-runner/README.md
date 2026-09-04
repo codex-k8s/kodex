@@ -4,8 +4,8 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 2.0.0
-updated: 2026-08-23
+version: 3.0.0
+updated: 2026-09-04
 ---
 
 # agent-runner
@@ -19,9 +19,11 @@ updated: 2026-08-23
 
 Runner:
 
-- читает и валидирует immutable `kodex.agent-runner-input.v4`;
+- читает и валидирует immutable `kodex.agent-runner-input.v6`;
 - подтверждает exact turn/attempt/fence через runtime-controller callback;
-- материализует bounded instructions, files, provider binding и MCP config;
+- init container материализует bounded instructions и exact VFS files;
+- role runtime повторно проверяет manifests, размеры и digests без записи в
+  read-only input mounts;
 - запускает provider runtime прямым `exec.CommandContext` без shell workflow;
 - передаёт coalesced safe progress;
 - завершает child processes и формирует signed bounded terminal handoff.
@@ -50,6 +52,12 @@ MCP остаётся runtime-протоколом. Каждый server/tool им
 типизированную schema, timeout, required flag и allowlist. Config генерируется
 из server-owned RuntimeRevision; secret values в TOML не записываются.
 
+Provider process читает только broker-owned immutable Secret subPath и
+публичный pinned digest из ConfigMap. Role runtime не получает credential
+mounts или secret env. MCP proxy и callbacks проверяют один exact binding:
+project/session/turn/attempt/lease/fence/generation/method/input digest и
+RuntimeRevision digest.
+
 - platform MCP: `delegate_agent`, `invoke_integration` по exact grants и
   `propose_configuration_plan` только для системного помощника;
 - integration MCP: специализированные adapters `integration-gateway`;
@@ -70,7 +78,21 @@ RuntimeRevision/Pod. MCP timeout не используется как много
 Warm runner системного помощника стартует provider session заранее и получает
 server-owned turns последовательно через защищённый callback. Idle loop не
 считается Turn. При revision mismatch, stale ticket или callback loss runtime
-закрыто отклоняет работу; controller восстанавливает desired Pod.
+закрыто отклоняет работу; controller восстанавливает desired Pod. Turn с новыми
+files не переиспользует warm Pod и получает собственную init materialization.
+
+## Workspace
+
+`workspace-init` с UID 10001 заполняет `input` и `knowledge`; в role/provider
+containers эти mounts read-only. Session PVC смонтирован только в
+`/workspace/.kodex/state`. Writable workspace/result outbox ограничен 1 GiB,
+10 000 files и Kubernetes `emptyDir.sizeLimit`; root filesystem read-only,
+`fsGroup=29000`, seccomp и optional provider AppArmor согласованы с admission.
+
+До готовности runtime выполняется bounded canary create/write/`fsync`/atomic
+replace/read/delete с cleanup. Диагностика ограничена точными reason codes
+`READ_ONLY`, `QUOTA_EXCEEDED`, `PATH_OUTSIDE_WORKSPACE`, `RUNTIME_IO_ERROR` и
+не содержит body либо path.
 
 ## Безопасность вывода
 
@@ -83,7 +105,7 @@ safe code/message key и bounded status. Пользовательский тек
 
 ```bash
 cd services/jobs/agent-runner
-GOWORK=off go test ./...
+GOWORK=off go test ./internal/app ./internal/security ./internal/workspace
 ```
 
 Schema: `contracts/runtime-controller/v6/agent-runner-input.schema.json`.

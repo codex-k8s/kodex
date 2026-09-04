@@ -85,7 +85,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
 		SecretBrokerTarget:          secretBrokerTarget,
 		SecretBrokerTLSServerName:   secretBrokerTLSServerName,
-		SecretBrokerCAFile:          "/var/run/config/kodex/runtime-controller/secret-broker/ca.pem",
+		SecretBrokerCAFile:          "/var/run/config/kodex/runtime-controller/control-plane/ca.pem",
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
 		ProviderAppArmorProfile:     "",

@@ -13,8 +13,8 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
-	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -93,16 +93,20 @@ func (client *Client) Materialize(ctx context.Context, input runtimecontract.Run
 	if err != nil {
 		return Projection{}, errors.New("runtime credential projection project is invalid")
 	}
-	response, err := client.api.MaterializeRuntimeCredentials(projectContext, &secretbrokerv1.MaterializeRuntimeCredentialsRequest{
-		WorkloadInstance: input.WorkloadInstance, LeaseRef: input.LeaseRef, Fence: input.LeaseFence,
-		Generation: input.LeaseGeneration, RuntimeRevisionRef: input.RuntimeRevisionRef,
-		RuntimeRevisionDigest: input.RuntimeRevisionDigest, SessionRef: input.SessionRef, TurnRef: input.TurnRef,
-		Attempt: input.Attempt, InputDigest: input.InputDigest,
-	})
+	response, err := client.api.MaterializeRuntimeCredentials(projectContext, materializeRequest(input))
 	if err != nil {
 		return Projection{}, errors.New("materialize runtime credential projection")
 	}
 	return projectionFromDescriptor(input, response.GetProjection())
+}
+
+func materializeRequest(input runtimecontract.RunnerInput) *secretbrokerv1.MaterializeRuntimeCredentialsRequest {
+	return &secretbrokerv1.MaterializeRuntimeCredentialsRequest{
+		WorkloadInstance: input.WorkloadInstance, LeaseRef: input.LeaseRef, Fence: input.LeaseFence,
+		Generation: input.LeaseGeneration, RuntimeRevisionRef: input.RuntimeRevisionRef,
+		RuntimeRevisionDigest: input.RuntimeRevisionDigest, SessionRef: input.SessionRef, TurnRef: input.TurnRef,
+		Attempt: input.Attempt, InputDigest: input.InputDigest,
+	}
 }
 
 func projectionFromDescriptor(input runtimecontract.RunnerInput, descriptor *secretbrokerv1.RuntimeCredentialProjectionDescriptor) (Projection, error) {

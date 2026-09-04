@@ -43,6 +43,10 @@ spec:
           key.matches('^environment-[a-f0-9]{16}$'))
       message: runtime execution ticket contains an unsupported data key
     - expression: >-
+        object.metadata.labels['runtime.kodex.dev/mode'] != 'turn' ||
+        size(object.data) == 2
+      message: turn execution tickets cannot contain credential values
+    - expression: >-
         has(object.metadata.annotations) &&
         'runtime.kodex.dev/revision-digest' in object.metadata.annotations &&
         object.metadata.annotations['runtime.kodex.dev/revision-digest']
@@ -350,10 +354,12 @@ spec:
         object.metadata.name.matches('^runtime-projection-[a-f0-9]{16}$') &&
         has(object.immutable) && object.immutable == true &&
         (!has(object.binaryData) || size(object.binaryData) == 0) &&
-        has(object.data) && size(object.data) == 8 &&
+        has(object.data) && size(object.data) == 9 &&
         ['runtime.json', 'workspace-policy.json', 'inputs.json', 'results.json',
-         'skills.json', 'memories.json', 'mcp.json', 'callback.json'].all(key,
-           key in object.data && size(object.data[key]) > 0)
+         'skills.json', 'memories.json', 'mcp.json', 'callback.json',
+         'provider-auth.sha256'].all(key,
+           key in object.data && size(object.data[key]) > 0) &&
+        object.data['provider-auth.sha256'].matches('^[a-f0-9]{64}$')
       message: runtime revision projection content is incomplete
     - expression: >-
         has(object.metadata.labels) &&
@@ -428,6 +434,10 @@ spec:
       expression: >-
         object.spec.volumes.filter(volume,
           volume.name == 'runtime-input' && has(volume.configMap))
+    - name: providerVolumes
+      expression: >-
+        object.spec.volumes.filter(volume,
+          volume.name == 'provider-auth' && has(volume.secret))
     - name: allContainers
       expression: >-
         object.spec.containers +
@@ -622,7 +632,11 @@ spec:
           object.metadata.annotations['runtime.kodex.dev/mcp-binding-digest'] == '') ||
          (object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
           object.metadata.annotations['runtime.kodex.dev/execution-binding-digest'].matches('^[a-f0-9]{64}$') &&
-          object.metadata.annotations['runtime.kodex.dev/mcp-binding-digest'].matches('^[a-f0-9]{64}$')))
+          object.metadata.annotations['runtime.kodex.dev/mcp-binding-digest'].matches('^[a-f0-9]{64}$') &&
+          object.metadata.annotations['runtime.kodex.dev/credential-projection-name'].matches('^runtime-credentials-[a-f0-9]{40}$') &&
+          size(object.metadata.annotations['runtime.kodex.dev/credential-projection-uid']) > 0 &&
+          size(object.metadata.annotations['runtime.kodex.dev/credential-projection-resource-version']) > 0 &&
+          object.metadata.annotations['runtime.kodex.dev/credential-projection-digest'].matches('^[a-f0-9]{64}$')))
       message: managed role Pod is not pinned to exact runtime revisions
     - expression: >-
         size(variables.ticketVolumes) == 1 &&
@@ -631,6 +645,12 @@ spec:
         size(variables.revisionVolumes) == 1 &&
         variables.revisionVolumes[0].configMap.name
           .matches('^runtime-projection-[a-f0-9]{16}$') &&
+        size(variables.providerVolumes) == 1 &&
+        (object.metadata.labels['runtime.kodex.dev/mode'] != 'turn' ||
+         (variables.providerVolumes[0].secret.secretName ==
+            object.metadata.annotations['runtime.kodex.dev/credential-projection-name'] &&
+          variables.providerVolumes[0].secret.secretName.matches(
+            '^runtime-credentials-[a-f0-9]{40}$'))) &&
         (object.metadata.labels['runtime.kodex.dev/mode'] != 'turn' ||
          (variables.ticketVolumes[0].secret.secretName.endsWith(
             object.metadata.labels['runtime.kodex.dev/execution-hash']) &&
@@ -642,12 +662,16 @@ spec:
         variables.providerContainers[0].env.all(item,
           !(has(item.valueFrom) && has(item.valueFrom.secretKeyRef)) ||
           (item.valueFrom.secretKeyRef.name ==
-             variables.ticketVolumes[0].secret.secretName &&
-           item.valueFrom.secretKeyRef.key
-             .matches('^environment-[a-f0-9]{16}$') &&
+             (object.metadata.labels['runtime.kodex.dev/mode'] == 'turn'
+               ? variables.providerVolumes[0].secret.secretName
+               : variables.ticketVolumes[0].secret.secretName) &&
+           item.valueFrom.secretKeyRef.key.matches(
+             object.metadata.labels['runtime.kodex.dev/mode'] == 'turn'
+               ? '^[A-Z_][A-Z0-9_]{0,126}$'
+               : '^environment-[a-f0-9]{16}$') &&
            (!has(item.valueFrom.secretKeyRef.optional) ||
             item.valueFrom.secretKeyRef.optional == false)))
-      message: provider runtime may project only exact execution ticket keys
+      message: provider runtime may project only exact broker credential keys
     - expression: >-
         variables.allContainers.filter(container,
           container.name != 'provider-runtime').all(container,
@@ -725,8 +749,12 @@ spec:
           !has(container.volumeMounts) ||
           container.volumeMounts.filter(mount,
             mount.name == 'runtime-input').all(mount,
-              mount.mountPath == '/var/run/config/kodex/runtime' &&
-              !has(mount.subPath) && has(mount.readOnly) &&
+              ((mount.mountPath == '/var/run/config/kodex/runtime' &&
+                !has(mount.subPath)) ||
+               (container.name == 'provider-runtime' &&
+                mount.mountPath == '/run/secrets/kodex/runtime/provider/auth.sha256' &&
+                mount.subPath == 'provider-auth.sha256')) &&
+              has(mount.readOnly) &&
               mount.readOnly == true) &&
           container.volumeMounts.filter(mount,
             mount.name == 'runtime-ticket').all(mount,
@@ -776,6 +804,8 @@ spec:
         size(object.spec.volumes.filter(volume,
           volume.name == 'provider-auth' && has(volume.secret) &&
           volume.secret.defaultMode == 256 &&
+          (object.metadata.labels['runtime.kodex.dev/mode'] != 'turn' ||
+           volume.secret.secretName == object.metadata.annotations['runtime.kodex.dev/credential-projection-name']) &&
           !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
           !has(volume.configMap) && !has(volume.projected) && !has(volume.emptyDir))) == 1 &&
         ['workspace', 'vfs-input', 'vfs-knowledge'].all(name,
@@ -828,9 +858,16 @@ spec:
           mount.mountPath == '/var/run/config/kodex/runtime' &&
           !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
-          mount.name == 'provider-auth' && mount.subPath in
-            ['auth.json', 'auth.sha256'] && has(mount.readOnly) &&
-          mount.readOnly == true)) == 2 &&
+          mount.name == 'runtime-input' &&
+          mount.mountPath == '/run/secrets/kodex/runtime/provider/auth.sha256' &&
+          mount.subPath == 'provider-auth.sha256' && has(mount.readOnly) &&
+          mount.readOnly == true)) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'provider-auth' &&
+          mount.mountPath == '/run/secrets/kodex/runtime/provider/auth.json' &&
+          mount.subPath == (object.metadata.labels['runtime.kodex.dev/mode'] == 'turn'
+            ? 'provider-auth.json' : 'auth.json') && has(mount.readOnly) &&
+          mount.readOnly == true)) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-socket' && mount.mountPath == '/run/kodex/provider')) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
@@ -843,9 +880,12 @@ spec:
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
             'provider-socket', 'tmp', 'kube-api-access'] ||
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
-        ['workspace', 'session', 'vfs-input', 'vfs-knowledge'].all(name,
+        ['workspace', 'session'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
+        ['vfs-input', 'vfs-knowledge'].all(name,
+          size(variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == name && has(mount.readOnly) && mount.readOnly == true)) == 1) &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace')) == 1 &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
@@ -890,7 +930,8 @@ spec:
           mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
         object.spec.initContainers[0].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge',
-            'runtime-input', 'tmp']) &&
+            'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
+            'tmp']) &&
         ['workspace', 'session', 'vfs-input', 'vfs-knowledge'].all(name,
           size(object.spec.initContainers[0].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
@@ -905,6 +946,18 @@ spec:
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
           mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
           !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-ticket' &&
+          mount.mountPath == '/var/run/secrets/kodex/runtime/ticket/token' &&
+          mount.subPath == 'token' && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-ca' &&
+          mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'callback-client' &&
+          mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
+          has(mount.readOnly) && mount.readOnly == true)) == 1 &&
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
           mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1
       message: managed role Pod authority mount boundary is invalid

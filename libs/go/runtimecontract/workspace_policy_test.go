@@ -8,11 +8,7 @@ import (
 )
 
 func validWorkspacePolicy() RuntimeWorkspacePolicy {
-	p := RuntimeWorkspacePolicy{Revision: 1, Root: RuntimeWorkspaceRoot, Rules: []RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: RuntimeWorkspaceReadOnly}, {Path: "/workspace/knowledge", Access: RuntimeWorkspaceReadOnly}, {Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable}}, MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceMaximumFiles, DenialReasons: runtimeWorkspaceDenialReasons[:]}
-	raw, _ := json.Marshal(p)
-	sum := sha256.Sum256(raw)
-	p.Digest = hex.EncodeToString(sum[:])
-	return p
+	return RuntimeWorkspacePolicyV1()
 }
 
 func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
@@ -21,6 +17,7 @@ func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
 		{".kodex/outbox/result.md", RuntimeWorkspaceWritable, ""},
 		{"/workspace/input/set/files/a.txt", RuntimeWorkspaceReadOnly, ""},
 		{"/workspace/knowledge/memory.md", RuntimeWorkspaceReadOnly, ""},
+		{"/workspace/.kodex/state/codex-home/auth.json", RuntimeWorkspaceReadOnly, ""},
 		{"../other/session", "", RuntimeWorkspacePathOutsideWorkspace},
 		{"/workspace/input/../../other", "", RuntimeWorkspacePathOutsideWorkspace},
 		{"/other/project", "", RuntimeWorkspacePathOutsideWorkspace},

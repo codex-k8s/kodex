@@ -79,9 +79,10 @@ func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 		policy.MaximumFileCount != 10_000 || len(policy.Digest) != 64 {
 		t.Fatalf("workspace policy = %#v", policy)
 	}
-	if len(policy.Rules) != 3 || policy.Rules[0].Path != "/workspace/input" ||
-		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[2].Path != "/workspace" ||
-		policy.Rules[2].Access != "WRITABLE" {
+	if len(policy.Rules) != 4 || policy.Rules[0].Path != "/workspace/input" ||
+		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[3].Path != "/workspace" ||
+		policy.Rules[3].Access != "WRITABLE" || policy.Rules[2].Path != "/workspace/.kodex/state/codex-home/auth.json" ||
+		policy.Rules[2].Access != "READ_ONLY" {
 		t.Fatalf("workspace path matrix = %#v", policy.Rules)
 	}
 	if strings.Join(policy.DenialReasons, ",") != "READ_ONLY,QUOTA_EXCEEDED,PATH_OUTSIDE_WORKSPACE,RUNTIME_IO_ERROR" {
