@@ -11,9 +11,10 @@ updated: 2026-09-05
 # Промежуточный контракт для HTTP/PWA
 
 Источник: MVP-UI-37, Issue #1046. Это согласованная передача Proto/generated/policy
-внутри одного полного CP unit, не готовая реализация owner lifecycle. Новые методы
-пока наследуют gRPC Unimplemented. Owner SQL/domain, authorization и behavioral
-PostgreSQL tests продолжаются в этой же ветке; их нельзя считать PASS по codegen.
+внутри одного полного CP unit, не готовая реализация всего owner lifecycle.
+Memory create/revise/archive/restore/purge и list/get/history уже подключены к
+owner SQL/domain. Skill и agent bindings пока наследуют gRPC Unimplemented;
+их нельзя считать PASS по codegen.
 
 ## Общие правила
 
@@ -93,6 +94,29 @@ Operation IDs находятся в `ControlAPIGatewayOperations`: prefixes
 Policy revision 51 сохраняет scheduler и interaction operations.
 
 Proto lint/codegen, policy codegen и Go compatibility: PASS локально.
-Новые owner lifecycle, PostgreSQL acceptance, runtime materialization: NOT RUN
-и ещё не реализованы. STT parameters уже реализованы checkpoint `a88caf7f2`;
+Memory CRUD/history: локальный targeted PostgreSQL PASS, точка входа
+`bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$/memory_records'`.
+Проверены immutable history, version conflict, page cursor, archive/restore,
+terminal purge и отсутствие summary в replay после purge. Migration 00611
+применена штатным runner в disposable PostgreSQL; live-проверки не выполнялись.
+Skill lifecycle, agent bindings и runtime materialization ещё не реализованы.
+STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.
+
+## Матрица Memory owner
+
+| Сценарий | Authority и переход | Receipt, аудит и чтение |
+| --- | --- | --- |
+| Create | Проверенный tenant; project.manage либо agent.manage; agent принадлежит exact project; source run требует run.view | Сервер назначает memr/memv и provenance; audit + receipt в одной транзакции |
+| Revise | Owner ref разрешается до OCC и receipt; создаётся новая immutable revision с parent | Старый summary не меняется; Get/history показывают exact revision |
+| Archive | ACTIVE → ARCHIVED, OCC | Bindings отключаются в той же транзакции; Get возвращает tombstone state |
+| Restore | ARCHIVED → ACTIVE, OCC, retention ещё действителен | Старые bindings не включаются автоматически |
+| Purge | Только ARCHIVED → PURGED, OCC; DB запрещает обратный переход | Summary всех revisions очищается атомарно; receipt не хранит summary |
+| Replay | Повторная owner/read/source-run проверка; digest исходного intent неизменен | Summary exact revision повторно читается с проверкой retention/purge |
+| List/history | SQL eligibility до LIMIT; cursor связан с tenant/actor/filter | Total считается в SQL; содержимое материализуется только для ограниченной страницы |
+| Retention | EXPIRED/redacted вычисляется авторитетной SQL projection | Автоматический физический GC и runtime pins ещё не реализованы |
+
+Для каждой перечисленной команды domain event пока отсутствует: авторитетный
+read path — GetMemoryRecord/ListMemoryRecords/ListMemoryRecordRevisions. Команды
+не запускают фонового consumer; дальнейшая runtime materialization должна
+проверять активное состояние и retention заново перед каждым attempt.

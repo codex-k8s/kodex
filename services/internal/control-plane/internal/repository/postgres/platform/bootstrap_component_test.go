@@ -180,6 +180,9 @@ func TestBootstrapComponent(t *testing.T) {
 			t.Fatalf("authority proof changed platform cursor: platform=%d->%d proof=%d->%d revision=%d", platformBefore, platformAfter, proofBefore, proofAfter, revision)
 		}
 	})
+	t.Run("memory records owner lifecycle", func(t *testing.T) {
+		testMemoryRecords(t, ctx, repository)
+	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})

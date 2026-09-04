@@ -148,6 +148,24 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			projectRef = draft.ProjectRef
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+	case command.MemoryRecordInput:
+		projectRef, agentRef := payload.ProjectRef, payload.AgentRef
+		if input.Kind != command.CreateMemoryRecord {
+			record, err := scanMemoryRecord(tx.QueryRow(ctx, queryMemoryRecordGet, current.organizationID, payload.RecordRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			projectRef, agentRef = record.ProjectRef, record.AgentRef
+		}
+		if payload.Specification.SourceRunRef != "" {
+			if err := repository.requireAccess(ctx, tx, current, "run.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: payload.Specification.SourceRunRef}); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+		}
+		if agentRef != "" {
+			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", agentRef, projectRef)
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.WorkflowInput:
 		if input.Kind == command.CreateWorkflow {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
