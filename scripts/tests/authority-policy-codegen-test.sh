@@ -31,7 +31,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 49 and .policy.authority_abi_version == 2 and
+	.policy_revision == 50 and .policy.authority_abi_version == 2 and
 	(.policy.authority_proof_producers | length) == 13 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and

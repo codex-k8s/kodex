@@ -181,10 +181,44 @@ updated: 2026-09-05
   Targeted Go transport/domain/repository: PASS.
   Render policy 49, race и actual HTTPS Mattermost: NOT RUN на этой передаче.
 
+## Седьмая промежуточная передача: secret impact/rebind
+
+- `GetRuntimeSecretImpact(secret_ref, revision, page)` возвращает secret version,
+  target revision, consumers, total и page. Consumer содержит environment ref,
+  version/ref, исходные secret revisions и optional agent binding. Eligibility
+  `secret.rotate`, `project.manage`, `agent.manage` применяется до SQL LIMIT;
+  cursor связан с actor/tenant/secret/точной target revision.
+- `RebindRuntimeSecret(mutation, secret_ref, revision, selections)` принимает
+  expected secret version и до 32 environment selections / 100 agent consumers.
+  Selection содержит environment ref/expected version, source version ref и
+  exact consumer tuple. Ответ: environments и bindings. Policy revision 50,
+  operations `platform.query.runtime-secrets.impact` и
+  `platform.command.runtime-secrets.rebind`.
+- Owner transaction создаёт новые immutable environment revisions, сохраняет
+  остальные зависимости и меняет только выбранные bindings. Публикация и
+  AGENT_CHANGED фиксируются вместе с audit/idempotency receipt. Stale consumer
+  откатывает весь batch. Уже созданные RuntimeRevision не переписываются.
+- `RuntimeSecretBinding.revision=3`: 0 выбирает текущую revision; положительное
+  значение требует точную ACTIVE revision. Recovery сохраняет materialization,
+  пока её использует current environment, pinned binding либо активный run.
+  Перед выдачей DELETE owner необратимо отмечает revision RETIRED; дальнейшая
+  привязка отклоняется. Runtime projection проверяет immutable descriptor, а не
+  требует совпадения с текущей revision секрета.
+- Migration 00609 закрыто помечает старые non-current revisions RETIRED:
+  прежний recovery мог уже удалить materialization без устойчивого DB receipt.
+  Миграция не утверждает наличие таких объектов. Возобновление использования
+  требует новой rotation/rebind, а не реактивации старой записи.
+- Критерий selected/replay/OCC/cursor/retention закреплён в
+  `secret_impact_component_test.go`, test `testSecretImpact`. Первый полный
+  PostgreSQL suite и targeted Go: PASS. Proto lint/codegen и policy codegen:
+  PASS. Повторный полный PostgreSQL suite с forward-only DB trigger: PASS.
+  Runtime projection полного credential flow, race и render policy 50:
+  NOT RUN на этой передаче. Live Kubernetes не использовался.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
-revision impact и selected rebind secrets; проверка Git lifecycle;
+сквозная credential matrix secret revisions; проверка Git lifecycle;
 полные STT model params и immutable projection; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов

@@ -159,7 +159,7 @@ func domainEnvironment(values []*controlplanev1.RuntimeEnvironmentValue, secrets
 	}
 	domainSecrets := make([]entity.RuntimeSecretBinding, 0, len(secrets))
 	for _, item := range secrets {
-		domainSecrets = append(domainSecrets, entity.RuntimeSecretBinding{Name: item.GetName(), SecretRef: item.GetSecretRef()})
+		domainSecrets = append(domainSecrets, entity.RuntimeSecretBinding{Name: item.GetName(), SecretRef: item.GetSecretRef(), Revision: item.GetRevision()})
 	}
 	domainTools := make([]entity.RuntimeEnvironmentTool, 0, len(tools))
 	for _, item := range tools {

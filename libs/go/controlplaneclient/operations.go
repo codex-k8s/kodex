@@ -31,6 +31,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.interaction-identities.bind":             controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName,
 		"platform.command.interaction-identities.revoke":           controlplanev1.PlatformCommandService_RevokeInteractionIdentity_FullMethodName,
 		"platform.query.runtime-environments.impact":               controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+		"platform.query.runtime-secrets.impact":                    controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName,
+		"platform.command.runtime-secrets.rebind":                  controlplanev1.PlatformCommandService_RebindRuntimeSecret_FullMethodName,
 		"platform.command.runtime-environments.rebind":             controlplanev1.PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
 		"platform.command.runtime-environment-drafts.create":       controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
 		"platform.command.runtime-environment-drafts.save":         controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,

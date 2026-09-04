@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 49,
+  "policy_revision": 50,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -366,6 +366,7 @@
           "platform.command.runtime-environments.rebind",
           "platform.command.runtime-environments.rollback",
           "platform.command.runtime-secrets.create",
+          "platform.command.runtime-secrets.rebind",
           "platform.command.runtime-secrets.reveal",
           "platform.command.runtime-secrets.revoke",
           "platform.command.runtime-secrets.rotate",
@@ -433,6 +434,7 @@
           "platform.query.runtime-environments.list",
           "platform.query.runtime-environments.readiness.get",
           "platform.query.runtime-secrets.get",
+          "platform.query.runtime-secrets.impact",
           "platform.query.runtime-secrets.list",
           "platform.query.runtimes.list",
           "platform.query.schedule-revisions.list",
@@ -4920,6 +4922,42 @@
         }
       },
       {
+        "operation_id": "platform.command.runtime-secrets.rebind",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/RebindRuntimeSecret",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.runtime-secrets.rebind",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
         "operation_id": "platform.command.runtime-secrets.reveal",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -7956,6 +7994,42 @@
         "request_profile": {
           "mode": "UNARY_PROTO_SHA256",
           "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.query.runtime-secrets.impact",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/GetRuntimeSecretImpact",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.runtime-secrets.impact",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
           "version": "FORBIDDEN",
           "attempt": "FORBIDDEN",
           "idempotency": "FORBIDDEN"
