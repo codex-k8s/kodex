@@ -615,9 +615,10 @@ func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, t
 	var result entity.SystemSTTConfiguration
 	var eligible, providerEnabled, apiKey, enabled bool
 	var rawProviderCapabilities []byte
+	var content string
 	err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
 		&result.ConfigurationRef, &result.RevisionRef, &result.Revision, &result.Digest, &result.ProviderAccountRef, &result.Model, &result.Language, &result.PermissionKey,
-		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey, &enabled)
+		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey, &enabled, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.SystemSTTConfiguration{}, errs.ErrNotFound
 	}
@@ -649,8 +650,16 @@ func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, t
 	if !providerEnabled {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_DISABLED")
 	}
-	if !systemSTTModelSupported(result.Model, result.Language) {
+	specification, specificationErr := revisionservice.ParseSystemSTT(content)
+	digest := sha256.Sum256([]byte(content))
+	if specificationErr != nil || hex.EncodeToString(digest[:]) != result.Digest {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_MODEL_UNSUPPORTED")
+	} else {
+		result.Parameters = specification.Parameters
+		result.Enabled = specification.Enabled
+		result.MaximumAudioBytes = specification.MaximumAudioBytes
+		result.MaximumAudioDurationMilliseconds = specification.MaximumAudioDurationMilliseconds
+		result.ProviderTimeoutMilliseconds = specification.ProviderTimeoutMilliseconds
 	}
 	result.Ready = len(result.ReadinessBlockers) == 0
 	return result, nil
@@ -658,7 +667,7 @@ func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, t
 
 // Профиль совпадает с исполняемым adapter stt-tts-service, а не каталогом LLM агента.
 func systemSTTModelSupported(model, language string) bool {
-	return model == "gpt-transcribe" && language == "ru"
+	return (value.STTParameters{}).Validate(model, language) == nil
 }
 
 func (repository *Repository) GetEffectivePromptTemplate(ctx context.Context, principal value.Principal, agentRef string) (entity.InstructionVersion, error) {

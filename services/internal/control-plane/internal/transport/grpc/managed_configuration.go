@@ -222,6 +222,11 @@ func (server *Server) GetSystemSTTConfiguration(ctx context.Context, _ *controlp
 		Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
 		Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
 		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
+		Enabled: configuration.Enabled, MaximumAudioBytes: configuration.MaximumAudioBytes,
+		MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
+		Parameters: &controlplanev1.SystemSTTParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
+			Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
+			Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
 	}}, nil
 }
 

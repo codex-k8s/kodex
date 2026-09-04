@@ -34,8 +34,11 @@ func (server *Server) ResolveTranscriptionPolicy(ctx context.Context, request *s
 	}
 	return &sttv1.ResolveTranscriptionPolicyResponse{
 		ConfigRevision: uint64(configuration.Revision), ConfigDigestSha256: configuration.Digest,
-		Model: configuration.Model, Language: configuration.Language, MaximumAudioBytes: 25 << 20,
-		MaximumAudioDurationMilliseconds: 600000, ProviderTimeoutMilliseconds: 15000,
+		Model: configuration.Model, Language: configuration.Language, MaximumAudioBytes: configuration.MaximumAudioBytes,
+		MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
+		Parameters: &sttv1.TranscriptionParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
+			Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
+			Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
 		ProviderAccountRef: configuration.ProviderAccountRef, ProviderCredentialGeneration: uint64(configuration.ProviderCredentialGeneration),
 		ExpiresAt: verified.GetExpiresAt(), Authority: proto.Clone(request.GetAuthority()).(*sttv1.DelegatedAuthorityLocator),
 	}, nil

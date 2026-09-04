@@ -12,7 +12,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
+	domainvalue "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -34,7 +36,7 @@ type document struct {
 	BaseImage   string                 `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
 	Packages    []string               `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
 	Definition  *integrationDefinition `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
-	STT         *sttConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	STT         *STTConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
 }
 
 type integrationDefinition struct {
@@ -50,12 +52,37 @@ type integrationOperation struct {
 	Approval     string `json:"approval" yaml:"approval" toml:"approval"`
 	ResourceKind string `json:"resourceKind" yaml:"resourceKind" toml:"resourceKind"`
 }
-type sttConfiguration struct {
-	Enabled            bool   `json:"enabled" yaml:"enabled" toml:"enabled"`
-	ProviderAccountRef string `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
-	Model              string `json:"model" yaml:"model" toml:"model"`
-	Language           string `json:"language" yaml:"language" toml:"language"`
-	PermissionKey      string `json:"permissionKey" yaml:"permissionKey" toml:"permissionKey"`
+type STTConfiguration struct {
+	Enabled                          bool                      `json:"enabled" yaml:"enabled" toml:"enabled"`
+	ProviderAccountRef               string                    `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
+	Model                            string                    `json:"model" yaml:"model" toml:"model"`
+	Language                         string                    `json:"language" yaml:"language" toml:"language"`
+	PermissionKey                    string                    `json:"permissionKey" yaml:"permissionKey" toml:"permissionKey"`
+	Parameters                       domainvalue.STTParameters `json:"parameters,omitempty" yaml:"parameters,omitempty" toml:"parameters,omitempty"`
+	MaximumAudioBytes                uint64                    `json:"maximumAudioBytes,omitempty" yaml:"maximumAudioBytes,omitempty" toml:"maximumAudioBytes,omitempty"`
+	MaximumAudioDurationMilliseconds uint64                    `json:"maximumAudioDurationMilliseconds,omitempty" yaml:"maximumAudioDurationMilliseconds,omitempty" toml:"maximumAudioDurationMilliseconds,omitempty"`
+	ProviderTimeoutMilliseconds      uint64                    `json:"providerTimeoutMilliseconds,omitempty" yaml:"providerTimeoutMilliseconds,omitempty" toml:"providerTimeoutMilliseconds,omitempty"`
+}
+
+func ParseSystemSTT(content string) (STTConfiguration, error) {
+	var document document
+	if err := decodeStrict("JSON", content, &document); err != nil {
+		return STTConfiguration{}, ErrInvalid
+	}
+	if err := validateDocument(KindSystemSTT, document); err != nil {
+		return STTConfiguration{}, err
+	}
+	result := *document.STT
+	if result.MaximumAudioBytes == 0 {
+		result.MaximumAudioBytes = modelprofile.RecommendedMaximumBytes
+	}
+	if result.MaximumAudioDurationMilliseconds == 0 {
+		result.MaximumAudioDurationMilliseconds = uint64(modelprofile.RecommendedMaximumDuration.Milliseconds())
+	}
+	if result.ProviderTimeoutMilliseconds == 0 {
+		result.ProviderTimeoutMilliseconds = 15000
+	}
+	return result, nil
 }
 
 func Validate(kind, format, content string) (string, []Diagnostic, error) {
@@ -172,6 +199,12 @@ func validateDocument(kind string, value document) error {
 		if value.STT == nil || value.Template != "" || value.BaseImage != "" || value.Definition != nil ||
 			value.STT.ProviderAccountRef == "" || value.STT.Model == "" || value.STT.PermissionKey != "platform.stt.use" {
 			return errors.New("system STT configuration is invalid")
+		}
+		if err := value.STT.Parameters.Validate(value.STT.Model, value.STT.Language); err != nil {
+			return err
+		}
+		if value.STT.MaximumAudioBytes > 25<<20 || value.STT.MaximumAudioDurationMilliseconds > 600000 || value.STT.ProviderTimeoutMilliseconds > 120000 {
+			return errors.New("system STT limits are invalid")
 		}
 	default:
 		return errors.New("revision kind is invalid")

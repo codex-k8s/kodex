@@ -4649,6 +4649,15 @@ message GetManagedConfigurationImpactRequest {
   string revision_ref = 2;
 }
 message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
+message SystemSTTParameters {
+  repeated string languages = 1;
+  repeated string keywords = 2;
+  string prompt = 3;
+  double temperature = 4;
+  string chunking_strategy = 5;
+  bool stream = 6;
+}
+
 message SystemSTTConfiguration {
   string configuration_ref = 1;
   string revision_ref = 2;
@@ -4661,6 +4670,11 @@ message SystemSTTConfiguration {
   bool ready = 9;
   repeated string readiness_blockers = 10;
   uint64 provider_credential_generation = 11;
+  bool enabled = 12;
+  SystemSTTParameters parameters = 13;
+  uint64 maximum_audio_bytes = 14;
+  uint64 maximum_audio_duration_milliseconds = 15;
+  uint64 provider_timeout_milliseconds = 16;
 }
 message GetSystemSTTConfigurationRequest {}
 message GetSystemSTTConfigurationResponse { SystemSTTConfiguration configuration = 1; }

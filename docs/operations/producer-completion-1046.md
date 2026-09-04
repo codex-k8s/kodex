@@ -252,11 +252,39 @@ updated: 2026-09-05
   последних fixture corrections: PASS. Git import/writeback и
   immutable Git source provenance ещё не объявлены реализованными.
 
+## STT immutable parameters
+
+- Из #1020 `c91cc7476959687d9e882109977655aec467f9fd` приняты shared STT Proto,
+  availability/catalog helpers и modelprofile. Generated пересоздан codegen;
+  service/deploy worker #1020 здесь не изменялись.
+- `SystemSTTConfiguration`: enabled=12, parameters=13, maximum_audio_bytes=14,
+  maximum_audio_duration_milliseconds=15, provider_timeout_milliseconds=16.
+  `SystemSTTParameters` содержит languages, keywords, prompt, temperature,
+  chunking_strategy, stream. ResolveTranscriptionPolicy отдаёт исходный shared
+  `TranscriptionParameters` field 12, без upload overrides.
+- Managed JSON содержит `stt.parameters` с camelCase `chunkingStrategy`.
+  Модель и параметры проверяются shared modelprofile; неподдерживаемые сочетания,
+  stream=true, неизвестные поля и credential values закрыто отклоняются.
+  Настраиваемые limits ограничены 25 MiB / 600 s / 120 s provider timeout;
+  отсутствующие значения получают 10 MiB / 120 s / 15 s. Digest сверяется с
+  immutable content; publish не перепривязывает consumer самовольно.
+- Runtime STT admission больше не использует LLM catalog и устаревший SQL Scan.
+  Owner разрешает исходного actor по server-owned root run и проверяет его
+  `platform.stt.use`, enabled configuration и credential eligibility.
+  Это не подтверждение live provider доступности; actual protected stream #1020
+  остаётся обязательной второй частью user availability.
+- `TestSystemSTTImmutableParametersAndLimits`, `TestSystemSTTModelMatchesExecutableProfile`,
+  managed STT PostgreSQL lifecycle: PASS. Полный CP PostgreSQL, targeted Go,
+  shared sttapi Go, Proto lint/codegen: PASS. Render/race этой передачи: NOT RUN.
+- Дополнительно исправлено stale revision-validator ожидание NOT_READY Mattermost:
+  negative case теперь явно портит READY registry descriptor, а не отклоняет
+  принятый executable package.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
 сквозная credential matrix secret revisions; проверка Git lifecycle;
-полные STT model params и immutable projection; mail authorization producer #1037;
+обновление STT permission существующих ролей и полная credential matrix; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов
 выполняют eligibility до SQL LIMIT, с дополнительной per-result проверкой Go.
