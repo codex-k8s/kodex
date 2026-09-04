@@ -13,8 +13,8 @@ updated: 2026-09-05
 Источник: MVP-UI-37, Issue #1046. Это согласованная передача Proto/generated/policy
 внутри одного полного CP unit, не готовая реализация всего owner lifecycle.
 Memory create/revise/archive/restore/purge и list/get/history уже подключены к
-owner SQL/domain. Skill lifecycle и list/get/history также подключены;
-agent bindings пока наследуют gRPC Unimplemented. Реальный scanner deploy и
+owner SQL/domain. Skill lifecycle, list/get/history и agent bindings также
+подключены. Реальный scanner deploy и
 runtime materialization нельзя считать PASS по codegen или PostgreSQL fixture.
 
 ## Общие правила
@@ -23,7 +23,7 @@ runtime materialization нельзя считать PASS по codegen или Pos
   tenant/project по существующему opaque ref; браузер не назначает provenance.
 - `MutationContext.expected_version` относится к aggregate version; для agent
   binding это agent version, `expected_binding_version=0` означает отсутствие
-  binding. Повтор с тем же idempotency key не создаёт дополнительную revision.
+  включённого binding. Повтор с тем же idempotency key не создаёт дополнительную revision.
 - Path файла внутри Skill является относительным manifest path, не filesystem
   authority. Ровно один `SKILL.md`; supporting files проходят owner validation,
   scan и policy review. Artifact ref/revision повторно проверяются владельцем.
@@ -102,7 +102,8 @@ terminal purge и отсутствие summary в replay после purge. Migra
 применена штатным runner в disposable PostgreSQL; live-проверки не выполнялись.
 Skill lifecycle/list/history: локальный targeted PostgreSQL PASS с явно тестовым
 scanner port; production Unix-socket client проверен Go/race protocol fixtures.
-Agent bindings и runtime materialization ещё не реализованы.
+Bind/unbind/rebind и readback проверены в обоих targeted PostgreSQL scenarios.
+Runtime materialization ещё не реализована.
 STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.
 
@@ -126,8 +127,8 @@ read path — GetMemoryRecord/ListMemoryRecords/ListMemoryRecordRevisions. Ко�
 
 ## Skill limits и передача HTTP
 
-Proto shape не изменён относительно `d97753154`. Доступны все девять команд
-Skill lifecycle и три query RPC; bind/unbind ещё не подключены.
+Skill lifecycle Proto shape не изменён относительно `d97753154`. Доступны все
+девять команд Skill lifecycle, три query RPC и bind/unbind.
 
 - Не более 128 файлов; каждый до 32 MiB, суммарно до 64 MiB.
 - `SKILL.md` до 256 KiB, UTF-8, обязательные YAML name/description и непустые
@@ -161,3 +162,39 @@ CP-owned scanner container, signature database delivery и его readiness ещ
 не подключены. Без них Validate возвращает INVALID/ERROR с
 `SKILL_MALWARE_SCANNER_UNAVAILABLE`, а не фиктивный CLEAN. Реальный ClamAV: NOT RUN.
 Структурный artifact scan не заменяет malware scanner.
+
+## Agent bindings
+
+`BindAgentSkillBundle`, `UnbindAgentSkillBundle`, `BindAgentMemoryRecord`,
+`UnbindAgentMemoryRecord` используют ранее переданные request/response без
+изменений. В `AgentRuntimeConfigurationView` добавлены только
+`skill_bindings = 8` и `memory_bindings = 9`, оба repeated AgentContextBinding.
+GetAgentRuntimeConfiguration возвращает их вместе с точным agent_version в
+одной repeatable-read транзакции. Чтение использует canonical agent.view,
+не legacy membership; вложенные ссылки фильтруются по owner eligibility.
+
+- Не более 128 включённых Skill+Memory bindings на Agent.
+- Bind требует agent.manage и независимый доступ к exact context revision,
+  source run/artifacts. Tenant/project совпадают; agent-scoped Memory нельзя
+  передать другому Agent. Global system assistant этим API не связывается.
+- Skill revision должна быть PUBLISHED/CLEAN, её файлы повторно сверяются по
+  exact object receipts и digest. Memory record ACTIVE, current и выбранная
+  revision не должны быть expired. Current pointer не заменяет выбранную revision.
+- Agent version и enabled binding version проверяются в owner-транзакции;
+  unbind требует exact bound revision. Новый bind после unbind использует
+  expected_binding_version=0, а сервер продолжает монотонную version старой строки.
+- Mutation атомарно сохраняет binding, увеличивает Agent version, audit,
+  receipt и AGENT_CHANGED. UI перечитывает AgentRuntimeConfigurationView для
+  следующего agent_version; response.binding.version относится к binding.
+- Readback содержит разрешённые включённые bindings. Expired Memory остаётся
+  metadata-ссылкой для unbind, но не разрешает выдачу summary/runtime snapshot.
+- Archive/purge context отключает bindings без автоматического восстановления.
+  RuntimeRevision pins/materialization и автоматический retention GC остаются
+  отдельными незавершёнными частями того же #1046, не скрываются за binding PASS.
+
+Проверка:
+`bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$/(memory_records|skill_bundle)'`.
+Оба сценария выполнены; проверены bind/readback, stale Agent/binding OCC,
+unbind и повторный bind с монотонной версией. Proto lint/codegen и Go
+transport/domain: локальный PASS. Существующий полный PostgreSQL suite на этом
+промежуточном checkpoint не повторялся.

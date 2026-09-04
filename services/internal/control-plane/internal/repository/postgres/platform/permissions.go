@@ -166,6 +166,11 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", agentRef, projectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+	case command.AgentContextBindingInput:
+		if err := repository.authorizeContextResource(ctx, tx, current, input, payload); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.SkillBundleInput:
 		projectRef := payload.ProjectRef
 		if payload.BundleRef != "" {

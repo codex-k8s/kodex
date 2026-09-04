@@ -158,13 +158,14 @@ type AgentRuntimeEnvironmentBinding struct {
 }
 
 type AgentRuntimeConfigurationView struct {
-	Configuration       AgentRuntimeConfiguration
-	PublishedOverlay    ConfigOverlayVersion
-	DraftOverlay        *ConfigOverlayVersion
-	EnvironmentBinding  AgentRuntimeEnvironmentBinding
-	Environment         RuntimeEnvironmentSet
-	SafeEffectiveConfig string
-	AgentVersion        int64
+	SkillBindings, MemoryBindings []AgentContextBinding
+	Configuration                 AgentRuntimeConfiguration
+	PublishedOverlay              ConfigOverlayVersion
+	DraftOverlay                  *ConfigOverlayVersion
+	EnvironmentBinding            AgentRuntimeEnvironmentBinding
+	Environment                   RuntimeEnvironmentSet
+	SafeEffectiveConfig           string
+	AgentVersion                  int64
 }
 
 type TemplateVariable struct {

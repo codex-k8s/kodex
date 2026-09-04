@@ -109,6 +109,7 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("publication: %v", err)
 	}
 	bundle = published.SkillBundle
+	testContextBinding(t, ctx, service, owner, project.Project.Ref, bundle.Ref, bundle.CurrentRevision.Ref, "skill-context", false)
 	listed, total, _, err := service.ListSkillBundles(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}})
 	if err != nil || total != 1 || len(listed) != 1 || listed[0].Ref != bundle.Ref {
 		t.Fatalf("skill catalog: %d %d %v", total, len(listed), err)

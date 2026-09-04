@@ -4052,6 +4052,8 @@ message AgentRuntimeConfigurationView {
   RuntimeEnvironmentSet environment = 5;
   string safe_effective_config = 6;
   int64 agent_version = 7;
+  repeated AgentContextBinding skill_bindings = 8;
+  repeated AgentContextBinding memory_bindings = 9;
 }
 
 message TemplateVariable {

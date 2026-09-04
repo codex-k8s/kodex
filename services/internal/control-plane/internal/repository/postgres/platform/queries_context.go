@@ -3,6 +3,22 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/context_bindings_list.sql
+	queryContextBindingsList string
+	//go:embed sql/context_binding_skill_files.sql
+	queryContextBindingSkillFiles string
+	//go:embed sql/context_binding_get.sql
+	queryContextBindingGet string
+	//go:embed sql/context_binding_count.sql
+	queryContextBindingCount string
+	//go:embed sql/context_binding_insert.sql
+	queryContextBindingInsert string
+	//go:embed sql/context_binding_update.sql
+	queryContextBindingUpdate string
+	//go:embed sql/context_binding_memory_target.sql
+	queryContextBindingMemoryTarget string
+	//go:embed sql/context_binding_skill_target.sql
+	queryContextBindingSkillTarget string
 	//go:embed sql/skill_bundle_list.sql
 	querySkillBundleList string
 	//go:embed sql/skill_revision_list.sql
