@@ -44,3 +44,73 @@ func TestNormalizeRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewUsesNormalizedCustomCronAndRunsDSTFoldOnce(t *testing.T) {
+	after := mustTime(t, "2026-10-25T00:20:00Z")
+	values, err := Preview(Spec{
+		Preset: "CUSTOM", CronExpression: "30 2 * * *", Timezone: "Europe/Berlin",
+		DSTGapPolicy: DSTGapShiftForward, DSTFoldPolicy: DSTFoldRunOnce,
+		MisfirePolicy: MisfireCoalesce, OverlapPolicy: OverlapForbid,
+	}, after, 2)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if !values[0].Equal(mustTime(t, "2026-10-25T00:30:00Z")) ||
+		!values[1].Equal(mustTime(t, "2026-10-26T01:30:00Z")) {
+		t.Fatalf("fold preview = %v", values)
+	}
+}
+
+func TestResolveDueMisfirePolicies(t *testing.T) {
+	scheduled := mustTime(t, "2026-09-04T09:00:00Z")
+	now := mustTime(t, "2026-09-04T12:30:00Z")
+	base := Spec{Preset: "CUSTOM", CronExpression: "0 * * * *", Timezone: "UTC"}
+
+	for _, test := range []struct {
+		name, policy, occurrence, next string
+	}{
+		{name: "coalesce", policy: MisfireCoalesce, occurrence: "2026-09-04T09:00:00Z", next: "2026-09-04T13:00:00Z"},
+		{name: "catch up one", policy: MisfireCatchUpOne, occurrence: "2026-09-04T09:00:00Z", next: "2026-09-04T10:00:00Z"},
+		{name: "skip", policy: MisfireSkip, next: "2026-09-04T13:00:00Z"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			spec := base
+			spec.MisfirePolicy = test.policy
+			occurrence, next, err := ResolveDue(spec, scheduled, now)
+			if err != nil || !next.Equal(mustTime(t, test.next)) {
+				t.Fatalf("resolve due: occurrence=%v next=%s err=%v", occurrence, next, err)
+			}
+			if test.occurrence == "" && occurrence != nil {
+				t.Fatalf("skip returned occurrence %s", occurrence)
+			}
+			if test.occurrence != "" && (occurrence == nil || !occurrence.Equal(mustTime(t, test.occurrence))) {
+				t.Fatalf("occurrence = %v", occurrence)
+			}
+		})
+	}
+}
+
+func TestNormalizeRejectsUnknownExecutionPolicies(t *testing.T) {
+	base := Spec{Preset: "CUSTOM", CronExpression: "0 * * * *", Timezone: "UTC"}
+	for _, mutate := range []func(*Spec){
+		func(spec *Spec) { spec.DSTGapPolicy = "SKIP" },
+		func(spec *Spec) { spec.DSTFoldPolicy = "RUN_TWICE" },
+		func(spec *Spec) { spec.MisfirePolicy = "ALL" },
+		func(spec *Spec) { spec.OverlapPolicy = "MAYBE" },
+	} {
+		spec := base
+		mutate(&spec)
+		if _, err := Normalize(spec, time.Now()); err == nil {
+			t.Fatalf("unknown policy accepted: %#v", spec)
+		}
+	}
+}
+
+func mustTime(t *testing.T, value string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}

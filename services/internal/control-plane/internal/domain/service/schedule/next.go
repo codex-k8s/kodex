@@ -8,12 +8,15 @@ import (
 	"strings"
 	"time"
 	_ "time/tzdata"
+
+	robfigcron "github.com/robfig/cron/v3"
 )
 
 var ErrInvalid = errors.New("invalid schedule specification")
 
 type Spec struct {
 	Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy string
 }
 
 type Normalized struct {
@@ -28,11 +31,34 @@ var weekdays = map[string]time.Weekday{
 	"FRIDAY": time.Friday, "SATURDAY": time.Saturday,
 }
 
+const (
+	DSTGapShiftForward = "SHIFT_FORWARD"
+	DSTFoldRunOnce     = "RUN_ONCE_EARLIEST"
+	MisfireCoalesce    = "COALESCE"
+	MisfireCatchUpOne  = "CATCH_UP_ONE"
+	MisfireSkip        = "SKIP"
+	OverlapForbid      = "FORBID"
+	OverlapAllow       = "ALLOW"
+)
+
+var standardParser = robfigcron.NewParser(
+	robfigcron.Minute | robfigcron.Hour | robfigcron.Dom | robfigcron.Month | robfigcron.Dow,
+)
+
 func Normalize(spec Spec, after time.Time) (Normalized, error) {
 	spec.Preset = strings.ToUpper(strings.TrimSpace(spec.Preset))
 	spec.TimeOfDay = strings.TrimSpace(spec.TimeOfDay)
 	spec.DayOfWeek = strings.ToUpper(strings.TrimSpace(spec.DayOfWeek))
 	spec.Timezone = strings.TrimSpace(spec.Timezone)
+	spec.DSTGapPolicy = defaultPolicy(spec.DSTGapPolicy, DSTGapShiftForward)
+	spec.DSTFoldPolicy = defaultPolicy(spec.DSTFoldPolicy, DSTFoldRunOnce)
+	spec.MisfirePolicy = defaultPolicy(spec.MisfirePolicy, MisfireCoalesce)
+	spec.OverlapPolicy = defaultPolicy(spec.OverlapPolicy, OverlapForbid)
+	if spec.DSTGapPolicy != DSTGapShiftForward || spec.DSTFoldPolicy != DSTFoldRunOnce ||
+		!oneOf(spec.MisfirePolicy, MisfireCoalesce, MisfireCatchUpOne, MisfireSkip) ||
+		!oneOf(spec.OverlapPolicy, OverlapForbid, OverlapAllow) {
+		return Normalized{}, ErrInvalid
+	}
 	if spec.Timezone == "" {
 		return Normalized{}, ErrInvalid
 	}
@@ -43,6 +69,9 @@ func Normalize(spec Spec, after time.Time) (Normalized, error) {
 		spec.TimeOfDay = ""
 		spec.DayOfWeek = ""
 		cron := strings.Join(strings.Fields(spec.CronExpression), " ")
+		if _, err := standardParser.Parse(cron); err != nil {
+			return Normalized{}, ErrInvalid
+		}
 		if _, err := parseCron(cron); err != nil {
 			return Normalized{}, ErrInvalid
 		}
@@ -80,6 +109,52 @@ func Normalize(spec Spec, after time.Time) (Normalized, error) {
 		return Normalized{}, err
 	}
 	return Normalized{Spec: spec, CronExpression: cron, Next: next}, nil
+}
+
+func Preview(spec Spec, after time.Time, limit int) ([]time.Time, error) {
+	if limit < 1 || limit > 100 {
+		return nil, ErrInvalid
+	}
+	normalized, err := Normalize(spec, after)
+	if err != nil {
+		return nil, err
+	}
+	values := make([]time.Time, 0, limit)
+	cursor := after
+	for len(values) < limit {
+		next, nextErr := NextWithPolicy(normalized.Spec, cursor)
+		if nextErr != nil {
+			return nil, nextErr
+		}
+		values = append(values, next)
+		cursor = next
+	}
+	return values, nil
+}
+
+// ResolveDue применяет ту же семантику, что create/preview, и возвращает
+// occurrence=nil только для явного SKIP пропущенного запуска.
+func ResolveDue(spec Spec, scheduledFor, now time.Time) (*time.Time, time.Time, error) {
+	normalized, err := Normalize(spec, scheduledFor.Add(-time.Minute))
+	if err != nil || !normalized.Next.Equal(scheduledFor) {
+		return nil, time.Time{}, ErrInvalid
+	}
+	if now.Before(scheduledFor) {
+		return nil, scheduledFor, nil
+	}
+	nextAfter := scheduledFor
+	if spec.MisfirePolicy == MisfireCoalesce || spec.MisfirePolicy == MisfireSkip {
+		nextAfter = now
+	}
+	next, err := NextWithPolicy(normalized.Spec, nextAfter)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if normalized.MisfirePolicy == MisfireSkip && now.After(scheduledFor) {
+		return nil, next, nil
+	}
+	occurrence := scheduledFor
+	return &occurrence, next, nil
 }
 
 func Display(preset, cron string) (string, string, error) {
@@ -130,6 +205,13 @@ func Display(preset, cron string) (string, string, error) {
 }
 
 func Next(preset, cron, timezone string, after time.Time) (time.Time, error) {
+	return NextWithPolicy(Spec{Preset: preset, CronExpression: cron, Timezone: timezone,
+		DSTGapPolicy: DSTGapShiftForward, DSTFoldPolicy: DSTFoldRunOnce,
+		MisfirePolicy: MisfireCoalesce, OverlapPolicy: OverlapForbid}, after)
+}
+
+func NextWithPolicy(spec Spec, after time.Time) (time.Time, error) {
+	preset, cron, timezone := spec.Preset, spec.CronExpression, spec.Timezone
 	location, err := time.LoadLocation(timezone)
 	if err != nil {
 		return time.Time{}, ErrInvalid
@@ -146,7 +228,7 @@ func Next(preset, cron, timezone string, after time.Time) (time.Time, error) {
 		}
 		candidate := localAfter.Truncate(time.Minute).Add(time.Minute)
 		for scanned := 0; scanned < 5*366*24*60; scanned++ {
-			if specification.matches(candidate) {
+			if specification.matches(candidate) && !duplicateFold(candidate, after, location, spec.DSTFoldPolicy) {
 				return candidate.UTC(), nil
 			}
 			candidate = candidate.Add(time.Minute)
@@ -175,6 +257,40 @@ func Next(preset, cron, timezone string, after time.Time) (time.Time, error) {
 		}
 	}
 	return time.Time{}, ErrInvalid
+}
+
+func duplicateFold(candidate, after time.Time, location *time.Location, policy string) bool {
+	if policy != DSTFoldRunOnce {
+		return false
+	}
+	local := candidate.In(location)
+	for _, delta := range []time.Duration{-time.Hour, -2 * time.Hour} {
+		previous := candidate.Add(delta)
+		previousLocal := previous.In(location)
+		if previous.After(after) || previousLocal.Year() != local.Year() || previousLocal.YearDay() != local.YearDay() ||
+			previousLocal.Hour() != local.Hour() || previousLocal.Minute() != local.Minute() {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func defaultPolicy(value, fallback string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func oneOf(value string, values ...string) bool {
+	for _, candidate := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 type cronSpecification struct {
