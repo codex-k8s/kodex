@@ -17,13 +17,13 @@ WITH projects AS (
            '/projects/' || project.ref || '/' || directory.name,
            '/projects/' || project.ref, directory.name, 'DIRECTORY', true,
            project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref
-    FROM projects AS project CROSS JOIN (VALUES ('entities'),('runs'),('skills'),('memories')) directory(name)
+    FROM projects AS project CROSS JOIN (VALUES ('entities'),('runs'),('skills'),('memories'),('files')) directory(name)
     UNION ALL
     SELECT 'dir:' || project.ref || ':entities:' || directory.name,
            '/projects/' || project.ref || '/entities/' || directory.name,
            '/projects/' || project.ref || '/entities', directory.name, 'DIRECTORY', true,
            project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref
-    FROM projects AS project CROSS JOIN (VALUES ('agents'),('workflows')) directory(name)
+    FROM projects AS project CROSS JOIN (VALUES ('agents'),('workflows'),('automations'),('environments')) directory(name)
     UNION ALL
     SELECT 'agent:' || agent.ref, '/projects/' || project.ref || '/entities/agents/' || agent.ref,
            '/projects/' || project.ref || '/entities/agents', agent.name, 'AGENT', true,
@@ -92,32 +92,71 @@ WITH projects AS (
     WHERE artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
       AND artifact.source IN ('AGENT_RESULT', 'INTEGRATION_RESULT')
     UNION ALL
-    SELECT 'memory:' || artifact.ref,
-           '/projects/' || project.ref || '/memories/' || artifact.ref,
-           '/projects/' || project.ref || '/memories', artifact.file_name, 'MEMORY', false,
+    SELECT 'file:' || artifact.ref,
+           '/projects/' || project.ref || '/files/' || artifact.ref,
+           '/projects/' || project.ref || '/files', artifact.file_name, 'INPUT', false,
            project.ref, artifact.ref, '', artifact.size_bytes, artifact.digest, artifact.created_at,
            'ARTIFACT', artifact.ref
     FROM control_plane.artifacts AS artifact JOIN projects AS project ON project.id = artifact.project_id
-    WHERE artifact.source = 'KNOWLEDGE_SOURCE' AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+    WHERE artifact.run_id IS NULL AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
     UNION ALL
-    SELECT 'skill:' || environment.ref || ':' || tool.value,
-           '/projects/' || project.ref || '/skills/' || md5(tool.value),
-           '/projects/' || project.ref || '/skills', tool.value, 'SKILL', false,
+    SELECT 'environment:' || environment.ref,
+           '/projects/' || project.ref || '/entities/environments/' || environment.ref,
+           '/projects/' || project.ref || '/entities/environments', environment.name, 'ENVIRONMENT', true,
            project.ref, environment.ref, '', 0, version.digest, version.created_at,
            'PROJECT', project.ref
     FROM control_plane.runtime_environment_sets AS environment
     JOIN projects AS project ON project.id = environment.project_id
     JOIN control_plane.runtime_environment_versions AS version ON version.id = environment.current_version_id
-    CROSS JOIN LATERAL jsonb_array_elements_text(version.selected_tools) tool(value)
-    WHERE environment.state = 'ACTIVE' AND tool.value <> ''
+    WHERE environment.state <> 'DELETED'
+    UNION ALL
+    SELECT 'automation:' || schedule.ref,
+           '/projects/' || project.ref || '/entities/automations/' || schedule.ref,
+           '/projects/' || project.ref || '/entities/automations', schedule.name, 'AUTOMATION', true,
+           project.ref, schedule.ref, '', 0, revision.digest, schedule.updated_at, 'SCHEDULE', schedule.ref
+    FROM control_plane.schedules schedule
+    JOIN projects project ON project.id = schedule.project_id
+    JOIN control_plane.schedule_revisions revision ON revision.id = schedule.current_revision_id
+    WHERE schedule.lifecycle_state <> 'DELETED'
+    UNION ALL
+    SELECT 'avatar:' || agent.ref || ':' || artifact.ref,
+           '/projects/' || project.ref || '/entities/agents/' || agent.ref || '/avatar',
+           '/projects/' || project.ref || '/entities/agents/' || agent.ref,
+           artifact.file_name, 'AVATAR', false, project.ref, artifact.ref, '', artifact.size_bytes,
+           artifact.digest, artifact.created_at, 'ARTIFACT', artifact.ref
+    FROM control_plane.agents agent
+    JOIN projects project ON project.id = agent.project_id
+    JOIN control_plane.artifacts artifact ON artifact.id = agent.avatar_artifact_id
+      AND artifact.organization_id = agent.organization_id AND artifact.project_id = agent.project_id
+      AND artifact.revision = agent.avatar_artifact_revision
+    WHERE agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
+      AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+      AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'agent.view', 'AGENT',
+          agent.id, agent.project_id, agent.created_by, jsonb_build_object('PROJECT', agent.project_id::text), @evaluated_at, false)
 ), filtered AS (
     SELECT * FROM nodes
     WHERE ((@mode = 'TREE' AND parent_path = @path)
         OR (@mode = 'SEARCH' AND (name ILIKE '%' || @query || '%' OR path ILIKE '%' || @query || '%')))
+), visible AS MATERIALIZED (
+    SELECT filtered.*
+    FROM filtered JOIN control_plane.catalog_access_targets target
+      ON target.organization_id = @organization_id::uuid AND target.kind = filtered.access_kind AND target.ref = filtered.access_ref
+    WHERE (@authority_project = '' OR target.project_id = NULLIF(@authority_project, '')::uuid)
+      AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid,
+          CASE filtered.access_kind WHEN 'PROJECT' THEN 'project.view' WHEN 'AGENT' THEN 'agent.view'
+            WHEN 'WORKFLOW' THEN 'workflow.view' WHEN 'RUN' THEN 'run.view' WHEN 'ARTIFACT' THEN 'artifact.view'
+            WHEN 'SCHEDULE' THEN 'schedule.view' ELSE '' END,
+          target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at, filtered.access_kind = 'PROJECT')
+      AND (filtered.run_ref = '' OR filtered.access_kind = 'RUN' OR EXISTS (
+          SELECT 1 FROM control_plane.catalog_access_targets parent
+          WHERE parent.organization_id = @organization_id::uuid AND parent.kind = 'RUN' AND parent.ref = filtered.run_ref
+            AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'run.view', 'RUN',
+                parent.id, parent.project_id, parent.owner_id, parent.related_ids, @evaluated_at, false)
+      ))
+), page AS (
+    SELECT * FROM visible
+    WHERE (@cursor_path = '' OR (path, ref) > (@cursor_path, @cursor_ref))
+    ORDER BY path, ref LIMIT @page_size
 )
-SELECT filtered.ref, filtered.path, filtered.parent_path, filtered.name, filtered.kind,
-       filtered.directory, filtered.project_ref, filtered.entity_ref, filtered.run_ref,
-       filtered.size_bytes, filtered.digest, filtered.modified_at,
-       filtered.access_kind, filtered.access_ref
-FROM filtered
-ORDER BY filtered.path, filtered.ref;
+SELECT COALESCE(jsonb_agg(to_jsonb(page) ORDER BY page.path, page.ref), '[]'::jsonb), (SELECT count(*) FROM visible)
+FROM page;

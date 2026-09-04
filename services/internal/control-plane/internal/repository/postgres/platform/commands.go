@@ -235,6 +235,9 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createAgent(ctx, tx, scope, input.Payload)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
+	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
+		return repository.changeRuntimeEnvironmentDraft(ctx, tx, scope, input)
 	case command.SetAgentAvatar, command.RemoveAgentAvatar:
 		return repository.changeAgentAvatar(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:

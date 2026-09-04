@@ -31,6 +31,14 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	}
 }
 
+func TestCastMembershipPreservesOnlyActualProjectScope(t *testing.T) {
+	for _, project := range []string{"", "prj_catalog"} {
+		if got := castMembership(entity.Membership{Ref: "member", ProjectRef: project}).GetProjectRef(); got != project {
+			t.Fatalf("membership project scope changed: %q", got)
+		}
+	}
+}
+
 func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
 	t.Parallel()
 

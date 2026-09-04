@@ -129,9 +129,41 @@ producer response закрыто отклоняется. Source content и name 
 Дополнительные тесты проверяют сохранение source, отсутствие caller authority,
 невалидные revisions, owner denial и duplicate consumers.
 
-Глобальные каталоги, environment/secret revision lifecycle и per-user STT
-eligibility зависят от завершения #1046. Этот раздел не заявляет готовность
-всего #1045 до подключения этих producer contracts.
+Выборочное переключение потребителей environment/secret revisions и полный
+SkillBundle/MemoryRecord lifecycle зависят от завершения #1046. Этот раздел
+не заявляет готовность всего #1045 до подключения этих producer contracts.
+
+## Черновики окружений (#1045, #1046)
+
+| HTTP /api/v1/ | Внутренний RPC | Авторитетный результат |
+| --- | --- | --- |
+| POST projects/{projectRef}/runtime-environment-drafts | CreateRuntimeEnvironmentDraft | Создание отдельного DRAFT, без публикации |
+| GET runtime-environment-drafts/{draftRef} | GetRuntimeEnvironmentDraft | Сохранённая спецификация и version |
+| PUT runtime-environment-drafts/{draftRef} | SaveRuntimeEnvironmentDraft | Сохранение, сброс предыдущей валидации |
+| POST runtime-environment-drafts/{draftRef}/validation | ValidateRuntimeEnvironmentDraft | VALID/digest либо INVALID/diagnostics |
+| POST runtime-environment-drafts/{draftRef}/publication | PublishRuntimeEnvironmentDraft | PUBLISHED и publishedEnvironmentRef |
+| DELETE runtime-environment-drafts/{draftRef} | DiscardRuntimeEnvironmentDraft | DISCARDED, опубликованное окружение не меняется |
+
+Actor/organization берутся из проверенной browser authority. При создании
+route project лишь сужает полномочия; при чтении/изменении владелец разрешает
+проект через draftRef и проверяет `project.manage`. Payload не назначает owner.
+Создание черновика существующего окружения требует пары environmentRef и
+expectedEnvironmentVersion. Последующие команды требуют If-Match версии
+черновика и Idempotency-Key; ETag ответа относится к этому же draft.
+
+Сохранение допускает незавершённые имя/образ и не запускает публикацию.
+Валидация и публикация выполняются отдельными owner-командами. Control-plane
+атомарно проверяет свежесть зависимостей, VALID/digest, OCC окружения и
+сохраняет публикацию; её событие и потребители принадлежат тому же владельцу.
+Черновые команды не создают исполняемую runtime revision; их авторитетный
+read path — GET draft. Ответ публикации возвращает ссылку, по которой PWA
+читает опубликованное окружение, а не выдаёт локальный draft за публикацию.
+
+Свободный текст, значения переменных и команды инструментов переносятся
+типизированным caster без общей строковой i18n/enum нормализации. Secret
+bindings содержат только ссылки. Все ответы no-store, массивы всегда `[]`.
+Тесты проверяют шесть точных RPC, source round-trip, policy enums, OCC,
+подстановку projectRef, отказ без версии и owner 403/404/412.
 
 ## Общие каталоги и виртуальные файлы (#1045)
 
@@ -159,7 +191,9 @@ Control-plane разрешает eligibility, lifecycle и scan state; путь 
 защищённом history read path. Компактная текущая ревизия сохраняет точные
 ref/version/state/digest, а не подменяет отсутствующий текст пустой строкой.
 Проектный `/projects/{projectRef}/members` также принимает query и pagination.
-Project identity глобальных membership дополняется producer в #1046.
+Глобальный membership сохраняет producer projectRef для группировки; у
+участника платформы этого поля нет. VFS также передаёт типы AUTOMATION,
+ENVIRONMENT и AVATAR без подмены их обычным файлом.
 
 Query, pageSize и pageToken ограничены до RPC, включая защиту от переполнения
 при преобразовании int в int32. Names/paths VFS сохраняются дословно, enum

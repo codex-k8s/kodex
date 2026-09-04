@@ -1151,6 +1151,9 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 
 func knownCommand(kind command.Kind) bool {
 	switch kind {
+	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
+		return true
 	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,

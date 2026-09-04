@@ -728,5 +728,7 @@ PERMISSION_PLATFORM_STT_USE_NAME:
   other: Голосовой ввод
 PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
   other: Преобразование речи в текст через настроенный сервис распознавания
+RUNTIME_ENVIRONMENT_DRAFT_CHANGED:
+  other: Черновик окружения изменён
 SCHEDULE_OCCURRENCE_FAILED:
   other: Не удалось выполнить запуск по расписанию

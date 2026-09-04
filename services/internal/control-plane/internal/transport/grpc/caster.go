@@ -170,7 +170,7 @@ func castUser(value entity.User) *controlplanev1.UserSummary {
 	return &controlplanev1.UserSummary{Ref: value.Ref, DisplayName: value.DisplayName, EmailHint: value.EmailMasked}
 }
 func castMembership(value entity.Membership) *controlplanev1.Membership {
-	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions), ProjectRef: value.ProjectRef}
 }
 func castProject(value entity.Project) *controlplanev1.Project {
 	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}

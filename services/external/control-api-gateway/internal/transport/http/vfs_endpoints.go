@@ -82,7 +82,8 @@ func writeVFSPage(w http.ResponseWriter, nodes []*controlplanev1.VFSNode, total 
 			controlplanev1.VFSNodeKind_VFS_NODE_KIND_AGENT, controlplanev1.VFSNodeKind_VFS_NODE_KIND_WORKFLOW,
 			controlplanev1.VFSNodeKind_VFS_NODE_KIND_RUN, controlplanev1.VFSNodeKind_VFS_NODE_KIND_INPUT,
 			controlplanev1.VFSNodeKind_VFS_NODE_KIND_RESULT, controlplanev1.VFSNodeKind_VFS_NODE_KIND_SKILL,
-			controlplanev1.VFSNodeKind_VFS_NODE_KIND_MEMORY:
+			controlplanev1.VFSNodeKind_VFS_NODE_KIND_MEMORY, controlplanev1.VFSNodeKind_VFS_NODE_KIND_AUTOMATION,
+			controlplanev1.VFSNodeKind_VFS_NODE_KIND_ENVIRONMENT, controlplanev1.VFSNodeKind_VFS_NODE_KIND_AVATAR:
 		default:
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
