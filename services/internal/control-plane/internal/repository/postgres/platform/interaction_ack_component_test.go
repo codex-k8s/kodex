@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func testInteractionACK(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, owner value.Principal, connectionRef string) {
+func testInteractionACK(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, owner value.Principal, connectionRef string) string {
 	t.Helper()
 	service, err := platformservice.New(repository)
 	if err != nil {
@@ -101,4 +101,5 @@ JOIN control_plane.runs run ON run.id=delivery.root_run_id WHERE run.ref=$1 AND 
 	if _, err := service.Execute(ctx, complete); err != nil {
 		t.Fatalf("ACK completion replay: %v", err)
 	}
+	return accepted.Run.Ref
 }

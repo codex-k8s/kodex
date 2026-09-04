@@ -71,7 +71,8 @@ FROM control_plane.integration_definitions WHERE stable_key='mattermost'`, conne
 	if err != nil || human.actorID != current.actorID || human.interactionIdentityID == "" || !human.credentialAuthenticatedAt.IsZero() {
 		t.Fatalf("mapped identity: %v", err)
 	}
-	testInteractionACK(t, ctx, repository, pool, owner, connectionRef)
+	ackRunRef := testInteractionACK(t, ctx, repository, pool, owner, connectionRef)
+	testInteractionUnknownOutcome(t, ctx, repository, pool, ackRunRef)
 	for _, field := range []string{"team", "channel", "user", "connection"} {
 		other := message
 		switch field {
@@ -132,7 +133,11 @@ VALUES ($1::uuid,'usr_interaction_member','verified-oidc-subject',repeat('e',64)
 		Mutation: value.Mutation{IdempotencyKey: "interaction-member-add"}, Payload: command.PlatformMembershipInput{UserRef: memberRef, Role: "MEMBER", Active: true}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.owner_gates WHERE organization_id=$1::uuid LIMIT 1`, current.organizationID).Scan(&gateRef); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO control_plane.owner_gates
+(ref,organization_id,project_id,root_run_id,node_id,title,prompt,allowed_decisions,state)
+SELECT 'interaction_identity_gate',run.organization_id,run.project_id,run.id,node.id,'Identity gate','Confirm',ARRAY['APPROVE','REJECT'],'OPEN'
+FROM control_plane.runs run JOIN control_plane.run_nodes node ON node.run_id=run.id
+WHERE run.organization_id=$1::uuid AND run.ref=$2 ORDER BY node.id LIMIT 1 RETURNING ref`, current.organizationID, ackRunRef).Scan(&gateRef); err != nil {
 		t.Fatal(err)
 	}
 	version = 2
@@ -148,6 +153,9 @@ VALUES ($1::uuid,'usr_interaction_member','verified-oidc-subject',repeat('e',64)
 		t.Fatal(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := repository.requireAccess(ctx, tx, current, "gate.resolve", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: gateRef}); err != nil {
+		t.Fatalf("owner cannot resolve test gate: %v", err)
+	}
 	human, err = repository.resolveInteractionIdentity(ctx, tx, current, message)
 	if err != nil {
 		t.Fatal(err)

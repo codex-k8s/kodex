@@ -234,6 +234,24 @@ updated: 2026-09-05
 - integrationpackage Go и `check-integration-package-codegen`: PASS.
   Actual HTTPS Mattermost, race и render на этой передаче: NOT RUN.
 
+## Независимая interaction fixture и Git ownership
+
+- `interaction_identity_component_test.go` создаёт gate на собственном ACK run;
+  сначала проверяет положительное owner permission, затем отказ mapped MEMBER.
+  UNKNOWN_OUTCOME fixture использует exact ACK run/grant вместо произвольного
+  чужого run. Health, identity и connection-test cases больше не зависят от
+  предшествующих subtests. Узкий PostgreSQL filter
+  `^TestBootstrapComponent$/(interaction_health|interaction_identity|integration_connection_tests)`:
+  PASS. Предыдущий fixture FAIL устранён без удаления boundary assertions.
+- UI create/validate/publish Git-owned managed configuration закрыто запрещены.
+  Copy сохраняет exact parent revision. Detach создаёт новую UI draft с parent,
+  сохраняя published current и существующие consumers. Command snapshot сохраняет
+  current revision и при работе с новой draft. Проверки находятся в
+  `managed_git_component_test.go` и общем managed lifecycle component test.
+- Targeted Go repository/transport/domain: PASS. Полный PostgreSQL suite после
+  последних fixture corrections: PASS. Git import/writeback и
+  immutable Git source provenance ещё не объявлены реализованными.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
