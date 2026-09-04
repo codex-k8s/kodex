@@ -74,12 +74,36 @@ func validVerifiedAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthori
 	return &internalrpcauthorityv1.VerifiedAuthorizationContext{
 		ContractVersion: 1, Audience: expectedAudience, TargetWorkloadId: expectedWorkloadID, CallerWorkloadId: expectedCaller,
 		FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName, OperationId: transcribeOperation,
-		Permission: value.PermissionTranscribe,
+		Permission: value.TransportPermissionTranscribe,
 		Authority:  &internalrpcauthorityv1.CallerAuthority{Actor: identity("actor"), Tenant: identity("tenant"), Project: identity("prj_abcdefgh")},
 		Jti:        uuid.NewString(), ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)),
 		SourceRevision: 7, SourceDigestSha256: digest, PolicyRevision: 19,
 		AuthorityAbiVersion: internalrpcauth.AuthorityABIVersion,
 		RequestBindingMode:  internalrpcauth.RequestBindingStream,
+	}
+}
+
+func TestPrincipalExactPermissionMapping(t *testing.T) {
+	for _, permission := range []string{value.TransportPermissionTranscribe, value.PermissionTranscribe, value.ConfigurationCapability, "speech.transcribe", "platform.stt.*", ""} {
+		verified := validVerifiedAuthorizationContext()
+		verified.Permission = permission
+		principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName)
+		if permission == value.TransportPermissionTranscribe {
+			if err != nil || principal.Permission != value.PermissionTranscribe {
+				t.Fatal("exact mapping нарушен")
+			}
+		} else if err == nil {
+			t.Fatal("неверное RPC permission принято")
+		}
+	}
+}
+
+func TestPrincipalOrganizationWithoutProject(t *testing.T) {
+	verified := validVerifiedAuthorizationContext()
+	verified.Authority.Project = nil
+	principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName)
+	if err != nil || principal.ProjectID != "" || principal.TenantID == "" || principal.Project != (value.AuthorityProvenance{}) {
+		t.Fatal("organization scope потерян")
 	}
 }
 

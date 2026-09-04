@@ -46,10 +46,10 @@ func TestTranscribeStreamsExactPinnedMultipart(t *testing.T) {
 				fields[part.FormName()] = string(raw)
 			}
 		}
-		if fileBytes != len(audio) || len(fields) != 2 || fields["model"] != value.DefaultModel || fields["language"] != value.DefaultLanguage {
-			t.Fatalf("multipart fields=%v file=%d", fields, fileBytes)
+		if fileBytes != len(audio) || len(fields) != 4 || fields["model"] != value.DefaultModel || fields["languages[]"] != value.DefaultLanguage || fields["response_format"] != "json" || fields["temperature"] != "0" {
+			t.Fatal("multipart fields mismatch")
 		}
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"text":"ok","usage":{}}`))}, nil
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"text":"ok","usage":{},"languages":[{"code":"ru"}]}`))}, nil
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +60,53 @@ func TestTranscribeStreamsExactPinnedMultipart(t *testing.T) {
 	})
 	if err != nil || text != "ok" {
 		t.Fatalf("result=%q err=%v", text, err)
+	}
+}
+
+func TestModelProbeIsExactNonBillableAndFailClosed(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+		ready  bool
+	}{
+		{200, `{"id":"gpt-transcribe","object":"model"}`, true},
+		{200, `{"id":"other","object":"model"}`, false},
+		{200, `{"id":"gpt-transcribe","object":"other"}`, false},
+		{200, `{}`, false}, {401, `{}`, false}, {429, `{}`, false}, {500, `{}`, false},
+		{200, strings.Repeat("x", 16385), false},
+	} {
+		calls := 0
+		client, _ := NewWithHTTPClient(doerFunc(func(request *http.Request) (*http.Response, error) {
+			calls++
+			if request.Method != http.MethodGet || request.URL.String() != "https://api.openai.com/v1/models/gpt-transcribe" || request.Body != nil {
+				t.Fatal("probe выполнил неверный запрос")
+			}
+			return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body))}, nil
+		}))
+		err := client.CheckModel(t.Context(), value.DefaultModel, []byte("test-only-key"))
+		if (err == nil) != tc.ready || calls != 1 {
+			t.Fatal("probe fail-closed/retry contract нарушен")
+		}
+		if err := client.CheckModel(t.Context(), "unknown", []byte("test-only-key")); err == nil || calls != 1 {
+			t.Fatal("unknown model достиг сети")
+		}
+	}
+}
+
+func TestProductionTransportPinsTLSAndEgress(t *testing.T) {
+	client, err := New(testEgressConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpClient := client.http.(*http.Client)
+	transport := httpClient.Transport.(*http.Transport)
+	request, _ := http.NewRequest(http.MethodGet, Endpoint, nil)
+	proxy, err := transport.Proxy(request)
+	if err != nil || proxy.String() != ProxyURL || transport.TLSClientConfig.InsecureSkipVerify || transport.TLSClientConfig.MinVersion != 0x0304 || transport.TLSClientConfig.MaxVersion != 0x0304 {
+		t.Fatal("TLS/egress weakened")
+	}
+	if httpClient.CheckRedirect(request, nil) == nil {
+		t.Fatal("redirect разрешён")
 	}
 }
 
@@ -78,8 +125,9 @@ func TestReadinessIsLocalAndEgressIsDiagnostic(t *testing.T) {
 	calls := 0
 	client, _ := NewWithHTTPClient(doerFunc(func(*http.Request) (*http.Response, error) {
 		calls++
-		return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader(""))}, nil
+		return &http.Response{StatusCode: http.StatusNoContent, Header: testEgressHeaders(), Body: io.NopCloser(strings.NewReader(""))}, nil
 	}))
+	client.egress = testEgressConfig()
 	if err := client.CheckLocal(t.Context()); err != nil || calls != 0 {
 		t.Fatalf("local check: calls=%d err=%v", calls, err)
 	}

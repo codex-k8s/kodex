@@ -2,9 +2,16 @@ package transcription
 
 import (
 	"context"
+	"io"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
+
+type AudioDecoder interface {
+	Duration(context.Context, io.ReadSeeker, int64, string, time.Duration) (time.Duration, error)
+	CheckLocal(context.Context) error
+}
 
 type PolicyResolver interface {
 	Resolve(context.Context, value.Principal, string, string) (value.Policy, error)

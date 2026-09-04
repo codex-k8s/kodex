@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ type Service struct {
 	policies    PolicyResolver
 	credentials CredentialProjector
 	provider    Provider
+	decoder     AudioDecoder
 	observer    Observer
 	now         func() time.Time
 	requestTTL  time.Duration
@@ -34,11 +36,11 @@ type Input struct {
 	MediaType      string
 }
 
-func New(policies PolicyResolver, credentials CredentialProjector, provider Provider, observer Observer, requestTTL time.Duration) (*Service, error) {
-	if policies == nil || credentials == nil || provider == nil || observer == nil || requestTTL < time.Second || requestTTL > 20*time.Second {
+func New(policies PolicyResolver, credentials CredentialProjector, provider Provider, observer Observer, requestTTL time.Duration, decoder AudioDecoder) (*Service, error) {
+	if policies == nil || credentials == nil || provider == nil || observer == nil || decoder == nil || requestTTL < time.Second || requestTTL > 20*time.Second {
 		return nil, errors.New("transcription service configuration is invalid")
 	}
-	return &Service{policies: policies, credentials: credentials, provider: provider, observer: observer, now: time.Now, requestTTL: requestTTL}, nil
+	return &Service{policies: policies, credentials: credentials, provider: provider, decoder: decoder, observer: observer, now: time.Now, requestTTL: requestTTL}, nil
 }
 
 func (service *Service) Transcribe(ctx context.Context, input Input) (value.TranscriptionResult, error) {
@@ -48,7 +50,7 @@ func (service *Service) Transcribe(ctx context.Context, input Input) (value.Tran
 	}
 	if ctx == nil || input.RequestID == "" || input.CorrelationID == "" || input.Principal.RequestID != input.RequestID ||
 		input.Principal.Permission != value.PermissionTranscribe || input.Principal.ActorID == "" ||
-		input.Principal.TenantID == "" || input.Principal.ProjectID == "" || input.Principal.AuthorityRevision == 0 ||
+		input.Principal.TenantID == "" || input.Principal.AuthorityRevision == 0 ||
 		!validSHA256(input.Principal.AuthorityDigestSHA256) || !service.now().Before(input.Principal.ExpiresAt) {
 		return fail(value.StageAuthority, value.ErrorDenied, errs.ErrPermissionDenied)
 	}
@@ -67,7 +69,7 @@ func (service *Service) Transcribe(ctx context.Context, input Input) (value.Tran
 	}
 	policyCtx, cancelPolicy := context.WithDeadline(requestCtx, policy.ExpiresAt)
 	defer cancelPolicy()
-	audio, err := ValidateAudio(input.AudioReader, input.AudioSizeBytes, input.MediaType, policy.MaximumAudioBytes, policy.MaximumAudioDuration)
+	audio, err := ValidateAudio(policyCtx, input.AudioReader, input.AudioSizeBytes, input.MediaType, policy.MaximumAudioBytes, policy.MaximumAudioDuration, service.decoder)
 	if err != nil {
 		return fail(value.StageAudio, value.ErrorInvalid, err)
 	}
@@ -83,7 +85,7 @@ func (service *Service) Transcribe(ctx context.Context, input Input) (value.Tran
 	defer cancelCredential()
 	providerCtx, cancelProvider := context.WithTimeout(credentialCtx, policy.ProviderTimeout)
 	defer cancelProvider()
-	transcript, err := service.provider.Transcribe(providerCtx, value.ProviderRequest{Audio: audio, Model: policy.Model, Language: policy.Language, APIKey: credential.APIKey})
+	transcript, err := service.provider.Transcribe(providerCtx, value.ProviderRequest{Audio: audio, Model: policy.Model, Language: policy.Language, Parameters: policy.Parameters, APIKey: credential.APIKey})
 	if err != nil {
 		stage, class := value.StageProvider, value.ErrorUnavailable
 		if errors.Is(err, errs.ErrEgressUnavailable) {
@@ -116,7 +118,7 @@ func (service *Service) CheckLocal(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("transcription local readiness context is required")
 	}
-	return service.provider.CheckLocal(ctx)
+	return errors.Join(service.decoder.CheckLocal(ctx), service.provider.CheckLocal(ctx))
 }
 
 func (service *Service) CheckProtectedPath(ctx context.Context) error {
@@ -124,7 +126,81 @@ func (service *Service) CheckProtectedPath(ctx context.Context) error {
 	if !ok {
 		return errs.ErrDelegatedProofPending
 	}
-	return checker.Check(ctx)
+	if err := checker.Check(ctx); err != nil {
+		return err
+	}
+	// Локальный issuer не доказывает user policy, credential или provider path.
+	return errs.ErrDelegatedProofPending
+}
+
+type Availability struct {
+	Stage      value.Stage
+	ValidUntil time.Time
+}
+
+func (service *Service) Catalog() modelprofile.Catalog {
+	if provider, ok := service.provider.(interface{ Catalog() modelprofile.Catalog }); ok {
+		return provider.Catalog()
+	}
+	return modelprofile.Catalog{}
+}
+
+// CheckAvailability выполняется только под тем же проверенным root authority,
+// что и Transcribe; не принимает audio и никогда не вызывает распознавание.
+func (service *Service) CheckAvailability(ctx context.Context, principal value.Principal, correlationID string) (Availability, error) {
+	if ctx == nil || principal.Permission != value.PermissionTranscribe || principal.ActorID == "" || principal.TenantID == "" ||
+		principal.RequestID == "" || correlationID == "" || principal.AuthorityRevision == 0 || !validSHA256(principal.AuthorityDigestSHA256) || !service.now().Before(principal.ExpiresAt) {
+		return Availability{Stage: value.StageAuthority}, errs.ErrPermissionDenied
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ctx, cancelAuthority := context.WithDeadline(ctx, principal.ExpiresAt)
+	defer cancelAuthority()
+	if err := service.CheckLocal(ctx); err != nil {
+		return Availability{Stage: value.StageAudio}, err
+	}
+	policy, err := service.policies.Resolve(ctx, principal, principal.RequestID, correlationID)
+	if err != nil {
+		return Availability{Stage: value.StagePolicy}, err
+	}
+	if err := validatePolicy(policy, service.now()); err != nil {
+		return Availability{Stage: value.StagePolicy}, err
+	}
+	ctx, cancelPolicy := context.WithDeadline(ctx, policy.ExpiresAt)
+	defer cancelPolicy()
+	credential, err := service.credentials.Project(ctx, principal, principal.RequestID, correlationID, policy)
+	defer clear(credential.APIKey)
+	if err != nil {
+		return Availability{Stage: value.StageCredential}, err
+	}
+	if err := validateCredential(credential, policy, service.now()); err != nil {
+		return Availability{Stage: value.StageCredential}, err
+	}
+	ctx, cancelCredential := context.WithDeadline(ctx, credential.ExpiresAt)
+	defer cancelCredential()
+	probe, ok := service.provider.(interface {
+		CheckModel(context.Context, string, []byte) error
+	})
+	if !ok {
+		return Availability{Stage: value.StageProvider}, errs.ErrProviderUnavailable
+	}
+	if err := probe.CheckModel(ctx, policy.Model, credential.APIKey); err != nil {
+		stage := value.StageProvider
+		if errors.Is(err, errs.ErrEgressUnavailable) {
+			stage = value.StageEgress
+		}
+		return Availability{Stage: stage}, err
+	}
+	validUntil := service.now().Add(30 * time.Second)
+	for _, expiry := range []time.Time{principal.ExpiresAt, policy.ExpiresAt, credential.ExpiresAt} {
+		if expiry.Before(validUntil) {
+			validUntil = expiry
+		}
+	}
+	if !service.now().Before(validUntil) {
+		return Availability{Stage: value.StageCredential}, errs.ErrGrantRevoked
+	}
+	return Availability{Stage: value.StageSuccess, ValidUntil: validUntil}, nil
 }
 
 func projectionClass(err error) value.ErrorClass {
@@ -135,8 +211,8 @@ func projectionClass(err error) value.ErrorClass {
 }
 
 func validatePolicy(policy value.Policy, now time.Time) error {
-	if policy.Revision == 0 || !validSHA256(policy.DigestSHA256) || policy.Model != value.DefaultModel ||
-		policy.Language != value.DefaultLanguage || policy.MaximumAudioBytes < 1024 || policy.MaximumAudioBytes > value.MaximumAbsoluteBytes ||
+	if policy.Revision == 0 || !validSHA256(policy.DigestSHA256) || modelprofile.Validate(policy.Model, policy.Language, policy.Parameters) != nil ||
+		policy.MaximumAudioBytes < 1024 || policy.MaximumAudioBytes > value.MaximumAbsoluteBytes ||
 		policy.MaximumAudioDuration < time.Second || policy.MaximumAudioDuration > 30*time.Minute ||
 		policy.ProviderTimeout < time.Second || policy.ProviderTimeout > 15*time.Second ||
 		policy.ProviderAccountRef == "" || len(policy.ProviderAccountRef) > 96 || policy.ProviderCredentialGeneration == 0 || !now.Before(policy.ExpiresAt) {

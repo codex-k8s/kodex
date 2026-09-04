@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 	"google.golang.org/grpc/codes"
@@ -80,6 +81,9 @@ func (client *Policy) Resolve(ctx context.Context, principal value.Principal, re
 	return value.Policy{
 		Revision: response.GetConfigRevision(), DigestSHA256: response.GetConfigDigestSha256(),
 		Model: response.GetModel(), Language: response.GetLanguage(), MaximumAudioBytes: int64(maximumBytes),
+		Parameters: modelprofile.Parameters{Languages: append([]string(nil), response.GetParameters().GetLanguages()...),
+			Keywords: append([]string(nil), response.GetParameters().GetKeywords()...), Prompt: response.GetParameters().GetPrompt(),
+			Temperature: response.GetParameters().GetTemperature(), ChunkingStrategy: response.GetParameters().GetChunkingStrategy(), Stream: response.GetParameters().GetStream()},
 		MaximumAudioDuration:         time.Duration(maximumDuration) * time.Millisecond,
 		ProviderTimeout:              time.Duration(providerTimeout) * time.Millisecond,
 		ProviderAccountRef:           response.GetProviderAccountRef(),
@@ -142,6 +146,9 @@ func authorityLocator(principal value.Principal, requestID, correlationID string
 }
 
 func provenance(input value.AuthorityProvenance) *sttv1.AuthorityIdentityProvenance {
+	if input == (value.AuthorityProvenance{}) {
+		return nil
+	}
 	return &sttv1.AuthorityIdentityProvenance{
 		Source: input.Source, Reference: input.Reference,
 		Revision: input.Revision, DigestSha256: input.DigestSHA256,
@@ -161,6 +168,9 @@ func sameAuthority(actual, expected *sttv1.DelegatedAuthorityLocator) bool {
 }
 
 func sameProvenance(actual, expected *sttv1.AuthorityIdentityProvenance) bool {
+	if actual == nil || expected == nil {
+		return actual == nil && expected == nil
+	}
 	return actual != nil && expected != nil && actual.GetSource() == expected.GetSource() &&
 		actual.GetReference() == expected.GetReference() && actual.GetRevision() == expected.GetRevision() &&
 		actual.GetDigestSha256() == expected.GetDigestSha256()

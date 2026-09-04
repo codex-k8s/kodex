@@ -92,7 +92,7 @@ func (client *Client) BindDelegated(
 		verified.GetOperationId() != "platform.stt.transcribe" ||
 		verified.GetFullMethod() != sttv1.SpeechToTextService_Transcribe_FullMethodName ||
 		verified.GetRequestBindingMode() != internalrpcauth.RequestBindingStream ||
-		verified.GetJti() != requestID || verified.GetPermission() != principal.Permission ||
+		verified.GetJti() != requestID || verified.GetPermission() != value.TransportPermissionTranscribe || principal.Permission != value.PermissionTranscribe ||
 		verified.GetSourceRevision() != principal.AuthorityRevision ||
 		verified.GetSourceDigestSha256() != principal.AuthorityDigestSHA256 ||
 		!samePrincipal(verified.GetAuthority(), principal) {
@@ -116,6 +116,9 @@ func samePrincipal(authority *internalrpcauthorityv1.CallerAuthority, principal 
 }
 
 func sameIdentity(actual *internalrpcauthorityv1.AuthorityIdentity, id string, provenance value.AuthorityProvenance) bool {
+	if actual == nil {
+		return id == "" && provenance == (value.AuthorityProvenance{})
+	}
 	return actual != nil && actual.GetProvenance() != nil && actual.GetId() == id &&
 		int32(actual.GetProvenance().GetSource()) == provenance.Source &&
 		actual.GetProvenance().GetReference() == provenance.Reference &&
