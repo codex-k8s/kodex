@@ -22,8 +22,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-const tokenFile = "token"
-
 var (
 	errConfiguration = errors.New("mattermost interaction configuration is invalid")
 	errCredential    = errors.New("mattermost interaction credential is unavailable")
@@ -47,6 +45,7 @@ type Adapter struct {
 	timeout      time.Duration
 	text         *texti18n.Localizer
 	definition   integrationpackage.Package
+	newTransport func(*url.URL) http.RoundTripper
 }
 
 type Message struct {
@@ -63,7 +62,14 @@ type Message struct {
 	RunRef      string
 }
 
-type MessageHandler func(context.Context, Message) (string, error)
+type MessageHandler func(context.Context, Message) error
+
+type DeliveryResult struct {
+	PostRef    string
+	ThreadRef  string
+	TeamRef    string
+	ChannelRef string
+}
 
 func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 	store, err := credentialfs.New(config.CredentialDirectory)
@@ -89,10 +95,12 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 	if err != nil {
 		return nil, errConfiguration
 	}
-	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text, definition: definitions["mattermost"]}, nil
+	adapter := &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text, definition: definitions["mattermost"]}
+	adapter.newTransport = adapter.defaultTransport
+	return adapter, nil
 }
 
-func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (postRef, threadRef string, resultErr error) {
+func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (result DeliveryResult, resultErr error) {
 	dispatched := false
 	defer func() {
 		if resultErr != nil && !dispatched {
@@ -100,17 +108,21 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 		}
 	}()
 	if claim == nil || claim.GetMessageKey() == "" {
-		return "", "", errConfiguration
+		return result, errConfiguration
 	}
 	gate, err := gateFromClaim(claim)
 	if err != nil {
-		return "", "", err
+		return result, err
 	}
 	client, _, channel, closeClient, err := adapter.client(ctx, claim)
 	if err != nil {
-		return "", "", err
+		return result, err
 	}
 	defer closeClient()
+	root, err := deliveryRoot(ctx, client, channel, claim)
+	if err != nil {
+		return result, err
+	}
 	data := map[string]any{}
 	if claim.GetTemplateData() != nil {
 		data = claim.GetTemplateData().AsMap()
@@ -120,17 +132,24 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	}
 	message := adapter.text.Localize(claim.GetLocale(), claim.GetMessageKey(), data)
 	if message == claim.GetMessageKey() || strings.TrimSpace(message) == "" || len(message) > 16<<10 {
-		return "", "", errResponse
+		return result, errResponse
 	}
 	if err := ctx.Err(); err != nil {
-		return "", "", err
+		return result, err
 	}
 	dispatched = true
-	return createPost(ctx, client, channel.Id, "", message, gate)
+	postRef, threadRef, err := createPost(ctx, client, channel.Id, root, message, gate)
+	if err != nil {
+		return result, err
+	}
+	return DeliveryResult{PostRef: postRef, ThreadRef: threadRef, TeamRef: channel.TeamId, ChannelRef: channel.Id}, nil
 }
 
 func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.InteractionSource, handler MessageHandler) error {
 	if source == nil || handler == nil || !listens(source.GetEnabledCapabilities()) {
+		return errConfiguration
+	}
+	if source.GetConnectionVersion() < 1 || source.GetCredentialRevisionRef() != source.GetCredentialDescriptor().GetRef() || source.GetCredentialRevision() != source.GetCredentialDescriptor().GetRevision() {
 		return errConfiguration
 	}
 	client, token, channel, closeClient, err := adapter.client(ctx, source)
@@ -203,23 +222,8 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 			if gate != nil {
 				message.GateRef, message.GateVersion, message.RunRef = gate.ref, gate.version, gate.runRef
 			}
-			messageKey, handleErr := handler(ctx, message)
-			if handleErr != nil {
-				return handleErr
-			}
-			if messageKey == "" {
-				continue
-			}
-			response := adapter.text.Localize(source.GetLocale(), messageKey, nil)
-			if response == messageKey || strings.TrimSpace(response) == "" {
-				return errResponse
-			}
-			root := post.RootId
-			if root == "" {
-				root = post.Id
-			}
-			if _, _, err := client.CreatePost(ctx, &model.Post{ChannelId: channel.Id, RootId: root, Message: response}); err != nil {
-				return classify(err)
+			if err := handler(ctx, message); err != nil {
+				return err
 			}
 		}
 	}
@@ -230,20 +234,16 @@ func (adapter *Adapter) client(ctx context.Context, source source) (*model.Clien
 	if err != nil {
 		return nil, "", nil, func() {}, err
 	}
-	raw, err := adapter.credentials.Read(source.GetCredentialMaterializationRef(), tokenFile)
+	raw, err := adapter.readInvocationCredential(ctx, source.GetCredentialDescriptor())
 	if err != nil {
 		return nil, "", nil, func() {}, errCredential
 	}
 	defer clear(raw)
-	token := strings.TrimSpace(string(raw))
-	if token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\r\n") {
-		return nil, "", nil, func() {}, errCredential
-	}
-	return adapter.authenticatedClient(ctx, source, base, token)
+	return adapter.authenticatedClient(ctx, source, base, string(raw))
 }
 
-func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, base *url.URL, token string) (*model.Client4, string, *model.Channel, func(), error) {
-	transport := &http.Transport{
+func (adapter *Adapter) defaultTransport(base *url.URL) http.RoundTripper {
+	return &http.Transport{
 		Proxy:                 http.ProxyURL(adapter.proxy),
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS13, ServerName: base.Hostname()},
 		ForceAttemptHTTP2:     true,
@@ -252,12 +252,18 @@ func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, 
 		TLSHandshakeTimeout:   adapter.timeout,
 		ResponseHeaderTimeout: adapter.timeout,
 	}
+}
+
+func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, base *url.URL, token string) (*model.Client4, string, *model.Channel, func(), error) {
+	transport := adapter.newTransport(base)
 	client := model.NewAPIv4Client(strings.TrimRight(base.String(), "/"))
 	client.HTTPClient = scopedHTTPClient(base, transport, adapter.timeout)
 	client.SetToken(token)
 	closeClient := func() {
 		client.AuthToken = ""
-		transport.CloseIdleConnections()
+		if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
+			closer.CloseIdleConnections()
+		}
 	}
 	channel, err := resolveChannel(ctx, client, source)
 	if err != nil {
@@ -269,7 +275,7 @@ func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, 
 
 type source interface {
 	GetBaseUrl() string
-	GetCredentialMaterializationRef() string
+	GetCredentialDescriptor() *controlplanev1.IntegrationCredentialRevision
 	GetTeamName() string
 	GetChannelName() string
 }

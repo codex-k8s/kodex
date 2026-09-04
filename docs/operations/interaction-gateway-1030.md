@@ -4,7 +4,7 @@ title: Доставка Mattermost и привязка внешнего поль
 type: operational-contract
 status: approved
 owner: platform
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -49,9 +49,19 @@ WebSocket frame ограничен 1 MiB, входящий текст огран
 readback. Событие WebSocket подтверждается `GetPost`: другой канал, автор,
 thread, изменённый текст либо удалённый post не принимаются.
 
-Замена или удаление подключения отменяет старый listener. Новое поколение,
+Замена версии подключения или immutable credential descriptor отменяет старый
+listener даже при прежнем имени Secret. Удаление подключения также отменяет
+listener. Новое поколение,
 включая быстро отменённое промежуточное, ждёт завершения всей цепочки
 предшественников. При shutdown SDK reader дренируется до закрытия каналов.
+
+ACK создаётся `control-plane` атомарно с acceptance receipt. Listener только
+передаёт проверенное сообщение владельцу и не создаёт отдельный post.
+`mattermost.acknowledgements` является внутренней delivery capability, а не
+доступным агенту инструментом. Claim содержит acceptance receipt и exact
+team/channel/root. Gateway сверяет канал и читает root перед отправкой, а
+completion передаёт team/channel/post/thread владельцу. Повреждённый readback
+после возможной отправки закрывается как `UNKNOWN_OUTCOME`.
 
 ## Human Gate
 
@@ -122,12 +132,22 @@ readback без `core_run_affected` и последовательную смен
 WebSocket fixture работает только на loopback без реальных credentials.
 
 Это промежуточная реализация полного unit, не объявление готовности #1030.
-До полного PR остаются HTTP/PWA управления identity,
-durable inbound acknowledgement, readiness рабочего пути и сквозной
-component-сценарий. Live Mattermost и staging не запускались.
+Локальный component fixture соединяет claim validation, exact credential,
+официальный SDK, HTTP provider responses и effect receipt; отдельно проверяет
+ACK и readiness подключения. Fixture подменяет только HTTP transport, не
+отключает scope/schema/credential проверки. Kubernetes readiness сохраняет
+workload-local границу `GUIDE-DOC-003`; доступность конкретного подключения
+проверяется реальной typed connection-test операцией.
+
+До полного PR остаются согласованный PostgreSQL-прогон с актуальным
+control-plane и зависимые HTTP/PWA управления identity. Live Mattermost и
+staging не запускались.
 
 Проверена официальная спецификация
 [Mattermost posts API](https://github.com/mattermost/mattermost-api-reference/blob/master/v4/source/posts.yaml)
 и установленный официальный Go SDK `server/public v0.4.3`.
 Context7 не вернул описание требуемой гарантии идемпотентности; гарантия
 дедупликации `CreatePost` не предполагается.
+Для file ranges дополнительно проверен официальный
+[WriteFileResponse](https://github.com/mattermost/mattermost/blob/master/server/platform/shared/web/files.go),
+использующий `http.ServeContent`; adapter требует точного Content-Range.

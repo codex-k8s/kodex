@@ -86,9 +86,39 @@ func TestDeliveryPreflightConfirmsNoEffect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = adapter.Deliver(t.Context(), &controlplanev1.InteractionDeliveryClaim{MessageKey: "READY", BaseUrl: "https://unapproved.example.test"})
+	_, err = adapter.Deliver(t.Context(), &controlplanev1.InteractionDeliveryClaim{MessageKey: "READY", BaseUrl: "https://unapproved.example.test"})
 	if err == nil || !ConfirmedNoEffect(err) {
 		t.Fatalf("preflight failure not classified: %v", err)
+	}
+}
+
+func TestAcknowledgementRequiresExactAcceptedThread(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*controlplanev1.InteractionDeliveryClaim)
+		valid  bool
+	}{
+		{name: "accepted", valid: true, mutate: func(*controlplanev1.InteractionDeliveryClaim) {}},
+		{name: "foreign_team", mutate: func(claim *controlplanev1.InteractionDeliveryClaim) { claim.ExternalTeamRef = testUserID }},
+		{name: "foreign_channel", mutate: func(claim *controlplanev1.InteractionDeliveryClaim) { claim.ExternalChannelRef = testUserID }},
+		{name: "missing_receipt", mutate: func(claim *controlplanev1.InteractionDeliveryClaim) { claim.AcceptanceReceiptRef = "" }},
+		{name: "missing_root", mutate: func(claim *controlplanev1.InteractionDeliveryClaim) { claim.ExternalRootPostRef = "" }},
+		{name: "ordinary_delivery_with_thread", mutate: func(claim *controlplanev1.InteractionDeliveryClaim) { claim.CapabilityKey = "mattermost.notifications" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			claim := &controlplanev1.InteractionDeliveryClaim{CapabilityKey: "mattermost.acknowledgements", AcceptanceReceiptRef: "receipt", ExternalTeamRef: testTeamID, ExternalChannelRef: testChannelID, ExternalRootPostRef: testPostID}
+			tc.mutate(claim)
+			client := operationFixture(t, func(request *http.Request) (*http.Response, bool) {
+				if request.Method != http.MethodGet {
+					t.Fatal("ack preflight created an effect")
+				}
+				return nil, false
+			})
+			root, err := deliveryRoot(t.Context(), client, testChannel(), claim)
+			if (err == nil) != tc.valid || tc.valid && root != testPostID {
+				t.Fatalf("root=%q err=%v", root, err)
+			}
+		})
 	}
 }
 

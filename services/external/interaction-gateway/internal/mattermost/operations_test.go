@@ -34,8 +34,10 @@ func operationFixture(t *testing.T, intercept func(*http.Request) (*http.Respons
 		}
 		path := request.URL.Path
 		switch {
-		case path == "/api/v4/teams/"+testTeamID:
+		case path == "/api/v4/teams/"+testTeamID, path == "/api/v4/teams/name/team":
 			return jsonResponse(t, 200, &model.Team{Id: testTeamID, Name: "team", DisplayName: "Team"}), nil
+		case path == "/api/v4/teams/"+testTeamID+"/channels/name/channel":
+			return jsonResponse(t, 200, &model.Channel{Id: testChannelID, TeamId: testTeamID, Name: "channel", DisplayName: "Channel"}), nil
 		case path == "/api/v4/channels/"+testChannelID+"/members":
 			return jsonResponse(t, 200, model.ChannelMembers{{ChannelId: testChannelID, UserId: testUserID, Roles: "channel_user"}}), nil
 		case path == "/api/v4/channels/"+testChannelID+"/posts", path == "/api/v4/posts/"+testPostID+"/thread", path == "/api/v4/teams/"+testTeamID+"/posts/search":

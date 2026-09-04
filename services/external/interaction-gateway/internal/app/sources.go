@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"google.golang.org/protobuf/proto"
 )
 
 type sourceSession struct {
@@ -73,7 +73,7 @@ func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client
 func (manager *sourceManager) Reconcile(parent context.Context, desired []*controlplanev1.InteractionSource) {
 	wanted := map[string]*controlplanev1.InteractionSource{}
 	for _, source := range desired {
-		if source == nil || source.GetConnectionRef() == "" || !sourceListens(source.GetEnabledCapabilities()) {
+		if source == nil || source.GetConnectionRef() == "" || !sourceListens(source.GetEnabledCapabilities()) || sourceFingerprint(source) == "" {
 			continue
 		}
 		wanted[source.GetConnectionRef()] = source
@@ -122,7 +122,7 @@ func (manager *sourceManager) Reconcile(parent context.Context, desired []*contr
 func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.InteractionSource) {
 	degraded := false
 	for {
-		err := manager.adapter.Listen(ctx, source, func(messageContext context.Context, message mattermost.Message) (string, error) {
+		err := manager.adapter.Listen(ctx, source, func(messageContext context.Context, message mattermost.Message) error {
 			acceptContext, cancel := context.WithTimeout(messageContext, manager.config.RequestTimeout)
 			defer cancel()
 			response, err := manager.control.AcceptInteractionMessage(acceptContext, &controlplanev1.AcceptInteractionMessageRequest{
@@ -135,9 +135,18 @@ func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.In
 				ExpectedGateVersion: message.GateVersion, RunRef: message.RunRef,
 			})
 			if err != nil {
-				return "", err
+				return err
 			}
-			return response.GetMessageKey(), nil
+			switch response.GetOutcome() {
+			case controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_IGNORED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_RUN_STARTED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_GATE_RESOLVED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_STALE,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_DUPLICATE:
+				return nil
+			default:
+				return errDeliveryResponse
+			}
 		})
 		if ctx.Err() != nil {
 			return
@@ -180,13 +189,16 @@ func (manager *sourceManager) Close(ctx context.Context) error {
 }
 
 func sourceFingerprint(source *controlplanev1.InteractionSource) string {
-	capabilities := append([]string(nil), source.GetEnabledCapabilities()...)
-	sort.Strings(capabilities)
-	value := strings.Join([]string{
-		source.GetConnectionRef(), source.GetCredentialMaterializationRef(), source.GetBaseUrl(),
-		source.GetTeamName(), source.GetChannelName(), source.GetLocale(), strings.Join(capabilities, ","),
-	}, "\x00")
-	digest := sha256.Sum256([]byte(value))
+	if source == nil {
+		return ""
+	}
+	snapshot := proto.Clone(source).(*controlplanev1.InteractionSource)
+	sort.Strings(snapshot.EnabledCapabilities)
+	value, err := (proto.MarshalOptions{Deterministic: true}).Marshal(snapshot)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])
 }
 

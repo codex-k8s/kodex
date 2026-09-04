@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
@@ -30,6 +31,27 @@ func (err *noEffectError) Unwrap() error { return err.cause }
 func ConfirmedNoEffect(err error) bool {
 	var noEffect *noEffectError
 	return errors.As(err, &noEffect)
+}
+
+func deliveryRoot(ctx context.Context, client *model.Client4, channel *model.Channel, claim *controlplanev1.InteractionDeliveryClaim) (string, error) {
+	ack := claim.GetCapabilityKey() == "mattermost.acknowledgements"
+	if !ack {
+		if claim.GetAcceptanceReceiptRef() != "" || claim.GetExternalRootPostRef() != "" || claim.GetExternalTeamRef() != "" || claim.GetExternalChannelRef() != "" {
+			return "", errConfiguration
+		}
+		return "", nil
+	}
+	if !boundedReference(claim.GetAcceptanceReceiptRef()) || claim.GetExternalTeamRef() != channel.TeamId || claim.GetExternalChannelRef() != channel.Id {
+		return "", errConfiguration
+	}
+	root, err := scopedPost(ctx, client, channel.Id, claim.GetExternalRootPostRef())
+	if err != nil {
+		return "", err
+	}
+	if root.RootId != "" {
+		return "", errResponse
+	}
+	return root.Id, nil
 }
 
 func createPost(ctx context.Context, client *model.Client4, channelID, rootID, message string, gate *gateContext) (string, string, error) {

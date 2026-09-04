@@ -11,6 +11,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type listenFunc func(context.Context, *controlplanev1.InteractionSource, mattermost.MessageHandler) error
@@ -21,6 +22,34 @@ func (fn listenFunc) Listen(ctx context.Context, source *controlplanev1.Interact
 
 func testSource(revision string) *controlplanev1.InteractionSource {
 	return &controlplanev1.InteractionSource{ConnectionRef: "connection", CredentialMaterializationRef: revision, EnabledCapabilities: []string{"mattermost.inbound"}}
+}
+
+func TestSourceFingerprintIncludesImmutableConnectionAndCredential(t *testing.T) {
+	source := testSource("same")
+	source.ConnectionVersion = 1
+	source.CredentialRevisionRef = "credential"
+	source.CredentialRevision = 1
+	source.CredentialDescriptor = &controlplanev1.IntegrationCredentialRevision{Ref: "credential", Revision: 1, SecretRef: "secret#key", SecretUid: "uid", SecretResourceVersion: "1", ContentSha256: "digest"}
+	fingerprint := sourceFingerprint(source)
+	for _, mutate := range []func(*controlplanev1.InteractionSource){
+		func(value *controlplanev1.InteractionSource) { value.ConnectionVersion++ },
+		func(value *controlplanev1.InteractionSource) { value.CredentialRevision++ },
+		func(value *controlplanev1.InteractionSource) { value.CredentialRevisionRef = "other" },
+		func(value *controlplanev1.InteractionSource) { value.CredentialDescriptor.SecretResourceVersion = "2" },
+		func(value *controlplanev1.InteractionSource) { value.CredentialDescriptor.ContentSha256 = "other" },
+	} {
+		changed := proto.Clone(source).(*controlplanev1.InteractionSource)
+		mutate(changed)
+		if sourceFingerprint(changed) == fingerprint {
+			t.Fatal("changed connection or credential reused old listener")
+		}
+	}
+	source.EnabledCapabilities = []string{"mattermost.inbound", "mattermost.gate_decisions"}
+	fingerprint = sourceFingerprint(source)
+	source.EnabledCapabilities[0], source.EnabledCapabilities[1] = source.EnabledCapabilities[1], source.EnabledCapabilities[0]
+	if sourceFingerprint(source) != fingerprint {
+		t.Fatal("capability order restarted unchanged listener")
+	}
 }
 
 func TestSourceReplacementJoinsAllPredecessors(t *testing.T) {
@@ -128,9 +157,9 @@ func TestSourcePassesVerifiedIdentityAndExactGateTuple(t *testing.T) {
 		return &controlplanev1.AcceptInteractionMessageResponse{Outcome: controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_GATE_RESOLVED, MessageKey: "ACK"}, nil
 	}}
 	listener := listenFunc(func(ctx context.Context, _ *controlplanev1.InteractionSource, handler mattermost.MessageHandler) error {
-		key, err := handler(ctx, mattermost.Message{EventRef: "event", PostRef: "post", RootPostRef: "root", TeamRef: "team", ChannelRef: "channel", UserDigest: "verified-digest", GateRef: "gate", GateVersion: 7, RunRef: "run", Text: "approve", Decision: controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE})
-		if err != nil || key != "ACK" {
-			t.Errorf("acceptance = %q %v", key, err)
+		err := handler(ctx, mattermost.Message{EventRef: "event", PostRef: "post", RootPostRef: "root", TeamRef: "team", ChannelRef: "channel", UserDigest: "verified-digest", GateRef: "gate", GateVersion: 7, RunRef: "run", Text: "approve", Decision: controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE})
+		if err != nil {
+			t.Errorf("acceptance = %v", err)
 		}
 		close(accepted)
 		<-ctx.Done()

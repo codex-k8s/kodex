@@ -27,9 +27,9 @@ func (control deliveryControl) CompleteInteractionDelivery(ctx context.Context, 
 	return control.complete(ctx, request)
 }
 
-type senderFunc func(context.Context, *controlplanev1.InteractionDeliveryClaim) (string, string, error)
+type senderFunc func(context.Context, *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error)
 
-func (fn senderFunc) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (string, string, error) {
+func (fn senderFunc) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error) {
 	return fn(ctx, claim)
 }
 
@@ -58,7 +58,7 @@ func noEffectFailure(t *testing.T) error {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = adapter.Deliver(t.Context(), nil)
+	_, err = adapter.Deliver(t.Context(), nil)
 	return err
 }
 
@@ -89,7 +89,7 @@ func TestDeliveryCompletionClassifiesEffectAndUsesAttemptIdentity(t *testing.T) 
 			claim := deliveryClaim()
 			for generation := int64(1); generation <= 2; generation++ {
 				claim.Lease.Generation = generation
-				if err := completeDelivery(t.Context(), control, claim, "post", "post", tc.err); err != nil {
+				if err := completeDelivery(t.Context(), control, claim, deliveryResult(), tc.err); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -121,12 +121,12 @@ func TestDeliveryClaimsOnlyWhenReadyToSendAndReservesCompletionTime(t *testing.T
 			return completionResponse(request), nil
 		},
 	}
-	sender := senderFunc(func(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (string, string, error) {
+	sender := senderFunc(func(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error) {
 		deadline, ok := ctx.Deadline()
 		if !ok || !deadline.Before(claim.GetLease().GetExpiresAt().AsTime().Add(-time.Second)) {
 			t.Fatal("lease expiry did not bound external operation")
 		}
-		return "post", "post", nil
+		return deliveryResult(), nil
 	})
 	if err := processDeliveries(t.Context(), control, sender, Config{ClaimLimit: 3, RequestTimeout: time.Second}); err != nil {
 		t.Fatal(err)
@@ -150,9 +150,9 @@ func TestDeliveryDoesNotDispatchExpiredOrMalformedLease(t *testing.T) {
 		control := deliveryControl{claim: func(context.Context, *controlplanev1.ClaimInteractionDeliveriesRequest) (*controlplanev1.ClaimInteractionDeliveriesResponse, error) {
 			return &controlplanev1.ClaimInteractionDeliveriesResponse{Claims: []*controlplanev1.InteractionDeliveryClaim{claim}}, nil
 		}}
-		sender := senderFunc(func(context.Context, *controlplanev1.InteractionDeliveryClaim) (string, string, error) {
+		sender := senderFunc(func(context.Context, *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error) {
 			t.Fatal("expired lease dispatched")
-			return "", "", nil
+			return mattermost.DeliveryResult{}, nil
 		})
 		if err := processDeliveries(t.Context(), control, sender, Config{ClaimLimit: 1, RequestTimeout: time.Second}); !errors.Is(err, errDeliveryLease) {
 			t.Fatalf("invalid lease = %v", err)
@@ -164,7 +164,32 @@ func TestCompletionRejectsWrongOwnerReadback(t *testing.T) {
 	control := deliveryControl{complete: func(context.Context, *controlplanev1.CompleteInteractionDeliveryRequest) (*controlplanev1.CompleteInteractionDeliveryResponse, error) {
 		return &controlplanev1.CompleteInteractionDeliveryResponse{DeliveryRef: "other", State: "SUCCEEDED"}, nil
 	}}
-	if err := completeDelivery(t.Context(), control, deliveryClaim(), "post", "post", nil); !errors.Is(err, errDeliveryResponse) {
+	if err := completeDelivery(t.Context(), control, deliveryClaim(), deliveryResult(), nil); !errors.Is(err, errDeliveryResponse) {
 		t.Fatalf("wrong readback = %v", err)
+	}
+}
+
+func deliveryResult() mattermost.DeliveryResult {
+	return mattermost.DeliveryResult{PostRef: "post", ThreadRef: "post", TeamRef: "team", ChannelRef: "channel"}
+}
+
+func TestAcknowledgementCompletionBindsExactExternalDestination(t *testing.T) {
+	for _, correct := range []bool{true, false} {
+		claim := deliveryClaim()
+		claim.ExternalTeamRef, claim.ExternalChannelRef, claim.ExternalRootPostRef = "team", "channel", "post"
+		result := deliveryResult()
+		if !correct {
+			result.ChannelRef = "other"
+		}
+		control := deliveryControl{complete: func(_ context.Context, request *controlplanev1.CompleteInteractionDeliveryRequest) (*controlplanev1.CompleteInteractionDeliveryResponse, error) {
+			if request.GetExternalTeamRef() != result.TeamRef || request.GetExternalChannelRef() != result.ChannelRef || request.GetExternalThreadRef() != result.ThreadRef || request.GetSuccess() != correct || request.GetUnknownOutcome() == correct {
+				t.Fatal("delivery lost exact destination or accepted mismatch")
+			}
+			return completionResponse(request), nil
+		}}
+		err := completeDelivery(t.Context(), control, claim, result, nil)
+		if (err == nil) != correct {
+			t.Fatalf("completion=%v", err)
+		}
 	}
 }

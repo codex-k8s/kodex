@@ -16,7 +16,7 @@ var (
 )
 
 type deliverySender interface {
-	Deliver(context.Context, *controlplanev1.InteractionDeliveryClaim) (string, string, error)
+	Deliver(context.Context, *controlplanev1.InteractionDeliveryClaim) (mattermost.DeliveryResult, error)
 }
 
 func processDeliveries(ctx context.Context, control controlplanev1.InteractionWorkServiceClient, adapter deliverySender, config Config) error {
@@ -45,10 +45,10 @@ func processDeliveries(ctx context.Context, control controlplanev1.InteractionWo
 		if err != nil {
 			return err
 		}
-		postRef, threadRef, deliveryErr := adapter.Deliver(sendContext, claim)
+		result, deliveryErr := adapter.Deliver(sendContext, claim)
 		cancelSend()
 		completionContext, cancelCompletion := context.WithTimeout(ctx, config.RequestTimeout)
-		err = completeDelivery(completionContext, control, claim, postRef, threadRef, deliveryErr)
+		err = completeDelivery(completionContext, control, claim, result, deliveryErr)
 		cancelCompletion()
 		if err != nil {
 			return err
@@ -84,10 +84,17 @@ func leaseContext(ctx context.Context, lease *controlplanev1.WorkLease, completi
 	return child, cancel, nil
 }
 
-func completeDelivery(ctx context.Context, control controlplanev1.InteractionWorkServiceClient, claim *controlplanev1.InteractionDeliveryClaim, postRef, threadRef string, deliveryErr error) error {
+func completeDelivery(ctx context.Context, control controlplanev1.InteractionWorkServiceClient, claim *controlplanev1.InteractionDeliveryClaim, result mattermost.DeliveryResult, deliveryErr error) error {
 	lease := claim.GetLease()
 	if lease == nil {
 		return errDeliveryLease
+	}
+	invalidResult := deliveryErr == nil && (result.PostRef == "" || result.ThreadRef == "" || result.TeamRef == "" || result.ChannelRef == "" ||
+		(claim.GetExternalTeamRef() != "" && claim.GetExternalTeamRef() != result.TeamRef) ||
+		(claim.GetExternalChannelRef() != "" && claim.GetExternalChannelRef() != result.ChannelRef) ||
+		(claim.GetExternalRootPostRef() != "" && claim.GetExternalRootPostRef() != result.ThreadRef))
+	if invalidResult {
+		deliveryErr = errDeliveryResponse
 	}
 	success, code := mattermost.Outcome(deliveryErr)
 	noEffect := mattermost.ConfirmedNoEffect(deliveryErr)
@@ -102,13 +109,18 @@ func completeDelivery(ctx context.Context, control controlplanev1.InteractionWor
 	response, err := control.CompleteInteractionDelivery(ctx, &controlplanev1.CompleteInteractionDeliveryRequest{
 		Mutation:    &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetDeliveryRef(), lease.GetRef()+":"+strconv.FormatInt(lease.GetGeneration(), 10)+":complete")},
 		DeliveryRef: claim.GetDeliveryRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
-		Success: success, ExternalPostRef: postRef, ExternalThreadRef: threadRef, SafeErrorCode: code,
+		Success: success, SafeErrorCode: code,
+		ExternalPostRef: result.PostRef, ExternalThreadRef: result.ThreadRef,
+		ExternalTeamRef: result.TeamRef, ExternalChannelRef: result.ChannelRef,
 		UnknownOutcome: unknown, ConfirmedNoEffect: noEffect,
 	})
 	if err != nil {
 		return err
 	}
 	if response.GetDeliveryRef() != claim.GetDeliveryRef() || response.GetState() != state || response.GetCoreRunAffected() {
+		return errDeliveryResponse
+	}
+	if invalidResult {
 		return errDeliveryResponse
 	}
 	return nil
