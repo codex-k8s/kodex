@@ -38,7 +38,7 @@ func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request,
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "state", "")
+	server.writeBootstrapState(w, r, response.GetState())
 }
 func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p generated.CreateProjectParams) {
 	body, ok := decodeJSON[generated.ProjectInput](w, r)

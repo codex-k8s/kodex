@@ -22,7 +22,7 @@ func (server *Server) GetBootstrapState(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("ETag", fmt.Sprintf("\"%d\"", identity.SessionRevision))
-	writeMessage(w, http.StatusOK, response, "state", "")
+	server.writeBootstrapState(w, r, response.GetState())
 }
 func (server *Server) GetOverview(w http.ResponseWriter, r *http.Request, p generated.GetOverviewParams) {
 	response, err := server.control.Query.GetOverview(r.Context(), &controlplanev1.GetOverviewRequest{ProjectRef: stringValue(p.ProjectRef)})
