@@ -106,6 +106,18 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "", resolvedAccessTarget{}, err
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
+	case command.RuntimeSecretRebindInput:
+		for _, selection := range payload.Selections {
+			if _, _, err := repository.environmentImpactTarget(ctx, tx, current, selection.EnvironmentRef, selection.SourceVersionRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			for _, consumer := range selection.Consumers {
+				if err := repository.requireAccess(ctx, tx, current, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: consumer.AgentRef}); err != nil {
+					return "", resolvedAccessTarget{}, err
+				}
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "secret.rotate", "SECRET", payload.SecretRef, "")
 	case command.RuntimeEnvironmentLifecycleInput:
 		permission := "runtime.environment.disable"
 		if input.Kind == command.DeleteRuntimeEnvironment {

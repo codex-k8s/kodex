@@ -181,10 +181,63 @@ updated: 2026-09-05
   Targeted Go transport/domain/repository: PASS.
   Render policy 49, race и actual HTTPS Mattermost: NOT RUN на этой передаче.
 
+## Седьмая промежуточная передача: secret impact/rebind
+
+- `GetRuntimeSecretImpact(secret_ref, revision, page)` возвращает secret version,
+  target revision, consumers, total и page. Consumer содержит environment ref,
+  version/ref, исходные secret revisions и optional agent binding. Eligibility
+  `secret.rotate`, `project.manage`, `agent.manage` применяется до SQL LIMIT;
+  cursor связан с actor/tenant/secret/точной target revision.
+- `RebindRuntimeSecret(mutation, secret_ref, revision, selections)` принимает
+  expected secret version и до 32 environment selections / 100 agent consumers.
+  Selection содержит environment ref/expected version, source version ref и
+  exact consumer tuple. Ответ: environments и bindings. Policy revision 50,
+  operations `platform.query.runtime-secrets.impact` и
+  `platform.command.runtime-secrets.rebind`.
+- Owner transaction создаёт новые immutable environment revisions, сохраняет
+  остальные зависимости и меняет только выбранные bindings. Публикация и
+  AGENT_CHANGED фиксируются вместе с audit/idempotency receipt. Stale consumer
+  откатывает весь batch. Уже созданные RuntimeRevision не переписываются.
+- `RuntimeSecretBinding.revision=3`: 0 выбирает текущую revision; положительное
+  значение требует точную ACTIVE revision. Recovery сохраняет materialization,
+  пока её использует current environment, pinned binding либо активный run.
+  Перед выдачей DELETE owner необратимо отмечает revision RETIRED; дальнейшая
+  привязка отклоняется. Runtime projection проверяет immutable descriptor, а не
+  требует совпадения с текущей revision секрета.
+- Migration 00609 закрыто помечает старые non-current revisions RETIRED:
+  прежний recovery мог уже удалить materialization без устойчивого DB receipt.
+  Миграция не утверждает наличие таких объектов. Возобновление использования
+  требует новой rotation/rebind, а не реактивации старой записи.
+- Критерий selected/replay/OCC/cursor/retention закреплён в
+  `secret_impact_component_test.go`, test `testSecretImpact`. Первый полный
+  PostgreSQL suite и targeted Go: PASS. Proto lint/codegen и policy codegen:
+  PASS. Повторный полный PostgreSQL suite с forward-only DB trigger: PASS.
+  Runtime projection полного credential flow, race и render policy 50:
+  NOT RUN на этой передаче. Live Kubernetes не использовался.
+
+## Подключение registry #1030
+
+- Из `6649449a4f143e180298d54a95e6429b8e2e38d1` приняты только Mattermost
+  manifest 2.2.0 и общий integrationpackage registry/tests. Generated каталог
+  пересоздан штатным `make gen-integration-packages`. Gateway не изменялся.
+- RuntimeRevision вызывает `Capability.CallableByAgent()` до prompt capability
+  intersection и перед сохранением effective grants; SQL resolve/claim сохраняет
+  закрытое исключение двух system operations. Tests
+  `TestRuntimeIntegrationGrantsExcludeSystemSubscriptions` и
+  `TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities`: PASS.
+- `testInteractionHealthRouting` проверяет READY/18 capabilities, создание
+  connection, typed credential fixture, только INTERACTION claim/completion и
+  отказ generic worker с известным fence. Полный PostgreSQL suite: PASS.
+  Прежнее NOT_READY assertion было stale после принятия executable registry.
+  Отдельный subtest без предшествующей общей fixture: FAIL (`no rows`),
+  не выдаётся за независимую поддержанную проверку.
+- integrationpackage Go и `check-integration-package-codegen`: PASS.
+  Actual HTTPS Mattermost, race и render на этой передаче: NOT RUN.
+
 ## Оставшаяся реализация
 
 Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
-revision impact и selected rebind secrets; проверка Git lifecycle;
+сквозная credential matrix secret revisions; проверка Git lifecycle;
 полные STT model params и immutable projection; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов

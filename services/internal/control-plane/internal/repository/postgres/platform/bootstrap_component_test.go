@@ -228,8 +228,8 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("integration read and Human Gate decisions preserve effect cardinality", func(t *testing.T) {
 		testIntegrationEffectLifecycle(t, ctx, repository, pool)
 	})
-	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
-		testOptionalInteractionIncident(t, ctx, repository, pool)
+	t.Run("interaction health checks are isolated from generic worker", func(t *testing.T) {
+		testInteractionHealthRouting(t, ctx, repository, pool)
 		testInteractionUnknownOutcome(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
@@ -291,6 +291,7 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
 	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
+	t.Run("secret revision impact selected rebind and retention", func(t *testing.T) { testSecretImpact(t, ctx, repository, pool) })
 }
 
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
@@ -2454,9 +2455,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 	}
 }
 
-func testOptionalInteractionIncident(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testInteractionHealthRouting(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	_ = pool
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
@@ -2477,7 +2477,7 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 		}
 	}
 	if mattermost == nil || mattermost.AdapterOwner != "interaction-gateway" ||
-		mattermost.ExecutionRoute != "INTERACTION" || mattermost.AdapterReadiness != "NOT_READY" {
+		mattermost.ExecutionRoute != "INTERACTION" || mattermost.AdapterReadiness != "READY" || len(mattermost.Capabilities) != 18 {
 		t.Fatalf("Mattermost routing metadata is invalid: %#v", mattermost)
 	}
 	connection, err := service.Execute(ctx, command.Command{
@@ -2486,8 +2486,51 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 			"base_url": "https://mattermost.example.test", "team_name": "customer-success", "channel_name": "ai-results",
 		}},
 	})
-	if err == nil || connection.Connection != nil {
-		t.Fatalf("generic Mattermost connection crossed owner route: connection=%#v err=%v", connection.Connection, err)
+	if err != nil || connection.Connection == nil || connection.Connection.State != "NOT_CONNECTED" {
+		t.Fatalf("create Mattermost connection: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `WITH revision AS (
+INSERT INTO control_plane.integration_credential_revisions
+(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+SELECT 'mattermost_test_credential',organization_id,id,1,'kodex-system/kodex-integration-credentials#test-token',gen_random_uuid(),'1',repeat('d',64),created_by
+FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id,masked_credentials_state='CONFIGURED'
+FROM revision WHERE connection.id=revision.connection_id`, connection.Connection.Ref); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-connection-test", ExpectedVersion: &connection.Connection.Version},
+		Payload:  command.ConnectionInput{Ref: connection.Connection.Ref}}); err != nil {
+		t.Fatal(err)
+	}
+	worker := func(workload, operation string) value.Principal {
+		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
+	}
+	generic := worker("integration-gateway", "platform.runtime.integration-tests.claim")
+	claims, err := service.ClaimIntegrationConnectionTests(ctx, generic, "generic-mattermost-test", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, claim := range claims {
+		if stringMap(claim, "connectionRef") == connection.Connection.Ref {
+			t.Fatal("generic worker claimed interaction health check")
+		}
+	}
+	interaction := worker("interaction-gateway", "platform.interactions.connection-tests.claim")
+	claims, err = service.ClaimIntegrationConnectionTests(ctx, interaction, "interaction-mattermost-test", 32)
+	if err != nil || len(claims) != 1 || stringMap(claims[0], "connectionRef") != connection.Connection.Ref {
+		t.Fatalf("interaction health claim: count=%d err=%v", len(claims), err)
+	}
+	claim := claims[0]
+	completion := command.Command{Kind: command.CompleteConnectionTest, Principal: generic,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-health-completion"},
+		Payload:  command.IntegrationConnectionTestInput{TestRef: stringMap(claim, "testRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64), Success: true}}
+	if _, err := service.Execute(ctx, completion); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("generic worker completed interaction health check: %v", err)
+	}
+	completion.Principal = interaction
+	if result, err := service.Execute(ctx, completion); err != nil || result.Connection == nil || result.Connection.State != "CONNECTED" {
+		t.Fatalf("interaction health completion: %v", err)
 	}
 }
 

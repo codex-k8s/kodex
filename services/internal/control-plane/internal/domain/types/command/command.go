@@ -43,6 +43,7 @@ const (
 	PublishRuntimeEnvironmentDraft  Kind = "PUBLISH_RUNTIME_ENVIRONMENT_DRAFT"
 	DiscardRuntimeEnvironmentDraft  Kind = "DISCARD_RUNTIME_ENVIRONMENT_DRAFT"
 	RebindRuntimeEnvironment        Kind = "REBIND_RUNTIME_ENVIRONMENT"
+	RebindRuntimeSecret             Kind = "REBIND_RUNTIME_SECRET"
 	BindInteractionIdentity         Kind = "BIND_INTERACTION_IDENTITY"
 	RevokeInteractionIdentity       Kind = "REVOKE_INTERACTION_IDENTITY"
 	PublishRuntimeEnvironment       Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
@@ -192,6 +193,12 @@ type RuntimeEnvironmentDraftInput struct {
 	ExpectedEnvironmentVersion           int64
 	Specification                        entity.RuntimeEnvironmentDraftSpecification
 }
+type RuntimeSecretRebindInput struct {
+	SecretRef  string
+	Revision   int64
+	Selections []entity.RuntimeSecretRebindSelection
+}
+
 type RuntimeEnvironmentBindingInput struct {
 	AgentRef, EnvironmentRef, VersionRef string
 }
@@ -388,6 +395,7 @@ type Result struct {
 	Agent                   *entity.Agent
 	RuntimeConfiguration    *entity.AgentRuntimeConfigurationView
 	RuntimeEnvironment      *entity.RuntimeEnvironmentSet
+	RuntimeEnvironments     []entity.RuntimeEnvironmentSet
 	Workflow                *entity.Workflow
 	Run                     *entity.Run
 	Graph                   *entity.RunGraph

@@ -81,6 +81,7 @@ const (
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
 	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
 	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
+	PlatformQueryService_GetRuntimeSecretImpact_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretImpact"
 	PlatformQueryService_ListInteractionIdentities_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListInteractionIdentities"
 )
 
@@ -152,6 +153,7 @@ type PlatformQueryServiceClient interface {
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error)
 	GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error)
+	GetRuntimeSecretImpact(ctx context.Context, in *GetRuntimeSecretImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretImpactResponse, error)
 	ListInteractionIdentities(ctx context.Context, in *ListInteractionIdentitiesRequest, opts ...grpc.CallOption) (*ListInteractionIdentitiesResponse, error)
 }
 
@@ -783,6 +785,16 @@ func (c *platformQueryServiceClient) GetRuntimeEnvironmentImpact(ctx context.Con
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetRuntimeSecretImpact(ctx context.Context, in *GetRuntimeSecretImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Context, in *ListInteractionIdentitiesRequest, opts ...grpc.CallOption) (*ListInteractionIdentitiesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListInteractionIdentitiesResponse)
@@ -861,6 +873,7 @@ type PlatformQueryServiceServer interface {
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error)
 	GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error)
+	GetRuntimeSecretImpact(context.Context, *GetRuntimeSecretImpactRequest) (*GetRuntimeSecretImpactResponse, error)
 	ListInteractionIdentities(context.Context, *ListInteractionIdentitiesRequest) (*ListInteractionIdentitiesResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
@@ -1057,6 +1070,9 @@ func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentDraft(contex
 }
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretImpact(context.Context, *GetRuntimeSecretImpactRequest) (*GetRuntimeSecretImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretImpact not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListInteractionIdentities(context.Context, *ListInteractionIdentitiesRequest) (*ListInteractionIdentitiesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListInteractionIdentities not implemented")
@@ -2198,6 +2214,24 @@ func _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetRuntimeSecretImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretImpact(ctx, req.(*GetRuntimeSecretImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListInteractionIdentities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListInteractionIdentitiesRequest)
 	if err := dec(in); err != nil {
@@ -2472,6 +2506,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler,
 		},
 		{
+			MethodName: "GetRuntimeSecretImpact",
+			Handler:    _PlatformQueryService_GetRuntimeSecretImpact_Handler,
+		},
+		{
 			MethodName: "ListInteractionIdentities",
 			Handler:    _PlatformQueryService_ListInteractionIdentities_Handler,
 		},
@@ -2487,6 +2525,7 @@ const (
 	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
 	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
 	PlatformCommandService_RebindRuntimeEnvironment_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRuntimeEnvironment"
+	PlatformCommandService_RebindRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RebindRuntimeSecret"
 	PlatformCommandService_BindInteractionIdentity_FullMethodName                  = "/controlplane.v1.PlatformCommandService/BindInteractionIdentity"
 	PlatformCommandService_RevokeInteractionIdentity_FullMethodName                = "/controlplane.v1.PlatformCommandService/RevokeInteractionIdentity"
 	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
@@ -2600,6 +2639,7 @@ type PlatformCommandServiceClient interface {
 	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
 	DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error)
 	RebindRuntimeEnvironment(ctx context.Context, in *RebindRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RebindRuntimeEnvironmentResponse, error)
+	RebindRuntimeSecret(ctx context.Context, in *RebindRuntimeSecretRequest, opts ...grpc.CallOption) (*RebindRuntimeSecretResponse, error)
 	BindInteractionIdentity(ctx context.Context, in *BindInteractionIdentityRequest, opts ...grpc.CallOption) (*BindInteractionIdentityResponse, error)
 	RevokeInteractionIdentity(ctx context.Context, in *RevokeInteractionIdentityRequest, opts ...grpc.CallOption) (*RevokeInteractionIdentityResponse, error)
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
@@ -2770,6 +2810,16 @@ func (c *platformCommandServiceClient) RebindRuntimeEnvironment(ctx context.Cont
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RebindRuntimeEnvironmentResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRuntimeEnvironment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindRuntimeSecret(ctx context.Context, in *RebindRuntimeSecretRequest, opts ...grpc.CallOption) (*RebindRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRuntimeSecret_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3814,6 +3864,7 @@ type PlatformCommandServiceServer interface {
 	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
 	DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error)
 	RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error)
+	RebindRuntimeSecret(context.Context, *RebindRuntimeSecretRequest) (*RebindRuntimeSecretResponse, error)
 	BindInteractionIdentity(context.Context, *BindInteractionIdentityRequest) (*BindInteractionIdentityResponse, error)
 	RevokeInteractionIdentity(context.Context, *RevokeInteractionIdentityRequest) (*RevokeInteractionIdentityResponse, error)
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
@@ -3947,6 +3998,9 @@ func (UnimplementedPlatformCommandServiceServer) DiscardRuntimeEnvironmentDraft(
 }
 func (UnimplementedPlatformCommandServiceServer) RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RebindRuntimeEnvironment not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindRuntimeSecret(context.Context, *RebindRuntimeSecretRequest) (*RebindRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindRuntimeSecret not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) BindInteractionIdentity(context.Context, *BindInteractionIdentityRequest) (*BindInteractionIdentityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BindInteractionIdentity not implemented")
@@ -4377,6 +4431,24 @@ func _PlatformCommandService_RebindRuntimeEnvironment_Handler(srv interface{}, c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).RebindRuntimeEnvironment(ctx, req.(*RebindRuntimeEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeSecret(ctx, req.(*RebindRuntimeSecretRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6189,6 +6261,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RebindRuntimeEnvironment",
 			Handler:    _PlatformCommandService_RebindRuntimeEnvironment_Handler,
+		},
+		{
+			MethodName: "RebindRuntimeSecret",
+			Handler:    _PlatformCommandService_RebindRuntimeSecret_Handler,
 		},
 		{
 			MethodName: "BindInteractionIdentity",
