@@ -11,6 +11,7 @@ usage() {
     "Usage: $0 [--check] [--skip-build] --context <exact-context>" \
     '  [--kubeconfig <path>] [--state-directory <path>]' \
     '  [--cluster-marker <root-owned-path>] [--expected-sha <40-hex-commit>]' \
+    '  [--profile web-only|web-with-mattermost]' \
     '  [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]' \
     '  [--batch browser|integration|role-image|archive|backup|hot-reload]...' \
     '  [--target <test-make-target>]...' >&2
@@ -24,6 +25,7 @@ resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
 cluster_marker=""
 expected_sha=""
+deployment_profile=""
 check_only=false
 skip_build=false
 targets=()
@@ -42,6 +44,7 @@ while (($# > 0)); do
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --profile) deployment_profile=${2:-}; shift 2 ;;
     --batch)
       batch=${2:-}
       case "$batch" in
@@ -58,6 +61,8 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+case "$deployment_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 
 if ((${#batches[@]} == 0)); then
   for batch in "${canonical_batches[@]}"; do
@@ -246,6 +251,7 @@ e2e_arguments=(
   --state-directory "$state_directory"
 )
 deployment_arguments=("${e2e_arguments[@]}")
+[[ -z "$deployment_profile" ]] || deployment_arguments+=(--profile "$deployment_profile")
 [[ -z "$cluster_marker" ]] || deployment_arguments+=(--cluster-marker "$cluster_marker")
 [[ -z "$expected_sha" ]] || deployment_arguments+=(--expected-sha "$expected_sha")
 if [[ "$skip_build" == true ]]; then

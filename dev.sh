@@ -14,6 +14,7 @@ usage() {
     "         [--target <test-make-target>]..." \
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
+    '  [--profile web-only|web-with-mattermost]' \
     '  [--expected-sha <40-hex-commit>]' >&2
 }
 
@@ -42,6 +43,7 @@ resource_prefix="local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
 cluster_marker=""
 expected_sha=""
+requested_profile=""
 while (($# > 0)); do
   case "$1" in
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
@@ -51,11 +53,20 @@ while (($# > 0)); do
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --profile) requested_profile=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 case "$command_name" in up|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
+[[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
+  fail 'state directory must be an exact safe absolute path'
+case "$requested_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
+deployment_profile=${requested_profile:-web-only}
+if [[ "$command_name" != down ]]; then
+  deployment_profile=$("$repository_root/tools/dev/resolve-local-profile.sh" \
+    "$requested_profile" "$state_directory/render.yaml")
+fi
 if [[ "${KODEX_DEV_TLS_MODE:-local-ca}" == public-acme ]]; then
   [[ -n "$cluster_marker" ]] || fail 'public development requires a disposable cluster marker'
   [[ -n "$expected_sha" ]] || fail 'public development requires an expected source SHA'
@@ -67,8 +78,6 @@ if [[ "$command_name" == e2e ]]; then
     fail 'E2E run timeout must be between 60000 and 1800000 milliseconds'
 fi
 [[ -f "$kubeconfig" && -r "$kubeconfig" ]] || fail 'Kubernetes configuration is absent'
-[[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
-  fail 'state directory must be an exact safe absolute path'
 export KUBECONFIG=$kubeconfig
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
@@ -168,6 +177,7 @@ if [[ "$command_name" == down ]]; then
       sleep 1
     done
   done
+  rm -f -- "$state_directory/render.yaml" "$state_directory/authority-source-state.json"
   printf 'Kodex local application namespaces removed; shared cluster controllers retained\n'
   exit 0
 fi
@@ -307,6 +317,8 @@ record_source_provenance_evidence() {
   rendered_revision=$(jq -r '.sourceRevision' <<<"$render_provenance")
   rendered_fingerprint=$(jq -r '.sourceContentSHA256' <<<"$render_provenance")
   rendered_dirty=$(jq -r '.sourceDirty' <<<"$render_provenance")
+  [[ "$(jq -r '.deploymentProfile // "web-only"' <<<"$render_provenance")" == "$deployment_profile" ]] ||
+    fail 'rendered deployment profile does not match the selected profile'
   current_revision=$(git -C "$repository_root" rev-parse HEAD)
   current_fingerprint=$(calculate_local_source_fingerprint)
   [[ "$current_fingerprint" =~ ^[a-f0-9]{64}$ ]] || fail 'source content fingerprint is invalid'
@@ -327,6 +339,7 @@ record_source_provenance_evidence() {
   install -d -m 0700 "$(dirname -- "$evidence_file")"
   temporary_evidence=$(mktemp "$(dirname -- "$evidence_file")/.source-provenance.XXXXXX")
   jq -n --arg command "$evidence_command" \
+    --arg deployment_profile "$deployment_profile" \
     --arg expected_sha "$expected_sha" --arg head_sha "$current_revision" \
     --arg rendered_sha "$rendered_revision" \
     --arg rendered_content_sha256 "$rendered_fingerprint" \
@@ -338,6 +351,7 @@ record_source_provenance_evidence() {
       {
         version: 1,
         command: $command,
+        deploymentProfile: $deployment_profile,
         expectedSHA: (if $expected_sha == "" then null else $expected_sha end),
         headSHA: $head_sha,
         renderedSHA: $rendered_sha,
@@ -374,6 +388,7 @@ resolve_local_authority_source_revision() {
   source_fingerprint=$(calculate_local_source_fingerprint)
   [[ "$source_fingerprint" =~ ^[a-f0-9]{64}$ ]] ||
     fail 'local source fingerprint is invalid'
+  source_fingerprint=$(printf '%s\0%s\0' "$source_fingerprint" "$deployment_profile" | sha256sum | awk '{print $1}')
   state_file="$state_directory/authority-source-state.json"
   state_revision=0
   state_fingerprint=""
@@ -741,6 +756,7 @@ api_endpoint_port=$(jq -er '
   if length != 1 then error("one Kubernetes API TCP port is required") else .[0] end
 ' <<<"$api_endpoint_slices") || fail 'Kubernetes API endpoint port is ambiguous'
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
+  --profile "$deployment_profile" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \
   --public-host "$public_host" --oidc-host "$oidc_host" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \

@@ -27,6 +27,7 @@ calculate_source_content_fingerprint() {
 usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
+    '  [--profile web-only|web-with-mattermost]' \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
@@ -49,6 +50,7 @@ usage() {
 source_root=""
 cache_root=""
 output=""
+deployment_profile=web-only
 public_host=""
 oidc_host=""
 ingress_class=traefik
@@ -76,6 +78,7 @@ while (($# > 0)); do
     --source-root) source_root=${2:-}; shift 2 ;;
     --cache-root) cache_root=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
+    --profile) deployment_profile=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
     --ingress-class) ingress_class=${2:-}; shift 2 ;;
@@ -102,6 +105,8 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+case "$deployment_profile" in web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 
 [[ "$source_root" == /* && -d "$source_root/.git" || -f "$source_root/.git" ]] ||
   fail 'source root must be an exact Git worktree path'
@@ -209,6 +214,9 @@ go_modules=(
   services/jobs/artifact-retention
   services/jobs/session-archive
 )
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  go_modules+=(services/external/interaction-gateway)
+fi
 for module in "${go_modules[@]}"; do
   [[ -f "$source_root/$module/go.mod" ]] || fail "Go module is absent: $module"
   GOMODCACHE="$go_module_cache" GOCACHE="$go_prime_cache" GOWORK=off GOTOOLCHAIN=local \
@@ -235,7 +243,7 @@ find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type f -exec c
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
 {
-  kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only"
+  kubectl kustomize "$repository_root/deploy/k8s/profiles/$deployment_profile"
   printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/base/local-object-storage"
   printf '\n---\n'
@@ -260,6 +268,7 @@ OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
 INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+DEPLOYMENT_PROFILE="$deployment_profile" \
 SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" \
 PROMOTED_PULL_HOST="$promoted_pull_host" \
 PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
@@ -286,8 +295,10 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
     .spec.template.metadata.labels."kodex.dev/environment" = "staging" |
     .spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.template.metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
     .spec.template.metadata.annotations."kodex.dev/source-revision" = strenv(SOURCE_REVISION) |
     .spec.template.metadata.annotations."kodex.dev/source-content-sha256" = strenv(SOURCE_DIGEST) |
+    .spec.template.metadata.annotations."kodex.dev/deployment-profile" = strenv(DEPLOYMENT_PROFILE) |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
     (.spec.template.spec.containers[] | select(.startupProbe != null) |
@@ -295,13 +306,14 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   ) |
   with(select(.metadata.labels != null);
     .metadata.labels."kodex.dev/environment" = "staging" |
+    .metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
     .metadata.labels."kodex.dev/local-profile" = "hot-reload"
   )
 ' "$render"
 
 printf '\n---\n' >>"$render"
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
-SOURCE_DIRTY="$source_dirty" yq -n '
+SOURCE_DIRTY="$source_dirty" DEPLOYMENT_PROFILE="$deployment_profile" yq -n '
   {
     "apiVersion":"v1",
     "kind":"ConfigMap",
@@ -311,11 +323,13 @@ SOURCE_DIRTY="$source_dirty" yq -n '
       "labels":{
         "app.kubernetes.io/part-of":"kodex",
         "kodex.dev/environment":"staging",
+        "kodex.dev/profile":strenv(DEPLOYMENT_PROFILE),
         "kodex.dev/local-profile":"hot-reload"
       }
     },
     "data":{
       "sourceRevision":strenv(SOURCE_REVISION),
+      "deploymentProfile":strenv(DEPLOYMENT_PROFILE),
       "sourceContentSHA256":strenv(SOURCE_DIGEST),
       "sourceDirty":strenv(SOURCE_DIRTY)
     }
@@ -340,6 +354,7 @@ yq -i '
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
       .metadata.name == "stt-tts-service" or
+      .metadata.name == "interaction-gateway" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
@@ -847,6 +862,13 @@ patch_go_container Deployment runtime-controller platform-worker-grant-agent ser
 patch_go_container Deployment integration-gateway integration-gateway services/external/integration-gateway ./cmd/integration-gateway
 patch_go_container Deployment integration-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment integration-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  patch_go_container Deployment interaction-gateway interaction-gateway services/external/interaction-gateway ./cmd/interaction-gateway
+  patch_go_container Deployment interaction-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+  patch_go_container Deployment interaction-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+  patch_go_init_container interaction-gateway internal-rpc-authority-socket-init \
+    services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
+fi
 patch_go_container Deployment integration-synthetic integration-synthetic services/external/integration-gateway ./cmd/integration-synthetic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
 patch_go_container Deployment artifact-retention artifact-retention services/jobs/artifact-retention ./cmd/artifact-retention
@@ -1031,6 +1053,7 @@ PUBLIC_HOST="$public_host" yq -i '
 ' "$render"
 
 SESSION_ARCHIVE_IMAGE="$session_archive_image" \
+DEPLOYMENT_PROFILE="$deployment_profile" \
 AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
   with(select(.kind == "ConfigMap" and
       .metadata.name == "internal-rpc-authority-publisher-target-registry");
@@ -1044,6 +1067,7 @@ AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
         .workload_id == "image-admission" or
         .workload_id == "image-promotion" or
         .workload_id == "integration-gateway" or
+        (.workload_id == "interaction-gateway" and strenv(DEPLOYMENT_PROFILE) == "web-with-mattermost") or
         .workload_id == "role-image-builder" or
         .workload_id == "secret-broker" or
         .workload_id == "stt-tts-service" or
@@ -1153,6 +1177,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
 "$repository_root/tools/dev/verify-local-stt-render.sh" "$output" "$stt_hot_reload_image"
+"$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and

@@ -7,15 +7,17 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s [--source-root <path>] [--cache-root <path>]\n' "$0" >&2
+  printf 'Usage: %s [--source-root <path>] [--cache-root <path>] [--profile web-only|web-with-mattermost]\n' "$0" >&2
 }
 
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 cache_root=""
+deployment_profile=web-only
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --cache-root) cache_root=${2:-}; shift 2 ;;
+    --profile) deployment_profile=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -154,6 +156,7 @@ install -d -m 0700 "$cache_root"
 render="$temporary_directory/render.yaml"
 
 "$source_root/tools/dev/render-local.sh" \
+  --profile "$deployment_profile" \
   --source-root "$source_root" --cache-root "$cache_root" --output "$render" \
   --public-host control.127.0.0.1.nip.io \
   --oidc-host sso.127.0.0.1.nip.io \
@@ -177,6 +180,24 @@ render="$temporary_directory/render.yaml"
   >/dev/null
 
 stt_image=registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555
+"$source_root/tools/dev/verify-local-profile-render.sh" "$render" "$deployment_profile"
+opposite_profile=web-only
+[[ "$deployment_profile" != web-only ]] || opposite_profile=web-with-mattermost
+if "$source_root/tools/dev/verify-local-profile-render.sh" "$render" "$opposite_profile" >/dev/null 2>&1; then
+  fail 'profile verifier accepted a render from another profile'
+fi
+profile_negative="$temporary_directory/profile-negative.yaml"
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  for mutation in \
+    'select(.kind != "Deployment" or .metadata.name != "interaction-gateway")' \
+    '(select(.kind == "Deployment" and .metadata.name == "interaction-gateway") | .spec.template.spec.containers) |= map(select(.name != "platform-worker-grant-agent"))' \
+    '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "interaction-gateway")) | to_yaml)'; do
+    yq "$mutation" "$render" >"$profile_negative"
+    if "$source_root/tools/dev/verify-local-profile-render.sh" "$profile_negative" "$deployment_profile" >/dev/null 2>&1; then
+      fail "profile verifier accepted missing Mattermost material: $mutation"
+    fi
+  done
+fi
 "$source_root/tools/dev/verify-local-stt-render.sh" "$render" "$stt_image"
 stt_negative="$temporary_directory/stt-negative.yaml"
 for mutation in \
@@ -302,13 +323,14 @@ source_dirty=false
 [[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
 yq -o=json -I=0 '.' "$render" | jq -s -e \
   --arg source_revision "$source_revision" --arg source_digest "$source_digest" \
-  --arg source_dirty "$source_dirty" '
+  --arg source_dirty "$source_dirty" --arg profile "$deployment_profile" '
     . as $resources |
     (first($resources[] | select(.kind == "ConfigMap" and
       .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-dev-source-provenance")) | .data) as $provenance |
     $provenance == {
       sourceRevision:$source_revision,
+      deploymentProfile:$profile,
       sourceContentSHA256:$source_digest,
       sourceDirty:$source_dirty
     } and
@@ -317,7 +339,8 @@ yq -o=json -I=0 '.' "$render" | jq -s -e \
       .spec.template.metadata.annotations["kodex.dev/source-revision"] ==
         $source_revision and
       .spec.template.metadata.annotations["kodex.dev/source-content-sha256"] ==
-        $source_digest)
+        $source_digest and
+      .spec.template.metadata.annotations["kodex.dev/deployment-profile"] == $profile)
   ' >/dev/null || fail 'rendered source provenance is not bound to the actual worktree content'
 [[ "$actual_policy_digest" != "$source_digest" &&
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||

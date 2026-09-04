@@ -37,6 +37,43 @@ CI-входом и не добавляется в Git.
   провайдеров. QA не получает SRE/root credentials; операции установки
   выполняет разрешённый оператор. В отчёте остаются только имена secret keys.
 
+## Профиль стенда
+
+`dev.sh up` и `dev.sh full-e2e` принимают `--profile web-only|web-with-mattermost`.
+Для новой установки по умолчанию используется `web-only`. В существующей
+установке отсутствие флага сохраняет профиль из `kodex-dev-source-provenance`;
+`status`, `smoke` и `e2e` используют то же правило. Старый render без поля
+`deploymentProfile` относится к ранее единственному локальному `web-only`.
+
+| Переход | Проверка и результат |
+| --- | --- |
+| Новая установка | Разрешены только два канонических профиля; выбранный профиль фиксируется в render, annotations workloads и evidence. |
+| Повторный up/readback | Профиль наследуется либо явно совпадает; чужой, повреждённый или symlink render отклоняется. |
+| Другой профиль без сброса | Отказ до обращения к Kubernetes: apply отсутствующего ресурса сам по себе не удаляет прежний workload. |
+| Явный down | Существующее owner-подтверждение и проверки disposable context сохраняются. Только после успешного удаления namespaces удаляются локальные render/authority markers; ошибка сброса их сохраняет. |
+| Новый up после сброса | Можно выбрать другой профиль; authority source fingerprint включает профиль и не смешивает его с прежним назначением ключей. |
+
+В `web-with-mattermost` загружаются модули и запускаются hot-reload контейнеры
+interaction-gateway, issuer и platform-worker-grant-agent, socket init и точное
+key-delivery назначение. В `web-only` они отсутствуют. Общие компоненты,
+включая session-archive и backup-controller, и общие назначения ключей совпадают
+между профилями; устранено расхождение #1056. Статический выбор профиля не
+подключает Mattermost автоматически и не выдаёт новые integration grants.
+
+Проверки без обращения к живому кластеру:
+
+```bash
+make test-full-local-e2e-entrypoint test-web-only-release
+timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
+  --profile web-only --cache-root /tmp/kodex-1031-render-cache
+timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
+  --profile web-with-mattermost --cache-root /tmp/kodex-1031-render-cache
+```
+
+Через Context7 проверены официальные правила
+[Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
+и [declarative configuration](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/).
+
 ## Локальная подготовка STT
 
 `dev.sh up` собирает `tools/dev/Dockerfile.local-stt` через
