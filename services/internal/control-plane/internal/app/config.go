@@ -21,6 +21,8 @@ const (
 )
 
 type Config struct {
+	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
+	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
 	TechnicalListen                 string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
 	ServerCertificateFile           string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
@@ -122,7 +124,9 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		GRPCListen: ":8443", TechnicalListen: ":9090",
+		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
+		SkillScannerTimeout: 15 * time.Second,
+		GRPCListen:          ":8443", TechnicalListen: ":9090",
 		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
 		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
 		ClientCAFile:                    "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
@@ -199,6 +203,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
+		return errors.New("control-plane skill scanner configuration is invalid")
+	}
 	for _, address := range []string{config.GRPCListen, config.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("control-plane listen address is invalid")

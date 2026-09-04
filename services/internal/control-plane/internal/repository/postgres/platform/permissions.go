@@ -166,6 +166,24 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", agentRef, projectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+	case command.SkillBundleInput:
+		projectRef := payload.ProjectRef
+		if payload.BundleRef != "" {
+			bundle, err := scanSkillBundle(tx.QueryRow(ctx, querySkillBundleGet, current.organizationID, payload.BundleRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			if projectRef != "" && projectRef != bundle.ProjectRef {
+				return "", resolvedAccessTarget{}, errs.ErrForbidden
+			}
+			projectRef = bundle.ProjectRef
+		}
+		for _, file := range payload.Specification.Files {
+			if err := repository.requireAccess(ctx, tx, current, "artifact.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ARTIFACT", ResourceRef: file.ArtifactRef}); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.WorkflowInput:
 		if input.Kind == command.CreateWorkflow {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)

@@ -183,6 +183,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("memory records owner lifecycle", func(t *testing.T) {
 		testMemoryRecords(t, ctx, repository)
 	})
+	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
+		testSkillBundleDraft(t, ctx, repository)
+	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})

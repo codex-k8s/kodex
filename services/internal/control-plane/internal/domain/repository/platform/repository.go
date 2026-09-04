@@ -216,6 +216,9 @@ type TranscriptionCredentialProjection struct {
 
 type Repository interface {
 	GetMemoryRecord(context.Context, value.Principal, string) (entity.KodexMemoryRecord, error)
+	GetSkillBundle(context.Context, value.Principal, string) (entity.SkillBundle, error)
+	ListSkillBundles(context.Context, value.Principal, query.Filter) ([]entity.SkillBundle, int64, string, error)
+	ListSkillBundleRevisions(context.Context, value.Principal, string, query.Page) ([]entity.SkillBundleRevision, int64, string, error)
 	ListMemoryRecords(context.Context, value.Principal, query.Filter) ([]entity.KodexMemoryRecord, int64, string, error)
 	ListMemoryRecordRevisions(context.Context, value.Principal, string, query.Page) ([]entity.MemoryRecordRevision, int64, string, error)
 	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)

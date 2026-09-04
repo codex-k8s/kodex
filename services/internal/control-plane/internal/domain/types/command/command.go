@@ -12,6 +12,15 @@ import (
 type Kind string
 
 const (
+	CreateSkillBundleDraft          Kind = "CREATE_SKILL_BUNDLE_DRAFT"
+	SaveSkillBundleDraft            Kind = "SAVE_SKILL_BUNDLE_DRAFT"
+	ValidateSkillBundleDraft        Kind = "VALIDATE_SKILL_BUNDLE_DRAFT"
+	ReviewSkillBundleDraft          Kind = "REVIEW_SKILL_BUNDLE_DRAFT"
+	PublishSkillBundleDraft         Kind = "PUBLISH_SKILL_BUNDLE_DRAFT"
+	DiscardSkillBundleDraft         Kind = "DISCARD_SKILL_BUNDLE_DRAFT"
+	ArchiveSkillBundle              Kind = "ARCHIVE_SKILL_BUNDLE"
+	RestoreSkillBundle              Kind = "RESTORE_SKILL_BUNDLE"
+	PurgeSkillBundle                Kind = "PURGE_SKILL_BUNDLE"
 	CreateMemoryRecord              Kind = "CREATE_MEMORY_RECORD"
 	ReviseMemoryRecord              Kind = "REVISE_MEMORY_RECORD"
 	ArchiveMemoryRecord             Kind = "ARCHIVE_MEMORY_RECORD"
@@ -211,6 +220,11 @@ type MemoryRecordInput struct {
 	Specification                   entity.MemoryRecordSpecification
 }
 
+type SkillBundleInput struct {
+	ProjectRef, BundleRef, RevisionRef, ExpectedDigest, Decision, Comment string
+	Specification                                                         entity.SkillBundleSpecification
+}
+
 type AgentContextBindingInput struct {
 	AgentRef, ResourceRef, RevisionRef string
 	ExpectedBindingVersion             int64
@@ -404,6 +418,7 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	SkillBundle             *entity.SkillBundle
 	MemoryRecord            *entity.KodexMemoryRecord
 	ContextBinding          *entity.AgentContextBinding
 	InteractionIdentity     *entity.InteractionIdentity
