@@ -267,6 +267,23 @@ func TestContextResourceEveryTypedRoute(t *testing.T) {
 	}
 }
 
+func TestContextSkillNameUsesUnicodeCharacters(t *testing.T) {
+	for _, size := range []int{160, 161} {
+		name := strings.Repeat("я", size)
+		want := size == 160
+		_, ok := skillSpecificationInput(generated.SkillBundleSpecification{Name: name, Files: []generated.SkillBundleFileInput{}})
+		if ok != want {
+			t.Fatalf("input: characters=%d accepted=%t", size, ok)
+		}
+		skill, _, _ := contextFixtures()
+		skill.DraftRevision.Name = name
+		view, ok := skillRevisionView(skill.DraftRevision)
+		if ok != want || ok && view.Name != name {
+			t.Fatalf("response: characters=%d accepted=%t", size, ok)
+		}
+	}
+}
+
 func TestContextResourceInputRejectsAuthorityAndMalformedBeforeRPC(t *testing.T) {
 	for _, tc := range []struct{ name, method, path, body string }{
 		{"provenance", "POST", "/api/v1/projects/prj_fixture01/memory-records", `{"specification":` + contextMemorySpec + `,"provenance":{"actorRef":"usr_forged01"}}`},

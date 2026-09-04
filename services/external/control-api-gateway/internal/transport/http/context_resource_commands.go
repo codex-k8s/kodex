@@ -15,7 +15,7 @@ func validSkillManifestPath(value string) bool {
 	return value != "" && len(value) <= 512 && value != "." && !strings.ContainsAny(value, "\\:\x00\r\n") && !strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "../") && value != ".." && path.Clean(value) == value
 }
 func skillSpecificationInput(value generated.SkillBundleSpecification) (*controlplanev1.SkillBundleSpecification, bool) {
-	if strings.TrimSpace(value.Name) == "" || len(value.Name) > 160 || len(value.Description) > 4000 || value.Files == nil || len(value.Files) > 128 {
+	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || len(value.Description) > 4000 || value.Files == nil || len(value.Files) > 128 {
 		return nil, false
 	}
 	result := &controlplanev1.SkillBundleSpecification{Name: value.Name, Description: value.Description}

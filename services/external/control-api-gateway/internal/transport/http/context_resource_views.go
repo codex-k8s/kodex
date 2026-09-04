@@ -46,7 +46,7 @@ func skillRevisionView(value *controlplanev1.SkillBundleRevision) (generated.Ski
 	if !ok || !opaqueHTTPReference.MatchString(value.GetRef()) || !validManagedVersion(value.GetRevision()) || !validManagedDigest(value.GetDigest()) ||
 		value.GetState() < controlplanev1.SkillRevisionState_SKILL_REVISION_STATE_DRAFT || value.GetState() > controlplanev1.SkillRevisionState_SKILL_REVISION_STATE_DISCARDED ||
 		value.GetScanState() < controlplanev1.SkillScanState_SKILL_SCAN_STATE_PENDING || value.GetScanState() > controlplanev1.SkillScanState_SKILL_SCAN_STATE_ERROR ||
-		len(value.GetFiles()) > 128 || len(value.GetDiagnostics()) > 128 || len(value.GetName()) > 160 || len(value.GetDescription()) > 4000 {
+		len(value.GetFiles()) > 128 || len(value.GetDiagnostics()) > 128 || utf8.RuneCountInString(value.GetName()) > 160 || len(value.GetDescription()) > 4000 {
 		return generated.SkillBundleRevision{}, false
 	}
 	result := generated.SkillBundleRevision{Ref: value.GetRef(), Revision: value.GetRevision(), State: generated.SkillBundleRevisionState(strings.TrimPrefix(value.GetState().String(), "SKILL_REVISION_STATE_")),

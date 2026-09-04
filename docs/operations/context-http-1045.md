@@ -92,7 +92,7 @@ owner lifecycle локальным state и не превращает ошибк
 
 ## Границы Формата
 
-- Skill specification: name <=160 UTF-8 bytes, description <=4000, files <=128.
+- Skill specification: name <=160 Unicode символов, description <=4000 UTF-8 bytes, files <=128.
   Каждый файл имеет относительный canonical manifest path <=512 bytes,
   artifactRef и положительную exact artifactRevision. Traversal, абсолютные
   пути, Windows separators, повторные paths и небезопасные JSON integers
