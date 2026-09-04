@@ -45,5 +45,20 @@ plugins:
       - require_unimplemented_servers=true
     types:
       - controlplane.v1
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    revision: 1
+    out: libs/go/sttapi
+    opt:
+      - module=github.com/codex-k8s/kodex/libs/go/sttapi
+    types:
+      - stt.v1
+  - remote: buf.build/grpc/go:v1.6.2
+    revision: 1
+    out: libs/go/sttapi
+    opt:
+      - module=github.com/codex-k8s/kodex/libs/go/sttapi
+      - require_unimplemented_servers=true
+    types:
+      - stt.v1
 inputs:
   - directory: contracts/proto

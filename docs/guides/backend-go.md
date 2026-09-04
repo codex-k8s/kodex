@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.0
-updated: 2026-08-23
+version: 1.4.1
+updated: 2026-09-04
 ---
 
 # Серверная разработка на Go
@@ -269,6 +269,10 @@ cleanup.
 `context.WithTimeout(backgroundCtx, timeout)`. Последовательная передача одного
 контекста в tracing shutdown, Sentry flush и другие независимые операции
 запрещена: первая зависшая операция не должна исчерпать бюджет остальных.
+Если API остановки не принимает context (`GracefulStop`, `Stop`), каждый такой
+вызов выполняется асинхронно и имеет bounded join в независимом cleanup
+контексте. Зависшие graceful и hard stop не могут задержать следующую cleanup
+операцию после исчерпания своего общего бюджета.
 
 ## Доменные типы
 

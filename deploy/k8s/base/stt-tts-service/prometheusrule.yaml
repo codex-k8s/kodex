@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stt-tts-service
+  labels:
+    app.kubernetes.io/name: stt-tts-service
+spec:
+  groups:
+    - name: stt-tts-service
+      rules:
+        - alert: STTServiceUnavailable
+          expr: absent(kodex_stt_tts_service_readiness{ready="true"}) or sum(kodex_stt_tts_service_readiness{ready="true"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: STT service has no ready replica
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/stt-tts-service.md
+        - alert: STTServiceUnexpectedFailures
+          expr: sum(rate(kodex_stt_tts_service_grpc_requests_total{code=~"Internal|Unavailable|Unknown|DataLoss"}[10m])) > 0
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: STT service returns unexpected gRPC failures
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/stt-tts-service.md
+        - alert: STTProviderUnavailable
+          expr: sum(rate(kodex_stt_tts_service_transcription_stage_total{stage=~"egress|provider",error_class=~"unavailable|timeout"}[10m])) > 0.1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: STT provider path is persistently unavailable
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/stt-tts-service.md

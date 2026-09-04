@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package stt.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1";
+
+// SpeechToTextService предоставляет только распознавание речи. TTS не входит
+// в текущую версию контракта.
+service SpeechToTextService {
+  // Transcribe принимает metadata первым сообщением, ограниченные chunks и
+  // commit последним сообщением. Полномочия и конфигурация задаются сервером.
+  rpc Transcribe(stream TranscribeRequest) returns (TranscribeResponse);
+
+  // CheckReadiness проверяет только локальную способность принимать RPC,
+  // локальный verifier/config и локальные обязательные ресурсы.
+  rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
+
+  // CheckProtectedPath — диагностический readback полного защищённого пути.
+  // Он не является Kubernetes readiness и не выполняет provider effect.
+  rpc CheckProtectedPath(CheckProtectedPathRequest) returns (CheckProtectedPathResponse);
+}
+
+// TranscriptionPolicyProjectionService — producer contract control-plane для
+// #1019. Payload служит только locator/echo. Вызов обязан нести server-owned
+// delegated/continuation proof, связанный с root actor/tenant/project, exact
+// caller/target/full method/operation, source revision+digest/provenance,
+// request/correlation и expiry. Реализация этого proof относится к #1023.
+service TranscriptionPolicyProjectionService {
+  rpc ResolveTranscriptionPolicy(ResolveTranscriptionPolicyRequest) returns (ResolveTranscriptionPolicyResponse);
+}
+
+// TranscriptionCredentialProjectionService — producer contract secret-broker
+// для #1024. Payload служит только locator/echo и не является authority. Для
+// вызова обязателен тот же delegated/continuation proof-контракт #1023.
+service TranscriptionCredentialProjectionService {
+  rpc ProjectTranscriptionCredential(ProjectTranscriptionCredentialRequest) returns (ProjectTranscriptionCredentialResponse);
+}
+
+message TranscribeRequest {
+  oneof body {
+    TranscribeMetadata metadata = 1;
+    bytes chunk = 2;
+    TranscribeCommit commit = 3;
+  }
+}
+
+message TranscribeMetadata {
+  string media_type = 1;
+  uint64 size_bytes = 2;
+}
+
+message TranscribeCommit {
+  uint64 size_bytes = 1;
+  string sha256 = 2;
+}
+
+message TranscribeResponse {
+  string text = 1;
+  TranscriptionReceipt receipt = 2;
+}
+
+message TranscriptionReceipt {
+  string request_id = 1;
+  string correlation_id = 2;
+  string actor_id = 3;
+  string tenant_id = 4;
+  string project_id = 5;
+  uint64 authority_source_revision = 6;
+  string authority_source_digest_sha256 = 7;
+  uint64 config_revision = 8;
+  string config_digest_sha256 = 9;
+  string model = 10;
+  string language = 11;
+  string provider_account_ref = 12;
+  uint64 provider_credential_generation = 13;
+  TranscriptionStage completed_stage = 14;
+}
+
+enum TranscriptionStage {
+  TRANSCRIPTION_STAGE_UNSPECIFIED = 0;
+  TRANSCRIPTION_STAGE_PROVIDER_COMPLETED = 1;
+}
+
+message CheckReadinessRequest {}
+
+message CheckReadinessResponse {
+  bool ready = 1;
+}
+
+message CheckProtectedPathRequest {}
+
+message CheckProtectedPathResponse {
+  bool ready = 1;
+  ProtectedPathStage stage = 2;
+}
+
+enum ProtectedPathStage {
+  PROTECTED_PATH_STAGE_UNSPECIFIED = 0;
+  PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY = 1;
+  PROTECTED_PATH_STAGE_POLICY = 2;
+  PROTECTED_PATH_STAGE_CREDENTIAL = 3;
+  PROTECTED_PATH_STAGE_EGRESS = 4;
+  PROTECTED_PATH_STAGE_READY = 5;
+}
+
+// DelegatedAuthorityLocator — единый locator/echo для обоих projection RPC.
+// Все поля должны быть сопоставлены с проверенным metadata proof; сами поля не
+// дают полномочий и не заменяют проверку владельцем projection.
+message DelegatedAuthorityLocator {
+  string request_id = 1;
+  string correlation_id = 2;
+  string root_actor_id = 3;
+  string tenant_id = 4;
+  string project_id = 5;
+  uint64 source_revision = 6;
+  string source_digest_sha256 = 7;
+  AuthorityIdentityProvenance actor = 8;
+  AuthorityIdentityProvenance tenant = 9;
+  AuthorityIdentityProvenance project = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+
+// source переносит exact numeric internalrpcauthority.v1.AuthoritySource и
+// проверяется по его закрытому реестру; локальный дублирующий enum запрещён.
+message AuthorityIdentityProvenance {
+  int32 source = 1;
+  string reference = 2;
+  uint64 revision = 3;
+  string digest_sha256 = 4;
+}
+
+message ResolveTranscriptionPolicyRequest {
+  DelegatedAuthorityLocator authority = 1;
+}
+
+message ResolveTranscriptionPolicyResponse {
+  uint64 config_revision = 1;
+  string config_digest_sha256 = 2;
+  string model = 3;
+  string language = 4;
+  uint64 maximum_audio_bytes = 5;
+  uint64 maximum_audio_duration_milliseconds = 6;
+  uint64 provider_timeout_milliseconds = 7;
+  string provider_account_ref = 8;
+  uint64 provider_credential_generation = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  DelegatedAuthorityLocator authority = 11;
+}
+
+message ProjectTranscriptionCredentialRequest {
+  DelegatedAuthorityLocator authority = 1;
+  string provider_account_ref = 2;
+  uint64 provider_credential_generation = 3;
+  uint64 config_revision = 4;
+  string config_digest_sha256 = 5;
+}
+
+message ProjectTranscriptionCredentialResponse {
+  bytes api_key = 1;
+  string provider_account_ref = 2;
+  uint64 provider_credential_generation = 3;
+  string config_digest_sha256 = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  uint64 config_revision = 6;
+  DelegatedAuthorityLocator authority = 7;
+}

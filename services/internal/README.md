@@ -22,3 +22,6 @@ Proto/gRPC.
 - [`control-plane`](control-plane/README.md) — авторитетные проекты, роли,
   конфигурация, sessions/run lineage, schedules, gates, integration metadata и
   artifacts.
+- [`stt-tts-service`](stt-tts-service/README.md) — неактивный base deployable
+  stateless STT; до материализации #1019/#1021/#1023/#1024 не входит в shipped
+  profiles и закрыто отказывает до projection RPC.

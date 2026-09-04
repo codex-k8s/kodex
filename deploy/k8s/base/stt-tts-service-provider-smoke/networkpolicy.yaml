@@ -1,0 +1,54 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stt-provider-smoke-default-deny
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: stt-provider-smoke}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stt-provider-smoke-exact-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: stt-provider-smoke
+      app.kubernetes.io/component: provider-smoke
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports: [{protocol: TCP, port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-gateway-stt-provider-smoke-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: egress-gateway
+      app.kubernetes.io/component: platform-egress
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stt-provider-smoke
+              app.kubernetes.io/component: provider-smoke
+      ports: [{protocol: TCP, port: 8080}]

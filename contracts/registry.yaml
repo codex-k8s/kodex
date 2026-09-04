@@ -60,6 +60,17 @@ packages:
       - role-image-builder
       - image-admission
       - image-promotion
+  - id: stt-v1
+    format: proto
+    owner: stt-tts-service
+    source: contracts/proto/stt/v1
+    generated:
+      go: libs/go/sttapi/gen/stt/v1
+    consumers:
+      - stt-tts-service
+      - control-api-gateway
+      - control-plane
+      - secret-broker
   - id: runtime-controller-agent-runner-input-v6
     format: json-schema
     owner: runtime-controller

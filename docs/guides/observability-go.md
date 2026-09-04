@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-07-31
+version: 1.1.1
+updated: 2026-09-04
 ---
 
 # Наблюдаемость Go-сервисов
@@ -74,6 +74,12 @@ HTTP method нормализуется закрытым allowlist стандар
 сырой `request.Method` не передается в metric vector. Аналогично неизвестные
 route, operation, provider status и outcome отображаются в заранее объявленное
 fallback-значение, а не создают новую серию.
+
+Streaming server metrics и trace охватывают весь RPC от входа в общую цепочку,
+включая auth, malformed request, admission и отказ до первого сообщения.
+In-flight gauge увеличивается до этих проверок и гарантированно уменьшается при
+любом исходе. Correlation назначается сервером один раз на stream, доступен
+error boundary и success path, но никогда не используется как metric label.
 
 Бизнесовые метрики описывают устойчивые outcomes утвержденных доменных
 сценариев и transactional outbox, а не произвольные идентификаторы.
