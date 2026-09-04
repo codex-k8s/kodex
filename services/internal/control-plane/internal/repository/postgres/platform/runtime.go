@@ -17,7 +17,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -611,22 +610,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
 		sttConfiguration := entity.SystemSTTConfiguration{}
 		if capabilityEnabled(capabilities, "platform.stt.use") {
-			var eligible, providerEnabled bool
-			var rawProviderCapabilities []byte
-			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
-				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
-				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
-				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
-				&rawProviderCapabilities); err != nil {
+			actorScope := scope
+			if err := tx.QueryRow(ctx, querySTTRuntimeActor, scope.organizationID, runRef).Scan(
+				&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.organizationRef); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			var providerCapabilities map[string]any
-			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
-				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
-				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+			sttConfiguration, err = repository.getSystemSTTConfigurationTx(ctx, tx, actorScope)
+			if err != nil || !sttConfiguration.Ready {
 				return commandOutcome{}, errs.ErrConflict
 			}
 		}

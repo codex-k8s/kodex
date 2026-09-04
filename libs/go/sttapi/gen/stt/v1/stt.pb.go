@@ -678,7 +678,8 @@ type CheckProtectedPathResponse struct {
 	Ready bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
 	Stage ProtectedPathStage     `protobuf:"varint,2,opt,name=stage,proto3,enum=stt.v1.ProtectedPathStage" json:"stage,omitempty"`
 	// Верхняя граница свежести: min(authority, config, credential, 30 секунд).
-	ValidUntil    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=valid_until,json=validUntil,proto3" json:"valid_until,omitempty"`
+	ValidUntil    *timestamppb.Timestamp     `protobuf:"bytes,3,opt,name=valid_until,json=validUntil,proto3" json:"valid_until,omitempty"`
+	Catalog       *TranscriptionModelCatalog `protobuf:"bytes,4,opt,name=catalog,proto3" json:"catalog,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -734,6 +735,315 @@ func (x *CheckProtectedPathResponse) GetValidUntil() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *CheckProtectedPathResponse) GetCatalog() *TranscriptionModelCatalog {
+	if x != nil {
+		return x.Catalog
+	}
+	return nil
+}
+
+// Параметры принадлежат immutable CP revision, не пользовательскому upload.
+type TranscriptionParameters struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Languages        []string               `protobuf:"bytes,1,rep,name=languages,proto3" json:"languages,omitempty"`
+	Keywords         []string               `protobuf:"bytes,2,rep,name=keywords,proto3" json:"keywords,omitempty"`
+	Prompt           string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Temperature      float64                `protobuf:"fixed64,4,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	ChunkingStrategy string                 `protobuf:"bytes,5,opt,name=chunking_strategy,json=chunkingStrategy,proto3" json:"chunking_strategy,omitempty"`
+	Stream           bool                   `protobuf:"varint,6,opt,name=stream,proto3" json:"stream,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *TranscriptionParameters) Reset() {
+	*x = TranscriptionParameters{}
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptionParameters) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptionParameters) ProtoMessage() {}
+
+func (x *TranscriptionParameters) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptionParameters.ProtoReflect.Descriptor instead.
+func (*TranscriptionParameters) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TranscriptionParameters) GetLanguages() []string {
+	if x != nil {
+		return x.Languages
+	}
+	return nil
+}
+
+func (x *TranscriptionParameters) GetKeywords() []string {
+	if x != nil {
+		return x.Keywords
+	}
+	return nil
+}
+
+func (x *TranscriptionParameters) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *TranscriptionParameters) GetTemperature() float64 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *TranscriptionParameters) GetChunkingStrategy() string {
+	if x != nil {
+		return x.ChunkingStrategy
+	}
+	return ""
+}
+
+func (x *TranscriptionParameters) GetStream() bool {
+	if x != nil {
+		return x.Stream
+	}
+	return false
+}
+
+type TranscriptionModelCatalog struct {
+	state                                       protoimpl.MessageState       `protogen:"open.v1"`
+	Version                                     string                       `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	ObservedAt                                  *timestamppb.Timestamp       `protobuf:"bytes,2,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	Models                                      []*TranscriptionModelProfile `protobuf:"bytes,3,rep,name=models,proto3" json:"models,omitempty"`
+	RecommendedModel                            string                       `protobuf:"bytes,4,opt,name=recommended_model,json=recommendedModel,proto3" json:"recommended_model,omitempty"`
+	RecommendedMaximumAudioBytes                uint64                       `protobuf:"varint,5,opt,name=recommended_maximum_audio_bytes,json=recommendedMaximumAudioBytes,proto3" json:"recommended_maximum_audio_bytes,omitempty"`
+	RecommendedMaximumAudioDurationMilliseconds uint64                       `protobuf:"varint,6,opt,name=recommended_maximum_audio_duration_milliseconds,json=recommendedMaximumAudioDurationMilliseconds,proto3" json:"recommended_maximum_audio_duration_milliseconds,omitempty"`
+	ResponseFormat                              string                       `protobuf:"bytes,7,opt,name=response_format,json=responseFormat,proto3" json:"response_format,omitempty"`
+	unknownFields                               protoimpl.UnknownFields
+	sizeCache                                   protoimpl.SizeCache
+}
+
+func (x *TranscriptionModelCatalog) Reset() {
+	*x = TranscriptionModelCatalog{}
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptionModelCatalog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptionModelCatalog) ProtoMessage() {}
+
+func (x *TranscriptionModelCatalog) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptionModelCatalog.ProtoReflect.Descriptor instead.
+func (*TranscriptionModelCatalog) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TranscriptionModelCatalog) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *TranscriptionModelCatalog) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *TranscriptionModelCatalog) GetModels() []*TranscriptionModelProfile {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+func (x *TranscriptionModelCatalog) GetRecommendedModel() string {
+	if x != nil {
+		return x.RecommendedModel
+	}
+	return ""
+}
+
+func (x *TranscriptionModelCatalog) GetRecommendedMaximumAudioBytes() uint64 {
+	if x != nil {
+		return x.RecommendedMaximumAudioBytes
+	}
+	return 0
+}
+
+func (x *TranscriptionModelCatalog) GetRecommendedMaximumAudioDurationMilliseconds() uint64 {
+	if x != nil {
+		return x.RecommendedMaximumAudioDurationMilliseconds
+	}
+	return 0
+}
+
+func (x *TranscriptionModelCatalog) GetResponseFormat() string {
+	if x != nil {
+		return x.ResponseFormat
+	}
+	return ""
+}
+
+// Совместимость адаптера, не доказательство доступа конкретного credential.
+type TranscriptionModelProfile struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Model               string                 `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Legacy              bool                   `protobuf:"varint,2,opt,name=legacy,proto3" json:"legacy,omitempty"`
+	ParameterNames      []string               `protobuf:"bytes,3,rep,name=parameter_names,json=parameterNames,proto3" json:"parameter_names,omitempty"`
+	ChunkingStrategies  []string               `protobuf:"bytes,4,rep,name=chunking_strategies,json=chunkingStrategies,proto3" json:"chunking_strategies,omitempty"`
+	FileStreamSupported bool                   `protobuf:"varint,5,opt,name=file_stream_supported,json=fileStreamSupported,proto3" json:"file_stream_supported,omitempty"`
+	StreamEnabled       bool                   `protobuf:"varint,6,opt,name=stream_enabled,json=streamEnabled,proto3" json:"stream_enabled,omitempty"`
+	MaximumPromptBytes  uint32                 `protobuf:"varint,7,opt,name=maximum_prompt_bytes,json=maximumPromptBytes,proto3" json:"maximum_prompt_bytes,omitempty"`
+	MaximumKeywords     uint32                 `protobuf:"varint,8,opt,name=maximum_keywords,json=maximumKeywords,proto3" json:"maximum_keywords,omitempty"`
+	MaximumKeywordBytes uint32                 `protobuf:"varint,9,opt,name=maximum_keyword_bytes,json=maximumKeywordBytes,proto3" json:"maximum_keyword_bytes,omitempty"`
+	MinimumTemperature  float64                `protobuf:"fixed64,10,opt,name=minimum_temperature,json=minimumTemperature,proto3" json:"minimum_temperature,omitempty"`
+	MaximumTemperature  float64                `protobuf:"fixed64,11,opt,name=maximum_temperature,json=maximumTemperature,proto3" json:"maximum_temperature,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *TranscriptionModelProfile) Reset() {
+	*x = TranscriptionModelProfile{}
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptionModelProfile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptionModelProfile) ProtoMessage() {}
+
+func (x *TranscriptionModelProfile) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptionModelProfile.ProtoReflect.Descriptor instead.
+func (*TranscriptionModelProfile) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TranscriptionModelProfile) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *TranscriptionModelProfile) GetLegacy() bool {
+	if x != nil {
+		return x.Legacy
+	}
+	return false
+}
+
+func (x *TranscriptionModelProfile) GetParameterNames() []string {
+	if x != nil {
+		return x.ParameterNames
+	}
+	return nil
+}
+
+func (x *TranscriptionModelProfile) GetChunkingStrategies() []string {
+	if x != nil {
+		return x.ChunkingStrategies
+	}
+	return nil
+}
+
+func (x *TranscriptionModelProfile) GetFileStreamSupported() bool {
+	if x != nil {
+		return x.FileStreamSupported
+	}
+	return false
+}
+
+func (x *TranscriptionModelProfile) GetStreamEnabled() bool {
+	if x != nil {
+		return x.StreamEnabled
+	}
+	return false
+}
+
+func (x *TranscriptionModelProfile) GetMaximumPromptBytes() uint32 {
+	if x != nil {
+		return x.MaximumPromptBytes
+	}
+	return 0
+}
+
+func (x *TranscriptionModelProfile) GetMaximumKeywords() uint32 {
+	if x != nil {
+		return x.MaximumKeywords
+	}
+	return 0
+}
+
+func (x *TranscriptionModelProfile) GetMaximumKeywordBytes() uint32 {
+	if x != nil {
+		return x.MaximumKeywordBytes
+	}
+	return 0
+}
+
+func (x *TranscriptionModelProfile) GetMinimumTemperature() float64 {
+	if x != nil {
+		return x.MinimumTemperature
+	}
+	return 0
+}
+
+func (x *TranscriptionModelProfile) GetMaximumTemperature() float64 {
+	if x != nil {
+		return x.MaximumTemperature
+	}
+	return 0
+}
+
 // DelegatedAuthorityLocator — единый locator/echo для обоих projection RPC.
 // Все поля должны быть сопоставлены с проверенным metadata proof; сами поля не
 // дают полномочий и не заменяют проверку владельцем projection.
@@ -756,7 +1066,7 @@ type DelegatedAuthorityLocator struct {
 
 func (x *DelegatedAuthorityLocator) Reset() {
 	*x = DelegatedAuthorityLocator{}
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -768,7 +1078,7 @@ func (x *DelegatedAuthorityLocator) String() string {
 func (*DelegatedAuthorityLocator) ProtoMessage() {}
 
 func (x *DelegatedAuthorityLocator) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -781,7 +1091,7 @@ func (x *DelegatedAuthorityLocator) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DelegatedAuthorityLocator.ProtoReflect.Descriptor instead.
 func (*DelegatedAuthorityLocator) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DelegatedAuthorityLocator) GetRequestId() string {
@@ -875,7 +1185,7 @@ type AuthorityIdentityProvenance struct {
 
 func (x *AuthorityIdentityProvenance) Reset() {
 	*x = AuthorityIdentityProvenance{}
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -887,7 +1197,7 @@ func (x *AuthorityIdentityProvenance) String() string {
 func (*AuthorityIdentityProvenance) ProtoMessage() {}
 
 func (x *AuthorityIdentityProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -900,7 +1210,7 @@ func (x *AuthorityIdentityProvenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorityIdentityProvenance.ProtoReflect.Descriptor instead.
 func (*AuthorityIdentityProvenance) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AuthorityIdentityProvenance) GetSource() int32 {
@@ -940,7 +1250,7 @@ type ResolveTranscriptionPolicyRequest struct {
 
 func (x *ResolveTranscriptionPolicyRequest) Reset() {
 	*x = ResolveTranscriptionPolicyRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -952,7 +1262,7 @@ func (x *ResolveTranscriptionPolicyRequest) String() string {
 func (*ResolveTranscriptionPolicyRequest) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -965,7 +1275,7 @@ func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveTranscriptionPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResolveTranscriptionPolicyRequest) GetAuthority() *DelegatedAuthorityLocator {
@@ -988,13 +1298,14 @@ type ResolveTranscriptionPolicyResponse struct {
 	ProviderCredentialGeneration     uint64                     `protobuf:"varint,9,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
 	ExpiresAt                        *timestamppb.Timestamp     `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	Authority                        *DelegatedAuthorityLocator `protobuf:"bytes,11,opt,name=authority,proto3" json:"authority,omitempty"`
+	Parameters                       *TranscriptionParameters   `protobuf:"bytes,12,opt,name=parameters,proto3" json:"parameters,omitempty"`
 	unknownFields                    protoimpl.UnknownFields
 	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *ResolveTranscriptionPolicyResponse) Reset() {
 	*x = ResolveTranscriptionPolicyResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[12]
+	mi := &file_stt_v1_stt_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1317,7 @@ func (x *ResolveTranscriptionPolicyResponse) String() string {
 func (*ResolveTranscriptionPolicyResponse) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[12]
+	mi := &file_stt_v1_stt_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1330,7 @@ func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveTranscriptionPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{12}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResolveTranscriptionPolicyResponse) GetConfigRevision() uint64 {
@@ -1099,6 +1410,13 @@ func (x *ResolveTranscriptionPolicyResponse) GetAuthority() *DelegatedAuthorityL
 	return nil
 }
 
+func (x *ResolveTranscriptionPolicyResponse) GetParameters() *TranscriptionParameters {
+	if x != nil {
+		return x.Parameters
+	}
+	return nil
+}
+
 type ProjectTranscriptionCredentialRequest struct {
 	state                        protoimpl.MessageState     `protogen:"open.v1"`
 	Authority                    *DelegatedAuthorityLocator `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
@@ -1112,7 +1430,7 @@ type ProjectTranscriptionCredentialRequest struct {
 
 func (x *ProjectTranscriptionCredentialRequest) Reset() {
 	*x = ProjectTranscriptionCredentialRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[13]
+	mi := &file_stt_v1_stt_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1124,7 +1442,7 @@ func (x *ProjectTranscriptionCredentialRequest) String() string {
 func (*ProjectTranscriptionCredentialRequest) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[13]
+	mi := &file_stt_v1_stt_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1137,7 +1455,7 @@ func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProjectTranscriptionCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{13}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ProjectTranscriptionCredentialRequest) GetAuthority() *DelegatedAuthorityLocator {
@@ -1190,7 +1508,7 @@ type ProjectTranscriptionCredentialResponse struct {
 
 func (x *ProjectTranscriptionCredentialResponse) Reset() {
 	*x = ProjectTranscriptionCredentialResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[14]
+	mi := &file_stt_v1_stt_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1202,7 +1520,7 @@ func (x *ProjectTranscriptionCredentialResponse) String() string {
 func (*ProjectTranscriptionCredentialResponse) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[14]
+	mi := &file_stt_v1_stt_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1215,7 +1533,7 @@ func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProjectTranscriptionCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{14}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ProjectTranscriptionCredentialResponse) GetApiKey() []byte {
@@ -1312,12 +1630,42 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\x15CheckReadinessRequest\".\n" +
 	"\x16CheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\"\x1b\n" +
-	"\x19CheckProtectedPathRequest\"\xa1\x01\n" +
+	"\x19CheckProtectedPathRequest\"\xde\x01\n" +
 	"\x1aCheckProtectedPathResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x120\n" +
 	"\x05stage\x18\x02 \x01(\x0e2\x1a.stt.v1.ProtectedPathStageR\x05stage\x12;\n" +
 	"\vvalid_until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"validUntil\"\x8e\x04\n" +
+	"validUntil\x12;\n" +
+	"\acatalog\x18\x04 \x01(\v2!.stt.v1.TranscriptionModelCatalogR\acatalog\"\xd2\x01\n" +
+	"\x17TranscriptionParameters\x12\x1c\n" +
+	"\tlanguages\x18\x01 \x03(\tR\tlanguages\x12\x1a\n" +
+	"\bkeywords\x18\x02 \x03(\tR\bkeywords\x12\x16\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12 \n" +
+	"\vtemperature\x18\x04 \x01(\x01R\vtemperature\x12+\n" +
+	"\x11chunking_strategy\x18\x05 \x01(\tR\x10chunkingStrategy\x12\x16\n" +
+	"\x06stream\x18\x06 \x01(\bR\x06stream\"\xb0\x03\n" +
+	"\x19TranscriptionModelCatalog\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12;\n" +
+	"\vobserved_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x129\n" +
+	"\x06models\x18\x03 \x03(\v2!.stt.v1.TranscriptionModelProfileR\x06models\x12+\n" +
+	"\x11recommended_model\x18\x04 \x01(\tR\x10recommendedModel\x12E\n" +
+	"\x1frecommended_maximum_audio_bytes\x18\x05 \x01(\x04R\x1crecommendedMaximumAudioBytes\x12d\n" +
+	"/recommended_maximum_audio_duration_milliseconds\x18\x06 \x01(\x04R+recommendedMaximumAudioDurationMilliseconds\x12'\n" +
+	"\x0fresponse_format\x18\a \x01(\tR\x0eresponseFormat\"\xf1\x03\n" +
+	"\x19TranscriptionModelProfile\x12\x14\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x12\x16\n" +
+	"\x06legacy\x18\x02 \x01(\bR\x06legacy\x12'\n" +
+	"\x0fparameter_names\x18\x03 \x03(\tR\x0eparameterNames\x12/\n" +
+	"\x13chunking_strategies\x18\x04 \x03(\tR\x12chunkingStrategies\x122\n" +
+	"\x15file_stream_supported\x18\x05 \x01(\bR\x13fileStreamSupported\x12%\n" +
+	"\x0estream_enabled\x18\x06 \x01(\bR\rstreamEnabled\x120\n" +
+	"\x14maximum_prompt_bytes\x18\a \x01(\rR\x12maximumPromptBytes\x12)\n" +
+	"\x10maximum_keywords\x18\b \x01(\rR\x0fmaximumKeywords\x122\n" +
+	"\x15maximum_keyword_bytes\x18\t \x01(\rR\x13maximumKeywordBytes\x12/\n" +
+	"\x13minimum_temperature\x18\n" +
+	" \x01(\x01R\x12minimumTemperature\x12/\n" +
+	"\x13maximum_temperature\x18\v \x01(\x01R\x12maximumTemperature\"\x8e\x04\n" +
 	"\x19DelegatedAuthorityLocator\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
@@ -1340,7 +1688,7 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\brevision\x18\x03 \x01(\x04R\brevision\x12#\n" +
 	"\rdigest_sha256\x18\x04 \x01(\tR\fdigestSha256\"d\n" +
 	"!ResolveTranscriptionPolicyRequest\x12?\n" +
-	"\tauthority\x18\x01 \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\"\xe8\x04\n" +
+	"\tauthority\x18\x01 \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\"\xa9\x05\n" +
 	"\"ResolveTranscriptionPolicyResponse\x12'\n" +
 	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x120\n" +
 	"\x14config_digest_sha256\x18\x02 \x01(\tR\x12configDigestSha256\x12\x14\n" +
@@ -1354,7 +1702,10 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12?\n" +
-	"\tauthority\x18\v \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\"\xbb\x02\n" +
+	"\tauthority\x18\v \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\x12?\n" +
+	"\n" +
+	"parameters\x18\f \x01(\v2\x1f.stt.v1.TranscriptionParametersR\n" +
+	"parameters\"\xbb\x02\n" +
 	"%ProjectTranscriptionCredentialRequest\x12?\n" +
 	"\tauthority\x18\x01 \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\x120\n" +
 	"\x14provider_account_ref\x18\x02 \x01(\tR\x12providerAccountRef\x12D\n" +
@@ -1404,7 +1755,7 @@ func file_stt_v1_stt_proto_rawDescGZIP() []byte {
 }
 
 var file_stt_v1_stt_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_stt_v1_stt_proto_goTypes = []any{
 	(TranscriptionStage)(0),                        // 0: stt.v1.TranscriptionStage
 	(ProtectedPathStage)(0),                        // 1: stt.v1.ProtectedPathStage
@@ -1417,13 +1768,16 @@ var file_stt_v1_stt_proto_goTypes = []any{
 	(*CheckReadinessResponse)(nil),                 // 8: stt.v1.CheckReadinessResponse
 	(*CheckProtectedPathRequest)(nil),              // 9: stt.v1.CheckProtectedPathRequest
 	(*CheckProtectedPathResponse)(nil),             // 10: stt.v1.CheckProtectedPathResponse
-	(*DelegatedAuthorityLocator)(nil),              // 11: stt.v1.DelegatedAuthorityLocator
-	(*AuthorityIdentityProvenance)(nil),            // 12: stt.v1.AuthorityIdentityProvenance
-	(*ResolveTranscriptionPolicyRequest)(nil),      // 13: stt.v1.ResolveTranscriptionPolicyRequest
-	(*ResolveTranscriptionPolicyResponse)(nil),     // 14: stt.v1.ResolveTranscriptionPolicyResponse
-	(*ProjectTranscriptionCredentialRequest)(nil),  // 15: stt.v1.ProjectTranscriptionCredentialRequest
-	(*ProjectTranscriptionCredentialResponse)(nil), // 16: stt.v1.ProjectTranscriptionCredentialResponse
-	(*timestamppb.Timestamp)(nil),                  // 17: google.protobuf.Timestamp
+	(*TranscriptionParameters)(nil),                // 11: stt.v1.TranscriptionParameters
+	(*TranscriptionModelCatalog)(nil),              // 12: stt.v1.TranscriptionModelCatalog
+	(*TranscriptionModelProfile)(nil),              // 13: stt.v1.TranscriptionModelProfile
+	(*DelegatedAuthorityLocator)(nil),              // 14: stt.v1.DelegatedAuthorityLocator
+	(*AuthorityIdentityProvenance)(nil),            // 15: stt.v1.AuthorityIdentityProvenance
+	(*ResolveTranscriptionPolicyRequest)(nil),      // 16: stt.v1.ResolveTranscriptionPolicyRequest
+	(*ResolveTranscriptionPolicyResponse)(nil),     // 17: stt.v1.ResolveTranscriptionPolicyResponse
+	(*ProjectTranscriptionCredentialRequest)(nil),  // 18: stt.v1.ProjectTranscriptionCredentialRequest
+	(*ProjectTranscriptionCredentialResponse)(nil), // 19: stt.v1.ProjectTranscriptionCredentialResponse
+	(*timestamppb.Timestamp)(nil),                  // 20: google.protobuf.Timestamp
 }
 var file_stt_v1_stt_proto_depIdxs = []int32{
 	3,  // 0: stt.v1.TranscribeRequest.metadata:type_name -> stt.v1.TranscribeMetadata
@@ -1433,32 +1787,36 @@ var file_stt_v1_stt_proto_depIdxs = []int32{
 	10, // 4: stt.v1.TranscribeResponse.availability:type_name -> stt.v1.CheckProtectedPathResponse
 	0,  // 5: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
 	1,  // 6: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
-	17, // 7: stt.v1.CheckProtectedPathResponse.valid_until:type_name -> google.protobuf.Timestamp
-	12, // 8: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
-	12, // 9: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
-	12, // 10: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
-	17, // 11: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 12: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	17, // 13: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 14: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	11, // 15: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	17, // 16: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 17: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	2,  // 18: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
-	7,  // 19: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
-	9,  // 20: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
-	13, // 21: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
-	15, // 22: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
-	5,  // 23: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
-	8,  // 24: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
-	10, // 25: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
-	14, // 26: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
-	16, // 27: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
-	23, // [23:28] is the sub-list for method output_type
-	18, // [18:23] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	20, // 7: stt.v1.CheckProtectedPathResponse.valid_until:type_name -> google.protobuf.Timestamp
+	12, // 8: stt.v1.CheckProtectedPathResponse.catalog:type_name -> stt.v1.TranscriptionModelCatalog
+	20, // 9: stt.v1.TranscriptionModelCatalog.observed_at:type_name -> google.protobuf.Timestamp
+	13, // 10: stt.v1.TranscriptionModelCatalog.models:type_name -> stt.v1.TranscriptionModelProfile
+	15, // 11: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
+	15, // 12: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
+	15, // 13: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
+	20, // 14: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
+	14, // 15: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	20, // 16: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
+	14, // 17: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	11, // 18: stt.v1.ResolveTranscriptionPolicyResponse.parameters:type_name -> stt.v1.TranscriptionParameters
+	14, // 19: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	20, // 20: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
+	14, // 21: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	2,  // 22: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
+	7,  // 23: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
+	9,  // 24: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
+	16, // 25: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
+	18, // 26: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
+	5,  // 27: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
+	8,  // 28: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
+	10, // 29: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
+	17, // 30: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
+	19, // 31: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
+	27, // [27:32] is the sub-list for method output_type
+	22, // [22:27] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_stt_v1_stt_proto_init() }
@@ -1478,7 +1836,7 @@ func file_stt_v1_stt_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stt_v1_stt_proto_rawDesc), len(file_stt_v1_stt_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   15,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

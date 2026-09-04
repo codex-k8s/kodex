@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 type Project struct {
@@ -259,12 +260,15 @@ type ManagedConfigurationBindingSnapshot struct {
 }
 
 type SystemSTTConfiguration struct {
-	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef string
-	Model, Language, PermissionKey                            string
-	Revision                                                  int64
-	ProviderCredentialGeneration                              uint64
-	Ready                                                     bool
-	ReadinessBlockers                                         []string
+	Parameters                                                                       value.STTParameters
+	Enabled                                                                          bool
+	MaximumAudioBytes, MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds uint64
+	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef                        string
+	Model, Language, PermissionKey                                                   string
+	Revision                                                                         int64
+	ProviderCredentialGeneration                                                     uint64
+	Ready                                                                            bool
+	ReadinessBlockers                                                                []string
 }
 
 type SpeechTranscriptionAvailability struct {

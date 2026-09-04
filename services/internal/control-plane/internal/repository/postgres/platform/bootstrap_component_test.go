@@ -518,7 +518,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	`, ownerScope.organizationID).Scan(&sttProviderAccountRef); err != nil {
 		t.Fatalf("select eligible system STT provider account: %v", err)
 	}
-	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"enabled":true,"providerAccountRef":%q,"model":"gpt-transcribe","language":"ru","permissionKey":"platform.stt.use"}}`, sttProviderAccountRef)
+	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"enabled":true,"providerAccountRef":%q,"model":"gpt-transcribe","language":"ru","permissionKey":"platform.stt.use","parameters":{"keywords":["Kodex"],"prompt":"Names","temperature":0.2,"chunkingStrategy":"auto"}}}`, sttProviderAccountRef)
 	sttCreated, err := service.Execute(ctx, command.Command{Kind: command.CreateSystemSTTDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-system-stt-create"},
 		Payload:  command.ManagedConfigurationInput{Name: "System STT", ContentFormat: "JSON", Content: sttContent}})
@@ -565,6 +565,11 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if err != nil || !sttConfiguration.Ready || sttConfiguration.RevisionRef != sttCreated.ManagedRevision.Ref ||
 		sttConfiguration.ProviderAccountRef != sttProviderAccountRef || sttConfiguration.ProviderCredentialGeneration == 0 {
 		t.Fatalf("read system STT configuration: configuration=%#v err=%v", sttConfiguration, err)
+	}
+	if !sttConfiguration.Enabled || sttConfiguration.MaximumAudioBytes != 10<<20 || sttConfiguration.MaximumAudioDurationMilliseconds != 120000 ||
+		len(sttConfiguration.Parameters.Keywords) != 1 || sttConfiguration.Parameters.Keywords[0] != "Kodex" || sttConfiguration.Parameters.Prompt != "Names" ||
+		sttConfiguration.Parameters.Temperature != 0.2 || sttConfiguration.Parameters.ChunkingStrategy != "auto" {
+		t.Fatal("immutable STT parameters or recommended limits were lost")
 	}
 	var sttProjectID string
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM control_plane.projects WHERE ref = $1`, projectResult.Project.Ref).Scan(&sttProjectID); err != nil {

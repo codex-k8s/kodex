@@ -7,7 +7,7 @@ SELECT account.ref,
        credential.secret_resource_version,
        credential.content_sha256,
        revision.content::jsonb -> 'stt' ->> 'model',
-       revision.content::jsonb -> 'stt' ->> 'language',
+       COALESCE(revision.content::jsonb -> 'stt' ->> 'language',''),
        definition.capabilities
 FROM control_plane.managed_configuration_bindings binding
 JOIN control_plane.managed_configuration_sets configuration

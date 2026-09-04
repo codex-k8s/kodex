@@ -100,6 +100,42 @@ message CheckProtectedPathResponse {
   ProtectedPathStage stage = 2;
   // Верхняя граница свежести: min(authority, config, credential, 30 секунд).
   google.protobuf.Timestamp valid_until = 3;
+  TranscriptionModelCatalog catalog = 4;
+}
+
+// Параметры принадлежат immutable CP revision, не пользовательскому upload.
+message TranscriptionParameters {
+  repeated string languages = 1;
+  repeated string keywords = 2;
+  string prompt = 3;
+  double temperature = 4;
+  string chunking_strategy = 5;
+  bool stream = 6;
+}
+
+message TranscriptionModelCatalog {
+  string version = 1;
+  google.protobuf.Timestamp observed_at = 2;
+  repeated TranscriptionModelProfile models = 3;
+  string recommended_model = 4;
+  uint64 recommended_maximum_audio_bytes = 5;
+  uint64 recommended_maximum_audio_duration_milliseconds = 6;
+  string response_format = 7;
+}
+
+// Совместимость адаптера, не доказательство доступа конкретного credential.
+message TranscriptionModelProfile {
+  string model = 1;
+  bool legacy = 2;
+  repeated string parameter_names = 3;
+  repeated string chunking_strategies = 4;
+  bool file_stream_supported = 5;
+  bool stream_enabled = 6;
+  uint32 maximum_prompt_bytes = 7;
+  uint32 maximum_keywords = 8;
+  uint32 maximum_keyword_bytes = 9;
+  double minimum_temperature = 10;
+  double maximum_temperature = 11;
 }
 
 enum ProtectedPathStage {
@@ -154,6 +190,7 @@ message ResolveTranscriptionPolicyResponse {
   uint64 provider_credential_generation = 9;
   google.protobuf.Timestamp expires_at = 10;
   DelegatedAuthorityLocator authority = 11;
+  TranscriptionParameters parameters = 12;
 }
 
 message ProjectTranscriptionCredentialRequest {
