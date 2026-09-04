@@ -113,7 +113,7 @@ func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	if err := client.Complete(context.Background(), input, payload); err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -198,7 +198,7 @@ func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	err = client.Complete(context.Background(), input, payload)
 	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
 		t.Fatalf("Complete() error = %v", err)
@@ -346,6 +346,25 @@ func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T
 		captured.PreviousContentSHA256 != payload.PreviousContentSHA256 ||
 		string(captured.Authentication) != string(payload.Authentication) {
 		t.Fatal("captured payload metadata does not match request")
+	}
+}
+
+func TestCompleteRejectsMismatchedAttemptBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { called = true }))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt + 1, Success: true, ResultSummary: "done"}
+	if err := client.Complete(context.Background(), input, payload); err == nil {
+		t.Fatal("completion with a foreign attempt was accepted")
+	}
+	if called {
+		t.Fatal("foreign attempt reached transport")
 	}
 }
 

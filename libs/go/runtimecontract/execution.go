@@ -539,6 +539,7 @@ func (usage TokenUsage) Validate() error {
 
 type RunnerCompletionRequest struct {
 	RuntimeRevisionDigest string           `json:"runtime_revision_digest"`
+	Attempt               int32            `json:"attempt"`
 	Success               bool             `json:"success"`
 	ResultSummary         string           `json:"result_summary"`
 	SafeErrorCode         string           `json:"safe_error_code,omitempty"`

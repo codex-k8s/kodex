@@ -71,6 +71,9 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate runtime completion: " + err.Error())
 	}
+	if payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
+		return errors.New("validate runtime completion: provenance does not match RuntimeRevision")
+	}
 	delivery, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryTimeout)
 	defer cancel()
 	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
