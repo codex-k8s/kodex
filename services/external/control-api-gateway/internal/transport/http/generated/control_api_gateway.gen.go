@@ -3813,6 +3813,60 @@ func (e SearchResultKind) Valid() bool {
 	}
 }
 
+// Defines values for SpeechTranscriptionAvailabilityReason.
+const (
+	SpeechTranscriptionAvailabilityReasonREADY                            SpeechTranscriptionAvailabilityReason = "READY"
+	SpeechTranscriptionAvailabilityReasonSTTCONFIGURATIONUNAVAILABLE      SpeechTranscriptionAvailabilityReason = "STT_CONFIGURATION_UNAVAILABLE"
+	SpeechTranscriptionAvailabilityReasonSTTCREDENTIALUNAVAILABLE         SpeechTranscriptionAvailabilityReason = "STT_CREDENTIAL_UNAVAILABLE"
+	SpeechTranscriptionAvailabilityReasonSTTDISABLED                      SpeechTranscriptionAvailabilityReason = "STT_DISABLED"
+	SpeechTranscriptionAvailabilityReasonSTTEGRESSUNAVAILABLE             SpeechTranscriptionAvailabilityReason = "STT_EGRESS_UNAVAILABLE"
+	SpeechTranscriptionAvailabilityReasonSTTMODELUNSUPPORTED              SpeechTranscriptionAvailabilityReason = "STT_MODEL_UNSUPPORTED"
+	SpeechTranscriptionAvailabilityReasonSTTNOTCONFIGURED                 SpeechTranscriptionAvailabilityReason = "STT_NOT_CONFIGURED"
+	SpeechTranscriptionAvailabilityReasonSTTPERMISSIONDENIED              SpeechTranscriptionAvailabilityReason = "STT_PERMISSION_DENIED"
+	SpeechTranscriptionAvailabilityReasonSTTPERMISSIONINVALID             SpeechTranscriptionAvailabilityReason = "STT_PERMISSION_INVALID"
+	SpeechTranscriptionAvailabilityReasonSTTPROVIDERACCOUNTINELIGIBLE     SpeechTranscriptionAvailabilityReason = "STT_PROVIDER_ACCOUNT_INELIGIBLE"
+	SpeechTranscriptionAvailabilityReasonSTTPROVIDERCREDENTIALUNSUPPORTED SpeechTranscriptionAvailabilityReason = "STT_PROVIDER_CREDENTIAL_UNSUPPORTED"
+	SpeechTranscriptionAvailabilityReasonSTTPROVIDERDISABLED              SpeechTranscriptionAvailabilityReason = "STT_PROVIDER_DISABLED"
+	SpeechTranscriptionAvailabilityReasonSTTPROVIDERUNAVAILABLE           SpeechTranscriptionAvailabilityReason = "STT_PROVIDER_UNAVAILABLE"
+	SpeechTranscriptionAvailabilityReasonSTTSERVICEUNAVAILABLE            SpeechTranscriptionAvailabilityReason = "STT_SERVICE_UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the SpeechTranscriptionAvailabilityReason enum.
+func (e SpeechTranscriptionAvailabilityReason) Valid() bool {
+	switch e {
+	case SpeechTranscriptionAvailabilityReasonREADY:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTCONFIGURATIONUNAVAILABLE:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTCREDENTIALUNAVAILABLE:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTDISABLED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTEGRESSUNAVAILABLE:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTMODELUNSUPPORTED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTNOTCONFIGURED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPERMISSIONDENIED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPERMISSIONINVALID:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPROVIDERACCOUNTINELIGIBLE:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPROVIDERCREDENTIALUNSUPPORTED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPROVIDERDISABLED:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTPROVIDERUNAVAILABLE:
+		return true
+	case SpeechTranscriptionAvailabilityReasonSTTSERVICEUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SpeechTranscriptionReceiptCompletedStage.
 const (
 	PROVIDERCOMPLETED SpeechTranscriptionReceiptCompletedStage = "PROVIDER_COMPLETED"
@@ -4538,25 +4592,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
-	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
-	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
-	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
+	CLEAN       ListArtifactsParamsScanState = "CLEAN"
+	FAILED      ListArtifactsParamsScanState = "FAILED"
+	PENDING     ListArtifactsParamsScanState = "PENDING"
+	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	SCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsScanStateCLEAN:
+	case CLEAN:
 		return true
-	case ListArtifactsParamsScanStateFAILED:
+	case FAILED:
 		return true
-	case ListArtifactsParamsScanStatePENDING:
+	case PENDING:
 		return true
-	case ListArtifactsParamsScanStateQUARANTINED:
+	case QUARANTINED:
 		return true
-	case ListArtifactsParamsScanStateSCANNING:
+	case SCANNING:
 		return true
 	default:
 		return false
@@ -5246,13 +5300,14 @@ type AuditEventOutcome string
 
 // BootstrapState defines model for BootstrapState.
 type BootstrapState struct {
-	Assistant          SystemAssistant            `json:"assistant"`
-	CurrentUser        UserSummary                `json:"currentUser"`
-	Initialized        bool                       `json:"initialized"`
-	NextActions        []NextAction               `json:"nextActions"`
-	OnboardingComplete bool                       `json:"onboardingComplete"`
-	PlatformRole       BootstrapStatePlatformRole `json:"platformRole"`
-	WebOnlyReady       bool                       `json:"webOnlyReady"`
+	Assistant           SystemAssistant                 `json:"assistant"`
+	CurrentUser         UserSummary                     `json:"currentUser"`
+	Initialized         bool                            `json:"initialized"`
+	NextActions         []NextAction                    `json:"nextActions"`
+	OnboardingComplete  bool                            `json:"onboardingComplete"`
+	PlatformRole        BootstrapStatePlatformRole      `json:"platformRole"`
+	SpeechTranscription SpeechTranscriptionAvailability `json:"speechTranscription"`
+	WebOnlyReady        bool                            `json:"webOnlyReady"`
 }
 
 // BootstrapStatePlatformRole defines model for BootstrapState.PlatformRole.
@@ -7059,6 +7114,16 @@ type SpeechTranscription struct {
 	Text    string                     `json:"text"`
 }
 
+// SpeechTranscriptionAvailability defines model for SpeechTranscriptionAvailability.
+type SpeechTranscriptionAvailability struct {
+	Available  bool                                  `json:"available"`
+	Reason     SpeechTranscriptionAvailabilityReason `json:"reason"`
+	ValidUntil *Timestamp                            `json:"validUntil,omitempty"`
+}
+
+// SpeechTranscriptionAvailabilityReason defines model for SpeechTranscriptionAvailability.Reason.
+type SpeechTranscriptionAvailabilityReason string
+
 // SpeechTranscriptionReceipt defines model for SpeechTranscriptionReceipt.
 type SpeechTranscriptionReceipt struct {
 	AuthoritySourceRevision int64                                    `json:"authoritySourceRevision"`
@@ -8579,6 +8644,19 @@ type AddSessionTurnParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// TranscribeOrganizationSpeechMultipartBody defines parameters for TranscribeOrganizationSpeech.
+type TranscribeOrganizationSpeechMultipartBody struct {
+	Audio openapi_types.File `json:"audio"`
+}
+
+// TranscribeOrganizationSpeechParams defines parameters for TranscribeOrganizationSpeech.
+type TranscribeOrganizationSpeechParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+
+	// XAudioSize Точный размер audio part; конфигурация STT может задавать меньший лимит.
+	XAudioSize int64 `json:"X-Audio-Size"`
+}
+
 // UpdateSystemAssistantOwnerInstructionsJSONBody defines parameters for UpdateSystemAssistantOwnerInstructions.
 type UpdateSystemAssistantOwnerInstructionsJSONBody struct {
 	OwnerInstructions string `json:"ownerInstructions"`
@@ -8890,6 +8968,9 @@ type CreateOwnerSessionJSONRequestBody = OwnerSessionCreateInput
 
 // AddSessionTurnJSONRequestBody defines body for AddSessionTurn for application/json ContentType.
 type AddSessionTurnJSONRequestBody = TurnInput
+
+// TranscribeOrganizationSpeechMultipartRequestBody defines body for TranscribeOrganizationSpeech for multipart/form-data ContentType.
+type TranscribeOrganizationSpeechMultipartRequestBody TranscribeOrganizationSpeechMultipartBody
 
 // UpdateSystemAssistantOwnerInstructionsJSONRequestBody defines body for UpdateSystemAssistantOwnerInstructions for application/json ContentType.
 type UpdateSystemAssistantOwnerInstructionsJSONRequestBody UpdateSystemAssistantOwnerInstructionsJSONBody
@@ -9445,6 +9526,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/sessions/{sessionRef}/turns)
 	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
+
+	// (POST /api/v1/speech/transcriptions)
+	TranscribeOrganizationSpeech(w http.ResponseWriter, r *http.Request, params TranscribeOrganizationSpeechParams)
 
 	// (GET /api/v1/system-assistant)
 	GetSystemAssistant(w http.ResponseWriter, r *http.Request)
@@ -24067,6 +24151,80 @@ func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// TranscribeOrganizationSpeech operation middleware
+func (siw *ServerInterfaceWrapper) TranscribeOrganizationSpeech(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TranscribeOrganizationSpeechParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-Audio-Size" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Audio-Size")]; found {
+		var XAudioSize int64
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Audio-Size", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Audio-Size", valueList[0], &XAudioSize, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: "int64"})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Audio-Size", Err: err})
+			return
+		}
+
+		params.XAudioSize = XAudioSize
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Audio-Size is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Audio-Size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TranscribeOrganizationSpeech(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSystemAssistant operation middleware
 func (siw *ServerInterfaceWrapper) GetSystemAssistant(w http.ResponseWriter, r *http.Request) {
 
@@ -25515,6 +25673,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/session", wrapper.RenewOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/speech/transcriptions", wrapper.TranscribeOrganizationSpeech)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-assistant/commands", wrapper.CommandSystemAssistant)

@@ -179,6 +179,43 @@ TestVFSRejectsMalformedPathAndUnknownProducerKind.
 
 ## Контракты и проверка
 
+### Доступность голосового ввода (#1045, #1020)
+
+Источник требования: `MVP-UI-55`..`MVP-UI-60`. Авторитетный actor и организация
+берутся из browser session/OIDC, а не из multipart или выбранного проекта.
+`POST /api/v1/speech/transcriptions` и совместимый проектный маршрут используют
+одну `platform.stt.transcribe` operation. Policy revision 45 выдаёт ей
+organization-scoped proof; проект не подставляется для обхода отсутствующей
+области. CSRF/Origin, organization+subject rate limit и concurrency admission
+выполняет общая browser boundary до handler.
+
+`GET /bootstrap` и результат onboarding содержат `speechTranscription`.
+Control-plane сначала вычисляет eligibility по правам и конфигурации. Только
+после положительного решения gateway вызывает `Transcribe.availability_check`
+под свежим user-bound authority: STT проверяет policy, credential и provider
+путь без audio и billable transcription. Локальная readiness не заменяет эту
+проверку. Ответ ограничен пятью секундами, не кэшируется между пользователями
+и даёт `available=true` только при `READY` и действующем `validUntil` не дальше
+30 секунд с допуском одной секунды на часы. PWA обновляет этот снимок до expiry;
+сама транскрипция всегда заново проверяет право и конфигурацию. Отказ STT не
+превращает bootstrap всего приложения в ошибку.
+
+Multipart принимает MP3/MPGA, WAV, FLAC, WebM, Ogg и MP4/M4A с закрытыми codec
+parameters. Content-Length и заявленный размер проверяются до RPC; chunks,
+digest и единственная part сверяются перед commit. Реальный контейнер и
+длительность проверяет STT decoder. Каждый выход из handler отменяет stream;
+автоматических повторов billable вызова нет. Audio/transcript не пишутся в
+логи или audit; gateway возвращает только текст и безопасный receipt, без
+actor/tenant/provider-account identifiers. Событий и устойчивой записи
+транскрипции нет, единственный результат возвращается в текущий запрос.
+
+Локальные тесты: `TestSpeechAvailabilityUsesProtectedStreamWithoutAudio`,
+`TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap`,
+`TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream`,
+`TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC`.
+Полный STT provider/deploy path завершается в #1020, #1029 и #1046, PWA в
+#1022; реальные русскоязычные provider и browser smoke до staging не выполнены.
+
 - OpenAPI: `contracts/openapi/control-api-gateway/v1/openapi.yaml`;
 - WebSocket: `contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml`;
 - deploy: `deploy/k8s/base/control-api-gateway`.
@@ -187,6 +224,9 @@ TestVFSRejectsMalformedPathAndUnknownProducerKind.
 control/context cancellation и oidc-client-ts session/events. Через Context7
 `/oapi-codegen/oapi-codegen` проверена stdhttp generation: generated handler
 не заменяет валидацию ограничений query/request на границе.
+Дополнительно Context7 `/grpc/grpc-go`: `SendMsg` может возвращать EOF вместо
+server status, поэтому STT handler читает окончательный статус через
+`CloseAndRecv`; отмена контекста завершает незакрытый streaming RPC.
 
 ```bash
 cd services/external/control-api-gateway

@@ -929,10 +929,41 @@ paths:
               schema: { $ref: '#/components/schemas/ProviderAccount' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/speech/transcriptions:
+    post:
+      tags: [Speech]
+      operationId: transcribeOrganizationSpeech
+      description: Голосовой ввод с проверенными полномочиями пользователя в организации; выбор проекта не требуется.
+      parameters:
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - name: X-Audio-Size
+          in: header
+          required: true
+          description: Точный размер audio part; конфигурация STT может задавать меньший лимит.
+          schema: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
+      requestBody:
+        required: true
+        description: Одна audio part формата MP3, WAV, FLAC, WebM, Ogg или MP4/M4A; длительность проверяет STT при декодировании.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+      responses:
+        '200':
+          description: Текст и безопасный receipt завершённой транскрипции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SpeechTranscription' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/projects/{projectRef}/speech/transcriptions:
     post:
       tags: [Speech]
       operationId: transcribeSpeech
+      description: Совместимый маршрут голосового ввода; полномочия STT принадлежат организации, а не проекту в URL.
       parameters:
         - { $ref: '#/components/parameters/ProjectRef' }
         - { $ref: '#/components/parameters/CsrfToken' }
@@ -3540,7 +3571,7 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, platformRole, nextActions]
+      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, platformRole, nextActions, speechTranscription]
       properties:
         initialized: { type: boolean }
         onboardingComplete: { type: boolean }
@@ -3549,6 +3580,15 @@ components:
         currentUser: { $ref: '#/components/schemas/UserSummary' }
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        speechTranscription: { $ref: '#/components/schemas/SpeechTranscriptionAvailability' }
+    SpeechTranscriptionAvailability:
+      type: object
+      additionalProperties: false
+      required: [available, reason]
+      properties:
+        available: { type: boolean }
+        reason: { type: string, enum: [READY, STT_NOT_CONFIGURED, STT_DISABLED, STT_PERMISSION_DENIED, STT_PERMISSION_INVALID, STT_PROVIDER_ACCOUNT_INELIGIBLE, STT_PROVIDER_CREDENTIAL_UNSUPPORTED, STT_PROVIDER_DISABLED, STT_MODEL_UNSUPPORTED, STT_CONFIGURATION_UNAVAILABLE, STT_SERVICE_UNAVAILABLE, STT_CREDENTIAL_UNAVAILABLE, STT_EGRESS_UNAVAILABLE, STT_PROVIDER_UNAVAILABLE] }
+        validUntil: { $ref: '#/components/schemas/Timestamp' }
     ManagedConfigurationDraftInput:
       type: object
       additionalProperties: false

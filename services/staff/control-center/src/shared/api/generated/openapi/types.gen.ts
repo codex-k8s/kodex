@@ -289,6 +289,13 @@ export type BootstrapState = {
     currentUser: UserSummary;
     platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
     nextActions: Array<NextAction>;
+    speechTranscription: SpeechTranscriptionAvailability;
+};
+
+export type SpeechTranscriptionAvailability = {
+    available: boolean;
+    reason: 'READY' | 'STT_NOT_CONFIGURED' | 'STT_DISABLED' | 'STT_PERMISSION_DENIED' | 'STT_PERMISSION_INVALID' | 'STT_PROVIDER_ACCOUNT_INELIGIBLE' | 'STT_PROVIDER_CREDENTIAL_UNSUPPORTED' | 'STT_PROVIDER_DISABLED' | 'STT_MODEL_UNSUPPORTED' | 'STT_CONFIGURATION_UNAVAILABLE' | 'STT_SERVICE_UNAVAILABLE' | 'STT_CREDENTIAL_UNAVAILABLE' | 'STT_EGRESS_UNAVAILABLE' | 'STT_PROVIDER_UNAVAILABLE';
+    validUntil?: Timestamp;
 };
 
 export type ManagedConfigurationDraftInput = {
@@ -3919,6 +3926,43 @@ export type GetProviderAccountResponses = {
 };
 
 export type GetProviderAccountResponse = GetProviderAccountResponses[keyof GetProviderAccountResponses];
+
+export type TranscribeOrganizationSpeechData = {
+    /**
+     * Одна audio part формата MP3, WAV, FLAC, WebM, Ogg или MP4/M4A; длительность проверяет STT при декодировании.
+     */
+    body: {
+        audio: Blob | File;
+    };
+    headers: {
+        'X-CSRF-Token': string;
+        /**
+         * Точный размер audio part; конфигурация STT может задавать меньший лимит.
+         */
+        'X-Audio-Size': number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/speech/transcriptions';
+};
+
+export type TranscribeOrganizationSpeechErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type TranscribeOrganizationSpeechError = TranscribeOrganizationSpeechErrors[keyof TranscribeOrganizationSpeechErrors];
+
+export type TranscribeOrganizationSpeechResponses = {
+    /**
+     * Текст и безопасный receipt завершённой транскрипции
+     */
+    200: SpeechTranscription;
+};
+
+export type TranscribeOrganizationSpeechResponse = TranscribeOrganizationSpeechResponses[keyof TranscribeOrganizationSpeechResponses];
 
 export type TranscribeSpeechData = {
     /**
