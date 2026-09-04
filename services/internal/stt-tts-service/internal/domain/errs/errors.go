@@ -14,4 +14,6 @@ var (
 	ErrGrantRevoked          = errors.New("transcription grant is revoked or stale")
 	ErrProviderUnavailable   = errors.New("transcription provider is unavailable")
 	ErrProviderRejected      = errors.New("transcription provider rejected the request")
+	ErrDelegatedProofPending = errors.New("delegated authorization proof is not materialized")
+	ErrEgressUnavailable     = errors.New("provider egress is unavailable")
 )

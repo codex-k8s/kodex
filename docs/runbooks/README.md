@@ -25,8 +25,9 @@ updated: 2026-09-04
 - `artifact-retention.md` — 30-day trash retention и exact object version purge;
 - `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
 - `secret-broker.md` — Runtime Secret operations, recovery и exact cleanup;
-- `stt-tts-service.md` — STT authority/projection/OpenAI path без вывода
-  аудио, transcript или credential;
+- `stt-tts-service.md` — локальная STT readiness, отдельный protected-path
+  diagnostic и неактивный acceptance launcher без вывода аудио, transcript
+  или credential;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 
 Runbooks не разрешают merge, deployment, reset или доступ к live credentials.

@@ -21,6 +21,7 @@ const (
 	Endpoint             = "https://api.openai.com/v1/audio/transcriptions"
 	ProxyURL             = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
 	maximumResponseBytes = 1 << 20
+	multipartBoundary    = "kodex-stt-boundary-v1"
 )
 
 type doer interface {
@@ -38,11 +39,8 @@ func New() (*Client, error) {
 		return nil, errors.New("OpenAI egress proxy configuration is invalid")
 	}
 	client, err := NewWithHTTPClient(&http.Client{Transport: &http.Transport{
-		Proxy:           http.ProxyURL(proxy),
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13},
-	}, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return errors.New("OpenAI redirect is rejected")
-	}})
+		Proxy: http.ProxyURL(proxy), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13},
+	}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("OpenAI redirect is rejected") }})
 	if err != nil {
 		return nil, err
 	}
@@ -60,53 +58,55 @@ func NewWithHTTPClient(client doer) (*Client, error) {
 	return &Client{http: client, readiness: client}, nil
 }
 
-func (client *Client) Check(ctx context.Context) error {
-	if client == nil || client.http == nil || client.readiness == nil {
+// CheckLocal не обращается к сети и проверяет только локальную конфигурацию.
+func (client *Client) CheckLocal(ctx context.Context) error {
+	if ctx == nil || client == nil || client.http == nil || client.readiness == nil {
 		return errors.New("OpenAI provider adapter is not configured")
+	}
+	return nil
+}
+
+// CheckEgress — отдельный diagnostic readback, не Kubernetes readiness.
+func (client *Client) CheckEgress(ctx context.Context) error {
+	if err := client.CheckLocal(ctx); err != nil {
+		return err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, ProxyURL+"/readyz", nil)
 	if err != nil {
-		return errors.New("create STT egress readiness request")
+		return errors.New("create STT egress diagnostic request")
 	}
 	response, err := client.readiness.Do(request)
 	if err != nil {
-		return errors.New("STT egress gateway is unavailable")
+		return errs.ErrEgressUnavailable
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusNoContent {
-		return errors.New("STT egress gateway is not ready")
+		return errs.ErrEgressUnavailable
 	}
 	return nil
 }
 
 func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequest) (string, error) {
-	if request.Model != value.DefaultModel || request.Language != value.DefaultLanguage || len(request.APIKey) == 0 || len(request.Audio.Bytes) == 0 {
+	if ctx == nil || request.Model != value.DefaultModel || request.Language != value.DefaultLanguage || len(request.APIKey) == 0 ||
+		request.Audio.Reader == nil || request.Audio.SizeBytes <= 0 || request.Audio.SizeBytes > value.MaximumAbsoluteBytes {
 		return "", errs.ErrInvalidRequest
 	}
-	body := bytes.NewBuffer(make([]byte, 0, len(request.Audio.Bytes)+1024))
-	writer := multipart.NewWriter(body)
-	file, err := writer.CreateFormFile("file", filename(request.Audio.MediaType))
+	if _, err := request.Audio.Reader.Seek(0, io.SeekStart); err != nil {
+		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("seek OpenAI audio input"))
+	}
+	prefix, suffix, contentType, err := multipartEnvelope(request.Audio.FileName, request.Model, request.Language)
 	if err != nil {
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("create OpenAI multipart file"))
+		return "", errors.Join(errs.ErrProviderUnavailable, err)
 	}
-	if _, err := file.Write(request.Audio.Bytes); err != nil {
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("write OpenAI multipart file"))
-	}
-	if err := writer.WriteField("model", request.Model); err != nil {
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("write OpenAI model field"))
-	}
-	if err := writer.WriteField("language", request.Language); err != nil {
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("write OpenAI language field"))
-	}
-	if err := writer.Close(); err != nil {
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("close OpenAI multipart body"))
-	}
+	contentLength := int64(prefix.Len()+suffix.Len()) + request.Audio.SizeBytes
+	body := io.MultiReader(bytes.NewReader(prefix.Bytes()), io.LimitReader(request.Audio.Reader, request.Audio.SizeBytes), bytes.NewReader(suffix.Bytes()))
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, Endpoint, body)
 	if err != nil {
 		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("create OpenAI transcription request"))
 	}
+	httpRequest.ContentLength = contentLength
 	httpRequest.Header.Set("Authorization", "Bearer "+string(request.APIKey))
-	httpRequest.Header.Set("Content-Type", writer.FormDataContentType())
+	httpRequest.Header.Set("Content-Type", contentType)
 	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("User-Agent", "kodex-stt-tts-service")
 	response, err := client.http.Do(httpRequest)
@@ -114,7 +114,7 @@ func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequ
 		if ctx.Err() != nil {
 			return "", errors.Join(errs.ErrProviderUnavailable, ctx.Err())
 		}
-		return "", errors.Join(errs.ErrProviderUnavailable, errors.New("OpenAI transcription request failed"))
+		return "", errors.Join(errs.ErrEgressUnavailable, errors.New("OpenAI transcription request failed"))
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -147,15 +147,36 @@ func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequ
 	return strings.TrimSpace(result.Text), nil
 }
 
-func filename(mediaType string) string {
-	switch mediaType {
-	case "audio/mpeg":
-		return "audio.mp3"
-	case "audio/wav":
-		return "audio.wav"
-	case "audio/flac":
-		return "audio.flac"
-	default:
-		return "audio.bin"
+type switchingWriter struct {
+	current io.Writer
+}
+
+func (writer *switchingWriter) Write(input []byte) (int, error) {
+	return writer.current.Write(input)
+}
+
+func multipartEnvelope(fileName, model, language string) (*bytes.Buffer, *bytes.Buffer, string, error) {
+	if fileName == "" || strings.ContainsAny(fileName, "\r\n\"") {
+		return nil, nil, "", errors.New("OpenAI audio filename is invalid")
 	}
+	prefix, suffix := &bytes.Buffer{}, &bytes.Buffer{}
+	destination := &switchingWriter{current: prefix}
+	writer := multipart.NewWriter(destination)
+	if err := writer.SetBoundary(multipartBoundary); err != nil {
+		return nil, nil, "", errors.New("set OpenAI multipart boundary")
+	}
+	if _, err := writer.CreateFormFile("file", fileName); err != nil {
+		return nil, nil, "", errors.New("create OpenAI multipart file")
+	}
+	destination.current = suffix
+	if err := writer.WriteField("model", model); err != nil {
+		return nil, nil, "", errors.New("write OpenAI model field")
+	}
+	if err := writer.WriteField("language", language); err != nil {
+		return nil, nil, "", errors.New("write OpenAI language field")
+	}
+	if err := writer.Close(); err != nil {
+		return nil, nil, "", errors.New("close OpenAI multipart body")
+	}
+	return prefix, suffix, writer.FormDataContentType(), nil
 }

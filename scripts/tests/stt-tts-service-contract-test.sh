@@ -5,49 +5,71 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 temporary_root="$(mktemp -d)"
 trap 'rm -rf "$temporary_root"' EXIT
 
-for source in \
-  deploy/k8s/overlays/staging/stt-tts-service \
-  deploy/k8s/overlays/production/stt-tts-service \
-  deploy/k8s/profiles/web-only \
-  deploy/k8s/profiles/web-with-mattermost; do
-  kubectl kustomize "$repository_root/$source" >"$temporary_root/$(echo "$source" | tr / _).yaml"
-done
+kubectl kustomize "$repository_root/deploy/k8s/overlays/staging/stt-tts-service" >"$temporary_root/staging.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/overlays/production/stt-tts-service" >"$temporary_root/production.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/base/stt-tts-service-acceptance" >"$temporary_root/acceptance.yaml"
 
 for profile in web-only web-with-mattermost; do
-  render="$temporary_root/deploy_k8s_profiles_${profile}.yaml"
-  yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
-    (.spec.template.spec.serviceAccountName == "stt-tts-service" and
-    .spec.template.spec.automountServiceAccountToken == false)' "$render" >/dev/null
-  yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
-    .spec.template.spec.containers[] | select(.name == "stt-tts-service") |
-    (.securityContext.readOnlyRootFilesystem == true and
-    .securityContext.allowPrivilegeEscalation == false)' "$render" >/dev/null
+  render="$temporary_root/${profile}.yaml"
+  kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$render"
+  if rg -n 'stt-tts-service|stt-acceptance' "$render"; then
+    printf 'Incomplete STT unit entered active %s render\n' "$profile" >&2
+    exit 1
+  fi
 done
 
-yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "stt-tts-service-exact-runtime-paths") |
+if jq -e '.images[] | select(.component == "stt-tts-service")' "$repository_root/tools/release/images.json" >/dev/null; then
+  printf 'Incomplete STT image entered the active release set\n' >&2
+  exit 1
+fi
+
+yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
+  (.spec.template.spec.terminationGracePeriodSeconds == 35 and
+   .spec.template.spec.containers[] | select(.name == "stt-tts-service") |
+   .resources.limits.memory == "256Mi")' "$temporary_root/production.yaml" >/dev/null
+yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
+  .spec.template.spec.volumes[] | select(.name == "stt-spool") |
+  .emptyDir.sizeLimit == "64Mi"' "$temporary_root/production.yaml" >/dev/null
+yq -e 'select(.kind == "ConfigMap" and .metadata.name == "stt-tts-service-runtime") |
+  (.data.STT_REQUEST_TIMEOUT == "20s" and .data.STT_SHUTDOWN_TIMEOUT == "30s" and
+   .data.STT_SPOOL_DIRECTORY == "/var/run/kodex/stt-spool")' "$temporary_root/production.yaml" >/dev/null
+yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
+  (.spec.template.spec.containers[] | select(.name == "stt-tts-service") |
+   .readinessProbe.httpGet.path == "/readyz")' "$temporary_root/production.yaml" >/dev/null
+
+yq -e 'select(.kind == "Job" and .metadata.name == "stt-acceptance") |
+  (.spec.backoffLimit == 0 and .spec.activeDeadlineSeconds == 90 and
+   .spec.template.spec.restartPolicy == "Never" and
+   .spec.template.spec.containers[0].name == "acceptance" and
+   (.spec.template.spec.containers[0].command | contains(["/usr/local/bin/stt-acceptance"])))' \
+  "$temporary_root/acceptance.yaml" >/dev/null
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "stt-acceptance-exact-egress") |
   [.spec.egress[].to[]?.podSelector.matchLabels."app.kubernetes.io/name"] |
-  contains(["control-plane", "secret-broker", "egress-gateway"])' \
-  "$temporary_root/deploy_k8s_overlays_production_stt-tts-service.yaml" >/dev/null
+  contains(["egress-gateway"])' "$temporary_root/acceptance.yaml" >/dev/null
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-stt-acceptance-ingress") |
+  [.spec.ingress[].from[]?.podSelector.matchLabels."app.kubernetes.io/name"] |
+  contains(["stt-acceptance"])' "$temporary_root/acceptance.yaml" >/dev/null
+if yq -e '.. | select(tag == "!!str") | select(test("sk-[A-Za-z0-9]"))' "$temporary_root/acceptance.yaml" >/dev/null 2>&1; then
+  printf 'Credential value entered the acceptance manifest\n' >&2
+  exit 1
+fi
 
-production_profile="$temporary_root/deploy_k8s_profiles_web-only.yaml"
-for owner_policy in control-plane-exact-runtime-paths secret-broker-exact-runtime-paths egress-gateway-exact-runtime-paths; do
-  owner_policy="$owner_policy" yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == strenv(owner_policy)) |
-    [.spec.ingress[].from[]?.podSelector.matchLabels."app.kubernetes.io/name"] |
-    contains(["stt-tts-service"])' "$production_profile" >/dev/null
-done
-
-grep -Fq 'https://api.openai.com/v1/audio/transcriptions' \
-  "$repository_root/services/internal/stt-tts-service/internal/clients/openai/client.go"
-grep -Fq 'http://egress-gateway.kodex-system.svc.cluster.local:8080' \
-  "$repository_root/services/internal/stt-tts-service/internal/clients/openai/client.go"
-docker buildx build --check \
-  -f "$repository_root/services/internal/stt-tts-service/Dockerfile" \
-  "$repository_root" >/dev/null
+grep -Fq '56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e' \
+  "$repository_root/services/internal/stt-tts-service/internal/acceptance/acceptance.go"
+grep -Fq 'rpc Transcribe(stream TranscribeRequest)' "$repository_root/contracts/proto/stt/v1/stt.proto"
+grep -Fq 'delegated/continuation proof' "$repository_root/contracts/proto/stt/v1/stt.proto"
+if rg -n 'Transcription(Policy|Credential)ProjectionServiceCheckReadiness' "$repository_root/contracts/proto/stt/v1/stt.proto"; then
+  printf 'Projection readiness RPC unexpectedly entered the STT contract\n' >&2
+  exit 1
+fi
 if rg -n 'rpc .*TTS|rpc .*Synthesize|service TextToSpeech' "$repository_root/contracts/proto/stt"; then
   printf 'TTS method unexpectedly entered the public contract\n' >&2
   exit 1
 fi
 
+docker buildx build --check \
+  -f "$repository_root/services/internal/stt-tts-service/Dockerfile" \
+  "$repository_root" >/dev/null
 (cd "$repository_root/services/internal/stt-tts-service" &&
   env -u GOFLAGS GOENV=off GOWORK=off go test ./... >/dev/null)
 

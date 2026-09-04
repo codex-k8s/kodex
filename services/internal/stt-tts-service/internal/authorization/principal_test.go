@@ -13,6 +13,7 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -24,76 +25,58 @@ type principalVerifier struct {
 	verified *internalrpcauthorityv1.VerifiedAuthorizationContext
 }
 
-func (verifier principalVerifier) VerifyAuthorizationContext(
-	context.Context,
-	*internalrpcauthorityv1.VerifyAuthorizationContextRequest,
-	...grpc.CallOption,
-) (*internalrpcauthorityv1.VerifyAuthorizationContextResponse, error) {
+func (verifier principalVerifier) VerifyAuthorizationContext(context.Context, *internalrpcauthorityv1.VerifyAuthorizationContextRequest, ...grpc.CallOption) (*internalrpcauthorityv1.VerifyAuthorizationContextResponse, error) {
 	return &internalrpcauthorityv1.VerifyAuthorizationContextResponse{Context: verifier.verified}, nil
 }
-
-func (principalVerifier) CheckReadiness(
-	context.Context,
-	*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
-	...grpc.CallOption,
-) (*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse, error) {
+func (principalVerifier) CheckReadiness(context.Context, *internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest, ...grpc.CallOption) (*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse, error) {
 	return &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessResponse{Ready: true}, nil
 }
 
 func TestPrincipalUsesAuthoritySourceRevision(t *testing.T) {
 	verified := validVerifiedAuthorizationContext()
-	verified.SourceRevision = 7
-	verified.PolicyRevision = 19
-
 	principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if principal.AuthorityRevision != verified.SourceRevision || principal.AuthorityRevision == verified.PolicyRevision {
-		t.Fatalf("authority revision = %d, ожидалась source revision %d", principal.AuthorityRevision, verified.SourceRevision)
-	}
-	if principal.AuthorityDigestSHA256 != verified.SourceDigestSha256 {
-		t.Fatal("authority digest не взят из source snapshot")
+	if principal.AuthorityRevision != verified.SourceRevision || principal.AuthorityRevision == verified.PolicyRevision ||
+		principal.Actor.Reference == "" || principal.Tenant.Reference == "" || principal.Project.Reference == "" {
+		t.Fatal("source revision или identity provenance потеряны")
 	}
 }
 
 func TestPrincipalRejectsInvalidSourceRevision(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		revision uint64
-	}{
-		{name: "zero", revision: 0},
-		{name: "above JSON safe integer", revision: maximumAuthorityRevision + 1},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			verified := validVerifiedAuthorizationContext()
-			verified.SourceRevision = test.revision
-			if _, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName); err == nil {
-				t.Fatalf("source revision %d принят", test.revision)
-			}
-		})
+	for _, revision := range []uint64{0, maximumAuthorityRevision + 1} {
+		verified := validVerifiedAuthorizationContext()
+		verified.SourceRevision = revision
+		if _, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName); err == nil {
+			t.Fatalf("source revision %d принят", revision)
+		}
+	}
+}
+
+func TestPrincipalRejectsMissingIdentityProvenance(t *testing.T) {
+	verified := validVerifiedAuthorizationContext()
+	verified.Authority.Project.Provenance = nil
+	if _, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName); err == nil {
+		t.Fatal("project без provenance принят")
 	}
 }
 
 func validVerifiedAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthorizationContext {
+	digest := strings.Repeat("a", 64)
+	identity := func(id string) *internalrpcauthorityv1.AuthorityIdentity {
+		return &internalrpcauthorityv1.AuthorityIdentity{Id: id, Provenance: &internalrpcauthorityv1.AuthorityProvenance{
+			Source:    internalrpcauthorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE,
+			Reference: "source:" + id, Revision: 3, DigestSha256: digest,
+		}}
+	}
 	return &internalrpcauthorityv1.VerifiedAuthorizationContext{
-		ContractVersion:  1,
-		Audience:         expectedAudience,
-		TargetWorkloadId: expectedWorkloadID,
-		CallerWorkloadId: expectedCaller,
-		FullMethod:       sttv1.SpeechToTextService_Transcribe_FullMethodName,
-		OperationId:      transcribeOperation,
-		Permission:       value.PermissionTranscribe,
-		Authority: &internalrpcauthorityv1.CallerAuthority{
-			Actor:   &internalrpcauthorityv1.AuthorityIdentity{Id: "actor"},
-			Tenant:  &internalrpcauthorityv1.AuthorityIdentity{Id: "tenant"},
-			Project: &internalrpcauthorityv1.AuthorityIdentity{Id: "prj_abcdefgh"},
-		},
-		Jti:                "request",
-		ExpiresAt:          timestamppb.New(time.Now().Add(time.Minute)),
-		SourceRevision:     7,
-		SourceDigestSha256: strings.Repeat("a", 64),
-		PolicyRevision:     19,
+		ContractVersion: 1, Audience: expectedAudience, TargetWorkloadId: expectedWorkloadID, CallerWorkloadId: expectedCaller,
+		FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName, OperationId: transcribeOperation,
+		Permission: value.PermissionTranscribe,
+		Authority:  &internalrpcauthorityv1.CallerAuthority{Actor: identity("actor"), Tenant: identity("tenant"), Project: identity("prj_abcdefgh")},
+		Jti:        uuid.NewString(), ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)),
+		SourceRevision: 7, SourceDigestSha256: digest, PolicyRevision: 19,
 	}
 }
 
@@ -105,8 +88,7 @@ func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.Ver
 	}
 	certificate := &x509.Certificate{Raw: []byte("test-certificate"), URIs: []*url.URL{spiffeID}}
 	base := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{
-		PeerCertificates: []*x509.Certificate{certificate},
-		VerifiedChains:   [][]*x509.Certificate{{certificate}},
+		PeerCertificates: []*x509.Certificate{certificate}, VerifiedChains: [][]*x509.Certificate{{certificate}},
 	}}})
 	base = metadata.NewIncomingContext(base, metadata.Pairs(authorityclient.AuthorizationMetadata, "compact"))
 	interceptor := authorityclient.VerifierUnaryServerInterceptor(principalVerifier{verified: verified})

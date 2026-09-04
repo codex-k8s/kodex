@@ -75,8 +75,8 @@ spec:
           volumeMounts:
             - {name: workload-tls, mountPath: /var/run/secrets/kodex/stt-tts-service/workload-tls, readOnly: true}
             - {name: internal-ca, mountPath: /var/run/config/kodex/stt-tts-service/internal-ca, readOnly: true}
-            - {name: application-grant, mountPath: /var/run/secrets/kodex/stt-tts-service/application-grant, readOnly: true}
             - {name: authority-sockets, mountPath: /run/kodex, readOnly: true}
+            - {name: stt-spool, mountPath: /var/run/kodex/stt-spool}
             - {name: otel-ca, mountPath: /var/run/config/kodex/stt-tts-service/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/stt-tts-service/observability, readOnly: true}
       volumes:
@@ -84,10 +84,10 @@ spec:
           secret: {secretName: internal-rpc-authority-stt-tts-service-workload-tls, defaultMode: 0440}
         - name: internal-ca
           configMap: {name: kodex-internal-ca, defaultMode: 0440, items: [{key: ca.pem, path: ca.pem}]}
-        - name: application-grant
-          emptyDir: {sizeLimit: 1Mi}
         - name: authority-sockets
           emptyDir: {sizeLimit: 1Mi}
+        - name: stt-spool
+          emptyDir: {sizeLimit: 64Mi}
         - name: otel-ca
           configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn

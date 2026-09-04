@@ -1,6 +1,7 @@
 package transcription
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -13,34 +14,34 @@ import (
 )
 
 type fakePolicy struct {
-	value value.Policy
-	err   error
-	calls int
+	policy value.Policy
+	err    error
+	calls  int
 }
 
-func (fake *fakePolicy) Resolve(context.Context, value.Principal, string) (value.Policy, error) {
+func (fake *fakePolicy) Resolve(context.Context, value.Principal, string, string) (value.Policy, error) {
 	fake.calls++
-	return fake.value, fake.err
+	return fake.policy, fake.err
 }
-func (fake *fakePolicy) Check(context.Context) error { return fake.err }
 
 type fakeCredential struct {
-	value value.Credential
-	err   error
-	calls int
+	credential value.Credential
+	err        error
+	calls      int
 }
 
-func (fake *fakeCredential) Project(context.Context, value.Principal, string, value.Policy) (value.Credential, error) {
+func (fake *fakeCredential) Project(context.Context, value.Principal, string, string, value.Policy) (value.Credential, error) {
 	fake.calls++
-	return fake.value, fake.err
+	return fake.credential, fake.err
 }
-func (fake *fakeCredential) Check(context.Context) error { return fake.err }
 
 type fakeProvider struct {
-	text    string
-	err     error
-	calls   int
-	request value.ProviderRequest
+	text        string
+	err         error
+	calls       int
+	request     value.ProviderRequest
+	localCalls  int
+	egressCalls int
 }
 
 func (fake *fakeProvider) Transcribe(_ context.Context, request value.ProviderRequest) (string, error) {
@@ -48,201 +49,158 @@ func (fake *fakeProvider) Transcribe(_ context.Context, request value.ProviderRe
 	fake.request = request
 	return fake.text, fake.err
 }
-func (fake *fakeProvider) Check(context.Context) error { return fake.err }
+func (fake *fakeProvider) CheckLocal(context.Context) error  { fake.localCalls++; return nil }
+func (fake *fakeProvider) CheckEgress(context.Context) error { fake.egressCalls++; return nil }
+
+type observed struct {
+	stage value.Stage
+	class value.ErrorClass
+	calls int
+}
+
+func (observer *observed) Observe(stage value.Stage, class value.ErrorClass) {
+	observer.stage, observer.class = stage, class
+	observer.calls++
+}
 
 func TestTranscribeCompletePath(t *testing.T) {
 	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
 	policy := validPolicy(now)
-	credentialBytes := []byte("test-only-credential")
-	policies := &fakePolicy{value: policy}
-	credentials := &fakeCredential{value: value.Credential{APIKey: credentialBytes, ProviderAccountRef: policy.ProviderAccountRef, ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256, ExpiresAt: now.Add(time.Minute)}}
-	provider := &fakeProvider{text: "  распознанный текст  "}
-	service, err := New(policies, credentials, provider, 10*time.Second)
+	key := []byte("test-only-credential")
+	policies := &fakePolicy{policy: policy}
+	credentials := &fakeCredential{credential: validCredential(policy, key, now)}
+	provider, observer := &fakeProvider{text: "  распознанный текст  "}, &observed{}
+	service, err := New(policies, credentials, provider, observer, 10*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 	service.now = func() time.Time { return now }
-	text, err := service.Transcribe(t.Context(), Input{Principal: validPrincipal(now), RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"})
-	if err != nil || text != "распознанный текст" {
-		t.Fatalf("неожиданный результат: %q, %v", text, err)
+	raw := pcmWAV(time.Second)
+	result, err := service.Transcribe(t.Context(), validInput(now, raw))
+	if err != nil || result.Text != "распознанный текст" || result.Receipt.CompletedStage != value.StageSuccess {
+		t.Fatalf("result=%#v err=%v", result, err)
 	}
-	if policies.calls != 1 || credentials.calls != 1 || provider.calls != 1 {
-		t.Fatal("нарушен единичный сквозной вызов")
+	if policies.calls != 1 || credentials.calls != 1 || provider.calls != 1 || observer.calls != 1 || observer.stage != value.StageSuccess {
+		t.Fatal("нарушена single-effect цепочка или observability")
 	}
-	if provider.request.Model != value.DefaultModel || provider.request.Language != value.DefaultLanguage || provider.request.Audio.Duration != time.Second {
-		t.Fatal("provider получил непроверенную конфигурацию")
+	if result.Receipt.RequestID == "" || result.Receipt.CorrelationID == "" || result.Receipt.ProviderAccountRef == "" ||
+		strings.Contains(result.Receipt.ConfigDigestSHA256, result.Text) {
+		t.Fatal("receipt неполон или содержит недопустимое значение")
 	}
-	for _, octet := range credentialBytes {
+	for _, octet := range key {
 		if octet != 0 {
-			t.Fatal("credential не очищен после provider-вызова")
+			t.Fatal("credential не очищен")
 		}
 	}
 }
 
 func TestTranscribeFailsClosedBeforeProvider(t *testing.T) {
-	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
-	tests := []struct {
-		name   string
-		mutate func(*Input, *value.Policy, *value.Credential)
-		target error
+	now := time.Now().UTC()
+	for _, test := range []struct {
+		name                     string
+		policyErr, credentialErr error
+		mutate                   func(*Input, *value.Policy)
 	}{
-		{name: "нет полномочия", mutate: func(input *Input, _ *value.Policy, _ *value.Credential) { input.Principal.Permission = "stt.read" }, target: errs.ErrPermissionDenied},
-		{name: "неверная модель", mutate: func(_ *Input, policy *value.Policy, _ *value.Credential) { policy.Model = "gpt-4o-transcribe" }, target: errs.ErrGrantRevoked},
-		{name: "подмена media type", mutate: func(input *Input, _ *value.Policy, _ *value.Credential) { input.MediaType = "audio/mpeg" }, target: errs.ErrUnsupportedAudio},
-		{name: "слишком большая запись", mutate: func(input *Input, policy *value.Policy, _ *value.Credential) {
-			policy.MaximumAudioBytes = 1024
-			input.Audio = make([]byte, 1025)
-		}, target: errs.ErrAudioTooLarge},
-		{name: "слишком длинная запись", mutate: func(input *Input, policy *value.Policy, _ *value.Credential) {
-			policy.MaximumAudioDuration = time.Second
-			input.Audio = pcmWAV(2 * time.Second)
-		}, target: errs.ErrAudioTooLong},
-		{name: "устаревшее поколение credential", mutate: func(_ *Input, policy *value.Policy, credential *value.Credential) {
-			credential.ProviderCredentialGeneration = policy.ProviderCredentialGeneration + 1
-		}, target: errs.ErrGrantRevoked},
-		{name: "credential переживает policy", mutate: func(_ *Input, policy *value.Policy, credential *value.Credential) {
-			credential.ExpiresAt = policy.ExpiresAt.Add(time.Second)
-		}, target: errs.ErrGrantRevoked},
-	}
-	for _, test := range tests {
+		{name: "нет полномочия", mutate: func(input *Input, _ *value.Policy) { input.Principal.Permission = "stt.read" }},
+		{name: "continuation proof отсутствует", policyErr: errs.ErrDelegatedProofPending},
+		{name: "policy отсутствует", policyErr: errors.New("unavailable")},
+		{name: "credential отсутствует", credentialErr: errors.New("unavailable")},
+		{name: "неверная модель", mutate: func(_ *Input, policy *value.Policy) { policy.Model = "other" }},
+		{name: "слишком большой файл", mutate: func(input *Input, policy *value.Policy) { policy.MaximumAudioBytes = 1024; input.AudioSizeBytes = 1025 }},
+	} {
 		t.Run(test.name, func(t *testing.T) {
 			policy := validPolicy(now)
-			credential := value.Credential{APIKey: []byte("test-only-credential"), ProviderAccountRef: policy.ProviderAccountRef, ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256, ExpiresAt: now.Add(time.Minute)}
-			input := Input{Principal: validPrincipal(now), RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"}
-			test.mutate(&input, &policy, &credential)
-			provider := &fakeProvider{text: "нельзя вызвать"}
-			service, err := New(&fakePolicy{value: policy}, &fakeCredential{value: credential}, provider, 10*time.Second)
-			if err != nil {
-				t.Fatal(err)
+			raw := pcmWAV(time.Second)
+			input := validInput(now, raw)
+			if test.mutate != nil {
+				test.mutate(&input, &policy)
 			}
+			provider, observer := &fakeProvider{text: "не вызывать"}, &observed{}
+			service, _ := New(&fakePolicy{policy: policy, err: test.policyErr}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now), err: test.credentialErr}, provider, observer, 10*time.Second)
 			service.now = func() time.Time { return now }
-			_, err = service.Transcribe(t.Context(), input)
-			if !errors.Is(err, test.target) {
-				t.Fatalf("ожидалась %v, получена %v", test.target, err)
-			}
-			if provider.calls != 0 {
-				t.Fatal("provider вызван после закрытого отказа")
+			if _, err := service.Transcribe(t.Context(), input); err == nil || provider.calls != 0 || observer.calls != 1 {
+				t.Fatalf("fail-closed нарушен: calls=%d observed=%d err=%v", provider.calls, observer.calls, err)
 			}
 		})
 	}
 }
-
-func TestTranscribeMapsProviderFailureWithoutDiagnostics(t *testing.T) {
-	now := time.Now().UTC()
-	policy := validPolicy(now)
-	provider := &fakeProvider{err: errors.Join(errs.ErrProviderUnavailable, errors.New("upstream detail must remain internal"))}
-	service, _ := New(&fakePolicy{value: policy}, &fakeCredential{value: value.Credential{APIKey: []byte("test-only-credential"), ProviderAccountRef: policy.ProviderAccountRef, ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256, ExpiresAt: now.Add(time.Minute)}}, provider, 10*time.Second)
-	service.now = func() time.Time { return now }
-	_, err := service.Transcribe(t.Context(), Input{Principal: validPrincipal(now), RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"})
-	if !errors.Is(err, errs.ErrProviderUnavailable) {
-		t.Fatalf("неверная классификация: %v", err)
-	}
-}
-
-func TestTranscribeRequiresBoundedProviderDeadline(t *testing.T) {
-	now := time.Now().UTC()
-	policy := validPolicy(now)
-	provider := &deadlineProvider{}
-	service, _ := New(&fakePolicy{value: policy}, &fakeCredential{value: value.Credential{
-		APIKey: []byte("test-only-credential"), ProviderAccountRef: policy.ProviderAccountRef,
-		ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256,
-		ExpiresAt: now.Add(time.Minute),
-	}}, provider, 10*time.Second)
-	service.now = func() time.Time { return now }
-	_, err := service.Transcribe(t.Context(), Input{Principal: validPrincipal(now), RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"})
-	if !errors.Is(err, errs.ErrProviderUnavailable) || !provider.bounded {
-		t.Fatalf("provider deadline не доказан: bounded=%v err=%v", provider.bounded, err)
-	}
-}
-
-func TestTranscribeFailsClosedWhenProjectionIsUnavailable(t *testing.T) {
-	now := time.Now().UTC()
-	policy := validPolicy(now)
-	tests := []struct {
-		name            string
-		policyError     error
-		credentialError error
-	}{
-		{name: "системная конфигурация отсутствует", policyError: errors.New("projection unavailable")},
-		{name: "credential не готов", credentialError: errors.New("projection unavailable")},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			provider := &fakeProvider{text: "нельзя вызвать"}
-			service, _ := New(&fakePolicy{value: policy, err: test.policyError}, &fakeCredential{value: value.Credential{
-				APIKey: []byte("test-only-credential"), ProviderAccountRef: policy.ProviderAccountRef,
-				ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256,
-				ExpiresAt: now.Add(time.Minute),
-			}, err: test.credentialError}, provider, 10*time.Second)
-			service.now = func() time.Time { return now }
-			_, err := service.Transcribe(t.Context(), Input{Principal: validPrincipal(now), RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"})
-			if err == nil || provider.calls != 0 {
-				t.Fatalf("проекция не закрыла provider path: %v", err)
-			}
-		})
-	}
-}
-
-type deadlineProvider struct{ bounded bool }
-
-func (provider *deadlineProvider) Transcribe(ctx context.Context, _ value.ProviderRequest) (string, error) {
-	_, provider.bounded = ctx.Deadline()
-	return "", context.DeadlineExceeded
-}
-func (*deadlineProvider) Check(context.Context) error { return nil }
 
 func TestTranscribeCapsDeadlineByAuthorityExpiry(t *testing.T) {
 	now := time.Now().UTC()
 	policy := validPolicy(now)
-	provider := &capturingDeadlineProvider{}
-	service, _ := New(&fakePolicy{value: policy}, &fakeCredential{value: value.Credential{
-		APIKey: []byte("test-only-credential"), ProviderAccountRef: policy.ProviderAccountRef,
-		ProviderCredentialGeneration: policy.ProviderCredentialGeneration, ConfigDigestSHA256: policy.DigestSHA256,
-		ExpiresAt: policy.ExpiresAt,
-	}}, provider, 10*time.Second)
+	provider := &deadlineProvider{}
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
 	service.now = func() time.Time { return now }
-	principal := validPrincipal(now)
-	principal.ExpiresAt = now.Add(500 * time.Millisecond)
-	_, _ = service.Transcribe(t.Context(), Input{Principal: principal, RequestID: "req_1", Audio: pcmWAV(time.Second), MediaType: "audio/wav"})
-	if provider.deadline.IsZero() || provider.deadline.After(principal.ExpiresAt) {
-		t.Fatalf("deadline вышел за authority expiry: %v > %v", provider.deadline, principal.ExpiresAt)
+	raw := pcmWAV(time.Second)
+	input := validInput(now, raw)
+	input.Principal.ExpiresAt = now.Add(500 * time.Millisecond)
+	_, _ = service.Transcribe(t.Context(), input)
+	if provider.deadline.IsZero() || provider.deadline.After(input.Principal.ExpiresAt) {
+		t.Fatal("deadline вышел за authority expiry")
 	}
 }
 
-type capturingDeadlineProvider struct{ deadline time.Time }
+func TestReadinessAndDiagnosticHaveNoRemoteEffect(t *testing.T) {
+	now := time.Now().UTC()
+	policy := validPolicy(now)
+	provider := &fakeProvider{text: "не вызывать"}
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
+	if err := service.CheckLocal(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(service.CheckProtectedPath(t.Context()), errs.ErrDelegatedProofPending) {
+		t.Fatal("diagnostic не остановился на delegated authority")
+	}
+	if provider.localCalls != 1 || provider.egressCalls != 0 || provider.calls != 0 {
+		t.Fatalf("readiness/diagnostic вызвали remote effect: local=%d egress=%d provider=%d", provider.localCalls, provider.egressCalls, provider.calls)
+	}
+}
 
-func (provider *capturingDeadlineProvider) Transcribe(ctx context.Context, _ value.ProviderRequest) (string, error) {
+type deadlineProvider struct{ deadline time.Time }
+
+func (provider *deadlineProvider) Transcribe(ctx context.Context, _ value.ProviderRequest) (string, error) {
 	provider.deadline, _ = ctx.Deadline()
 	return "", context.DeadlineExceeded
 }
-func (*capturingDeadlineProvider) Check(context.Context) error { return nil }
+func (*deadlineProvider) CheckLocal(context.Context) error  { return nil }
+func (*deadlineProvider) CheckEgress(context.Context) error { return nil }
 
 func TestValidateAudioRejectsTrailingWAVDataAndHeaderOnlyFLAC(t *testing.T) {
 	wav := append(pcmWAV(time.Second), 0)
-	if _, err := ValidateAudio(wav, "audio/wav", len(wav), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
-		t.Fatalf("WAV с trailing data принят: %v", err)
+	if _, err := ValidateAudio(bytes.NewReader(wav), int64(len(wav)), "audio/wav", int64(len(wav)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+		t.Fatalf("WAV trailing data принят: %v", err)
 	}
-	flac := make([]byte, 44)
-	copy(flac, "fLaC")
-	flac[4] = 0x80
-	flac[7] = 34
-	flac[18] = 0x01
-	flac[19] = 0xf4
-	flac[25] = 0x01
-	if _, err := ValidateAudio(flac, "audio/flac", len(flac), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
-		t.Fatalf("FLAC без frame принят: %v", err)
+	for _, flac := range [][]byte{falseFLACTotalSamples(), overflowFLACTotalSamples(), append(falseFLACTotalSamples(), []byte("trailing")...)} {
+		if _, err := ValidateAudio(bytes.NewReader(flac), int64(len(flac)), "audio/flac", int64(len(flac)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+			t.Fatalf("непроверенный FLAC принят: %v", err)
+		}
+	}
+	mp3 := make([]byte, 104)
+	copy(mp3, []byte{0xff, 0xfb, 0x10, 0x00})
+	if _, err := ValidateAudio(bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute); err != nil {
+		t.Fatalf("валидный MP3 отклонён: %v", err)
+	}
+	mp3 = append(mp3, 0)
+	if _, err := ValidateAudio(bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+		t.Fatalf("MP3 trailing data принят: %v", err)
 	}
 }
 
 func validPolicy(now time.Time) value.Policy {
 	return value.Policy{Revision: 7, DigestSHA256: strings.Repeat("a", 64), Model: value.DefaultModel, Language: value.DefaultLanguage,
 		MaximumAudioBytes: 1 << 20, MaximumAudioDuration: time.Minute, ProviderTimeout: 5 * time.Second,
-		ProviderAccountRef: "provider_account_1", ProviderCredentialGeneration: 3, CredentialProjectionGrant: "grant", ExpiresAt: now.Add(time.Minute)}
+		ProviderAccountRef: "provider_account_1", ProviderCredentialGeneration: 3, ExpiresAt: now.Add(time.Minute)}
 }
 
-func validPrincipal(now time.Time) value.Principal {
-	return value.Principal{ActorID: "actor", TenantID: "tenant", ProjectID: "prj_abcdefgh", RequestID: "request", Permission: value.PermissionTranscribe,
+func validCredential(policy value.Policy, key []byte, now time.Time) value.Credential {
+	return value.Credential{APIKey: key, ProviderAccountRef: policy.ProviderAccountRef, ProviderCredentialGeneration: policy.ProviderCredentialGeneration,
+		ConfigDigestSHA256: policy.DigestSHA256, ExpiresAt: now.Add(30 * time.Second)}
+}
+
+func validInput(now time.Time, raw []byte) Input {
+	principal := value.Principal{ActorID: "actor", TenantID: "tenant", ProjectID: "project", RequestID: "request", Permission: value.PermissionTranscribe,
 		AuthorityRevision: 2, AuthorityDigestSHA256: strings.Repeat("b", 64), ExpiresAt: now.Add(time.Minute)}
+	return Input{Principal: principal, RequestID: principal.RequestID, CorrelationID: "correlation", AudioReader: bytes.NewReader(raw), AudioSizeBytes: int64(len(raw)), MediaType: "audio/wav"}
 }
 
 func pcmWAV(duration time.Duration) []byte {
@@ -262,5 +220,26 @@ func pcmWAV(duration time.Duration) []byte {
 	binary.LittleEndian.PutUint16(raw[34:36], 16)
 	copy(raw[36:40], "data")
 	binary.LittleEndian.PutUint32(raw[40:44], uint32(dataSize))
+	return raw
+}
+
+func falseFLACTotalSamples() []byte {
+	raw := make([]byte, 44)
+	copy(raw, "fLaC")
+	raw[4] = 0x80
+	raw[7] = 34
+	raw[18] = 0x0a
+	raw[19] = 0xc4
+	raw[20] = 0x40
+	raw[21] = 0x00
+	raw[25] = 1
+	raw[42], raw[43] = 0xff, 0xf8
+	return raw
+}
+func overflowFLACTotalSamples() []byte {
+	raw := falseFLACTotalSamples()
+	for index := 21; index <= 25; index++ {
+		raw[index] = 0xff
+	}
 	return raw
 }

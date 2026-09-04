@@ -24,9 +24,9 @@ func transportError(err error) error {
 		return statusError(codes.InvalidArgument, "transcription request is invalid", "INVALID_REQUEST")
 	case errors.Is(err, errs.ErrPermissionDenied):
 		return statusError(codes.PermissionDenied, "transcription is not permitted", "PERMISSION_DENIED")
-	case errors.Is(err, errs.ErrGrantRevoked), errors.Is(err, errs.ErrProviderRejected):
+	case errors.Is(err, errs.ErrGrantRevoked), errors.Is(err, errs.ErrProviderRejected), errors.Is(err, errs.ErrDelegatedProofPending):
 		return statusError(codes.FailedPrecondition, "transcription prerequisites changed", "STATE_CONFLICT")
-	case errors.Is(err, errs.ErrPolicyUnavailable), errors.Is(err, errs.ErrCredentialUnavailable), errors.Is(err, errs.ErrProviderUnavailable):
+	case errors.Is(err, errs.ErrPolicyUnavailable), errors.Is(err, errs.ErrCredentialUnavailable), errors.Is(err, errs.ErrProviderUnavailable), errors.Is(err, errs.ErrEgressUnavailable):
 		return statusError(codes.Unavailable, "transcription is temporarily unavailable", "UNAVAILABLE")
 	default:
 		return statusError(codes.Internal, "transcription failed", "INTERNAL")

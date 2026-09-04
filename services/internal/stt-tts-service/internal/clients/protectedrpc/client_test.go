@@ -1,15 +1,26 @@
 package protectedrpc
 
-import "testing"
+import (
+	"errors"
+	"testing"
 
-func TestWithProjectReferenceRequiresCanonicalLocator(t *testing.T) {
-	ctx, err := WithProjectReference(t.Context(), "prj_abcdefgh")
-	if err != nil || projectReference(ctx) != "prj_abcdefgh" {
-		t.Fatalf("canonical project locator отклонён: %v", err)
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+)
+
+func TestDelegatedProofFailsClosedBeforeRPC(t *testing.T) {
+	client := &Client{}
+	_, err := client.BindDelegated(t.Context(), value.Principal{}, "request", "correlation",
+		sttv1.TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_FullMethodName, "platform.stt.policy.resolve")
+	if !errors.Is(err, errs.ErrDelegatedProofPending) {
+		t.Fatalf("ожидался закрытый отказ continuation proof, получено %v", err)
 	}
-	for _, reference := range []string{"project", "prj_short", "prj_abcdef/", " prj_abcdefgh"} {
-		if _, err := WithProjectReference(t.Context(), reference); err == nil {
-			t.Fatalf("небезопасный project locator принят: %q", reference)
-		}
+}
+
+func TestDelegatedProofRejectsUnknownOperation(t *testing.T) {
+	client := &Client{}
+	if _, err := client.BindDelegated(t.Context(), value.Principal{}, "request", "correlation", "/unknown", "unknown"); err == nil {
+		t.Fatal("незарегистрированная операция принята")
 	}
 }

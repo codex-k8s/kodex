@@ -23,7 +23,7 @@ spec:
             summary: STT service returns unexpected gRPC failures
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/stt-tts-service.md
         - alert: STTProviderUnavailable
-          expr: sum(rate(kodex_stt_tts_service_grpc_requests_total{operation="transcribe",code="Unavailable"}[10m])) > 0.1
+          expr: sum(rate(kodex_stt_tts_service_transcription_stage_total{stage=~"egress|provider",error_class=~"unavailable|timeout"}[10m])) > 0.1
           for: 10m
           labels: {severity: warning}
           annotations:

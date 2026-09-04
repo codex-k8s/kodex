@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SpeechToTextService_Transcribe_FullMethodName     = "/stt.v1.SpeechToTextService/Transcribe"
-	SpeechToTextService_CheckReadiness_FullMethodName = "/stt.v1.SpeechToTextService/CheckReadiness"
+	SpeechToTextService_Transcribe_FullMethodName         = "/stt.v1.SpeechToTextService/Transcribe"
+	SpeechToTextService_CheckReadiness_FullMethodName     = "/stt.v1.SpeechToTextService/CheckReadiness"
+	SpeechToTextService_CheckProtectedPath_FullMethodName = "/stt.v1.SpeechToTextService/CheckProtectedPath"
 )
 
 // SpeechToTextServiceClient is the client API for SpeechToTextService service.
@@ -28,13 +29,17 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
-// в текущую версию публичного контракта.
+// в текущую версию контракта.
 type SpeechToTextServiceClient interface {
-	// Transcribe принимает ограниченный аудиофайл. Полномочия, tenant, project,
-	// конфигурация модели и credential выводятся только на стороне сервера.
-	Transcribe(ctx context.Context, in *TranscribeRequest, opts ...grpc.CallOption) (*TranscribeResponse, error)
-	// CheckReadiness проверяет локальный production path без provider effect.
+	// Transcribe принимает metadata первым сообщением, ограниченные chunks и
+	// commit последним сообщением. Полномочия и конфигурация задаются сервером.
+	Transcribe(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TranscribeRequest, TranscribeResponse], error)
+	// CheckReadiness проверяет только локальную способность принимать RPC,
+	// локальный verifier/config и локальные обязательные ресурсы.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
+	// CheckProtectedPath — диагностический readback полного защищённого пути.
+	// Он не является Kubernetes readiness и не выполняет provider effect.
+	CheckProtectedPath(ctx context.Context, in *CheckProtectedPathRequest, opts ...grpc.CallOption) (*CheckProtectedPathResponse, error)
 }
 
 type speechToTextServiceClient struct {
@@ -45,15 +50,18 @@ func NewSpeechToTextServiceClient(cc grpc.ClientConnInterface) SpeechToTextServi
 	return &speechToTextServiceClient{cc}
 }
 
-func (c *speechToTextServiceClient) Transcribe(ctx context.Context, in *TranscribeRequest, opts ...grpc.CallOption) (*TranscribeResponse, error) {
+func (c *speechToTextServiceClient) Transcribe(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TranscribeRequest, TranscribeResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TranscribeResponse)
-	err := c.cc.Invoke(ctx, SpeechToTextService_Transcribe_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &SpeechToTextService_ServiceDesc.Streams[0], SpeechToTextService_Transcribe_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[TranscribeRequest, TranscribeResponse]{ClientStream: stream}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SpeechToTextService_TranscribeClient = grpc.ClientStreamingClient[TranscribeRequest, TranscribeResponse]
 
 func (c *speechToTextServiceClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -65,18 +73,32 @@ func (c *speechToTextServiceClient) CheckReadiness(ctx context.Context, in *Chec
 	return out, nil
 }
 
+func (c *speechToTextServiceClient) CheckProtectedPath(ctx context.Context, in *CheckProtectedPathRequest, opts ...grpc.CallOption) (*CheckProtectedPathResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckProtectedPathResponse)
+	err := c.cc.Invoke(ctx, SpeechToTextService_CheckProtectedPath_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SpeechToTextServiceServer is the server API for SpeechToTextService service.
 // All implementations must embed UnimplementedSpeechToTextServiceServer
 // for forward compatibility.
 //
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
-// в текущую версию публичного контракта.
+// в текущую версию контракта.
 type SpeechToTextServiceServer interface {
-	// Transcribe принимает ограниченный аудиофайл. Полномочия, tenant, project,
-	// конфигурация модели и credential выводятся только на стороне сервера.
-	Transcribe(context.Context, *TranscribeRequest) (*TranscribeResponse, error)
-	// CheckReadiness проверяет локальный production path без provider effect.
+	// Transcribe принимает metadata первым сообщением, ограниченные chunks и
+	// commit последним сообщением. Полномочия и конфигурация задаются сервером.
+	Transcribe(grpc.ClientStreamingServer[TranscribeRequest, TranscribeResponse]) error
+	// CheckReadiness проверяет только локальную способность принимать RPC,
+	// локальный verifier/config и локальные обязательные ресурсы.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
+	// CheckProtectedPath — диагностический readback полного защищённого пути.
+	// Он не является Kubernetes readiness и не выполняет provider effect.
+	CheckProtectedPath(context.Context, *CheckProtectedPathRequest) (*CheckProtectedPathResponse, error)
 	mustEmbedUnimplementedSpeechToTextServiceServer()
 }
 
@@ -87,11 +109,14 @@ type SpeechToTextServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedSpeechToTextServiceServer struct{}
 
-func (UnimplementedSpeechToTextServiceServer) Transcribe(context.Context, *TranscribeRequest) (*TranscribeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Transcribe not implemented")
+func (UnimplementedSpeechToTextServiceServer) Transcribe(grpc.ClientStreamingServer[TranscribeRequest, TranscribeResponse]) error {
+	return status.Error(codes.Unimplemented, "method Transcribe not implemented")
 }
 func (UnimplementedSpeechToTextServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedSpeechToTextServiceServer) CheckProtectedPath(context.Context, *CheckProtectedPathRequest) (*CheckProtectedPathResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckProtectedPath not implemented")
 }
 func (UnimplementedSpeechToTextServiceServer) mustEmbedUnimplementedSpeechToTextServiceServer() {}
 func (UnimplementedSpeechToTextServiceServer) testEmbeddedByValue()                             {}
@@ -114,23 +139,12 @@ func RegisterSpeechToTextServiceServer(s grpc.ServiceRegistrar, srv SpeechToText
 	s.RegisterService(&SpeechToTextService_ServiceDesc, srv)
 }
 
-func _SpeechToTextService_Transcribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TranscribeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SpeechToTextServiceServer).Transcribe(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SpeechToTextService_Transcribe_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SpeechToTextServiceServer).Transcribe(ctx, req.(*TranscribeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func _SpeechToTextService_Transcribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(SpeechToTextServiceServer).Transcribe(&grpc.GenericServerStream[TranscribeRequest, TranscribeResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type SpeechToTextService_TranscribeServer = grpc.ClientStreamingServer[TranscribeRequest, TranscribeResponse]
 
 func _SpeechToTextService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckReadinessRequest)
@@ -150,6 +164,24 @@ func _SpeechToTextService_CheckReadiness_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SpeechToTextService_CheckProtectedPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckProtectedPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SpeechToTextServiceServer).CheckProtectedPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SpeechToTextService_CheckProtectedPath_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SpeechToTextServiceServer).CheckProtectedPath(ctx, req.(*CheckProtectedPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SpeechToTextService_ServiceDesc is the grpc.ServiceDesc for SpeechToTextService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -158,21 +190,26 @@ var SpeechToTextService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*SpeechToTextServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Transcribe",
-			Handler:    _SpeechToTextService_Transcribe_Handler,
-		},
-		{
 			MethodName: "CheckReadiness",
 			Handler:    _SpeechToTextService_CheckReadiness_Handler,
 		},
+		{
+			MethodName: "CheckProtectedPath",
+			Handler:    _SpeechToTextService_CheckProtectedPath_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Transcribe",
+			Handler:       _SpeechToTextService_Transcribe_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "stt/v1/stt.proto",
 }
 
 const (
 	TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_FullMethodName = "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"
-	TranscriptionPolicyProjectionService_CheckReadiness_FullMethodName             = "/stt.v1.TranscriptionPolicyProjectionService/CheckReadiness"
 )
 
 // TranscriptionPolicyProjectionServiceClient is the client API for TranscriptionPolicyProjectionService service.
@@ -180,11 +217,12 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // TranscriptionPolicyProjectionService — producer contract control-plane для
-// #1019. Project в request является только locator из уже проверенного
-// authorization context и повторно разрешается владельцем данных.
+// #1019. Payload служит только locator/echo. Вызов обязан нести server-owned
+// delegated/continuation proof, связанный с root actor/tenant/project, exact
+// caller/target/full method/operation, source revision+digest/provenance,
+// request/correlation и expiry. Реализация этого proof относится к #1023.
 type TranscriptionPolicyProjectionServiceClient interface {
 	ResolveTranscriptionPolicy(ctx context.Context, in *ResolveTranscriptionPolicyRequest, opts ...grpc.CallOption) (*ResolveTranscriptionPolicyResponse, error)
-	CheckReadiness(ctx context.Context, in *TranscriptionPolicyProjectionServiceCheckReadinessRequest, opts ...grpc.CallOption) (*TranscriptionPolicyProjectionServiceCheckReadinessResponse, error)
 }
 
 type transcriptionPolicyProjectionServiceClient struct {
@@ -205,26 +243,17 @@ func (c *transcriptionPolicyProjectionServiceClient) ResolveTranscriptionPolicy(
 	return out, nil
 }
 
-func (c *transcriptionPolicyProjectionServiceClient) CheckReadiness(ctx context.Context, in *TranscriptionPolicyProjectionServiceCheckReadinessRequest, opts ...grpc.CallOption) (*TranscriptionPolicyProjectionServiceCheckReadinessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TranscriptionPolicyProjectionServiceCheckReadinessResponse)
-	err := c.cc.Invoke(ctx, TranscriptionPolicyProjectionService_CheckReadiness_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TranscriptionPolicyProjectionServiceServer is the server API for TranscriptionPolicyProjectionService service.
 // All implementations must embed UnimplementedTranscriptionPolicyProjectionServiceServer
 // for forward compatibility.
 //
 // TranscriptionPolicyProjectionService — producer contract control-plane для
-// #1019. Project в request является только locator из уже проверенного
-// authorization context и повторно разрешается владельцем данных.
+// #1019. Payload служит только locator/echo. Вызов обязан нести server-owned
+// delegated/continuation proof, связанный с root actor/tenant/project, exact
+// caller/target/full method/operation, source revision+digest/provenance,
+// request/correlation и expiry. Реализация этого proof относится к #1023.
 type TranscriptionPolicyProjectionServiceServer interface {
 	ResolveTranscriptionPolicy(context.Context, *ResolveTranscriptionPolicyRequest) (*ResolveTranscriptionPolicyResponse, error)
-	CheckReadiness(context.Context, *TranscriptionPolicyProjectionServiceCheckReadinessRequest) (*TranscriptionPolicyProjectionServiceCheckReadinessResponse, error)
 	mustEmbedUnimplementedTranscriptionPolicyProjectionServiceServer()
 }
 
@@ -237,9 +266,6 @@ type UnimplementedTranscriptionPolicyProjectionServiceServer struct{}
 
 func (UnimplementedTranscriptionPolicyProjectionServiceServer) ResolveTranscriptionPolicy(context.Context, *ResolveTranscriptionPolicyRequest) (*ResolveTranscriptionPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveTranscriptionPolicy not implemented")
-}
-func (UnimplementedTranscriptionPolicyProjectionServiceServer) CheckReadiness(context.Context, *TranscriptionPolicyProjectionServiceCheckReadinessRequest) (*TranscriptionPolicyProjectionServiceCheckReadinessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
 }
 func (UnimplementedTranscriptionPolicyProjectionServiceServer) mustEmbedUnimplementedTranscriptionPolicyProjectionServiceServer() {
 }
@@ -281,24 +307,6 @@ func _TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_Handler(sr
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TranscriptionPolicyProjectionService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TranscriptionPolicyProjectionServiceCheckReadinessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TranscriptionPolicyProjectionServiceServer).CheckReadiness(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TranscriptionPolicyProjectionService_CheckReadiness_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TranscriptionPolicyProjectionServiceServer).CheckReadiness(ctx, req.(*TranscriptionPolicyProjectionServiceCheckReadinessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TranscriptionPolicyProjectionService_ServiceDesc is the grpc.ServiceDesc for TranscriptionPolicyProjectionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -310,10 +318,6 @@ var TranscriptionPolicyProjectionService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ResolveTranscriptionPolicy",
 			Handler:    _TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_Handler,
 		},
-		{
-			MethodName: "CheckReadiness",
-			Handler:    _TranscriptionPolicyProjectionService_CheckReadiness_Handler,
-		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "stt/v1/stt.proto",
@@ -321,7 +325,6 @@ var TranscriptionPolicyProjectionService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName = "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential"
-	TranscriptionCredentialProjectionService_CheckReadiness_FullMethodName                 = "/stt.v1.TranscriptionCredentialProjectionService/CheckReadiness"
 )
 
 // TranscriptionCredentialProjectionServiceClient is the client API for TranscriptionCredentialProjectionService service.
@@ -329,11 +332,10 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // TranscriptionCredentialProjectionService — producer contract secret-broker
-// для #1024. Credential выдаётся только stt-tts-service после проверки
-// server-owned grant и exact generation.
+// для #1024. Payload служит только locator/echo и не является authority. Для
+// вызова обязателен тот же delegated/continuation proof-контракт #1023.
 type TranscriptionCredentialProjectionServiceClient interface {
 	ProjectTranscriptionCredential(ctx context.Context, in *ProjectTranscriptionCredentialRequest, opts ...grpc.CallOption) (*ProjectTranscriptionCredentialResponse, error)
-	CheckReadiness(ctx context.Context, in *TranscriptionCredentialProjectionServiceCheckReadinessRequest, opts ...grpc.CallOption) (*TranscriptionCredentialProjectionServiceCheckReadinessResponse, error)
 }
 
 type transcriptionCredentialProjectionServiceClient struct {
@@ -354,26 +356,15 @@ func (c *transcriptionCredentialProjectionServiceClient) ProjectTranscriptionCre
 	return out, nil
 }
 
-func (c *transcriptionCredentialProjectionServiceClient) CheckReadiness(ctx context.Context, in *TranscriptionCredentialProjectionServiceCheckReadinessRequest, opts ...grpc.CallOption) (*TranscriptionCredentialProjectionServiceCheckReadinessResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TranscriptionCredentialProjectionServiceCheckReadinessResponse)
-	err := c.cc.Invoke(ctx, TranscriptionCredentialProjectionService_CheckReadiness_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TranscriptionCredentialProjectionServiceServer is the server API for TranscriptionCredentialProjectionService service.
 // All implementations must embed UnimplementedTranscriptionCredentialProjectionServiceServer
 // for forward compatibility.
 //
 // TranscriptionCredentialProjectionService — producer contract secret-broker
-// для #1024. Credential выдаётся только stt-tts-service после проверки
-// server-owned grant и exact generation.
+// для #1024. Payload служит только locator/echo и не является authority. Для
+// вызова обязателен тот же delegated/continuation proof-контракт #1023.
 type TranscriptionCredentialProjectionServiceServer interface {
 	ProjectTranscriptionCredential(context.Context, *ProjectTranscriptionCredentialRequest) (*ProjectTranscriptionCredentialResponse, error)
-	CheckReadiness(context.Context, *TranscriptionCredentialProjectionServiceCheckReadinessRequest) (*TranscriptionCredentialProjectionServiceCheckReadinessResponse, error)
 	mustEmbedUnimplementedTranscriptionCredentialProjectionServiceServer()
 }
 
@@ -386,9 +377,6 @@ type UnimplementedTranscriptionCredentialProjectionServiceServer struct{}
 
 func (UnimplementedTranscriptionCredentialProjectionServiceServer) ProjectTranscriptionCredential(context.Context, *ProjectTranscriptionCredentialRequest) (*ProjectTranscriptionCredentialResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProjectTranscriptionCredential not implemented")
-}
-func (UnimplementedTranscriptionCredentialProjectionServiceServer) CheckReadiness(context.Context, *TranscriptionCredentialProjectionServiceCheckReadinessRequest) (*TranscriptionCredentialProjectionServiceCheckReadinessResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
 }
 func (UnimplementedTranscriptionCredentialProjectionServiceServer) mustEmbedUnimplementedTranscriptionCredentialProjectionServiceServer() {
 }
@@ -430,24 +418,6 @@ func _TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_Ha
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TranscriptionCredentialProjectionService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TranscriptionCredentialProjectionServiceCheckReadinessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TranscriptionCredentialProjectionServiceServer).CheckReadiness(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TranscriptionCredentialProjectionService_CheckReadiness_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TranscriptionCredentialProjectionServiceServer).CheckReadiness(ctx, req.(*TranscriptionCredentialProjectionServiceCheckReadinessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TranscriptionCredentialProjectionService_ServiceDesc is the grpc.ServiceDesc for TranscriptionCredentialProjectionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -458,10 +428,6 @@ var TranscriptionCredentialProjectionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ProjectTranscriptionCredential",
 			Handler:    _TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_Handler,
-		},
-		{
-			MethodName: "CheckReadiness",
-			Handler:    _TranscriptionCredentialProjectionService_CheckReadiness_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -55,7 +55,7 @@ runbook и ручная проверка входят в один Issue и од�
 | `internal-rpc-authority` | workload-local internal sidecar | короткоживущие authorization contexts, signing key lifecycle, JWKS manifest и verifier snapshot                                            | пользователи, роли, проекты, permissions и transport identity caller    |
 | `control-plane`          | internal service                | организации, Проекты, агенты, role image lifecycle, integrations metadata, runtime revisions, sessions, Run graph/events, schedules, memory, gates и artifact metadata | channel transport, Kubernetes resources, MCP execution и AI process  |
 | `runtime-controller`     | internal controller             | reconciliation pod/PVC/Secret/ConfigMap, capacity, TTL и runtime health; archive/restore добавит отдельный unit #1002                     | бизнесовая конфигурация, Codex process, session archive job и пользовательские сообщения |
-| `stt-tts-service`        | internal service                | stateless STT validation, server-pinned OpenAI request и bounded transcript result                                                        | TTS, browser transport, STT policy, permission, provider account и credential lifecycle |
+| `stt-tts-service`        | inactive internal service base  | stateless STT validation, server-pinned OpenAI request и bounded transcript result после materialization prerequisites                     | TTS, browser transport, STT policy, permission, provider account и credential lifecycle |
 | `control-api-gateway`    | external gateway                | HTTP/WebSocket transport state и owner session boundary                                                                                    | domain state и прямой доступ к PostgreSQL                               |
 | `egress-gateway`         | platform external gateway       | immutable FQDN/443 policy, CONNECT+ClientHello SNI validation, server-owned DNS snapshot и literal dial                                    | TLS termination, application credentials, provider lifecycle и business state |
 | `interaction-gateway`    | optional external adapter       | independent inbound/notification/result-mirror/gate-decision deliveries                                                                     | core readiness, sessions, gates, artifacts и terminal Run state          |
@@ -141,14 +141,19 @@ artifact пригодным для `RuntimeRevision`. Marker/PVC задают п
 state. Pull/admin/signing/promotion credentials
 builder не выдаются.
 
-`stt-tts-service` материализует только короткий синхронный STT path. Actor,
+`stt-tts-service` подготовлен как неактивный base deployable и не входит в
+`web-only`, `web-with-mattermost` либо release image set до завершения
+#1019/#1021/#1023/#1024. После materialization он обслуживает только короткий
+синхронный STT path. Actor,
 tenant и project приходят из проверенного authorization context; immutable
 model/limits/provider generation принадлежат projection `control-plane`, а
 краткоживущий API key — projection `secret-broker`. Аудио проверяется по
 bounded size, MIME/magic и локально вычисленной длительности до provider
 effect. OpenAI доступен только через exact `egress-gateway`; сервис не хранит
 аудио/transcript/credential и не публикует событие. Producer contracts
-находятся в `stt.v1`, но их реализации принадлежат #1019 и #1024.
+находятся в `stt.v1`, но их реализации принадлежат #1019 и #1024, а единый
+server-owned continuation proof — #1023. Пока proof отсутствует, оба adapter
+закрыто отказывают до сетевого RPC; payload locators не являются authority.
 
 ## Контракты
 

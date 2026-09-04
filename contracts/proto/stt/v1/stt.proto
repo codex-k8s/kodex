@@ -7,39 +7,80 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1";
 
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
-// в текущую версию публичного контракта.
+// в текущую версию контракта.
 service SpeechToTextService {
-  // Transcribe принимает ограниченный аудиофайл. Полномочия, tenant, project,
-  // конфигурация модели и credential выводятся только на стороне сервера.
-  rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+  // Transcribe принимает metadata первым сообщением, ограниченные chunks и
+  // commit последним сообщением. Полномочия и конфигурация задаются сервером.
+  rpc Transcribe(stream TranscribeRequest) returns (TranscribeResponse);
 
-  // CheckReadiness проверяет локальный production path без provider effect.
+  // CheckReadiness проверяет только локальную способность принимать RPC,
+  // локальный verifier/config и локальные обязательные ресурсы.
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
+
+  // CheckProtectedPath — диагностический readback полного защищённого пути.
+  // Он не является Kubernetes readiness и не выполняет provider effect.
+  rpc CheckProtectedPath(CheckProtectedPathRequest) returns (CheckProtectedPathResponse);
 }
 
 // TranscriptionPolicyProjectionService — producer contract control-plane для
-// #1019. Project в request является только locator из уже проверенного
-// authorization context и повторно разрешается владельцем данных.
+// #1019. Payload служит только locator/echo. Вызов обязан нести server-owned
+// delegated/continuation proof, связанный с root actor/tenant/project, exact
+// caller/target/full method/operation, source revision+digest/provenance,
+// request/correlation и expiry. Реализация этого proof относится к #1023.
 service TranscriptionPolicyProjectionService {
   rpc ResolveTranscriptionPolicy(ResolveTranscriptionPolicyRequest) returns (ResolveTranscriptionPolicyResponse);
-  rpc CheckReadiness(TranscriptionPolicyProjectionServiceCheckReadinessRequest) returns (TranscriptionPolicyProjectionServiceCheckReadinessResponse);
 }
 
 // TranscriptionCredentialProjectionService — producer contract secret-broker
-// для #1024. Credential выдаётся только stt-tts-service после проверки
-// server-owned grant и exact generation.
+// для #1024. Payload служит только locator/echo и не является authority. Для
+// вызова обязателен тот же delegated/continuation proof-контракт #1023.
 service TranscriptionCredentialProjectionService {
   rpc ProjectTranscriptionCredential(ProjectTranscriptionCredentialRequest) returns (ProjectTranscriptionCredentialResponse);
-  rpc CheckReadiness(TranscriptionCredentialProjectionServiceCheckReadinessRequest) returns (TranscriptionCredentialProjectionServiceCheckReadinessResponse);
 }
 
 message TranscribeRequest {
-  bytes audio = 1;
-  string media_type = 2;
+  oneof body {
+    TranscribeMetadata metadata = 1;
+    bytes chunk = 2;
+    TranscribeCommit commit = 3;
+  }
+}
+
+message TranscribeMetadata {
+  string media_type = 1;
+  uint64 size_bytes = 2;
+}
+
+message TranscribeCommit {
+  uint64 size_bytes = 1;
+  string sha256 = 2;
 }
 
 message TranscribeResponse {
   string text = 1;
+  TranscriptionReceipt receipt = 2;
+}
+
+message TranscriptionReceipt {
+  string request_id = 1;
+  string correlation_id = 2;
+  string actor_id = 3;
+  string tenant_id = 4;
+  string project_id = 5;
+  uint64 authority_source_revision = 6;
+  string authority_source_digest_sha256 = 7;
+  uint64 config_revision = 8;
+  string config_digest_sha256 = 9;
+  string model = 10;
+  string language = 11;
+  string provider_account_ref = 12;
+  uint64 provider_credential_generation = 13;
+  TranscriptionStage completed_stage = 14;
+}
+
+enum TranscriptionStage {
+  TRANSCRIPTION_STAGE_UNSPECIFIED = 0;
+  TRANSCRIPTION_STAGE_PROVIDER_COMPLETED = 1;
 }
 
 message CheckReadinessRequest {}
@@ -48,15 +89,50 @@ message CheckReadinessResponse {
   bool ready = 1;
 }
 
-message ResolveTranscriptionPolicyRequest {
-  string project_id = 1;
-  string request_id = 2;
-  string actor_id = 3;
+message CheckProtectedPathRequest {}
+
+message CheckProtectedPathResponse {
+  bool ready = 1;
+  ProtectedPathStage stage = 2;
+}
+
+enum ProtectedPathStage {
+  PROTECTED_PATH_STAGE_UNSPECIFIED = 0;
+  PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY = 1;
+  PROTECTED_PATH_STAGE_POLICY = 2;
+  PROTECTED_PATH_STAGE_CREDENTIAL = 3;
+  PROTECTED_PATH_STAGE_EGRESS = 4;
+  PROTECTED_PATH_STAGE_READY = 5;
+}
+
+// DelegatedAuthorityLocator — единый locator/echo для обоих projection RPC.
+// Все поля должны быть сопоставлены с проверенным metadata proof; сами поля не
+// дают полномочий и не заменяют проверку владельцем projection.
+message DelegatedAuthorityLocator {
+  string request_id = 1;
+  string correlation_id = 2;
+  string root_actor_id = 3;
   string tenant_id = 4;
-  // authority_revision — ревизия immutable snapshot источника полномочий;
-  // canonical pair дополняется authority_digest_sha256.
-  uint64 authority_revision = 5;
-  string authority_digest_sha256 = 6;
+  string project_id = 5;
+  uint64 source_revision = 6;
+  string source_digest_sha256 = 7;
+  AuthorityIdentityProvenance actor = 8;
+  AuthorityIdentityProvenance tenant = 9;
+  AuthorityIdentityProvenance project = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+
+// source переносит exact numeric internalrpcauthority.v1.AuthoritySource и
+// проверяется по его закрытому реестру; локальный дублирующий enum запрещён.
+message AuthorityIdentityProvenance {
+  int32 source = 1;
+  string reference = 2;
+  uint64 revision = 3;
+  string digest_sha256 = 4;
+}
+
+message ResolveTranscriptionPolicyRequest {
+  DelegatedAuthorityLocator authority = 1;
 }
 
 message ResolveTranscriptionPolicyResponse {
@@ -69,38 +145,16 @@ message ResolveTranscriptionPolicyResponse {
   uint64 provider_timeout_milliseconds = 7;
   string provider_account_ref = 8;
   uint64 provider_credential_generation = 9;
-  string credential_projection_grant = 10;
-  google.protobuf.Timestamp expires_at = 11;
-  string request_id = 12;
-  string actor_id = 13;
-  string tenant_id = 14;
-  string project_id = 15;
-  // authority_revision — exact echo ревизии immutable snapshot источника
-  // полномочий из request.
-  uint64 authority_revision = 16;
-  string authority_digest_sha256 = 17;
-}
-
-message TranscriptionPolicyProjectionServiceCheckReadinessRequest {}
-
-message TranscriptionPolicyProjectionServiceCheckReadinessResponse {
-  bool ready = 1;
+  google.protobuf.Timestamp expires_at = 10;
+  DelegatedAuthorityLocator authority = 11;
 }
 
 message ProjectTranscriptionCredentialRequest {
-  string project_id = 1;
-  string request_id = 2;
-  string provider_account_ref = 3;
-  uint64 provider_credential_generation = 4;
-  uint64 config_revision = 5;
-  string config_digest_sha256 = 6;
-  string credential_projection_grant = 7;
-  string actor_id = 8;
-  string tenant_id = 9;
-  // authority_revision — ревизия immutable snapshot источника полномочий;
-  // canonical pair дополняется authority_digest_sha256.
-  uint64 authority_revision = 10;
-  string authority_digest_sha256 = 11;
+  DelegatedAuthorityLocator authority = 1;
+  string provider_account_ref = 2;
+  uint64 provider_credential_generation = 3;
+  uint64 config_revision = 4;
+  string config_digest_sha256 = 5;
 }
 
 message ProjectTranscriptionCredentialResponse {
@@ -109,19 +163,6 @@ message ProjectTranscriptionCredentialResponse {
   uint64 provider_credential_generation = 3;
   string config_digest_sha256 = 4;
   google.protobuf.Timestamp expires_at = 5;
-  string request_id = 6;
-  string actor_id = 7;
-  string tenant_id = 8;
-  string project_id = 9;
-  uint64 config_revision = 10;
-  // authority_revision — exact echo ревизии immutable snapshot источника
-  // полномочий из request.
-  uint64 authority_revision = 11;
-  string authority_digest_sha256 = 12;
-}
-
-message TranscriptionCredentialProjectionServiceCheckReadinessRequest {}
-
-message TranscriptionCredentialProjectionServiceCheckReadinessResponse {
-  bool ready = 1;
+  uint64 config_revision = 6;
+  DelegatedAuthorityLocator authority = 7;
 }

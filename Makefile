@@ -114,11 +114,11 @@ test-stt-tts-service-contract:
 
 test-stt-security-negative:
 	@cd services/internal/stt-tts-service && env -u GOFLAGS GOENV=off GOWORK=off \
-		go test ./internal/... -run 'TestConfigRejectsAlternateSecurityBoundary|TestPrincipalUsesAuthoritySourceRevision|TestPrincipalRejectsInvalidSourceRevision|TestPolicyProjectionRequiresExactAuthorityEcho|TestPolicyProjectionRejectsUnsignedLimitOverflow|TestWithProjectReferenceRequiresCanonicalLocator|TestTranscribeFailsClosedBeforeProvider|TestTranscribeCapsDeadlineByAuthorityExpiry|TestValidateAudioRejectsTrailingWAVDataAndHeaderOnlyFLAC|TestTranscribeRejectsMissingVerifiedContext|TestServerBoundsConcurrentTranscriptions|TestTranscribeRejectsProviderDiagnostics|TestTransportErrorDoesNotExposeProviderDiagnostics|TestTransportErrorPreservesRequestCancellation'
+		go test ./internal/... -run 'TestConfigRejectsAlternateSecurityBoundary|TestPrincipalUsesAuthoritySourceRevision|TestPrincipalRejectsInvalidSourceRevision|TestPrincipalRejectsMissingIdentityProvenance|TestPolicyProjectionRequiresExactAuthorityEcho|TestPolicyProjectionRejectsUnsignedLimitOverflow|TestProjectionRequiresDelegatedProofBeforeRPC|TestDelegatedProofFailsClosedBeforeRPC|TestTranscribeFailsClosedBeforeProvider|TestTranscribeCapsDeadlineByAuthorityExpiry|TestReadinessAndDiagnosticHaveNoRemoteEffect|TestValidateAudioRejectsTrailingWAVDataAndHeaderOnlyFLAC|TestTranscribeRejectsMissingVerifiedContext|TestServerBoundsConcurrentTranscriptions|TestReceiveAudioRequiresExactCommitAndNoTrailingMessage|TestTransportErrorDoesNotExposeProviderDiagnostics|TestTransportErrorPreservesRequestCancellation|TestLabelsUseClosedSets'
 
 test-stt-acceptance:
 	@cd services/internal/stt-tts-service && env -u GOFLAGS GOENV=off GOWORK=off \
-		go test ./internal/clients/openai -run '^TestLiveRussianNumberFixture$$' -v
+		go test ./internal/acceptance -run '^TestLiveRussianNumberFixture$$' -v
 
 test-go: test-go-toolchain-contract check-sql-boundary
 	@./scripts/test-go-modules.sh

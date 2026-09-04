@@ -4,95 +4,89 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-04
 ---
 
 # stt-tts-service
 
-`stt-tts-service` — stateless-владелец server-side распознавания речи. В этой
-версии публичен только `stt.v1.SpeechToTextService`; TTS отсутствует в Proto,
-коде и deploy-профиле.
+`stt-tts-service` — подготовленный, но неактивный stateless-владелец
+server-side распознавания речи. TTS отсутствует. Пока #1019, #1021, #1023 и
+#1024 не материализовали producer RPC, gateway route, единый continuation
+proof и authority sidecars, unit не входит в `web-only`,
+`web-with-mattermost` и release image set. Base и owner overlays существуют
+только для contract/render-проверки; развёртывать их сейчас нельзя.
 
-## Сквозной сценарий
+## Сквозной контракт после materialization
 
-| Шаг | Контракт и источник полномочий | Владелец/результат |
+| Шаг | Actor/authority и контракт | Владелец/результат |
 | --- | --- | --- |
-| 1 | `POST /api/v1/projects/{projectRef}/transcriptions` из #1021 принимает bounded multipart; browser session и CSRF проверяет `control-api-gateway` | gateway не назначает actor/tenant из multipart |
-| 2 | gateway вызывает `/stt.v1.SpeechToTextService/Transcribe`; exact operation `platform.stt.transcribe`, permission `stt.transcribe`, audience и caller workload проверяет authority profile #1023 | `stt-tts-service` получает actor/tenant/project только из `VerifiedAuthorizationContext` |
-| 3 | сервис вызывает `/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy` с проверенными locators и authority revision/digest | `control-plane` #1019 повторно проверяет tenant/project eligibility и возвращает immutable config revision, `gpt-transcribe`, `ru`, limits, provider account generation и краткоживущий grant |
-| 4 | локальная проверка связывает MIME, magic bytes, размер и длительность; MP3/WAV/FLAC вне limits отклоняются до внешнего effect | состояние не записывается; OCC и idempotency неприменимы к stateless read/effect |
-| 5 | `/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential` передаёт exact policy/grant/actor/tenant/config/generation locators | `secret-broker` #1024 проверяет grant и возвращает краткоживущий API key с exact readback; ключ очищается после вызова |
-| 6 | `POST https://api.openai.com/v1/audio/transcriptions` через exact proxy `egress-gateway...:8080`; TLS завершается только в OpenAI | ответ JSON `text` нормализуется только по краям и возвращается gateway; domain event отсутствует |
+| 1 | #1021 принимает bounded browser multipart и создаёт client-stream `Transcribe` | browser payload не назначает actor/tenant/project |
+| 2 | local `internalrpcauth` verifier проверяет mTLS, exact caller/target/full method/operation, permission, expiry и root actor/tenant/project provenance | transport передаёт домену только `VerifiedAuthorizationContext` |
+| 3 | stream metadata резервирует до копии один из двух slots и весь заявленный byte budget; chunks не больше 64 KiB пишутся в bounded spool; commit сверяет exact size и SHA-256 | trailing message/data и mismatch закрыто отклоняются |
+| 4 | policy adapter обязан получить server-owned delegated/continuation proof для root actor/tenant/project, request/correlation, source revision+digest/provenance и exact RPC | до реализации #1023 adapter возвращает ошибку до сетевого RPC; locator/echo не authority |
+| 5 | домен проверяет server-pinned `gpt-transcribe`, `ru`, limits и MP3/WAV frames/chunks | FLAC отклоняется: подменяемый STREAMINFO `total_samples` не доказывает frames |
+| 6 | credential adapter применяет тот же proof/locator contract и сверяет config/account/generation/expiry | #1024 выдаёт краткоживущий key; key очищается после вызова |
+| 7 | один `POST https://api.openai.com/v1/audio/transcriptions` идёт через exact egress proxy без автоматического retry | multipart состоит только из streaming file, `model=gpt-transcribe`, `language=ru` |
+| 8 | ответ содержит transcript и безопасный receipt | receipt не содержит transcript/audio/API key/grant |
 
-Поле request, `projectRef`, actor/tenant locator и provider account reference не
-являются authority. Каждый producer обязан сверить их с собственным
-проверенным authorization context и server-owned state. Несовпадение любого
-echo/revision/digest/generation или expiry закрывает путь до OpenAI.
+Success receipt содержит request/correlation, actor/tenant/project, authority
+source revision+digest, config revision+digest/model/language, provider account
+locator/credential generation и завершённый stage. Сервис не хранит state и не
+публикует domain event; повторный запрос получает новый authorization context.
 
-## Конфигурация provider
+## Readiness и diagnostic
 
-Закрытая shipped schema текущей версии:
+- `/healthz` подтверждает жизнь процесса;
+- `/readyz` и gRPC `CheckReadiness` проверяют только уже открытые local
+  listeners, локальный verifier, pinned config и writable bounded spool;
+- `/diagnostics/protected-path` и gRPC `CheckProtectedPath` отдельно сообщают
+  stage полного protected path и не участвуют в Kubernetes readiness;
+- diagnostic не вызывает OpenAI. В текущем неактивном unit он закрыто
+  возвращает `delegated_authority`, потому что continuation proof #1023 ещё не
+  материализован.
 
-- `model` — только `gpt-transcribe`;
-- `language` — только ISO-639-1 hint `ru`;
-- `maximum_audio_bytes` — `1024..26214400`;
-- `maximum_audio_duration_milliseconds` — `1000..1800000`;
-- `provider_timeout_milliseconds` — `1000..45000`;
-- `provider_account_ref`, credential generation, revision, digest, grant и
-  expiry назначаются сервером.
+Readiness не зависит от control-plane, secret-broker, DNS/egress или OpenAI и
+не утверждает готовность полного protected path.
 
-Произвольные `prompt`, temperature, response format и model из browser/RPC не
-принимаются. MVP принимает MP3, WAV и FLAC: для них длительность вычисляется
-локально без decoder/provider-вызова. Расширение списка требует нового
-валидатора длительности и contract-теста. Один replica одновременно исполняет
-не более двух transcription-запросов; переполнение закрыто возвращает
-`ResourceExhausted/RATE_LIMITED` до provider effect.
+## Ресурсные и lifecycle-границы
 
-## State, events и lifecycle
+- максимум одного файла — 25 MiB, одновременно — два stream и 50 MiB
+  зарезервированных audio bytes;
+- spool `emptyDir` — 64 MiB, Pod memory limit — 256 MiB;
+- request deadline — 20 s, provider timeout — не более 15 s;
+- shutdown budget — 30 s, Kubernetes grace — 35 s;
+- gRPC сначала выполняет deadline-aware `GracefulStop`, после deadline —
+  `Stop` и bounded join;
+- один provider effect, автоматического retry нет.
 
-Сервис не владеет PostgreSQL/Redis/S3 state. Поэтому migrations, transaction,
-OCC, idempotency receipt, outbox, AsyncAPI и domain event отсутствуют осознанно.
-Один запрос имеет только один provider effect; автоматический retry после
-начала OpenAI request запрещён. Retry создаёт новый пользовательский запрос и
-новый authorization context/credential projection.
+## Наблюдаемость
 
-Startup barrier и `/readyz` проверяют verifier, issuer, принадлежащий
-`control-plane` proof resolver, policy
-projection, credential projection и локальную provider-конфигурацию. Worker
-readiness прекращается до shutdown зависимостей; tracing и Sentry получают
-раздельные bounded shutdown contexts.
+`kodex_stt_tts_service_transcription_stage_total{stage,error_class}` использует
+только закрытые stage `authority|policy|audio|credential|egress|provider|success`
+и error class `none|denied|invalid|unavailable|timeout|rejected`; неизвестные
+значения нормализуются в `unknown`. Логи и receipt не содержат audio,
+transcript, API key или authority grant.
 
-## Consumer prerequisites
+## Acceptance fixture
 
-- #1019 материализует producer RPC policy projection и immutable STT config;
-- #1024 материализует producer RPC credential projection без долговременной
-  выдачи ключа;
-- #1023 регистрирует workload `stt-tts-service`, SPIFFE/mTLS, issuer/verifier,
-  grants и exact operation profiles всех четырёх projection RPC и входных
-  `Transcribe`/`CheckReadiness`;
-- #1021 добавляет внешний bounded multipart endpoint и generated STT client.
+`make test-stt-acceptance` использует внешний
+`KODEX_STT_ACCEPTANCE_FIXTURE` (по умолчанию
+`/home/s/projects/matter-codex/.agents/mvp-finish/1-2-3-4-5.mp3`) и до live
+вызова требует exact SHA-256
+`56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e`.
+Credential для локального теста задаётся только
+`KODEX_STT_ACCEPTANCE_OPENAI_API_KEY`; без него результат — честный `NOT RUN`.
 
-Base manifests намеренно содержат read-only slots `authority-sockets` и
-`application-grant`. До атомарной materialization из #1023 Pod остаётся
-неготовым; пустой volume не считается credential или готовым authority path.
+Неактивный code-first launcher расположен в
+`deploy/k8s/base/stt-tts-service-acceptance`: Job использует тот же
+`egress-gateway`, внешний PVC fixture и Secret file без значения в Git,
+`backoffLimit: 0`. Его запуск требует отдельного owner OK и materialized
+fixture/Secret; в этом remediation deploy не выполняется.
 
-## Локальная проверка
+## Проверенные внешние документы
 
-```bash
-cd services/internal/stt-tts-service
-GOWORK=off go test ./...
-```
-
-Live acceptance запускается только при отдельном тестовом
-`KODEX_STT_ACCEPTANCE_OPENAI_API_KEY`; fixture задаётся
-`KODEX_STT_ACCEPTANCE_FIXTURE`, по умолчанию используется внешний
-`/home/s/projects/matter-codex/.agents/mvp-finish/1-2-3-4-5.mp3`.
-
-При реализации сверены Context7
-`/websites/developers_openai_api_reference`, официальный метод
-[`audio/transcriptions create`](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create),
-карточки [`gpt-transcribe`](https://developers.openai.com/api/docs/models/gpt-transcribe)
-и [`gpt-4o-transcribe`](https://developers.openai.com/api/docs/models/gpt-4o-transcribe),
-а также актуальный gRPC-Go `/grpc/grpc-go` для TLS client/server и unary
-interceptors.
+Проверены официальный OpenAI Audio Transcriptions create reference (endpoint,
+поддерживаемые форматы и параметры `file`, `model`, `language`), Context7
+`/grpc/grpc-go` для `GracefulStop`/`Stop` и Context7 Go standard library
+`/websites/pkg_go_dev_go1_25_3` для streaming `mime/multipart`/`net/http` body.

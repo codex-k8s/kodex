@@ -22,10 +22,118 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type TranscriptionStage int32
+
+const (
+	TranscriptionStage_TRANSCRIPTION_STAGE_UNSPECIFIED        TranscriptionStage = 0
+	TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED TranscriptionStage = 1
+)
+
+// Enum value maps for TranscriptionStage.
+var (
+	TranscriptionStage_name = map[int32]string{
+		0: "TRANSCRIPTION_STAGE_UNSPECIFIED",
+		1: "TRANSCRIPTION_STAGE_PROVIDER_COMPLETED",
+	}
+	TranscriptionStage_value = map[string]int32{
+		"TRANSCRIPTION_STAGE_UNSPECIFIED":        0,
+		"TRANSCRIPTION_STAGE_PROVIDER_COMPLETED": 1,
+	}
+)
+
+func (x TranscriptionStage) Enum() *TranscriptionStage {
+	p := new(TranscriptionStage)
+	*p = x
+	return p
+}
+
+func (x TranscriptionStage) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TranscriptionStage) Descriptor() protoreflect.EnumDescriptor {
+	return file_stt_v1_stt_proto_enumTypes[0].Descriptor()
+}
+
+func (TranscriptionStage) Type() protoreflect.EnumType {
+	return &file_stt_v1_stt_proto_enumTypes[0]
+}
+
+func (x TranscriptionStage) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TranscriptionStage.Descriptor instead.
+func (TranscriptionStage) EnumDescriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{0}
+}
+
+type ProtectedPathStage int32
+
+const (
+	ProtectedPathStage_PROTECTED_PATH_STAGE_UNSPECIFIED         ProtectedPathStage = 0
+	ProtectedPathStage_PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY ProtectedPathStage = 1
+	ProtectedPathStage_PROTECTED_PATH_STAGE_POLICY              ProtectedPathStage = 2
+	ProtectedPathStage_PROTECTED_PATH_STAGE_CREDENTIAL          ProtectedPathStage = 3
+	ProtectedPathStage_PROTECTED_PATH_STAGE_EGRESS              ProtectedPathStage = 4
+	ProtectedPathStage_PROTECTED_PATH_STAGE_READY               ProtectedPathStage = 5
+)
+
+// Enum value maps for ProtectedPathStage.
+var (
+	ProtectedPathStage_name = map[int32]string{
+		0: "PROTECTED_PATH_STAGE_UNSPECIFIED",
+		1: "PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY",
+		2: "PROTECTED_PATH_STAGE_POLICY",
+		3: "PROTECTED_PATH_STAGE_CREDENTIAL",
+		4: "PROTECTED_PATH_STAGE_EGRESS",
+		5: "PROTECTED_PATH_STAGE_READY",
+	}
+	ProtectedPathStage_value = map[string]int32{
+		"PROTECTED_PATH_STAGE_UNSPECIFIED":         0,
+		"PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY": 1,
+		"PROTECTED_PATH_STAGE_POLICY":              2,
+		"PROTECTED_PATH_STAGE_CREDENTIAL":          3,
+		"PROTECTED_PATH_STAGE_EGRESS":              4,
+		"PROTECTED_PATH_STAGE_READY":               5,
+	}
+)
+
+func (x ProtectedPathStage) Enum() *ProtectedPathStage {
+	p := new(ProtectedPathStage)
+	*p = x
+	return p
+}
+
+func (x ProtectedPathStage) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ProtectedPathStage) Descriptor() protoreflect.EnumDescriptor {
+	return file_stt_v1_stt_proto_enumTypes[1].Descriptor()
+}
+
+func (ProtectedPathStage) Type() protoreflect.EnumType {
+	return &file_stt_v1_stt_proto_enumTypes[1]
+}
+
+func (x ProtectedPathStage) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ProtectedPathStage.Descriptor instead.
+func (ProtectedPathStage) EnumDescriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
+}
+
 type TranscribeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Audio         []byte                 `protobuf:"bytes,1,opt,name=audio,proto3" json:"audio,omitempty"`
-	MediaType     string                 `protobuf:"bytes,2,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Body:
+	//
+	//	*TranscribeRequest_Metadata
+	//	*TranscribeRequest_Chunk
+	//	*TranscribeRequest_Commit
+	Body          isTranscribeRequest_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -60,16 +168,162 @@ func (*TranscribeRequest) Descriptor() ([]byte, []int) {
 	return file_stt_v1_stt_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TranscribeRequest) GetAudio() []byte {
+func (x *TranscribeRequest) GetBody() isTranscribeRequest_Body {
 	if x != nil {
-		return x.Audio
+		return x.Body
 	}
 	return nil
 }
 
-func (x *TranscribeRequest) GetMediaType() string {
+func (x *TranscribeRequest) GetMetadata() *TranscribeMetadata {
+	if x != nil {
+		if x, ok := x.Body.(*TranscribeRequest_Metadata); ok {
+			return x.Metadata
+		}
+	}
+	return nil
+}
+
+func (x *TranscribeRequest) GetChunk() []byte {
+	if x != nil {
+		if x, ok := x.Body.(*TranscribeRequest_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+func (x *TranscribeRequest) GetCommit() *TranscribeCommit {
+	if x != nil {
+		if x, ok := x.Body.(*TranscribeRequest_Commit); ok {
+			return x.Commit
+		}
+	}
+	return nil
+}
+
+type isTranscribeRequest_Body interface {
+	isTranscribeRequest_Body()
+}
+
+type TranscribeRequest_Metadata struct {
+	Metadata *TranscribeMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof"`
+}
+
+type TranscribeRequest_Chunk struct {
+	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+type TranscribeRequest_Commit struct {
+	Commit *TranscribeCommit `protobuf:"bytes,3,opt,name=commit,proto3,oneof"`
+}
+
+func (*TranscribeRequest_Metadata) isTranscribeRequest_Body() {}
+
+func (*TranscribeRequest_Chunk) isTranscribeRequest_Body() {}
+
+func (*TranscribeRequest_Commit) isTranscribeRequest_Body() {}
+
+type TranscribeMetadata struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MediaType     string                 `protobuf:"bytes,1,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
+	SizeBytes     uint64                 `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TranscribeMetadata) Reset() {
+	*x = TranscribeMetadata{}
+	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscribeMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscribeMetadata) ProtoMessage() {}
+
+func (x *TranscribeMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscribeMetadata.ProtoReflect.Descriptor instead.
+func (*TranscribeMetadata) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *TranscribeMetadata) GetMediaType() string {
 	if x != nil {
 		return x.MediaType
+	}
+	return ""
+}
+
+func (x *TranscribeMetadata) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+type TranscribeCommit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SizeBytes     uint64                 `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Sha256        string                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TranscribeCommit) Reset() {
+	*x = TranscribeCommit{}
+	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscribeCommit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscribeCommit) ProtoMessage() {}
+
+func (x *TranscribeCommit) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscribeCommit.ProtoReflect.Descriptor instead.
+func (*TranscribeCommit) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TranscribeCommit) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *TranscribeCommit) GetSha256() string {
+	if x != nil {
+		return x.Sha256
 	}
 	return ""
 }
@@ -77,13 +331,14 @@ func (x *TranscribeRequest) GetMediaType() string {
 type TranscribeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Receipt       *TranscriptionReceipt  `protobuf:"bytes,2,opt,name=receipt,proto3" json:"receipt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TranscribeResponse) Reset() {
 	*x = TranscribeResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	mi := &file_stt_v1_stt_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +350,7 @@ func (x *TranscribeResponse) String() string {
 func (*TranscribeResponse) ProtoMessage() {}
 
 func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	mi := &file_stt_v1_stt_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +363,7 @@ func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeResponse.ProtoReflect.Descriptor instead.
 func (*TranscribeResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *TranscribeResponse) GetText() string {
@@ -116,6 +371,161 @@ func (x *TranscribeResponse) GetText() string {
 		return x.Text
 	}
 	return ""
+}
+
+func (x *TranscribeResponse) GetReceipt() *TranscriptionReceipt {
+	if x != nil {
+		return x.Receipt
+	}
+	return nil
+}
+
+type TranscriptionReceipt struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	RequestId                    string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	CorrelationId                string                 `protobuf:"bytes,2,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	ActorId                      string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	TenantId                     string                 `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	ProjectId                    string                 `protobuf:"bytes,5,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	AuthoritySourceRevision      uint64                 `protobuf:"varint,6,opt,name=authority_source_revision,json=authoritySourceRevision,proto3" json:"authority_source_revision,omitempty"`
+	AuthoritySourceDigestSha256  string                 `protobuf:"bytes,7,opt,name=authority_source_digest_sha256,json=authoritySourceDigestSha256,proto3" json:"authority_source_digest_sha256,omitempty"`
+	ConfigRevision               uint64                 `protobuf:"varint,8,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ConfigDigestSha256           string                 `protobuf:"bytes,9,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
+	Model                        string                 `protobuf:"bytes,10,opt,name=model,proto3" json:"model,omitempty"`
+	Language                     string                 `protobuf:"bytes,11,opt,name=language,proto3" json:"language,omitempty"`
+	ProviderAccountRef           string                 `protobuf:"bytes,12,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
+	ProviderCredentialGeneration uint64                 `protobuf:"varint,13,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
+	CompletedStage               TranscriptionStage     `protobuf:"varint,14,opt,name=completed_stage,json=completedStage,proto3,enum=stt.v1.TranscriptionStage" json:"completed_stage,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *TranscriptionReceipt) Reset() {
+	*x = TranscriptionReceipt{}
+	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptionReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptionReceipt) ProtoMessage() {}
+
+func (x *TranscriptionReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptionReceipt.ProtoReflect.Descriptor instead.
+func (*TranscriptionReceipt) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TranscriptionReceipt) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetAuthoritySourceRevision() uint64 {
+	if x != nil {
+		return x.AuthoritySourceRevision
+	}
+	return 0
+}
+
+func (x *TranscriptionReceipt) GetAuthoritySourceDigestSha256() string {
+	if x != nil {
+		return x.AuthoritySourceDigestSha256
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetConfigRevision() uint64 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *TranscriptionReceipt) GetConfigDigestSha256() string {
+	if x != nil {
+		return x.ConfigDigestSha256
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetProviderAccountRef() string {
+	if x != nil {
+		return x.ProviderAccountRef
+	}
+	return ""
+}
+
+func (x *TranscriptionReceipt) GetProviderCredentialGeneration() uint64 {
+	if x != nil {
+		return x.ProviderCredentialGeneration
+	}
+	return 0
+}
+
+func (x *TranscriptionReceipt) GetCompletedStage() TranscriptionStage {
+	if x != nil {
+		return x.CompletedStage
+	}
+	return TranscriptionStage_TRANSCRIPTION_STAGE_UNSPECIFIED
 }
 
 type CheckReadinessRequest struct {
@@ -126,7 +536,7 @@ type CheckReadinessRequest struct {
 
 func (x *CheckReadinessRequest) Reset() {
 	*x = CheckReadinessRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	mi := &file_stt_v1_stt_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +548,7 @@ func (x *CheckReadinessRequest) String() string {
 func (*CheckReadinessRequest) ProtoMessage() {}
 
 func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	mi := &file_stt_v1_stt_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +561,7 @@ func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{2}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{5}
 }
 
 type CheckReadinessResponse struct {
@@ -163,7 +573,7 @@ type CheckReadinessResponse struct {
 
 func (x *CheckReadinessResponse) Reset() {
 	*x = CheckReadinessResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	mi := &file_stt_v1_stt_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +585,7 @@ func (x *CheckReadinessResponse) String() string {
 func (*CheckReadinessResponse) ProtoMessage() {}
 
 func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	mi := &file_stt_v1_stt_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +598,7 @@ func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{3}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CheckReadinessResponse) GetReady() bool {
@@ -198,23 +608,301 @@ func (x *CheckReadinessResponse) GetReady() bool {
 	return false
 }
 
+type CheckProtectedPathRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckProtectedPathRequest) Reset() {
+	*x = CheckProtectedPathRequest{}
+	mi := &file_stt_v1_stt_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckProtectedPathRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckProtectedPathRequest) ProtoMessage() {}
+
+func (x *CheckProtectedPathRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckProtectedPathRequest.ProtoReflect.Descriptor instead.
+func (*CheckProtectedPathRequest) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{7}
+}
+
+type CheckProtectedPathResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	Stage         ProtectedPathStage     `protobuf:"varint,2,opt,name=stage,proto3,enum=stt.v1.ProtectedPathStage" json:"stage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckProtectedPathResponse) Reset() {
+	*x = CheckProtectedPathResponse{}
+	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckProtectedPathResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckProtectedPathResponse) ProtoMessage() {}
+
+func (x *CheckProtectedPathResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckProtectedPathResponse.ProtoReflect.Descriptor instead.
+func (*CheckProtectedPathResponse) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CheckProtectedPathResponse) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *CheckProtectedPathResponse) GetStage() ProtectedPathStage {
+	if x != nil {
+		return x.Stage
+	}
+	return ProtectedPathStage_PROTECTED_PATH_STAGE_UNSPECIFIED
+}
+
+// DelegatedAuthorityLocator — единый locator/echo для обоих projection RPC.
+// Все поля должны быть сопоставлены с проверенным metadata proof; сами поля не
+// дают полномочий и не заменяют проверку владельцем projection.
+type DelegatedAuthorityLocator struct {
+	state              protoimpl.MessageState       `protogen:"open.v1"`
+	RequestId          string                       `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	CorrelationId      string                       `protobuf:"bytes,2,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	RootActorId        string                       `protobuf:"bytes,3,opt,name=root_actor_id,json=rootActorId,proto3" json:"root_actor_id,omitempty"`
+	TenantId           string                       `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	ProjectId          string                       `protobuf:"bytes,5,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	SourceRevision     uint64                       `protobuf:"varint,6,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	SourceDigestSha256 string                       `protobuf:"bytes,7,opt,name=source_digest_sha256,json=sourceDigestSha256,proto3" json:"source_digest_sha256,omitempty"`
+	Actor              *AuthorityIdentityProvenance `protobuf:"bytes,8,opt,name=actor,proto3" json:"actor,omitempty"`
+	Tenant             *AuthorityIdentityProvenance `protobuf:"bytes,9,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	Project            *AuthorityIdentityProvenance `protobuf:"bytes,10,opt,name=project,proto3" json:"project,omitempty"`
+	ExpiresAt          *timestamppb.Timestamp       `protobuf:"bytes,11,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *DelegatedAuthorityLocator) Reset() {
+	*x = DelegatedAuthorityLocator{}
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DelegatedAuthorityLocator) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DelegatedAuthorityLocator) ProtoMessage() {}
+
+func (x *DelegatedAuthorityLocator) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DelegatedAuthorityLocator.ProtoReflect.Descriptor instead.
+func (*DelegatedAuthorityLocator) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *DelegatedAuthorityLocator) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetRootActorId() string {
+	if x != nil {
+		return x.RootActorId
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetSourceRevision() uint64 {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return 0
+}
+
+func (x *DelegatedAuthorityLocator) GetSourceDigestSha256() string {
+	if x != nil {
+		return x.SourceDigestSha256
+	}
+	return ""
+}
+
+func (x *DelegatedAuthorityLocator) GetActor() *AuthorityIdentityProvenance {
+	if x != nil {
+		return x.Actor
+	}
+	return nil
+}
+
+func (x *DelegatedAuthorityLocator) GetTenant() *AuthorityIdentityProvenance {
+	if x != nil {
+		return x.Tenant
+	}
+	return nil
+}
+
+func (x *DelegatedAuthorityLocator) GetProject() *AuthorityIdentityProvenance {
+	if x != nil {
+		return x.Project
+	}
+	return nil
+}
+
+func (x *DelegatedAuthorityLocator) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+// source переносит exact numeric internalrpcauthority.v1.AuthoritySource и
+// проверяется по его закрытому реестру; локальный дублирующий enum запрещён.
+type AuthorityIdentityProvenance struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        int32                  `protobuf:"varint,1,opt,name=source,proto3" json:"source,omitempty"`
+	Reference     string                 `protobuf:"bytes,2,opt,name=reference,proto3" json:"reference,omitempty"`
+	Revision      uint64                 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	DigestSha256  string                 `protobuf:"bytes,4,opt,name=digest_sha256,json=digestSha256,proto3" json:"digest_sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthorityIdentityProvenance) Reset() {
+	*x = AuthorityIdentityProvenance{}
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthorityIdentityProvenance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthorityIdentityProvenance) ProtoMessage() {}
+
+func (x *AuthorityIdentityProvenance) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthorityIdentityProvenance.ProtoReflect.Descriptor instead.
+func (*AuthorityIdentityProvenance) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AuthorityIdentityProvenance) GetSource() int32 {
+	if x != nil {
+		return x.Source
+	}
+	return 0
+}
+
+func (x *AuthorityIdentityProvenance) GetReference() string {
+	if x != nil {
+		return x.Reference
+	}
+	return ""
+}
+
+func (x *AuthorityIdentityProvenance) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *AuthorityIdentityProvenance) GetDigestSha256() string {
+	if x != nil {
+		return x.DigestSha256
+	}
+	return ""
+}
+
 type ResolveTranscriptionPolicyRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RequestId string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ActorId   string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	TenantId  string                 `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	// authority_revision — ревизия immutable snapshot источника полномочий;
-	// canonical pair дополняется authority_digest_sha256.
-	AuthorityRevision     uint64 `protobuf:"varint,5,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256 string `protobuf:"bytes,6,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Authority     *DelegatedAuthorityLocator `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolveTranscriptionPolicyRequest) Reset() {
 	*x = ResolveTranscriptionPolicyRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -226,7 +914,7 @@ func (x *ResolveTranscriptionPolicyRequest) String() string {
 func (*ResolveTranscriptionPolicyRequest) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -239,79 +927,36 @@ func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveTranscriptionPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{4}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *ResolveTranscriptionPolicyRequest) GetProjectId() string {
+func (x *ResolveTranscriptionPolicyRequest) GetAuthority() *DelegatedAuthorityLocator {
 	if x != nil {
-		return x.ProjectId
+		return x.Authority
 	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyRequest) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyRequest) GetActorId() string {
-	if x != nil {
-		return x.ActorId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyRequest) GetAuthorityRevision() uint64 {
-	if x != nil {
-		return x.AuthorityRevision
-	}
-	return 0
-}
-
-func (x *ResolveTranscriptionPolicyRequest) GetAuthorityDigestSha256() string {
-	if x != nil {
-		return x.AuthorityDigestSha256
-	}
-	return ""
+	return nil
 }
 
 type ResolveTranscriptionPolicyResponse struct {
-	state                            protoimpl.MessageState `protogen:"open.v1"`
-	ConfigRevision                   uint64                 `protobuf:"varint,1,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	ConfigDigestSha256               string                 `protobuf:"bytes,2,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
-	Model                            string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	Language                         string                 `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`
-	MaximumAudioBytes                uint64                 `protobuf:"varint,5,opt,name=maximum_audio_bytes,json=maximumAudioBytes,proto3" json:"maximum_audio_bytes,omitempty"`
-	MaximumAudioDurationMilliseconds uint64                 `protobuf:"varint,6,opt,name=maximum_audio_duration_milliseconds,json=maximumAudioDurationMilliseconds,proto3" json:"maximum_audio_duration_milliseconds,omitempty"`
-	ProviderTimeoutMilliseconds      uint64                 `protobuf:"varint,7,opt,name=provider_timeout_milliseconds,json=providerTimeoutMilliseconds,proto3" json:"provider_timeout_milliseconds,omitempty"`
-	ProviderAccountRef               string                 `protobuf:"bytes,8,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
-	ProviderCredentialGeneration     uint64                 `protobuf:"varint,9,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
-	CredentialProjectionGrant        string                 `protobuf:"bytes,10,opt,name=credential_projection_grant,json=credentialProjectionGrant,proto3" json:"credential_projection_grant,omitempty"`
-	ExpiresAt                        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	RequestId                        string                 `protobuf:"bytes,12,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ActorId                          string                 `protobuf:"bytes,13,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	TenantId                         string                 `protobuf:"bytes,14,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	ProjectId                        string                 `protobuf:"bytes,15,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	// authority_revision — exact echo ревизии immutable snapshot источника
-	// полномочий из request.
-	AuthorityRevision     uint64 `protobuf:"varint,16,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256 string `protobuf:"bytes,17,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                            protoimpl.MessageState     `protogen:"open.v1"`
+	ConfigRevision                   uint64                     `protobuf:"varint,1,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ConfigDigestSha256               string                     `protobuf:"bytes,2,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
+	Model                            string                     `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Language                         string                     `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`
+	MaximumAudioBytes                uint64                     `protobuf:"varint,5,opt,name=maximum_audio_bytes,json=maximumAudioBytes,proto3" json:"maximum_audio_bytes,omitempty"`
+	MaximumAudioDurationMilliseconds uint64                     `protobuf:"varint,6,opt,name=maximum_audio_duration_milliseconds,json=maximumAudioDurationMilliseconds,proto3" json:"maximum_audio_duration_milliseconds,omitempty"`
+	ProviderTimeoutMilliseconds      uint64                     `protobuf:"varint,7,opt,name=provider_timeout_milliseconds,json=providerTimeoutMilliseconds,proto3" json:"provider_timeout_milliseconds,omitempty"`
+	ProviderAccountRef               string                     `protobuf:"bytes,8,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
+	ProviderCredentialGeneration     uint64                     `protobuf:"varint,9,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
+	ExpiresAt                        *timestamppb.Timestamp     `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Authority                        *DelegatedAuthorityLocator `protobuf:"bytes,11,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *ResolveTranscriptionPolicyResponse) Reset() {
 	*x = ResolveTranscriptionPolicyResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[5]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -323,7 +968,7 @@ func (x *ResolveTranscriptionPolicyResponse) String() string {
 func (*ResolveTranscriptionPolicyResponse) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[5]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -336,7 +981,7 @@ func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveTranscriptionPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{5}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ResolveTranscriptionPolicyResponse) GetConfigRevision() uint64 {
@@ -402,13 +1047,6 @@ func (x *ResolveTranscriptionPolicyResponse) GetProviderCredentialGeneration() u
 	return 0
 }
 
-func (x *ResolveTranscriptionPolicyResponse) GetCredentialProjectionGrant() string {
-	if x != nil {
-		return x.CredentialProjectionGrant
-	}
-	return ""
-}
-
 func (x *ResolveTranscriptionPolicyResponse) GetExpiresAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ExpiresAt
@@ -416,150 +1054,27 @@ func (x *ResolveTranscriptionPolicyResponse) GetExpiresAt() *timestamppb.Timesta
 	return nil
 }
 
-func (x *ResolveTranscriptionPolicyResponse) GetRequestId() string {
+func (x *ResolveTranscriptionPolicyResponse) GetAuthority() *DelegatedAuthorityLocator {
 	if x != nil {
-		return x.RequestId
+		return x.Authority
 	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyResponse) GetActorId() string {
-	if x != nil {
-		return x.ActorId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyResponse) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyResponse) GetProjectId() string {
-	if x != nil {
-		return x.ProjectId
-	}
-	return ""
-}
-
-func (x *ResolveTranscriptionPolicyResponse) GetAuthorityRevision() uint64 {
-	if x != nil {
-		return x.AuthorityRevision
-	}
-	return 0
-}
-
-func (x *ResolveTranscriptionPolicyResponse) GetAuthorityDigestSha256() string {
-	if x != nil {
-		return x.AuthorityDigestSha256
-	}
-	return ""
-}
-
-type TranscriptionPolicyProjectionServiceCheckReadinessRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessRequest) Reset() {
-	*x = TranscriptionPolicyProjectionServiceCheckReadinessRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TranscriptionPolicyProjectionServiceCheckReadinessRequest) ProtoMessage() {}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TranscriptionPolicyProjectionServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
-func (*TranscriptionPolicyProjectionServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{6}
-}
-
-type TranscriptionPolicyProjectionServiceCheckReadinessResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessResponse) Reset() {
-	*x = TranscriptionPolicyProjectionServiceCheckReadinessResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TranscriptionPolicyProjectionServiceCheckReadinessResponse) ProtoMessage() {}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TranscriptionPolicyProjectionServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
-func (*TranscriptionPolicyProjectionServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *TranscriptionPolicyProjectionServiceCheckReadinessResponse) GetReady() bool {
-	if x != nil {
-		return x.Ready
-	}
-	return false
+	return nil
 }
 
 type ProjectTranscriptionCredentialRequest struct {
-	state                        protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId                    string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RequestId                    string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ProviderAccountRef           string                 `protobuf:"bytes,3,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
-	ProviderCredentialGeneration uint64                 `protobuf:"varint,4,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
-	ConfigRevision               uint64                 `protobuf:"varint,5,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	ConfigDigestSha256           string                 `protobuf:"bytes,6,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
-	CredentialProjectionGrant    string                 `protobuf:"bytes,7,opt,name=credential_projection_grant,json=credentialProjectionGrant,proto3" json:"credential_projection_grant,omitempty"`
-	ActorId                      string                 `protobuf:"bytes,8,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	TenantId                     string                 `protobuf:"bytes,9,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	// authority_revision — ревизия immutable snapshot источника полномочий;
-	// canonical pair дополняется authority_digest_sha256.
-	AuthorityRevision     uint64 `protobuf:"varint,10,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256 string `protobuf:"bytes,11,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                        protoimpl.MessageState     `protogen:"open.v1"`
+	Authority                    *DelegatedAuthorityLocator `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	ProviderAccountRef           string                     `protobuf:"bytes,2,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
+	ProviderCredentialGeneration uint64                     `protobuf:"varint,3,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
+	ConfigRevision               uint64                     `protobuf:"varint,4,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ConfigDigestSha256           string                     `protobuf:"bytes,5,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *ProjectTranscriptionCredentialRequest) Reset() {
 	*x = ProjectTranscriptionCredentialRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +1086,7 @@ func (x *ProjectTranscriptionCredentialRequest) String() string {
 func (*ProjectTranscriptionCredentialRequest) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,21 +1099,14 @@ func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProjectTranscriptionCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{8}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *ProjectTranscriptionCredentialRequest) GetProjectId() string {
+func (x *ProjectTranscriptionCredentialRequest) GetAuthority() *DelegatedAuthorityLocator {
 	if x != nil {
-		return x.ProjectId
+		return x.Authority
 	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialRequest) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
+	return nil
 }
 
 func (x *ProjectTranscriptionCredentialRequest) GetProviderAccountRef() string {
@@ -629,64 +1137,22 @@ func (x *ProjectTranscriptionCredentialRequest) GetConfigDigestSha256() string {
 	return ""
 }
 
-func (x *ProjectTranscriptionCredentialRequest) GetCredentialProjectionGrant() string {
-	if x != nil {
-		return x.CredentialProjectionGrant
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialRequest) GetActorId() string {
-	if x != nil {
-		return x.ActorId
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialRequest) GetAuthorityRevision() uint64 {
-	if x != nil {
-		return x.AuthorityRevision
-	}
-	return 0
-}
-
-func (x *ProjectTranscriptionCredentialRequest) GetAuthorityDigestSha256() string {
-	if x != nil {
-		return x.AuthorityDigestSha256
-	}
-	return ""
-}
-
 type ProjectTranscriptionCredentialResponse struct {
-	state                        protoimpl.MessageState `protogen:"open.v1"`
-	ApiKey                       []byte                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	ProviderAccountRef           string                 `protobuf:"bytes,2,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
-	ProviderCredentialGeneration uint64                 `protobuf:"varint,3,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
-	ConfigDigestSha256           string                 `protobuf:"bytes,4,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
-	ExpiresAt                    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	RequestId                    string                 `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ActorId                      string                 `protobuf:"bytes,7,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	TenantId                     string                 `protobuf:"bytes,8,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	ProjectId                    string                 `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	ConfigRevision               uint64                 `protobuf:"varint,10,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	// authority_revision — exact echo ревизии immutable snapshot источника
-	// полномочий из request.
-	AuthorityRevision     uint64 `protobuf:"varint,11,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256 string `protobuf:"bytes,12,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                        protoimpl.MessageState     `protogen:"open.v1"`
+	ApiKey                       []byte                     `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	ProviderAccountRef           string                     `protobuf:"bytes,2,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
+	ProviderCredentialGeneration uint64                     `protobuf:"varint,3,opt,name=provider_credential_generation,json=providerCredentialGeneration,proto3" json:"provider_credential_generation,omitempty"`
+	ConfigDigestSha256           string                     `protobuf:"bytes,4,opt,name=config_digest_sha256,json=configDigestSha256,proto3" json:"config_digest_sha256,omitempty"`
+	ExpiresAt                    *timestamppb.Timestamp     `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	ConfigRevision               uint64                     `protobuf:"varint,6,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	Authority                    *DelegatedAuthorityLocator `protobuf:"bytes,7,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *ProjectTranscriptionCredentialResponse) Reset() {
 	*x = ProjectTranscriptionCredentialResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -698,7 +1164,7 @@ func (x *ProjectTranscriptionCredentialResponse) String() string {
 func (*ProjectTranscriptionCredentialResponse) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -711,7 +1177,7 @@ func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProjectTranscriptionCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ProjectTranscriptionCredentialResponse) GetApiKey() []byte {
@@ -749,34 +1215,6 @@ func (x *ProjectTranscriptionCredentialResponse) GetExpiresAt() *timestamppb.Tim
 	return nil
 }
 
-func (x *ProjectTranscriptionCredentialResponse) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialResponse) GetActorId() string {
-	if x != nil {
-		return x.ActorId
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialResponse) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ProjectTranscriptionCredentialResponse) GetProjectId() string {
-	if x != nil {
-		return x.ProjectId
-	}
-	return ""
-}
-
 func (x *ProjectTranscriptionCredentialResponse) GetConfigRevision() uint64 {
 	if x != nil {
 		return x.ConfigRevision
@@ -784,123 +1222,83 @@ func (x *ProjectTranscriptionCredentialResponse) GetConfigRevision() uint64 {
 	return 0
 }
 
-func (x *ProjectTranscriptionCredentialResponse) GetAuthorityRevision() uint64 {
+func (x *ProjectTranscriptionCredentialResponse) GetAuthority() *DelegatedAuthorityLocator {
 	if x != nil {
-		return x.AuthorityRevision
+		return x.Authority
 	}
-	return 0
-}
-
-func (x *ProjectTranscriptionCredentialResponse) GetAuthorityDigestSha256() string {
-	if x != nil {
-		return x.AuthorityDigestSha256
-	}
-	return ""
-}
-
-type TranscriptionCredentialProjectionServiceCheckReadinessRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessRequest) Reset() {
-	*x = TranscriptionCredentialProjectionServiceCheckReadinessRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TranscriptionCredentialProjectionServiceCheckReadinessRequest) ProtoMessage() {}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TranscriptionCredentialProjectionServiceCheckReadinessRequest.ProtoReflect.Descriptor instead.
-func (*TranscriptionCredentialProjectionServiceCheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
-}
-
-type TranscriptionCredentialProjectionServiceCheckReadinessResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessResponse) Reset() {
-	*x = TranscriptionCredentialProjectionServiceCheckReadinessResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TranscriptionCredentialProjectionServiceCheckReadinessResponse) ProtoMessage() {}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TranscriptionCredentialProjectionServiceCheckReadinessResponse.ProtoReflect.Descriptor instead.
-func (*TranscriptionCredentialProjectionServiceCheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *TranscriptionCredentialProjectionServiceCheckReadinessResponse) GetReady() bool {
-	if x != nil {
-		return x.Ready
-	}
-	return false
+	return nil
 }
 
 var File_stt_v1_stt_proto protoreflect.FileDescriptor
 
 const file_stt_v1_stt_proto_rawDesc = "" +
 	"\n" +
-	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"H\n" +
-	"\x11TranscribeRequest\x12\x14\n" +
-	"\x05audio\x18\x01 \x01(\fR\x05audio\x12\x1d\n" +
+	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa1\x01\n" +
+	"\x11TranscribeRequest\x128\n" +
+	"\bmetadata\x18\x01 \x01(\v2\x1a.stt.v1.TranscribeMetadataH\x00R\bmetadata\x12\x16\n" +
+	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunk\x122\n" +
+	"\x06commit\x18\x03 \x01(\v2\x18.stt.v1.TranscribeCommitH\x00R\x06commitB\x06\n" +
+	"\x04body\"R\n" +
+	"\x12TranscribeMetadata\x12\x1d\n" +
 	"\n" +
-	"media_type\x18\x02 \x01(\tR\tmediaType\"(\n" +
+	"media_type\x18\x01 \x01(\tR\tmediaType\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\"I\n" +
+	"\x10TranscribeCommit\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x01 \x01(\x04R\tsizeBytes\x12\x16\n" +
+	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"`\n" +
 	"\x12TranscribeResponse\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\x17\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x126\n" +
+	"\areceipt\x18\x02 \x01(\v2\x1c.stt.v1.TranscriptionReceiptR\areceipt\"\xfe\x04\n" +
+	"\x14TranscriptionReceipt\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
+	"\x0ecorrelation_id\x18\x02 \x01(\tR\rcorrelationId\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x1b\n" +
+	"\ttenant_id\x18\x04 \x01(\tR\btenantId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x05 \x01(\tR\tprojectId\x12:\n" +
+	"\x19authority_source_revision\x18\x06 \x01(\x04R\x17authoritySourceRevision\x12C\n" +
+	"\x1eauthority_source_digest_sha256\x18\a \x01(\tR\x1bauthoritySourceDigestSha256\x12'\n" +
+	"\x0fconfig_revision\x18\b \x01(\x04R\x0econfigRevision\x120\n" +
+	"\x14config_digest_sha256\x18\t \x01(\tR\x12configDigestSha256\x12\x14\n" +
+	"\x05model\x18\n" +
+	" \x01(\tR\x05model\x12\x1a\n" +
+	"\blanguage\x18\v \x01(\tR\blanguage\x120\n" +
+	"\x14provider_account_ref\x18\f \x01(\tR\x12providerAccountRef\x12D\n" +
+	"\x1eprovider_credential_generation\x18\r \x01(\x04R\x1cproviderCredentialGeneration\x12C\n" +
+	"\x0fcompleted_stage\x18\x0e \x01(\x0e2\x1a.stt.v1.TranscriptionStageR\x0ecompletedStage\"\x17\n" +
 	"\x15CheckReadinessRequest\".\n" +
 	"\x16CheckReadinessResponse\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready\"\x80\x02\n" +
-	"!ResolveTranscriptionPolicyRequest\x12\x1d\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\"\x1b\n" +
+	"\x19CheckProtectedPathRequest\"d\n" +
+	"\x1aCheckProtectedPathResponse\x12\x14\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\x120\n" +
+	"\x05stage\x18\x02 \x01(\x0e2\x1a.stt.v1.ProtectedPathStageR\x05stage\"\x8e\x04\n" +
+	"\x19DelegatedAuthorityLocator\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
+	"\x0ecorrelation_id\x18\x02 \x01(\tR\rcorrelationId\x12\"\n" +
+	"\rroot_actor_id\x18\x03 \x01(\tR\vrootActorId\x12\x1b\n" +
+	"\ttenant_id\x18\x04 \x01(\tR\btenantId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\x12\x19\n" +
-	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x1b\n" +
-	"\ttenant_id\x18\x04 \x01(\tR\btenantId\x12-\n" +
-	"\x12authority_revision\x18\x05 \x01(\x04R\x11authorityRevision\x126\n" +
-	"\x17authority_digest_sha256\x18\x06 \x01(\tR\x15authorityDigestSha256\"\xc4\x06\n" +
+	"project_id\x18\x05 \x01(\tR\tprojectId\x12'\n" +
+	"\x0fsource_revision\x18\x06 \x01(\x04R\x0esourceRevision\x120\n" +
+	"\x14source_digest_sha256\x18\a \x01(\tR\x12sourceDigestSha256\x129\n" +
+	"\x05actor\x18\b \x01(\v2#.stt.v1.AuthorityIdentityProvenanceR\x05actor\x12;\n" +
+	"\x06tenant\x18\t \x01(\v2#.stt.v1.AuthorityIdentityProvenanceR\x06tenant\x12=\n" +
+	"\aproject\x18\n" +
+	" \x01(\v2#.stt.v1.AuthorityIdentityProvenanceR\aproject\x129\n" +
+	"\n" +
+	"expires_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x94\x01\n" +
+	"\x1bAuthorityIdentityProvenance\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\x05R\x06source\x12\x1c\n" +
+	"\treference\x18\x02 \x01(\tR\treference\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x04R\brevision\x12#\n" +
+	"\rdigest_sha256\x18\x04 \x01(\tR\fdigestSha256\"d\n" +
+	"!ResolveTranscriptionPolicyRequest\x12?\n" +
+	"\tauthority\x18\x01 \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\"\xe8\x04\n" +
 	"\"ResolveTranscriptionPolicyResponse\x12'\n" +
 	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x120\n" +
 	"\x14config_digest_sha256\x18\x02 \x01(\tR\x12configDigestSha256\x12\x14\n" +
@@ -910,67 +1308,45 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"#maximum_audio_duration_milliseconds\x18\x06 \x01(\x04R maximumAudioDurationMilliseconds\x12B\n" +
 	"\x1dprovider_timeout_milliseconds\x18\a \x01(\x04R\x1bproviderTimeoutMilliseconds\x120\n" +
 	"\x14provider_account_ref\x18\b \x01(\tR\x12providerAccountRef\x12D\n" +
-	"\x1eprovider_credential_generation\x18\t \x01(\x04R\x1cproviderCredentialGeneration\x12>\n" +
-	"\x1bcredential_projection_grant\x18\n" +
-	" \x01(\tR\x19credentialProjectionGrant\x129\n" +
+	"\x1eprovider_credential_generation\x18\t \x01(\x04R\x1cproviderCredentialGeneration\x129\n" +
 	"\n" +
-	"expires_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\f \x01(\tR\trequestId\x12\x19\n" +
-	"\bactor_id\x18\r \x01(\tR\aactorId\x12\x1b\n" +
-	"\ttenant_id\x18\x0e \x01(\tR\btenantId\x12\x1d\n" +
-	"\n" +
-	"project_id\x18\x0f \x01(\tR\tprojectId\x12-\n" +
-	"\x12authority_revision\x18\x10 \x01(\x04R\x11authorityRevision\x126\n" +
-	"\x17authority_digest_sha256\x18\x11 \x01(\tR\x15authorityDigestSha256\";\n" +
-	"9TranscriptionPolicyProjectionServiceCheckReadinessRequest\"R\n" +
-	":TranscriptionPolicyProjectionServiceCheckReadinessResponse\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready\"\x97\x04\n" +
-	"%ProjectTranscriptionCredentialRequest\x12\x1d\n" +
-	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\x120\n" +
-	"\x14provider_account_ref\x18\x03 \x01(\tR\x12providerAccountRef\x12D\n" +
-	"\x1eprovider_credential_generation\x18\x04 \x01(\x04R\x1cproviderCredentialGeneration\x12'\n" +
-	"\x0fconfig_revision\x18\x05 \x01(\x04R\x0econfigRevision\x120\n" +
-	"\x14config_digest_sha256\x18\x06 \x01(\tR\x12configDigestSha256\x12>\n" +
-	"\x1bcredential_projection_grant\x18\a \x01(\tR\x19credentialProjectionGrant\x12\x19\n" +
-	"\bactor_id\x18\b \x01(\tR\aactorId\x12\x1b\n" +
-	"\ttenant_id\x18\t \x01(\tR\btenantId\x12-\n" +
-	"\x12authority_revision\x18\n" +
-	" \x01(\x04R\x11authorityRevision\x126\n" +
-	"\x17authority_digest_sha256\x18\v \x01(\tR\x15authorityDigestSha256\"\xac\x04\n" +
+	"expires_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12?\n" +
+	"\tauthority\x18\v \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\"\xbb\x02\n" +
+	"%ProjectTranscriptionCredentialRequest\x12?\n" +
+	"\tauthority\x18\x01 \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority\x120\n" +
+	"\x14provider_account_ref\x18\x02 \x01(\tR\x12providerAccountRef\x12D\n" +
+	"\x1eprovider_credential_generation\x18\x03 \x01(\x04R\x1cproviderCredentialGeneration\x12'\n" +
+	"\x0fconfig_revision\x18\x04 \x01(\x04R\x0econfigRevision\x120\n" +
+	"\x14config_digest_sha256\x18\x05 \x01(\tR\x12configDigestSha256\"\x90\x03\n" +
 	"&ProjectTranscriptionCredentialResponse\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\fR\x06apiKey\x120\n" +
 	"\x14provider_account_ref\x18\x02 \x01(\tR\x12providerAccountRef\x12D\n" +
 	"\x1eprovider_credential_generation\x18\x03 \x01(\x04R\x1cproviderCredentialGeneration\x120\n" +
 	"\x14config_digest_sha256\x18\x04 \x01(\tR\x12configDigestSha256\x129\n" +
 	"\n" +
-	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1d\n" +
+	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12'\n" +
+	"\x0fconfig_revision\x18\x06 \x01(\x04R\x0econfigRevision\x12?\n" +
+	"\tauthority\x18\a \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority*e\n" +
+	"\x12TranscriptionStage\x12#\n" +
+	"\x1fTRANSCRIPTION_STAGE_UNSPECIFIED\x10\x00\x12*\n" +
+	"&TRANSCRIPTION_STAGE_PROVIDER_COMPLETED\x10\x01*\xef\x01\n" +
+	"\x12ProtectedPathStage\x12$\n" +
+	" PROTECTED_PATH_STAGE_UNSPECIFIED\x10\x00\x12,\n" +
+	"(PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY\x10\x01\x12\x1f\n" +
+	"\x1bPROTECTED_PATH_STAGE_POLICY\x10\x02\x12#\n" +
+	"\x1fPROTECTED_PATH_STAGE_CREDENTIAL\x10\x03\x12\x1f\n" +
+	"\x1bPROTECTED_PATH_STAGE_EGRESS\x10\x04\x12\x1e\n" +
+	"\x1aPROTECTED_PATH_STAGE_READY\x10\x052\x8a\x02\n" +
+	"\x13SpeechToTextService\x12E\n" +
 	"\n" +
-	"request_id\x18\x06 \x01(\tR\trequestId\x12\x19\n" +
-	"\bactor_id\x18\a \x01(\tR\aactorId\x12\x1b\n" +
-	"\ttenant_id\x18\b \x01(\tR\btenantId\x12\x1d\n" +
-	"\n" +
-	"project_id\x18\t \x01(\tR\tprojectId\x12'\n" +
-	"\x0fconfig_revision\x18\n" +
-	" \x01(\x04R\x0econfigRevision\x12-\n" +
-	"\x12authority_revision\x18\v \x01(\x04R\x11authorityRevision\x126\n" +
-	"\x17authority_digest_sha256\x18\f \x01(\tR\x15authorityDigestSha256\"?\n" +
-	"=TranscriptionCredentialProjectionServiceCheckReadinessRequest\"V\n" +
-	">TranscriptionCredentialProjectionServiceCheckReadinessResponse\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready2\xab\x01\n" +
-	"\x13SpeechToTextService\x12C\n" +
-	"\n" +
-	"Transcribe\x12\x19.stt.v1.TranscribeRequest\x1a\x1a.stt.v1.TranscribeResponse\x12O\n" +
-	"\x0eCheckReadiness\x12\x1d.stt.v1.CheckReadinessRequest\x1a\x1e.stt.v1.CheckReadinessResponse2\xb5\x02\n" +
+	"Transcribe\x12\x19.stt.v1.TranscribeRequest\x1a\x1a.stt.v1.TranscribeResponse(\x01\x12O\n" +
+	"\x0eCheckReadiness\x12\x1d.stt.v1.CheckReadinessRequest\x1a\x1e.stt.v1.CheckReadinessResponse\x12[\n" +
+	"\x12CheckProtectedPath\x12!.stt.v1.CheckProtectedPathRequest\x1a\".stt.v1.CheckProtectedPathResponse2\x9b\x01\n" +
 	"$TranscriptionPolicyProjectionService\x12s\n" +
-	"\x1aResolveTranscriptionPolicy\x12).stt.v1.ResolveTranscriptionPolicyRequest\x1a*.stt.v1.ResolveTranscriptionPolicyResponse\x12\x97\x01\n" +
-	"\x0eCheckReadiness\x12A.stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessRequest\x1aB.stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessResponse2\xcd\x02\n" +
+	"\x1aResolveTranscriptionPolicy\x12).stt.v1.ResolveTranscriptionPolicyRequest\x1a*.stt.v1.ResolveTranscriptionPolicyResponse2\xab\x01\n" +
 	"(TranscriptionCredentialProjectionService\x12\x7f\n" +
-	"\x1eProjectTranscriptionCredential\x12-.stt.v1.ProjectTranscriptionCredentialRequest\x1a..stt.v1.ProjectTranscriptionCredentialResponse\x12\x9f\x01\n" +
-	"\x0eCheckReadiness\x12E.stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessRequest\x1aF.stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessResponseB<Z:github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1b\x06proto3"
+	"\x1eProjectTranscriptionCredential\x12-.stt.v1.ProjectTranscriptionCredentialRequest\x1a..stt.v1.ProjectTranscriptionCredentialResponseB<Z:github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1b\x06proto3"
 
 var (
 	file_stt_v1_stt_proto_rawDescOnce sync.Once
@@ -984,42 +1360,59 @@ func file_stt_v1_stt_proto_rawDescGZIP() []byte {
 	return file_stt_v1_stt_proto_rawDescData
 }
 
-var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_stt_v1_stt_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_stt_v1_stt_proto_goTypes = []any{
-	(*TranscribeRequest)(nil),                                              // 0: stt.v1.TranscribeRequest
-	(*TranscribeResponse)(nil),                                             // 1: stt.v1.TranscribeResponse
-	(*CheckReadinessRequest)(nil),                                          // 2: stt.v1.CheckReadinessRequest
-	(*CheckReadinessResponse)(nil),                                         // 3: stt.v1.CheckReadinessResponse
-	(*ResolveTranscriptionPolicyRequest)(nil),                              // 4: stt.v1.ResolveTranscriptionPolicyRequest
-	(*ResolveTranscriptionPolicyResponse)(nil),                             // 5: stt.v1.ResolveTranscriptionPolicyResponse
-	(*TranscriptionPolicyProjectionServiceCheckReadinessRequest)(nil),      // 6: stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessRequest
-	(*TranscriptionPolicyProjectionServiceCheckReadinessResponse)(nil),     // 7: stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessResponse
-	(*ProjectTranscriptionCredentialRequest)(nil),                          // 8: stt.v1.ProjectTranscriptionCredentialRequest
-	(*ProjectTranscriptionCredentialResponse)(nil),                         // 9: stt.v1.ProjectTranscriptionCredentialResponse
-	(*TranscriptionCredentialProjectionServiceCheckReadinessRequest)(nil),  // 10: stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessRequest
-	(*TranscriptionCredentialProjectionServiceCheckReadinessResponse)(nil), // 11: stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessResponse
-	(*timestamppb.Timestamp)(nil),                                          // 12: google.protobuf.Timestamp
+	(TranscriptionStage)(0),                        // 0: stt.v1.TranscriptionStage
+	(ProtectedPathStage)(0),                        // 1: stt.v1.ProtectedPathStage
+	(*TranscribeRequest)(nil),                      // 2: stt.v1.TranscribeRequest
+	(*TranscribeMetadata)(nil),                     // 3: stt.v1.TranscribeMetadata
+	(*TranscribeCommit)(nil),                       // 4: stt.v1.TranscribeCommit
+	(*TranscribeResponse)(nil),                     // 5: stt.v1.TranscribeResponse
+	(*TranscriptionReceipt)(nil),                   // 6: stt.v1.TranscriptionReceipt
+	(*CheckReadinessRequest)(nil),                  // 7: stt.v1.CheckReadinessRequest
+	(*CheckReadinessResponse)(nil),                 // 8: stt.v1.CheckReadinessResponse
+	(*CheckProtectedPathRequest)(nil),              // 9: stt.v1.CheckProtectedPathRequest
+	(*CheckProtectedPathResponse)(nil),             // 10: stt.v1.CheckProtectedPathResponse
+	(*DelegatedAuthorityLocator)(nil),              // 11: stt.v1.DelegatedAuthorityLocator
+	(*AuthorityIdentityProvenance)(nil),            // 12: stt.v1.AuthorityIdentityProvenance
+	(*ResolveTranscriptionPolicyRequest)(nil),      // 13: stt.v1.ResolveTranscriptionPolicyRequest
+	(*ResolveTranscriptionPolicyResponse)(nil),     // 14: stt.v1.ResolveTranscriptionPolicyResponse
+	(*ProjectTranscriptionCredentialRequest)(nil),  // 15: stt.v1.ProjectTranscriptionCredentialRequest
+	(*ProjectTranscriptionCredentialResponse)(nil), // 16: stt.v1.ProjectTranscriptionCredentialResponse
+	(*timestamppb.Timestamp)(nil),                  // 17: google.protobuf.Timestamp
 }
 var file_stt_v1_stt_proto_depIdxs = []int32{
-	12, // 0: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
-	12, // 1: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 2: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
-	2,  // 3: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
-	4,  // 4: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
-	6,  // 5: stt.v1.TranscriptionPolicyProjectionService.CheckReadiness:input_type -> stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessRequest
-	8,  // 6: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
-	10, // 7: stt.v1.TranscriptionCredentialProjectionService.CheckReadiness:input_type -> stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessRequest
-	1,  // 8: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
-	3,  // 9: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
-	5,  // 10: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
-	7,  // 11: stt.v1.TranscriptionPolicyProjectionService.CheckReadiness:output_type -> stt.v1.TranscriptionPolicyProjectionServiceCheckReadinessResponse
-	9,  // 12: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
-	11, // 13: stt.v1.TranscriptionCredentialProjectionService.CheckReadiness:output_type -> stt.v1.TranscriptionCredentialProjectionServiceCheckReadinessResponse
-	8,  // [8:14] is the sub-list for method output_type
-	2,  // [2:8] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	3,  // 0: stt.v1.TranscribeRequest.metadata:type_name -> stt.v1.TranscribeMetadata
+	4,  // 1: stt.v1.TranscribeRequest.commit:type_name -> stt.v1.TranscribeCommit
+	6,  // 2: stt.v1.TranscribeResponse.receipt:type_name -> stt.v1.TranscriptionReceipt
+	0,  // 3: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
+	1,  // 4: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
+	12, // 5: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
+	12, // 6: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
+	12, // 7: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
+	17, // 8: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 9: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	17, // 10: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 11: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	11, // 12: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	17, // 13: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 14: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	2,  // 15: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
+	7,  // 16: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
+	9,  // 17: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
+	13, // 18: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
+	15, // 19: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
+	5,  // 20: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
+	8,  // 21: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
+	10, // 22: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
+	14, // 23: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
+	16, // 24: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
+	20, // [20:25] is the sub-list for method output_type
+	15, // [15:20] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_stt_v1_stt_proto_init() }
@@ -1027,18 +1420,24 @@ func file_stt_v1_stt_proto_init() {
 	if File_stt_v1_stt_proto != nil {
 		return
 	}
+	file_stt_v1_stt_proto_msgTypes[0].OneofWrappers = []any{
+		(*TranscribeRequest_Metadata)(nil),
+		(*TranscribeRequest_Chunk)(nil),
+		(*TranscribeRequest_Commit)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stt_v1_stt_proto_rawDesc), len(file_stt_v1_stt_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   12,
+			NumEnums:      2,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
 		GoTypes:           file_stt_v1_stt_proto_goTypes,
 		DependencyIndexes: file_stt_v1_stt_proto_depIdxs,
+		EnumInfos:         file_stt_v1_stt_proto_enumTypes,
 		MessageInfos:      file_stt_v1_stt_proto_msgTypes,
 	}.Build()
 	File_stt_v1_stt_proto = out.File

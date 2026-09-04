@@ -118,7 +118,7 @@ capability и исполнение effect остаются в существую
 | --- | --- | --- |
 | Mattermost | Optional inbound, notifications, result mirror и Human Gate decisions | Typed interaction adapter |
 | OpenAI Codex | Первый поставщик среды выполнения агента | Адаптер поставщика и device-code авторизация |
-| OpenAI Audio Transcriptions | Русское STT для Control Center | `stt-tts-service`, `gpt-transcribe`, exact HTTPS через egress-gateway |
+| OpenAI Audio Transcriptions | Планируемое русское STT для Control Center | Неактивный `stt-tts-service`; после #1019/#1021/#1023/#1024 — `gpt-transcribe` и exact HTTPS через egress-gateway |
 | GitHub | Репозитории, Issues, PR и рецензирование | Типизированный управляемый MCP adapter по exact grant |
 | Kubernetes | Среда платформы и целевых проектов | Kubernetes платформы — внутренний runtime boundary; целевые кластеры — типизированный MCP adapter по exact grant |
 | Электронная почта | Прием и исходящая коммуникация | Управляемый MCP |
@@ -151,7 +151,9 @@ STT adapter допускает только `POST https://api.openai.com/v1/audi
 `model=gpt-transcribe` и `language=ru`; произвольные provider-параметры из
 browser отсутствуют. API key выдаёт `secret-broker` краткоживущей projection
 для exact actor/tenant/config/account generation и не получает
-`egress-gateway`.
+`egress-gateway`. До materialization producer/consumer/authority из
+#1019/#1021/#1023/#1024 этот путь не включён в shipped profiles, а STT producer
+закрыто отказывает до projection RPC.
 
 ## Контракт согласования
 

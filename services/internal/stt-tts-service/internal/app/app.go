@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
+	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
@@ -23,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/projection"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/protectedrpc"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
+	servicemetrics "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/observability/metrics"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,9 +33,10 @@ import (
 )
 
 const (
-	serviceName      = "stt-tts-service"
-	metricsSubsystem = "stt_tts_service"
-	callerSPIFFEID   = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	serviceName        = "stt-tts-service"
+	metricsSubsystem   = "stt_tts_service"
+	callerSPIFFEID     = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	grpcShutdownBudget = 22 * time.Second
 )
 
 type checker interface{ Check(context.Context) error }
@@ -54,44 +58,42 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	logger := telemetry.Logger(os.Stdout)
 	methods := map[string]string{
-		sttv1.SpeechToTextService_Transcribe_FullMethodName:     "transcribe",
-		sttv1.SpeechToTextService_CheckReadiness_FullMethodName: "readiness",
+		sttv1.SpeechToTextService_Transcribe_FullMethodName:         "transcribe",
+		sttv1.SpeechToTextService_CheckReadiness_FullMethodName:     "readiness",
+		sttv1.SpeechToTextService_CheckProtectedPath_FullMethodName: "protected_path",
 	}
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, methods)
-	defer func() {
-		trace, cancelTrace := context.WithTimeout(shutdownBase, 5*time.Second)
-		resultErr = errors.Join(resultErr, telemetry.ShutdownTracing(trace))
-		cancelTrace()
-		sentry, cancelSentry := context.WithTimeout(shutdownBase, 5*time.Second)
-		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
-		cancelSentry()
-	}()
+	outcomes := servicemetrics.New()
+	if err := metrics.Register(outcomes.Collector()); err != nil {
+		return errors.New("register STT service metrics")
+	}
 	dependencies, err := protectedrpc.Dial(startup, protectedrpc.Config{
 		Policy:          protectedrpc.TargetConfig{Target: config.PolicyTarget, TLSServerName: config.PolicyTLSServerName, CAFile: config.DependencyCAFile},
 		Credential:      protectedrpc.TargetConfig{Target: config.CredentialTarget, TLSServerName: config.CredentialTLSServerName, CAFile: config.DependencyCAFile},
-		Resolver:        protectedrpc.TargetConfig{Target: config.ResolverTarget, TLSServerName: config.ResolverTLSServerName, CAFile: config.DependencyCAFile},
 		CertificateFile: config.WorkloadCertificateFile, PrivateKeyFile: config.WorkloadPrivateKeyFile,
-		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: config.AuthorityIssuerUID,
-		ExpectedIssuerGID: config.AuthorityIssuerGID, DialTimeout: config.ReadinessTimeout,
+		DialTimeout: config.ReadinessTimeout,
 	})
 	if err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, dependencies.Close()) }()
-	policy, err := projection.NewPolicy(dependencies.Policy)
+	policy, err := projection.NewPolicy(dependencies.Policy, dependencies)
 	if err != nil {
+		_ = dependencies.Close()
 		return err
 	}
-	credential, err := projection.NewCredential(dependencies.Credential)
+	credential, err := projection.NewCredential(dependencies.Credential, dependencies)
 	if err != nil {
+		_ = dependencies.Close()
 		return err
 	}
 	provider, err := openai.New()
 	if err != nil {
+		_ = dependencies.Close()
 		return err
 	}
-	domain, err := transcriptionservice.New(policy, credential, provider, config.RequestTimeout)
+	domain, err := transcriptionservice.New(policy, credential, provider, outcomes, config.RequestTimeout)
 	if err != nil {
+		_ = dependencies.Close()
 		return err
 	}
 	verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
@@ -99,67 +101,121 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: config.ReadinessTimeout,
 	})
 	if err != nil {
+		_ = dependencies.Close()
 		return errors.New("connect STT authorization verifier")
 	}
-	defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
-	handler, err := transportgrpc.New(domain)
+	handler, err := transportgrpc.New(domain, config.SpoolDirectory)
 	if err != nil {
+		_ = verifier.Close()
+		_ = dependencies.Close()
 		return err
 	}
 	tlsConfig, err := serverTLS(config)
 	if err != nil {
+		_ = verifier.Close()
+		_ = dependencies.Close()
 		return err
 	}
+	errorObserver := grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
+		logger.Error("unexpected gRPC failure", "method", normalizeMethod(methods, method), "code", code.String())
+	})
 	grpcServer := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
-		grpc.ChainUnaryInterceptor(
-			metrics.UnaryServerInterceptor(), telemetry.UnaryServerInterceptor(methods),
-			authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()),
-			grpcserver.RejectMalformedUnary,
-			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
-				logger.Error("unexpected gRPC failure", "method", normalizeMethod(methods, method), "code", code.String())
-			})),
-		),
-		grpc.MaxRecvMsgSize(26<<20), grpc.MaxSendMsgSize(1<<20),
+		grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), telemetry.UnaryServerInterceptor(methods),
+			authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()), grpcserver.RejectMalformedUnary,
+			grpcserver.ErrorBoundary(errorObserver)),
+		grpc.ChainStreamInterceptor(authorityclient.VerifierStreamServerInterceptor(verifier.Verifier()),
+			grpcserver.RejectMalformedStream, grpcserver.StreamErrorBoundary(errorObserver)),
+		grpc.MaxRecvMsgSize(68<<10), grpc.MaxSendMsgSize(1<<20),
 	)
 	sttv1.RegisterSpeechToTextServiceServer(grpcServer, handler)
-	listener, err := net.Listen("tcp", config.GRPCListen)
+	grpcListener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
+		_ = verifier.Close()
+		_ = dependencies.Close()
 		return errors.New("listen for STT gRPC")
 	}
 	readiness := serviceruntime.NewReadiness()
-	readiness.Set(false, "infrastructure_starting")
+	readiness.Set(false, "local_runtime_starting")
 	metrics.SetReady(false)
-	technical := technicalServer(lifecycle, config, readiness, metrics)
-	verifierCheck := verifierReadiness{client: verifier.Verifier()}
-	checks := []checker{domain, dependencies, verifierCheck}
-	if err := checkAll(startup, checks...); err != nil {
-		_ = listener.Close()
-		return errors.Join(errors.New("STT startup barrier failed"), err)
+	technical, err := httpserver.New(httpserver.Config{
+		Address: config.TechnicalListen, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second,
+		WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second,
+		MaximumHeaderBytes: 16 << 10, MaximumConnections: 128,
+	}, readiness, metrics.PrometheusHandler(), httpserver.ExactGETRoute{
+		Path: "/diagnostics/protected-path", ContentType: "application/json; charset=utf-8",
+		Handler: protectedPathHandler(domain, config.ReadinessTimeout),
+	})
+	if err != nil || technical.Listen() != nil {
+		_ = grpcListener.Close()
+		_ = verifier.Close()
+		_ = dependencies.Close()
+		return errors.New("listen for STT technical HTTP")
+	}
+	localChecks := []checker{domainLocalCheck{domain}, verifierReadiness{verifier.Verifier()}, spoolReadiness{config.SpoolDirectory}}
+	if err := checkAll(startup, localChecks...); err != nil {
+		_ = grpcListener.Close()
+		_ = technical.Shutdown(shutdownBase)
+		_ = verifier.Close()
+		_ = dependencies.Close()
+		return errors.Join(errors.New("STT local startup barrier failed"), err)
 	}
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
-	workers := serviceruntime.StartWorkers(lifecycle, serveGRPC(grpcServer, listener), serveHTTP(technical),
-		monitorReadiness(readiness, metrics, logger, config.ReadinessTimeout, checks...))
-	err = workers.Wait(context.WithoutCancel(lifecycle))
+	workers := serviceruntime.StartWorkers(lifecycle, serveGRPC(grpcServer, grpcListener), serveHTTP(technical),
+		monitorReadiness(readiness, metrics, logger, config.ReadinessTimeout, localChecks...))
+	workerDone := make(chan error, 1)
+	go func() { workerDone <- workers.Wait(context.WithoutCancel(shutdownBase)) }()
+	select {
+	case resultErr = <-workerDone:
+	case <-lifecycle.Done():
+	}
+	readiness.Set(false, "shutting_down")
+	metrics.SetReady(false)
+	workers.Stop()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
-		serviceruntime.ShutdownOperation{Name: "STT gRPC server", Timeout: config.ShutdownTimeout, Run: func(context.Context) error { grpcServer.GracefulStop(); return nil }},
-		serviceruntime.ShutdownOperation{Name: "STT technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown},
-		serviceruntime.ShutdownOperation{Name: "STT workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
+		serviceruntime.ShutdownOperation{Name: "STT gRPC server", Timeout: grpcShutdownBudget, Run: func(ctx context.Context) error {
+			graceful, cancel := context.WithTimeout(ctx, 21*time.Second)
+			defer cancel()
+			return grpcserver.GracefulStop(graceful, grpcServer)
+		}},
+		serviceruntime.ShutdownOperation{Name: "STT technical HTTP server", Timeout: 2 * time.Second, Run: technical.Shutdown},
+		serviceruntime.ShutdownOperation{Name: "STT workers", Timeout: 2 * time.Second, Run: workers.Wait},
+		serviceruntime.ShutdownOperation{Name: "STT dependency connections", Timeout: time.Second, Run: func(context.Context) error { return dependencies.Close() }},
+		serviceruntime.ShutdownOperation{Name: "STT verifier connection", Timeout: time.Second, Run: func(context.Context) error { return verifier.Close() }},
+		serviceruntime.ShutdownOperation{Name: "STT tracing", Timeout: time.Second, Run: telemetry.ShutdownTracing},
+		serviceruntime.ShutdownOperation{Name: "STT Sentry", Timeout: time.Second, Run: telemetry.FlushSentry},
 	)
-	return errors.Join(err, shutdownErr)
+	return errors.Join(resultErr, shutdownErr)
 }
+
+type domainLocalCheck struct{ service *transcriptionservice.Service }
+
+func (check domainLocalCheck) Check(ctx context.Context) error { return check.service.CheckLocal(ctx) }
 
 type verifierReadiness struct {
 	client internalrpcauthorityv1.AuthorizationVerifierServiceClient
 }
 
-func (checker verifierReadiness) Check(ctx context.Context) error {
-	response, err := checker.client.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
+func (check verifierReadiness) Check(ctx context.Context) error {
+	response, err := check.client.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest{})
 	if err != nil || !response.GetReady() {
 		return errors.New("STT authorization verifier is not ready")
 	}
 	return nil
+}
+
+type spoolReadiness struct{ directory string }
+
+func (check spoolReadiness) Check(context.Context) error {
+	file, err := os.CreateTemp(check.directory, ".readiness-*")
+	if err != nil {
+		return errors.New("STT spool is not writable")
+	}
+	name := file.Name()
+	closeErr := file.Close()
+	removeErr := os.Remove(name)
+	return errors.Join(closeErr, removeErr)
 }
 
 func checkAll(ctx context.Context, checkers ...checker) error {
@@ -175,6 +231,11 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-ticker.C:
+			}
 			check, cancel := context.WithTimeout(ctx, timeout)
 			err := checkAll(check, checkers...)
 			cancel()
@@ -185,60 +246,58 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 				}
 			} else {
 				metrics.SetReady(false)
-				if readiness.Set(false, "dependency_unavailable") {
-					logger.WarnContext(ctx, "STT readiness lost", "error_class", "dependency")
+				if readiness.Set(false, "local_runtime_unavailable") {
+					logger.WarnContext(ctx, "STT readiness lost", "error_class", "local_runtime")
 				}
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-ticker.C:
 			}
 		}
 	}
 }
 
-func technicalServer(lifecycle context.Context, config Config, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics) *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("/readyz", func(writer http.ResponseWriter, _ *http.Request) {
-		ready, reason := readiness.Ready()
+func protectedPathHandler(service *transcriptionservice.Service, timeout time.Duration) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ctx, cancel := context.WithTimeout(request.Context(), timeout)
+		defer cancel()
+		ready := service.CheckProtectedPath(ctx) == nil
+		status := http.StatusOK
+		stage := "ready"
 		if !ready {
-			http.Error(writer, reason, http.StatusServiceUnavailable)
-			return
+			status = http.StatusFailedDependency
+			stage = "delegated_authority"
 		}
-		writer.WriteHeader(http.StatusNoContent)
+		writer.WriteHeader(status)
+		_ = json.NewEncoder(writer).Encode(map[string]any{"ready": ready, "stage": stage})
 	})
-	mux.Handle("/metrics", metrics.PrometheusHandler())
-	return &http.Server{Addr: config.TechnicalListen, Handler: mux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 }
 
 func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
-		go func() { done <- server.Serve(listener) }()
+		go func() {
+			err := server.Serve(listener)
+			if errors.Is(err, grpc.ErrServerStopped) {
+				err = nil
+			}
+			done <- err
+		}()
 		select {
 		case err := <-done:
 			return err
 		case <-ctx.Done():
-			server.GracefulStop()
-			return <-done
+			return ctx.Err()
 		}
 	}
 }
-func serveHTTP(server *http.Server) serviceruntime.Worker {
+
+func serveHTTP(server *httpserver.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
-		go func() { done <- server.ListenAndServe() }()
+		go func() { done <- server.Serve() }()
 		select {
 		case err := <-done:
-			if errors.Is(err, http.ErrServerClosed) {
-				return nil
-			}
 			return err
 		case <-ctx.Done():
-			_ = server.Close()
-			return nil
+			return ctx.Err()
 		}
 	}
 }
@@ -267,8 +326,7 @@ func serverTLS(config Config) (*tls.Config, error) {
 				}
 			}
 			return errors.New("STT client identity is invalid")
-		},
-	}, nil
+		}}, nil
 }
 
 func normalizeMethod(methods map[string]string, method string) string {
