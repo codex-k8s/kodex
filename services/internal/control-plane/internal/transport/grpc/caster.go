@@ -295,13 +295,20 @@ func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.
 		Ready: value.Ready, ReadinessBlockers: value.ReadinessBlockers, NextActions: nextActions(value.NextActions)}
 }
 func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *controlplanev1.AgentRuntimeConfigurationView {
-	return &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),
+	result := &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),
 		PublishedOverlay: castConfigOverlay(&value.PublishedOverlay), DraftOverlay: castConfigOverlay(value.DraftOverlay),
 		EnvironmentBinding: &controlplanev1.AgentRuntimeEnvironmentBinding{Ref: value.EnvironmentBinding.Ref,
 			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
 			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest, VersionRef: value.EnvironmentBinding.VersionRef},
 		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
 		AgentVersion: value.AgentVersion}
+	for _, binding := range value.SkillBindings {
+		result.SkillBindings = append(result.SkillBindings, castContextBinding(binding))
+	}
+	for _, binding := range value.MemoryBindings {
+		result.MemoryBindings = append(result.MemoryBindings, castContextBinding(binding))
+	}
+	return result
 }
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
 	result := &controlplanev1.IntegrationCapability{

@@ -233,6 +233,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.saveSkillDraft(ctx, tx, scope, input)
 	case command.ValidateSkillBundleDraft:
 		return repository.validateSkillDraft(ctx, tx, scope, input)
+	case command.BindAgentMemoryRecord, command.UnbindAgentMemoryRecord, command.BindAgentSkillBundle, command.UnbindAgentSkillBundle:
+		return repository.changeContextBinding(ctx, tx, scope, input)
 	case command.ReviewSkillBundleDraft, command.PublishSkillBundleDraft, command.DiscardSkillBundleDraft, command.ArchiveSkillBundle, command.RestoreSkillBundle, command.PurgeSkillBundle:
 		return repository.transitionSkillBundle(ctx, tx, scope, input)
 	case command.CompleteOnboarding:

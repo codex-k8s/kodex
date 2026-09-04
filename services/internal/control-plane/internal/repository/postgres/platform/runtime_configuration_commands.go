@@ -693,10 +693,17 @@ func lockOverlayDraft(ctx context.Context, tx pgx.Tx, organizationID, agentRef s
 }
 
 func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	// Caller уже проверил точное право Agent; legacy membership не заменяет эту policy.
 	view, err := repository.scanAgentRuntimeConfigurationView(tx.QueryRow(ctx, queryRuntimeConfigurationGetAgentView,
-		scope.organizationID, ref, scope.role, scope.actorID))
+		scope.organizationID, ref, "OWNER", scope.actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
+	}
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
+	}
+	if err := repository.populateContextBindings(ctx, tx, scope, ref, &view); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	return view, nil
 }
