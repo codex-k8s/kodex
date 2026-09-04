@@ -72,11 +72,13 @@ Full baseline, review итогового интегрированного SHA, s
 по локальным fixture-тестам. Откат application не откатывает PostgreSQL schema;
 неизвестные outcomes нельзя переводить в READY старым бинарём.
 
-Локальный `make test-web-only-release` завершился `FAIL` на общей проверке
-`provider credential publisher delivery targets are incomplete`.
-Формирование обоих profiles через `kubectl kustomize` успешно; это отдельный
-результат, не успешный общий release suite. Общий publisher registry не менялся
-в #1028. Deployed browser replay fixture прежнего профиля не запускался.
+Первый локальный `make test-web-only-release` завершился `FAIL` на проверке
+`provider credential publisher delivery targets are incomplete`. После
+интеграции актуального `main` и #1048 полный release suite повторно выполнен
+на содержимом `5fe379f24685a03245496dbe3129638d47c42216`: `PASS`.
+Также повторно прошли targeted PostgreSQL, оба integration render-профиля и
+package/email/proto codegen. Это локальные проверки, не CI и не staging.
+Deployed browser replay fixture прежнего профиля не запускался.
 
 После rebase на runtime #1047 общий PostgreSQL suite остановился на
 `session_provider_affinity_survives_policy_mutation_and_fails_closed_on_revoke`:
