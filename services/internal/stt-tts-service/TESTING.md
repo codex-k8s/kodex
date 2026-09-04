@@ -10,14 +10,14 @@ updated: 2026-09-05
 
 # Проверка #1020
 
-База: main `1cf399a5f`, включая scheduler1027/policy44. Общую authority policy
-этот unit не изменяет. CP1046/policy45 и HTTP1045 интегрирует root; глобальная
+База: main `dfa54dab9`, включая scheduler1027 и STT egress #1052. Общую authority policy
+этот unit не изменяет. CP1046 и HTTP1045 интегрирует root; глобальная
 browser-проверка их объединённого результата не является локальным STT тестом.
 
 ## Критерий → свидетельство
 
 Дополнение1029: checkpoint `fd93e6f4ebd254be41fcb4cc9e7a4775a20f932b`
-слит с сохранением consumer NetworkPolicy8081. STT expectations сверяются
+интегрирован с сохранением consumer NetworkPolicy8081. STT expectations сверяются
 с canonical digest и profile фактической rendered policy.
 `TestEgressReadbackRequiresEveryExactHeader` покрывает absent/wrong/duplicate
 для revision/digest/profile/workload/operation и 204/503.
@@ -60,17 +60,21 @@ Optional `STT_PLAYWRIGHT_PACKAGE` указывает package.json установ
 
 ## NOT RUN
 
-- Live OpenAI: отдельный тестовый ключ не предоставлен. Direct smoke после
+- Live OpenAI: в локальных проверках тестовый ключ не используется. Direct smoke после
   успешного fixture preflight выдаёт NOT RUN, не PASS.
 - Safari macOS/iOS и hardware microphone: среда отсутствует. Linux WebKit
   26.5 не предоставляет MediaRecorder; его case SKIP/NOT RUN, не Safari PASS.
 - Staging/deploy, registry promotion/node pull, живые issuer/readback и
-  финальное объединённое browser acceptance: разрешение не выдавалось.
+  финальное объединённое browser acceptance: выполняются после полной
+  интеграции эпика по разрешённому плану #1031, здесь не запускались.
 
 Периодический refresh Bootstrap по TTL вызывает свежий probe через
 пользовательский authenticated stream. Отдельный незащищённый account-wide
 обход не используется; key не сохраняется между probes. Model metadata GET
 не доказывает платную транскрипцию и не заменяет live smoke.
 
-Push, PR, merge и deploy этим unit не выполняются. Итоговый SHA и локальные
-результаты сообщаются root отдельно; per-unit review отменён владельцем.
+Root публикует unit после проверок точного SHA. Per-unit review отменён
+владельцем только в ускоренной волне; общий итоговый gate сохраняется.
+Tracing/Sentry cleanup зарегистрирован сразу после создания telemetry и
+выполняется также при раннем startup failure, с независимыми ограниченными
+контекстами и без повторного flush при штатном shutdown.
