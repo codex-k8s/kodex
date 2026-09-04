@@ -19,16 +19,32 @@ import (
 )
 
 func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, principal value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
-	row := repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetAgentView, scope.organizationID, ref, scope.role, scope.actorID)
-	view, err := repository.scanAgentRuntimeConfigurationView(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
-	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "agent.view", "AGENT", ref, "")
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if scope.authorityProjectID != "" && scope.authorityProjectID != target.projectID {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrForbidden
+	}
+	if err := repository.requireAccess(ctx, tx, scope, "agent.view", target); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if tx.Commit(ctx) != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	return view, nil

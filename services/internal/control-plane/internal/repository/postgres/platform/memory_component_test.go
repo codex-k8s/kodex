@@ -52,6 +52,7 @@ func testMemoryRecords(t *testing.T, ctx context.Context, repository *Repository
 		t.Fatalf("stale revision: %v", err)
 	}
 	record = updated.MemoryRecord
+	testContextBinding(t, ctx, service, owner, project.Project.Ref, record.Ref, record.CurrentRevision.Ref, "memory-context", true)
 	history, total, next, err := service.ListMemoryRecordRevisions(ctx, owner, record.Ref, query.Page{Size: 1})
 	if err != nil || total != 2 || len(history) != 1 || next == "" {
 		t.Fatalf("history page: total=%d count=%d next=%t err=%v", total, len(history), next != "", err)

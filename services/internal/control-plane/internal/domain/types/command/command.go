@@ -28,6 +28,8 @@ const (
 	PurgeMemoryRecord               Kind = "PURGE_MEMORY_RECORD"
 	BindAgentMemoryRecord           Kind = "BIND_AGENT_MEMORY_RECORD"
 	UnbindAgentMemoryRecord         Kind = "UNBIND_AGENT_MEMORY_RECORD"
+	BindAgentSkillBundle            Kind = "BIND_AGENT_SKILL_BUNDLE"
+	UnbindAgentSkillBundle          Kind = "UNBIND_AGENT_SKILL_BUNDLE"
 	CompleteOnboarding              Kind = "COMPLETE_ONBOARDING"
 	CreateProject                   Kind = "CREATE_PROJECT"
 	UpdateProject                   Kind = "UPDATE_PROJECT"
