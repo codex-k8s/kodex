@@ -4,8 +4,8 @@ title: Runbooks Kodex
 type: runbook-index
 status: approved
 owner: sre
-version: 2.0.0
-updated: 2026-08-25
+version: 2.1.0
+updated: 2026-09-04
 ---
 
 # Runbooks Kodex
@@ -25,6 +25,8 @@ updated: 2026-08-25
 - `artifact-retention.md` — 30-day trash retention и exact object version purge;
 - `session-archive.md` — snapshot/restore session JSONL, guarded PVC cleanup и GC;
 - `secret-broker.md` — Runtime Secret operations, recovery и exact cleanup;
+- `stt-tts-service.md` — STT authority/projection/OpenAI path без вывода
+  аудио, transcript или credential;
 - `internal-rpc-authority.md` и `egress-gateway.md` — security boundaries.
 
 Runbooks не разрешают merge, deployment, reset или доступ к live credentials.

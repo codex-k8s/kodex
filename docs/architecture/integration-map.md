@@ -4,8 +4,8 @@ title: Карта интеграций
 type: architecture
 status: approved
 owner: architect
-version: 1.4.0
-updated: 2026-08-28
+version: 1.5.0
+updated: 2026-09-04
 ---
 
 # Карта интеграций
@@ -118,6 +118,7 @@ capability и исполнение effect остаются в существую
 | --- | --- | --- |
 | Mattermost | Optional inbound, notifications, result mirror и Human Gate decisions | Typed interaction adapter |
 | OpenAI Codex | Первый поставщик среды выполнения агента | Адаптер поставщика и device-code авторизация |
+| OpenAI Audio Transcriptions | Русское STT для Control Center | `stt-tts-service`, `gpt-transcribe`, exact HTTPS через egress-gateway |
 | GitHub | Репозитории, Issues, PR и рецензирование | Типизированный управляемый MCP adapter по exact grant |
 | Kubernetes | Среда платформы и целевых проектов | Kubernetes платформы — внутренний runtime boundary; целевые кластеры — типизированный MCP adapter по exact grant |
 | Электронная почта | Прием и исходящая коммуникация | Управляемый MCP |
@@ -144,6 +145,13 @@ CONNECT authority и фактического ClientHello SNI, запрещае�
 server-owned A/AAAA resolution с TTL/CNAME/special-purpose validation. TLS
 остаётся end-to-end, поэтому application credentials и проверка сертификата
 не переходят к gateway.
+
+STT adapter допускает только `POST https://api.openai.com/v1/audio/transcriptions`
+с end-to-end TLS. Multipart содержит проверенный файл, server-pinned
+`model=gpt-transcribe` и `language=ru`; произвольные provider-параметры из
+browser отсутствуют. API key выдаёт `secret-broker` краткоживущей projection
+для exact actor/tenant/config/account generation и не получает
+`egress-gateway`.
 
 ## Контракт согласования
 

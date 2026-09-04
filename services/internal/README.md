@@ -22,3 +22,6 @@ Proto/gRPC.
 - [`control-plane`](control-plane/README.md) — авторитетные проекты, роли,
   конфигурация, sessions/run lineage, schedules, gates, integration metadata и
   artifacts.
+- [`stt-tts-service`](stt-tts-service/README.md) — stateless STT с
+  server-owned policy/credential projections и exact OpenAI egress; TTS в
+  текущем контракте отсутствует.

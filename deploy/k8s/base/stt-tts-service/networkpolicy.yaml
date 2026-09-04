@@ -1,0 +1,75 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stt-tts-service-default-deny
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: stt-tts-service}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stt-tts-service-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: stt-tts-service
+      app.kubernetes.io/component: internal-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-api-gateway
+              app.kubernetes.io/component: external-gateway
+      ports: [{protocol: TCP, port: 8443}]
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: prometheus}
+      ports: [{protocol: TCP, port: 9090}]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+              app.kubernetes.io/component: internal-service
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: secret-broker
+              app.kubernetes.io/component: secret-broker
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kodex-system}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: egress-gateway
+              app.kubernetes.io/component: platform-egress
+      ports: [{protocol: TCP, port: 8080}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: opentelemetry-collector}
+      ports: [{protocol: TCP, port: 4317}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sentry-relay}
+      ports: [{protocol: TCP, port: 8443}]

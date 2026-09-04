@@ -28,6 +28,10 @@ spec:
             matchLabels:
               app.kubernetes.io/name: control-plane
               app.kubernetes.io/component: internal-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stt-tts-service
+              app.kubernetes.io/component: internal-service
       ports:
         - {protocol: TCP, port: 8443}
     - from:

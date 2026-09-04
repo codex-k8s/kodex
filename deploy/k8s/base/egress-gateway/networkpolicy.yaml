@@ -50,6 +50,13 @@ spec:
             matchLabels:
               app.kubernetes.io/name: release-artifact-materializer
               app.kubernetes.io/component: release-bootstrap
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stt-tts-service
+              app.kubernetes.io/component: internal-service
       ports:
         - {protocol: TCP, port: 8080}
     - from:

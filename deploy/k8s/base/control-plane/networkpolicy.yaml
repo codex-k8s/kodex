@@ -56,6 +56,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: secret-broker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stt-tts-service
+              app.kubernetes.io/component: internal-service
       ports:
         - protocol: TCP
           port: 8443

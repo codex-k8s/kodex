@@ -11,7 +11,7 @@ GRPC_GO_PLUGIN_LOCAL_VERSION := 1.6.2
 CONTROL_API_GATEWAY_ASYNCAPI_PARSER_VERSION := 3.6.3
 OAPI_CODEGEN_VERSION := v2.7.1
 
-.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-session-archive-seaweedfs-e2e test-integration-synthetic test-full-local-e2e-entrypoint test-local-e2e-oidc-group-fixture-contract test-local-backup-controller-credentials-contract test-local-go-cache-contract test-local-image-cache-import-contract test-local-kubernetes-api-egress-contract test-local-object-storage-capacity-contract test-local-provider-account-persistence-contract test-local-material-contract-revision test-integration-deployed-e2e-check test-integration-deployed-e2e test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
+.PHONY: check-go-toolchain check-sql-boundary check-proto-toolchain check-openapi-toolchain check-control-api-gateway-asyncapi-toolchain test-go-toolchain-contract test-web-only-release test-service-infrastructure-bootstrap test-management-surfaces test-install-contract test-authority-policy-codegen test-control-plane-postgres test-internal-rpc-authority-postgres test-session-archive-seaweedfs-e2e test-integration-synthetic test-full-local-e2e-entrypoint test-local-e2e-oidc-group-fixture-contract test-local-backup-controller-credentials-contract test-local-go-cache-contract test-local-image-cache-import-contract test-local-kubernetes-api-egress-contract test-local-object-storage-capacity-contract test-local-provider-account-persistence-contract test-local-material-contract-revision test-integration-deployed-e2e-check test-integration-deployed-e2e test-stt-tts-service-contract test-stt-security-negative test-stt-acceptance test-go test-go-all tidy-go govulncheck gen-integration-packages check-integration-package-codegen gen-openapi gen-openapi-go gen-control-api-gateway-openapi-go gen-control-api-gateway-asyncapi check-control-api-gateway-asyncapi-codegen lint-control-api-gateway-asyncapi gen-openapi-ts lint-proto build-proto gen-proto check-proto-codegen
 
 check-go-toolchain:
 	@./scripts/check-go-toolchain.sh
@@ -108,6 +108,17 @@ test-integration-deployed-e2e-check:
 
 test-integration-deployed-e2e:
 	@./scripts/tests/integration-deployed-e2e.sh
+
+test-stt-tts-service-contract:
+	@./scripts/tests/stt-tts-service-contract-test.sh
+
+test-stt-security-negative:
+	@cd services/internal/stt-tts-service && env -u GOFLAGS GOENV=off GOWORK=off \
+		go test ./internal/... -run 'TestConfigRejectsAlternateSecurityBoundary|TestPolicyProjectionRequiresExactAuthorityEcho|TestWithProjectReferenceRequiresCanonicalLocator|TestTranscribeFailsClosedBeforeProvider|TestTranscribeCapsDeadlineByAuthorityExpiry|TestValidateAudioRejectsTrailingWAVDataAndHeaderOnlyFLAC|TestTranscribeRejectsMissingVerifiedContext|TestServerBoundsConcurrentTranscriptions|TestTranscribeRejectsProviderDiagnostics|TestTransportErrorDoesNotExposeProviderDiagnostics|TestTransportErrorPreservesRequestCancellation'
+
+test-stt-acceptance:
+	@cd services/internal/stt-tts-service && env -u GOFLAGS GOENV=off GOWORK=off \
+		go test ./internal/clients/openai -run '^TestLiveRussianNumberFixture$$' -v
 
 test-go: test-go-toolchain-contract check-sql-boundary
 	@./scripts/test-go-modules.sh

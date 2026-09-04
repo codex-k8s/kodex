@@ -39,5 +39,18 @@ plugins:
       - require_unimplemented_servers=true
     types:
       - secretbroker.v1
+  - local: protoc-gen-go
+    out: libs/go/sttapi
+    opt:
+      - module=github.com/codex-k8s/kodex/libs/go/sttapi
+    types:
+      - stt.v1
+  - local: protoc-gen-go-grpc
+    out: libs/go/sttapi
+    opt:
+      - module=github.com/codex-k8s/kodex/libs/go/sttapi
+      - require_unimplemented_servers=true
+    types:
+      - stt.v1
 inputs:
   - directory: contracts/proto

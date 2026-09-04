@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stt-tts-service-runtime
+data:
+  STT_GRPC_LISTEN: ":8443"
+  STT_TECHNICAL_LISTEN: ":9090"
+  STT_POLICY_TARGET: "dns:///control-plane.kodex-system.svc:8443"
+  STT_POLICY_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
+  STT_CREDENTIAL_TARGET: "dns:///secret-broker.kodex-system.svc:8443"
+  STT_CREDENTIAL_TLS_SERVER_NAME: "secret-broker.kodex-system.svc.cluster.local"
+  STT_AUTHORITY_RESOLVER_TARGET: "dns:///control-plane.kodex-system.svc:8443"
+  STT_AUTHORITY_RESOLVER_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
+  STT_REQUEST_TIMEOUT: "45s"
+  STT_STARTUP_TIMEOUT: "30s"
+  STT_READINESS_TIMEOUT: "5s"
+  STT_SHUTDOWN_TIMEOUT: "20s"

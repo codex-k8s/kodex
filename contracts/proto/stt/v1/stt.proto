@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package stt.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1";
+
+// SpeechToTextService предоставляет только распознавание речи. TTS не входит
+// в текущую версию публичного контракта.
+service SpeechToTextService {
+  // Transcribe принимает ограниченный аудиофайл. Полномочия, tenant, project,
+  // конфигурация модели и credential выводятся только на стороне сервера.
+  rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+
+  // CheckReadiness проверяет локальный production path без provider effect.
+  rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse);
+}
+
+// TranscriptionPolicyProjectionService — producer contract control-plane для
+// #1019. Project в request является только locator из уже проверенного
+// authorization context и повторно разрешается владельцем данных.
+service TranscriptionPolicyProjectionService {
+  rpc ResolveTranscriptionPolicy(ResolveTranscriptionPolicyRequest) returns (ResolveTranscriptionPolicyResponse);
+  rpc CheckReadiness(TranscriptionPolicyProjectionServiceCheckReadinessRequest) returns (TranscriptionPolicyProjectionServiceCheckReadinessResponse);
+}
+
+// TranscriptionCredentialProjectionService — producer contract secret-broker
+// для #1024. Credential выдаётся только stt-tts-service после проверки
+// server-owned grant и exact generation.
+service TranscriptionCredentialProjectionService {
+  rpc ProjectTranscriptionCredential(ProjectTranscriptionCredentialRequest) returns (ProjectTranscriptionCredentialResponse);
+  rpc CheckReadiness(TranscriptionCredentialProjectionServiceCheckReadinessRequest) returns (TranscriptionCredentialProjectionServiceCheckReadinessResponse);
+}
+
+message TranscribeRequest {
+  bytes audio = 1;
+  string media_type = 2;
+}
+
+message TranscribeResponse {
+  string text = 1;
+}
+
+message CheckReadinessRequest {}
+
+message CheckReadinessResponse {
+  bool ready = 1;
+}
+
+message ResolveTranscriptionPolicyRequest {
+  string project_id = 1;
+  string request_id = 2;
+  string actor_id = 3;
+  string tenant_id = 4;
+  uint64 authority_revision = 5;
+  string authority_digest_sha256 = 6;
+}
+
+message ResolveTranscriptionPolicyResponse {
+  uint64 config_revision = 1;
+  string config_digest_sha256 = 2;
+  string model = 3;
+  string language = 4;
+  uint64 maximum_audio_bytes = 5;
+  uint64 maximum_audio_duration_milliseconds = 6;
+  uint64 provider_timeout_milliseconds = 7;
+  string provider_account_ref = 8;
+  uint64 provider_credential_generation = 9;
+  string credential_projection_grant = 10;
+  google.protobuf.Timestamp expires_at = 11;
+  string request_id = 12;
+  string actor_id = 13;
+  string tenant_id = 14;
+  string project_id = 15;
+  uint64 authority_revision = 16;
+  string authority_digest_sha256 = 17;
+}
+
+message TranscriptionPolicyProjectionServiceCheckReadinessRequest {}
+
+message TranscriptionPolicyProjectionServiceCheckReadinessResponse {
+  bool ready = 1;
+}
+
+message ProjectTranscriptionCredentialRequest {
+  string project_id = 1;
+  string request_id = 2;
+  string provider_account_ref = 3;
+  uint64 provider_credential_generation = 4;
+  uint64 config_revision = 5;
+  string config_digest_sha256 = 6;
+  string credential_projection_grant = 7;
+  string actor_id = 8;
+  string tenant_id = 9;
+  uint64 authority_revision = 10;
+  string authority_digest_sha256 = 11;
+}
+
+message ProjectTranscriptionCredentialResponse {
+  bytes api_key = 1;
+  string provider_account_ref = 2;
+  uint64 provider_credential_generation = 3;
+  string config_digest_sha256 = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  string request_id = 6;
+  string actor_id = 7;
+  string tenant_id = 8;
+  string project_id = 9;
+  uint64 config_revision = 10;
+  uint64 authority_revision = 11;
+  string authority_digest_sha256 = 12;
+}
+
+message TranscriptionCredentialProjectionServiceCheckReadinessRequest {}
+
+message TranscriptionCredentialProjectionServiceCheckReadinessResponse {
+  bool ready = 1;
+}

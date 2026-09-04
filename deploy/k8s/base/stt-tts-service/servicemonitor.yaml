@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stt-tts-service
+  labels:
+    app.kubernetes.io/name: stt-tts-service
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stt-tts-service
+      app.kubernetes.io/component: internal-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
