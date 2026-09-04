@@ -37,7 +37,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
 		if key == "mattermost" {
 			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
-				definition.Spec.ExecutionRoute != string(RouteInteraction) || definition.Spec.Readiness != string(ReadinessNotReady) {
+				definition.Spec.ExecutionRoute != string(RouteInteraction) || !definition.ExecutableBy(OwnerInteractionGateway, RouteInteraction) {
 				t.Fatalf("Mattermost executable routing is invalid: %#v", definition.Spec)
 			}
 			continue
@@ -54,7 +54,7 @@ func TestParseRejectsAdapterRoutingMismatch(t *testing.T) {
 	for _, changed := range []string{
 		strings.Replace(base, "adapterOwner: interaction-gateway", "adapterOwner: integration-gateway", 1),
 		strings.Replace(base, "executionRoute: INTERACTION", "executionRoute: MANAGED_MCP", 1),
-		strings.Replace(base, "readiness: NOT_READY", "readiness: READY", 1),
+		strings.Replace(base, "readiness: READY", "readiness: NOT_READY", 1),
 	} {
 		if _, err := Parse([]byte(changed)); err == nil {
 			t.Fatal("Parse() accepted mismatched adapter routing")

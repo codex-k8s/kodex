@@ -87,7 +87,7 @@ spec:
         - name: authority-sockets
           emptyDir: {sizeLimit: 1Mi}
         - name: stt-spool
-          emptyDir: {sizeLimit: 64Mi}
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
         - name: otel-ca
           configMap: {name: kodex-otel-ca, defaultMode: 0440}
         - name: sentry-dsn

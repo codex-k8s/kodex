@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 )
 
 type Config struct {
+	Egress                  openai.EgressConfig
 	GRPCListen              string        `env:"STT_GRPC_LISTEN"`
 	TechnicalListen         string        `env:"STT_TECHNICAL_LISTEN"`
 	SpoolDirectory          string        `env:"STT_SPOOL_DIRECTORY"`
@@ -72,6 +74,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if err := config.Egress.Validate(); err != nil {
+		return err
+	}
 	for _, address := range []string{config.GRPCListen, config.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("STT listen address is invalid")

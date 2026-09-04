@@ -181,7 +181,7 @@ for role in \
   ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 \
   ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 \
   ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1 \
-  ira_secret_broker_verifier_g1; do
+  ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1; do
   openssl rand -hex 32 >"$output_directory/postgresql/roles/$role"
 done
 

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -452,7 +452,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
-		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
+		if err := jsonUnmarshal(rawIntegrationGrants, &integrationGrants); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		integrationGrants = callableIntegrationGrants(integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var attachmentSets []map[string]string
@@ -607,22 +610,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
 		sttConfiguration := entity.SystemSTTConfiguration{}
 		if capabilityEnabled(capabilities, "platform.stt.use") {
-			var eligible, providerEnabled bool
-			var rawProviderCapabilities []byte
-			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
-				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
-				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
-				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
-				&rawProviderCapabilities); err != nil {
+			actorScope := scope
+			if err := tx.QueryRow(ctx, querySTTRuntimeActor, scope.organizationID, runRef).Scan(
+				&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.organizationRef); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			var providerCapabilities map[string]any
-			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
-				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
-				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+			sttConfiguration, err = repository.getSystemSTTConfigurationTx(ctx, tx, actorScope)
+			if err != nil || !sttConfiguration.Ready {
 				return commandOutcome{}, errs.ErrConflict
 			}
 		}
@@ -912,13 +906,23 @@ func promptUserCapabilities(platformRole string, projectPermissions, agentCapabi
 	return result
 }
 
+func callableIntegrationGrants(grants []map[string]string) []map[string]string {
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if (integrationpackage.Capability{Operation: grant["operation"]}).CallableByAgent() {
+			result = append(result, grant)
+		}
+	}
+	return result
+}
+
 func filterIntegrationGrants(grants []map[string]string, capabilities []string) []map[string]string {
 	allowed := make(map[string]struct{}, len(capabilities))
 	for _, capability := range capabilities {
 		allowed[capability] = struct{}{}
 	}
 	result := make([]map[string]string, 0, len(grants))
-	for _, grant := range grants {
+	for _, grant := range callableIntegrationGrants(grants) {
 		if _, ok := allowed[grant["capabilityKey"]]; ok {
 			result = append(result, grant)
 		}

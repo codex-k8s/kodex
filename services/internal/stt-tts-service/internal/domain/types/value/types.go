@@ -2,18 +2,21 @@
 package value
 
 import (
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"io"
 	"time"
 )
 
 const (
-	PermissionTranscribe           = "stt.transcribe"
-	DefaultModel                   = "gpt-transcribe"
-	DefaultLanguage                = "ru"
-	MaximumAbsoluteBytes     int64 = 25 << 20
-	MaximumConcurrentStreams       = 2
-	MaximumInflightBytes     int64 = MaximumAbsoluteBytes * MaximumConcurrentStreams
-	MaximumChunkBytes              = 64 << 10
+	PermissionTranscribe                = "stt.transcribe"
+	TransportPermissionTranscribe       = "platform.stt.transcribe"
+	ConfigurationCapability             = "platform.stt.use"
+	DefaultModel                        = "gpt-transcribe"
+	DefaultLanguage                     = "ru"
+	MaximumAbsoluteBytes          int64 = 25 << 20
+	MaximumConcurrentStreams            = 2
+	MaximumInflightBytes          int64 = MaximumAbsoluteBytes * MaximumConcurrentStreams
+	MaximumChunkBytes                   = 64 << 10
 )
 
 type AuthorityProvenance struct {
@@ -45,6 +48,7 @@ type Policy struct {
 	Revision                     uint64
 	DigestSHA256                 string
 	Model, Language              string
+	Parameters                   modelprofile.Parameters
 	MaximumAudioBytes            int64
 	MaximumAudioDuration         time.Duration
 	ProviderTimeout              time.Duration
@@ -62,10 +66,11 @@ type Credential struct {
 }
 
 type ProviderRequest struct {
-	Audio    Audio
-	Model    string
-	Language string
-	APIKey   []byte
+	Parameters modelprofile.Parameters
+	Audio      Audio
+	Model      string
+	Language   string
+	APIKey     []byte
 }
 
 type TranscriptionReceipt struct {

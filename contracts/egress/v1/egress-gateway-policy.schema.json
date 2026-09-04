@@ -54,6 +54,34 @@
             "shutdownTimeoutMilliseconds": {"type": "integer", "minimum": 1000, "maximum": 20000}
           }
         },
+        "profiles": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "workload", "operation", "destinations"],
+            "properties": {
+              "name": {"const": "openai-stt"},
+              "workload": {"const": "stt-tts-service"},
+              "operation": {"const": "openai.transcription"},
+              "destinations": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["hostname", "port"],
+                  "properties": {
+                    "hostname": {"const": "api.openai.com"},
+                    "port": {"const": 443}
+                  }
+                }
+              }
+            }
+          }
+        },
         "destinations": {
           "type": "array",
           "minItems": 1,

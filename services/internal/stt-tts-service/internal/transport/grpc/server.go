@@ -15,7 +15,9 @@ import (
 	"time"
 
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/libs/go/sttapi"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
@@ -24,12 +26,15 @@ import (
 	googlegrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Service interface {
 	Transcribe(context.Context, transcriptionservice.Input) (value.TranscriptionResult, error)
 	CheckLocal(context.Context) error
 	CheckProtectedPath(context.Context) error
+	CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error)
+	Catalog() modelprofile.Catalog
 }
 
 type Readiness interface {
@@ -104,6 +109,24 @@ func (server *Server) Transcribe(stream sttv1.SpeechToTextService_TranscribeServ
 			return transportError(ctx.Err())
 		}
 		return transportError(errs.ErrInvalidRequest)
+	}
+	if metadataMessage.GetAvailabilityCheck() != nil {
+		if trailing, err := stream.Recv(); err != io.EOF || trailing != nil {
+			return transportError(errs.ErrInvalidRequest)
+		}
+		if ready, _ := server.readiness.Ready(); !ready {
+			return transportError(errs.ErrProviderUnavailable)
+		}
+		availability, err := server.service.CheckAvailability(ctx, principal, sharedobservability.CorrelationID(ctx))
+		response := &sttv1.CheckProtectedPathResponse{Stage: protectedStage(availability.Stage), Catalog: sttapi.ModelCatalog(server.service.Catalog())}
+		if err == nil {
+			response.Ready = true
+			response.ValidUntil = timestamppb.New(availability.ValidUntil)
+		}
+		if ctx.Err() != nil {
+			return transportError(ctx.Err())
+		}
+		return stream.SendAndClose(&sttv1.TranscribeResponse{Availability: response})
 	}
 	if metadataMessage.GetMetadata() == nil || metadataMessage.GetMetadata().GetSizeBytes() == 0 ||
 		metadataMessage.GetMetadata().GetSizeBytes() > uint64(value.MaximumAbsoluteBytes) {
@@ -193,11 +216,24 @@ func (server *Server) CheckReadiness(ctx context.Context, _ *sttv1.CheckReadines
 }
 
 func (server *Server) CheckProtectedPath(ctx context.Context, _ *sttv1.CheckProtectedPathRequest) (*sttv1.CheckProtectedPathResponse, error) {
-	if err := server.service.CheckProtectedPath(ctx); err != nil {
-		return &sttv1.CheckProtectedPathResponse{Ready: false, Stage: sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY},
-			statusError(codes.FailedPrecondition, "STT protected path is not materialized", "STATE_CONFLICT")
+	return &sttv1.CheckProtectedPathResponse{Ready: false, Stage: sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY}, nil
+}
+
+func protectedStage(stage value.Stage) sttv1.ProtectedPathStage {
+	switch stage {
+	case value.StagePolicy:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_POLICY
+	case value.StageCredential:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_CREDENTIAL
+	case value.StageEgress:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_EGRESS
+	case value.StageProvider:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_PROVIDER
+	case value.StageSuccess:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_READY
+	default:
+		return sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY
 	}
-	return &sttv1.CheckProtectedPathResponse{Ready: true, Stage: sttv1.ProtectedPathStage_PROTECTED_PATH_STAGE_READY}, nil
 }
 
 type byteAdmission struct {

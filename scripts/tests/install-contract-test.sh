@@ -230,14 +230,14 @@ jq -e '
     "secret-broker-verifier-restore-ack")
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'provider credential authority material projections are incomplete'
-for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1; do
+for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1; do
   rg -Fq "$role" "$repository_root/tools/install/generate-material.sh" ||
     fail "fresh install does not generate PostgreSQL credential: $role"
   rg -Fq "$role" \
     "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
     fail "PostgreSQL credential reconciler omits runtime principal: $role"
 done
-[[ $(rg -F -- '-eq 19' \
+[[ $(rg -F -- '-eq 21' \
   "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" | wc -l) -eq 2 ]] ||
   fail 'PostgreSQL credential startup and SCRAM readback counts differ from the exact role registry'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||

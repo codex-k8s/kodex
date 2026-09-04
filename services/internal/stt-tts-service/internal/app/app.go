@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/clients/protectedrpc"
 	transcriptionservice "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/service/transcription"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/audio/ffmpeg"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 	servicemetrics "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/observability/metrics"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc"
@@ -57,6 +58,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	defer func() {
+		resultErr = errors.Join(resultErr, serviceruntime.RunShutdown(context.WithoutCancel(shutdownBase),
+			serviceruntime.ShutdownOperation{Name: "STT tracing", Timeout: time.Second, Run: telemetry.ShutdownTracing},
+			serviceruntime.ShutdownOperation{Name: "STT Sentry", Timeout: time.Second, Run: telemetry.FlushSentry},
+		))
+	}()
 	logger := telemetry.Logger(os.Stdout)
 	methods := map[string]string{
 		sttv1.SpeechToTextService_Transcribe_FullMethodName:         "transcribe",
@@ -100,13 +107,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return err
 	}
-	provider, err := openai.New()
+	provider, err := openai.New(config.Egress)
 	if err != nil {
 		_ = dependencies.Close()
 		_ = issuer.Close()
 		return err
 	}
-	domain, err := transcriptionservice.New(policy, credential, provider, outcomes, config.RequestTimeout)
+	domain, err := transcriptionservice.New(policy, credential, provider, outcomes, config.RequestTimeout, ffmpeg.New(config.SpoolDirectory))
 	if err != nil {
 		_ = dependencies.Close()
 		_ = issuer.Close()
@@ -205,8 +212,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "STT dependency connections", Timeout: time.Second, Run: func(context.Context) error { return dependencies.Close() }},
 		serviceruntime.ShutdownOperation{Name: "STT verifier connection", Timeout: time.Second, Run: func(context.Context) error { return verifier.Close() }},
 		serviceruntime.ShutdownOperation{Name: "STT issuer connection", Timeout: time.Second, Run: func(context.Context) error { return issuer.Close() }},
-		serviceruntime.ShutdownOperation{Name: "STT tracing", Timeout: time.Second, Run: telemetry.ShutdownTracing},
-		serviceruntime.ShutdownOperation{Name: "STT Sentry", Timeout: time.Second, Run: telemetry.FlushSentry},
 	)
 	return errors.Join(resultErr, shutdownErr)
 }

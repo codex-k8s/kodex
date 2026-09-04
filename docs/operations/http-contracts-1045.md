@@ -120,7 +120,18 @@ PWA Schedule и IntegrationDefinition fixtures/editor, которые ещё н�
 
 ## Незавершённые зависимости
 
-- Настоящий SkillBundle/MemoryRecord CRUD и полный STT parameters требуют
-  producer checkpoint #1046; подмена tools/knowledge artifacts запрещена.
+- Полные STT parameters потреблены из `a88caf7f2` вместе с предшественниками
+  и миграцией системных ролей `9911ddb38`. GET `system-stt-configuration`
+  возвращает enabled, parameters и три точных limit поля. POST
+  `system-stt-configurations/typed-drafts` принимает name, optional
+  configurationRef и specification. Новый configuration не требует If-Match;
+  новая revision существующего configuration требует его ETag. Параметры
+  проверяет общий modelprofile; далее используется тот же CP draft/validate/
+  publish lifecycle. Raw JSON/YAML/TOML редактор сохранён. Это не upload override
+  и не подтверждение доступности provider. Focused HTTP race/SDK: PASS.
+- HTTP SkillBundle/MemoryRecord потребляет `d97753154`: все 24 typed
+  operations реализованы и покрыты focused fake tests. Точные paths, OCC,
+  redaction и ограничения — в `context-http-1045.md`. CP owner SQL/runtime
+  пока не реализован в этом checkpoint; full acceptance не заявляется.
 - Полный PR body и итоговая матрица criterion/evidence оформляются после
   полного HTTP scope. Live provider, staging и deploy не запускались.

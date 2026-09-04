@@ -2,7 +2,7 @@
 SELECT configuration.ref, revision.ref, revision.revision, revision.digest,
        revision.content::jsonb -> 'stt' ->> 'providerAccountRef',
        revision.content::jsonb -> 'stt' ->> 'model',
-       revision.content::jsonb -> 'stt' ->> 'language',
+       COALESCE(revision.content::jsonb -> 'stt' ->> 'language',''),
        revision.content::jsonb -> 'stt' ->> 'permissionKey',
        COALESCE(account.enabled AND account.state = 'AUTHORIZED' AND credential.id IS NOT NULL, false),
        COALESCE(definition.enabled AND definition.stable_key = 'openai-codex', false), COALESCE(definition.capabilities, '{}'::jsonb),
@@ -16,7 +16,7 @@ SELECT configuration.ref, revision.ref, revision.revision, revision.digest,
            ORDER BY attempt.updated_at DESC, attempt.ref DESC
            LIMIT 1
        ), false),
-       COALESCE((revision.content::jsonb -> 'stt' ->> 'enabled')::boolean, false)
+       COALESCE((revision.content::jsonb -> 'stt' ->> 'enabled')::boolean, false), revision.content
 FROM control_plane.managed_configuration_bindings binding
 JOIN control_plane.managed_configuration_sets configuration
   ON configuration.id = binding.configuration_set_id

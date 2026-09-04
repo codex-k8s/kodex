@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: stt-tts-service-runtime
 data:
+  STT_EGRESS_EXPECTED_REVISION: "2026-09-05.1"
+  STT_EGRESS_EXPECTED_DIGEST: "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218"
   STT_GRPC_LISTEN: ":8443"
   STT_TECHNICAL_LISTEN: ":9090"
   STT_POLICY_TARGET: "dns:///control-plane.kodex-system.svc:8443"

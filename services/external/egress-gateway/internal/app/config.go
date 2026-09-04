@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	PolicyFile       string `env:"EGRESS_GATEWAY_POLICY_FILE,required"`
-	ExpectedRevision string `env:"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION,required"`
-	ExpectedDigest   string `env:"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST,required"`
-	ConnectAddress   string `env:"EGRESS_GATEWAY_CONNECT_LISTEN,required"`
-	TechnicalAddress string `env:"EGRESS_GATEWAY_TECHNICAL_LISTEN,required"`
-	ResolverConfig   string `env:"EGRESS_GATEWAY_RESOLV_CONF,required"`
+	PolicyFile        string `env:"EGRESS_GATEWAY_POLICY_FILE,required"`
+	ExpectedRevision  string `env:"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION,required"`
+	ExpectedDigest    string `env:"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST,required"`
+	ConnectAddress    string `env:"EGRESS_GATEWAY_CONNECT_LISTEN,required"`
+	STTConnectAddress string `env:"EGRESS_GATEWAY_STT_CONNECT_LISTEN,required"`
+	TechnicalAddress  string `env:"EGRESS_GATEWAY_TECHNICAL_LISTEN,required"`
+	ResolverConfig    string `env:"EGRESS_GATEWAY_RESOLV_CONF,required"`
 }
 
 func loadConfig() (Config, error) {
@@ -37,12 +38,15 @@ func (config Config) validate() error {
 			return errors.New("egress gateway configuration path is invalid")
 		}
 	}
-	for _, address := range []string{config.ConnectAddress, config.TechnicalAddress} {
-		if _, _, err := net.SplitHostPort(address); err != nil {
+	for _, listener := range []struct{ address, port string }{
+		{config.ConnectAddress, "8080"}, {config.STTConnectAddress, "8081"}, {config.TechnicalAddress, "9090"},
+	} {
+		if _, port, err := net.SplitHostPort(listener.address); err != nil || port != listener.port {
 			return errors.New("egress gateway listen address is invalid")
 		}
 	}
-	if config.ConnectAddress == config.TechnicalAddress || len(config.ExpectedRevision) < 3 || len(config.ExpectedRevision) > 64 ||
+	if config.ConnectAddress == config.TechnicalAddress || config.STTConnectAddress == config.ConnectAddress ||
+		config.STTConnectAddress == config.TechnicalAddress || len(config.ExpectedRevision) < 3 || len(config.ExpectedRevision) > 64 ||
 		strings.TrimSpace(config.ExpectedRevision) != config.ExpectedRevision {
 		return errors.New("egress gateway deployment expectation is invalid")
 	}

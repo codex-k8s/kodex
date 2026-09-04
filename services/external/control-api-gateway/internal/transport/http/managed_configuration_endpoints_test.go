@@ -57,7 +57,8 @@ func (client *managedRPCRecorder) Invoke(_ context.Context, method string, reque
 	case strings.HasSuffix(method, "/GetManagedConfigurationImpact"):
 		output = &controlplanev1.GetManagedConfigurationImpactResponse{Impact: &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: configuration.Ref, TargetRevisionRef: revision.Ref, Digest: strings.Repeat("b", 64)}}
 	case strings.HasSuffix(method, "/GetSystemSTTConfiguration"):
-		output = &controlplanev1.GetSystemSTTConfigurationResponse{Configuration: &controlplanev1.SystemSTTConfiguration{ConfigurationRef: configuration.Ref, RevisionRef: revision.Ref, Revision: 2, Digest: revision.Digest, ProviderAccountRef: "pacc_fixture01", Model: "gpt-transcribe", Language: "ru", PermissionKey: "platform.stt.use"}}
+		output = &controlplanev1.GetSystemSTTConfigurationResponse{Configuration: &controlplanev1.SystemSTTConfiguration{ConfigurationRef: configuration.Ref, RevisionRef: revision.Ref, Revision: 2, Digest: revision.Digest, ProviderAccountRef: "pacc_fixture01", Model: "gpt-transcribe", Language: "ru", PermissionKey: "platform.stt.use",
+			Parameters: &controlplanev1.SystemSTTParameters{}, MaximumAudioBytes: 10 << 20, MaximumAudioDurationMilliseconds: 120000, ProviderTimeoutMilliseconds: 15000}}
 	default:
 		target := response.(proto.Message).ProtoReflect()
 		target.Set(target.Descriptor().Fields().ByName("configuration"), protoreflect.ValueOfMessage(configuration.ProtoReflect()))

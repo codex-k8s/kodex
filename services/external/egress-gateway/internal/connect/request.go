@@ -168,14 +168,15 @@ func parseReadinessAuthority(value string) (Target, error) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	host, portValue, err := net.SplitHostPort(value)
-	if err != nil || portValue != "8080" {
+	if err != nil || (portValue != "8080" && portValue != "8081") {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	hostname, err := policy.NormalizeHostname(host)
 	if err != nil {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
-	return Target{Hostname: hostname, Port: 8080}, nil
+	port, _ := strconv.Atoi(portValue)
+	return Target{Hostname: hostname, Port: port}, nil
 }
 
 func readLine(reader *bufio.Reader, total *int, maximum int) (string, error) {
