@@ -15,6 +15,8 @@ import (
 const (
 	controlPlaneTarget        = "dns:///control-plane.kodex-system.svc:8443"
 	controlPlaneTLSServerName = "control-plane.kodex-system.svc.cluster.local"
+	secretBrokerTarget        = "dns:///secret-broker.kodex-system.svc:8443"
+	secretBrokerTLSServerName = "secret-broker.kodex-system.svc.cluster.local"
 	callbackTLSServerName     = "runtime-controller-callback.kodex-system.svc.cluster.local"
 	defaultControlNamespace   = "kodex-system"
 	defaultRuntimeNamespace   = "kodex-runtime"
@@ -44,6 +46,9 @@ type Config struct {
 	ControlPlaneCertificateFile    string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_CERTIFICATE_FILE"`
 	ControlPlanePrivateKeyFile     string        `env:"RUNTIME_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile           string        `env:"RUNTIME_CONTROLLER_APPLICATION_GRANT_FILE"`
+	SecretBrokerTarget             string        `env:"RUNTIME_CONTROLLER_SECRET_BROKER_TARGET"`
+	SecretBrokerTLSServerName      string        `env:"RUNTIME_CONTROLLER_SECRET_BROKER_TLS_SERVER_NAME"`
+	SecretBrokerCAFile             string        `env:"RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE"`
 	PromotedRoleImageRepository    string        `env:"RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY"`
 	DefaultRoleImageReference      string        `env:"RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"`
 	RoleRuntimeContractRevision    uint64        `env:"RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_REVISION"`
@@ -78,6 +83,9 @@ func loadConfig() (Config, error) {
 		ControlPlaneCertificateFile: "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.crt",
 		ControlPlanePrivateKeyFile:  "/var/run/secrets/kodex/runtime-controller/workload-tls/tls.key",
 		ApplicationGrantFile:        "/var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws",
+		SecretBrokerTarget:          secretBrokerTarget,
+		SecretBrokerTLSServerName:   secretBrokerTLSServerName,
+		SecretBrokerCAFile:          "/var/run/config/kodex/runtime-controller/control-plane/ca.pem",
 		DefaultRoleImageReference:   "registry-pull.invalid/kodex/agent-runner@sha256:" + strings.Repeat("0", 64),
 		ProviderHTTPSProxy:          "http://egress-gateway.kodex-system.svc:8080",
 		ProviderAppArmorProfile:     "",
@@ -99,7 +107,8 @@ func (config Config) validate() error {
 		config.ControlNamespace != defaultControlNamespace || config.RuntimeNamespace != defaultRuntimeNamespace ||
 		config.ControlNamespace == config.RuntimeNamespace || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||
 		config.ControlPlaneTLSServerName != controlPlaneTLSServerName || config.CallbackTLSServerName != callbackTLSServerName ||
-		config.CallbackExpectedClientSPIFFEID != runtimeCallbackClientID {
+		config.CallbackExpectedClientSPIFFEID != runtimeCallbackClientID || config.SecretBrokerTarget != secretBrokerTarget ||
+		config.SecretBrokerTLSServerName != secretBrokerTLSServerName {
 		return errors.New("runtime controller identity is invalid")
 	}
 	for _, address := range []string{config.TechnicalListen, config.CallbackListen} {
@@ -109,7 +118,7 @@ func (config Config) validate() error {
 	}
 	for _, fileName := range []string{config.CallbackServerCertificateFile, config.CallbackServerPrivateKeyFile,
 		config.CallbackClientCAFile, config.ControlPlaneCAFile, config.ControlPlaneCertificateFile,
-		config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile} {
+		config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile, config.SecretBrokerCAFile} {
 		if !filepath.IsAbs(fileName) {
 			return errors.New("runtime controller file path is invalid")
 		}

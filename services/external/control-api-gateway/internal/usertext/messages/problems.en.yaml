@@ -98,6 +98,10 @@ PROVIDER_ACCOUNT_CREATED:
   other: Model account created
 PROVIDER_ACCOUNT_UPDATED:
   other: Model account updated
+AGENT_AVATAR_UPDATED:
+  other: Agent avatar updated
+MANAGED_CONFIGURATION_CHANGED:
+  other: Configuration updated
 PROVIDER_DEVICE_AUTHORIZATION_STARTED:
   other: Model account device authorization started
 PROVIDER_ACCOUNT_AUTHORIZED:

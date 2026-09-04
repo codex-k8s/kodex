@@ -434,6 +434,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(input.BoundedInput)
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
 	return input
 }

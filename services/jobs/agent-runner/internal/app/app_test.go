@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -326,6 +327,49 @@ func TestMaterializeInputArtifactsRejectsManifestMismatchBeforeWorkspaceMutation
 	for _, directory := range []string{"input", "session", "knowledge"} {
 		if raw, err := os.ReadFile(filepath.Join(root, directory, "sentinel")); err != nil || string(raw) != "preserve" {
 			t.Fatalf("workspace %s changed before digest validation: raw=%q err=%v", directory, raw, err)
+		}
+	}
+}
+
+func TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := runtimecontract.BuildWorkspaceAttachmentManifest(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "private-manifest.json")
+	if err := os.WriteFile(target, manifest.Bytes, 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "input", "manifest.json")); err != nil {
+		t.Fatal(err)
+	}
+	err = verifyInputArtifacts(model.Input{WorkspaceRoot: root})
+	if err == nil || strings.Contains(err.Error(), target) {
+		t.Fatalf("verifyInputArtifacts() error = %v", err)
+	}
+}
+
+func TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(root, "input", "manifest.json"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInputArtifacts(model.Input{WorkspaceRoot: root}); err == nil {
+		t.Fatal("FIFO input was accepted")
+	}
+}
+
+func TestMaterializedInstructionsRejectUnpromisedNames(t *testing.T) {
+	for _, instructions := range []string{"{{ .agent.name }}", "{{ .project.name }}"} {
+		if err := validateMaterializedInstructions(model.Input{Instructions: instructions}); err == nil {
+			t.Fatalf("unmaterialized template variable %q was accepted", instructions)
 		}
 	}
 }

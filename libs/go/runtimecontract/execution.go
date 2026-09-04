@@ -310,6 +310,10 @@ func (input RunnerInput) Validate() error {
 			strings.TrimSpace(input.Task) == "" || len(input.Task) > 1<<20 {
 			return errors.New("runner turn binding is invalid")
 		}
+		inputDigest, err := RuntimeBoundedInputDigest(input.BoundedInput)
+		if err != nil || inputDigest != input.InputDigest {
+			return errors.New("runner bounded input digest is invalid")
+		}
 		executionDigest, mcpDigest, err := RuntimeExecutionBindingDigests(input)
 		if err != nil || input.ExecutionBindingDigest != executionDigest || input.MCPBindingDigest != mcpDigest {
 			return errors.New("runner execution binding digest is invalid")
@@ -511,7 +515,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		SecretProjections           []RuntimeSecretProjection
 		EnvironmentPolicy           RuntimeEnvironmentPolicy
 		WorkspacePolicy             RuntimeWorkspacePolicy
-		EffectiveKubernetesAccess   RuntimeKubernetesAccess
+		KubernetesAccessProfile     RuntimeKubernetesAccessProfile
 	}{
 		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
@@ -538,7 +542,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
 		EnvironmentPolicy: input.EnvironmentPolicy, WorkspacePolicy: input.WorkspacePolicy,
-		EffectiveKubernetesAccess: input.EffectiveKubernetesAccess,
+		KubernetesAccessProfile: input.EffectiveKubernetesAccess.Profile,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

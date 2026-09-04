@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/credentialprojection"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -35,8 +36,13 @@ type turnLifecycle interface {
 	DeleteTurn(context.Context, string) error
 }
 
+type credentialMaterializer interface {
+	Materialize(context.Context, runtimecontract.RunnerInput) (credentialprojection.Projection, error)
+}
+
 type runtime struct {
 	control           controlplanev1.RuntimeWorkServiceClient
+	credentials       credentialMaterializer
 	manager           *workload.Manager
 	turns             turnLifecycle
 	coordinator       *callback.Coordinator
@@ -44,6 +50,7 @@ type runtime struct {
 	assistant         *serviceruntime.Readiness
 	logger            *slog.Logger
 	capacity          chan struct{}
+	trackers          sync.WaitGroup
 	inspectInterval   time.Duration
 	terminalGrace     time.Duration
 	completionRetries []time.Duration
@@ -52,13 +59,18 @@ type runtime struct {
 	warmTicket        string
 }
 
-func newRuntime(control controlplanev1.RuntimeWorkServiceClient, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	return &runtime{control: control, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
+func newRuntime(control controlplanev1.RuntimeWorkServiceClient, credentials credentialMaterializer, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
+	return &runtime{control: control, credentials: credentials, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
 		capacity: make(chan struct{}, config.MaximumConcurrentTurns), inspectInterval: defaultTurnInspectionInterval,
 		terminalGrace: defaultTerminalCallbackGrace, completionRetries: defaultFailureCompletionRetryDelays[:]}
 }
 
 func (runtime *runtime) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+		runtime.trackers.Wait()
+	}()
 	if err := runtime.manager.CleanupStaleTurns(ctx); err != nil {
 		return err
 	}
@@ -183,7 +195,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			warmCompatibility, warmTicket := runtime.warmCompatibility, runtime.warmTicket
 			runtime.warmMu.RUnlock()
 			turnCompatibility, compatibilityErr := runtimecontract.WarmCompatibilityDigest(input)
-			if compatibilityErr == nil && warmCompatibility == turnCompatibility && warmTicket != "" {
+			if compatibilityErr == nil && warmCompatibility == turnCompatibility && warmTicket != "" && warmFileProjectionEligible(input) {
 				if err := runtime.manager.RegisterWarmTurn(ctx, input, warmTicket); err != nil || runtime.coordinator.EnqueueWarm(input, turnCompatibility) != nil {
 					<-runtime.capacity
 					runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
@@ -194,16 +206,34 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			}
 		}
 		if !warmExecution {
-			if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
-				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "kubernetes", "reason", err.Error())
+			projectionContext, cancelProjection := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+			projection, projectionErr := runtime.credentials.Materialize(projectionContext, input)
+			cancelProjection()
+			if projectionErr == nil {
+				projectionErr = runtime.manager.EnsureTurn(ctx, input, providerBinding, workload.CredentialProjection{
+					Namespace: projection.Namespace, SecretName: projection.SecretName, SecretUID: projection.SecretUID,
+					SecretResourceVersion: projection.SecretResourceVersion, ContentSHA256: projection.ContentSHA256,
+					ProviderAuthKey: projection.ProviderAuthKey, RuntimeSecretKeys: projection.RuntimeSecretKeys,
+				})
+			}
+			if projectionErr != nil {
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "dependency")
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue
 			}
 		}
-		go runtime.track(ctx, input, done, warmExecution)
+		runtime.trackers.Add(1)
+		go func() {
+			defer runtime.trackers.Done()
+			runtime.track(ctx, input, done, warmExecution)
+		}()
 	}
 	return len(response.GetExecutions()), nil
+}
+
+func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {
+	return len(input.AttachmentSets) == 0 && len(input.InputArtifacts) == 0
 }
 
 func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool) {
@@ -232,7 +262,9 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
 			cancelRequest()
 			if err != nil {
-				_ = runtime.manager.DeleteTurn(context.WithoutCancel(parent), input.LeaseRef)
+				cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(parent), runtime.config.RequestTimeout)
+				_ = runtime.turns.DeleteTurn(cleanup, input.LeaseRef)
+				cancelCleanup()
 				runtime.coordinator.Complete(input.LeaseRef)
 				return
 			}

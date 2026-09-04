@@ -232,7 +232,7 @@ func readBounded(file int, buffer []byte) (int, error) {
 }
 
 func writableUsage(root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, error) {
-	var bytes, files int64
+	var bytes, files, entries int64
 	err := filepath.WalkDir(root, func(localPath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return classify(walkErr)
@@ -255,10 +255,17 @@ func writableUsage(root string, policy runtimecontract.RuntimeWorkspacePolicy) (
 		if entry.Type()&os.ModeSymlink != 0 {
 			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 		}
+		entries++
+		if entries > policy.MaximumFileCount {
+			return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
+		}
 		if entry.Type().IsRegular() {
 			info, err := entry.Info()
 			if err != nil {
 				return classify(err)
+			}
+			if info.Size() < 0 || info.Size() > policy.MaximumWritableBytes-bytes {
+				return &Denial{Reason: runtimecontract.RuntimeWorkspaceQuotaExceeded}
 			}
 			bytes += info.Size()
 			files++

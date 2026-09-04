@@ -35,3 +35,19 @@ func TestRetryOperationLockReleaseStopsOnContext(t *testing.T) {
 		t.Fatalf("operation lock release = %v after %d attempts", err, attempts)
 	}
 }
+
+func TestRetryOperationLockReleaseStopsWhenAttemptCancelsContext(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	releaseErr := errors.New("persistent S3 failure")
+	attempts := 0
+	err := retryOperationLockRelease(ctx, time.Nanosecond, func(context.Context) error {
+		attempts++
+		cancel()
+		return releaseErr
+	})
+	if !errors.Is(err, releaseErr) || attempts != 1 {
+		t.Fatalf("operation lock release = %v after %d attempts", err, attempts)
+	}
+}

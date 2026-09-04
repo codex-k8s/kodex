@@ -179,6 +179,7 @@ func validRelayFixture() (model.Input, request) {
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(input.BoundedInput)
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
 	payload := request{Input: input, Refresh: runtimecontract.RunnerProviderCredentialRefreshRequest{
 		RuntimeRevisionDigest:         input.RuntimeRevisionDigest,

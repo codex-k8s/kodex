@@ -124,3 +124,29 @@ func TestWorkspaceDenialsAreExactAndDoNotContainPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestWritableUsageStopsAtDirectoryAndByteBudgets(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "a/b/c/d"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	policy := testPolicy()
+	policy.MaximumFileCount = 3
+	if _, _, err := writableUsage(root, policy); DenialReason(err) != runtimecontract.RuntimeWorkspaceQuotaExceeded {
+		t.Fatalf("directory budget error = %v", err)
+	}
+	file, err := os.Create(filepath.Join(root, "large"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(runtimecontract.RuntimeWorkspaceWritableBytes + 1); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := writableUsage(root, testPolicy()); DenialReason(err) != runtimecontract.RuntimeWorkspaceQuotaExceeded {
+		t.Fatalf("byte budget error = %v", err)
+	}
+}
