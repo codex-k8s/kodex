@@ -230,6 +230,7 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
 		testOptionalInteractionIncident(t, ctx, repository, pool)
+		testInteractionUnknownOutcome(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
@@ -288,6 +289,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("provider credential cleanup is durable fenced and exact", func(t *testing.T) {
 		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
+	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
+	t.Run("secret revision impact selected rebind and retention", func(t *testing.T) { testSecretImpact(t, ctx, repository, pool) })
 }
 
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
@@ -2834,11 +2838,25 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	if err != nil || stringMap(readResolved, "state") != "READY" || stringMap(readResolved, "gateRef") != "" {
 		t.Fatalf("resolve read invocation without gate: result=%#v err=%v", readResolved, err)
 	}
+	interactionWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.invocations.claim",
+	}, "interaction-gateway")
+	if claims, err := service.ClaimIntegrationInvocations(ctx, interactionWorker, "interaction-isolation", 1); err != nil || len(claims) != 0 {
+		t.Fatalf("interaction workload claimed managed invocation: %d %v", len(claims), err)
+	}
 	readClaims, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
 	if err != nil || len(readClaims) != 1 || stringMap(readClaims[0], "capabilityKey") != "synthetic.journal.read" {
 		t.Fatalf("claim read invocation without gate: claims=%#v err=%v", readClaims, err)
 	}
 	readClaim := readClaims[0]
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: interactionWorker,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-wrong-workload-complete"},
+		Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(readClaim, "invocationRef"), LeaseRef: stringMap(readClaim, "leaseRef"),
+			Fence: stringMap(readClaim, "fence"), Generation: readClaim["generation"].(int64)},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("interaction workload completed managed claim with disclosed fence: %v", err)
+	}
 	readSummary := `{"journal":"effect-main","effect_key":"` + stringMap(readClaim, "effectKey") + `","sequence":0,"value":"","count":0}`
 	readResponseDigest := sha256.Sum256([]byte(readSummary))
 	if completedRead, err := service.Execute(ctx, command.Command{

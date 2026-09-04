@@ -75,6 +75,9 @@ service PlatformQueryService {
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
   rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
+  rpc GetRuntimeEnvironmentImpact(GetRuntimeEnvironmentImpactRequest) returns (GetRuntimeEnvironmentImpactResponse);
+  rpc GetRuntimeSecretImpact(GetRuntimeSecretImpactRequest) returns (GetRuntimeSecretImpactResponse);
+  rpc ListInteractionIdentities(ListInteractionIdentitiesRequest) returns (ListInteractionIdentitiesResponse);
 }
 
 service PlatformCommandService {
@@ -83,6 +86,10 @@ service PlatformCommandService {
   rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
   rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
   rpc DiscardRuntimeEnvironmentDraft(DiscardRuntimeEnvironmentDraftRequest) returns (DiscardRuntimeEnvironmentDraftResponse);
+  rpc RebindRuntimeEnvironment(RebindRuntimeEnvironmentRequest) returns (RebindRuntimeEnvironmentResponse);
+  rpc RebindRuntimeSecret(RebindRuntimeSecretRequest) returns (RebindRuntimeSecretResponse);
+  rpc BindInteractionIdentity(BindInteractionIdentityRequest) returns (BindInteractionIdentityResponse);
+  rpc RevokeInteractionIdentity(RevokeInteractionIdentityRequest) returns (RevokeInteractionIdentityResponse);
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
@@ -3129,6 +3136,10 @@ message InteractionSource {
   string channel_name = 5;
   string locale = 6;
   repeated string enabled_capabilities = 7;
+  int64 connection_version = 8;
+  string credential_revision_ref = 9;
+  int64 credential_revision = 10;
+  IntegrationCredentialRevision credential_descriptor = 11;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3147,6 +3158,14 @@ message InteractionDeliveryClaim {
   string message_key = 9;
   google.protobuf.Struct template_data = 10;
   WorkLease lease = 11;
+  string gate_ref = 12;
+  int64 gate_version = 13;
+  string run_ref = 14;
+  string external_team_ref = 15;
+  string external_channel_ref = 16;
+  string external_root_post_ref = 17;
+  string acceptance_receipt_ref = 18;
+  IntegrationCredentialRevision credential_descriptor = 19;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;
@@ -3165,6 +3184,10 @@ message CompleteInteractionDeliveryRequest {
   string external_post_ref = 7;
   string external_thread_ref = 8;
   string safe_error_code = 9;
+  bool unknown_outcome = 10;
+  bool confirmed_no_effect = 11;
+  string external_team_ref = 12;
+  string external_channel_ref = 13;
 }
 message CompleteInteractionDeliveryResponse {
   string delivery_ref = 1;
@@ -3190,6 +3213,44 @@ message AcceptInteractionMessageRequest {
   string external_user_digest = 7;
   string message = 8;
   OwnerGateDecision decision = 9;
+  string external_team_ref = 10;
+  string gate_ref = 11;
+  int64 expected_gate_version = 12;
+  string run_ref = 13;
+}
+
+message InteractionIdentity {
+  string ref = 1;
+  int64 version = 2;
+  string connection_ref = 3;
+  int64 connection_version = 4;
+  string external_team_ref = 5;
+  string external_channel_ref = 6;
+  string external_user_digest = 7;
+  string subject_ref = 8;
+  string state = 9;
+}
+message BindInteractionIdentityRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string external_team_ref = 3;
+  string external_channel_ref = 4;
+  string external_user_digest = 5;
+  string subject_ref = 6;
+}
+message BindInteractionIdentityResponse { InteractionIdentity identity = 1; }
+message RevokeInteractionIdentityRequest {
+  MutationContext mutation = 1;
+  string identity_ref = 2;
+}
+message RevokeInteractionIdentityResponse { InteractionIdentity identity = 1; }
+message ListInteractionIdentitiesRequest {
+  string connection_ref = 1;
+  PageRequest page = 2;
+}
+message ListInteractionIdentitiesResponse {
+  repeated InteractionIdentity identities = 1;
+  PageInfo page = 2;
 }
 message AcceptInteractionMessageResponse {
   InteractionMessageOutcome outcome = 1;
@@ -3630,9 +3691,42 @@ message BindAgentRuntimeEnvironmentRequest {
   MutationContext mutation = 1;
   string agent_ref = 2;
   string environment_ref = 3;
+  string version_ref = 4;
 }
 message BindAgentRuntimeEnvironmentResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+
+message RuntimeEnvironmentConsumer {
+  string agent_ref = 1;
+  int64 agent_version = 2;
+  string binding_ref = 3;
+  int64 binding_version = 4;
+  string version_ref = 5;
+  string project_ref = 6;
+}
+message GetRuntimeEnvironmentImpactRequest {
+  string environment_ref = 1;
+  string version_ref = 2;
+  PageRequest page = 3;
+}
+message GetRuntimeEnvironmentImpactResponse {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string target_version_ref = 3;
+  string target_digest = 4;
+  repeated RuntimeEnvironmentConsumer consumers = 5;
+  int64 total = 6;
+  PageInfo page = 7;
+}
+message RebindRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string version_ref = 3;
+  repeated RuntimeEnvironmentConsumer consumers = 4;
+}
+message RebindRuntimeEnvironmentResponse {
+  repeated AgentRuntimeEnvironmentBinding bindings = 1;
 }
 
 message ProviderAccountCandidate {
@@ -3678,11 +3772,49 @@ message RuntimeEnvironmentValue {
   string value = 2;
 }
 
+message RuntimeSecretImpactConsumer {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string environment_version_ref = 3;
+  repeated int64 secret_revisions = 4;
+  RuntimeEnvironmentConsumer consumer = 5;
+}
+message GetRuntimeSecretImpactRequest {
+  string secret_ref = 1;
+  int64 revision = 2;
+  PageRequest page = 3;
+}
+message GetRuntimeSecretImpactResponse {
+  string secret_ref = 1;
+  int64 secret_version = 2;
+  int64 target_revision = 3;
+  repeated RuntimeSecretImpactConsumer consumers = 4;
+  int64 total = 5;
+  PageInfo page = 6;
+}
+message RuntimeSecretRebindSelection {
+  string environment_ref = 1;
+  int64 expected_environment_version = 2;
+  string source_version_ref = 3;
+  repeated RuntimeEnvironmentConsumer consumers = 4;
+}
+message RebindRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  int64 revision = 3;
+  repeated RuntimeSecretRebindSelection selections = 4;
+}
+message RebindRuntimeSecretResponse {
+  repeated RuntimeEnvironmentSet environments = 1;
+  repeated AgentRuntimeEnvironmentBinding bindings = 2;
+}
+
 // RuntimeSecretBinding является единственным browser-facing input для
 // привязки активной Runtime Secret revision к имени переменной окружения.
 message RuntimeSecretBinding {
   string name = 1;
   string secret_ref = 2;
+  int64 revision = 3;
 }
 
 // RuntimeSecretDescriptor содержит только immutable Secret identity и digest.
@@ -3885,6 +4017,7 @@ message AgentRuntimeEnvironmentBinding {
   string agent_ref = 3;
   string environment_ref = 4;
   string digest = 5;
+  string version_ref = 6;
 }
 
 message AgentRuntimeConfigurationView {

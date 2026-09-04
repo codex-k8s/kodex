@@ -42,6 +42,10 @@ const (
 	ValidateRuntimeEnvironmentDraft Kind = "VALIDATE_RUNTIME_ENVIRONMENT_DRAFT"
 	PublishRuntimeEnvironmentDraft  Kind = "PUBLISH_RUNTIME_ENVIRONMENT_DRAFT"
 	DiscardRuntimeEnvironmentDraft  Kind = "DISCARD_RUNTIME_ENVIRONMENT_DRAFT"
+	RebindRuntimeEnvironment        Kind = "REBIND_RUNTIME_ENVIRONMENT"
+	RebindRuntimeSecret             Kind = "REBIND_RUNTIME_SECRET"
+	BindInteractionIdentity         Kind = "BIND_INTERACTION_IDENTITY"
+	RevokeInteractionIdentity       Kind = "REVOKE_INTERACTION_IDENTITY"
 	PublishRuntimeEnvironment       Kind = "PUBLISH_RUNTIME_ENVIRONMENT_VERSION"
 	RollbackRuntimeEnvironment      Kind = "ROLLBACK_RUNTIME_ENVIRONMENT"
 	SetRuntimeEnvironmentEnabled    Kind = "SET_RUNTIME_ENVIRONMENT_ENABLED"
@@ -189,8 +193,19 @@ type RuntimeEnvironmentDraftInput struct {
 	ExpectedEnvironmentVersion           int64
 	Specification                        entity.RuntimeEnvironmentDraftSpecification
 }
+type RuntimeSecretRebindInput struct {
+	SecretRef  string
+	Revision   int64
+	Selections []entity.RuntimeSecretRebindSelection
+}
+
 type RuntimeEnvironmentBindingInput struct {
-	AgentRef, EnvironmentRef string
+	AgentRef, EnvironmentRef, VersionRef string
+}
+
+type RuntimeEnvironmentRebindInput struct {
+	EnvironmentRef, VersionRef string
+	Consumers                  []entity.RuntimeEnvironmentConsumer
 }
 type RuntimeEnvironmentLifecycleInput struct {
 	EnvironmentRef string
@@ -349,13 +364,21 @@ type IntegrationConnectionTestInput struct {
 	Success                                                bool
 }
 type InteractionDeliveryInput struct {
+	ExternalTeamRef, ExternalChannelRef                                             string
 	DeliveryRef, LeaseRef, Fence, ExternalPostRef, ExternalThreadRef, SafeErrorCode string
 	Generation                                                                      int64
 	Success                                                                         bool
+	UnknownOutcome, ConfirmedNoEffect                                               bool
 }
 type InteractionMessageInput struct {
 	ConnectionRef, ExternalEventRef, ExternalPostRef, ExternalRootPostRef string
 	ExternalChannelRef, ExternalUserDigest, Message, Decision             string
+	ExternalTeamRef, GateRef, RunRef                                      string
+	ExpectedGateVersion                                                   int64
+}
+
+type InteractionIdentityInput struct {
+	IdentityRef, ConnectionRef, ExternalTeamRef, ExternalChannelRef, ExternalUserDigest, SubjectRef string
 }
 
 type ManagedConfigurationInput struct {
@@ -364,12 +387,15 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	InteractionIdentity     *entity.InteractionIdentity
+	EnvironmentBindings     []entity.AgentRuntimeEnvironmentBinding
 	RuntimeEnvironmentDraft *entity.RuntimeEnvironmentDraft
 	Project                 *entity.Project
 	Membership              *entity.Membership
 	Agent                   *entity.Agent
 	RuntimeConfiguration    *entity.AgentRuntimeConfigurationView
 	RuntimeEnvironment      *entity.RuntimeEnvironmentSet
+	RuntimeEnvironments     []entity.RuntimeEnvironmentSet
 	Workflow                *entity.Workflow
 	Run                     *entity.Run
 	Graph                   *entity.RunGraph

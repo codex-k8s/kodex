@@ -19,8 +19,24 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,
 		command.FailSessionArchiveTask,
-		command.CompleteConnectionTest, command.CompleteIntegrationInvocation,
-		command.CompleteInteractionDelivery, command.AcceptInteractionMessage:
+		command.CompleteInteractionDelivery:
+		return nil
+	case command.CompleteIntegrationInvocation:
+		return repository.authorizeIntegrationCompletion(ctx, tx, current, input)
+	case command.CompleteConnectionTest:
+		return repository.authorizeIntegrationTestCompletion(ctx, tx, current, input)
+	case command.AcceptInteractionMessage:
+		payload, ok := input.Payload.(command.InteractionMessageInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		human, err := repository.resolveInteractionIdentity(ctx, tx, current, payload)
+		if err != nil {
+			return err
+		}
+		if payload.Decision != "" {
+			return repository.requireAccess(ctx, tx, human, "gate.resolve", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: payload.GateRef})
+		}
 		return nil
 	case command.CreateAccessRole, command.CreateAccessRoleVersion, command.ArchiveAccessRole,
 		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
@@ -42,6 +58,22 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, resolvedAccessTarget, error) {
 	organization := resolvedAccessTarget{scope: organizationTarget(current.organizationRef)}
 	switch payload := input.Payload.(type) {
+	case command.InteractionIdentityInput:
+		if current.authorityProjectID != "" {
+			return "", resolvedAccessTarget{}, errs.ErrForbidden
+		}
+		connectionRef := payload.ConnectionRef
+		if input.Kind == command.RevokeInteractionIdentity {
+			identity, err := scanInteractionIdentity(tx.QueryRow(ctx, queryInteractionIdentityGet, current.organizationID, payload.IdentityRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			connectionRef = identity.ConnectionRef
+		}
+		if err := repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: connectionRef}); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return "access.manage", organization, nil
 	case command.ProjectInput:
 		if input.Kind == command.CreateProject {
 			return "project.create", organization, nil
@@ -66,6 +98,26 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.RuntimeEnvironmentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.RuntimeEnvironmentRebindInput:
+		lookup := current
+		lookup.role = "OWNER"
+		environment, err := repository.getRuntimeEnvironmentTx(ctx, tx, lookup, payload.EnvironmentRef)
+		if err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", environment.ProjectRef, environment.ProjectRef)
+	case command.RuntimeSecretRebindInput:
+		for _, selection := range payload.Selections {
+			if _, _, err := repository.environmentImpactTarget(ctx, tx, current, selection.EnvironmentRef, selection.SourceVersionRef); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			for _, consumer := range selection.Consumers {
+				if err := repository.requireAccess(ctx, tx, current, "agent.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: consumer.AgentRef}); err != nil {
+					return "", resolvedAccessTarget{}, err
+				}
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "secret.rotate", "SECRET", payload.SecretRef, "")
 	case command.RuntimeEnvironmentLifecycleInput:
 		permission := "runtime.environment.disable"
 		if input.Kind == command.DeleteRuntimeEnvironment {

@@ -216,6 +216,9 @@ type TranscriptionCredentialProjection struct {
 
 type Repository interface {
 	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
+	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, query.Page) (entity.RuntimeSecretImpact, error)
+	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
+	ListInteractionIdentities(context.Context, value.Principal, string, query.Page) ([]entity.InteractionIdentity, string, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
 	AcceptWorkerGrant(context.Context, WorkerGrantInput) error

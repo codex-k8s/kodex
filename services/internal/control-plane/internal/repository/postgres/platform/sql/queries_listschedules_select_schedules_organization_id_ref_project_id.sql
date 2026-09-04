@@ -82,5 +82,10 @@ WHERE schedule.organization_id = @organization_id::uuid
       ' ', schedule.name, schedule.target_ref, COALESCE(agent.name, ''), COALESCE(workflow.name, '')
   )) LIKE '%' || lower(@search_query) || '%')
   AND (@cursor_ref = '' OR schedule.ref > @cursor_ref)
+  AND (@authority_project = '' OR schedule.project_id = NULLIF(@authority_project,'')::uuid)
+  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=schedule.organization_id AND target.kind='SCHEDULE' AND target.id=schedule.id
+        AND control_plane.catalog_resource_visible(schedule.organization_id, @actor_id::uuid, 'schedule.view', target.kind,
+            target.id, target.project_id, target.owner_id, target.related_ids, statement_timestamp()))
 ORDER BY schedule.ref
 LIMIT @page_size

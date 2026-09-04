@@ -106,7 +106,8 @@ func IntegrationPackage(format, content string) (integrationpackage.Package, err
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	definition, err := integrationpackage.Parse([]byte(content))
-	if err != nil || !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+	if err != nil || !(definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
+		definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)) {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	registered, err := integrationpackage.LoadShipped()

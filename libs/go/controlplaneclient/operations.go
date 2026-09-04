@@ -27,6 +27,13 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.organization-membership-candidates.list":   controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName,
 		"platform.query.memberships.list":                          controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName,
 		"platform.query.runtime-environment-drafts.get":            controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName,
+		"platform.query.interaction-identities.list":               controlplanev1.PlatformQueryService_ListInteractionIdentities_FullMethodName,
+		"platform.command.interaction-identities.bind":             controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName,
+		"platform.command.interaction-identities.revoke":           controlplanev1.PlatformCommandService_RevokeInteractionIdentity_FullMethodName,
+		"platform.query.runtime-environments.impact":               controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+		"platform.query.runtime-secrets.impact":                    controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName,
+		"platform.command.runtime-secrets.rebind":                  controlplanev1.PlatformCommandService_RebindRuntimeSecret_FullMethodName,
+		"platform.command.runtime-environments.rebind":             controlplanev1.PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
 		"platform.command.runtime-environment-drafts.create":       controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
 		"platform.command.runtime-environment-drafts.save":         controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
 		"platform.command.runtime-environment-drafts.validate":     controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
@@ -346,10 +353,14 @@ func IntegrationGatewayOperations() map[string]string {
 
 func InteractionGatewayOperations() map[string]string {
 	return map[string]string{
-		"platform.interactions.sources.list":        controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
-		"platform.interactions.deliveries.claim":    controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
-		"platform.interactions.deliveries.complete": controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
-		"platform.interactions.messages.accept":     controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
+		"platform.interactions.connection-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
+		"platform.interactions.connection-tests.complete": controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
+		"platform.interactions.invocations.claim":         controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.interactions.invocations.complete":      controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+		"platform.interactions.sources.list":              controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
+		"platform.interactions.deliveries.claim":          controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
+		"platform.interactions.deliveries.complete":       controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
+		"platform.interactions.messages.accept":           controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
 	}
 }
 

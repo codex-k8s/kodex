@@ -867,6 +867,108 @@ export type RuntimeEnvironmentReadiness = {
     observedAt: Timestamp;
 };
 
+export type RuntimeSecretImpactConsumer = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    environmentVersionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    secretRevisions: Array<number>;
+    /**
+     * Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
+     */
+    consumer?: RuntimeEnvironmentConsumer;
+};
+
+export type RuntimeSecretImpact = {
+    secretRef: OpaqueRef;
+    secretVersion: number;
+    targetRevision: number;
+    consumers: Array<RuntimeSecretImpactConsumer>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type RuntimeSecretRebindSelection = {
+    environmentRef: OpaqueRef;
+    expectedEnvironmentVersion: number;
+    sourceVersionRef: OpaqueRef;
+    consumers: Array<RuntimeEnvironmentConsumer>;
+};
+
+export type RuntimeSecretRebindInput = {
+    /**
+     * Уникальные environments; суммарно не более 100 consumers.
+     */
+    selections: Array<RuntimeSecretRebindSelection>;
+};
+
+export type RuntimeSecretReboundEnvironment = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    projectRef: OpaqueRef;
+    versionRef: OpaqueRef;
+    digest: string;
+};
+
+export type RuntimeSecretRebindResult = {
+    environments: Array<RuntimeSecretReboundEnvironment>;
+    bindings: Array<AgentRuntimeEnvironmentBinding>;
+};
+
+export type InteractionIdentityBindInput = {
+    externalTeamRef: string;
+    externalChannelRef: string;
+    externalUserDigest: string;
+    subjectRef: OpaqueRef;
+};
+
+export type InteractionIdentity = {
+    ref: OpaqueRef;
+    version: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    externalTeamRef: string;
+    externalChannelRef: string;
+    externalUserDigest: string;
+    subjectRef: OpaqueRef;
+    state: 'ACTIVE' | 'REVOKED';
+};
+
+export type InteractionIdentityPage = {
+    items: Array<InteractionIdentity>;
+    nextPageToken: string;
+};
+
+export type RuntimeEnvironmentConsumer = {
+    agentRef: OpaqueRef;
+    agentVersion: number;
+    bindingRef: OpaqueRef;
+    bindingVersion: number;
+    /**
+     * Прежняя версия окружения в binding; не целевая версия из path.
+     */
+    versionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+};
+
+export type RuntimeEnvironmentImpact = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    targetVersionRef: OpaqueRef;
+    targetDigest: string;
+    consumers: Array<RuntimeEnvironmentConsumer>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type RuntimeEnvironmentRebindInput = {
+    consumers: Array<RuntimeEnvironmentConsumer>;
+};
+
+export type RuntimeEnvironmentRebindResult = {
+    bindings: Array<AgentRuntimeEnvironmentBinding>;
+};
+
 export type RuntimeEnvironmentDraftCreateInput = {
     environmentRef?: OpaqueRef;
     expectedEnvironmentVersion?: number;
@@ -918,6 +1020,7 @@ export type AgentRuntimeEnvironmentBinding = {
     version: number;
     agentRef: OpaqueRef;
     environmentRef: OpaqueRef;
+    versionRef?: OpaqueRef;
     digest: string;
 };
 
@@ -2112,6 +2215,12 @@ export type AgentRef = OpaqueRef;
 export type RuntimeEnvironmentRef = OpaqueRef;
 
 export type RuntimeEnvironmentDraftRef = OpaqueRef;
+
+export type RuntimeEnvironmentVersionRef = OpaqueRef;
+
+export type RuntimeSecretRevision = number;
+
+export type InteractionIdentityRef = OpaqueRef;
 
 export type SecretRef = OpaqueRef;
 
@@ -4350,6 +4459,228 @@ export type PreviewPromptTemplateResponses = {
 };
 
 export type PreviewPromptTemplateResponse = PreviewPromptTemplateResponses[keyof PreviewPromptTemplateResponses];
+
+export type GetRuntimeSecretImpactData = {
+    body?: never;
+    path: {
+        secretRef: OpaqueRef;
+        revision: number;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact';
+};
+
+export type GetRuntimeSecretImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretImpactError = GetRuntimeSecretImpactErrors[keyof GetRuntimeSecretImpactErrors];
+
+export type GetRuntimeSecretImpactResponses = {
+    /**
+     * Точные старые revisions и доступные consumers
+     */
+    200: RuntimeSecretImpact;
+};
+
+export type GetRuntimeSecretImpactResponse = GetRuntimeSecretImpactResponses[keyof GetRuntimeSecretImpactResponses];
+
+export type RebindRuntimeSecretData = {
+    body: RuntimeSecretRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+        revision: number;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings';
+};
+
+export type RebindRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRuntimeSecretError = RebindRuntimeSecretErrors[keyof RebindRuntimeSecretErrors];
+
+export type RebindRuntimeSecretResponses = {
+    /**
+     * Безопасные квитанции публикации; полное окружение читается через getRuntimeEnvironmentSet
+     */
+    200: RuntimeSecretRebindResult;
+};
+
+export type RebindRuntimeSecretResponse = RebindRuntimeSecretResponses[keyof RebindRuntimeSecretResponses];
+
+export type ListInteractionIdentitiesData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/interaction-identities';
+};
+
+export type ListInteractionIdentitiesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListInteractionIdentitiesError = ListInteractionIdentitiesErrors[keyof ListInteractionIdentitiesErrors];
+
+export type ListInteractionIdentitiesResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: InteractionIdentityPage;
+};
+
+export type ListInteractionIdentitiesResponse = ListInteractionIdentitiesResponses[keyof ListInteractionIdentitiesResponses];
+
+export type BindInteractionIdentityData = {
+    body: InteractionIdentityBindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/interaction-identities';
+};
+
+export type BindInteractionIdentityErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindInteractionIdentityError = BindInteractionIdentityErrors[keyof BindInteractionIdentityErrors];
+
+export type BindInteractionIdentityResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    201: InteractionIdentity;
+};
+
+export type BindInteractionIdentityResponse = BindInteractionIdentityResponses[keyof BindInteractionIdentityResponses];
+
+export type RevokeInteractionIdentityData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        identityRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/interaction-identities/{identityRef}';
+};
+
+export type RevokeInteractionIdentityErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeInteractionIdentityError = RevokeInteractionIdentityErrors[keyof RevokeInteractionIdentityErrors];
+
+export type RevokeInteractionIdentityResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: InteractionIdentity;
+};
+
+export type RevokeInteractionIdentityResponse = RevokeInteractionIdentityResponses[keyof RevokeInteractionIdentityResponses];
+
+export type GetRuntimeEnvironmentImpactData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+        versionRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact';
+};
+
+export type GetRuntimeEnvironmentImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentImpactError = GetRuntimeEnvironmentImpactErrors[keyof GetRuntimeEnvironmentImpactErrors];
+
+export type GetRuntimeEnvironmentImpactResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: RuntimeEnvironmentImpact;
+};
+
+export type GetRuntimeEnvironmentImpactResponse = GetRuntimeEnvironmentImpactResponses[keyof GetRuntimeEnvironmentImpactResponses];
+
+export type RebindRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+        versionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings';
+};
+
+export type RebindRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRuntimeEnvironmentError = RebindRuntimeEnvironmentErrors[keyof RebindRuntimeEnvironmentErrors];
+
+export type RebindRuntimeEnvironmentResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: RuntimeEnvironmentRebindResult;
+};
+
+export type RebindRuntimeEnvironmentResponse = RebindRuntimeEnvironmentResponses[keyof RebindRuntimeEnvironmentResponses];
 
 export type CreateRuntimeEnvironmentDraftData = {
     body: RuntimeEnvironmentDraftCreateInput;

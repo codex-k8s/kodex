@@ -15,8 +15,9 @@ JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 WHERE i.organization_id=$1::uuid
   AND i.state='READY'
+  AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions')
   AND c.enabled AND c.state='CONNECTED'
-  AND d.enabled AND d.adapter_owner='integration-gateway' AND d.execution_route='MANAGED_MCP' AND d.adapter_readiness='READY'
+  AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'
   AND c.definition_version=i.definition_version AND c.definition_digest=i.definition_digest
   AND g.definition_version=i.definition_version AND g.definition_digest=i.definition_digest
   AND g.resource_scope_digest=i.resource_scope_digest AND g.capability_key=i.capability_key

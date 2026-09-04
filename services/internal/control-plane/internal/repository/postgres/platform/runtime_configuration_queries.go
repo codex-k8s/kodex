@@ -79,6 +79,7 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	return authorizedCatalog(ctx, repository, scope, "RUNTIME_ENVIRONMENT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeEnvironmentSet, error) {
 			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
+				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
 				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
 				"cursor_ref": cursor, "page_size": limit,
 			})
@@ -352,6 +353,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	view.Environment.CurrentVersion.Version = view.Environment.CurrentVersion.Revision
 	view.EnvironmentBinding.AgentRef = view.Configuration.AgentRef
 	view.EnvironmentBinding.EnvironmentRef = view.Environment.Ref
+	view.EnvironmentBinding.VersionRef = view.Environment.CurrentVersion.Ref
 	if decodeStrict(rawCandidates, &view.Configuration.ProviderPolicy.AccountCandidates) != nil ||
 		decodeStrict(rawPublishedProblems, &view.PublishedOverlay.ValidationMessages) != nil ||
 		decodeStrict(rawValues, &view.Environment.CurrentVersion.Values) != nil ||
