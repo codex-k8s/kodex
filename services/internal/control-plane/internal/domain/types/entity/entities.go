@@ -21,6 +21,13 @@ type SearchResult struct {
 	UpdatedAt                                     time.Time
 }
 
+type VFSNode struct {
+	Ref, Path, ParentPath, Name, Kind, ProjectRef, EntityRef, RunRef, Digest string
+	Directory                                                                bool
+	SizeBytes                                                                int64
+	ModifiedAt                                                               time.Time
+}
+
 type User struct {
 	Ref, DisplayName, EmailMasked string
 	Active                        bool
@@ -170,8 +177,92 @@ type TemplateVariableField struct{ Name, Type, Description string }
 type ProviderDefinition struct {
 	Key, Name, Description, DefaultModelID string
 	AuthorizationMethods, ModelIDs         []string
+	Models                                 []ModelCapability
 	Available, Ready                       bool
 	ReadinessBlockers                      []string
+}
+
+type ModelCapability struct {
+	ID, ProviderDefinitionKey, DefaultReasoningEffort string
+	ReasoningEfforts                                  []string
+	EligibleProviderAccountRefs, ReadinessBlockers    []string
+	Available                                         bool
+}
+
+type RuntimeWorkspacePathRule struct {
+	Path   string `json:"path"`
+	Access string `json:"access"`
+}
+
+type RuntimeWorkspacePolicy struct {
+	Revision             int64                      `json:"revision"`
+	Root                 string                     `json:"root"`
+	Digest               string                     `json:"digest"`
+	Rules                []RuntimeWorkspacePathRule `json:"rules"`
+	MaximumWritableBytes int64                      `json:"maximumWritableBytes"`
+	MaximumFileCount     int64                      `json:"maximumFileCount"`
+	DenialReasons        []string                   `json:"denialReasons"`
+}
+
+type PromptMaterializationSnapshot struct {
+	TargetKind             string            `json:"targetKind"`
+	TargetRef              string            `json:"targetRef"`
+	ProjectRef             string            `json:"projectRef"`
+	RunRef                 string            `json:"runRef"`
+	SessionRef             string            `json:"sessionRef"`
+	TemplateRef            string            `json:"templateRef"`
+	TemplateDigest         string            `json:"templateDigest"`
+	TemplateContent        string            `json:"templateContent"`
+	Variables              map[string]string `json:"variables"`
+	StructuredVariables    map[string]any    `json:"structuredVariables"`
+	UserCapabilities       []string          `json:"userCapabilities"`
+	AgentCapabilities      []string          `json:"agentCapabilities"`
+	WorkflowCapabilities   []string          `json:"workflowCapabilities"`
+	ConnectionCapabilities []string          `json:"connectionCapabilities"`
+	HumanGateCapabilities  []string          `json:"humanGateCapabilities"`
+	WorkflowStage          string            `json:"workflowStage"`
+	Automation             string            `json:"automation"`
+	SessionContinuation    string            `json:"sessionContinuation"`
+}
+
+type ManagedConfigurationRevision struct {
+	Ref, State, ContentFormat, Content, Digest, ParentRevisionRef string
+	Revision                                                      int64
+	ValidationDiagnostics                                         []string
+	CreatedAt                                                     time.Time
+	ValidatedAt, PublishedAt                                      *time.Time
+}
+
+type ManagedConfigurationSet struct {
+	Ref, ProjectRef, Kind, Name, ManagedBy, Source, SourceRevision string
+	Version                                                        int64
+	CurrentRevision                                                *ManagedConfigurationRevision
+	UpdatedAt                                                      time.Time
+}
+
+type ManagedConfigurationConsumer struct {
+	Kind, Ref, RevisionRef string
+	Version                int64
+}
+
+type ManagedConfigurationImpact struct {
+	ConfigurationRef, TargetRevisionRef, Digest string
+	Consumers                                   []ManagedConfigurationConsumer
+}
+
+type ManagedConfigurationBindingSnapshot struct {
+	Ref, ConsumerKind, ConsumerRef string
+	Version                        int64
+	Configuration                  ManagedConfigurationSet
+	Revision                       ManagedConfigurationRevision
+}
+
+type SystemSTTConfiguration struct {
+	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef string
+	Model, Language, PermissionKey                            string
+	Revision                                                  int64
+	Ready                                                     bool
+	ReadinessBlockers                                         []string
 }
 
 type ProviderAuthorization struct {
@@ -185,12 +276,12 @@ type ProviderCredentialDescriptor struct {
 }
 
 type ProviderAccount struct {
-	Ref, DefinitionKey, Name, ExternalAccountMasked, State string
-	Version                                                int64
-	Enabled, Ready                                         bool
-	Authorization                                          *ProviderAuthorization
-	NextActions                                            []string
-	CreatedAt, UpdatedAt                                   time.Time
+	Ref, DefinitionKey, Name, ExternalAccountMasked, State, SafeStatusReason string
+	Version                                                                  int64
+	Enabled, Ready                                                           bool
+	Authorization                                                            *ProviderAuthorization
+	NextActions                                                              []string
+	CreatedAt, UpdatedAt                                                     time.Time
 }
 
 type AgentAvatar struct {

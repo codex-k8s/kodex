@@ -56,6 +56,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.Ref, payload.ProjectRef)
+	case command.AgentAvatarInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentRuntimeConfigurationInput:
@@ -149,7 +151,7 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		switch input.Kind {
 		case command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey, command.RefreshProviderAuthorization:
 			permission = "provider.account.authorize"
-		case command.RevokeProviderAccount:
+		case command.RevokeProviderAccount, command.DeleteProviderAccount:
 			permission = "provider.account.revoke"
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, permission, "PROVIDER_ACCOUNT", payload.AccountRef, "")
@@ -170,6 +172,32 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "project.view", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.AssistantTurnInput, command.AssistantConversationTitleInput,
 		command.AssistantPlanInput, command.AssistantPlanDraftInput, command.AssistantInstructionsInput:
+		return "organization.manage", organization, nil
+	case command.ManagedConfigurationInput:
+		if input.Kind == command.CreateSystemSTTDraft {
+			return "organization.manage", organization, nil
+		}
+		if input.Kind == command.CreateIntegrationDefinition && payload.ConfigurationRef == "" {
+			return "organization.manage", organization, nil
+		}
+		if (input.Kind == command.CreatePromptTemplateDraft || input.Kind == command.CreateRoleImageRevisionDraft) && payload.ConfigurationRef == "" {
+			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
+		}
+		if payload.ConfigurationRef != "" {
+			var projectRef string
+			if err := tx.QueryRow(ctx, queryManagedConfigurationAccessTarget, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
+			}).Scan(&projectRef); errors.Is(err, pgx.ErrNoRows) {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			} else if err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrUnavailable
+			}
+			if projectRef != "" {
+				return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+			}
+		}
+		// Точный set и его tenant повторно разрешаются под блокировкой внутри
+		// owner-транзакции; непривилегированному actor ресурс не раскрывается.
 		return "organization.manage", organization, nil
 	default:
 		if input.Kind == command.CompleteOnboarding {

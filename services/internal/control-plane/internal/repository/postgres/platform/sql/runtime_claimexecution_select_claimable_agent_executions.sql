@@ -7,10 +7,28 @@ SELECT n.id::text,
        COALESCE(r.project_id::text, ''),
        COALESCE(p.ref, ''),
        initiator.ref,
+       initiator.display_name,
+       organization.ref,
+       organization.name,
+       COALESCE(p.name, ''),
        r.session_id::text,
        s.ref,
        COALESCE(t.content,r.task),
+       r.source,
+       CASE WHEN root.target_type = 'WORKFLOW' THEN root.target_ref ELSE '' END,
+       COALESCE((
+           SELECT schedule.ref
+           FROM control_plane.schedule_occurrences occurrence
+           JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
+           WHERE occurrence.run_id = root.id
+             AND occurrence.organization_id = r.organization_id
+           ORDER BY occurrence.created_at DESC
+           LIMIT 1
+       ), ''),
+       n.workflow_step_key,
+       COALESCE(t.turn_number, 0),
        a.ref,
+       a.name,
        a.runtime_key,
        rp.runtime_revision,
        runtime_config.provider,
@@ -32,6 +50,75 @@ SELECT n.id::text,
            ELSE ''
        END,
        a.capabilities,
+       COALESCE((
+           SELECT membership.role
+           FROM control_plane.memberships membership
+           WHERE membership.organization_id = r.organization_id
+             AND membership.project_id IS NULL
+             AND membership.subject_id = root.initiated_by
+             AND membership.active
+           LIMIT 1
+       ), ''),
+       COALESCE((
+           SELECT membership.permissions
+           FROM control_plane.memberships membership
+           WHERE membership.organization_id = r.organization_id
+             AND membership.project_id = r.project_id
+             AND membership.subject_id = root.initiated_by
+             AND membership.active
+           LIMIT 1
+       ), '{}'::text[]),
+       CASE
+           WHEN workflow_version.id IS NOT NULL
+            AND n.workflow_step_key LIKE 'workflow.coordinator.%'
+               THEN ARRAY['platform.run.delegate']::text[]
+           ELSE COALESCE((
+               SELECT ARRAY(
+                   SELECT capability.value
+                   FROM jsonb_array_elements_text(
+                       CASE
+                           WHEN jsonb_typeof(step.value -> 'RequiredCapabilityKeys') = 'array'
+                               THEN step.value -> 'RequiredCapabilityKeys'
+                           ELSE '[]'::jsonb
+                       END
+                   ) capability(value)
+               )
+               FROM jsonb_array_elements(
+                   CASE
+                       WHEN jsonb_typeof(workflow_version.spec -> 'Steps') = 'array'
+                           THEN workflow_version.spec -> 'Steps'
+                       ELSE '[]'::jsonb
+                   END
+               ) step(value)
+               WHERE step.value ->> 'Key' = n.workflow_step_key
+               LIMIT 1
+           ), '{}'::text[])
+       END,
+       CASE
+           WHEN NOT n.human_gate_after THEN NULL::text[]
+           WHEN workflow_version.id IS NULL THEN '{}'::text[]
+           ELSE COALESCE((
+               SELECT ARRAY(
+                   SELECT capability.value
+                   FROM jsonb_array_elements_text(
+                       CASE
+                           WHEN jsonb_typeof(step.value -> 'RequiredCapabilityKeys') = 'array'
+                               THEN step.value -> 'RequiredCapabilityKeys'
+                           ELSE '[]'::jsonb
+                       END
+                   ) capability(value)
+               )
+               FROM jsonb_array_elements(
+                   CASE
+                       WHEN jsonb_typeof(workflow_version.spec -> 'Steps') = 'array'
+                           THEN workflow_version.spec -> 'Steps'
+                       ELSE '[]'::jsonb
+                   END
+               ) step(value)
+               WHERE step.value ->> 'Key' = n.workflow_step_key
+               LIMIT 1
+           ), '{}'::text[])
+       END,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN
        COALESCE((SELECT array_agg(knowledge_artifact.ref ORDER BY knowledge_binding.created_at)
                  FROM control_plane.artifact_bindings knowledge_binding
@@ -476,6 +563,7 @@ FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id = root.initiated_by
+JOIN control_plane.organizations organization ON organization.id = r.organization_id
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
@@ -502,11 +590,34 @@ JOIN control_plane.provider_definitions runtime_provider_definition ON runtime_p
 LEFT JOIN control_plane.workflow_versions workflow_version
   ON workflow_version.id = root.workflow_version_id
 JOIN LATERAL (
-    SELECT instruction.ref, instruction.digest, instruction.content
-    FROM control_plane.instruction_versions instruction
-    WHERE instruction.agent_id = a.id
-      AND instruction.state = 'PUBLISHED'
-    ORDER BY instruction.version_number DESC
+    SELECT source.ref, source.digest, source.content
+    FROM (
+        SELECT revision.ref, revision.digest, revision.content, revision.revision, 1 AS priority
+        FROM control_plane.managed_configuration_bindings binding
+        JOIN control_plane.managed_configuration_sets configuration
+          ON configuration.id = binding.configuration_set_id
+         AND configuration.kind = 'PROMPT_TEMPLATE'
+         AND configuration.organization_id = a.organization_id
+         AND configuration.project_id = a.project_id
+        JOIN control_plane.managed_configuration_revisions revision
+          ON revision.id = binding.configuration_revision_id
+         AND revision.configuration_set_id = configuration.id
+         AND revision.state IN ('PUBLISHED', 'SUPERSEDED')
+        WHERE binding.organization_id = a.organization_id
+          AND binding.project_id = a.project_id
+          AND binding.configuration_kind = 'PROMPT_TEMPLATE'
+          AND binding.consumer_kind = 'AGENT'
+          AND binding.consumer_ref = a.ref
+
+        UNION ALL
+
+        SELECT instruction.ref, instruction.digest, instruction.content,
+               instruction.version_number::bigint, 2
+        FROM control_plane.instruction_versions instruction
+        WHERE instruction.agent_id = a.id
+          AND instruction.state = 'PUBLISHED'
+    ) source
+    ORDER BY source.priority, source.revision DESC
     LIMIT 1
 ) iv ON true
 LEFT JOIN control_plane.assistant_runtime ar ON ar.agent_id = a.id

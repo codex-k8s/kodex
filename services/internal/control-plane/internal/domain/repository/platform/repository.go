@@ -55,6 +55,12 @@ type ArtifactUpload struct {
 	Reader                                          ArtifactReader
 }
 
+type AgentAvatarUpload struct {
+	ArtifactUpload
+	AgentRef        string
+	ExpectedVersion int64
+}
+
 type ArtifactDownload struct {
 	Artifact entity.Artifact
 	Reader   io.ReadCloser
@@ -167,7 +173,9 @@ type Repository interface {
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
-	Search(context.Context, value.Principal, query.Filter) ([]entity.SearchResult, error)
+	Search(context.Context, value.Principal, query.Filter) ([]entity.SearchResult, int64, string, error)
+	ListVFSNodes(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
+	SearchVFS(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, []string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListPlatformMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
@@ -176,6 +184,8 @@ type Repository interface {
 	ListMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)
 	ListAgents(context.Context, value.Principal, query.Filter) ([]entity.Agent, string, error)
 	GetAgent(context.Context, value.Principal, string) (entity.Agent, error)
+	GetEffectivePromptTemplate(context.Context, value.Principal, string) (entity.InstructionVersion, error)
+	GetPromptMaterializationSnapshot(context.Context, value.Principal, string, string) (entity.PromptMaterializationSnapshot, error)
 	GetAgentRuntimeConfiguration(context.Context, value.Principal, string) (entity.AgentRuntimeConfigurationView, error)
 	ListAgentRuntimeConfigurations(context.Context, value.Principal, query.Filter) ([]entity.AgentRuntimeConfiguration, string, error)
 	ListRuntimeEnvironments(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentSet, string, error)
@@ -191,8 +201,13 @@ type Repository interface {
 	CompleteRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretCompleteInput) (entity.RuntimeSecret, error)
 	FailRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretFailInput) (RuntimeSecretFailureResult, error)
 	RecoverRuntimeSecretMaterialization(context.Context, value.Principal, RuntimeSecretRecoveryInput) (RuntimeSecretRecoveryResult, error)
-	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, string, error)
+	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, int64, string, error)
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
+	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
+	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
+	GetManagedConfigurationImpact(context.Context, value.Principal, string, string) (entity.ManagedConfigurationImpact, error)
+	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
+	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)
 	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)
 	GetProviderAccount(context.Context, value.Principal, string) (entity.ProviderAccount, error)
 	ListRoleImageRecipeRevisions(context.Context, value.Principal, query.Filter) ([]entity.RoleImageRecipeRevision, string, error)
@@ -209,6 +224,8 @@ type Repository interface {
 	GetArtifactImpact(context.Context, value.Principal, string, string) (entity.ArtifactImpact, error)
 	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
+	UploadAgentAvatar(context.Context, value.Principal, value.Mutation, AgentAvatarUpload) (entity.Agent, error)
+	CleanupExpiredAgentAvatarUploads(context.Context, int32) error
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	PurgeArtifact(context.Context, value.Principal, value.Mutation, string, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)

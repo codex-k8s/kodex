@@ -2,15 +2,18 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -132,33 +135,182 @@ func (repository *Repository) ListRuntimes(ctx context.Context, principal value.
 	return result, rows.Err()
 }
 
-func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, int64, string, error) {
+	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, err
+		return nil, 0, "", err
 	}
-	limit := filter.Limit
-	if limit < 1 {
-		limit = 20
-	}
+	limit := boundedPage(filter.Page)
 	if limit > 50 {
 		limit = 50
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesSearchSelectEligibleResources,
-		scope.organizationID, scope.role, scope.actorID, filter.Query, limit)
+	cursor, err := decodeSearchCursor(filter.Page.Token, filter.Query, filter.ProjectRef)
 	if err != nil {
-		return nil, errs.ErrUnavailable
+		return nil, 0, "", err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, 0, "", errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, queryQueriesSearchSelectEligibleResources, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "query": filter.Query,
+		"project_ref": strings.TrimSpace(filter.ProjectRef),
+	})
+	if err != nil {
+		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.SearchResult
-	for rows.Next() {
-		var item entity.SearchResult
-		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle, &item.State, &item.UpdatedAt); err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		result = append(result, item)
+	type rankedResult struct {
+		entity.SearchResult
+		relevance int
+		orderTime time.Time
 	}
-	return result, rows.Err()
+	candidates := make([]rankedResult, 0)
+	for rows.Next() {
+		var item rankedResult
+		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
+			&item.State, &item.UpdatedAt, &item.relevance, &item.orderTime); err != nil {
+			return nil, 0, "", errs.ErrUnavailable
+		}
+		candidates = append(candidates, item)
+	}
+	if rows.Err() != nil {
+		return nil, 0, "", errs.ErrUnavailable
+	}
+	rows.Close()
+	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	bindings, err := repository.loadAccessBindings(ctx, tx, current.organizationID, subject)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	evaluatedAt := time.Now().UTC()
+	ranked := make([]rankedResult, 0, len(candidates))
+	for _, item := range candidates {
+		visible, visibilityErr := repository.resourceVisible(ctx, tx, current, subject.AccessSubject, bindings,
+			item.Kind, item.Ref, item.ProjectRef, evaluatedAt)
+		if visibilityErr != nil {
+			return nil, 0, "", visibilityErr
+		}
+		if visible {
+			ranked = append(ranked, item)
+		}
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].relevance != ranked[j].relevance {
+			return ranked[i].relevance < ranked[j].relevance
+		}
+		if !ranked[i].orderTime.Equal(ranked[j].orderTime) {
+			return ranked[i].orderTime.After(ranked[j].orderTime)
+		}
+		return ranked[i].Kind+"\x00"+ranked[i].Ref < ranked[j].Kind+"\x00"+ranked[j].Ref
+	})
+	total := int64(len(ranked))
+	if cursor.Time != nil {
+		remaining := ranked[:0]
+		for _, item := range ranked {
+			if searchResultAfterCursor(item.relevance, item.orderTime, item.Kind, item.Ref, cursor) {
+				remaining = append(remaining, item)
+			}
+		}
+		ranked = remaining
+	}
+	next := ""
+	if len(ranked) > int(limit) {
+		ranked = ranked[:limit]
+		last := ranked[len(ranked)-1]
+		next = encodeSearchCursor(searchCursor{Relevance: last.relevance, Time: &last.orderTime, Kind: last.Kind, Ref: last.Ref}, filter.Query, filter.ProjectRef)
+		if next == filter.Page.Token {
+			return nil, 0, "", errs.ErrConflict
+		}
+	}
+	result := make([]entity.SearchResult, 0, len(ranked))
+	for _, item := range ranked {
+		result = append(result, item.SearchResult)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, "", errs.ErrConflict
+	}
+	return result, total, next, nil
+}
+
+func searchResultAfterCursor(relevance int, createdAt time.Time, kind, ref string, cursor searchCursor) bool {
+	return relevance > cursor.Relevance ||
+		relevance == cursor.Relevance && createdAt.Before(*cursor.Time) ||
+		relevance == cursor.Relevance && createdAt.Equal(*cursor.Time) && kind+"\x00"+ref > cursor.Kind+"\x00"+cursor.Ref
+}
+
+func (repository *Repository) resourceVisible(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	subject entity.AccessSubject,
+	bindings []entity.AccessBinding,
+	resourceKind, resourceRef, projectRef string,
+	evaluatedAt time.Time,
+) (bool, error) {
+	permission := visibilityPermission(resourceKind)
+	if permission == "" {
+		return false, nil
+	}
+	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ProjectRef: projectRef, ResourceKind: resourceKind, ResourceRef: resourceRef,
+	})
+	if errors.Is(err, errs.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	resourceBindings := bindings
+	if resourceKind != "PROJECT" {
+		resourceBindings = make([]entity.AccessBinding, 0, len(bindings))
+		for _, binding := range bindings {
+			if binding.PresentationKind != "PROJECT_MEMBERSHIP" {
+				resourceBindings = append(resourceBindings, binding)
+			}
+		}
+	}
+	return accessservice.Evaluate(subject, permission, target.scope, target.ownerSubjectRef, resourceBindings, evaluatedAt).Allowed, nil
+}
+
+type searchCursor struct {
+	Version   int        `json:"v"`
+	Filter    string     `json:"f"`
+	Relevance int        `json:"r"`
+	Time      *time.Time `json:"t"`
+	Kind      string     `json:"k"`
+	Ref       string     `json:"i"`
+}
+
+func searchFilterDigest(queryValue, projectRef string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(queryValue) + "\x00" + strings.TrimSpace(projectRef)))
+	return base64.RawURLEncoding.EncodeToString(digest[:12])
+}
+
+func encodeSearchCursor(cursor searchCursor, queryValue, projectRef string) string {
+	cursor.Version, cursor.Filter = 2, searchFilterDigest(queryValue, projectRef)
+	raw, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeSearchCursor(token, queryValue, projectRef string) (searchCursor, error) {
+	if strings.TrimSpace(token) == "" {
+		return searchCursor{}, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) > 512 {
+		return searchCursor{}, errs.ErrInvalid
+	}
+	var cursor searchCursor
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 2 || cursor.Filter != searchFilterDigest(queryValue, projectRef) ||
+		cursor.Time == nil || cursor.Relevance < 0 || cursor.Relevance > 2 || cursor.Kind == "" || cursor.Ref == "" {
+		return searchCursor{}, errs.ErrInvalid
+	}
+	return cursor, nil
 }
 
 func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
@@ -402,9 +554,10 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	for rows.Next() {
 		var item entity.Agent
 		var canManage, canLaunch bool
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
+		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
+		setAgentAvatarReadback(&item)
 		item.NextActions = agentActions(item, canManage, canLaunch)
 		result = append(result, item)
 	}
@@ -428,13 +581,14 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 	var item entity.Agent
 	var canManage, canLaunch bool
 	err = repository.pool.QueryRow(ctx, queryQueriesGetagentSelectAgentsOrganizationIdRefSystemKey, scope.organizationID, ref, scope.role, scope.actorID).Scan(
-		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
+		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Agent{}, errs.ErrNotFound
 	}
 	if err != nil {
 		return entity.Agent{}, errs.ErrUnavailable
 	}
+	setAgentAvatarReadback(&item)
 	item.System = item.SystemKey != ""
 	item.NextActions = agentActions(item, canManage, canLaunch)
 	if err := repository.attachInstructions(ctx, scope, &item); err != nil {

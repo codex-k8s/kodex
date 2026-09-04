@@ -195,7 +195,7 @@ func TestProviderCompensationKeepsMaterializationWhenReferenceReadIsUnavailable(
 	}
 }
 
-func TestProviderRefreshKeepsObservedCredentialAfterAmbiguousOwnerCommitFailure(t *testing.T) {
+func TestProviderRefreshCompensatesObservedCredentialAfterAuthoritativeNonReference(t *testing.T) {
 	t.Parallel()
 	version := int64(3)
 	descriptor := entity.ProviderCredentialDescriptor{
@@ -220,13 +220,38 @@ func TestProviderRefreshKeepsObservedCredentialAfterAmbiguousOwnerCommitFailure(
 	if !errors.Is(err, errProviderOwnerCommit) {
 		t.Fatalf("refresh error = %v", err)
 	}
-	if len(materializer.discards) != 0 || repository.referenceChecks != 0 || repository.resolveCalls != 1 {
-		t.Fatalf("ambiguous refresh discarded observed materialization or repeated principal resolution: %#v/%d",
-			materializer.discards, repository.resolveCalls)
+	if len(materializer.discards) != 1 || repository.referenceChecks != 1 || repository.resolveCalls != 1 {
+		t.Fatalf("refresh compensation/reference/resolve = %#v/%d/%d",
+			materializer.discards, repository.referenceChecks, repository.resolveCalls)
 	}
 	payload, ok := repository.executed.Payload.(command.ProviderAccountInput)
 	if !ok || payload.Credential == nil || *payload.Credential != descriptor {
 		t.Fatalf("refresh command lost exact credential descriptor: %#v", repository.executed.Payload)
+	}
+	discard := materializer.discards[0]
+	if discard.AttemptRef != repository.account.Authorization.Ref || discard.AccountRef != repository.account.Ref ||
+		discard.MaterializerAttemptRef != "" || discard.Credential == nil || *discard.Credential != descriptor {
+		t.Fatalf("refresh compensation lost exact credential descriptor: %#v", discard)
+	}
+}
+
+func TestProviderRefreshKeepsObservedCredentialAfterCommittedOwnerReference(t *testing.T) {
+	t.Parallel()
+	version := int64(3)
+	descriptor := entity.ProviderCredentialDescriptor{
+		SecretName: "provider-credential-device", SecretUID: "uid-provider-credential-device",
+		SecretResourceVersion: "302", ContentSHA256: strings.Repeat("c", 64),
+	}
+	repository := &providerFailureRepository{referenced: true, account: entity.ProviderAccount{
+		Ref: "pacc_device456", Version: version, State: "PENDING_AUTHORIZATION",
+		Authorization: &entity.ProviderAuthorization{Ref: "pauth_device456", Method: "DEVICE_CODE", State: "PENDING", MaterializerAttemptRef: "pmat_device456"},
+	}}
+	materializer := &providerMaterializerRecorder{observation: ProviderAuthorizationObservation{State: "AUTHORIZED", Credential: &descriptor}}
+	service, _ := New(repository, WithProviderCredentialMaterializer(materializer))
+	_, err := service.RefreshProviderAccountAuthorization(context.Background(), providerTestPrincipal(),
+		value.Mutation{IdempotencyKey: "provider-device-refresh-committed", ExpectedVersion: &version}, repository.account.Ref)
+	if !errors.Is(err, errProviderOwnerCommit) || repository.referenceChecks != 1 || len(materializer.discards) != 0 {
+		t.Fatalf("committed reference was discarded: err=%v checks=%d discards=%#v", err, repository.referenceChecks, materializer.discards)
 	}
 }
 

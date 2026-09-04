@@ -667,7 +667,7 @@ func scanAccessBinding(scanner accessScanner) (entity.AccessBinding, error) {
 		&creator.Ref, &creator.DisplayName, &creator.EmailMasked,
 		&item.Scope.Kind, &item.Scope.ProjectRef, &item.Scope.ResourceKind, &item.Scope.ResourceRef,
 		&item.Conditions.ValidFrom, &item.Conditions.ValidUntil, &item.Conditions.RequireOwner,
-		&item.CreatedAt, &item.UpdatedAt,
+		&item.CreatedAt, &item.UpdatedAt, &item.PresentationKind,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.AccessBinding{}, errs.ErrNotFound

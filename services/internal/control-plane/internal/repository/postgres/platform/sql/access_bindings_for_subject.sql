@@ -19,7 +19,8 @@ SELECT b.id::text, b.ref, b.version, b.state, b.subject_kind,
          WHEN 'SECRET' THEN COALESCE((SELECT secret.ref FROM control_plane.runtime_secrets secret WHERE secret.id = b.resource_id), '')
          ELSE ''
        END,
-       b.valid_from, b.valid_until, b.require_owner, b.created_at, b.updated_at
+       b.valid_from, b.valid_until, b.require_owner, b.created_at, b.updated_at,
+       b.presentation_kind
 FROM control_plane.access_bindings b
 JOIN control_plane.application_role_versions rv ON rv.id = b.role_version_id
 JOIN control_plane.application_roles role ON role.id = rv.role_id

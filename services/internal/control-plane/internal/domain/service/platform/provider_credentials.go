@@ -201,6 +201,12 @@ func (service *Service) RefreshProviderAccountAuthorization(
 			Credential: observed.Credential,
 		},
 	})
+	if err != nil && observed.Credential != nil {
+		cleanupErr := service.compensateProviderMaterialization(ctx, principal, ProviderMaterializationDiscard{
+			AttemptRef: account.Authorization.Ref, AccountRef: accountRef, Credential: observed.Credential,
+		})
+		return entity.ProviderAccount{}, errors.Join(err, cleanupErr)
+	}
 	return providerAccountResult(result, err)
 }
 

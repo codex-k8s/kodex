@@ -88,14 +88,19 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListTemplateVariables(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	items, total, next, err := server.service.ListTemplateVariables(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListTemplateVariablesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListTemplateVariablesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
-		response.Variables = append(response.Variables, &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
-			Description: item.Description, Example: item.Example, Source: item.Source})
+		variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
+			Description: item.Description, Example: item.Example, Source: item.Source, Collection: item.Collection,
+			ItemValueType: item.ItemType, RangeExample: item.RangeExample}
+		for _, field := range item.ItemFields {
+			variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
+		}
+		response.Variables = append(response.Variables, variable)
 	}
 	return response, nil
 }

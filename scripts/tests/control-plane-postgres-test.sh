@@ -54,6 +54,9 @@ run_migration() {
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
       ./internal/repository/postgres/platform -run '^TestBootstrapComponent$'
+  KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
+      ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
 )
 
 printf 'Control-plane PostgreSQL tests passed\n'

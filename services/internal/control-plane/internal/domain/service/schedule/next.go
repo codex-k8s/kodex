@@ -13,7 +13,7 @@ import (
 var ErrInvalid = errors.New("invalid schedule specification")
 
 type Spec struct {
-	Preset, TimeOfDay, DayOfWeek, Timezone string
+	Preset, CronExpression, TimeOfDay, DayOfWeek, Timezone string
 }
 
 type Normalized struct {
@@ -38,6 +38,16 @@ func Normalize(spec Spec, after time.Time) (Normalized, error) {
 	}
 	if _, err := time.LoadLocation(spec.Timezone); err != nil {
 		return Normalized{}, ErrInvalid
+	}
+	if spec.Preset == "CUSTOM" {
+		spec.TimeOfDay = ""
+		spec.DayOfWeek = ""
+		cron := strings.Join(strings.Fields(spec.CronExpression), " ")
+		if _, err := parseCron(cron); err != nil {
+			return Normalized{}, ErrInvalid
+		}
+		next, err := Next(spec.Preset, cron, spec.Timezone, after)
+		return Normalized{Spec: spec, CronExpression: cron, Next: next}, err
 	}
 	if spec.Preset == "HOURLY" {
 		spec.TimeOfDay = ""
@@ -74,6 +84,10 @@ func Normalize(spec Spec, after time.Time) (Normalized, error) {
 
 func Display(preset, cron string) (string, string, error) {
 	preset = strings.ToUpper(strings.TrimSpace(preset))
+	if preset == "CUSTOM" {
+		_, err := parseCron(strings.Join(strings.Fields(cron), " "))
+		return "", "", err
+	}
 	fields := strings.Fields(cron)
 	if len(fields) != 5 || fields[2] != "*" || fields[3] != "*" {
 		return "", "", ErrInvalid
@@ -125,6 +139,20 @@ func Next(preset, cron, timezone string, after time.Time) (time.Time, error) {
 		return time.Time{}, err
 	}
 	localAfter := after.In(location)
+	if strings.EqualFold(strings.TrimSpace(preset), "CUSTOM") {
+		specification, parseErr := parseCron(strings.Join(strings.Fields(cron), " "))
+		if parseErr != nil {
+			return time.Time{}, ErrInvalid
+		}
+		candidate := localAfter.Truncate(time.Minute).Add(time.Minute)
+		for scanned := 0; scanned < 5*366*24*60; scanned++ {
+			if specification.matches(candidate) {
+				return candidate.UTC(), nil
+			}
+			candidate = candidate.Add(time.Minute)
+		}
+		return time.Time{}, ErrInvalid
+	}
 	if preset == "HOURLY" {
 		candidate := time.Date(localAfter.Year(), localAfter.Month(), localAfter.Day(), localAfter.Hour(), 0, 0, 0, location)
 		for !candidate.After(after) {
@@ -147,6 +175,107 @@ func Next(preset, cron, timezone string, after time.Time) (time.Time, error) {
 		}
 	}
 	return time.Time{}, ErrInvalid
+}
+
+type cronSpecification struct {
+	minute, hour, dayOfMonth, month, dayOfWeek map[int]struct{}
+	anyDayOfMonth, anyDayOfWeek                bool
+}
+
+func (specification cronSpecification) matches(value time.Time) bool {
+	_, minute := specification.minute[value.Minute()]
+	_, hour := specification.hour[value.Hour()]
+	_, month := specification.month[int(value.Month())]
+	_, dayOfMonth := specification.dayOfMonth[value.Day()]
+	_, dayOfWeek := specification.dayOfWeek[int(value.Weekday())]
+	dayMatches := dayOfMonth && dayOfWeek
+	if !specification.anyDayOfMonth && !specification.anyDayOfWeek {
+		dayMatches = dayOfMonth || dayOfWeek
+	}
+	return minute && hour && month && dayMatches
+}
+
+func parseCron(expression string) (cronSpecification, error) {
+	fields := strings.Fields(expression)
+	if len(fields) != 5 || len(expression) > 128 {
+		return cronSpecification{}, ErrInvalid
+	}
+	minute, _, err := parseCronField(fields[0], 0, 59, false)
+	if err != nil {
+		return cronSpecification{}, err
+	}
+	hour, _, err := parseCronField(fields[1], 0, 23, false)
+	if err != nil {
+		return cronSpecification{}, err
+	}
+	dayOfMonth, anyDayOfMonth, err := parseCronField(fields[2], 1, 31, false)
+	if err != nil {
+		return cronSpecification{}, err
+	}
+	month, _, err := parseCronField(fields[3], 1, 12, false)
+	if err != nil {
+		return cronSpecification{}, err
+	}
+	dayOfWeek, anyDayOfWeek, err := parseCronField(fields[4], 0, 7, true)
+	if err != nil {
+		return cronSpecification{}, err
+	}
+	return cronSpecification{minute: minute, hour: hour, dayOfMonth: dayOfMonth, month: month,
+		dayOfWeek: dayOfWeek, anyDayOfMonth: anyDayOfMonth, anyDayOfWeek: anyDayOfWeek}, nil
+}
+
+func parseCronField(field string, minimum, maximum int, normalizeSunday bool) (map[int]struct{}, bool, error) {
+	values := make(map[int]struct{}, maximum-minimum+1)
+	any := field == "*"
+	for _, segment := range strings.Split(field, ",") {
+		if segment == "" {
+			return nil, false, ErrInvalid
+		}
+		base, step := segment, 1
+		parts := strings.Split(segment, "/")
+		if len(parts) == 2 {
+			base = parts[0]
+			parsedStep, err := strconv.Atoi(parts[1])
+			if err != nil || parsedStep < 1 || parsedStep > maximum-minimum+1 {
+				return nil, false, ErrInvalid
+			}
+			step = parsedStep
+		} else if len(parts) != 1 {
+			return nil, false, ErrInvalid
+		}
+		start, end := minimum, maximum
+		if base != "*" {
+			bounds := strings.Split(base, "-")
+			parsedStart, err := strconv.Atoi(bounds[0])
+			if err != nil {
+				return nil, false, ErrInvalid
+			}
+			start, end = parsedStart, parsedStart
+			if len(bounds) == 2 {
+				parsedEnd, endErr := strconv.Atoi(bounds[1])
+				if endErr != nil {
+					return nil, false, ErrInvalid
+				}
+				end = parsedEnd
+			} else if len(bounds) != 1 {
+				return nil, false, ErrInvalid
+			}
+		}
+		if start < minimum || end > maximum || start > end {
+			return nil, false, ErrInvalid
+		}
+		for raw := start; raw <= end; raw += step {
+			value := raw
+			if normalizeSunday && value == 7 {
+				value = 0
+			}
+			values[value] = struct{}{}
+		}
+	}
+	if len(values) == 0 {
+		return nil, false, ErrInvalid
+	}
+	return values, any, nil
 }
 
 func parseTime(value string) (int, int, bool) {

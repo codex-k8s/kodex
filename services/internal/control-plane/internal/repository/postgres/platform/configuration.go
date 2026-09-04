@@ -278,7 +278,7 @@ func normalizeScheduleInput(payload command.ScheduleInput, after time.Time) (sch
 	if payload.Name == "" || len(payload.Name) > 160 || !contains([]string{"AGENT", "WORKFLOW"}, payload.Target.Type) || payload.Target.Ref == "" || !contains([]string{"NEW_EACH_RUN", "CONTINUE_ONE"}, payload.SessionPolicy) || !contains([]string{"CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"}, payload.NotificationPolicy) {
 		return scheduleservice.Normalized{}, errs.ErrInvalid
 	}
-	normalized, err := scheduleservice.Normalize(scheduleservice.Spec{Preset: payload.Preset, TimeOfDay: payload.TimeOfDay, DayOfWeek: payload.DayOfWeek, Timezone: payload.Timezone}, after)
+	normalized, err := scheduleservice.Normalize(scheduleservice.Spec{Preset: payload.Preset, CronExpression: payload.CronExpression, TimeOfDay: payload.TimeOfDay, DayOfWeek: payload.DayOfWeek, Timezone: payload.Timezone}, after)
 	if err != nil {
 		return scheduleservice.Normalized{}, errs.ErrInvalid
 	}

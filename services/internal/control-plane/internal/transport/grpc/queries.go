@@ -80,11 +80,11 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 	if err != nil {
 		return nil, err
 	}
-	items, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), Limit: request.GetLimit()})
+	items, total, next, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), ProjectRef: request.GetProjectRef(), Limit: request.GetLimit(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.SearchPlatformResponse{}
+	response := &controlplanev1.SearchPlatformResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Results = append(response.Results, castSearchResult(item))
 	}

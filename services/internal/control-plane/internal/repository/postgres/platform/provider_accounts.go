@@ -54,8 +54,16 @@ func (repository *Repository) changeProviderAccount(
 		if err := repository.insertProviderAuthorization(ctx, tx, current, accountID, payload); err != nil {
 			return commandOutcome{}, err
 		}
+		if credentialID != nil {
+			if _, err := tx.Exec(ctx, queryProviderCredentialCleanupScheduleAccount, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "account_id": accountID,
+				"eligible_at": time.Now().UTC(), "maximum_attempts": providerCredentialCleanupMaxAttempts,
+			}); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+		}
 		if _, err := tx.Exec(ctx, queryProviderAccountsUpdateLifecycle, pgx.StrictNamedArgs{
-			"account_id": accountID, "state": "PENDING_AUTHORIZATION", "enabled": false, "clear_credential": false,
+			"account_id": accountID, "state": "PENDING_AUTHORIZATION", "enabled": false, "clear_credential": credentialID != nil,
 		}); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -121,9 +129,20 @@ func (repository *Repository) changeProviderAccount(
 			}
 			summary = "i18n:PROVIDER_AUTHORIZATION_FAILED"
 		}
-	case command.RevokeProviderAccount:
+	case command.RevokeProviderAccount, command.DeleteProviderAccount:
 		if state == "REVOKED" {
 			return commandOutcome{}, errs.ErrConflict
+		}
+		if input.Kind == command.DeleteProviderAccount {
+			var apiKeyAccount bool
+			if err := tx.QueryRow(ctx, queryProviderAccountsIsAPIKey, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "account_id": accountID,
+			}).Scan(&apiKeyAccount); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if !apiKeyAccount {
+				return commandOutcome{}, errs.ErrConflict
+			}
 		}
 		var activeRuntimeLease, activeWarmConsumer bool
 		if err := tx.QueryRow(ctx, queryProviderAccountsCleanupGuard, pgx.StrictNamedArgs{

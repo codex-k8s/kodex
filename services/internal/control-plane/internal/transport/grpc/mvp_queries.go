@@ -70,7 +70,35 @@ func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.Pro
 	for _, method := range value.AuthorizationMethods {
 		result.AuthorizationMethods = append(result.AuthorizationMethods, providerAuthorizationMethod(method))
 	}
+	for _, model := range value.Models {
+		result.Models = append(result.Models, castModelCapability(model))
+	}
 	return result
+}
+
+func (server *Server) ListModelCapabilities(ctx context.Context, request *controlplanev1.ListModelCapabilitiesRequest) (*controlplanev1.ListModelCapabilitiesResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, total, next, err := server.service.ListModelCapabilities(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+		Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListModelCapabilitiesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Models = append(response.Models, castModelCapability(item))
+	}
+	return response, nil
+}
+
+func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapability {
+	return &controlplanev1.ModelCapability{Id: value.ID, ProviderDefinitionKey: value.ProviderDefinitionKey,
+		ReasoningEfforts: value.ReasoningEfforts, DefaultReasoningEffort: value.DefaultReasoningEffort,
+		Available: value.Available, EligibleProviderAccountRefs: value.EligibleProviderAccountRefs,
+		ReadinessBlockers: value.ReadinessBlockers}
 }
 
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
@@ -78,7 +106,7 @@ func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderA
 		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
 		Enabled: value.Enabled, Ready: value.Ready, NextActions: nextActions(value.NextActions),
-		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt),
+		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,
 	}
 	if value.Authorization != nil {
 		result.Authorization = &controlplanev1.ProviderAuthorization{

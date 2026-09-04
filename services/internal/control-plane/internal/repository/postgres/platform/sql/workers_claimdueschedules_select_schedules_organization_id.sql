@@ -10,8 +10,12 @@ SELECT s.id::text,
        s.target_type,
        s.target_ref,
        s.input,
-       s.current_revision_id::text
+       s.current_revision_id::text,
+       revision.ref,
+       revision.revision,
+       revision.digest
 FROM control_plane.schedules s
+JOIN control_plane.schedule_revisions revision ON revision.id = s.current_revision_id
 WHERE s.organization_id = $1::uuid
   AND s.lifecycle_state = 'ACTIVE'
   AND s.enabled

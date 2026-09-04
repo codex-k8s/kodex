@@ -68,6 +68,36 @@ func (server *Server) RefreshProviderAccountAuthorization(
 	return &controlplanev1.RefreshProviderAccountAuthorizationResponse{Account: castProviderAccount(account)}, nil
 }
 
+func (server *Server) VerifyProviderAccountDeviceAuthorization(
+	ctx context.Context,
+	request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest,
+) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
+	principal, err := principal(ctx, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	account, err := server.service.RefreshProviderAccountAuthorization(ctx, principal, mutation(request.GetMutation()), request.GetAccountRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(account)}, nil
+}
+
+func (server *Server) ReauthorizeProviderAccountDeviceCode(
+	ctx context.Context,
+	request *controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest,
+) (*controlplanev1.ReauthorizeProviderAccountDeviceCodeResponse, error) {
+	principal, err := principal(ctx, controlplanev1.PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	account, err := server.service.StartProviderAccountDeviceAuthorization(ctx, principal, mutation(request.GetMutation()), request.GetAccountRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.ReauthorizeProviderAccountDeviceCodeResponse{Account: castProviderAccount(account)}, nil
+}
+
 func (server *Server) RevokeProviderAccount(
 	ctx context.Context,
 	request *controlplanev1.RevokeProviderAccountRequest,
@@ -78,6 +108,18 @@ func (server *Server) RevokeProviderAccount(
 		return nil, err
 	}
 	return &controlplanev1.RevokeProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
+}
+
+func (server *Server) DeleteProviderAccount(
+	ctx context.Context,
+	request *controlplanev1.DeleteProviderAccountRequest,
+) (*controlplanev1.DeleteProviderAccountResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName,
+		command.DeleteProviderAccount, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.DeleteProviderAccountResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
 func (server *Server) SetProviderAccountEnabled(
