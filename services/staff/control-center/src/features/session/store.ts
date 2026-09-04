@@ -49,6 +49,9 @@ const sessionRenewalIntervalMs = 5 * 60 * 1000;
 const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
 const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
 const runtimeSecretRevealPendingLifetimeMs = 5 * 60 * 1000;
+const renewalLeaseKey = "kodex.session.renewal.lease";
+const renewalLeaseMs = 15_000;
+const renewalChannelName = "kodex.session";
 
 export interface LoginCompletion {
   readonly kind: "login" | "runtime-secret" | "runtime-environment-policy";
@@ -113,6 +116,43 @@ export const useSessionStore = defineStore("session", () => {
   let renewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
   let loggingOut = false;
+  const tabId = crypto.randomUUID();
+  const renewalChannel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel(renewalChannelName);
+
+  function publishSessionRevision(nextRevision: number): void {
+    renewalChannel?.postMessage({ type: "session-revision", revision: nextRevision });
+  }
+
+  function ownsRenewalLease(): boolean {
+    const now = Date.now();
+    const raw = window.localStorage.getItem(renewalLeaseKey);
+    if (raw) {
+      try {
+        const lease = JSON.parse(raw) as { owner?: string; expiresAt?: number };
+        if (lease.owner !== tabId && typeof lease.expiresAt === "number" && lease.expiresAt > now) return false;
+      } catch {
+        window.localStorage.removeItem(renewalLeaseKey);
+      }
+    }
+    window.localStorage.setItem(renewalLeaseKey, JSON.stringify({ owner: tabId, expiresAt: now + renewalLeaseMs }));
+    return true;
+  }
+
+  renewalChannel?.addEventListener("message", (event: MessageEvent) => {
+    const message = event.data as { type?: string; revision?: unknown };
+    if (message.type !== "session-revision" || typeof message.revision !== "number" || !Number.isSafeInteger(message.revision) || message.revision < 1) return;
+    revision.value = message.revision;
+    window.sessionStorage.setItem(sessionRevisionKey, String(message.revision));
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== renewalLeaseKey || !event.newValue) return;
+    try {
+      const lease = JSON.parse(event.newValue) as { owner?: string; expiresAt?: number };
+      if (lease.owner === tabId || typeof lease.expiresAt !== "number" || lease.expiresAt <= Date.now()) return;
+    } catch {
+      return;
+    }
+  });
 
   const canLogout = computed(
     () => phase.value === "authenticated" && revision.value > 0,
@@ -414,6 +454,7 @@ export const useSessionStore = defineStore("session", () => {
 
   async function renew(): Promise<void> {
     if (phase.value !== "authenticated" || loggingOut) return;
+    if (!ownsRenewalLease()) return;
     if (renewalRequest) return await renewalRequest;
     const controller = new AbortController();
     renewalController = controller;
@@ -425,6 +466,7 @@ export const useSessionStore = defineStore("session", () => {
             signal: AbortSignal.any([requestSignal(), controller.signal]),
           }),
         );
+        publishSessionRevision(revision.value);
       } catch (error) {
         if (controller.signal.aborted) return;
         const normalized = asProblem(error);
