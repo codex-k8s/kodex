@@ -2,6 +2,7 @@ package projection
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -25,18 +26,70 @@ func (policyClient) CheckReadiness(context.Context, *sttv1.TranscriptionPolicyPr
 
 func TestPolicyProjectionRequiresExactAuthorityEcho(t *testing.T) {
 	principal := value.Principal{ActorID: "actor", TenantID: "tenant", ProjectID: "prj_abcdefgh", AuthorityRevision: 4, AuthorityDigestSHA256: strings.Repeat("a", 64)}
-	response := &sttv1.ResolveTranscriptionPolicyResponse{RequestId: "request", ActorId: principal.ActorID, TenantId: principal.TenantID,
-		ProjectId: principal.ProjectID, AuthorityRevision: principal.AuthorityRevision, AuthorityDigestSha256: principal.AuthorityDigestSHA256,
-		ExpiresAt: timestamppb.New(time.Now().Add(time.Minute))}
-	client, err := NewPolicy(policyClient{response: response})
+	client, err := NewPolicy(policyClient{response: validPolicyResponse(principal)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.Resolve(t.Context(), principal, "request"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("точный authority echo отклонён: %v", err)
 	}
-	response.TenantId = "other-tenant"
-	if _, err := client.Resolve(t.Context(), principal, "request"); err == nil {
-		t.Fatal("несовпадающий tenant echo принят")
+	for _, test := range []struct {
+		name   string
+		mutate func(*sttv1.ResolveTranscriptionPolicyResponse)
+	}{
+		{name: "tenant", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) { response.TenantId = "other-tenant" }},
+		{name: "authority revision", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) { response.AuthorityRevision++ }},
+		{name: "authority digest", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) {
+			response.AuthorityDigestSha256 = strings.Repeat("b", 64)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := validPolicyResponse(principal)
+			test.mutate(response)
+			client, err := NewPolicy(policyClient{response: response})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Resolve(t.Context(), principal, "request"); err == nil {
+				t.Fatal("несовпадающий authority echo принят")
+			}
+		})
+	}
+}
+
+func TestPolicyProjectionRejectsUnsignedLimitOverflow(t *testing.T) {
+	principal := value.Principal{ActorID: "actor", TenantID: "tenant", ProjectID: "prj_abcdefgh", AuthorityRevision: 4, AuthorityDigestSHA256: strings.Repeat("a", 64)}
+	for _, test := range []struct {
+		name   string
+		mutate func(*sttv1.ResolveTranscriptionPolicyResponse)
+	}{
+		{name: "maximum audio bytes", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) { response.MaximumAudioBytes = math.MaxUint64 }},
+		{name: "maximum audio duration", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) {
+			response.MaximumAudioDurationMilliseconds = math.MaxUint64
+		}},
+		{name: "provider timeout", mutate: func(response *sttv1.ResolveTranscriptionPolicyResponse) {
+			response.ProviderTimeoutMilliseconds = math.MaxUint64
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := validPolicyResponse(principal)
+			test.mutate(response)
+			client, err := NewPolicy(policyClient{response: response})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Resolve(t.Context(), principal, "request"); err == nil {
+				t.Fatal("uint64 limit overflow принят")
+			}
+		})
+	}
+}
+
+func validPolicyResponse(principal value.Principal) *sttv1.ResolveTranscriptionPolicyResponse {
+	return &sttv1.ResolveTranscriptionPolicyResponse{
+		RequestId: "request", ActorId: principal.ActorID, TenantId: principal.TenantID,
+		ProjectId: principal.ProjectID, AuthorityRevision: principal.AuthorityRevision, AuthorityDigestSha256: principal.AuthorityDigestSHA256,
+		MaximumAudioBytes: 1024, MaximumAudioDurationMilliseconds: 1000, ProviderTimeoutMilliseconds: 1000,
+		ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)),
 	}
 }

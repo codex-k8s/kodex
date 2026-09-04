@@ -53,6 +53,8 @@ message ResolveTranscriptionPolicyRequest {
   string request_id = 2;
   string actor_id = 3;
   string tenant_id = 4;
+  // authority_revision — ревизия immutable snapshot источника полномочий;
+  // canonical pair дополняется authority_digest_sha256.
   uint64 authority_revision = 5;
   string authority_digest_sha256 = 6;
 }
@@ -73,6 +75,8 @@ message ResolveTranscriptionPolicyResponse {
   string actor_id = 13;
   string tenant_id = 14;
   string project_id = 15;
+  // authority_revision — exact echo ревизии immutable snapshot источника
+  // полномочий из request.
   uint64 authority_revision = 16;
   string authority_digest_sha256 = 17;
 }
@@ -93,6 +97,8 @@ message ProjectTranscriptionCredentialRequest {
   string credential_projection_grant = 7;
   string actor_id = 8;
   string tenant_id = 9;
+  // authority_revision — ревизия immutable snapshot источника полномочий;
+  // canonical pair дополняется authority_digest_sha256.
   uint64 authority_revision = 10;
   string authority_digest_sha256 = 11;
 }
@@ -108,6 +114,8 @@ message ProjectTranscriptionCredentialResponse {
   string tenant_id = 8;
   string project_id = 9;
   uint64 config_revision = 10;
+  // authority_revision — exact echo ревизии immutable snapshot источника
+  // полномочий из request.
   uint64 authority_revision = 11;
   string authority_digest_sha256 = 12;
 }

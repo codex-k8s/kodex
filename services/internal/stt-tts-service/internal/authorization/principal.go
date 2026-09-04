@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	expectedAudience    = "urn:kodex:internal-rpc:stt-tts-service"
-	expectedWorkloadID  = "stt-tts-service"
-	expectedCaller      = "control-api-gateway"
-	transcribeOperation = "platform.stt.transcribe"
+	expectedAudience         = "urn:kodex:internal-rpc:stt-tts-service"
+	expectedWorkloadID       = "stt-tts-service"
+	expectedCaller           = "control-api-gateway"
+	transcribeOperation      = "platform.stt.transcribe"
+	maximumAuthorityRevision = uint64(1<<53 - 1)
 )
 
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
@@ -27,7 +28,8 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		verified.GetPermission() != value.PermissionTranscribe || verified.GetAuthority() == nil ||
 		verified.GetAuthority().GetActor() == nil || verified.GetAuthority().GetTenant() == nil ||
 		verified.GetAuthority().GetProject() == nil || verified.GetExpiresAt() == nil ||
-		!verified.GetExpiresAt().IsValid() || verified.GetPolicyRevision() == 0 ||
+		!verified.GetExpiresAt().IsValid() || verified.GetSourceRevision() == 0 ||
+		verified.GetSourceRevision() > maximumAuthorityRevision ||
 		verified.GetSourceDigestSha256() == "" || verified.GetJti() == "" {
 		return value.Principal{}, errors.New("verified STT authorization context is invalid")
 	}
@@ -36,7 +38,7 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		TenantID:   strings.TrimSpace(verified.GetAuthority().GetTenant().GetId()),
 		ProjectID:  strings.TrimSpace(verified.GetAuthority().GetProject().GetId()),
 		RequestID:  verified.GetJti(),
-		Permission: verified.GetPermission(), AuthorityRevision: verified.GetPolicyRevision(),
+		Permission: verified.GetPermission(), AuthorityRevision: verified.GetSourceRevision(),
 		AuthorityDigestSHA256: verified.GetSourceDigestSha256(), ExpiresAt: verified.GetExpiresAt().AsTime().UTC(),
 	}
 	if principal.ActorID == "" || principal.TenantID == "" || principal.ProjectID == "" {

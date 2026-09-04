@@ -199,13 +199,15 @@ func (x *CheckReadinessResponse) GetReady() bool {
 }
 
 type ResolveTranscriptionPolicyRequest struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId             string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	RequestId             string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ActorId               string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	TenantId              string                 `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	AuthorityRevision     uint64                 `protobuf:"varint,5,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256 string                 `protobuf:"bytes,6,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	RequestId string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ActorId   string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	TenantId  string                 `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// authority_revision — ревизия immutable snapshot источника полномочий;
+	// canonical pair дополняется authority_digest_sha256.
+	AuthorityRevision     uint64 `protobuf:"varint,5,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
+	AuthorityDigestSha256 string `protobuf:"bytes,6,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -299,10 +301,12 @@ type ResolveTranscriptionPolicyResponse struct {
 	ActorId                          string                 `protobuf:"bytes,13,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
 	TenantId                         string                 `protobuf:"bytes,14,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	ProjectId                        string                 `protobuf:"bytes,15,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	AuthorityRevision                uint64                 `protobuf:"varint,16,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256            string                 `protobuf:"bytes,17,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields                    protoimpl.UnknownFields
-	sizeCache                        protoimpl.SizeCache
+	// authority_revision — exact echo ревизии immutable snapshot источника
+	// полномочий из request.
+	AuthorityRevision     uint64 `protobuf:"varint,16,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
+	AuthorityDigestSha256 string `protobuf:"bytes,17,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ResolveTranscriptionPolicyResponse) Reset() {
@@ -545,10 +549,12 @@ type ProjectTranscriptionCredentialRequest struct {
 	CredentialProjectionGrant    string                 `protobuf:"bytes,7,opt,name=credential_projection_grant,json=credentialProjectionGrant,proto3" json:"credential_projection_grant,omitempty"`
 	ActorId                      string                 `protobuf:"bytes,8,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
 	TenantId                     string                 `protobuf:"bytes,9,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	AuthorityRevision            uint64                 `protobuf:"varint,10,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256        string                 `protobuf:"bytes,11,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	// authority_revision — ревизия immutable snapshot источника полномочий;
+	// canonical pair дополняется authority_digest_sha256.
+	AuthorityRevision     uint64 `protobuf:"varint,10,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
+	AuthorityDigestSha256 string `protobuf:"bytes,11,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ProjectTranscriptionCredentialRequest) Reset() {
@@ -670,10 +676,12 @@ type ProjectTranscriptionCredentialResponse struct {
 	TenantId                     string                 `protobuf:"bytes,8,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	ProjectId                    string                 `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	ConfigRevision               uint64                 `protobuf:"varint,10,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	AuthorityRevision            uint64                 `protobuf:"varint,11,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
-	AuthorityDigestSha256        string                 `protobuf:"bytes,12,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	// authority_revision — exact echo ревизии immutable snapshot источника
+	// полномочий из request.
+	AuthorityRevision     uint64 `protobuf:"varint,11,opt,name=authority_revision,json=authorityRevision,proto3" json:"authority_revision,omitempty"`
+	AuthorityDigestSha256 string `protobuf:"bytes,12,opt,name=authority_digest_sha256,json=authorityDigestSha256,proto3" json:"authority_digest_sha256,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ProjectTranscriptionCredentialResponse) Reset() {

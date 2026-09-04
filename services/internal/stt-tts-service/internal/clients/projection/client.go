@@ -15,7 +15,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const credentialProjectionIncomplete = "transcription credential projection is incomplete"
+const (
+	credentialProjectionIncomplete = "transcription credential projection is incomplete"
+	policyProjectionIncomplete     = "transcription policy projection is incomplete"
+	minimumAudioBytes              = uint64(1024)
+	maximumAudioBytes              = uint64(26214400)
+	minimumAudioDurationMillis     = uint64(1000)
+	maximumAudioDurationMillis     = uint64(1800000)
+	minimumProviderTimeoutMillis   = uint64(1000)
+	maximumProviderTimeoutMillis   = uint64(45000)
+)
 
 type Policy struct {
 	client sttv1.TranscriptionPolicyProjectionServiceClient
@@ -44,13 +53,21 @@ func (client *Policy) Resolve(ctx context.Context, principal value.Principal, re
 		response.GetActorId() != principal.ActorID || response.GetTenantId() != principal.TenantID ||
 		response.GetProjectId() != principal.ProjectID || response.GetAuthorityRevision() != principal.AuthorityRevision ||
 		response.GetAuthorityDigestSha256() != principal.AuthorityDigestSHA256 {
-		return value.Policy{}, errors.New("transcription policy projection is incomplete")
+		return value.Policy{}, errors.New(policyProjectionIncomplete)
+	}
+	maximumAudioBytesRaw := response.GetMaximumAudioBytes()
+	maximumAudioDurationMillisRaw := response.GetMaximumAudioDurationMilliseconds()
+	providerTimeoutMillisRaw := response.GetProviderTimeoutMilliseconds()
+	if maximumAudioBytesRaw < minimumAudioBytes || maximumAudioBytesRaw > maximumAudioBytes ||
+		maximumAudioDurationMillisRaw < minimumAudioDurationMillis || maximumAudioDurationMillisRaw > maximumAudioDurationMillis ||
+		providerTimeoutMillisRaw < minimumProviderTimeoutMillis || providerTimeoutMillisRaw > maximumProviderTimeoutMillis {
+		return value.Policy{}, errors.New(policyProjectionIncomplete)
 	}
 	return value.Policy{
 		Revision: response.GetConfigRevision(), DigestSHA256: response.GetConfigDigestSha256(),
-		Model: response.GetModel(), Language: response.GetLanguage(), MaximumAudioBytes: int(response.GetMaximumAudioBytes()),
-		MaximumAudioDuration: time.Duration(response.GetMaximumAudioDurationMilliseconds()) * time.Millisecond,
-		ProviderTimeout:      time.Duration(response.GetProviderTimeoutMilliseconds()) * time.Millisecond,
+		Model: response.GetModel(), Language: response.GetLanguage(), MaximumAudioBytes: int(maximumAudioBytesRaw),
+		MaximumAudioDuration: time.Duration(maximumAudioDurationMillisRaw) * time.Millisecond,
+		ProviderTimeout:      time.Duration(providerTimeoutMillisRaw) * time.Millisecond,
 		ProviderAccountRef:   response.GetProviderAccountRef(), ProviderCredentialGeneration: response.GetProviderCredentialGeneration(),
 		CredentialProjectionGrant: response.GetCredentialProjectionGrant(), ExpiresAt: response.GetExpiresAt().AsTime(),
 	}, nil
