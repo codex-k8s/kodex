@@ -861,6 +861,30 @@ func (e BootstrapStatePlatformRole) Valid() bool {
 	}
 }
 
+// Defines values for ContextResourceState.
+const (
+	ContextResourceStateACTIVE   ContextResourceState = "ACTIVE"
+	ContextResourceStateARCHIVED ContextResourceState = "ARCHIVED"
+	ContextResourceStateEXPIRED  ContextResourceState = "EXPIRED"
+	ContextResourceStatePURGED   ContextResourceState = "PURGED"
+)
+
+// Valid indicates whether the value is a known member of the ContextResourceState enum.
+func (e ContextResourceState) Valid() bool {
+	switch e {
+	case ContextResourceStateACTIVE:
+		return true
+	case ContextResourceStateARCHIVED:
+		return true
+	case ContextResourceStateEXPIRED:
+		return true
+	case ContextResourceStatePURGED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GateResolutionDecision.
 const (
 	GateResolutionDecisionAPPROVE        GateResolutionDecision = "APPROVE"
@@ -2351,16 +2375,16 @@ func (e RoleEnvironmentPlatformOs) Valid() bool {
 
 // Defines values for RoleImageArtifactAdmissionVerdict.
 const (
-	ACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
-	REJECTED RoleImageArtifactAdmissionVerdict = "REJECTED"
+	RoleImageArtifactAdmissionVerdictACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
+	RoleImageArtifactAdmissionVerdictREJECTED RoleImageArtifactAdmissionVerdict = "REJECTED"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageArtifactAdmissionVerdict enum.
 func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
 	switch e {
-	case ACCEPTED:
+	case RoleImageArtifactAdmissionVerdictACCEPTED:
 		return true
-	case REJECTED:
+	case RoleImageArtifactAdmissionVerdictREJECTED:
 		return true
 	default:
 		return false
@@ -3858,6 +3882,81 @@ func (e SearchResultKind) Valid() bool {
 	}
 }
 
+// Defines values for SkillBundleReviewInputDecision.
+const (
+	SkillBundleReviewInputDecisionAPPROVE SkillBundleReviewInputDecision = "APPROVE"
+	SkillBundleReviewInputDecisionREJECT  SkillBundleReviewInputDecision = "REJECT"
+)
+
+// Valid indicates whether the value is a known member of the SkillBundleReviewInputDecision enum.
+func (e SkillBundleReviewInputDecision) Valid() bool {
+	switch e {
+	case SkillBundleReviewInputDecisionAPPROVE:
+		return true
+	case SkillBundleReviewInputDecisionREJECT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SkillBundleRevisionScanState.
+const (
+	SkillBundleRevisionScanStateCLEAN    SkillBundleRevisionScanState = "CLEAN"
+	SkillBundleRevisionScanStateERROR    SkillBundleRevisionScanState = "ERROR"
+	SkillBundleRevisionScanStateINFECTED SkillBundleRevisionScanState = "INFECTED"
+	SkillBundleRevisionScanStatePENDING  SkillBundleRevisionScanState = "PENDING"
+)
+
+// Valid indicates whether the value is a known member of the SkillBundleRevisionScanState enum.
+func (e SkillBundleRevisionScanState) Valid() bool {
+	switch e {
+	case SkillBundleRevisionScanStateCLEAN:
+		return true
+	case SkillBundleRevisionScanStateERROR:
+		return true
+	case SkillBundleRevisionScanStateINFECTED:
+		return true
+	case SkillBundleRevisionScanStatePENDING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SkillBundleRevisionState.
+const (
+	SkillBundleRevisionStateAPPROVED  SkillBundleRevisionState = "APPROVED"
+	SkillBundleRevisionStateDISCARDED SkillBundleRevisionState = "DISCARDED"
+	SkillBundleRevisionStateDRAFT     SkillBundleRevisionState = "DRAFT"
+	SkillBundleRevisionStateINVALID   SkillBundleRevisionState = "INVALID"
+	SkillBundleRevisionStatePUBLISHED SkillBundleRevisionState = "PUBLISHED"
+	SkillBundleRevisionStateREJECTED  SkillBundleRevisionState = "REJECTED"
+	SkillBundleRevisionStateVALIDATED SkillBundleRevisionState = "VALIDATED"
+)
+
+// Valid indicates whether the value is a known member of the SkillBundleRevisionState enum.
+func (e SkillBundleRevisionState) Valid() bool {
+	switch e {
+	case SkillBundleRevisionStateAPPROVED:
+		return true
+	case SkillBundleRevisionStateDISCARDED:
+		return true
+	case SkillBundleRevisionStateDRAFT:
+		return true
+	case SkillBundleRevisionStateINVALID:
+		return true
+	case SkillBundleRevisionStatePUBLISHED:
+		return true
+	case SkillBundleRevisionStateREJECTED:
+		return true
+	case SkillBundleRevisionStateVALIDATED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SpeechTranscriptionAvailabilityReason.
 const (
 	SpeechTranscriptionAvailabilityReasonREADY                            SpeechTranscriptionAvailabilityReason = "READY"
@@ -4367,22 +4466,22 @@ func (e WorkflowStepGateDecisions) Valid() bool {
 
 // Defines values for WorkflowStepInputGateDecisions.
 const (
-	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
-	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
-	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
-	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	REJECT         WorkflowStepInputGateDecisions = "REJECT"
+	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowStepInputGateDecisions enum.
 func (e WorkflowStepInputGateDecisions) Valid() bool {
 	switch e {
-	case WorkflowStepInputGateDecisionsAPPROVE:
+	case APPROVE:
 		return true
-	case WorkflowStepInputGateDecisionsCANCEL:
+	case CANCEL:
 		return true
-	case WorkflowStepInputGateDecisionsREJECT:
+	case REJECT:
 		return true
-	case WorkflowStepInputGateDecisionsREQUESTCHANGES:
+	case REQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -4649,22 +4748,22 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case ListArtifactsParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGED:
+	case PURGED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGEPENDING:
+	case PURGEPENDING:
 		return true
 	default:
 		return false
@@ -4694,25 +4793,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	CLEAN       ListArtifactsParamsScanState = "CLEAN"
-	FAILED      ListArtifactsParamsScanState = "FAILED"
-	PENDING     ListArtifactsParamsScanState = "PENDING"
-	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	SCANNING    ListArtifactsParamsScanState = "SCANNING"
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case CLEAN:
+	case ListArtifactsParamsScanStateCLEAN:
 		return true
-	case FAILED:
+	case ListArtifactsParamsScanStateFAILED:
 		return true
-	case PENDING:
+	case ListArtifactsParamsScanStatePENDING:
 		return true
-	case QUARANTINED:
+	case ListArtifactsParamsScanStateQUARANTINED:
 		return true
-	case SCANNING:
+	case ListArtifactsParamsScanStateSCANNING:
 		return true
 	default:
 		return false
@@ -5010,6 +5109,22 @@ type AgentCommand struct {
 
 // AgentCommandAction defines model for AgentCommand.Action.
 type AgentCommandAction string
+
+// AgentContextBinding defines model for AgentContextBinding.
+type AgentContextBinding struct {
+	AgentRef    OpaqueRef `json:"agentRef"`
+	Digest      string    `json:"digest"`
+	Ref         OpaqueRef `json:"ref"`
+	ResourceRef OpaqueRef `json:"resourceRef"`
+	RevisionRef OpaqueRef `json:"revisionRef"`
+	Version     int64     `json:"version"`
+}
+
+// AgentContextBindingInput defines model for AgentContextBindingInput.
+type AgentContextBindingInput struct {
+	ExpectedBindingVersion int64     `json:"expectedBindingVersion"`
+	RevisionRef            OpaqueRef `json:"revisionRef"`
+}
 
 // AgentInput defines model for AgentInput.
 type AgentInput struct {
@@ -5439,6 +5554,24 @@ type ConfigOverlayVersion struct {
 	Version            int64      `json:"version"`
 }
 
+// ContextProvenance defines model for ContextProvenance.
+type ContextProvenance struct {
+	ActorRef       OpaqueRef `json:"actorRef"`
+	CreatedAt      Timestamp `json:"createdAt"`
+	Digest         string    `json:"digest"`
+	SourceKind     string    `json:"sourceKind"`
+	SourceRef      *string   `json:"sourceRef,omitempty"`
+	SourceRevision *string   `json:"sourceRevision,omitempty"`
+}
+
+// ContextResourceState defines model for ContextResourceState.
+type ContextResourceState string
+
+// ContextRevisionDigestInput defines model for ContextRevisionDigestInput.
+type ContextRevisionDigestInput struct {
+	ExpectedDigest string `json:"expectedDigest"`
+}
+
 // EffectiveAccessDecision defines model for EffectiveAccessDecision.
 type EffectiveAccessDecision struct {
 	Decision      AccessDecision          `json:"decision"`
@@ -5753,6 +5886,18 @@ type InteractionIdentityPage struct {
 	NextPageToken string                `json:"nextPageToken"`
 }
 
+// KodexMemoryRecord defines model for KodexMemoryRecord.
+type KodexMemoryRecord struct {
+	AgentRef        *OpaqueRef           `json:"agentRef,omitempty"`
+	CreatedAt       Timestamp            `json:"createdAt"`
+	CurrentRevision MemoryRecordRevision `json:"currentRevision"`
+	ProjectRef      OpaqueRef            `json:"projectRef"`
+	Ref             OpaqueRef            `json:"ref"`
+	State           ContextResourceState `json:"state"`
+	UpdatedAt       Timestamp            `json:"updatedAt"`
+	Version         int64                `json:"version"`
+}
+
 // ManagedConfiguration defines model for ManagedConfiguration.
 type ManagedConfiguration struct {
 	CurrentRevision *ManagedConfigurationRevision `json:"currentRevision,omitempty"`
@@ -5910,6 +6055,47 @@ type MembershipPermissions string
 
 // MembershipPlatformRole defines model for Membership.PlatformRole.
 type MembershipPlatformRole string
+
+// MemoryRecordCreateInput defines model for MemoryRecordCreateInput.
+type MemoryRecordCreateInput struct {
+	AgentRef      *OpaqueRef                `json:"agentRef,omitempty"`
+	Specification MemoryRecordSpecification `json:"specification"`
+}
+
+// MemoryRecordPage defines model for MemoryRecordPage.
+type MemoryRecordPage struct {
+	Items         []KodexMemoryRecord `json:"items"`
+	NextPageToken string              `json:"nextPageToken"`
+	Total         int64               `json:"total"`
+}
+
+// MemoryRecordRevision defines model for MemoryRecordRevision.
+type MemoryRecordRevision struct {
+	Digest            string            `json:"digest"`
+	ParentRevisionRef *OpaqueRef        `json:"parentRevisionRef,omitempty"`
+	Provenance        ContextProvenance `json:"provenance"`
+	Redacted          bool              `json:"redacted"`
+	Ref               OpaqueRef         `json:"ref"`
+	RetentionUntil    Timestamp         `json:"retentionUntil"`
+	Revision          int64             `json:"revision"`
+	Summary           string            `json:"summary"`
+	Title             string            `json:"title"`
+}
+
+// MemoryRecordRevisionPage defines model for MemoryRecordRevisionPage.
+type MemoryRecordRevisionPage struct {
+	Items         []MemoryRecordRevision `json:"items"`
+	NextPageToken string                 `json:"nextPageToken"`
+	Total         int64                  `json:"total"`
+}
+
+// MemoryRecordSpecification defines model for MemoryRecordSpecification.
+type MemoryRecordSpecification struct {
+	RetentionUntil Timestamp  `json:"retentionUntil"`
+	SourceRunRef   *OpaqueRef `json:"sourceRunRef,omitempty"`
+	Summary        string     `json:"summary"`
+	Title          string     `json:"title"`
+}
 
 // NextAction defines model for NextAction.
 type NextAction string
@@ -7366,6 +7552,97 @@ type SimulateAccessResult struct {
 	Subject     AccessSubject           `json:"subject"`
 }
 
+// SkillBundle defines model for SkillBundle.
+type SkillBundle struct {
+	CreatedAt       Timestamp            `json:"createdAt"`
+	CurrentRevision *SkillBundleRevision `json:"currentRevision,omitempty"`
+	DraftRevision   *SkillBundleRevision `json:"draftRevision,omitempty"`
+	ProjectRef      OpaqueRef            `json:"projectRef"`
+	Ref             OpaqueRef            `json:"ref"`
+	State           ContextResourceState `json:"state"`
+	UpdatedAt       Timestamp            `json:"updatedAt"`
+	Version         int64                `json:"version"`
+}
+
+// SkillBundleDraftCreateInput defines model for SkillBundleDraftCreateInput.
+type SkillBundleDraftCreateInput struct {
+	BundleRef     *OpaqueRef               `json:"bundleRef,omitempty"`
+	Specification SkillBundleSpecification `json:"specification"`
+}
+
+// SkillBundleFile defines model for SkillBundleFile.
+type SkillBundleFile struct {
+	ArtifactRef      OpaqueRef `json:"artifactRef"`
+	ArtifactRevision int64     `json:"artifactRevision"`
+	Digest           string    `json:"digest"`
+	Path             string    `json:"path"`
+	SizeBytes        int64     `json:"sizeBytes"`
+}
+
+// SkillBundleFileInput defines model for SkillBundleFileInput.
+type SkillBundleFileInput struct {
+	ArtifactRef      OpaqueRef `json:"artifactRef"`
+	ArtifactRevision int64     `json:"artifactRevision"`
+	Path             string    `json:"path"`
+}
+
+// SkillBundlePage defines model for SkillBundlePage.
+type SkillBundlePage struct {
+	Items         []SkillBundle `json:"items"`
+	NextPageToken string        `json:"nextPageToken"`
+	Total         int64         `json:"total"`
+}
+
+// SkillBundleReviewInput defines model for SkillBundleReviewInput.
+type SkillBundleReviewInput struct {
+	Comment        string                         `json:"comment"`
+	Decision       SkillBundleReviewInputDecision `json:"decision"`
+	ExpectedDigest string                         `json:"expectedDigest"`
+}
+
+// SkillBundleReviewInputDecision defines model for SkillBundleReviewInput.Decision.
+type SkillBundleReviewInputDecision string
+
+// SkillBundleRevision defines model for SkillBundleRevision.
+type SkillBundleRevision struct {
+	Description       string                       `json:"description"`
+	Diagnostics       []string                     `json:"diagnostics"`
+	Digest            string                       `json:"digest"`
+	Files             []SkillBundleFile            `json:"files"`
+	Name              string                       `json:"name"`
+	ParentRevisionRef *OpaqueRef                   `json:"parentRevisionRef,omitempty"`
+	Provenance        ContextProvenance            `json:"provenance"`
+	Ref               OpaqueRef                    `json:"ref"`
+	ReviewedAt        *Timestamp                   `json:"reviewedAt,omitempty"`
+	ReviewedBy        *OpaqueRef                   `json:"reviewedBy,omitempty"`
+	Revision          int64                        `json:"revision"`
+	ScanDigest        *string                      `json:"scanDigest,omitempty"`
+	ScanEngine        *string                      `json:"scanEngine,omitempty"`
+	ScanState         SkillBundleRevisionScanState `json:"scanState"`
+	ScannedAt         *Timestamp                   `json:"scannedAt,omitempty"`
+	State             SkillBundleRevisionState     `json:"state"`
+}
+
+// SkillBundleRevisionScanState defines model for SkillBundleRevision.ScanState.
+type SkillBundleRevisionScanState string
+
+// SkillBundleRevisionState defines model for SkillBundleRevision.State.
+type SkillBundleRevisionState string
+
+// SkillBundleRevisionPage defines model for SkillBundleRevisionPage.
+type SkillBundleRevisionPage struct {
+	Items         []SkillBundleRevision `json:"items"`
+	NextPageToken string                `json:"nextPageToken"`
+	Total         int64                 `json:"total"`
+}
+
+// SkillBundleSpecification defines model for SkillBundleSpecification.
+type SkillBundleSpecification struct {
+	Description string                 `json:"description"`
+	Files       []SkillBundleFileInput `json:"files"`
+	Name        string                 `json:"name"`
+}
+
 // SpeechTranscription defines model for SpeechTranscription.
 type SpeechTranscription struct {
 	Receipt SpeechTranscriptionReceipt `json:"receipt"`
@@ -7732,6 +8009,15 @@ type ConfigurationRevisionRef = OpaqueRef
 // ConnectionRef defines model for ConnectionRef.
 type ConnectionRef = OpaqueRef
 
+// ContextAgentRefQuery defines model for ContextAgentRefQuery.
+type ContextAgentRefQuery = OpaqueRef
+
+// ContextResourceStateQuery defines model for ContextResourceStateQuery.
+type ContextResourceStateQuery = ContextResourceState
+
+// ContextRevisionRef defines model for ContextRevisionRef.
+type ContextRevisionRef = OpaqueRef
+
 // ConversationRef defines model for ConversationRef.
 type ConversationRef = OpaqueRef
 
@@ -7758,6 +8044,9 @@ type InteractionIdentityRef = OpaqueRef
 
 // MembershipRef defines model for MembershipRef.
 type MembershipRef = OpaqueRef
+
+// MemoryRecordRef defines model for MemoryRecordRef.
+type MemoryRecordRef = OpaqueRef
 
 // PageSize defines model for PageSize.
 type PageSize = int
@@ -7812,6 +8101,9 @@ type SecretRef = OpaqueRef
 
 // SessionRef defines model for SessionRef.
 type SessionRef = OpaqueRef
+
+// SkillBundleRef defines model for SkillBundleRef.
+type SkillBundleRef = OpaqueRef
 
 // VFSPageToken defines model for VFSPageToken.
 type VFSPageToken = string
@@ -8026,6 +8318,20 @@ type ListAgentInstructionVersionsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// UnbindAgentMemoryRecordParams defines parameters for UnbindAgentMemoryRecord.
+type UnbindAgentMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// BindAgentMemoryRecordParams defines parameters for BindAgentMemoryRecord.
+type BindAgentMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // PublishAgentRuntimeConfigurationParams defines parameters for PublishAgentRuntimeConfiguration.
 type PublishAgentRuntimeConfigurationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -8044,6 +8350,20 @@ type BindAgentRuntimeEnvironmentParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// UnbindAgentSkillBundleParams defines parameters for UnbindAgentSkillBundle.
+type UnbindAgentSkillBundleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// BindAgentSkillBundleParams defines parameters for BindAgentSkillBundle.
+type BindAgentSkillBundleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ListOrganizationArtifactsParams defines parameters for ListOrganizationArtifacts.
@@ -8391,6 +8711,50 @@ type ListManagedConfigurationHistoryParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListMemoryRecordsParams defines parameters for ListMemoryRecords.
+type ListMemoryRecordsParams struct {
+	ProjectRef *ProjectRefQuery           `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	AgentRef   *ContextAgentRefQuery      `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	Query      *Query                     `form:"query,omitempty" json:"query,omitempty"`
+	State      *ContextResourceStateQuery `form:"state,omitempty" json:"state,omitempty"`
+	PageSize   *PageSize                  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken                 `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ArchiveMemoryRecordParams defines parameters for ArchiveMemoryRecord.
+type ArchiveMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// PurgeMemoryRecordParams defines parameters for PurgeMemoryRecord.
+type PurgeMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// RestoreMemoryRecordParams defines parameters for RestoreMemoryRecord.
+type RestoreMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ListMemoryRecordRevisionsParams defines parameters for ListMemoryRecordRevisions.
+type ListMemoryRecordRevisionsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ReviseMemoryRecordParams defines parameters for ReviseMemoryRecord.
+type ReviseMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // CompleteOnboardingParams defines parameters for CompleteOnboarding.
 type CompleteOnboardingParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -8537,6 +8901,12 @@ type ListProjectMembershipCandidatesParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// CreateMemoryRecordParams defines parameters for CreateMemoryRecord.
+type CreateMemoryRecordParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ListRoleImageRecipesParams defines parameters for ListRoleImageRecipes.
 type ListRoleImageRecipesParams struct {
 	RoleDefinitionRef *RoleDefinitionRefQuery `form:"roleDefinitionRef,omitempty" json:"roleDefinitionRef,omitempty"`
@@ -8620,6 +8990,13 @@ type ListSchedulesParams struct {
 type CreateScheduleParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CreateSkillBundleDraftParams defines parameters for CreateSkillBundleDraft.
+type CreateSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
+	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
 }
 
 // TranscribeSpeechMultipartBody defines parameters for TranscribeSpeech.
@@ -9044,6 +9421,78 @@ type AddSessionTurnParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListSkillBundlesParams defines parameters for ListSkillBundles.
+type ListSkillBundlesParams struct {
+	ProjectRef *ProjectRefQuery           `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	AgentRef   *ContextAgentRefQuery      `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	Query      *Query                     `form:"query,omitempty" json:"query,omitempty"`
+	State      *ContextResourceStateQuery `form:"state,omitempty" json:"state,omitempty"`
+	PageSize   *PageSize                  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken                 `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ArchiveSkillBundleParams defines parameters for ArchiveSkillBundle.
+type ArchiveSkillBundleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// PurgeSkillBundleParams defines parameters for PurgeSkillBundle.
+type PurgeSkillBundleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// RestoreSkillBundleParams defines parameters for RestoreSkillBundle.
+type RestoreSkillBundleParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ListSkillBundleRevisionsParams defines parameters for ListSkillBundleRevisions.
+type ListSkillBundleRevisionsParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// SaveSkillBundleDraftParams defines parameters for SaveSkillBundleDraft.
+type SaveSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// DiscardSkillBundleDraftParams defines parameters for DiscardSkillBundleDraft.
+type DiscardSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// PublishSkillBundleDraftParams defines parameters for PublishSkillBundleDraft.
+type PublishSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ReviewSkillBundleDraftParams defines parameters for ReviewSkillBundleDraft.
+type ReviewSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// ValidateSkillBundleDraftParams defines parameters for ValidateSkillBundleDraft.
+type ValidateSkillBundleDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // TranscribeOrganizationSpeechMultipartBody defines parameters for TranscribeOrganizationSpeech.
 type TranscribeOrganizationSpeechMultipartBody struct {
 	Audio openapi_types.File `json:"audio"`
@@ -9205,11 +9654,23 @@ type CommandAgentInstructionsJSONRequestBody = InstructionCommand
 // CreateInstructionDraftJSONRequestBody defines body for CreateInstructionDraft for application/json ContentType.
 type CreateInstructionDraftJSONRequestBody CreateInstructionDraftJSONBody
 
+// UnbindAgentMemoryRecordJSONRequestBody defines body for UnbindAgentMemoryRecord for application/json ContentType.
+type UnbindAgentMemoryRecordJSONRequestBody = AgentContextBindingInput
+
+// BindAgentMemoryRecordJSONRequestBody defines body for BindAgentMemoryRecord for application/json ContentType.
+type BindAgentMemoryRecordJSONRequestBody = AgentContextBindingInput
+
 // PublishAgentRuntimeConfigurationJSONRequestBody defines body for PublishAgentRuntimeConfiguration for application/json ContentType.
 type PublishAgentRuntimeConfigurationJSONRequestBody = AgentRuntimeConfigurationInput
 
 // BindAgentRuntimeEnvironmentJSONRequestBody defines body for BindAgentRuntimeEnvironment for application/json ContentType.
 type BindAgentRuntimeEnvironmentJSONRequestBody = RuntimeEnvironmentBindingInput
+
+// UnbindAgentSkillBundleJSONRequestBody defines body for UnbindAgentSkillBundle for application/json ContentType.
+type UnbindAgentSkillBundleJSONRequestBody = AgentContextBindingInput
+
+// BindAgentSkillBundleJSONRequestBody defines body for BindAgentSkillBundle for application/json ContentType.
+type BindAgentSkillBundleJSONRequestBody = AgentContextBindingInput
 
 // ChangeArtifactBindingJSONRequestBody defines body for ChangeArtifactBinding for application/json ContentType.
 type ChangeArtifactBindingJSONRequestBody = ArtifactBindingInput
@@ -9271,6 +9732,9 @@ type RebindIntegrationDefinitionConsumersJSONRequestBody = ManagedConfigurationR
 // CopyGitManagedConfigurationJSONRequestBody defines body for CopyGitManagedConfiguration for application/json ContentType.
 type CopyGitManagedConfigurationJSONRequestBody = ManagedConfigurationCopyInput
 
+// ReviseMemoryRecordJSONRequestBody defines body for ReviseMemoryRecord for application/json ContentType.
+type ReviseMemoryRecordJSONRequestBody = MemoryRecordSpecification
+
 // ResolveOwnerGateJSONRequestBody defines body for ResolveOwnerGate for application/json ContentType.
 type ResolveOwnerGateJSONRequestBody = GateResolution
 
@@ -9291,6 +9755,9 @@ type AddProjectMembershipJSONRequestBody = ProjectMembershipCreateInput
 
 // ChangeProjectMembershipJSONRequestBody defines body for ChangeProjectMembership for application/json ContentType.
 type ChangeProjectMembershipJSONRequestBody = ProjectMembershipChangeInput
+
+// CreateMemoryRecordJSONRequestBody defines body for CreateMemoryRecord for application/json ContentType.
+type CreateMemoryRecordJSONRequestBody = MemoryRecordCreateInput
 
 // CreateRoleImageRecipeJSONRequestBody defines body for CreateRoleImageRecipe for application/json ContentType.
 type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
@@ -9315,6 +9782,9 @@ type CreateRuntimeSecretJSONRequestBody = RuntimeSecretCreateInput
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = ScheduleInput
+
+// CreateSkillBundleDraftJSONRequestBody defines body for CreateSkillBundleDraft for application/json ContentType.
+type CreateSkillBundleDraftJSONRequestBody = SkillBundleDraftCreateInput
 
 // TranscribeSpeechMultipartRequestBody defines body for TranscribeSpeech for multipart/form-data ContentType.
 type TranscribeSpeechMultipartRequestBody TranscribeSpeechMultipartBody
@@ -9390,6 +9860,21 @@ type CreateOwnerSessionJSONRequestBody = OwnerSessionCreateInput
 
 // AddSessionTurnJSONRequestBody defines body for AddSessionTurn for application/json ContentType.
 type AddSessionTurnJSONRequestBody = TurnInput
+
+// SaveSkillBundleDraftJSONRequestBody defines body for SaveSkillBundleDraft for application/json ContentType.
+type SaveSkillBundleDraftJSONRequestBody = SkillBundleSpecification
+
+// DiscardSkillBundleDraftJSONRequestBody defines body for DiscardSkillBundleDraft for application/json ContentType.
+type DiscardSkillBundleDraftJSONRequestBody = ContextRevisionDigestInput
+
+// PublishSkillBundleDraftJSONRequestBody defines body for PublishSkillBundleDraft for application/json ContentType.
+type PublishSkillBundleDraftJSONRequestBody = ContextRevisionDigestInput
+
+// ReviewSkillBundleDraftJSONRequestBody defines body for ReviewSkillBundleDraft for application/json ContentType.
+type ReviewSkillBundleDraftJSONRequestBody = SkillBundleReviewInput
+
+// ValidateSkillBundleDraftJSONRequestBody defines body for ValidateSkillBundleDraft for application/json ContentType.
+type ValidateSkillBundleDraftJSONRequestBody = ContextRevisionDigestInput
 
 // TranscribeOrganizationSpeechMultipartRequestBody defines body for TranscribeOrganizationSpeech for multipart/form-data ContentType.
 type TranscribeOrganizationSpeechMultipartRequestBody TranscribeOrganizationSpeechMultipartBody
@@ -9523,6 +10008,12 @@ type ServerInterface interface {
 	// (GET /api/v1/agents/{agentRef}/instruction-versions)
 	ListAgentInstructionVersions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params ListAgentInstructionVersionsParams)
 
+	// (DELETE /api/v1/agents/{agentRef}/memory-records/{recordRef})
+	UnbindAgentMemoryRecord(w http.ResponseWriter, r *http.Request, agentRef AgentRef, recordRef MemoryRecordRef, params UnbindAgentMemoryRecordParams)
+
+	// (PUT /api/v1/agents/{agentRef}/memory-records/{recordRef})
+	BindAgentMemoryRecord(w http.ResponseWriter, r *http.Request, agentRef AgentRef, recordRef MemoryRecordRef, params BindAgentMemoryRecordParams)
+
 	// (GET /api/v1/agents/{agentRef}/runtime-configuration)
 	GetAgentRuntimeConfiguration(w http.ResponseWriter, r *http.Request, agentRef AgentRef)
 
@@ -9534,6 +10025,12 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/agents/{agentRef}/runtime-environment-binding)
 	BindAgentRuntimeEnvironment(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params BindAgentRuntimeEnvironmentParams)
+
+	// (DELETE /api/v1/agents/{agentRef}/skill-bundles/{bundleRef})
+	UnbindAgentSkillBundle(w http.ResponseWriter, r *http.Request, agentRef AgentRef, bundleRef SkillBundleRef, params UnbindAgentSkillBundleParams)
+
+	// (PUT /api/v1/agents/{agentRef}/skill-bundles/{bundleRef})
+	BindAgentSkillBundle(w http.ResponseWriter, r *http.Request, agentRef AgentRef, bundleRef SkillBundleRef, params BindAgentSkillBundleParams)
 
 	// (GET /api/v1/artifacts)
 	ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, params ListOrganizationArtifactsParams)
@@ -9670,6 +10167,27 @@ type ServerInterface interface {
 	// (GET /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact)
 	GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef)
 
+	// (GET /api/v1/memory-records)
+	ListMemoryRecords(w http.ResponseWriter, r *http.Request, params ListMemoryRecordsParams)
+
+	// (GET /api/v1/memory-records/{recordRef})
+	GetMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef)
+
+	// (POST /api/v1/memory-records/{recordRef}/archive)
+	ArchiveMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params ArchiveMemoryRecordParams)
+
+	// (POST /api/v1/memory-records/{recordRef}/purge)
+	PurgeMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params PurgeMemoryRecordParams)
+
+	// (POST /api/v1/memory-records/{recordRef}/restoration)
+	RestoreMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params RestoreMemoryRecordParams)
+
+	// (GET /api/v1/memory-records/{recordRef}/revisions)
+	ListMemoryRecordRevisions(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params ListMemoryRecordRevisionsParams)
+
+	// (POST /api/v1/memory-records/{recordRef}/revisions)
+	ReviseMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params ReviseMemoryRecordParams)
+
 	// (POST /api/v1/onboarding/completion)
 	CompleteOnboarding(w http.ResponseWriter, r *http.Request, params CompleteOnboardingParams)
 
@@ -9736,6 +10254,9 @@ type ServerInterface interface {
 	// (GET /api/v1/projects/{projectRef}/membership-candidates)
 	ListProjectMembershipCandidates(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListProjectMembershipCandidatesParams)
 
+	// (POST /api/v1/projects/{projectRef}/memory-records)
+	CreateMemoryRecord(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateMemoryRecordParams)
+
 	// (GET /api/v1/projects/{projectRef}/role-image-recipes)
 	ListRoleImageRecipes(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListRoleImageRecipesParams)
 
@@ -9777,6 +10298,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/schedules)
 	CreateSchedule(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateScheduleParams)
+
+	// (POST /api/v1/projects/{projectRef}/skill-bundle-drafts)
+	CreateSkillBundleDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateSkillBundleDraftParams)
 
 	// (POST /api/v1/projects/{projectRef}/speech/transcriptions)
 	TranscribeSpeech(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params TranscribeSpeechParams)
@@ -9990,6 +10514,39 @@ type ServerInterface interface {
 
 	// (POST /api/v1/sessions/{sessionRef}/turns)
 	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
+
+	// (GET /api/v1/skill-bundles)
+	ListSkillBundles(w http.ResponseWriter, r *http.Request, params ListSkillBundlesParams)
+
+	// (GET /api/v1/skill-bundles/{bundleRef})
+	GetSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/archive)
+	ArchiveSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, params ArchiveSkillBundleParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/purge)
+	PurgeSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, params PurgeSkillBundleParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/restoration)
+	RestoreSkillBundle(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, params RestoreSkillBundleParams)
+
+	// (GET /api/v1/skill-bundles/{bundleRef}/revisions)
+	ListSkillBundleRevisions(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, params ListSkillBundleRevisionsParams)
+
+	// (PUT /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef})
+	SaveSkillBundleDraft(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, revisionRef ContextRevisionRef, params SaveSkillBundleDraftParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/discard)
+	DiscardSkillBundleDraft(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, revisionRef ContextRevisionRef, params DiscardSkillBundleDraftParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/publication)
+	PublishSkillBundleDraft(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, revisionRef ContextRevisionRef, params PublishSkillBundleDraftParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/review)
+	ReviewSkillBundleDraft(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, revisionRef ContextRevisionRef, params ReviewSkillBundleDraftParams)
+
+	// (POST /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/validation)
+	ValidateSkillBundleDraft(w http.ResponseWriter, r *http.Request, bundleRef SkillBundleRef, revisionRef ContextRevisionRef, params ValidateSkillBundleDraftParams)
 
 	// (POST /api/v1/speech/transcriptions)
 	TranscribeOrganizationSpeech(w http.ResponseWriter, r *http.Request, params TranscribeOrganizationSpeechParams)
@@ -12773,6 +13330,236 @@ func (siw *ServerInterfaceWrapper) ListAgentInstructionVersions(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// UnbindAgentMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) UnbindAgentMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnbindAgentMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnbindAgentMemoryRecord(w, r, agentRef, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BindAgentMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) BindAgentMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BindAgentMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BindAgentMemoryRecord(w, r, agentRef, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAgentRuntimeConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) GetAgentRuntimeConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -13069,6 +13856,236 @@ func (siw *ServerInterfaceWrapper) BindAgentRuntimeEnvironment(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BindAgentRuntimeEnvironment(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnbindAgentSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) UnbindAgentSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnbindAgentSkillBundleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnbindAgentSkillBundle(w, r, agentRef, bundleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BindAgentSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) BindAgentSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BindAgentSkillBundleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BindAgentSkillBundle(w, r, agentRef, bundleRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17062,6 +18079,627 @@ func (siw *ServerInterfaceWrapper) GetManagedConfigurationImpact(w http.Response
 	handler.ServeHTTP(w, r)
 }
 
+// ListMemoryRecords operation middleware
+func (siw *ServerInterfaceWrapper) ListMemoryRecords(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMemoryRecordsParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMemoryRecords(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) GetMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMemoryRecord(w, r, recordRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveMemoryRecord(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PurgeMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) PurgeMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PurgeMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeMemoryRecord(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) RestoreMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreMemoryRecord(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMemoryRecordRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListMemoryRecordRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMemoryRecordRevisionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMemoryRecordRevisions(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReviseMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) ReviseMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recordRef" -------------
+	var recordRef MemoryRecordRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recordRef", r.PathValue("recordRef"), &recordRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recordRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReviseMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReviseMemoryRecord(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CompleteOnboarding operation middleware
 func (siw *ServerInterfaceWrapper) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 
@@ -18850,6 +20488,89 @@ func (siw *ServerInterfaceWrapper) ListProjectMembershipCandidates(w http.Respon
 	handler.ServeHTTP(w, r)
 }
 
+// CreateMemoryRecord operation middleware
+func (siw *ServerInterfaceWrapper) CreateMemoryRecord(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMemoryRecordParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMemoryRecord(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoleImageRecipes operation middleware
 func (siw *ServerInterfaceWrapper) ListRoleImageRecipes(w http.ResponseWriter, r *http.Request) {
 
@@ -20008,6 +21729,108 @@ func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSchedule(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOptional
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSkillBundleDraft(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25800,6 +27623,1096 @@ func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListSkillBundles operation middleware
+func (siw *ServerInterfaceWrapper) ListSkillBundles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSkillBundlesParams
+
+	// ------------- Optional query parameter "projectRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "projectRef", r.URL.Query(), &params.ProjectRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSkillBundles(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) GetSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSkillBundle(w, r, bundleRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveSkillBundleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveSkillBundle(w, r, bundleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PurgeSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) PurgeSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PurgeSkillBundleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeSkillBundle(w, r, bundleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreSkillBundle operation middleware
+func (siw *ServerInterfaceWrapper) RestoreSkillBundle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreSkillBundleParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreSkillBundle(w, r, bundleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSkillBundleRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListSkillBundleRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSkillBundleRevisionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSkillBundleRevisions(w, r, bundleRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) SaveSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ContextRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SaveSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveSkillBundleDraft(w, r, bundleRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) DiscardSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ContextRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscardSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardSkillBundleDraft(w, r, bundleRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) PublishSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ContextRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PublishSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishSkillBundleDraft(w, r, bundleRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReviewSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) ReviewSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ContextRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReviewSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReviewSkillBundleDraft(w, r, bundleRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateSkillBundleDraft operation middleware
+func (siw *ServerInterfaceWrapper) ValidateSkillBundleDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bundleRef" -------------
+	var bundleRef SkillBundleRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bundleRef", r.PathValue("bundleRef"), &bundleRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bundleRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ContextRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ValidateSkillBundleDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateSkillBundleDraft(w, r, bundleRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TranscribeOrganizationSpeech operation middleware
 func (siw *ServerInterfaceWrapper) TranscribeOrganizationSpeech(w http.ResponseWriter, r *http.Request) {
 
@@ -27272,10 +30185,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-commands", wrapper.CommandAgentInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-drafts", wrapper.CreateInstructionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-versions", wrapper.ListAgentInstructionVersions)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/agents/{agentRef}/memory-records/{recordRef}", wrapper.UnbindAgentMemoryRecord)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/memory-records/{recordRef}", wrapper.BindAgentMemoryRecord)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration", wrapper.GetAgentRuntimeConfiguration)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration", wrapper.PublishAgentRuntimeConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-configuration/versions", wrapper.ListAgentRuntimeConfigurationVersions)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/runtime-environment-binding", wrapper.BindAgentRuntimeEnvironment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/agents/{agentRef}/skill-bundles/{bundleRef}", wrapper.UnbindAgentSkillBundle)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/agents/{agentRef}/skill-bundles/{bundleRef}", wrapper.BindAgentSkillBundle)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts", wrapper.ListOrganizationArtifacts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts", wrapper.UploadOrganizationArtifact)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}", wrapper.DeleteArtifact)
@@ -27321,6 +30238,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/detachment", wrapper.DetachGitManagedConfiguration)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions", wrapper.ListManagedConfigurationHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact", wrapper.GetManagedConfigurationImpact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records", wrapper.ListMemoryRecords)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}", wrapper.GetMemoryRecord)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/archive", wrapper.ArchiveMemoryRecord)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/purge", wrapper.PurgeMemoryRecord)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/restoration", wrapper.RestoreMemoryRecord)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ListMemoryRecordRevisions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ReviseMemoryRecord)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)
@@ -27343,6 +30267,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.ChangeProjectMembership)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/membership-candidates", wrapper.ListProjectMembershipCandidates)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/memory-records", wrapper.CreateMemoryRecord)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.ListRoleImageRecipes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)
@@ -27357,6 +30282,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-secrets", wrapper.CreateRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.ListSchedules)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.CreateSchedule)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/skill-bundle-drafts", wrapper.CreateSkillBundleDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/speech/transcriptions", wrapper.TranscribeSpeech)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/template-variables", wrapper.ListTemplateVariables)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.ListWorkflows)
@@ -27428,6 +30354,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session", wrapper.CreateOwnerSession)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/session", wrapper.RenewOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/skill-bundles", wrapper.ListSkillBundles)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}", wrapper.GetSkillBundle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/archive", wrapper.ArchiveSkillBundle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/purge", wrapper.PurgeSkillBundle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/restoration", wrapper.RestoreSkillBundle)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions", wrapper.ListSkillBundleRevisions)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}", wrapper.SaveSkillBundleDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/discard", wrapper.DiscardSkillBundleDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/publication", wrapper.PublishSkillBundleDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/review", wrapper.ReviewSkillBundleDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/validation", wrapper.ValidateSkillBundleDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/speech/transcriptions", wrapper.TranscribeOrganizationSpeech)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)

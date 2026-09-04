@@ -3141,6 +3141,319 @@ paths:
           description: Создана отдельная UI-конфигурация
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles:
+    get:
+      tags: [Agents]
+      operationId: listSkillBundles
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/ContextAgentRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/ContextResourceStateQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundlePage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}:
+    get:
+      tags: [Agents]
+      operationId: getSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions:
+    get:
+      tags: [Agents]
+      operationId: listSkillBundleRevisions
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleRevisionPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/archive:
+    post:
+      tags: [Agents]
+      operationId: archiveSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/restoration:
+    post:
+      tags: [Agents]
+      operationId: restoreSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/purge:
+    post:
+      tags: [Agents]
+      operationId: purgeSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/skill-bundles/{bundleRef}:
+    put:
+      tags: [Agents]
+      operationId: bindAgentSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Agents]
+      operationId: unbindAgentSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records:
+    get:
+      tags: [Agents]
+      operationId: listMemoryRecords
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/ContextAgentRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/ContextResourceStateQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}:
+    get:
+      tags: [Agents]
+      operationId: getMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/revisions:
+    get:
+      tags: [Agents]
+      operationId: listMemoryRecordRevisions
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordRevisionPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Agents]
+      operationId: reviseMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordSpecification' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/archive:
+    post:
+      tags: [Agents]
+      operationId: archiveMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/restoration:
+    post:
+      tags: [Agents]
+      operationId: restoreMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/purge:
+    post:
+      tags: [Agents]
+      operationId: purgeMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/memory-records/{recordRef}:
+    put:
+      tags: [Agents]
+      operationId: bindAgentMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Agents]
+      operationId: unbindAgentMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/skill-bundle-drafts:
+    post:
+      tags: [Agents]
+      operationId: createSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleDraftCreateInput' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}:
+    put:
+      tags: [Agents]
+      operationId: saveSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleSpecification' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Agents]
+      operationId: validateSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/review:
+    post:
+      tags: [Agents]
+      operationId: reviewSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleReviewInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Agents]
+      operationId: publishSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Agents]
+      operationId: discardSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/memory-records:
+    post:
+      tags: [Agents]
+      operationId: createMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordCreateInput' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/system-stt-configurations/typed-drafts:
     post:
       tags: [Administration]
@@ -3181,6 +3494,31 @@ components:
       description: Версия авторитетного агрегата
       schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
   parameters:
+    SkillBundleRef:
+      name: bundleRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    MemoryRecordRef:
+      name: recordRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextRevisionRef:
+      name: revisionRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextAgentRefQuery:
+      name: agentRef
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextResourceStateQuery:
+      name: state
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/ContextResourceState' }
     ConfigurationRef:
       name: configurationRef
       in: path
@@ -3908,6 +4246,194 @@ components:
         targetRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
         consumers: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/ManagedConfigurationConsumer' } }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    ContextResourceState:
+      type: string
+      enum: [ACTIVE, ARCHIVED, EXPIRED, PURGED]
+    ContextProvenance:
+      type: object
+      additionalProperties: false
+      required: [actorRef, sourceKind, digest, createdAt]
+      properties:
+        actorRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sourceKind: { type: string, maxLength: 64 }
+        sourceRef: { type: string, maxLength: 128 }
+        sourceRevision: { type: string, maxLength: 128 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    SkillBundleFileInput:
+      type: object
+      additionalProperties: false
+      required: [path, artifactRef, artifactRevision]
+      properties:
+        path: { type: string, maxLength: 512 }
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    SkillBundleFile:
+      type: object
+      additionalProperties: false
+      required: [path, artifactRef, artifactRevision, digest, sizeBytes]
+      properties:
+        path: { type: string, maxLength: 512 }
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    SkillBundleSpecification:
+      type: object
+      additionalProperties: false
+      required: [name, description, files]
+      properties:
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 4000 }
+        files: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFileInput' } }
+    SkillBundleDraftCreateInput:
+      type: object
+      additionalProperties: false
+      required: [specification]
+      properties:
+        bundleRef: { $ref: '#/components/schemas/OpaqueRef' }
+        specification: { $ref: '#/components/schemas/SkillBundleSpecification' }
+    ContextRevisionDigestInput:
+      type: object
+      additionalProperties: false
+      required: [expectedDigest]
+      properties:
+        expectedDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SkillBundleReviewInput:
+      type: object
+      additionalProperties: false
+      required: [expectedDigest, decision, comment]
+      properties:
+        expectedDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        comment: { type: string, maxLength: 4000 }
+    SkillBundleRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, state, name, description, files, digest, provenance, scanState, diagnostics]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        state: { type: string, enum: [DRAFT, INVALID, VALIDATED, APPROVED, REJECTED, PUBLISHED, DISCARDED] }
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 4000 }
+        files: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFile' } }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        provenance: { $ref: '#/components/schemas/ContextProvenance' }
+        scanState: { type: string, enum: [PENDING, CLEAN, INFECTED, ERROR] }
+        scanEngine: { type: string, maxLength: 128 }
+        scanDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        scannedAt: { $ref: '#/components/schemas/Timestamp' }
+        reviewedBy: { $ref: '#/components/schemas/OpaqueRef' }
+        reviewedAt: { $ref: '#/components/schemas/Timestamp' }
+        diagnostics: { type: array, maxItems: 128, items: { type: string, maxLength: 2000 } }
+    SkillBundle:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, state, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { $ref: '#/components/schemas/ContextResourceState' }
+        currentRevision: { $ref: '#/components/schemas/SkillBundleRevision' }
+        draftRevision: { $ref: '#/components/schemas/SkillBundleRevision' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    MemoryRecordSpecification:
+      type: object
+      additionalProperties: false
+      required: [title, summary, retentionUntil]
+      properties:
+        title: { type: string, maxLength: 160 }
+        summary: { type: string, maxLength: 65536 }
+        sourceRunRef: { $ref: '#/components/schemas/OpaqueRef' }
+        retentionUntil: { $ref: '#/components/schemas/Timestamp' }
+    MemoryRecordCreateInput:
+      type: object
+      additionalProperties: false
+      required: [specification]
+      properties:
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        specification: { $ref: '#/components/schemas/MemoryRecordSpecification' }
+    MemoryRecordRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, title, summary, digest, provenance, retentionUntil, redacted]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        title: { type: string, maxLength: 160 }
+        summary: { type: string, maxLength: 65536 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        provenance: { $ref: '#/components/schemas/ContextProvenance' }
+        retentionUntil: { $ref: '#/components/schemas/Timestamp' }
+        redacted: { type: boolean }
+    KodexMemoryRecord:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, state, currentRevision, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { $ref: '#/components/schemas/ContextResourceState' }
+        currentRevision: { $ref: '#/components/schemas/MemoryRecordRevision' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AgentContextBindingInput:
+      type: object
+      additionalProperties: false
+      required: [revisionRef, expectedBindingVersion]
+      properties:
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedBindingVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    AgentContextBinding:
+      type: object
+      additionalProperties: false
+      required: [ref, version, agentRef, resourceRef, revisionRef, digest]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resourceRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SkillBundlePage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/SkillBundle' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    MemoryRecordPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/KodexMemoryRecord' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    SkillBundleRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/SkillBundleRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    MemoryRecordRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/MemoryRecordRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
     SystemSTTParameters:
       type: object
       additionalProperties: false
