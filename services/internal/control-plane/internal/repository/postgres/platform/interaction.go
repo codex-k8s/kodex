@@ -61,14 +61,22 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 	result := []map[string]any{}
 	for rows.Next() {
 		var connectionRef, credentialRef, baseURL, teamName, channelName, locale string
+		var credentialRevisionRef string
+		var connectionVersion, credentialRevision int64
+		var credential entity.IntegrationCredentialRevision
 		var capabilities []string
-		if err := rows.Scan(&connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale, &capabilities); err != nil {
+		if err := rows.Scan(&connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale, &capabilities,
+			&connectionVersion, &credentialRevisionRef, &credentialRevision, &credential.SecretRef, &credential.SecretUID,
+			&credential.SecretResourceVersion, &credential.ContentSHA256, &credential.CreatedAt); err != nil {
 			return nil, errs.ErrUnavailable
 		}
+		credential.Ref, credential.Revision = credentialRevisionRef, credentialRevision
 		result = append(result, map[string]any{
+			"credential":    credential,
 			"connectionRef": connectionRef, "credentialRef": credentialRef,
 			"baseURL": baseURL, "teamName": teamName, "channelName": channelName,
 			"locale": locale, "capabilities": capabilities,
+			"connectionVersion": connectionVersion, "credentialRevisionRef": credentialRevisionRef, "credentialRevision": credentialRevision,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -98,12 +106,17 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		var templateRaw []byte
 		var generation int64
 		var gateRef, runRef string
+		var externalTeam, externalChannel, externalRoot, receiptRef string
+		var credential entity.IntegrationCredentialRevision
 		var gateVersion int64
 		var expiresAt any
 		if err := rows.Scan(
 			&deliveryRef, &connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale,
 			&capabilityKey, &messageKey, &templateRaw, &leaseRef, &fence, &generation, &expiresAt,
 			&gateRef, &gateVersion, &runRef,
+			&externalTeam, &externalChannel, &externalRoot, &receiptRef,
+			&credential.Ref, &credential.Revision, &credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
+			&credential.ContentSHA256, &credential.CreatedAt,
 		); err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -113,10 +126,12 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		}
 		result = append(result, map[string]any{
 			"deliveryRef": deliveryRef, "connectionRef": connectionRef, "credentialRef": credentialRef,
-			"baseURL": baseURL, "teamName": teamName, "channelName": channelName, "locale": locale,
+			"credential": credential,
+			"baseURL":    baseURL, "teamName": teamName, "channelName": channelName, "locale": locale,
 			"capabilityKey": capabilityKey, "messageKey": messageKey, "templateData": templateData,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 			"gateRef": gateRef, "gateVersion": gateVersion, "runRef": runRef,
+			"externalTeamRef": externalTeam, "externalChannelRef": externalChannel, "externalRootPostRef": externalRoot, "acceptanceReceiptRef": receiptRef,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -137,13 +152,15 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 		payload.SafeErrorCode = "INTERACTION_OUTCOME_UNKNOWN"
 	}
 	if payload.Success {
-		if payload.ExternalPostRef == "" || len(payload.ExternalPostRef) > 128 || len(payload.ExternalThreadRef) > 128 {
+		if payload.ExternalPostRef == "" || len(payload.ExternalPostRef) > 128 || len(payload.ExternalThreadRef) > 128 ||
+			payload.ExternalTeamRef == "" || len(payload.ExternalTeamRef) > 128 || payload.ExternalChannelRef == "" || len(payload.ExternalChannelRef) > 128 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 	} else if !validInteractionErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var deliveryID, projectID, projectRef, rootRunID, runRef, gateID, capabilityKey string
+	var targetTeam, targetChannel, targetRoot string
 	var attempt int
 	var createdAt time.Time
 	err := tx.QueryRow(ctx, queryInteractionCompleteDeliveryResolve, pgx.StrictNamedArgs{
@@ -152,7 +169,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 		"lease_ref":       payload.LeaseRef,
 		"fence":           payload.Fence,
 		"generation":      payload.Generation,
-	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt, &createdAt)
+	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt, &createdAt, &targetTeam, &targetChannel, &targetRoot)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -160,14 +177,21 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var deliveryRef, state string
+	if payload.Success && ((targetTeam != "" && payload.ExternalTeamRef != targetTeam) ||
+		(targetChannel != "" && payload.ExternalChannelRef != targetChannel) ||
+		(targetRoot != "" && payload.ExternalThreadRef != targetRoot)) {
+		return commandOutcome{}, errs.ErrForbidden
+	}
 	err = tx.QueryRow(ctx, queryInteractionCompleteDeliveryUpdate, pgx.StrictNamedArgs{
-		"delivery_id":         deliveryID,
-		"success":             payload.Success,
-		"confirmed_no_effect": payload.ConfirmedNoEffect,
-		"external_post_ref":   payload.ExternalPostRef,
-		"external_thread_ref": payload.ExternalThreadRef,
-		"safe_error_code":     payload.SafeErrorCode,
-		"attempt":             attempt,
+		"external_team_ref":    payload.ExternalTeamRef,
+		"external_channel_ref": payload.ExternalChannelRef,
+		"delivery_id":          deliveryID,
+		"success":              payload.Success,
+		"confirmed_no_effect":  payload.ConfirmedNoEffect,
+		"external_post_ref":    payload.ExternalPostRef,
+		"external_thread_ref":  payload.ExternalThreadRef,
+		"safe_error_code":      payload.SafeErrorCode,
+		"attempt":              attempt,
 	}).Scan(&deliveryRef, &state)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -255,6 +279,8 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	var gateVersion int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryInteractionFindGateDelivery, pgx.StrictNamedArgs{
+		"external_team_ref":      payload.ExternalTeamRef,
+		"external_channel_ref":   payload.ExternalChannelRef,
 		"organization_id":        scope.organizationID,
 		"connection_ref":         payload.ConnectionRef,
 		"external_root_post_ref": payload.ExternalRootPostRef,
@@ -274,7 +300,7 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	}
 	decision := payload.Decision
 	if decision == "" || !contains([]string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}, decision) || !contains(allowed, decision) {
-		if err := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
 			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
 			outcome: "IGNORED",
@@ -284,7 +310,7 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 		return interactionMessageOutcome(gateRef, "IGNORED", "i18n:MATTERMOST_GATE_COMMAND_HELP", gateRef, projectID, projectRef), true, nil
 	}
 	if gateState != "OPEN" {
-		if err := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
 			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
 			outcome: "STALE", decision: decision,
@@ -299,7 +325,7 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	nested.Payload = command.GateResolutionInput{GateRef: gateRef, Decision: decision, Comment: truncate(strings.TrimSpace(payload.Message), 2000)}
 	outcome, err := repository.resolveGate(ctx, tx, scope, nested)
 	if errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrVersionMismatch) {
-		if receiptErr := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+		if receiptErr := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 			connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
 			projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
 			outcome: "STALE", decision: decision,
@@ -311,7 +337,7 @@ func (repository *Repository) acceptInteractionGateDecision(ctx context.Context,
 	if err != nil {
 		return commandOutcome{}, true, err
 	}
-	if err := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+	if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 		connectionID: connectionID, grantID: grantID, gateID: gateID, rootRunRef: runRef,
 		projectID: projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
 		outcome: "GATE_RESOLVED", decision: decision,
@@ -349,7 +375,7 @@ func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx p
 	}
 	rows.Close()
 	if len(routes) != 1 || strings.TrimSpace(payload.Message) == "" {
-		if err := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+		if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 			connectionID: connectionID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest, outcome: "IGNORED",
 		}); err != nil {
 			return commandOutcome{}, err
@@ -380,7 +406,7 @@ func (repository *Repository) acceptInteractionInbound(ctx context.Context, tx p
 	if outcome.result.Run == nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if err := repository.insertInteractionReceipt(ctx, tx, scope, interactionReceipt{
+	if err := repository.insertInteractionReceipt(ctx, tx, scope, payload, interactionReceipt{
 		connectionID: connectionID, grantID: selected.grantID, rootRunRef: outcome.result.Run.Ref,
 		projectID: selected.projectID, eventDigest: eventDigest, userDigest: payload.ExternalUserDigest,
 		outcome: "RUN_STARTED",
@@ -398,25 +424,32 @@ type interactionReceipt struct {
 	eventDigest, userDigest, outcome, decision           string
 }
 
-func (repository *Repository) insertInteractionReceipt(ctx context.Context, tx pgx.Tx, scope scope, receipt interactionReceipt) error {
+func (repository *Repository) insertInteractionReceipt(ctx context.Context, tx pgx.Tx, scope scope, message command.InteractionMessageInput, receipt interactionReceipt) error {
 	ref, err := newRef("irc")
 	if err != nil {
 		return err
 	}
+	rootPost := message.ExternalRootPostRef
+	if rootPost == "" {
+		rootPost = message.ExternalPostRef
+	}
 	if _, err := tx.Exec(ctx, queryInteractionInsertMessageReceipt, pgx.StrictNamedArgs{
-		"receipt_ref":           ref,
-		"organization_id":       scope.organizationID,
-		"project_id":            receipt.projectID,
-		"connection_id":         receipt.connectionID,
-		"grant_id":              receipt.grantID,
-		"root_run_ref":          receipt.rootRunRef,
-		"gate_id":               receipt.gateID,
-		"external_event_digest": receipt.eventDigest,
-		"external_user_digest":  receipt.userDigest,
-		"outcome":               receipt.outcome,
-		"decision":              receipt.decision,
-		"identity_id":           scope.interactionIdentityID,
-		"subject_id":            scope.actorID,
+		"external_team_ref":      message.ExternalTeamRef,
+		"external_channel_ref":   message.ExternalChannelRef,
+		"external_root_post_ref": rootPost,
+		"receipt_ref":            ref,
+		"organization_id":        scope.organizationID,
+		"project_id":             receipt.projectID,
+		"connection_id":          receipt.connectionID,
+		"grant_id":               receipt.grantID,
+		"root_run_ref":           receipt.rootRunRef,
+		"gate_id":                receipt.gateID,
+		"external_event_digest":  receipt.eventDigest,
+		"external_user_digest":   receipt.userDigest,
+		"outcome":                receipt.outcome,
+		"decision":               receipt.decision,
+		"identity_id":            scope.interactionIdentityID,
+		"subject_id":             scope.actorID,
 	}); err != nil {
 		return errs.ErrUnavailable
 	}

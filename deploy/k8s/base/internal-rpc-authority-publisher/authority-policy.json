@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 48,
+  "policy_revision": 49,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -204,6 +204,8 @@
           "DOMAIN_STATE"
         ],
         "allowed_operation_ids": [
+          "platform.interactions.connection-tests.claim",
+          "platform.interactions.connection-tests.complete",
           "platform.interactions.deliveries.claim",
           "platform.interactions.deliveries.complete",
           "platform.interactions.invocations.claim",
@@ -5703,6 +5705,76 @@
           "version": "FORBIDDEN",
           "attempt": "FORBIDDEN",
           "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.interactions.connection-tests.claim",
+        "caller_workload_id": "interaction-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ClaimIntegrationConnectionTests",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.interactions.connection-tests.claim",
+        "authority_proof_producer_id": "control-plane.interaction-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.interactions.connection-tests.complete",
+        "caller_workload_id": "interaction-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.interactions.connection-tests.complete",
+        "authority_proof_producer_id": "control-plane.interaction-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {

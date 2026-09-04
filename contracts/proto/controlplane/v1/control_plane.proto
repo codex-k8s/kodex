@@ -3134,6 +3134,10 @@ message InteractionSource {
   string channel_name = 5;
   string locale = 6;
   repeated string enabled_capabilities = 7;
+  int64 connection_version = 8;
+  string credential_revision_ref = 9;
+  int64 credential_revision = 10;
+  IntegrationCredentialRevision credential_descriptor = 11;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3155,6 +3159,11 @@ message InteractionDeliveryClaim {
   string gate_ref = 12;
   int64 gate_version = 13;
   string run_ref = 14;
+  string external_team_ref = 15;
+  string external_channel_ref = 16;
+  string external_root_post_ref = 17;
+  string acceptance_receipt_ref = 18;
+  IntegrationCredentialRevision credential_descriptor = 19;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;
@@ -3175,6 +3184,8 @@ message CompleteInteractionDeliveryRequest {
   string safe_error_code = 9;
   bool unknown_outcome = 10;
   bool confirmed_no_effect = 11;
+  string external_team_ref = 12;
+  string external_channel_ref = 13;
 }
 message CompleteInteractionDeliveryResponse {
   string delivery_ref = 1;
