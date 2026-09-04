@@ -728,5 +728,7 @@ PERMISSION_PLATFORM_STT_USE_NAME:
   other: Voice input
 PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
   other: Convert speech to text through the configured transcription service
+RUNTIME_ENVIRONMENT_DRAFT_CHANGED:
+  other: Environment draft changed
 SCHEDULE_OCCURRENCE_FAILED:
   other: Scheduled occurrence failed

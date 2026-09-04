@@ -2946,6 +2946,33 @@ func (e RunToolCallState) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeEnvironmentDraftState.
+const (
+	RuntimeEnvironmentDraftStateDISCARDED RuntimeEnvironmentDraftState = "DISCARDED"
+	RuntimeEnvironmentDraftStateDRAFT     RuntimeEnvironmentDraftState = "DRAFT"
+	RuntimeEnvironmentDraftStateINVALID   RuntimeEnvironmentDraftState = "INVALID"
+	RuntimeEnvironmentDraftStatePUBLISHED RuntimeEnvironmentDraftState = "PUBLISHED"
+	RuntimeEnvironmentDraftStateVALID     RuntimeEnvironmentDraftState = "VALID"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeEnvironmentDraftState enum.
+func (e RuntimeEnvironmentDraftState) Valid() bool {
+	switch e {
+	case RuntimeEnvironmentDraftStateDISCARDED:
+		return true
+	case RuntimeEnvironmentDraftStateDRAFT:
+		return true
+	case RuntimeEnvironmentDraftStateINVALID:
+		return true
+	case RuntimeEnvironmentDraftStatePUBLISHED:
+		return true
+	case RuntimeEnvironmentDraftStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeEnvironmentSetState.
 const (
 	RuntimeEnvironmentSetStateACTIVE   RuntimeEnvironmentSetState = "ACTIVE"
@@ -4097,15 +4124,18 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 
 // Defines values for VFSNodeKind.
 const (
-	AGENT     VFSNodeKind = "AGENT"
-	DIRECTORY VFSNodeKind = "DIRECTORY"
-	INPUT     VFSNodeKind = "INPUT"
-	MEMORY    VFSNodeKind = "MEMORY"
-	PROJECT   VFSNodeKind = "PROJECT"
-	RESULT    VFSNodeKind = "RESULT"
-	RUN       VFSNodeKind = "RUN"
-	SKILL     VFSNodeKind = "SKILL"
-	WORKFLOW  VFSNodeKind = "WORKFLOW"
+	AGENT       VFSNodeKind = "AGENT"
+	AUTOMATION  VFSNodeKind = "AUTOMATION"
+	AVATAR      VFSNodeKind = "AVATAR"
+	DIRECTORY   VFSNodeKind = "DIRECTORY"
+	ENVIRONMENT VFSNodeKind = "ENVIRONMENT"
+	INPUT       VFSNodeKind = "INPUT"
+	MEMORY      VFSNodeKind = "MEMORY"
+	PROJECT     VFSNodeKind = "PROJECT"
+	RESULT      VFSNodeKind = "RESULT"
+	RUN         VFSNodeKind = "RUN"
+	SKILL       VFSNodeKind = "SKILL"
+	WORKFLOW    VFSNodeKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeKind enum.
@@ -4113,7 +4143,13 @@ func (e VFSNodeKind) Valid() bool {
 	switch e {
 	case AGENT:
 		return true
+	case AUTOMATION:
+		return true
+	case AVATAR:
+		return true
 	case DIRECTORY:
+		return true
+	case ENVIRONMENT:
 		return true
 	case INPUT:
 		return true
@@ -4136,22 +4172,22 @@ func (e VFSNodeKind) Valid() bool {
 
 // Defines values for WorkflowState.
 const (
-	ARCHIVED  WorkflowState = "ARCHIVED"
-	DRAFT     WorkflowState = "DRAFT"
-	PUBLISHED WorkflowState = "PUBLISHED"
-	VALID     WorkflowState = "VALID"
+	WorkflowStateARCHIVED  WorkflowState = "ARCHIVED"
+	WorkflowStateDRAFT     WorkflowState = "DRAFT"
+	WorkflowStatePUBLISHED WorkflowState = "PUBLISHED"
+	WorkflowStateVALID     WorkflowState = "VALID"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowState enum.
 func (e WorkflowState) Valid() bool {
 	switch e {
-	case ARCHIVED:
+	case WorkflowStateARCHIVED:
 		return true
-	case DRAFT:
+	case WorkflowStateDRAFT:
 		return true
-	case PUBLISHED:
+	case WorkflowStatePUBLISHED:
 		return true
-	case VALID:
+	case WorkflowStateVALID:
 		return true
 	default:
 		return false
@@ -5763,10 +5799,13 @@ type Membership struct {
 	NextActions  []NextAction            `json:"nextActions"`
 	Permissions  []MembershipPermissions `json:"permissions"`
 	PlatformRole MembershipPlatformRole  `json:"platformRole"`
-	Ref          OpaqueRef               `json:"ref"`
-	UpdatedAt    *Timestamp              `json:"updatedAt,omitempty"`
-	User         UserSummary             `json:"user"`
-	Version      int64                   `json:"version"`
+
+	// ProjectRef Проект участника; отсутствует у участника платформы
+	ProjectRef *OpaqueRef  `json:"projectRef,omitempty"`
+	Ref        OpaqueRef   `json:"ref"`
+	UpdatedAt  *Timestamp  `json:"updatedAt,omitempty"`
+	User       UserSummary `json:"user"`
+	Version    int64       `json:"version"`
 }
 
 // MembershipPermissions defines model for Membership.Permissions.
@@ -6576,6 +6615,45 @@ type RunWorkspace struct {
 // RuntimeEnvironmentBindingInput defines model for RuntimeEnvironmentBindingInput.
 type RuntimeEnvironmentBindingInput struct {
 	EnvironmentRef OpaqueRef `json:"environmentRef"`
+}
+
+// RuntimeEnvironmentDraft defines model for RuntimeEnvironmentDraft.
+type RuntimeEnvironmentDraft struct {
+	Diagnostics                []string   `json:"diagnostics"`
+	EnvironmentRef             *OpaqueRef `json:"environmentRef,omitempty"`
+	ExpectedEnvironmentVersion int64      `json:"expectedEnvironmentVersion"`
+	ProjectRef                 OpaqueRef  `json:"projectRef"`
+	PublishedEnvironmentRef    *OpaqueRef `json:"publishedEnvironmentRef,omitempty"`
+	Ref                        OpaqueRef  `json:"ref"`
+
+	// Specification Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+	Specification    RuntimeEnvironmentDraftSpecification `json:"specification"`
+	State            RuntimeEnvironmentDraftState         `json:"state"`
+	ValidationDigest *string                              `json:"validationDigest,omitempty"`
+	Version          int64                                `json:"version"`
+}
+
+// RuntimeEnvironmentDraftState defines model for RuntimeEnvironmentDraft.State.
+type RuntimeEnvironmentDraftState string
+
+// RuntimeEnvironmentDraftCreateInput defines model for RuntimeEnvironmentDraftCreateInput.
+type RuntimeEnvironmentDraftCreateInput struct {
+	EnvironmentRef             *OpaqueRef `json:"environmentRef,omitempty"`
+	ExpectedEnvironmentVersion *int64     `json:"expectedEnvironmentVersion,omitempty"`
+
+	// Specification Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+	Specification RuntimeEnvironmentDraftSpecification `json:"specification"`
+}
+
+// RuntimeEnvironmentDraftSpecification Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+type RuntimeEnvironmentDraftSpecification struct {
+	Description      string                         `json:"description"`
+	ImageArtifactRef string                         `json:"imageArtifactRef"`
+	Name             string                         `json:"name"`
+	Policy           *RuntimeEnvironmentPolicyInput `json:"policy,omitempty"`
+	SecretBindings   []RuntimeSecretBinding         `json:"secretBindings"`
+	Tools            []RuntimeEnvironmentTool       `json:"tools"`
+	Values           []RuntimeEnvironmentValue      `json:"values"`
 }
 
 // RuntimeEnvironmentImage defines model for RuntimeEnvironmentImage.
@@ -7481,6 +7559,9 @@ type RunRef = OpaqueRef
 // RunRefQuery defines model for RunRefQuery.
 type RunRefQuery = OpaqueRef
 
+// RuntimeEnvironmentDraftRef defines model for RuntimeEnvironmentDraftRef.
+type RuntimeEnvironmentDraftRef = OpaqueRef
+
 // RuntimeEnvironmentRef defines model for RuntimeEnvironmentRef.
 type RuntimeEnvironmentRef = OpaqueRef
 
@@ -8237,6 +8318,12 @@ type ListRoleImageRecipeRevisionsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// CreateRuntimeEnvironmentDraftParams defines parameters for CreateRuntimeEnvironmentDraft.
+type CreateRuntimeEnvironmentDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ListRuntimeEnvironmentSetsParams defines parameters for ListRuntimeEnvironmentSets.
 type ListRuntimeEnvironmentSetsParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -8488,6 +8575,34 @@ type CommandRunParams struct {
 type ListRunEventsParams struct {
 	AfterSequence *int64 `form:"afterSequence,omitempty" json:"afterSequence,omitempty"`
 	Limit         *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DiscardRuntimeEnvironmentDraftParams defines parameters for DiscardRuntimeEnvironmentDraft.
+type DiscardRuntimeEnvironmentDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// SaveRuntimeEnvironmentDraftParams defines parameters for SaveRuntimeEnvironmentDraft.
+type SaveRuntimeEnvironmentDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// PublishRuntimeEnvironmentDraftParams defines parameters for PublishRuntimeEnvironmentDraft.
+type PublishRuntimeEnvironmentDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ValidateRuntimeEnvironmentDraftParams defines parameters for ValidateRuntimeEnvironmentDraft.
+type ValidateRuntimeEnvironmentDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // ListOrganizationRuntimeEnvironmentSetsParams defines parameters for ListOrganizationRuntimeEnvironmentSets.
@@ -8894,6 +9009,9 @@ type CommandRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
 // PromoteRoleImageJSONRequestBody defines body for PromoteRoleImage for application/json ContentType.
 type PromoteRoleImageJSONRequestBody = RoleImagePromotionInput
 
+// CreateRuntimeEnvironmentDraftJSONRequestBody defines body for CreateRuntimeEnvironmentDraft for application/json ContentType.
+type CreateRuntimeEnvironmentDraftJSONRequestBody = RuntimeEnvironmentDraftCreateInput
+
 // CreateRuntimeEnvironmentSetJSONRequestBody defines body for CreateRuntimeEnvironmentSet for application/json ContentType.
 type CreateRuntimeEnvironmentSetJSONRequestBody = RuntimeEnvironmentInput
 
@@ -8941,6 +9059,9 @@ type CreateRunJSONRequestBody = RunInput
 
 // CommandRunJSONRequestBody defines body for CommandRun for application/json ContentType.
 type CommandRunJSONRequestBody = RunCommand
+
+// SaveRuntimeEnvironmentDraftJSONRequestBody defines body for SaveRuntimeEnvironmentDraft for application/json ContentType.
+type SaveRuntimeEnvironmentDraftJSONRequestBody = RuntimeEnvironmentDraftSpecification
 
 // SetRuntimeEnvironmentEnabledJSONRequestBody defines body for SetRuntimeEnvironmentEnabled for application/json ContentType.
 type SetRuntimeEnvironmentEnabledJSONRequestBody = EnabledInput
@@ -9323,6 +9444,9 @@ type ServerInterface interface {
 	// (GET /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions)
 	ListRoleImageRecipeRevisions(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params ListRoleImageRecipeRevisionsParams)
 
+	// (POST /api/v1/projects/{projectRef}/runtime-environment-drafts)
+	CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateRuntimeEnvironmentDraftParams)
+
 	// (GET /api/v1/projects/{projectRef}/runtime-environments)
 	ListRuntimeEnvironmentSets(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListRuntimeEnvironmentSetsParams)
 
@@ -9442,6 +9566,21 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runs/{runRef}/graph)
 	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (DELETE /api/v1/runtime-environment-drafts/{draftRef})
+	DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef, params DiscardRuntimeEnvironmentDraftParams)
+
+	// (GET /api/v1/runtime-environment-drafts/{draftRef})
+	GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef)
+
+	// (PUT /api/v1/runtime-environment-drafts/{draftRef})
+	SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef, params SaveRuntimeEnvironmentDraftParams)
+
+	// (POST /api/v1/runtime-environment-drafts/{draftRef}/publication)
+	PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef, params PublishRuntimeEnvironmentDraftParams)
+
+	// (POST /api/v1/runtime-environment-drafts/{draftRef}/validation)
+	ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef, params ValidateRuntimeEnvironmentDraftParams)
 
 	// (GET /api/v1/runtime-environments)
 	ListOrganizationRuntimeEnvironmentSets(w http.ResponseWriter, r *http.Request, params ListOrganizationRuntimeEnvironmentSetsParams)
@@ -18723,6 +18862,89 @@ func (siw *ServerInterfaceWrapper) ListRoleImageRecipeRevisions(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// CreateRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRuntimeEnvironmentDraft(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuntimeEnvironmentSets operation middleware
 func (siw *ServerInterfaceWrapper) ListRuntimeEnvironmentSets(w http.ResponseWriter, r *http.Request) {
 
@@ -22055,6 +22277,462 @@ func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRunGraph(w, r, runRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeEnvironmentDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscardRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardRuntimeEnvironmentDraft(w, r, draftRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeEnvironmentDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeEnvironmentDraft(w, r, draftRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeEnvironmentDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SaveRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveRuntimeEnvironmentDraft(w, r, draftRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeEnvironmentDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PublishRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishRuntimeEnvironmentDraft(w, r, draftRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateRuntimeEnvironmentDraft operation middleware
+func (siw *ServerInterfaceWrapper) ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeEnvironmentDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ValidateRuntimeEnvironmentDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateRuntimeEnvironmentDraft(w, r, draftRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -25605,6 +26283,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands", wrapper.CommandRoleImageRecipe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions", wrapper.PromoteRoleImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions", wrapper.ListRoleImageRecipeRevisions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-environment-drafts", wrapper.CreateRuntimeEnvironmentDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-environments", wrapper.ListRuntimeEnvironmentSets)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-environments", wrapper.CreateRuntimeEnvironmentSet)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/runtime-secrets", wrapper.ListRuntimeSecrets)
@@ -25645,6 +26324,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.DiscardRuntimeEnvironmentDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.GetRuntimeEnvironmentDraft)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.SaveRuntimeEnvironmentDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}/publication", wrapper.PublishRuntimeEnvironmentDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}/validation", wrapper.ValidateRuntimeEnvironmentDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments", wrapper.ListOrganizationRuntimeEnvironmentSets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}", wrapper.DeleteRuntimeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}", wrapper.GetRuntimeEnvironmentSet)

@@ -471,6 +471,10 @@ export type ProjectPage = {
 
 export type Membership = {
     ref: OpaqueRef;
+    /**
+     * Проект участника; отсутствует у участника платформы
+     */
+    projectRef?: OpaqueRef;
     version: number;
     user: UserSummary;
     platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
@@ -601,7 +605,7 @@ export type VfsNode = {
     path: string;
     parentPath: string;
     name: string;
-    kind: 'DIRECTORY' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'INPUT' | 'RESULT' | 'SKILL' | 'MEMORY';
+    kind: 'DIRECTORY' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'INPUT' | 'RESULT' | 'SKILL' | 'MEMORY' | 'AUTOMATION' | 'ENVIRONMENT' | 'AVATAR';
     directory: boolean;
     projectRef: string;
     entityRef: string;
@@ -861,6 +865,38 @@ export type RuntimeEnvironmentReadiness = {
     ready: boolean;
     blockers: Array<string>;
     observedAt: Timestamp;
+};
+
+export type RuntimeEnvironmentDraftCreateInput = {
+    environmentRef?: OpaqueRef;
+    expectedEnvironmentVersion?: number;
+    specification: RuntimeEnvironmentDraftSpecification;
+};
+
+/**
+ * Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+ */
+export type RuntimeEnvironmentDraftSpecification = {
+    name: string;
+    description: string;
+    imageArtifactRef: string;
+    tools: Array<RuntimeEnvironmentTool>;
+    values: Array<RuntimeEnvironmentValue>;
+    secretBindings: Array<RuntimeSecretBinding>;
+    policy?: RuntimeEnvironmentPolicyInput;
+};
+
+export type RuntimeEnvironmentDraft = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    environmentRef?: OpaqueRef;
+    expectedEnvironmentVersion: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'DISCARDED';
+    specification: RuntimeEnvironmentDraftSpecification;
+    validationDigest?: string;
+    diagnostics: Array<string>;
+    publishedEnvironmentRef?: OpaqueRef;
 };
 
 export type RuntimeEnvironmentInput = {
@@ -2074,6 +2110,8 @@ export type AccessBindingRef = OpaqueRef;
 export type AgentRef = OpaqueRef;
 
 export type RuntimeEnvironmentRef = OpaqueRef;
+
+export type RuntimeEnvironmentDraftRef = OpaqueRef;
 
 export type SecretRef = OpaqueRef;
 
@@ -4312,6 +4350,192 @@ export type PreviewPromptTemplateResponses = {
 };
 
 export type PreviewPromptTemplateResponse = PreviewPromptTemplateResponses[keyof PreviewPromptTemplateResponses];
+
+export type CreateRuntimeEnvironmentDraftData = {
+    body: RuntimeEnvironmentDraftCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-environment-drafts';
+};
+
+export type CreateRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeEnvironmentDraftError = CreateRuntimeEnvironmentDraftErrors[keyof CreateRuntimeEnvironmentDraftErrors];
+
+export type CreateRuntimeEnvironmentDraftResponses = {
+    /**
+     * Серверный черновик окружения; опубликованная ревизия не изменена
+     */
+    201: RuntimeEnvironmentDraft;
+};
+
+export type CreateRuntimeEnvironmentDraftResponse = CreateRuntimeEnvironmentDraftResponses[keyof CreateRuntimeEnvironmentDraftResponses];
+
+export type DiscardRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type DiscardRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRuntimeEnvironmentDraftError = DiscardRuntimeEnvironmentDraftErrors[keyof DiscardRuntimeEnvironmentDraftErrors];
+
+export type DiscardRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик закрыт без изменения опубликованной ревизии
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type DiscardRuntimeEnvironmentDraftResponse = DiscardRuntimeEnvironmentDraftResponses[keyof DiscardRuntimeEnvironmentDraftResponses];
+
+export type GetRuntimeEnvironmentDraftData = {
+    body?: never;
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type GetRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentDraftError = GetRuntimeEnvironmentDraftErrors[keyof GetRuntimeEnvironmentDraftErrors];
+
+export type GetRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик из авторитетного хранилища
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type GetRuntimeEnvironmentDraftResponse = GetRuntimeEnvironmentDraftResponses[keyof GetRuntimeEnvironmentDraftResponses];
+
+export type SaveRuntimeEnvironmentDraftData = {
+    body: RuntimeEnvironmentDraftSpecification;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type SaveRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRuntimeEnvironmentDraftError = SaveRuntimeEnvironmentDraftErrors[keyof SaveRuntimeEnvironmentDraftErrors];
+
+export type SaveRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик сохранён, прежняя валидация сброшена
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type SaveRuntimeEnvironmentDraftResponse = SaveRuntimeEnvironmentDraftResponses[keyof SaveRuntimeEnvironmentDraftResponses];
+
+export type ValidateRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}/validation';
+};
+
+export type ValidateRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRuntimeEnvironmentDraftError = ValidateRuntimeEnvironmentDraftErrors[keyof ValidateRuntimeEnvironmentDraftErrors];
+
+export type ValidateRuntimeEnvironmentDraftResponses = {
+    /**
+     * Результат серверной проверки, включая INVALID и диагностические коды
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type ValidateRuntimeEnvironmentDraftResponse = ValidateRuntimeEnvironmentDraftResponses[keyof ValidateRuntimeEnvironmentDraftResponses];
+
+export type PublishRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}/publication';
+};
+
+export type PublishRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeEnvironmentDraftError = PublishRuntimeEnvironmentDraftErrors[keyof PublishRuntimeEnvironmentDraftErrors];
+
+export type PublishRuntimeEnvironmentDraftResponses = {
+    /**
+     * Проверенный черновик опубликован; publishedEnvironmentRef указывает на результат
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type PublishRuntimeEnvironmentDraftResponse = PublishRuntimeEnvironmentDraftResponses[keyof PublishRuntimeEnvironmentDraftResponses];
 
 export type DeleteRuntimeEnvironmentData = {
     body?: never;

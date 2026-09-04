@@ -183,6 +183,41 @@ func TestOrganizationCatalogPropagatesAuthoritativeDenial(t *testing.T) {
 	}
 }
 
+func TestMembershipProjectGroupingUsesProducerReference(t *testing.T) {
+	client := &catalogRPCRecorder{response: &controlplanev1.ListProjectMembershipsResponse{Memberships: []*controlplanev1.Membership{{
+		Ref: "member_fixture01", ProjectRef: "prj_fixture01", Version: 1,
+		PlatformRole: controlplanev1.PlatformRole_PLATFORM_ROLE_MEMBER,
+	}}}}
+	recorder := httptest.NewRecorder()
+	catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/project-memberships", nil))
+	var page struct {
+		Items []generated.Membership `json:"items"`
+	}
+	if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &page) != nil || len(page.Items) != 1 ||
+		page.Items[0].ProjectRef == nil || *page.Items[0].ProjectRef != "prj_fixture01" {
+		t.Fatalf("membership lost project grouping: %s", recorder.Body.String())
+	}
+}
+
+func TestVFSIncludesAutomationEnvironmentAndAvatarKinds(t *testing.T) {
+	for _, kind := range []controlplanev1.VFSNodeKind{
+		controlplanev1.VFSNodeKind_VFS_NODE_KIND_AUTOMATION,
+		controlplanev1.VFSNodeKind_VFS_NODE_KIND_ENVIRONMENT,
+		controlplanev1.VFSNodeKind_VFS_NODE_KIND_AVATAR,
+	} {
+		recorder := httptest.NewRecorder()
+		writeVFSPage(recorder, []*controlplanev1.VFSNode{{
+			Ref: "node_fixture01", Path: "/projects/prj_fixture01/node_fixture01", ParentPath: "/projects/prj_fixture01",
+			Name: "TYPE_Источник", Kind: kind, Directory: kind != controlplanev1.VFSNodeKind_VFS_NODE_KIND_AVATAR,
+		}}, 1, "")
+		var page generated.VFSNodePage
+		if recorder.Code != http.StatusOK || json.Unmarshal(recorder.Body.Bytes(), &page) != nil || len(page.Items) != 1 ||
+			string(page.Items[0].Kind) != strings.TrimPrefix(kind.String(), "VFS_NODE_KIND_") || page.Items[0].Name != "TYPE_Источник" {
+			t.Fatalf("new VFS kind rejected or changed: %s", recorder.Body.String())
+		}
+	}
+}
+
 func TestVFSRoutesPreserveTypedSourceAndPagination(t *testing.T) {
 	t.Parallel()
 	node := &controlplanev1.VFSNode{Ref: "art_fixture01", Path: "/projects/prj_fixture01/results/art_fixture01",
