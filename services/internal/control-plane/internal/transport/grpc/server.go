@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/authorization"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -28,6 +29,7 @@ const (
 )
 
 type Server struct {
+	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
 	controlplanev1.UnimplementedPlatformQueryServiceServer
 	controlplanev1.UnimplementedPlatformCommandServiceServer
 	controlplanev1.UnimplementedSystemAssistantServiceServer

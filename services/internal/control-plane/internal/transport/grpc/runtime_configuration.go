@@ -265,7 +265,7 @@ func (server *Server) RollbackRuntimeEnvironment(ctx context.Context, request *c
 }
 func (server *Server) BindAgentRuntimeEnvironment(ctx context.Context, request *controlplanev1.BindAgentRuntimeEnvironmentRequest) (*controlplanev1.BindAgentRuntimeEnvironmentResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName,
-		command.BindAgentRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentBindingInput{AgentRef: request.GetAgentRef(), EnvironmentRef: request.GetEnvironmentRef()})
+		command.BindAgentRuntimeEnvironment, request.GetMutation(), command.RuntimeEnvironmentBindingInput{AgentRef: request.GetAgentRef(), EnvironmentRef: request.GetEnvironmentRef(), VersionRef: request.GetVersionRef()})
 	if err != nil {
 		return nil, err
 	}

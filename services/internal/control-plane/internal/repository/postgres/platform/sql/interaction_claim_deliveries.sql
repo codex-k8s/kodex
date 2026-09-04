@@ -1,13 +1,13 @@
 -- name: interaction_claim_deliveries :many
 WITH expired AS (
     UPDATE control_plane.interaction_deliveries
-    SET state = 'FAILED',
+    SET state = 'UNKNOWN_OUTCOME',
         lease_ref = NULL,
         fence_digest = NULL,
         workload_instance = NULL,
         lease_expires_at = NULL,
         available_at = clock_timestamp(),
-        safe_error_code = 'INTERACTION_LEASE_EXPIRED',
+        safe_error_code = 'INTERACTION_OUTCOME_UNKNOWN',
         version = version + 1,
         updated_at = clock_timestamp()
     WHERE organization_id = @organization_id::uuid

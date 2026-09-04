@@ -13,6 +13,7 @@ import (
 )
 
 type BootstrapState struct {
+	SpeechTranscription               entity.SpeechTranscriptionAvailability
 	Bootstrapped, OnboardingCompleted bool
 	OrganizationRef                   string
 	Assistant                         entity.SystemAssistant
@@ -214,6 +215,8 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
+	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
 	AcceptWorkerGrant(context.Context, WorkerGrantInput) error
@@ -259,6 +262,7 @@ type Repository interface {
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
 	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
 	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
+	ListManagedConfigurations(context.Context, value.Principal, query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error)
 	GetManagedConfigurationImpact(context.Context, value.Principal, string, string) (entity.ManagedConfigurationImpact, error)
 	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
 	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)

@@ -51,6 +51,7 @@ type integrationOperation struct {
 	ResourceKind string `json:"resourceKind" yaml:"resourceKind" toml:"resourceKind"`
 }
 type sttConfiguration struct {
+	Enabled            bool   `json:"enabled" yaml:"enabled" toml:"enabled"`
 	ProviderAccountRef string `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
 	Model              string `json:"model" yaml:"model" toml:"model"`
 	Language           string `json:"language" yaml:"language" toml:"language"`

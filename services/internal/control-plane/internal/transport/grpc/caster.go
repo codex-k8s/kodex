@@ -170,7 +170,7 @@ func castUser(value entity.User) *controlplanev1.UserSummary {
 	return &controlplanev1.UserSummary{Ref: value.Ref, DisplayName: value.DisplayName, EmailHint: value.EmailMasked}
 }
 func castMembership(value entity.Membership) *controlplanev1.Membership {
-	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions), ProjectRef: value.ProjectRef}
 }
 func castProject(value entity.Project) *controlplanev1.Project {
 	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
@@ -299,7 +299,7 @@ func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *c
 		PublishedOverlay: castConfigOverlay(&value.PublishedOverlay), DraftOverlay: castConfigOverlay(value.DraftOverlay),
 		EnvironmentBinding: &controlplanev1.AgentRuntimeEnvironmentBinding{Ref: value.EnvironmentBinding.Ref,
 			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
-			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest},
+			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest, VersionRef: value.EnvironmentBinding.VersionRef},
 		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
 		AgentVersion: value.AgentVersion}
 }
@@ -683,7 +683,8 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
+		SpeechTranscription: &controlplanev1.SpeechTranscriptionAvailability{Eligible: value.SpeechTranscription.Eligible, Available: false, Reason: value.SpeechTranscription.Reason}}
 }
 
 func castOverview(value repository.Overview) *controlplanev1.Overview {

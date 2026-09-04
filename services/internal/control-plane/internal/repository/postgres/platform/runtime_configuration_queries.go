@@ -76,35 +76,29 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	if err != nil {
 		return nil, "", err
 	}
-	if filter.ProjectRef == "" || (filter.Page.Token != "" && (!strings.HasPrefix(filter.Page.Token, "renv_") || len(filter.Page.Token) > 96)) {
-		return nil, "", errs.ErrInvalid
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
-		"cursor_ref": filter.Page.Token, "platform_role": scope.role, "actor_id": scope.actorID, "page_size": limit + 1,
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	items := make([]entity.RuntimeEnvironmentSet, 0, limit+1)
-	for rows.Next() {
-		item, scanErr := repository.scanRuntimeEnvironment(rows)
-		if scanErr != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		items = append(items, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = items[len(items)-1].Ref
-	}
-	return items, next, nil
+	return authorizedCatalog(ctx, repository, scope, "RUNTIME_ENVIRONMENT", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeEnvironmentSet, error) {
+			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
+				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
+				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
+				"cursor_ref": cursor, "page_size": limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.RuntimeEnvironmentSet
+			for rows.Next() {
+				item, err := repository.scanRuntimeEnvironment(rows)
+				if err != nil {
+					return nil, errs.ErrUnavailable
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.RuntimeEnvironmentSet) entity.AccessScope {
+			return entity.AccessScope{ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, _ *entity.RuntimeEnvironmentSet, _ func(string) bool) error { return nil })
 }
 
 func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
@@ -359,6 +353,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	view.Environment.CurrentVersion.Version = view.Environment.CurrentVersion.Revision
 	view.EnvironmentBinding.AgentRef = view.Configuration.AgentRef
 	view.EnvironmentBinding.EnvironmentRef = view.Environment.Ref
+	view.EnvironmentBinding.VersionRef = view.Environment.CurrentVersion.Ref
 	if decodeStrict(rawCandidates, &view.Configuration.ProviderPolicy.AccountCandidates) != nil ||
 		decodeStrict(rawPublishedProblems, &view.PublishedOverlay.ValidationMessages) != nil ||
 		decodeStrict(rawValues, &view.Environment.CurrentVersion.Values) != nil ||

@@ -26,6 +26,14 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.organization-memberships.list":             controlplanev1.PlatformQueryService_ListPlatformMemberships_FullMethodName,
 		"platform.query.organization-membership-candidates.list":   controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName,
 		"platform.query.memberships.list":                          controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName,
+		"platform.query.runtime-environment-drafts.get":            controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName,
+		"platform.query.runtime-environments.impact":               controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+		"platform.command.runtime-environments.rebind":             controlplanev1.PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
+		"platform.command.runtime-environment-drafts.create":       controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.save":         controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.validate":     controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.publish":      controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.discard":      controlplanev1.PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
 		"platform.query.membership-candidates.list":                controlplanev1.PlatformQueryService_ListProjectMembershipCandidates_FullMethodName,
 		"platform.query.agents.list":                               controlplanev1.PlatformQueryService_ListAgents_FullMethodName,
 		"platform.query.agents.get":                                controlplanev1.PlatformQueryService_GetAgent_FullMethodName,
@@ -82,6 +90,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.prompt-templates.validate":                 controlplanev1.PlatformQueryService_ValidatePromptTemplate_FullMethodName,
 		"platform.query.prompt-templates.preview":                  controlplanev1.PlatformQueryService_PreviewPromptTemplate_FullMethodName,
 		"platform.query.managed-configurations.history.list":       controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName,
+		"platform.query.managed-configurations.list":               controlplanev1.PlatformQueryService_ListManagedConfigurations_FullMethodName,
 		"platform.query.managed-configurations.impact.get":         controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName,
 		"platform.query.system-stt.get":                            controlplanev1.PlatformQueryService_GetSystemSTTConfiguration_FullMethodName,
 		"platform.query.role-image-revisions.list":                 controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName,
@@ -236,8 +245,9 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 // который материализует и проверяет credentials одной execution lease.
 func RuntimeCredentialProjectionOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime.credentials.materialize":     "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
-		"platform.runtime.credentials.readiness.check": "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
+		"platform.runtime.credentials.materialize":                  "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
+		"platform.runtime.credentials.system-assistant.materialize": "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials",
+		"platform.runtime.credentials.readiness.check":              "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
 	}
 }
 
@@ -352,14 +362,7 @@ func InteractionGatewayOperations() map[string]string {
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
 		"platform.query.projects.get":                           {},
-		"platform.query.memberships.list":                       {},
 		"platform.query.membership-candidates.list":             {},
-		"platform.query.agents.list":                            {},
-		"platform.query.workflows.list":                         {},
-		"platform.query.artifacts.list":                         {},
-		"platform.query.schedules.list":                         {},
-		"platform.query.runtime-environments.list":              {},
-		"platform.query.runtime-secrets.list":                   {},
 		"platform.query.template-variables.list":                {},
 		"platform.query.role-image-revisions.list":              {},
 		"platform.command.projects.update":                      {},

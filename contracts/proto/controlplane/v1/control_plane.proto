@@ -71,11 +71,20 @@ service PlatformQueryService {
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
+  rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
+  rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
+  rpc GetRuntimeEnvironmentImpact(GetRuntimeEnvironmentImpactRequest) returns (GetRuntimeEnvironmentImpactResponse);
 }
 
 service PlatformCommandService {
+  rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
+  rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
+  rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
+  rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
+  rpc DiscardRuntimeEnvironmentDraft(DiscardRuntimeEnvironmentDraftRequest) returns (DiscardRuntimeEnvironmentDraftResponse);
+  rpc RebindRuntimeEnvironment(RebindRuntimeEnvironmentRequest) returns (RebindRuntimeEnvironmentResponse);
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
@@ -645,6 +654,7 @@ message Membership {
   bool active = 6;
   google.protobuf.Timestamp updated_at = 7;
   repeated NextAction next_actions = 8;
+  string project_ref = 9;
 }
 
 message Project {
@@ -1447,6 +1457,14 @@ message BootstrapState {
   UserSummary current_user = 5;
   repeated NextAction next_actions = 6;
   PlatformRole platform_role = 7;
+  SpeechTranscriptionAvailability speech_transcription = 8;
+}
+
+message SpeechTranscriptionAvailability {
+  bool eligible = 1;
+  // available вычисляет gateway после проверки живого STT пути; owner не заявляет готовность сервиса.
+  bool available = 2;
+  string reason = 3;
 }
 
 message Overview {
@@ -1535,6 +1553,9 @@ enum VFSNodeKind {
   VFS_NODE_KIND_RESULT = 7;
   VFS_NODE_KIND_SKILL = 8;
   VFS_NODE_KIND_MEMORY = 9;
+  VFS_NODE_KIND_AUTOMATION = 10;
+  VFS_NODE_KIND_ENVIRONMENT = 11;
+  VFS_NODE_KIND_AVATAR = 12;
 }
 
 message VFSNode {
@@ -1682,6 +1703,7 @@ message RemovePlatformMembershipResponse {
 message ListProjectMembershipsRequest {
   string project_ref = 1;
   PageRequest page = 2;
+  string query = 3;
 }
 message ListProjectMembershipsResponse {
   repeated Membership memberships = 1;
@@ -3145,6 +3167,8 @@ message CompleteInteractionDeliveryRequest {
   string external_post_ref = 7;
   string external_thread_ref = 8;
   string safe_error_code = 9;
+  bool unknown_outcome = 10;
+  bool confirmed_no_effect = 11;
 }
 message CompleteInteractionDeliveryResponse {
   string delivery_ref = 1;
@@ -3525,6 +3549,62 @@ message CreateRuntimeEnvironmentSetRequest {
   repeated RuntimeEnvironmentTool tools = 8;
   RuntimeEnvironmentPolicyInput policy = 9;
 }
+
+message RuntimeEnvironmentDraftSpecification {
+  string name = 1;
+  string description = 2;
+  repeated RuntimeEnvironmentValue values = 3;
+  repeated RuntimeSecretBinding secret_bindings = 4;
+  string image_artifact_ref = 5;
+  repeated RuntimeEnvironmentTool tools = 6;
+  RuntimeEnvironmentPolicyInput policy = 7;
+}
+message RuntimeEnvironmentDraft {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string environment_ref = 4;
+  int64 expected_environment_version = 5;
+  string state = 6;
+  RuntimeEnvironmentDraftSpecification specification = 7;
+  string validation_digest = 8;
+  repeated string diagnostics = 9;
+  string published_environment_ref = 10;
+}
+message GetRuntimeEnvironmentDraftRequest { string draft_ref = 1; }
+message GetRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message CreateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string environment_ref = 3;
+  int64 expected_environment_version = 4;
+  RuntimeEnvironmentDraftSpecification specification = 5;
+}
+message CreateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message SaveRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+  RuntimeEnvironmentDraftSpecification specification = 3;
+}
+message SaveRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message ValidateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message ValidateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message PublishRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PublishRuntimeEnvironmentDraftResponse {
+  RuntimeEnvironmentDraft draft = 1;
+  RuntimeEnvironmentSet environment = 2;
+}
+message DiscardRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message DiscardRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
 message CreateRuntimeEnvironmentSetResponse {
   RuntimeEnvironmentSet environment = 1;
 }
@@ -3554,9 +3634,42 @@ message BindAgentRuntimeEnvironmentRequest {
   MutationContext mutation = 1;
   string agent_ref = 2;
   string environment_ref = 3;
+  string version_ref = 4;
 }
 message BindAgentRuntimeEnvironmentResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+
+message RuntimeEnvironmentConsumer {
+  string agent_ref = 1;
+  int64 agent_version = 2;
+  string binding_ref = 3;
+  int64 binding_version = 4;
+  string version_ref = 5;
+  string project_ref = 6;
+}
+message GetRuntimeEnvironmentImpactRequest {
+  string environment_ref = 1;
+  string version_ref = 2;
+  PageRequest page = 3;
+}
+message GetRuntimeEnvironmentImpactResponse {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string target_version_ref = 3;
+  string target_digest = 4;
+  repeated RuntimeEnvironmentConsumer consumers = 5;
+  int64 total = 6;
+  PageInfo page = 7;
+}
+message RebindRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string version_ref = 3;
+  repeated RuntimeEnvironmentConsumer consumers = 4;
+}
+message RebindRuntimeEnvironmentResponse {
+  repeated AgentRuntimeEnvironmentBinding bindings = 1;
 }
 
 message ProviderAccountCandidate {
@@ -3809,6 +3922,7 @@ message AgentRuntimeEnvironmentBinding {
   string agent_ref = 3;
   string environment_ref = 4;
   string digest = 5;
+  string version_ref = 6;
 }
 
 message AgentRuntimeConfigurationView {
@@ -4417,6 +4531,17 @@ message CopyGitManagedConfigurationResponse {
 message ListManagedConfigurationHistoryRequest {
   string configuration_ref = 1;
   PageRequest page = 2;
+}
+message ListManagedConfigurationsRequest {
+  string project_ref = 1;
+  ManagedConfigurationKind kind = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+message ListManagedConfigurationsResponse {
+  repeated ManagedConfigurationSet configurations = 1;
+  int64 total = 2;
+  PageInfo page = 3;
 }
 message ListManagedConfigurationHistoryResponse {
   ManagedConfigurationSet configuration = 1;

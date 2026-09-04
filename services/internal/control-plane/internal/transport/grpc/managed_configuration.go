@@ -2,10 +2,14 @@ package grpc
 
 import (
 	"context"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type managedDraftRequest interface {
@@ -124,6 +128,32 @@ func (server *Server) DetachGitManagedConfiguration(ctx context.Context, request
 func (server *Server) CopyGitManagedConfiguration(ctx context.Context, request *controlplanev1.CopyGitManagedConfigurationRequest) (*controlplanev1.CopyGitManagedConfigurationResponse, error) {
 	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CopyGitManagedConfiguration_FullMethodName, command.CopyGitManagedConfiguration, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), Name: request.GetName()})
 	return &controlplanev1.CopyGitManagedConfigurationResponse{Configuration: configuration, Revision: revision}, err
+}
+
+func (server *Server) ListManagedConfigurations(ctx context.Context, request *controlplanev1.ListManagedConfigurationsRequest) (*controlplanev1.ListManagedConfigurationsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListManagedConfigurations_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	kind := ""
+	if request.GetKind() != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_UNSPECIFIED {
+		name, known := controlplanev1.ManagedConfigurationKind_name[int32(request.GetKind())]
+		if !known {
+			return nil, status.Error(codes.InvalidArgument, "invalid configuration kind")
+		}
+		kind = strings.TrimPrefix(name, "MANAGED_CONFIGURATION_KIND_")
+	}
+	items, total, next, err := server.service.ListManagedConfigurations(ctx, p, query.Filter{
+		ProjectRef: request.GetProjectRef(), Category: kind, Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListManagedConfigurationsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Configurations = append(response.Configurations, castManagedConfiguration(&item))
+	}
+	return response, nil
 }
 
 func (server *Server) ListManagedConfigurationHistory(ctx context.Context, request *controlplanev1.ListManagedConfigurationHistoryRequest) (*controlplanev1.ListManagedConfigurationHistoryResponse, error) {

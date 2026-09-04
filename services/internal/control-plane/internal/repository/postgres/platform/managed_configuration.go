@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	revisionservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/revision"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -569,19 +568,34 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 }
 
 func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, principal value.Principal) (entity.SystemSTTConfiguration, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
+	permission := "organization.view"
+	if principal.CallerWorkload == "stt-tts-service" && principal.Permission == "platform.stt.policy.resolve" {
+		permission = "platform.stt.use"
+	}
+	current, tx, err := repository.authorizedRead(ctx, principal, permission, func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
 	})
 	if err != nil {
 		return entity.SystemSTTConfiguration{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := repository.getSystemSTTConfigurationTx(ctx, tx, current)
+	if err != nil {
+		return entity.SystemSTTConfiguration{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.SystemSTTConfiguration{}, errs.ErrConflict
+	}
+	return result, nil
+}
+
+func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, tx pgx.Tx, current scope) (entity.SystemSTTConfiguration, error) {
 	var result entity.SystemSTTConfiguration
-	var eligible, providerEnabled, apiKey bool
+	var eligible, providerEnabled, apiKey, enabled bool
 	var rawProviderCapabilities []byte
-	err = tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
+	err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
 		&result.ConfigurationRef, &result.RevisionRef, &result.Revision, &result.Digest, &result.ProviderAccountRef, &result.Model, &result.Language, &result.PermissionKey,
-		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey)
+		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey, &enabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.SystemSTTConfiguration{}, errs.ErrNotFound
 	}
@@ -590,6 +604,15 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	}
 	if result.PermissionKey != "platform.stt.use" {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PERMISSION_INVALID")
+	}
+	if err := repository.requireAccess(ctx, tx, current, "platform.stt.use", organizationTarget(current.organizationRef)); err != nil {
+		if !errors.Is(err, errs.ErrNotFound) {
+			return entity.SystemSTTConfiguration{}, err
+		}
+		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PERMISSION_DENIED")
+	}
+	if !enabled {
+		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_DISABLED")
 	}
 	if !eligible {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_ACCOUNT_INELIGIBLE")
@@ -604,14 +627,16 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	if !providerEnabled {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_DISABLED")
 	}
-	if _, allowed := modelcatalog.Find(result.Model, providerReportedModels(providerCapabilities)); !allowed {
+	if !systemSTTModelSupported(result.Model, result.Language) {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_MODEL_UNSUPPORTED")
 	}
 	result.Ready = len(result.ReadinessBlockers) == 0
-	if err := tx.Commit(ctx); err != nil {
-		return entity.SystemSTTConfiguration{}, errs.ErrConflict
-	}
 	return result, nil
+}
+
+// Профиль совпадает с исполняемым adapter stt-tts-service, а не каталогом LLM агента.
+func systemSTTModelSupported(model, language string) bool {
+	return model == "gpt-transcribe" && language == "ru"
 }
 
 func (repository *Repository) GetEffectivePromptTemplate(ctx context.Context, principal value.Principal, agentRef string) (entity.InstructionVersion, error) {
