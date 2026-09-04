@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -61,7 +62,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	limiter := ratelimit.New(ratelimit.Config{Window: config.RateWindow, Limit: config.RateLimit, MaximumKeys: config.MaximumRateKeys, PreAuthConcurrency: config.PreAuthConcurrency, GlobalHTTPConcurrency: config.MaximumHTTPConcurrency, PerSubjectHTTPConcurrency: config.PerSubjectHTTPConcurrency, GlobalWebSocketConcurrency: config.MaximumWebSocketConcurrency, PerSubjectWebSocketConcurrency: config.PerSubjectWebSocketConcurrency})
-	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProjectRequiredOperations: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProofOperations: authorityProofOperations(), ProjectRequiredOperations: authorityProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
 	if err != nil {
 		return err
 	}
@@ -249,6 +250,20 @@ func methodOperations() map[string]string {
 	result := map[string]string{}
 	for operation, method := range controlplaneclient.ControlAPIGatewayOperations() {
 		result[method] = operation
+	}
+	return result
+}
+
+func authorityProofOperations() map[string]string {
+	result := controlplaneclient.ControlAPIGatewayOperations()
+	maps.Copy(result, controlplaneclient.STTGatewayOperations())
+	return result
+}
+
+func authorityProjectRequiredOperations() map[string]struct{} {
+	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
+	for operation := range controlplaneclient.STTGatewayOperations() {
+		result[operation] = struct{}{}
 	}
 	return result
 }

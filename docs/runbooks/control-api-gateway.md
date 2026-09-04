@@ -128,6 +128,11 @@ correlation IDs, authority/config revisions, model, язык и terminal stage;
 audio, transcript, credentials, provider account и raw provider diagnostics не
 логируются.
 
+Операция STT не входит в control-plane RPC registry: gateway добавляет её в
+отдельный `ProofOperations` профиль и требует project scope. Policy и credential
+projections получают полномочия только как canonical continuation проверенного
+parent `platform.stt.transcribe`; самостоятельная child issuance запрещена.
+
 ## Assistant HTTP lifecycle
 
 - создание conversation не принимает авторитетный title; context entity и

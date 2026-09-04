@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason(t *testing.T) {
@@ -164,7 +165,7 @@ func localAuthorityFailure(t *testing.T, code codes.Code) error {
 	interceptor := authorityclient.IssuerUnaryClientInterceptor(nil, testOperationResolver{method: "example.read"}, testProofProvider{
 		err: status.Error(code, "authority failure"),
 	})
-	return interceptor(context.Background(), method, nil, nil, nil,
+	return interceptor(context.Background(), method, &emptypb.Empty{}, nil, nil,
 		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
 			t.Fatal("downstream RPC was opened after failed authority proof")
 			return nil

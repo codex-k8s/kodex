@@ -49,6 +49,9 @@ STT transport проверяет multipart/media type/declared size до отк�
 request cancellation/deadline. Permission, server-owned policy, credential,
 media signature и фактический размер проверяет `stt-tts-service` до provider
 effect. Audio, transcript, secret и provider content не записываются в логи.
+Direct STT operation зарегистрирована в отдельном `ProofOperations` профиле с
+обязательным project scope; дочерние policy/credential RPC получают только
+canonical continuation от проверенного parent `platform.stt.transcribe`.
 
 ## Realtime
 

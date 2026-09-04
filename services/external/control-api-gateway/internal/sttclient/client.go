@@ -10,13 +10,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
-
-const TranscribeOperation = "platform.stt.transcribe"
 
 type Config struct {
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
@@ -56,7 +55,10 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	operations := operationSet{sttv1.SpeechToTextService_Transcribe_FullMethodName: TranscribeOperation}
+	operations := make(operationSet, len(controlplaneclient.STTGatewayOperations()))
+	for operation, method := range controlplaneclient.STTGatewayOperations() {
+		operations[method] = operation
+	}
 	connection, err := grpc.NewClient(
 		config.Target,
 		grpc.WithTransportCredentials(transport),
