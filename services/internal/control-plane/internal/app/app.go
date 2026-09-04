@@ -159,8 +159,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	}
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
-		SignerTrustFile:       config.ProofSignerTrustFile,
-		WorkerGrantTrustFiles: workerGrantTrustFiles,
+		SignerTrustFile:          config.ProofSignerTrustFile,
+		WorkerGrantTrustFiles:    workerGrantTrustFiles,
+		ReadinessWorkerGrantFile: config.ProviderApplicationGrantFile,
 		OIDC: oidcverifier.Config{
 			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
 			ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,

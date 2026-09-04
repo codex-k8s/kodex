@@ -25,6 +25,11 @@ const (
 	AlgorithmES256                    = "ES256"
 	CriticalHeader                    = "mcxv"
 	ContractVersion                   = 1
+	AuthorityABIVersion               = 2
+	RequestBindingUnary               = "UNARY_PROTO_SHA256"
+	RequestBindingStream              = "STREAM_SESSION"
+	ProfileBindingRequired            = "REQUIRED"
+	ProfileBindingForbidden           = "FORBIDDEN"
 	MaxCompactJWSBytes                = 8192
 	AuthorizationContextProtectedType = "kodex-internal-rpc-auth+jws"
 	AuthorityProofProtectedType       = "kodex-internal-rpc-authority-proof+jws"

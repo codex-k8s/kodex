@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type fakeVerifier struct {
@@ -28,8 +29,10 @@ type fakeVerifier struct {
 }
 
 type fakeIssuer struct {
-	response *internalrpcauthorityv1.IssueAuthorizationContextResponse
-	calls    int
+	response             *internalrpcauthorityv1.IssueAuthorizationContextResponse
+	continuationResponse *internalrpcauthorityv1.IssueAuthorizationContextResponse
+	continuationRequest  *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest
+	calls                int
 }
 
 type fakeOperationResolver map[string]string
@@ -85,12 +88,21 @@ func (verifier *fakeVerifier) VerifyAuthorizationContext(
 }
 
 func (issuer *fakeIssuer) IssueAuthorizationContext(
-	context.Context,
-	*internalrpcauthorityv1.IssueAuthorizationContextRequest,
-	...grpc.CallOption,
+	_ context.Context,
+	_ *internalrpcauthorityv1.IssueAuthorizationContextRequest,
+	_ ...grpc.CallOption,
 ) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
 	issuer.calls++
 	return issuer.response, nil
+}
+
+func (issuer *fakeIssuer) IssueContinuationAuthorizationContext(
+	_ context.Context,
+	request *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest,
+	_ ...grpc.CallOption,
+) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
+	issuer.continuationRequest = request
+	return issuer.continuationResponse, nil
 }
 
 func (*fakeIssuer) CheckReadiness(
@@ -155,7 +167,7 @@ func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T
 	)
 	response, err := interceptor(
 		both,
-		nil,
+		&emptypb.Empty{},
 		&grpc.UnaryServerInfo{FullMethod: "/example.v1.Service/Method"},
 		handler,
 	)
@@ -164,6 +176,7 @@ func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T
 	}
 	if verifier.request.GetObservedFullMethod() != "/example.v1.Service/Method" ||
 		verifier.request.GetCompactJws() != "compact" ||
+		verifier.request.GetObservedRequestDigestSha256() != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ||
 		verifier.request.GetDownstreamPeer().GetSpiffeId() !=
 			"spiffe://kodex.local/ns/kodex-system/sa/caller" {
 		t.Fatalf("verifier request lost exact binding: %+v", verifier.request)
@@ -193,7 +206,7 @@ func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
 				err: test.err, correlationID: correlationID,
 			})
 			called := false
-			err := interceptor(context.Background(), method, nil, nil, nil,
+			err := interceptor(context.Background(), method, &emptypb.Empty{}, nil, nil,
 				func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
 					called = true
 					return nil
@@ -246,7 +259,7 @@ func TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry(t *testin
 	issuer := &fakeIssuer{response: &internalrpcauthorityv1.IssueAuthorizationContextResponse{CompactJws: "issued"}}
 	interceptor := IssuerUnaryClientInterceptor(issuer, fakeOperationResolver{method: "example.read"}, provider)
 	invocations := 0
-	err := interceptor(t.Context(), method, nil, nil, nil,
+	err := interceptor(t.Context(), method, &emptypb.Empty{}, nil, nil,
 		func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
 			invocations++
 			return nil
@@ -254,6 +267,51 @@ func TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry(t *testin
 	)
 	if err != nil || provider.calls != 2 || issuer.calls != 1 || invocations != 1 {
 		t.Fatalf("interceptor retry: err=%v proof_calls=%d issuer_calls=%d downstream_calls=%d", err, provider.calls, issuer.calls, invocations)
+	}
+}
+
+func TestContinuationInterceptorUsesOnlyVerifiedParent(t *testing.T) {
+	t.Parallel()
+
+	const (
+		method      = "/example.v1.Projection/Resolve"
+		operation   = "example.projection.resolve"
+		requestID   = "request-1"
+		correlation = "correlation-1"
+	)
+	verified := &internalrpcauthorityv1.VerifiedAuthorizationContext{Jti: "parent-jti"}
+	parent := context.WithValue(t.Context(), continuationSourceKey{}, continuationSource{
+		compact: "parent-compact", verified: verified,
+	})
+	bound, err := BindContinuation(parent, operation, method, requestID, correlation)
+	if err != nil {
+		t.Fatalf("привязать continuation: %v", err)
+	}
+	issuer := &fakeIssuer{continuationResponse: &internalrpcauthorityv1.IssueAuthorizationContextResponse{CompactJws: "child-compact"}}
+	interceptor := ContinuationUnaryClientInterceptor(issuer, fakeOperationResolver{method: operation})
+	invocations := 0
+	err = interceptor(bound, method, &emptypb.Empty{}, nil, nil,
+		func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+			invocations++
+			metadata, ok := metadata.FromOutgoingContext(ctx)
+			if !ok || len(metadata.Get(AuthorizationMetadata)) != 1 || metadata.Get(AuthorizationMetadata)[0] != "child-compact" {
+				t.Fatal("выпущенный child context не передан downstream")
+			}
+			return nil
+		},
+	)
+	if err != nil || invocations != 1 || issuer.continuationRequest == nil {
+		t.Fatalf("continuation RPC: err=%v invocations=%d request=%+v", err, invocations, issuer.continuationRequest)
+	}
+	if issuer.continuationRequest.GetParentAuthorizationContextCompactJws() != "parent-compact" ||
+		issuer.continuationRequest.GetOperationId() != operation ||
+		issuer.continuationRequest.GetRequestId() != requestID ||
+		issuer.continuationRequest.GetCorrelationId() != correlation ||
+		issuer.continuationRequest.GetRequestDigestSha256() != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		t.Fatalf("continuation потерял exact binding: %+v", issuer.continuationRequest)
+	}
+	if _, err := BindContinuation(t.Context(), operation, method, requestID, correlation); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("контекст без проверенного parent не отклонён: %v", err)
 	}
 }
 

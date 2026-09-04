@@ -14,6 +14,11 @@ service AuthorizationIssuerService {
   // переопределить эти значения.
   rpc IssueAuthorizationContext(IssueAuthorizationContextRequest) returns (IssueAuthorizationContextResponse);
 
+  // IssueContinuationAuthorizationContext выпускает child context только из
+  // уже принятого локальным verifier parent context. Actor/tenant/project и
+  // provenance наследуются; request не может их переопределить.
+  rpc IssueContinuationAuthorizationContext(IssueContinuationAuthorizationContextRequest) returns (IssueAuthorizationContextResponse);
+
   // CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
   // signing/policy snapshot, которые использует рабочий выпуск.
   rpc CheckReadiness(AuthorizationIssuerServiceCheckReadinessRequest) returns (AuthorizationIssuerServiceCheckReadinessResponse);
@@ -183,6 +188,19 @@ message IssueAuthorizationContextRequest {
   // downstream audience, actor/tenant/project и коротким сроком действия.
   // Синтаксически корректные claims без допустимой подписи не принимаются.
   string authority_proof_compact_jws = 4;
+  // request_digest_sha256 вычислен client interceptor из фактического unary
+  // protobuf request. Для STREAM_SESSION он обязан отсутствовать.
+  string request_digest_sha256 = 5;
+}
+
+message IssueContinuationAuthorizationContextRequest {
+  string operation_id = 1;
+  // parent_authorization_context_compact_jws получен только из контекста,
+  // сформированного локальным verifier interceptor после durable acceptance.
+  string parent_authorization_context_compact_jws = 2;
+  string request_id = 3;
+  string correlation_id = 4;
+  string request_digest_sha256 = 5;
 }
 
 message IssueAuthorizationContextResponse {
@@ -195,6 +213,7 @@ message IssueAuthorizationContextResponse {
   uint64 key_set_revision = 5;
   uint64 policy_revision = 6;
   uint64 signer_generation = 7;
+  uint32 authority_abi_version = 8;
 }
 
 message ResolveAuthorityProofRequest {
@@ -210,6 +229,7 @@ message ResolveAuthorityProofRequest {
   // является authority: resolver обязан повторно проверить принадлежность
   // project к tenant, actor membership и exact operation permission.
   string project_reference = 5;
+  string request_digest_sha256 = 6;
 }
 
 message ResolveAuthorityProofResponse {
@@ -245,6 +265,9 @@ message VerifyAuthorizationContextRequest {
   string observed_full_method = 2;
   DownstreamTransportPeer downstream_peer = 3;
   string correlation_id = 4;
+  // observed_request_digest_sha256 вычисляет target interceptor из
+  // фактически принятого unary protobuf request.
+  string observed_request_digest_sha256 = 5;
 }
 
 message VerifyAuthorizationContextResponse {
@@ -285,6 +308,25 @@ message VerifiedAuthorizationContext {
   google.protobuf.Timestamp credential_authenticated_at = 23;
   string credential_acr = 24;
   repeated string credential_amr = 25;
+  string request_digest_sha256 = 26;
+  ContinuationLineage continuation = 27;
+  uint32 authority_abi_version = 28;
+  string request_binding_mode = 29;
+}
+
+// ContinuationLineage связывает child context с принятым parent и исходным
+// root. Поля полностью выводятся issuer из подписанного parent context.
+message ContinuationLineage {
+  string root_jti = 1;
+  string root_operation_id = 2;
+  string root_full_method = 3;
+  uint64 root_source_revision = 4;
+  string root_source_digest_sha256 = 5;
+  string parent_jti = 6;
+  string parent_operation_id = 7;
+  string parent_full_method = 8;
+  string request_id = 9;
+  string correlation_id = 10;
 }
 
 message AuthorizationIssuerServiceCheckReadinessRequest {}
@@ -298,6 +340,7 @@ message AuthorizationIssuerServiceCheckReadinessResponse {
   uint64 key_set_revision = 4;
   uint64 policy_revision = 5;
   uint64 signer_generation = 6;
+  uint32 authority_abi_version = 7;
 }
 
 message AuthorizationVerifierServiceCheckReadinessRequest {}
@@ -312,6 +355,7 @@ message AuthorizationVerifierServiceCheckReadinessResponse {
   uint64 policy_revision = 5;
   uint64 signer_generation = 6;
   bool replay_store_ready = 7;
+  uint32 authority_abi_version = 8;
 }
 
 message PrepareRestoreRequest {

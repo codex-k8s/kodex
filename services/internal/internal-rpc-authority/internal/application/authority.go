@@ -15,8 +15,14 @@ import (
 
 // IssueCommand содержит минимальный ввод выпуска контекста.
 type IssueCommand struct {
-	OperationID  string
-	ProofCompact string
+	OperationID   string
+	ProofCompact  string
+	RequestDigest string
+}
+
+// ContinuationCommand содержит только server-owned parent и exact child request.
+type ContinuationCommand struct {
+	OperationID, ParentCompact, RequestID, CorrelationID, RequestDigest string
 }
 
 // IssueResult содержит compact JWS и проверенные claims.
@@ -27,9 +33,10 @@ type IssueResult struct {
 
 // VerifyCommand содержит наблюдаемую целевую границу проверки.
 type VerifyCommand struct {
-	Compact            string
-	ObservedFullMethod string
-	DownstreamSPIFFEID string
+	Compact               string
+	ObservedFullMethod    string
+	DownstreamSPIFFEID    string
+	ObservedRequestDigest string
 }
 
 // Authority управляет активным доменным снимком и допуском запросов.
@@ -76,7 +83,22 @@ func (application *Authority) Issue(
 		ctx,
 		command.OperationID,
 		command.ProofCompact,
+		command.RequestDigest,
 	)
+	if err != nil {
+		return IssueResult{}, err
+	}
+	return IssueResult{Compact: compact, Claims: claims}, nil
+}
+
+// IssueContinuation выпускает child context через текущий снимок.
+func (application *Authority) IssueContinuation(ctx context.Context, command ContinuationCommand) (IssueResult, error) {
+	domain, done, err := application.begin()
+	if err != nil {
+		return IssueResult{}, err
+	}
+	defer done()
+	compact, claims, err := domain.IssueContinuation(ctx, command.OperationID, command.ParentCompact, command.RequestID, command.CorrelationID, command.RequestDigest)
 	if err != nil {
 		return IssueResult{}, err
 	}
@@ -98,6 +120,7 @@ func (application *Authority) Verify(
 		command.Compact,
 		command.ObservedFullMethod,
 		command.DownstreamSPIFFEID,
+		command.ObservedRequestDigest,
 	)
 }
 

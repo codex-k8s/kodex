@@ -12,6 +12,9 @@ var proofReserveSQL string
 //go:embed sql/context__reserve.sql
 var contextReserveSQL string
 
+//go:embed sql/continuation__reserve.sql
+var continuationReserveSQL string
+
 //go:embed sql/verifier__activate_snapshot.sql
 var verifierActivateSnapshotSQL string
 
@@ -30,6 +33,7 @@ var proofReservationsDeleteExpiredSQL string
 type querySet struct {
 	proofReserve                     string
 	contextReserve                   string
+	continuationReserve              string
 	verifierActivateSnapshot         string
 	verifierAcceptContext            string
 	verifierReadiness                string
@@ -41,6 +45,7 @@ func loadQueries() (querySet, error) {
 	queries := querySet{
 		proofReserve:                     proofReserveSQL,
 		contextReserve:                   contextReserveSQL,
+		continuationReserve:              continuationReserveSQL,
 		verifierActivateSnapshot:         verifierActivateSnapshotSQL,
 		verifierAcceptContext:            verifierAcceptContextSQL,
 		verifierReadiness:                verifierReadinessSQL,
@@ -54,6 +59,7 @@ func loadQueries() (querySet, error) {
 	}{
 		{"proof__reserve", "one", queries.proofReserve},
 		{"context__reserve", "one", queries.contextReserve},
+		{"continuation__reserve", "one", queries.continuationReserve},
 		{"verifier__activate_snapshot", "one", queries.verifierActivateSnapshot},
 		{"verifier__accept_context", "one", queries.verifierAcceptContext},
 		{"verifier__readiness", "one", queries.verifierReadiness},

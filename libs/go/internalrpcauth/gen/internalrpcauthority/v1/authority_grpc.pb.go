@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthorizationIssuerService_IssueAuthorizationContext_FullMethodName = "/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext"
-	AuthorizationIssuerService_CheckReadiness_FullMethodName            = "/internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness"
+	AuthorizationIssuerService_IssueAuthorizationContext_FullMethodName             = "/internalrpcauthority.v1.AuthorizationIssuerService/IssueAuthorizationContext"
+	AuthorizationIssuerService_IssueContinuationAuthorizationContext_FullMethodName = "/internalrpcauthority.v1.AuthorizationIssuerService/IssueContinuationAuthorizationContext"
+	AuthorizationIssuerService_CheckReadiness_FullMethodName                        = "/internalrpcauthority.v1.AuthorizationIssuerService/CheckReadiness"
 )
 
 // AuthorizationIssuerServiceClient is the client API for AuthorizationIssuerService service.
@@ -34,6 +35,10 @@ type AuthorizationIssuerServiceClient interface {
 	// TTL и ревизии из загруженной машинной policy. Request не может
 	// переопределить эти значения.
 	IssueAuthorizationContext(ctx context.Context, in *IssueAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueAuthorizationContextResponse, error)
+	// IssueContinuationAuthorizationContext выпускает child context только из
+	// уже принятого локальным verifier parent context. Actor/tenant/project и
+	// provenance наследуются; request не может их переопределить.
+	IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueAuthorizationContextResponse, error)
 	// CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
 	// signing/policy snapshot, которые использует рабочий выпуск.
 	CheckReadiness(ctx context.Context, in *AuthorizationIssuerServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorizationIssuerServiceCheckReadinessResponse, error)
@@ -51,6 +56,16 @@ func (c *authorizationIssuerServiceClient) IssueAuthorizationContext(ctx context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IssueAuthorizationContextResponse)
 	err := c.cc.Invoke(ctx, AuthorizationIssuerService_IssueAuthorizationContext_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authorizationIssuerServiceClient) IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueAuthorizationContextResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueAuthorizationContextResponse)
+	err := c.cc.Invoke(ctx, AuthorizationIssuerService_IssueContinuationAuthorizationContext_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +93,10 @@ type AuthorizationIssuerServiceServer interface {
 	// TTL и ревизии из загруженной машинной policy. Request не может
 	// переопределить эти значения.
 	IssueAuthorizationContext(context.Context, *IssueAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error)
+	// IssueContinuationAuthorizationContext выпускает child context только из
+	// уже принятого локальным verifier parent context. Actor/tenant/project и
+	// provenance наследуются; request не может их переопределить.
+	IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error)
 	// CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
 	// signing/policy snapshot, которые использует рабочий выпуск.
 	CheckReadiness(context.Context, *AuthorizationIssuerServiceCheckReadinessRequest) (*AuthorizationIssuerServiceCheckReadinessResponse, error)
@@ -93,6 +112,9 @@ type UnimplementedAuthorizationIssuerServiceServer struct{}
 
 func (UnimplementedAuthorizationIssuerServiceServer) IssueAuthorizationContext(context.Context, *IssueAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IssueAuthorizationContext not implemented")
+}
+func (UnimplementedAuthorizationIssuerServiceServer) IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueContinuationAuthorizationContext not implemented")
 }
 func (UnimplementedAuthorizationIssuerServiceServer) CheckReadiness(context.Context, *AuthorizationIssuerServiceCheckReadinessRequest) (*AuthorizationIssuerServiceCheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
@@ -137,6 +159,24 @@ func _AuthorizationIssuerService_IssueAuthorizationContext_Handler(srv interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthorizationIssuerService_IssueContinuationAuthorizationContext_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueContinuationAuthorizationContextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthorizationIssuerServiceServer).IssueContinuationAuthorizationContext(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthorizationIssuerService_IssueContinuationAuthorizationContext_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthorizationIssuerServiceServer).IssueContinuationAuthorizationContext(ctx, req.(*IssueContinuationAuthorizationContextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthorizationIssuerService_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AuthorizationIssuerServiceCheckReadinessRequest)
 	if err := dec(in); err != nil {
@@ -165,6 +205,10 @@ var AuthorizationIssuerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IssueAuthorizationContext",
 			Handler:    _AuthorizationIssuerService_IssueAuthorizationContext_Handler,
+		},
+		{
+			MethodName: "IssueContinuationAuthorizationContext",
+			Handler:    _AuthorizationIssuerService_IssueContinuationAuthorizationContext_Handler,
 		},
 		{
 			MethodName: "CheckReadiness",

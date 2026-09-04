@@ -25,7 +25,10 @@
     "source_digest_sha256",
     "key_set_revision",
     "policy_revision",
-    "signer_generation"
+    "signer_generation",
+    "caller_credential_revision",
+    "request_binding_mode",
+    "authority_abi_version"
   ],
   "properties": {
     "v": {
@@ -90,8 +93,42 @@
     },
     "signer_generation": {
       "$ref": "#/$defs/revision"
+    },
+    "caller_credential_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "request_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "request_binding_mode": {
+      "enum": [
+        "UNARY_PROTO_SHA256",
+        "STREAM_SESSION"
+      ]
+    },
+    "authority_abi_version": {
+      "const": 2
+    },
+    "continuation": {
+      "$ref": "#/$defs/continuation"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"request_binding_mode": {"const": "UNARY_PROTO_SHA256"}},
+        "required": ["request_binding_mode"]
+      },
+      "then": {"required": ["request_digest_sha256"]}
+    },
+    {
+      "if": {
+        "properties": {"request_binding_mode": {"const": "STREAM_SESSION"}},
+        "required": ["request_binding_mode"]
+      },
+      "then": {"not": {"required": ["request_digest_sha256"]}}
+    }
+  ],
   "$defs": {
     "uuid": {
       "type": "string",
@@ -193,6 +230,34 @@
         }
       }
     },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_jti",
+        "root_operation_id",
+        "root_full_method",
+        "root_source_revision",
+        "root_source_digest_sha256",
+        "parent_jti",
+        "parent_operation_id",
+        "parent_full_method",
+        "request_id",
+        "correlation_id"
+      ],
+      "properties": {
+        "root_jti": {"$ref": "#/$defs/uuid"},
+        "root_operation_id": {"$ref": "#/$defs/operationId"},
+        "root_full_method": {"$ref": "#/$defs/fullMethod"},
+        "root_source_revision": {"$ref": "#/$defs/revision"},
+        "root_source_digest_sha256": {"$ref": "#/$defs/sha256"},
+        "parent_jti": {"$ref": "#/$defs/uuid"},
+        "parent_operation_id": {"$ref": "#/$defs/operationId"},
+        "parent_full_method": {"$ref": "#/$defs/fullMethod"},
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "correlation_id": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
@@ -216,7 +281,11 @@
             "IMAGE_PROMOTION_CLAIM",
             "PROCESS_RUN",
             "AUTOMATION_OCCURRENCE",
-            "LEGACY_MIGRATION"
+            "LEGACY_MIGRATION",
+            "WORKLOAD_READINESS",
+            "PROVIDER_READBACK",
+            "GIT_RECONCILIATION",
+            "RUNTIME_EXECUTION"
           ]
         },
         "reference": {

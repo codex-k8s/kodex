@@ -43,8 +43,9 @@ func (server *AuthorityProofServer) ResolveAuthorityProof(ctx context.Context, r
 	}
 	result, err := server.service.Resolve(ctx, authorityproof.ResolveInput{
 		PeerSPIFFEID: spiffeID, Authorization: values[0], OperationID: strings.TrimSpace(request.GetOperationId()),
-		ProjectReference: strings.TrimSpace(request.GetProjectReference()), IdempotencyKey: strings.TrimSpace(request.GetIdempotencyKey()),
-		CorrelationID: strings.TrimSpace(request.GetCorrelationId()),
+		ResourceReference: strings.TrimSpace(request.GetResourceReference()),
+		ProjectReference:  strings.TrimSpace(request.GetProjectReference()), IdempotencyKey: strings.TrimSpace(request.GetIdempotencyKey()),
+		CorrelationID: strings.TrimSpace(request.GetCorrelationId()), RequestDigestSHA256: strings.TrimSpace(request.GetRequestDigestSha256()),
 	})
 	if err != nil {
 		return nil, proofStatus(err)

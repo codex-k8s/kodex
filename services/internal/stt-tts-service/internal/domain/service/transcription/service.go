@@ -119,8 +119,12 @@ func (service *Service) CheckLocal(ctx context.Context) error {
 	return service.provider.CheckLocal(ctx)
 }
 
-func (service *Service) CheckProtectedPath(context.Context) error {
-	return errs.ErrDelegatedProofPending
+func (service *Service) CheckProtectedPath(ctx context.Context) error {
+	checker, ok := service.policies.(interface{ Check(context.Context) error })
+	if !ok {
+		return errs.ErrDelegatedProofPending
+	}
+	return checker.Check(ctx)
 }
 
 func projectionClass(err error) value.ErrorClass {

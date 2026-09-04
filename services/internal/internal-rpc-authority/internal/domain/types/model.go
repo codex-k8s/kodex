@@ -4,8 +4,13 @@ import "time"
 
 // Версия контракта и максимальный размер подписанного контекста.
 const (
-	ContractVersion   = 1
-	ReplayModeOneTime = "ONE_TIME"
+	ContractVersion         = 1
+	AuthorityABIVersion     = 2
+	ReplayModeOneTime       = "ONE_TIME"
+	RequestBindingUnary     = "UNARY_PROTO_SHA256"
+	RequestBindingStream    = "STREAM_SESSION"
+	ProfileBindingRequired  = "REQUIRED"
+	ProfileBindingForbidden = "FORBIDDEN"
 )
 
 // Workload описывает проверенную workload-идентичность.
@@ -59,6 +64,9 @@ type AuthorityProof struct {
 	IssuedAt                     int64                     `json:"iat"`
 	NotBefore                    int64                     `json:"nbf"`
 	ExpiresAt                    int64                     `json:"exp"`
+	RequestDigestSHA256          string                    `json:"request_digest_sha256,omitempty"`
+	RequestBindingMode           string                    `json:"request_binding_mode"`
+	AuthorityABIVersion          uint32                    `json:"authority_abi_version"`
 }
 
 // AuthorizationClaims содержит подписанный контекст внутреннего RPC.
@@ -85,6 +93,39 @@ type AuthorizationClaims struct {
 	SignerGeneration         uint64                    `json:"signer_generation"`
 	CallerCredentialRevision uint64                    `json:"caller_credential_revision"`
 	CredentialAuthentication *CredentialAuthentication `json:"credential_authentication,omitempty"`
+	RequestDigestSHA256      string                    `json:"request_digest_sha256,omitempty"`
+	RequestBindingMode       string                    `json:"request_binding_mode"`
+	AuthorityABIVersion      uint32                    `json:"authority_abi_version"`
+	Continuation             *ContinuationLineage      `json:"continuation,omitempty"`
+}
+
+// ContinuationLineage связывает child context с исходным root и принятым parent.
+type ContinuationLineage struct {
+	RootJTI                string `json:"root_jti"`
+	RootOperationID        string `json:"root_operation_id"`
+	RootFullMethod         string `json:"root_full_method"`
+	RootSourceRevision     uint64 `json:"root_source_revision"`
+	RootSourceDigestSHA256 string `json:"root_source_digest_sha256"`
+	ParentJTI              string `json:"parent_jti"`
+	ParentOperationID      string `json:"parent_operation_id"`
+	ParentFullMethod       string `json:"parent_full_method"`
+	RequestID              string `json:"request_id"`
+	CorrelationID          string `json:"correlation_id"`
+}
+
+// RequestProfile задаёт exact применимость request-bound измерений.
+type RequestProfile struct {
+	Mode        string `yaml:"mode"`
+	Resource    string `yaml:"resource"`
+	Version     string `yaml:"version"`
+	Attempt     string `yaml:"attempt"`
+	Idempotency string `yaml:"idempotency"`
+}
+
+// ContinuationProfile задаёт единственный разрешённый parent для child RPC.
+type ContinuationProfile struct {
+	ParentOperationID string `yaml:"parent_operation_id"`
+	ParentFullMethod  string `yaml:"parent_full_method"`
 }
 
 // IssuedTime возвращает время выпуска в UTC.
@@ -104,25 +145,28 @@ func (claims AuthorizationClaims) ExpiryTime() time.Time {
 
 // OperationBinding связывает операцию, workload, RPC и разрешение.
 type OperationBinding struct {
-	OperationID            string   `yaml:"operation_id"`
-	CallerWorkloadID       string   `yaml:"caller_workload_id"`
-	CallerSPIFFEID         string   `yaml:"caller_spiffe_id"`
-	Issuer                 string   `yaml:"issuer"`
-	TargetWorkloadID       string   `yaml:"target_workload_id"`
-	TargetSPIFFEID         string   `yaml:"target_spiffe_id"`
-	Audience               string   `yaml:"audience"`
-	FullMethod             string   `yaml:"full_method"`
-	Permission             string   `yaml:"permission"`
-	AuthorityProofIssuer   string   `yaml:"authority_proof_issuer"`
-	AuthorityProofAudience string   `yaml:"authority_proof_audience"`
-	AuthoritySources       []string `yaml:"authority_sources"`
-	ProjectRequired        bool     `yaml:"project_required"`
-	TokenTTLSeconds        int64    `yaml:"token_ttl_seconds"`
+	OperationID            string               `yaml:"operation_id"`
+	CallerWorkloadID       string               `yaml:"caller_workload_id"`
+	CallerSPIFFEID         string               `yaml:"caller_spiffe_id"`
+	Issuer                 string               `yaml:"issuer"`
+	TargetWorkloadID       string               `yaml:"target_workload_id"`
+	TargetSPIFFEID         string               `yaml:"target_spiffe_id"`
+	Audience               string               `yaml:"audience"`
+	FullMethod             string               `yaml:"full_method"`
+	Permission             string               `yaml:"permission"`
+	AuthorityProofIssuer   string               `yaml:"authority_proof_issuer"`
+	AuthorityProofAudience string               `yaml:"authority_proof_audience"`
+	AuthoritySources       []string             `yaml:"authority_sources"`
+	ProjectRequired        bool                 `yaml:"project_required"`
+	TokenTTLSeconds        int64                `yaml:"token_ttl_seconds"`
+	RequestProfile         RequestProfile       `yaml:"request_profile"`
+	Continuation           *ContinuationProfile `yaml:"continuation,omitempty"`
 }
 
 // PolicySnapshot задаёт версионированную машинную политику authority.
 type PolicySnapshot struct {
 	Version                 int                `yaml:"version"`
+	AuthorityABIVersion     uint32             `yaml:"authority_abi_version"`
 	TrustDomain             string             `yaml:"trust_domain"`
 	DefaultDecision         string             `yaml:"default_decision"`
 	TokenTTLSeconds         int64              `yaml:"token_ttl_seconds"`

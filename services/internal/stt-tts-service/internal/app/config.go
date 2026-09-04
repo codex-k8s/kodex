@@ -38,6 +38,9 @@ type Config struct {
 	AuthorityVerifierSocket string        `env:"INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET"`
 	AuthorityVerifierUID    uint32        `env:"STT_AUTHORITY_VERIFIER_UID"`
 	AuthorityVerifierGID    uint32        `env:"STT_AUTHORITY_VERIFIER_GID"`
+	AuthorityIssuerSocket   string        `env:"INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET"`
+	AuthorityIssuerUID      uint32        `env:"STT_AUTHORITY_ISSUER_UID"`
+	AuthorityIssuerGID      uint32        `env:"STT_AUTHORITY_ISSUER_GID"`
 	RequestTimeout          time.Duration `env:"STT_REQUEST_TIMEOUT"`
 	StartupTimeout          time.Duration `env:"STT_STARTUP_TIMEOUT"`
 	ReadinessTimeout        time.Duration `env:"STT_READINESS_TIMEOUT"`
@@ -57,6 +60,8 @@ func loadConfig() (Config, error) {
 		CredentialTarget: credentialTarget, CredentialTLSServerName: credentialSNI,
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath,
 		AuthorityVerifierUID:    29002, AuthorityVerifierGID: 29000,
+		AuthorityIssuerSocket: authorityclient.IssuerSocketPath,
+		AuthorityIssuerUID:    29001, AuthorityIssuerGID: 29000,
 		RequestTimeout: requestTimeout, StartupTimeout: startupTimeout,
 		ReadinessTimeout: readinessTimeout, ShutdownTimeout: shutdownTimeout,
 	}
@@ -76,13 +81,15 @@ func (config Config) validate() error {
 		config.CredentialTarget != credentialTarget || config.CredentialTLSServerName != credentialSNI ||
 		config.AuthorityVerifierSocket != authorityclient.VerifierSocketPath ||
 		config.AuthorityVerifierUID != 29002 || config.AuthorityVerifierGID != 29000 ||
+		config.AuthorityIssuerSocket != authorityclient.IssuerSocketPath ||
+		config.AuthorityIssuerUID != 29001 || config.AuthorityIssuerGID != 29000 ||
 		config.RequestTimeout != requestTimeout || config.StartupTimeout != startupTimeout ||
 		config.ReadinessTimeout != readinessTimeout || config.ShutdownTimeout != shutdownTimeout {
 		return errors.New("STT configuration is invalid")
 	}
 	for _, path := range []string{config.SpoolDirectory, config.ServerCertificateFile, config.ServerPrivateKeyFile,
 		config.ClientCAFile, config.WorkloadCertificateFile, config.WorkloadPrivateKeyFile,
-		config.DependencyCAFile, config.AuthorityVerifierSocket} {
+		config.DependencyCAFile, config.AuthorityVerifierSocket, config.AuthorityIssuerSocket} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("STT file path is invalid")
 		}

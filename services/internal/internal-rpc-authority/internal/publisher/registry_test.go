@@ -21,14 +21,25 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	for _, testCase := range []struct {
 		relative             string
 		wantStartupReadbacks int
+		requiredTargets      []string
 	}{
 		{
 			relative:             "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
 			wantStartupReadbacks: 11,
+			requiredTargets: []string{
+				"control-plane.authorization-issuer",
+				"secret-broker.authorization-verifier",
+				"stt-tts-service.authorization-issuer",
+				"stt-tts-service.authorization-verifier",
+			},
 		},
 		{
 			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
 			wantStartupReadbacks: 11,
+			requiredTargets: []string{
+				"control-plane.authorization-issuer",
+				"secret-broker.authorization-verifier",
+			},
 		},
 	} {
 		source, err := os.ReadFile(filepath.Join(repositoryRoot, testCase.relative))
@@ -46,10 +57,7 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		if len(registry.Targets) == 0 {
 			t.Fatalf("реестр %s не содержит целей", testCase.relative)
 		}
-		for _, targetID := range []string{
-			"control-plane.authorization-issuer",
-			"secret-broker.authorization-verifier",
-		} {
+		for _, targetID := range testCase.requiredTargets {
 			if _, ok := registry.Targets[targetID]; !ok {
 				t.Fatalf("реестр %s не содержит цель %s", testCase.relative, targetID)
 			}

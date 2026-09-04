@@ -96,10 +96,11 @@ type ProofAuthority struct {
 }
 
 type WorkerGrantInput struct {
-	WorkloadID string
-	Revision   uint64
-	IssuedAt   time.Time
-	ExpiresAt  time.Time
+	WorkloadID           string
+	CredentialGeneration uint64
+	Revision             uint64
+	IssuedAt             time.Time
+	ExpiresAt            time.Time
 }
 
 type RuntimeSecretPrepareInput struct {

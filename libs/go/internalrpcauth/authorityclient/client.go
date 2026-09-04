@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
@@ -20,6 +21,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // Канонические UDS-пути и имя метаданных контекста авторизации.
@@ -133,6 +135,101 @@ type OperationResolver interface {
 	OperationID(fullMethod string) (string, bool)
 }
 
+type requestDigestKey struct{}
+
+// RequestDigest возвращает digest фактического unary protobuf request,
+// вычисленный interceptor до обращения к proof resolver.
+func RequestDigest(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(requestDigestKey{}).(string)
+	return value, ok && value != ""
+}
+
+func bindRequestDigest(ctx context.Context, request any) (context.Context, string, error) {
+	message, ok := request.(proto.Message)
+	if !ok || message == nil {
+		return nil, "", status.Error(codes.InvalidArgument, "protobuf request is required")
+	}
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+	if err != nil {
+		return nil, "", status.Error(codes.InvalidArgument, "protobuf request encoding failed")
+	}
+	digest := sha256.Sum256(raw)
+	value := hex.EncodeToString(digest[:])
+	return context.WithValue(ctx, requestDigestKey{}, value), value, nil
+}
+
+type continuationSource struct {
+	compact  string
+	verified *internalrpcauthorityv1.VerifiedAuthorizationContext
+}
+
+type continuationSourceKey struct{}
+type continuationRequestKey struct{}
+
+type continuationRequest struct {
+	operationID, fullMethod, requestID, correlationID string
+}
+
+// BindContinuation разрешает child issuance только из контекста, созданного
+// verifier interceptor после durable acceptance parent JTI.
+func BindContinuation(
+	ctx context.Context,
+	operationID, fullMethod, requestID, correlationID string,
+) (context.Context, error) {
+	if ctx == nil || operationID == "" || fullMethod == "" || requestID == "" ||
+		correlationID == "" || len(operationID) > 128 || len(fullMethod) > 256 ||
+		len(requestID) > 128 || len(correlationID) > 128 ||
+		strings.TrimSpace(requestID) != requestID || strings.TrimSpace(correlationID) != correlationID {
+		return nil, status.Error(codes.InvalidArgument, "continuation request is invalid")
+	}
+	source, ok := ctx.Value(continuationSourceKey{}).(continuationSource)
+	if !ok || source.compact == "" || source.verified == nil {
+		return nil, status.Error(codes.FailedPrecondition, "verified parent authorization context required")
+	}
+	return context.WithValue(ctx, continuationRequestKey{}, continuationRequest{
+		operationID: operationID, fullMethod: fullMethod,
+		requestID: requestID, correlationID: correlationID,
+	}), nil
+}
+
+// ContinuationUnaryClientInterceptor выпускает exact child context в момент,
+// когда доступен фактический protobuf request.
+func ContinuationUnaryClientInterceptor(
+	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
+	operations OperationResolver,
+) grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		request any,
+		reply any,
+		connection *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		options ...grpc.CallOption,
+	) error {
+		operationID, ok := operations.OperationID(method)
+		pending, pendingOK := ctx.Value(continuationRequestKey{}).(continuationRequest)
+		source, sourceOK := ctx.Value(continuationSourceKey{}).(continuationSource)
+		if !ok || !pendingOK || !sourceOK || pending.operationID != operationID || pending.fullMethod != method {
+			return status.Error(codes.PermissionDenied, "internal RPC continuation is not registered")
+		}
+		_, requestDigest, err := bindRequestDigest(ctx, request)
+		if err != nil {
+			return err
+		}
+		issued, err := issuer.IssueContinuationAuthorizationContext(ctx,
+			&internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest{
+				OperationId: operationID, ParentAuthorizationContextCompactJws: source.compact,
+				RequestId: pending.requestID, CorrelationId: pending.correlationID,
+				RequestDigestSha256: requestDigest,
+			})
+		if err != nil {
+			return newLocalAuthorityError(err, pending.correlationID)
+		}
+		return invoker(metadata.AppendToOutgoingContext(ctx, AuthorizationMetadata, issued.GetCompactJws()), method, request, reply, connection, options...)
+	}
+}
+
 // LocalAuthorityError отличает сбой локальной выдачи контекста от ошибки
 // downstream RPC. Внешняя граница может безопасно нормализовать только этот
 // доверенный тип, не принимая произвольный bare gRPC status за доменный ответ.
@@ -227,6 +324,12 @@ func IssuerUnaryClientInterceptor(
 		invoker grpc.UnaryInvoker,
 		options ...grpc.CallOption,
 	) error {
+		var requestDigest string
+		var err error
+		ctx, requestDigest, err = bindRequestDigest(ctx, request)
+		if err != nil {
+			return err
+		}
 		operationID, ok := operations.OperationID(method)
 		if !ok {
 			return status.Error(codes.PermissionDenied, "internal RPC operation is not registered")
@@ -241,6 +344,7 @@ func IssuerUnaryClientInterceptor(
 				OperationId:              operationID,
 				CorrelationId:            correlationID,
 				AuthorityProofCompactJws: proof,
+				RequestDigestSha256:      requestDigest,
 			},
 		)
 		if err != nil {
@@ -323,12 +427,17 @@ func VerifierUnaryServerInterceptor(
 		if len(values) != 1 || values[0] == "" {
 			return nil, status.Error(codes.Unauthenticated, "authorization context required")
 		}
+		_, requestDigest, err := bindRequestDigest(ctx, request)
+		if err != nil {
+			return nil, err
+		}
 		verified, err := verifier.VerifyAuthorizationContext(
 			ctx,
 			&internalrpcauthorityv1.VerifyAuthorizationContextRequest{
-				CompactJws:         values[0],
-				ObservedFullMethod: info.FullMethod,
-				DownstreamPeer:     transport,
+				CompactJws:                  values[0],
+				ObservedFullMethod:          info.FullMethod,
+				DownstreamPeer:              transport,
+				ObservedRequestDigestSha256: requestDigest,
 			},
 		)
 		if err != nil {
@@ -337,10 +446,11 @@ func VerifierUnaryServerInterceptor(
 		if verified.GetContext() == nil {
 			return nil, status.Error(codes.Internal, "verified authorization context missing")
 		}
-		return handler(
-			context.WithValue(ctx, verifiedContextKey{}, verified.GetContext()),
-			request,
-		)
+		authorized := context.WithValue(ctx, verifiedContextKey{}, verified.GetContext())
+		authorized = context.WithValue(authorized, continuationSourceKey{}, continuationSource{
+			compact: values[0], verified: verified.GetContext(),
+		})
+		return handler(authorized, request)
 	}
 }
 
@@ -384,7 +494,10 @@ func VerifierStreamServerInterceptor(
 		}
 		return handler(service, &authorizedServerStream{
 			ServerStream: stream,
-			ctx:          context.WithValue(ctx, verifiedContextKey{}, verified.GetContext()),
+			ctx: context.WithValue(
+				context.WithValue(ctx, verifiedContextKey{}, verified.GetContext()),
+				continuationSourceKey{}, continuationSource{compact: values[0], verified: verified.GetContext()},
+			),
 		})
 	}
 }

@@ -195,6 +195,7 @@ func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMetho
 	}
 	correlation := uuid.NewString()
 	request := &internalrpcauthorityv1.ResolveAuthorityProofRequest{OperationId: operationID, IdempotencyKey: uuid.NewString(), CorrelationId: correlation}
+	request.RequestDigestSha256, _ = authorityclient.RequestDigest(ctx)
 	if _, required := client.projectRequired[operationID]; required {
 		request.ProjectReference, _ = ctx.Value(projectReferenceContextKey{}).(string)
 	}

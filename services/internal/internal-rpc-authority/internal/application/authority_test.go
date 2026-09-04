@@ -123,6 +123,14 @@ func (store *activationStore) Reserve(context.Context, repository.Reservation) e
 	return nil
 }
 
+func (store *activationStore) ReserveContinuation(
+	context.Context,
+	repository.Reservation,
+	repository.Reservation,
+) error {
+	return nil
+}
+
 func (store *activationStore) ActivateSnapshot(
 	_ context.Context,
 	state repository.SnapshotState,
@@ -161,7 +169,8 @@ func newActivationAuthority(
 	}
 	const issuer = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
 	domain, err := service.NewAuthority(model.PolicySnapshot{
-		Version: 1, DefaultDecision: "DENY", TokenTTLSeconds: 30,
+		Version: 1, AuthorityABIVersion: model.AuthorityABIVersion,
+		DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 2, SourceRevision: 1,
 		SourceDigestSHA256:      strings.Repeat("a", 64),
 		PredecessorDigestSHA256: strings.Repeat("0", 64),

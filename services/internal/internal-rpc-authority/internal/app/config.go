@@ -195,6 +195,13 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"stt-tts-service": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
+				readbackCredentialSecret:    "internal-rpc-authority-stt-tts-service-issuer-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-stt-tts-service-issuer-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-stt-tts-service-issuer-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-stt-tts-service-issuer-restore-ack",
+			},
 			"control-plane": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
 				readbackCredentialSecret:    "internal-rpc-authority-control-plane-issuer-readback-credential",
@@ -274,6 +281,13 @@ func applyWorkloadProfile(config *Config) error {
 			},
 		},
 		ModeVerifier: {
+			"stt-tts-service": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
+				readbackCredentialSecret:    "internal-rpc-authority-stt-tts-service-verifier-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-stt-tts-service-verifier-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-stt-tts-service-verifier-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-stt-tts-service-verifier-restore-ack",
+			},
 			"secret-broker": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
 				readbackCredentialSecret:    "internal-rpc-authority-secret-broker-verifier-readback-credential",

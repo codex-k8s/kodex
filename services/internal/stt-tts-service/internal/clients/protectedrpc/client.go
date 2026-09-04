@@ -1,6 +1,5 @@
-// Package protectedrpc создаёт только exact mTLS-соединения к зависимостям.
-// До материализации server-owned continuation primitive в #1023 каждый
-// projection-вызов закрыто отклоняется до обращения к сети.
+// Package protectedrpc создаёт exact mTLS-соединения и server-owned
+// continuation для зависимостей STT.
 package protectedrpc
 
 import (
@@ -12,8 +11,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
-	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -27,24 +28,30 @@ type Config struct {
 	Policy, Credential              TargetConfig
 	CertificateFile, PrivateKeyFile string
 	DialTimeout                     time.Duration
+	Issuer                          internalrpcauthorityv1.AuthorizationIssuerServiceClient
 }
 
 type Client struct {
 	Policy             sttv1.TranscriptionPolicyProjectionServiceClient
 	Credential         sttv1.TranscriptionCredentialProjectionServiceClient
+	issuer             internalrpcauthorityv1.AuthorizationIssuerServiceClient
 	policy, credential *grpc.ClientConn
 }
 
 func Dial(_ context.Context, config Config) (*Client, error) {
 	if config.DialTimeout < 100*time.Millisecond || config.DialTimeout > 5*time.Second ||
-		!filepath.IsAbs(config.CertificateFile) || !filepath.IsAbs(config.PrivateKeyFile) {
+		!filepath.IsAbs(config.CertificateFile) || !filepath.IsAbs(config.PrivateKeyFile) || config.Issuer == nil {
 		return nil, errors.New("STT protected RPC configuration is invalid")
 	}
-	policy, err := dial(config.Policy, config)
+	operations := operationRegistry{
+		sttv1.TranscriptionPolicyProjectionService_ResolveTranscriptionPolicy_FullMethodName:         "platform.stt.policy.resolve",
+		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName: "platform.stt.credential.project",
+	}
+	policy, err := dial(config.Policy, config, operations)
 	if err != nil {
 		return nil, err
 	}
-	credential, err := dial(config.Credential, config)
+	credential, err := dial(config.Credential, config, operations)
 	if err != nil {
 		_ = policy.Close()
 		return nil, err
@@ -52,17 +59,19 @@ func Dial(_ context.Context, config Config) (*Client, error) {
 	return &Client{
 		Policy:     sttv1.NewTranscriptionPolicyProjectionServiceClient(policy),
 		Credential: sttv1.NewTranscriptionCredentialProjectionServiceClient(credential),
+		issuer:     config.Issuer,
 		policy:     policy, credential: credential,
 	}, nil
 }
 
-func dial(target TargetConfig, config Config) (*grpc.ClientConn, error) {
+func dial(target TargetConfig, config Config, operations operationRegistry) (*grpc.ClientConn, error) {
 	transport, err := transportCredentials(target, config.CertificateFile, config.PrivateKeyFile)
 	if err != nil {
 		return nil, err
 	}
 	connection, err := grpc.NewClient(target.Target,
 		grpc.WithTransportCredentials(transport),
+		grpc.WithChainUnaryInterceptor(authorityclient.ContinuationUnaryClientInterceptor(config.Issuer, operations)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1<<20), grpc.MaxCallSendMsgSize(1<<20)),
 	)
 	if err != nil {
@@ -71,18 +80,59 @@ func dial(target TargetConfig, config Config) (*grpc.ClientConn, error) {
 	return connection, nil
 }
 
-// BindDelegated валидирует exact operation registry и закрыто отказывает до
-// RPC: существующий internalrpcauth поддерживает первичный proof, но не
-// server-owned continuation входного root actor.
+// BindDelegated связывает child RPC только с принятым входным STT context.
 func (client *Client) BindDelegated(
 	ctx context.Context,
-	_ value.Principal,
+	principal value.Principal,
 	requestID, correlationID, fullMethod, operation string,
 ) (context.Context, error) {
-	if ctx == nil || requestID == "" || correlationID == "" || operationFor(fullMethod) != operation {
+	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
+	if client == nil || ctx == nil || requestID == "" || correlationID == "" || operationFor(fullMethod) != operation ||
+		!ok || verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion ||
+		verified.GetOperationId() != "platform.stt.transcribe" ||
+		verified.GetFullMethod() != sttv1.SpeechToTextService_Transcribe_FullMethodName ||
+		verified.GetRequestBindingMode() != internalrpcauth.RequestBindingStream ||
+		verified.GetJti() != requestID || verified.GetPermission() != principal.Permission ||
+		verified.GetSourceRevision() != principal.AuthorityRevision ||
+		verified.GetSourceDigestSha256() != principal.AuthorityDigestSHA256 ||
+		!samePrincipal(verified.GetAuthority(), principal) {
 		return nil, errors.New("STT delegated operation is invalid")
 	}
-	return nil, errs.ErrDelegatedProofPending
+	return authorityclient.BindContinuation(ctx, operation, fullMethod, requestID, correlationID)
+}
+
+type operationRegistry map[string]string
+
+func (registry operationRegistry) OperationID(fullMethod string) (string, bool) {
+	operation, ok := registry[fullMethod]
+	return operation, ok
+}
+
+func samePrincipal(authority *internalrpcauthorityv1.CallerAuthority, principal value.Principal) bool {
+	return authority != nil && authority.GetActorKind() != internalrpcauthorityv1.ActorKind_ACTOR_KIND_UNSPECIFIED &&
+		sameIdentity(authority.GetActor(), principal.ActorID, principal.Actor) &&
+		sameIdentity(authority.GetTenant(), principal.TenantID, principal.Tenant) &&
+		sameIdentity(authority.GetProject(), principal.ProjectID, principal.Project)
+}
+
+func sameIdentity(actual *internalrpcauthorityv1.AuthorityIdentity, id string, provenance value.AuthorityProvenance) bool {
+	return actual != nil && actual.GetProvenance() != nil && actual.GetId() == id &&
+		int32(actual.GetProvenance().GetSource()) == provenance.Source &&
+		actual.GetProvenance().GetReference() == provenance.Reference &&
+		actual.GetProvenance().GetRevision() == provenance.Revision &&
+		actual.GetProvenance().GetDigestSha256() == provenance.DigestSHA256
+}
+
+// Check подтверждает, что issuer обслуживает ту же ABI, которую использует клиент.
+func (client *Client) Check(ctx context.Context) error {
+	if client == nil || client.issuer == nil {
+		return errors.New("STT continuation issuer is unavailable")
+	}
+	response, err := client.issuer.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest{})
+	if err != nil || !response.GetReady() || response.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion {
+		return errors.New("STT continuation issuer is not ready")
+	}
+	return nil
 }
 
 func operationFor(fullMethod string) string {

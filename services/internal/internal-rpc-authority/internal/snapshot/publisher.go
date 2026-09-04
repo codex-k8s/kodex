@@ -116,6 +116,7 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	); err != nil ||
 		policyDocument.Version != model.ContractVersion ||
 		policyDocument.PolicyRevision == 0 ||
+		policyDocument.Policy.AuthorityABIVersion != model.AuthorityABIVersion ||
 		policyDocument.Policy.TrustDomain != "kodex.local" ||
 		policyDocument.Policy.DefaultDecision != "DENY" ||
 		len(policyDocument.Policy.OperationBindings) == 0 ||

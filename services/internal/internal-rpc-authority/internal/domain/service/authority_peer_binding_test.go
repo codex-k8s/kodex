@@ -56,7 +56,8 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		SourceDigestSHA256: strings.Repeat("a", 64), PredecessorRevision: 6,
 		PredecessorDigestSHA256: strings.Repeat("b", 64), KeySetRevision: 7,
 		PolicyRevision: 31, SignerGeneration: 7, Issuer: verifierIssuer,
-		SignerKeyID: verifierKey.KeyID,
+		AuthorityABIVersion: model.AuthorityABIVersion,
+		SignerKeyID:         verifierKey.KeyID,
 		OperationBindings: []model.OperationBinding{{
 			OperationID: operation, CallerWorkloadID: "automation-scheduler",
 			CallerSPIFFEID: callerSPIFFE, Issuer: callerIssuer,
@@ -64,6 +65,11 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 			Audience: audience, FullMethod: method, Permission: operation,
 			AuthorityProofIssuer: targetSPIFFE, AuthorityProofAudience: "urn:kodex:proof",
 			AuthoritySources: []string{"DOMAIN_STATE"}, TokenTTLSeconds: 30,
+			RequestProfile: model.RequestProfile{
+				Mode:     model.RequestBindingStream,
+				Resource: model.ProfileBindingForbidden, Version: model.ProfileBindingForbidden,
+				Attempt: model.ProfileBindingForbidden, Idempotency: model.ProfileBindingForbidden,
+			},
 		}},
 	}
 	keyRecord := func(
@@ -105,6 +111,8 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 		ReplayMode: model.ReplayModeOneTime, SourceRevision: 7,
 		SourceDigestSHA256: strings.Repeat("a", 64), KeySetRevision: 7,
 		PolicyRevision: 31, SignerGeneration: 1,
+		AuthorityABIVersion: model.AuthorityABIVersion,
+		RequestBindingMode:  model.RequestBindingStream,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(
 		claims,
@@ -116,7 +124,7 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	if err != nil {
 		t.Fatalf("sign caller authorization context: %v", err)
 	}
-	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE); err != nil {
+	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE, ""); err != nil {
 		t.Fatalf("verify caller generation independent from verifier: %v", err)
 	}
 	claims.SignerGeneration = 2
@@ -131,7 +139,7 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	if err != nil {
 		t.Fatalf("sign mismatched caller authorization context: %v", err)
 	}
-	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE); err == nil {
+	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE, ""); err == nil {
 		t.Fatal("caller generation not matching its trusted key was accepted")
 	}
 }
@@ -174,6 +182,13 @@ func TestAuthorizationExpiryDoesNotExceedMetadataWindow(t *testing.T) {
 type testAuthorityStore struct{}
 
 func (testAuthorityStore) Reserve(context.Context, repository.Reservation) error { return nil }
+func (testAuthorityStore) ReserveContinuation(
+	context.Context,
+	repository.Reservation,
+	repository.Reservation,
+) error {
+	return nil
+}
 func (testAuthorityStore) ActivateSnapshot(context.Context, repository.SnapshotState) error {
 	return nil
 }

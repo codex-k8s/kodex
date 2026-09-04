@@ -836,13 +836,13 @@ func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (u
 }
 
 func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platformrepo.WorkerGrantInput) error {
-	if input.WorkloadID == "" || input.Revision == 0 || input.Revision > 9007199254740991 ||
+	if input.WorkloadID == "" || input.CredentialGeneration == 0 || input.Revision == 0 || input.Revision > 9007199254740991 ||
 		input.IssuedAt.IsZero() || !input.ExpiresAt.After(input.IssuedAt) {
 		return errs.ErrForbidden
 	}
 	var accepted uint64
 	if err := repository.pool.QueryRow(ctx, queryAcceptWorkerGrantHighWatermark,
-		input.WorkloadID, input.Revision, input.IssuedAt.UTC(), input.ExpiresAt.UTC()).Scan(&accepted); errors.Is(err, pgx.ErrNoRows) {
+		input.WorkloadID, input.CredentialGeneration, input.Revision, input.IssuedAt.UTC(), input.ExpiresAt.UTC()).Scan(&accepted); errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrForbidden
 	} else if err != nil {
 		return errs.ErrUnavailable

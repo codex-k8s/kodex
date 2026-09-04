@@ -140,7 +140,7 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 		Subject:  "kodex-system-subject", CallerSPIFFEID: producer.CallerSPIFFEID,
 		WorkloadID: producer.CallerWorkloadID, OrganizationID: "kodex-installation",
 		Revision: 7, CredentialGeneration: 1, JTI: uuid.NewString(), IssuedAt: now.Unix(), NotBefore: now.Unix(),
-		ExpiresAt: now.Add(workerGrantTTL).Unix(),
+		ExpiresAt: now.Add(workerGrantTTL).Unix(), AuthorityABIVersion: internalrpcauth.AuthorityABIVersion,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
 		Type: workerGrantType, KeyID: key.KeyID,
@@ -162,6 +162,16 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
 		t.Fatal("worker grant с поколением другого ключа был принят")
 	}
+	claims.CredentialGeneration = 0
+	compact, err = internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
+		Type: workerGrantType, KeyID: key.KeyID,
+	})
+	if err != nil {
+		t.Fatalf("подписать grant без поколения credential: %v", err)
+	}
+	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
+		t.Fatal("worker grant без поколения credential был принят")
+	}
 	claims.CredentialGeneration = 1
 
 	claims.Audience = "urn:kodex:platform-worker:another-workload"
@@ -173,6 +183,18 @@ func TestWorkerGrantRequiresExactWorkloadBinding(t *testing.T) {
 	}
 	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
 		t.Fatal("worker grant с неверной аудиторией был принят")
+	}
+
+	claims.Audience = producer.ApplicationCredentialAudience
+	claims.AuthorityABIVersion = 0
+	compact, err = internalrpcauth.SignCanonicalJSON(claims, key, internalrpcauth.ProtectedHeaderExpectation{
+		Type: workerGrantType, KeyID: key.KeyID,
+	})
+	if err != nil {
+		t.Fatalf("подписать grant без ABI: %v", err)
+	}
+	if _, err := service.verifyWorkerGrant(compact, producer); err == nil {
+		t.Fatal("worker grant без текущей ABI был принят")
 	}
 }
 
@@ -193,6 +215,7 @@ func testProducer(workloadID, credentialType string) proofProducer {
 
 func testPolicy(producer proofProducer) policyDocument {
 	document := policyDocument{Version: 1, PolicyRevision: 1}
+	document.Policy.AuthorityABIVersion = internalrpcauth.AuthorityABIVersion
 	document.Policy.TrustDomain = "kodex.local"
 	document.Policy.DefaultDecision = "DENY"
 	document.Policy.ProofProducers = []proofProducer{producer}
@@ -201,6 +224,11 @@ func testPolicy(producer proofProducer) policyDocument {
 		CallerSPIFFEID: producer.CallerSPIFFEID, Audience: "urn:kodex:internal-rpc:control-plane",
 		FullMethod: "/controlplane.v1.PlatformQueryService/GetBootstrapState",
 		Permission: "platform.test", ProducerID: producer.ProducerID,
+		RequestProfile: requestProfile{
+			Mode:     internalrpcauth.RequestBindingUnary,
+			Resource: internalrpcauth.ProfileBindingForbidden, Version: internalrpcauth.ProfileBindingForbidden,
+			Attempt: internalrpcauth.ProfileBindingForbidden, Idempotency: internalrpcauth.ProfileBindingForbidden,
+		},
 	}}
 	return document
 }
