@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1245,6 +1246,10 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, serviceAccountName, podName)
 	execution.Revision.EnvironmentPolicy = testRuntimeEnvironmentPolicyProto(policy)
 	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
+	workspace := runtimecontract.RuntimeWorkspacePolicy{Revision: 1, Root: "/workspace", Rules: []runtimecontract.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: "READ_ONLY"}, {Path: "/workspace/knowledge", Access: "READ_ONLY"}, {Path: "/workspace", Access: "WRITABLE"}}, MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000, DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"}}
+	rawWorkspace, _ := json.Marshal(workspace)
+	workspaceDigest := sha256.Sum256(rawWorkspace)
+	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: hex.EncodeToString(workspaceDigest[:]), DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}, Rules: []*controlplanev1.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/knowledge", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE}}}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
 	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools, policy)
 	return execution

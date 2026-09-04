@@ -51,6 +51,7 @@
     "execution_ticket_file",
     "provider_auth_file",
     "provider_auth_sha256_file",
+    "workspace_policy",
     "workspace_root",
     "outbox_root",
     "codex_home"
@@ -176,6 +177,7 @@
     "execution_ticket_file": {"$ref": "#/$defs/secret_file"},
     "provider_auth_file": {"$ref": "#/$defs/secret_file"},
     "provider_auth_sha256_file": {"$ref": "#/$defs/secret_file"},
+    "workspace_policy": {"$ref": "#/$defs/workspace_policy"},
     "workspace_root": {"const": "/workspace"},
     "outbox_root": {"const": "/workspace/.kodex/outbox"},
     "codex_home": {"const": "/workspace/.kodex/state/codex-home"}
@@ -587,6 +589,29 @@
         "service_account_name": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"},
         "rules": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/kubernetes_rule"}},
         "digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workspace_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "access"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/workspace(?:/[A-Za-z0-9._-]+)*$"},
+        "access": {"enum": ["READ_ONLY", "WRITABLE"]}
+      }
+    },
+    "workspace_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "root", "rules", "maximum_writable_bytes", "maximum_file_count", "digest", "denial_reasons"],
+      "properties": {
+        "revision": {"type": "integer", "minimum": 1},
+        "root": {"const": "/workspace"},
+        "rules": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/workspace_rule"}},
+        "maximum_writable_bytes": {"type": "integer", "minimum": 1},
+        "maximum_file_count": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "denial_reasons": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"enum": ["READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"]}}
       }
     },
     "secret_projection": {

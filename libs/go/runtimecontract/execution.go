@@ -177,6 +177,7 @@ type RunnerInput struct {
 	EnvironmentValues           []RuntimeEnvironmentValue `json:"environment_values,omitempty"`
 	SecretProjections           []RuntimeSecretProjection `json:"secret_projections,omitempty"`
 	EnvironmentPolicy           RuntimeEnvironmentPolicy  `json:"environment_policy"`
+	WorkspacePolicy             RuntimeWorkspacePolicy    `json:"workspace_policy"`
 	EffectiveKubernetesAccess   RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
 	CodexSandbox                string                    `json:"codex_sandbox"`
 	CodexApprovalPolicy         string                    `json:"codex_approval_policy"`
@@ -256,6 +257,9 @@ func (input RunnerInput) Validate() error {
 		normalizedPolicy.RBACDigest != input.EnvironmentPolicy.RBACDigest || ValidateRuntimeKubernetesAccess(input.EffectiveKubernetesAccess) != nil ||
 		input.EffectiveKubernetesAccess.Profile != normalizedPolicy.KubernetesAccess {
 		return errors.New("runner environment policy binding is invalid")
+	}
+	if input.WorkspacePolicy.Root != "" && input.WorkspacePolicy.Validate() != nil {
+		return errors.New("runner workspace policy binding is invalid")
 	}
 	environmentDigest, err := RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, normalizedPolicy)
 	if err != nil || environmentDigest != input.RuntimeEnvironmentDigest {

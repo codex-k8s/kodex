@@ -465,6 +465,11 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	workspacePolicy, err := runtimeWorkspacePolicyFromProto(revision.GetWorkspacePolicy())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
+	input.WorkspacePolicy = workspacePolicy
 	for _, item := range revision.GetEnvironmentValues() {
 		input.EnvironmentValues = append(input.EnvironmentValues, runtimecontract.RuntimeEnvironmentValue{Name: item.GetName(), Value: item.GetValue()})
 	}
@@ -481,6 +486,23 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		})
 	}
 	return input, nil
+}
+
+func runtimeWorkspacePolicyFromProto(value *controlplanev1.RuntimeWorkspacePolicy) (runtimecontract.RuntimeWorkspacePolicy, error) {
+	if value == nil {
+		return runtimecontract.RuntimeWorkspacePolicy{}, errors.New("runtime workspace policy is missing")
+	}
+	policy := runtimecontract.RuntimeWorkspacePolicy{Revision: value.GetRevision(), Root: value.GetRoot(), MaximumWritableBytes: value.GetMaximumWritableBytes(), MaximumFileCount: value.GetMaximumFileCount(), Digest: value.GetDigest()}
+	for _, rule := range value.GetRules() {
+		policy.Rules = append(policy.Rules, runtimecontract.RuntimeWorkspacePathRule{Path: rule.GetPath(), Access: strings.TrimPrefix(rule.GetAccess().String(), "RUNTIME_WORKSPACE_ACCESS_")})
+	}
+	for _, reason := range value.GetDenialReasons() {
+		policy.DenialReasons = append(policy.DenialReasons, strings.TrimPrefix(reason.String(), "RUNTIME_WORKSPACE_DENIAL_REASON_"))
+	}
+	if err := policy.Validate(); err != nil {
+		return runtimecontract.RuntimeWorkspacePolicy{}, err
+	}
+	return policy, nil
 }
 
 func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentPolicy) (runtimecontract.RuntimeEnvironmentPolicy, error) {
