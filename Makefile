@@ -149,6 +149,10 @@ gen-integration-packages: check-go-toolchain
 
 .PHONY: gen-email-bridge check-email-bridge-codegen
 .PHONY: test-integration-gateway-render
+.PHONY: test-integration-gateway-postgres
+test-integration-gateway-postgres:
+	@bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(provider_credential_refresh|integration|role_image|runtime_environment_lifecycle|managed_configuration)'
+
 test-integration-gateway-render:
 	@bash scripts/tests/integration-gateway-render-test.sh
 

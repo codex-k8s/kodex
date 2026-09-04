@@ -51,7 +51,7 @@ updated: 2026-09-04
 | Email fail closed | `TestEmailNotReadyCannotSend`; generated модели `emailbridge`, sender query, fake send/status |
 | Synthetic | `make test-integration-synthetic`: race, HTTP CRUD/OCC, replay и local-only render |
 | Contracts | `make check-integration-package-codegen check-email-bridge-codegen check-proto-codegen`; OpenAPI re-generation comparison |
-| Migration | `make test-control-plane-postgres`: fresh PostgreSQL, up/status/up, версия 20260904000500 |
+| Migration и targeted component | `make test-integration-gateway-postgres`: fresh PostgreSQL, up/status/up, версия 20260904000500, integration и managed configuration subtests |
 | Targeted render | `make test-integration-gateway-render`: оба profiles, exact egress, probes, ServiceAccount, lease budget и unknown alert |
 
 ## Эксплуатация
@@ -77,6 +77,11 @@ Full baseline, review итогового интегрированного SHA, s
 Формирование обоих profiles через `kubectl kustomize` успешно; это отдельный
 результат, не успешный общий release suite. Общий publisher registry не менялся
 в #1028. Deployed browser replay fixture прежнего профиля не запускался.
+
+После rebase на runtime #1047 общий PostgreSQL suite остановился на
+`session_provider_affinity_survives_policy_mutation_and_fails_closed_on_revoke`:
+ожидание workspace policy не соответствует новой модели. Это `FAIL` общего
+suite; targeted integration subtests запускаются отдельной точкой входа выше.
 
 ## Проверенные API
 
