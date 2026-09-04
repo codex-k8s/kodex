@@ -12,6 +12,8 @@ import (
 // CheckAvailability использует тот же защищённый Transcribe stream. Caller
 // обязан выпустить свежий пользовательский authority; payload его не заменяет.
 func CheckAvailability(ctx context.Context, client sttv1.SpeechToTextServiceClient) (*sttv1.CheckProtectedPathResponse, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	stream, err := client.Transcribe(ctx)
 	if err != nil {
 		return nil, err

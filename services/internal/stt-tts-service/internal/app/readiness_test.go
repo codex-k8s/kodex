@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"os"
 	"testing"
 	"time"
@@ -36,6 +37,12 @@ type readinessMetric struct{ ready bool }
 func (metric *readinessMetric) SetReady(ready bool) { metric.ready = ready }
 
 type readinessService struct{}
+
+func (readinessService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
+
+func (readinessService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
+	return transcriptionservice.Availability{}, errors.New("unavailable")
+}
 
 func (readinessService) Transcribe(context.Context, transcriptionservice.Input) (value.TranscriptionResult, error) {
 	return value.TranscriptionResult{}, nil

@@ -4,100 +4,144 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.3.0
-updated: 2026-09-04
+version: 1.4.0
+updated: 2026-09-05
 ---
 
 # stt-tts-service
 
-`stt-tts-service` — подготовленный, но неактивный stateless-владелец
-server-side распознавания речи. TTS отсутствует. #1019 и #1032 материализовали
-сервис и producer RPC, а #1023 — единый continuation proof и authority
-sidecars. Credential projection #1024 материализован в PR #1034. Пока #1021 не
-материализовал gateway route, unit не входит в `web-only`,
-`web-with-mattermost` и release image set. Base и owner overlays существуют
-только для contract/render-проверки; развёртывать их сейчас нельзя.
+Активный stateless STT unit #1020 эпика #1018: входит в release image set,
+`web-only` и `web-with-mattermost`. TTS не реализован. Включение сервиса в
+render не является разрешением на deploy или свидетельством live acceptance.
 
-## Сквозной контракт после materialization
+## Сквозной контракт
 
-| Шаг | Actor/authority и контракт | Владелец/результат |
+| Шаг | Проверка | Результат |
 | --- | --- | --- |
-| 1 | #1021 принимает bounded browser multipart и создаёт client-stream `Transcribe` | browser payload не назначает actor/tenant/project |
-| 2 | local `internalrpcauth` verifier проверяет mTLS, exact caller/target/full method/operation, permission, expiry и root actor/tenant/project provenance | transport передаёт домену только `VerifiedAuthorizationContext` |
-| 3 | stream interceptor до первого `Recv` резервирует один из двух slots и задаёт server-owned deadline `min(20s, authority expiry)`; metadata затем резервирует весь заявленный byte budget | stalled stream, trailing message/data и mismatch закрыто отклоняются, slot/bytes освобождаются |
-| 4 | policy adapter получает через local issuer server-owned continuation proof ABI 2 для root actor/tenant/project, request/correlation, source revision+digest/provenance, request digest и exact RPC | issuer атомарно подтверждает durable-accepted parent и резервирует child JTI; locator/echo не authority |
-| 5 | домен проверяет server-pinned `gpt-transcribe`, `ru`, limits и MP3/WAV frames/chunks | FLAC отклоняется: подменяемый STREAMINFO `total_samples` не доказывает frames |
-| 6 | credential adapter применяет тот же proof/locator contract и сверяет config/account/generation/expiry | #1024 выдаёт краткоживущий key; key очищается после вызова |
-| 7 | один `POST https://api.openai.com/v1/audio/transcriptions` идёт через exact egress proxy без автоматического retry | multipart состоит только из streaming file, `model=gpt-transcribe`, `language=ru` |
-| 8 | ответ содержит transcript и безопасный receipt | receipt не содержит transcript/audio/API key/grant |
+| Browser → gateway #1045 | session, CSRF/Origin, organization eligibility #1046, bounded upload | payload не назначает actor/organization/project |
+| Gateway → STT | exact mTLS, verifier, свежий stream authority, operation/permission `platform.stt.transcribe` | domain permission `stt.transcribe`; `platform.stt.use` не RPC permission |
+| STT → control-plane | continuation parent JTI, request digest, source revision/provenance, locator/echo | server-pinned policy, account/generation, limits |
+| Audio → FFmpeg | MIME allowlist, actual decode, byte/sample/deadline limits | длительность по PCM, не STREAMINFO/container duration |
+| STT → secret-broker | exact continuation, config/account/generation/expiry | краткоживущий key, очищаемый после запроса |
+| STT → OpenAI | один HTTPS POST через exact egress-gateway, TLS 1.3, без redirect/retry | bounded transcript и безопасный receipt |
 
-Success receipt содержит request/correlation, actor/tenant/project, authority
-source revision+digest, config revision+digest/model/language, provider account
-locator/credential generation и завершённый stage. Сервис не хранит state и не
-публикует domain event; повторный запрос получает новый authorization context.
+Project необязателен только когда отсутствует в проверенном authority.
+Переданный project обязан иметь полную provenance; пустой locator не разрешает
+доступ сам по себе. Изменения CP organization projection/authority принадлежат
+#1046, глобальный HTTP route/bootstrap — #1045.
 
-## Readiness и diagnostic
+Результат не сохраняется в БД, cache, object storage или audit. Domain events
+нет: авторитетный результат — единственный RPC response. Успех, отказ,
+cancel/deadline освобождают stream slot, byte reservation и ephemeral spool.
+Retry — новый явный запрос с новым authority; скрытых billable повторов нет.
 
-- `/healthz` подтверждает жизнь процесса;
-- `/readyz` и gRPC `CheckReadiness` проверяют только уже открытые local
-  listeners, локальный verifier, pinned config и writable bounded spool;
-- `/diagnostics/protected-path` и gRPC `CheckProtectedPath` отдельно сообщают
-  stage полного protected path и не участвуют в Kubernetes readiness;
-- diagnostic не вызывает projection RPC или OpenAI. Он подтверждает, что local
-  issuer обслуживает authority ABI 2; mismatch, stale snapshot или недоступный
-  sidecar закрыто возвращают stage `delegated_authority`.
+## Форматы
 
-Readiness не зависит от control-plane, secret-broker, DNS/egress или OpenAI и
-не утверждает готовность полного protected path.
+| Входной MIME | Нормализованный MIME / контейнер |
+| --- | --- |
+| audio/mpeg, audio/mp3, audio/mpga | audio/mpeg / MP3; расширения mp3/mpeg/mpga |
+| audio/wav, audio/x-wav, audio/wave | audio/wav / WAV |
+| audio/flac, audio/x-flac | audio/flac / FLAC |
+| audio/webm, video/webm | audio/webm / WebM |
+| audio/ogg, application/ogg | audio/ogg / Ogg |
+| audio/mp4, audio/m4a, audio/x-m4a, video/mp4 | audio/mp4 / M4A/MP4 |
 
-## Ресурсные и lifecycle-границы
+Разбор через `mime.ParseMediaType`; допускается только параметр
+`codecs=opus|vorbis|mp4a.40.2`. MIME не доказывает формат: FFmpeg проверяет
+контейнер и декодирует samples. Демультиплексоры/кодеки закрыты allowlist,
+входной protocol — только наследованный seekable `fd`, без file/HTTP/playlist.
+MP4 с moov в конце доступен без дополнительной production-копии файла.
+Matroska packet boundaries берутся из demuxer без повторного Opus parser;
+сам decoder всегда включён. Любая диагностика decoder приводит к отказу и
+не сохраняется: metadata может содержать пользовательский текст.
 
-- максимум одного файла — 25 MiB, одновременно — два stream и 50 MiB
-  зарезервированных audio bytes;
-- spool `emptyDir` — 64 MiB, Pod memory limit — 256 MiB;
-- deadline всего handler/upload/provider — `min(20 s, authority expiry)`, provider timeout — не более 15 s и не шире transport deadline;
-- shutdown budget — 30 s, Kubernetes grace — 35 s;
-- gRPC сначала выполняет deadline-aware `GracefulStop`, после deadline —
-  асинхронный `Stop` и bounded join обеих операций;
-- один provider effect, автоматического retry нет.
+Hard limits: 25 MiB на файл, два stream/50 MiB зарезервированных bytes,
+64 MiB memory-backed spool, 256 MiB container memory. Policy может сужать limits.
+Полный stream ограничен min(20 секунд, authority expiry), decode — 5 секунд
+внутри этого бюджета, provider — не более 15 секунд и всех expiry.
+PCM вывод не сохраняется; превышение sample budget отменяет и дожидается
+decoder. Shutdown 30 секунд, Kubernetes grace 35 секунд.
 
-## Наблюдаемость
+## Модель и параметры
 
-`kodex_stt_tts_service_grpc_streams_in_flight{operation}` и общие completed/
-duration stream-метрики учитывают весь RPC, включая ранний auth, malformed,
-admission и spool failure. Каждый stream получает server-owned correlation UUID
-для trace, безопасного error observation и success receipt. Correlation не
-является metric label. `kodex_stt_tts_service_transcription_stage_total{stage,error_class}` использует
-только закрытые stage `authority|policy|audio|credential|egress|provider|success`
-и error class `none|denied|invalid|unavailable|timeout|rejected`; неизвестные
-значения нормализуются в `unknown`. Логи и receipt не содержат audio,
-transcript, API key или authority grant.
+Рекомендуемый новый профиль: `gpt-transcribe`, `languages=[ru,en]`,
+пустые keywords/prompt, `temperature=0`, `response_format=json`, stream=false,
+10 MiB и 120 секунд. CP #1046 хранит параметры в immutable revision и передаёт
+`ResolveTranscriptionPolicyResponse.parameters`; upload их не принимает.
+Каталог адаптера включает `gpt-transcribe`, `gpt-4o-transcribe`,
+`gpt-4o-mini-transcribe`, документированный snapshot
+`gpt-4o-mini-transcribe-2025-12-15`, а `whisper-1` помечает legacy.
+Произвольные snapshots, diarization и realtime модели закрыто отклоняются.
 
-## Прямая provider smoke-проверка
+`modelprofile.Validate` проверяет конечный temperature 0..1, language hints,
+ограниченные prompt/keywords и совместимость. Только gpt-transcribe получает
+`languages[]`/`keywords[]`; остальные модели получают singular `language`.
+Старый policy language переводится в единственный languages[] для gpt-transcribe,
+но одновременное заполнение двух hints запрещено. Chunking допускает unset/auto
+для GPT, только unset для Whisper. Stream=true запрещён синхронным профилем
+MVP57, хотя каталог отдельно сообщает file-stream способность провайдера.
+Singular `language` для gpt-transcribe не отправляется. Ответ допускает
+`text`, `usage`, `languages`; unknown/trailing JSON закрыто отклоняется.
+Каталог возвращается адаптером в `availability.catalog`, содержит version,
+дату проверки официальной документации observed_at и server limits параметров.
+Это реестр совместимости, а не live account/model availability.
 
-`make test-stt-provider-smoke` проверяет только прямой OpenAI adapter и использует внешний
-`KODEX_STT_ACCEPTANCE_FIXTURE` (по умолчанию
-`/home/s/projects/matter-codex/.agents/mvp-finish/1-2-3-4-5.mp3`) и до live
-вызова требует exact SHA-256
-`56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e`.
-Credential для локального теста задаётся только
-`KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY`; без него после проверки checksum
-результат — честный `NOT RUN`.
+## Readiness и доступность микрофона
 
-Неактивный code-first launcher расположен в
-`deploy/k8s/base/stt-tts-service-provider-smoke`: Job использует тот же
-`egress-gateway`, внешний PVC fixture и Secret file без значения в Git,
-`backoffLimit: 0`. Его запуск требует отдельного owner OK и materialized
-fixture/Secret; в этом remediation deploy не выполняется.
+`/healthz` — процесс. `/readyz` и `CheckReadiness` — local runtime,
+issuer/verifier, decoder и writable spool, без удалённых вызовов.
+Обычные `/diagnostics/protected-path` и `CheckProtectedPath` не имеют
+user authority, поэтому не заявляют READY полного пути.
 
-Эта проверка не является end-to-end acceptance: она обходит gRPC, authority,
-policy и credential projection. Полная gRPC acceptance остаётся обязательной,
-но `NOT RUN` до materialization #1021; зависимость результата Issue #1020
-отслеживается в #1031, и provider smoke не может дать ей `PASS`.
+Gateway вызывает `sttapi.CheckAvailability(ctx, client)` через обычный
+защищённый client-stream `Transcribe`: единственное сообщение
+`availability_check: {}`, затем CloseAndRecv. Используется свежий authority
+того же пользователя/organization, без project для global/admin.
+Ответ — `availability {ready, stage, valid_until, catalog}`, без text/receipt.
 
-## Проверенные внешние документы
+Проверка получает реальные policy/credential projections и выполняет только
+`GET https://api.openai.com/v1/models/{selected-model}` через тот же provider
+HTTP client, exact TLS/egress, с общим бюджетом 5 секунд. Key очищается.
+GET подтверждает доступ к model metadata, но не качество транскрипции:
+для него всё равно обязателен отдельный live smoke.
+Cache availability не разделяется между users/organizations и истекает
+не позже min(authority, policy, credential expiry, 30 секунд).
+Любой отказ или отсутствие свежего результата скрывает микрофон.
 
-Проверены официальный OpenAI Audio Transcriptions create reference (endpoint,
-поддерживаемые форматы и параметры `file`, `model`, `language`), Context7
-`/grpc/grpc-go` для `GracefulStop`/`Stop` и Context7 Go standard library
-`/websites/pkg_go_dev_go1_25_3` для streaming `mime/multipart`/`net/http` body.
+## Проверки
+
+- `make test-stt-tts-service-contract`: оба profile render, key delivery,
+  exact network, Dockerfile check и Go tests.
+- `cd services/internal/stt-tts-service && GOWORK=off go test -race ./...`:
+  domain/security, decoder containers, mTLS protected fake integration,
+  continuation request binding, revoked authority/credential, timeout/no retry.
+- `go test ./internal/providersmoke -run TestFixturePreflight -v`:
+  embedded tracked fixture, 46364 bytes, SHA256
+  `56a17fd3675e5913e912c404a203bc1062daf3c3c1ec79d5210d20fe28539e8e`.
+- `stt-provider-smoke --fixture-only`: тот же portable preflight без ключа
+  и сети, включая реальный decoder в runtime image.
+- `testdata/capture-mediarecorder.cjs /absolute/disposable/directory`:
+  настоящий MediaRecorder Chromium/Firefox/WebKit записывает разрешённый
+  fixture через Web Audio; без hardware microphone и внешней сети.
+  `STT_PLAYWRIGHT_PACKAGE` — optional package.json установленного Playwright.
+  `KODEX_STT_MEDIARECORDER_FIXTURES` подключает записи к Go decoder test.
+  WebKit/Linux не выдаётся за Safari/macOS или Safari/iOS.
+
+`make test-stt-provider-smoke` без отдельного
+`KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY` — NOT RUN после успешного preflight.
+По умолчанию используется embedded tracked fixture, не абсолютный home path.
+Optional `KODEX_STT_ACCEPTANCE_FIXTURE` обязан иметь тот же size/SHA256.
+Live Job не входит в active profiles и требует отдельного owner OK.
+До staging live provider не вызывать без отдельного тестового ключа.
+
+## Проверенные документы
+
+- [OpenAI GPT-Transcribe](https://developers.openai.com/api/docs/models/gpt-transcribe).
+- [OpenAI File transcription](https://developers.openai.com/api/docs/guides/speech-to-text):
+  languages вместо language и JSON languages response.
+- [OpenAI Audio API](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+- Context7 `/websites/ffmpeg_documentation`: protocol whitelist, decode/error options.
+- Context7 `/microsoft/playwright`: Chromium/Firefox/WebKit launch/close.
+
+Live account/model access и распознавание проверяются отдельно, не выводятся
+из документации, Docker build или fake provider.

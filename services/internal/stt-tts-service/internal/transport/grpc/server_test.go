@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,6 +27,12 @@ import (
 )
 
 type fakeService struct{}
+
+func (fakeService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
+
+func (fakeService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
+	return transcriptionservice.Availability{}, errors.New("unavailable")
+}
 
 func (fakeService) Transcribe(context.Context, transcriptionservice.Input) (value.TranscriptionResult, error) {
 	return value.TranscriptionResult{}, nil
@@ -62,7 +70,8 @@ func (stream *fakeStream) RecvMsg(message any) error {
 	if !ok {
 		return errors.New("unexpected receive type")
 	}
-	*request = *stream.messages[stream.index]
+	proto.Reset(request)
+	proto.Merge(request, stream.messages[stream.index])
 	stream.index++
 	return nil
 }

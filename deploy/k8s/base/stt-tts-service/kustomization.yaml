@@ -9,6 +9,9 @@ resources:
   - poddisruptionbudget.yaml
   - servicemonitor.yaml
   - networkpolicy.yaml
+  - dependency-ingress.yaml
+  - key-delivery-rbac.yaml
+  - certificate.yaml
   - prometheusrule.yaml
 components:
   - ../../components/internal-rpc-authority-stt-tts-service-issuer
