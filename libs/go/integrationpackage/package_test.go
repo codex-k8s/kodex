@@ -15,7 +15,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 		t.Fatalf("LoadShipped() returned %d definitions; want 7", len(definitions))
 	}
 	github := definitions["github"]
-	if github.Digest == "" || github.Metadata.Version != "2.0.0" || github.Spec.Credential.SecretKey != "token" {
+	if github.Digest == "" || github.Metadata.Version != "2.1.0" || github.Spec.Credential.SecretKey != "token" {
 		t.Fatalf("GitHub definition metadata is incomplete: %#v", github)
 	}
 	for _, key := range []string{"github.repository.metadata.read", "github.issue.create", "github.issue.update"} {
@@ -32,6 +32,49 @@ func TestLoadShippedDefinitions(t *testing.T) {
 		if definition.Digest == "" || definition.Spec.HealthCheck.Operation == "" || len(definition.Spec.NetworkDestinations) == 0 {
 			t.Fatalf("definition %q does not have an executable boundary: %#v", key, definition.Spec)
 		}
+	}
+	for key, definition := range definitions {
+		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
+		if key == "mattermost" {
+			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
+				definition.Spec.ExecutionRoute != string(RouteInteraction) || definition.Spec.Readiness != string(ReadinessNotReady) {
+				t.Fatalf("Mattermost executable routing is invalid: %#v", definition.Spec)
+			}
+			continue
+		}
+		if !executable {
+			t.Fatalf("integration-gateway definition %q is not executable", key)
+		}
+	}
+}
+
+func TestParseRejectsAdapterRoutingMismatch(t *testing.T) {
+	t.Parallel()
+	base := shippedYAML["mattermost.yaml"]
+	for _, changed := range []string{
+		strings.Replace(base, "adapterOwner: interaction-gateway", "adapterOwner: integration-gateway", 1),
+		strings.Replace(base, "executionRoute: INTERACTION", "executionRoute: MANAGED_MCP", 1),
+		strings.Replace(base, "readiness: NOT_READY", "readiness: READY", 1),
+	} {
+		if _, err := Parse([]byte(changed)); err == nil {
+			t.Fatal("Parse() accepted mismatched adapter routing")
+		}
+	}
+}
+
+func TestInputSchemaDigestIsCanonicalAndClosed(t *testing.T) {
+	t.Parallel()
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability, _ := definitions["github"].Capability("github.issue.update")
+	schema, err := capability.InputSchema()
+	digest, digestErr := capability.InputSchemaDigest()
+	if err != nil || digestErr != nil || len(digest) != 64 ||
+		!strings.Contains(string(schema), `"additionalProperties":false`) ||
+		!strings.Contains(string(schema), `"issue_number"`) {
+		t.Fatalf("InputSchema() = %s, %q, %v, %v", schema, digest, err, digestErr)
 	}
 }
 

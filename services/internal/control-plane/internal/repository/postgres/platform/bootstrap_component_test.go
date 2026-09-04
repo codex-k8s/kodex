@@ -641,7 +641,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		"managed-integration-definition", command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.ManagedConfigurationInput{Name: "Synthetic managed definition",
-			ContentFormat: "JSON", Content: `{"name":"Synthetic managed definition","definition":{"key":"synthetic","version":"1.0.0","adapter":"synthetic","operations":[{"key":"synthetic.journal.read","operation":"READ_JOURNAL","risk":"READ","approval":"NONE","resourceKind":"SYNTHETIC_JOURNAL"}]}}`},
+			ContentFormat: "JSON", Content: string(asJSON(repository.integrationDefinitions["synthetic"]))},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref})
 	testIntegrationDefinitionRebindAuthority(t, ctx, repository, service, owner, integrationDefinition, *connection.Connection)
 	integrationReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -2370,120 +2370,38 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 
 func testOptionalInteractionIncident(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
+	_ = pool
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
 	}, "control-api-gateway")
-	runtimeWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim",
-	}, "runtime-controller")
-	interactionWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.deliveries.claim",
-	}, "interaction-gateway")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatalf("construct optional interaction service: %v", err)
 	}
-	project, err := service.Execute(ctx, command.Command{
-		Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-project-create"},
-		Payload: command.ProjectInput{Name: "Customer success", Purpose: "Prepare customer updates", Language: "en"},
-	})
-	if err != nil || project.Project == nil {
-		t.Fatalf("create interaction project: project=%#v err=%v", project.Project, err)
+	definitions, _, _, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{})
+	if err != nil {
+		t.Fatalf("list integration definitions: %v", err)
 	}
-	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "interaction-agent-create", "Customer success specialist")
+	var mattermost *entity.IntegrationDefinition
+	for index := range definitions {
+		if definitions[index].Key == "mattermost" {
+			mattermost = &definitions[index]
+			break
+		}
+	}
+	if mattermost == nil || mattermost.AdapterOwner != "interaction-gateway" ||
+		mattermost.ExecutionRoute != "INTERACTION" || mattermost.AdapterReadiness != "NOT_READY" {
+		t.Fatalf("Mattermost routing metadata is invalid: %#v", mattermost)
+	}
 	connection, err := service.Execute(ctx, command.Command{
 		Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-connection-create"},
 		Payload: command.ConnectionInput{DefinitionKey: "mattermost", Name: "Optional customer channel", PublicConfiguration: map[string]any{
 			"base_url": "https://mattermost.example.test", "team_name": "customer-success", "channel_name": "ai-results",
 		}},
 	})
-	if err != nil || connection.Connection == nil {
-		t.Fatalf("create Mattermost connection: connection=%#v err=%v", connection.Connection, err)
-	}
-	connection, err = service.Execute(ctx, command.Command{
-		Kind: command.ConfigureConnectionCredential, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "interaction-connection-credential", ExpectedVersion: &connection.Connection.Version},
-		Payload: command.ConnectionInput{Ref: connection.Connection.Ref, MaterializationRef: "interaction-mattermost-token", CredentialRevision: &entity.IntegrationCredentialRevision{
-			SecretRef: "kodex-system/kodex-integration-credentials#mattermost-token",
-			SecretUID: "30000000-0000-4000-8000-000000000001", SecretResourceVersion: "1",
-			ContentSHA256: strings.Repeat("a", 64),
-		}},
-	})
-	if err != nil || connection.Connection == nil {
-		t.Fatalf("configure Mattermost credential: connection=%#v err=%v", connection.Connection, err)
-	}
-	var connectedVersion int64
-	if err := pool.QueryRow(ctx, bootstrapComponentConnectIntegrationQuery, connection.Connection.Ref).Scan(&connectedVersion); err != nil {
-		t.Fatalf("materialize connected Mattermost fixture: %v", err)
-	}
-	granted, err := service.Execute(ctx, command.Command{
-		Kind: command.ChangeIntegrationGrant, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "interaction-notification-grant", ExpectedVersion: &connectedVersion},
-		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Connection.Ref, CapabilityKey: "mattermost.notifications", AgentRef: agent.Ref, Enabled: true},
-	})
-	if err != nil || granted.Connection == nil || len(granted.Connection.Grants) != 1 {
-		t.Fatalf("grant Mattermost notification: connection=%#v err=%v", granted.Connection, err)
-	}
-	launched, err := service.Execute(ctx, command.Command{
-		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "interaction-run-launch"},
-		Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Prepare account update", Task: "Prepare a concise account update.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}},
-	})
-	if err != nil || launched.Run == nil {
-		t.Fatalf("launch interaction run: run=%#v err=%v", launched.Run, err)
-	}
-	completed := claimAndCompleteRun(t, ctx, service, runtimeWorker, launched.Run.Ref, "interaction-run", false)
-	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
-		t.Fatalf("complete interaction run: run=%#v", completed.Run)
-	}
-	claims, err := service.ClaimInteractionDeliveries(ctx, interactionWorker, "interaction-component", 1)
-	if err != nil || len(claims) != 1 {
-		t.Fatalf("claim optional delivery: claims=%#v err=%v", claims, err)
-	}
-	claim := claims[0]
-	failed, err := service.Execute(ctx, command.Command{
-		Kind: command.CompleteInteractionDelivery, Principal: interactionWorker,
-		Mutation: value.Mutation{IdempotencyKey: "interaction-delivery-failed"},
-		Payload: command.InteractionDeliveryInput{
-			DeliveryRef: stringMap(claim, "deliveryRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"),
-			Generation: claim["generation"].(int64), Success: false, SafeErrorCode: "INTERACTION_UNAVAILABLE",
-		},
-	})
-	if err != nil || failed.Event == nil || failed.Event.Type != "INCIDENT_LINKED" || failed.Event.Delta.Incident == nil || failed.Event.Delta.Incident.CoreAffected {
-		t.Fatalf("record optional delivery incident: event=%#v err=%v", failed.Event, err)
-	}
-	readback, err := service.GetRun(ctx, owner, completed.Run.Ref)
-	if err != nil || readback.State != "SUCCEEDED" || len(readback.Incidents) != 1 || readback.Incidents[0].State != "RECOVERING" || readback.Incidents[0].CoreAffected {
-		t.Fatalf("optional failure changed core run or lost incident: run=%#v err=%v", readback, err)
-	}
-	events, sequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completed.Run.Ref, Limit: 100})
-	if err != nil || !complete || len(events) == 0 || events[len(events)-1].Type != "INCIDENT_LINKED" || events[len(events)-1].IncidentRef != readback.Incidents[0].Ref || sequence != events[len(events)-1].Sequence {
-		t.Fatalf("read incident from resumable stream: events=%#v sequence=%d complete=%v err=%v", events, sequence, complete, err)
-	}
-	if _, err := pool.Exec(ctx, bootstrapComponentMakeInteractionDeliveryDueQuery, stringMap(claim, "deliveryRef")); err != nil {
-		t.Fatalf("make failed delivery retryable: %v", err)
-	}
-	retryClaims, err := service.ClaimInteractionDeliveries(ctx, interactionWorker, "interaction-component", 1)
-	if err != nil || len(retryClaims) != 1 {
-		t.Fatalf("claim optional delivery retry: claims=%#v err=%v", retryClaims, err)
-	}
-	retry := retryClaims[0]
-	recovered, err := service.Execute(ctx, command.Command{
-		Kind: command.CompleteInteractionDelivery, Principal: interactionWorker,
-		Mutation: value.Mutation{IdempotencyKey: "interaction-delivery-recovered"},
-		Payload: command.InteractionDeliveryInput{
-			DeliveryRef: stringMap(retry, "deliveryRef"), LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"),
-			Generation: retry["generation"].(int64), Success: true, ExternalPostRef: "post-component-001",
-		},
-	})
-	if err != nil || recovered.Event == nil || recovered.Event.Delta.Incident == nil || recovered.Event.Delta.Incident.State != "RESOLVED" {
-		t.Fatalf("resolve optional delivery incident: event=%#v err=%v", recovered.Event, err)
-	}
-	readback, err = service.GetRun(ctx, owner, completed.Run.Ref)
-	if err != nil || readback.State != "SUCCEEDED" || len(readback.Incidents) != 1 || readback.Incidents[0].State != "RESOLVED" {
-		t.Fatalf("read recovered optional delivery: run=%#v err=%v", readback, err)
+	if err == nil || connection.Connection != nil {
+		t.Fatalf("generic Mattermost connection crossed owner route: connection=%#v err=%v", connection.Connection, err)
 	}
 }
 
@@ -2914,7 +2832,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"),
 		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.write",
 		"idempotency_key": "integration-effect-approved-invocation",
-	}, map[string]any{"value": "approved-value"})
+	}, map[string]any{"value": strings.Repeat("v", 3000)})
 	if err != nil || stringMap(resolved, "state") != "WAITING_APPROVAL" || stringMap(resolved, "gateRef") == "" {
 		t.Fatalf("resolve protected invocation: result=%#v err=%v", resolved, err)
 	}
@@ -2935,7 +2853,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("claim approved effect: claims=%#v err=%v", claims, err)
 	}
 	claim := claims[0]
-	resultSummary := `{"journal":"effect-main","effect_key":"` + stringMap(claim, "effectKey") + `","sequence":1,"value":"approved-value","count":1}`
+	resultSummary := `{"journal":"effect-main","effect_key":"` + stringMap(claim, "effectKey") + `","sequence":1,"value":"` + strings.Repeat("v", 3000) + `","count":1}`
 	responseDigest := sha256.Sum256([]byte(resultSummary))
 	completion := command.IntegrationInvocationInput{
 		InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"),
@@ -2962,8 +2880,8 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	if _, err := service.Execute(ctx, command.Command{
 		Kind: command.CompleteIntegrationInvocation, Principal: gateway,
 		Mutation: value.Mutation{IdempotencyKey: "integration-effect-complete-mismatch"}, Payload: mismatch,
-	}); !errors.Is(err, domainerrs.ErrForbidden) {
-		t.Fatalf("mismatched effect receipt error=%v, want forbidden", err)
+	}); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatalf("mismatched effect receipt error=%v, want invalid", err)
 	}
 	var receiptCount int
 	if err := pool.QueryRow(ctx, bootstrapComponentEffectReceiptCountQuery, stringMap(claim, "effectKey")).Scan(&receiptCount); err != nil || receiptCount != 1 {
@@ -2972,6 +2890,73 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	afterCompletion, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
 	if err != nil || len(afterCompletion) != 0 {
 		t.Fatalf("claim completed effect retry: claims=%#v err=%v", afterCompletion, err)
+	}
+	largeReadback, err := service.GetIntegrationInvocation(ctx, runtimeWorker, stringMap(claim, "invocationRef"))
+	if err != nil || stringMap(largeReadback, "resultSummary") != resultSummary {
+		t.Fatalf("typed result was truncated: %v", err)
+	}
+	for _, expire := range []bool{false, true} {
+		key := fmt.Sprintf("integration-unknown-%t", expire)
+		unknown, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
+			"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"),
+			"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.write", "idempotency_key": key,
+		}, map[string]any{"value": key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key + "-approve", ExpectedVersion: &gateVersion},
+			Payload:  command.GateResolutionInput{GateRef: stringMap(unknown, "gateRef"), Decision: "APPROVE"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "unknown-component", 1)
+		if err != nil || len(claims) != 1 {
+			t.Fatalf("unknown claim: count=%d err=%v", len(claims), err)
+		}
+		claim := claims[0]
+		if expire {
+			_, err = pool.Exec(ctx, `UPDATE control_plane.integration_invocations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE ref=$1`, stringMap(claim, "invocationRef"))
+		} else {
+			_, err = service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,
+				Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.IntegrationInvocationInput{
+					InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"),
+					Generation: claim["generation"].(int64), UnknownOutcome: true, SafeErrorCode: "INTEGRATION_OUTCOME_UNKNOWN",
+				}})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for attempt := 0; attempt < 2; attempt++ {
+			claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "replacement-worker", 1)
+			if err != nil || len(claims) != 0 {
+				t.Fatalf("unknown outcome was reclaimed: %d, %v", len(claims), err)
+			}
+		}
+		readback, err := service.GetIntegrationInvocation(ctx, runtimeWorker, stringMap(unknown, "invocationRef"))
+		if err != nil || stringMap(readback, "state") != "UNKNOWN_OUTCOME" || stringMap(readback, "effectReceiptRef") != "" {
+			t.Fatalf("unknown durable readback: %#v %v", readback, err)
+		}
+	}
+	_, err = service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{
+		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"),
+		"connection_ref": created.Connection.Ref, "capability_key": "synthetic.journal.read", "idempotency_key": "integration-revoked-queued",
+	}, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection, err := service.GetIntegrationConnection(ctx, owner, created.Connection.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-revoke-before-claim", ExpectedVersion: &connection.Version},
+		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "synthetic.journal.read", AgentRef: agent.Ref, Enabled: false}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "revoked-component", 1); err != nil || len(claims) != 0 {
+		t.Fatalf("revoked grant claimed: %d %v", len(claims), err)
 	}
 	run, err := service.GetRun(ctx, owner, launched.Run.Ref)
 	if err != nil {

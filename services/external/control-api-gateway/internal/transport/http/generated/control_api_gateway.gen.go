@@ -1161,6 +1161,60 @@ func (e IntegrationDefinitionAdapter) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationDefinitionAdapterOwner.
+const (
+	IntegrationGateway IntegrationDefinitionAdapterOwner = "integration-gateway"
+	InteractionGateway IntegrationDefinitionAdapterOwner = "interaction-gateway"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionAdapterOwner enum.
+func (e IntegrationDefinitionAdapterOwner) Valid() bool {
+	switch e {
+	case IntegrationGateway:
+		return true
+	case InteractionGateway:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionAdapterReadiness.
+const (
+	IntegrationDefinitionAdapterReadinessNOTREADY IntegrationDefinitionAdapterReadiness = "NOT_READY"
+	IntegrationDefinitionAdapterReadinessREADY    IntegrationDefinitionAdapterReadiness = "READY"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionAdapterReadiness enum.
+func (e IntegrationDefinitionAdapterReadiness) Valid() bool {
+	switch e {
+	case IntegrationDefinitionAdapterReadinessNOTREADY:
+		return true
+	case IntegrationDefinitionAdapterReadinessREADY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionExecutionRoute.
+const (
+	INTERACTION IntegrationDefinitionExecutionRoute = "INTERACTION"
+	MANAGEDMCP  IntegrationDefinitionExecutionRoute = "MANAGED_MCP"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionExecutionRoute enum.
+func (e IntegrationDefinitionExecutionRoute) Valid() bool {
+	switch e {
+	case INTERACTION:
+		return true
+	case MANAGEDMCP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationDefinitionOrigin.
 const (
 	SHIPPED IntegrationDefinitionOrigin = "SHIPPED"
@@ -3782,25 +3836,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	CLEAN       ListArtifactsParamsScanState = "CLEAN"
-	FAILED      ListArtifactsParamsScanState = "FAILED"
-	PENDING     ListArtifactsParamsScanState = "PENDING"
-	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	SCANNING    ListArtifactsParamsScanState = "SCANNING"
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case CLEAN:
+	case ListArtifactsParamsScanStateCLEAN:
 		return true
-	case FAILED:
+	case ListArtifactsParamsScanStateFAILED:
 		return true
-	case PENDING:
+	case ListArtifactsParamsScanStatePENDING:
 		return true
-	case QUARANTINED:
+	case ListArtifactsParamsScanStateQUARANTINED:
 		return true
-	case SCANNING:
+	case ListArtifactsParamsScanStateSCANNING:
 		return true
 	default:
 		return false
@@ -4725,24 +4779,36 @@ type IntegrationCredentialInput struct {
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Adapter             IntegrationDefinitionAdapter    `json:"adapter"`
-	Available           bool                            `json:"available"`
-	BuiltIn             bool                            `json:"builtIn"`
-	Capabilities        []IntegrationCapability         `json:"capabilities"`
-	Category            string                          `json:"category"`
-	ConfigurationFields []IntegrationConfigurationField `json:"configurationFields"`
-	CredentialSecretKey *string                         `json:"credentialSecretKey,omitempty"`
-	DefinitionVersion   string                          `json:"definitionVersion"`
-	Description         string                          `json:"description"`
-	Digest              string                          `json:"digest"`
-	Key                 string                          `json:"key"`
-	Name                string                          `json:"name"`
-	Origin              IntegrationDefinitionOrigin     `json:"origin"`
-	SchemaVersion       string                          `json:"schemaVersion"`
+	Adapter             IntegrationDefinitionAdapter          `json:"adapter"`
+	AdapterOwner        IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
+	AdapterReadiness    IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
+	Available           bool                                  `json:"available"`
+	BuiltIn             bool                                  `json:"builtIn"`
+	Capabilities        []IntegrationCapability               `json:"capabilities"`
+	Category            string                                `json:"category"`
+	ConfigurationFields []IntegrationConfigurationField       `json:"configurationFields"`
+	CredentialSecretKey *string                               `json:"credentialSecretKey,omitempty"`
+	DefinitionVersion   string                                `json:"definitionVersion"`
+	Description         string                                `json:"description"`
+	Digest              string                                `json:"digest"`
+	ExecutionRoute      IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
+	Key                 string                                `json:"key"`
+	Name                string                                `json:"name"`
+	Origin              IntegrationDefinitionOrigin           `json:"origin"`
+	SchemaVersion       string                                `json:"schemaVersion"`
 }
 
 // IntegrationDefinitionAdapter defines model for IntegrationDefinition.Adapter.
 type IntegrationDefinitionAdapter string
+
+// IntegrationDefinitionAdapterOwner defines model for IntegrationDefinition.AdapterOwner.
+type IntegrationDefinitionAdapterOwner string
+
+// IntegrationDefinitionAdapterReadiness defines model for IntegrationDefinition.AdapterReadiness.
+type IntegrationDefinitionAdapterReadiness string
+
+// IntegrationDefinitionExecutionRoute defines model for IntegrationDefinition.ExecutionRoute.
+type IntegrationDefinitionExecutionRoute string
 
 // IntegrationDefinitionOrigin defines model for IntegrationDefinition.Origin.
 type IntegrationDefinitionOrigin string

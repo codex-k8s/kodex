@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: synthetic
-  version: 3.0.0
+  version: 3.1.0
   origin: SHIPPED
 spec:
   name: Synthetic HTTP
   description: Детерминированная HTTP-интеграция для проверки read/write lifecycle без внешнего провайдера.
   category: testing
   adapter: SYNTHETIC_HTTP
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   configurationFields:
     - key: journal
       type: STRING
@@ -62,7 +65,7 @@ spec:
         - {key: journal, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
         - {key: effect_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
         - {key: sequence, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: value, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
+        - {key: value, type: STRING, format: PLAIN, required: false, maximumLength: 4096}
         - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 1}
       execution:
         idempotency: PROVIDER_NATIVE

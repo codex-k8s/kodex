@@ -793,7 +793,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if err != nil || len(encodedInput) > 64<<10 {
 		return nil, errs.ErrInvalid
 	}
-	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID string
+	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef string
 	var definitionKey, definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, resourceScopeDigest string
 	var encodedScope []byte
 	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef,
@@ -801,12 +801,17 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	).Scan(
 		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
 		&definitionKey, &definitionVersion, &definitionDigest, &risk, &approvalPolicy,
-		&resourceKind, &encodedScope, &resourceScopeDigest,
+		&resourceKind, &encodedScope, &resourceScopeDigest, &initiatorRef,
 	)
 	if err != nil {
 		if serializableTransactionConflict(err) {
 			return nil, serializableTransactionError(err, errs.ErrUnavailable)
 		}
+		return nil, errs.ErrForbidden
+	}
+	initiatorScope := scope
+	initiatorScope.actorRef = initiatorRef
+	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); err != nil {
 		return nil, errs.ErrForbidden
 	}
 	definition, exists := repository.integrationDefinitions[definitionKey]
@@ -914,6 +919,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	}
 	type candidate struct {
 		id, ref, connectionRef, definitionKey, capabilityKey                 string
+		initiatorRef                                                         string
 		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
 		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
 		generation                                                           int64
@@ -931,7 +937,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.resourceKind, &item.resourceScope, &item.resourceScopeDigest, &item.effectKey,
 			&item.inputDigest, &item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
-			&item.credentialCreatedAt,
+			&item.credentialCreatedAt, &item.initiatorRef,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -944,6 +950,11 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	}
 	result := make([]map[string]any, 0, len(candidates))
 	for _, item := range candidates {
+		initiatorScope := scope
+		initiatorScope.actorRef = item.initiatorRef
+		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
+			continue
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("eff")
 		digest := sha256.Sum256([]byte(fence))
@@ -999,11 +1010,19 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if payload.Success && (payload.SafeErrorCode != "" || payload.EffectKey == "" || payload.InputDigest == "" ||
-		payload.ProviderEffectRef == "" || len(payload.ResponseDigest) != sha256.Size*2 || payload.ResultSummary == "") ||
+	if payload.Success && payload.UnknownOutcome || payload.UnknownOutcome != (payload.SafeErrorCode == "INTEGRATION_OUTCOME_UNKNOWN") ||
+		len(payload.ResultSummary) > 64<<10 ||
+		payload.Success && (payload.SafeErrorCode != "" || payload.EffectKey == "" || payload.InputDigest == "" ||
+			payload.ProviderEffectRef == "" || len(payload.ResponseDigest) != sha256.Size*2 || payload.ResultSummary == "") ||
 		!payload.Success && (!safeIntegrationErrorCode(payload.SafeErrorCode) || payload.EffectKey != "" ||
 			payload.InputDigest != "" || payload.ProviderEffectRef != "" || payload.ResponseDigest != "") {
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	if payload.Success {
+		digest := sha256.Sum256([]byte(payload.ResultSummary))
+		if hex.EncodeToString(digest[:]) != payload.ResponseDigest {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 	}
 	var invocationID, runID, rootRunID, projectID, projectRef, nodeRef, storedDigest, state, leaseRef string
 	var effectKey, inputDigest, receiptRef, receiptEffectKey, receiptInputDigest string
@@ -1021,7 +1040,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	if state == "SUCCEEDED" && payload.Success && receiptRef != "" &&
 		receiptEffectKey == payload.EffectKey && receiptInputDigest == payload.InputDigest &&
 		receiptProviderRef == payload.ProviderEffectRef && receiptResponseDigest == payload.ResponseDigest &&
-		receiptResult == truncate(payload.ResultSummary, 2000) {
+		receiptResult == payload.ResultSummary {
 		runRef, runErr := mustRunRef(ctx, tx, runID)
 		if runErr != nil {
 			return commandOutcome{}, runErr
@@ -1039,7 +1058,9 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	next := "SUCCEEDED"
-	if !payload.Success {
+	if payload.UnknownOutcome {
+		next = "UNKNOWN_OUTCOME"
+	} else if !payload.Success {
 		next = "FAILED"
 	}
 	var receiptID any
@@ -1049,7 +1070,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		var storedReceiptID string
 		if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationInsertEffectReceipt,
 			generatedReceiptRef, scope.organizationID, invocationID, payload.EffectKey, payload.InputDigest,
-			truncate(payload.ProviderEffectRef, 256), payload.ResponseDigest, truncate(payload.ResultSummary, 2000),
+			truncate(payload.ProviderEffectRef, 256), payload.ResponseDigest, payload.ResultSummary,
 		).Scan(&storedReceiptID, &storedReceiptRef); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return commandOutcome{}, errs.ErrConflict
@@ -1059,7 +1080,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		receiptID = storedReceiptID
 	}
 	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationinvocationUpdateIntegrationInvocationsStateResultSummarySafeErrorCode,
-		invocationID, next, truncate(payload.ResultSummary, 2000), truncate(payload.SafeErrorCode, 100), receiptID,
+		invocationID, next, payload.ResultSummary, truncate(payload.SafeErrorCode, 100), receiptID,
 	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -1080,7 +1101,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 
 func safeIntegrationErrorCode(code string) bool {
 	switch code {
-	case "INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED", "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_RESPONSE_INVALID":
+	case "INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED", "INTEGRATION_ROUTE_NOT_OWNED", "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_RESPONSE_INVALID", "INTEGRATION_OUTCOME_UNKNOWN":
 		return true
 	default:
 		return false

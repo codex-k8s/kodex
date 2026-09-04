@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: mattermost
-  version: 2.0.0
+  version: 2.1.0
   origin: SHIPPED
 spec:
   name: Mattermost
   description: Необязательное подключение каналов, принадлежащее interaction-gateway и не влияющее на core readiness.
   category: communications
   adapter: MATTERMOST_INTERACTION
+  adapterOwner: interaction-gateway
+  executionRoute: INTERACTION
+  readiness: NOT_READY
   credential:
     secretKey: token
     kind: TOKEN

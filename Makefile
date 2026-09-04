@@ -147,6 +147,19 @@ gen-integration-packages: check-go-toolchain
 		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
 	@gofmt -w libs/go/integrationpackage/shipped_gen.go
 
+.PHONY: gen-email-bridge check-email-bridge-codegen
+.PHONY: test-integration-gateway-render
+test-integration-gateway-render:
+	@bash scripts/tests/integration-gateway-render-test.sh
+
+gen-email-bridge: check-openapi-toolchain
+	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+
+check-email-bridge-codegen: check-openapi-toolchain
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+		oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o "$$tmp" contracts/openapi/email-bridge/v1/openapi.yaml; \
+		cmp services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go "$$tmp"
+
 check-integration-package-codegen: check-go-toolchain
 	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
 		cd libs/go/integrationpackage && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/packagegen \

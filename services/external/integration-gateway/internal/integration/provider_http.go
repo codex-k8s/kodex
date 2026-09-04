@@ -22,6 +22,8 @@ type providerCall struct {
 	Body                                                   any
 	Credential                                             *CredentialRevision
 	Capability                                             integrationpackage.Capability
+	MultipartBody                                          []byte
+	MultipartType                                          string
 }
 
 func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]byte, error) {
@@ -42,11 +44,18 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 		}
 	}
+	if call.MultipartBody != nil {
+		if call.Body != nil || len(call.MultipartBody) > maximumResponseBytes {
+			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		body = call.MultipartBody
+	}
 	attempts := call.Capability.Execution.MaxAttempts
 	if attempts < 1 {
 		attempts = 1
 	}
-	if call.Method != http.MethodGet && call.Method != http.MethodHead && call.Capability.Execution.Idempotency != "PROVIDER_NATIVE" {
+	mutation := call.Method != http.MethodGet && call.Method != http.MethodHead
+	if mutation {
 		attempts = 1
 	}
 	timeout := time.Duration(call.Capability.Execution.TimeoutSeconds) * time.Second
@@ -74,6 +83,10 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
 		}
+		if call.MultipartBody != nil {
+			request.Header.Set("Content-Type", call.MultipartType)
+			request.Header.Set("X-Atlassian-Token", "nocheck")
+		}
 		switch call.AuthScheme {
 		case "BEARER":
 			request.Header.Set("Authorization", "Bearer "+string(credential))
@@ -90,10 +103,21 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 		if call.EffectKey != "" {
 			request.Header.Set("Idempotency-Key", call.EffectKey)
 		}
+		// Запрещаем неявный повтор Transport даже при provider-native effect key.
+		if mutation {
+			request.GetBody = nil
+			request.Body = io.NopCloser(bytes.NewReader(body))
+			if len(body) == 0 {
+				request.ContentLength = -1
+			}
+		}
 
 		response, responseErr := adapter.providerHTTPClient.Do(request)
 		if responseErr != nil {
 			cancel()
+			if mutation {
+				return nil, &UnknownOutcomeError{}
+			}
 			if attempt < attempts && waitProviderRetry(ctx, call.Capability, attempt, "") {
 				continue
 			}
@@ -103,10 +127,16 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 		_ = response.Body.Close()
 		cancel()
 		if readErr != nil {
+			if mutation && response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+				return nil, &UnknownOutcomeError{}
+			}
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
 			return responseBody, nil
+		}
+		if mutation && response.StatusCode >= http.StatusInternalServerError {
+			return nil, &UnknownOutcomeError{}
 		}
 		if attempt < attempts && retryableProviderStatus(response.StatusCode) &&
 			waitProviderRetry(ctx, call.Capability, attempt, response.Header.Get("Retry-After")) {
@@ -135,8 +165,20 @@ func retryableProviderStatus(status int) bool {
 
 func waitProviderRetry(ctx context.Context, capability integrationpackage.Capability, attempt int, retryAfter string) bool {
 	delay := time.Duration(capability.Execution.RetryBackoffMilliseconds) * time.Millisecond * time.Duration(attempt)
-	if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 && seconds <= 2 {
-		delay = time.Duration(seconds) * time.Second
+	if retryAfter != "" {
+		if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 {
+			if seconds > 2 {
+				return false
+			}
+			delay = time.Duration(seconds) * time.Second
+		} else if until, err := http.ParseTime(retryAfter); err == nil {
+			delay = time.Until(until)
+			if delay > 2*time.Second {
+				return false
+			}
+		} else {
+			return false
+		}
 	}
 	if delay < 50*time.Millisecond {
 		delay = 50 * time.Millisecond

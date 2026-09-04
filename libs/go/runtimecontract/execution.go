@@ -34,6 +34,7 @@ var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9
 var imageDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-(?:core-v[1-9][0-9]*|runtime-[a-f0-9]{64})$`)
 var workflowStepKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$`)
+var integrationDefinitionVersionPattern = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9]+$`)
 
 // RuntimeTLSBinding описывает точную mTLS-границу callback runtime-controller.
 type RuntimeTLSBinding struct {
@@ -71,6 +72,11 @@ type RunnerIntegrationGrant struct {
 	CapabilityName        string `json:"capability_name"`
 	CapabilityDescription string `json:"capability_description"`
 	Risk                  string `json:"risk"`
+	DefinitionVersion     string `json:"definition_version"`
+	DefinitionDigest      string `json:"definition_digest"`
+	Operation             string `json:"operation"`
+	InputSchema           string `json:"input_schema"`
+	InputSchemaSHA256     string `json:"input_schema_sha256"`
 }
 
 // RunnerAssistantContext — безопасный route/resource snapshot, который
@@ -397,6 +403,9 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 			grant.CapabilityKey == "" || len(grant.CapabilityKey) > 255 ||
 			grant.CapabilityName == "" || len(grant.CapabilityName) > 160 ||
 			len(grant.CapabilityDescription) > 2000 ||
+			!integrationDefinitionVersionPattern.MatchString(grant.DefinitionVersion) || !sha256Pattern.MatchString(grant.DefinitionDigest) ||
+			grant.Operation == "" || len(grant.Operation) > 255 || !sha256Pattern.MatchString(grant.InputSchemaSHA256) ||
+			!validIntegrationInputSchema(grant.InputSchema, grant.InputSchemaSHA256) ||
 			!containsString([]string{"READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"}, grant.Risk) {
 			return false
 		}
@@ -411,6 +420,20 @@ func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {
 		bindings[binding] = struct{}{}
 	}
 	return true
+}
+
+func validIntegrationInputSchema(raw, expectedDigest string) bool {
+	if len(raw) == 0 || len(raw) > 64<<10 || !json.Valid([]byte(raw)) {
+		return false
+	}
+	var schema map[string]any
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&schema) != nil || schema["type"] != "object" || schema["additionalProperties"] != false {
+		return false
+	}
+	digest := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(digest[:]) == expectedDigest
 }
 
 func validCapabilities(capabilities []string) bool {

@@ -125,6 +125,13 @@ repository не имеют default и всегда задаются Connection c
 
 ## Поддерживаемый deployed local E2E
 
+После #1028 crash-window mutation больше не возвращается в очередь:
+просроченная mutation lease становится `UNKNOWN_OUTCOME`. Старый deployed
+replay-сценарий ниже описывает прежнюю семантику и не является acceptance
+нового профиля. Он не запускался в рамках #1028. Актуальные targeted
+сценарии и запрет повторного эффекта описаны в
+[`OPS-INT-1028`](../operations/integration-gateway-1028.md).
+
 Отдельный entrypoint `scripts/tests/integration-deployed-e2e.sh` проверяет
 развёрнутый local path, не подменяя `integration-gateway` прямым provider
 вызовом. Сценарий создаёт одноразовые Project, Agent и Connection через

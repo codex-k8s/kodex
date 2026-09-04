@@ -1,7 +1,9 @@
 package revision
 
 import (
+	"encoding/json"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"testing"
 )
 
@@ -26,7 +28,15 @@ func TestValidateRejectsMultipleYAMLDocuments(t *testing.T) {
 }
 
 func TestValidateTypedIntegrationRegistry(t *testing.T) {
-	content := `{"name":"GitHub","definition":{"key":"github","version":"1.0.0","adapter":"github","operations":[{"key":"issues.create","operation":"CREATE_ISSUE","risk":"WRITE","approval":"HUMAN_EACH_EFFECT","resourceKind":"GITHUB_REPOSITORY"}]}}`
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(definitions["github"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
 	digest, diagnostics, err := Validate(KindIntegrationDefinition, "JSON", content)
 	if err != nil || len(diagnostics) != 0 || len(digest) != 64 {
 		t.Fatalf("typed integration definition rejected: digest=%q diagnostics=%#v err=%v", digest, diagnostics, err)
@@ -45,5 +55,22 @@ func TestValidateSTTContainsNoCredentialValue(t *testing.T) {
 	invalid := `{"name":"System STT","stt":{"providerAccountRef":"pacc_example","model":"whisper-1","language":"ru","permissionKey":"platform.stt.use","apiKey":"secret"}}`
 	if _, _, err := Validate(KindSystemSTT, "JSON", invalid); !errors.Is(err, ErrInvalid) {
 		t.Fatal("credential field was accepted")
+	}
+}
+
+func TestIntegrationRevisionRequiresExactRegisteredReadyPackage(t *testing.T) {
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"github", "mattermost"} {
+		definition := definitions[key]
+		if key == "github" {
+			definition.Metadata.Version = "99.0.0"
+		}
+		raw, _ := json.Marshal(definition)
+		if _, _, err := Validate(KindIntegrationDefinition, "JSON", string(raw)); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("unregistered/unready definition accepted: %s", key)
+		}
 	}
 }

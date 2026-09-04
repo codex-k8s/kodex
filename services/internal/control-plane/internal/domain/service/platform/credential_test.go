@@ -31,7 +31,7 @@ func (repository *integrationCredentialRepository) ResolvePrincipal(_ context.Co
 func (repository *integrationCredentialRepository) GetIntegrationConnection(_ context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
 	repository.readPrincipal = principal
 	return entity.IntegrationConnection{
-		Ref: ref, Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
+		Ref: ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 	}, nil
 }
 

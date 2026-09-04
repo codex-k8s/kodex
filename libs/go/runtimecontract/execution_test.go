@@ -1,6 +1,8 @@
 package runtimecontract
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 )
@@ -94,10 +96,14 @@ func TestRunnerInputAcceptsImmutableSystemRuntimeRevision(t *testing.T) {
 func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	valid := validRunnerInputFixture()
 	valid.SessionContext = []RunnerSessionMessage{{Role: "USER", Content: "bounded context"}}
+	inputSchema := `{"additionalProperties":false,"properties":{},"required":[],"type":"object"}`
+	inputSchemaDigest := sha256.Sum256([]byte(inputSchema))
 	valid.IntegrationGrants = []RunnerIntegrationGrant{{
 		Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "crm",
 		ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM",
-		CapabilityDescription: "Read bounded CRM records.", Risk: "READ",
+		CapabilityDescription: "Read bounded CRM records.", Risk: "READ", DefinitionVersion: "1.2.3",
+		DefinitionDigest: strings.Repeat("8", 64), Operation: "crm.records.read", InputSchema: inputSchema,
+		InputSchemaSHA256: hex.EncodeToString(inputSchemaDigest[:]),
 	}}
 	valid.Capabilities = []string{"crm.read"}
 	refreshRunnerInputBindings(&valid)

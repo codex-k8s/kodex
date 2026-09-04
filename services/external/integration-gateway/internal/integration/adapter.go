@@ -64,6 +64,15 @@ type SafeError struct{ Code string }
 
 func (err *SafeError) Error() string { return err.Code }
 
+type UnknownOutcomeError struct{}
+
+func (*UnknownOutcomeError) Error() string { return "INTEGRATION_OUTCOME_UNKNOWN" }
+
+func IsUnknownOutcome(err error) bool {
+	var unknown *UnknownOutcomeError
+	return errors.As(err, &unknown)
+}
+
 type Adapter struct {
 	credentials        *credentialfs.Store
 	definitions        map[string]integrationpackage.Package
@@ -107,7 +116,7 @@ func New(config Config) (*Adapter, error) {
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
 	return &Adapter{
 		credentials: credentials, definitions: definitions,
-		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout},
+		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{
 			Transport: providerTransport,
@@ -184,6 +193,9 @@ func Outcome(err error) (bool, string) {
 	if errors.As(err, &safe) {
 		return false, safe.Code
 	}
+	if IsUnknownOutcome(err) {
+		return false, "INTEGRATION_OUTCOME_UNKNOWN"
+	}
 	return false, "INTEGRATION_UNAVAILABLE"
 }
 
@@ -196,28 +208,22 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	switch definition.Spec.Adapter {
-	case "SYNTHETIC_HTTP":
-		_, err = adapter.callSynthetic(ctx, http.MethodGet, "/v1/journals/"+url.PathEscape(configuration["journal"]), "", nil)
-	case "GITHUB":
-		client, cleanup, clientErr := adapter.githubClient(ctx, request.Credential)
-		if clientErr != nil {
-			return "", clientErr
-		}
-		defer cleanup()
-		_, response, providerErr := client.Repositories.Get(ctx, configuration["owner"], configuration["repository"])
-		err = githubError(response, providerErr)
-	case "GITLAB":
-		err = adapter.testGitLab(ctx, request, configuration)
-	case "JIRA":
-		err = adapter.testJira(ctx, request, configuration)
-	case "CONFLUENCE":
-		err = adapter.testConfluence(ctx, request, configuration)
-	case "EMAIL_HTTPS":
-		err = adapter.testEmail(ctx, request, configuration)
-	default:
-		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	capability, ok := definition.Capability(definition.Spec.HealthCheck.Operation)
+	if !ok {
+		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
+	request.CapabilityKey, request.Operation = capability.Key, capability.Operation
+	request.Risk, request.ApprovalPolicy = capability.Risk, capability.ApprovalPolicy
+	request.ResourceKind = capability.ResourceScope.Kind
+	request.ResourceScope, err = capability.ResourceScopeValues(configuration)
+	if err != nil {
+		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	scopeJSON, _ := json.Marshal(request.ResourceScope)
+	scopeDigest, inputDigest := sha256.Sum256(scopeJSON), sha256.Sum256([]byte("{}"))
+	request.ResourceScopeDigest, request.InputDigest = hex.EncodeToString(scopeDigest[:]), hex.EncodeToString(inputDigest[:])
+	request.Input, request.EffectKey = map[string]any{}, "health-check"
+	_, err = adapter.Execute(ctx, request)
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 }
 
@@ -231,7 +237,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	case "SYNTHETIC_HTTP":
 		result, err = adapter.executeSynthetic(ctx, request, configuration, canonicalInput)
 	case "GITHUB":
-		result, err = adapter.executeGitHub(ctx, request, configuration, canonicalInput)
+		result, err = adapter.executeGitHub(ctx, request, capability, configuration, canonicalInput)
 	case "GITLAB":
 		result, err = adapter.executeGitLab(ctx, request, capability, configuration, canonicalInput)
 	case "JIRA":
@@ -244,10 +250,18 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
 	if err != nil {
+		var safe *SafeError
+		if capability.Risk != "READ" && errors.As(err, &safe) &&
+			(safe.Code == "INTEGRATION_UNAVAILABLE" || safe.Code == "INTEGRATION_RESPONSE_INVALID") {
+			return Result{}, &UnknownOutcomeError{}
+		}
 		return Result{}, err
 	}
 	canonicalOutput, err := capability.ValidateOutput([]byte(result.Summary))
 	if err != nil {
+		if capability.Risk != "READ" {
+			return Result{}, &UnknownOutcomeError{}
+		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	result.Summary = string(canonicalOutput)
@@ -256,6 +270,9 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	if capability.Operation != request.Operation || result.Receipt.EffectKey != request.EffectKey ||
 		result.Receipt.InputDigest != request.InputDigest || result.Receipt.ProviderEffectRef == "" ||
 		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > maximumResponseBytes {
+		if capability.Risk != "READ" {
+			return Result{}, &UnknownOutcomeError{}
+		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return result, nil
@@ -265,6 +282,9 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	definition, exists := adapter.definitions[request.DefinitionKey]
 	if !exists || definition.Metadata.Version != request.DefinitionVersion || definition.Digest != request.DefinitionDigest {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
 	}
 	if (definition.Spec.Credential == nil) != (request.Credential == nil) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
@@ -315,11 +335,16 @@ func (adapter *Adapter) validateInvocation(request Request) (
 func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	journal := configuration["journal"]
 	path := "/v1/journals/" + url.PathEscape(journal)
-	method, effectKey, body := http.MethodGet, request.EffectKey, []byte(nil)
+	method, effectKey, body := http.MethodGet, "", []byte(nil)
 	if request.Operation == "synthetic.journal.write" {
-		method, path, body = http.MethodPost, path+"/entries", canonicalInput
+		method, path, effectKey, body = http.MethodPost, path+"/entries", request.EffectKey, canonicalInput
 	}
 	response, err := adapter.callSynthetic(ctx, method, path, effectKey, body)
+	if IsUnknownOutcome(err) && request.Operation == "synthetic.journal.write" {
+		if reconciled, reconcileErr := adapter.callSynthetic(ctx, http.MethodGet, "/v1/journals/"+url.PathEscape(journal), request.EffectKey, nil); reconcileErr == nil {
+			response, err = reconciled, nil
+		}
+	}
 	if err != nil {
 		return Result{}, err
 	}
@@ -369,18 +394,31 @@ func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectK
 	if len(body) > 0 {
 		request.Header.Set("Content-Type", "application/json")
 	}
+	if method != http.MethodGet && method != http.MethodHead {
+		request.GetBody = nil
+		request.Body = io.NopCloser(bytes.NewReader(body))
+		if len(body) == 0 {
+			request.ContentLength = -1
+		}
+	}
 	response, err := adapter.syntheticClient.Do(request)
 	if err != nil {
+		if method != http.MethodGet && method != http.MethodHead {
+			return nil, &UnknownOutcomeError{}
+		}
 		return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		if method != http.MethodGet && method != http.MethodHead && response.StatusCode >= http.StatusInternalServerError {
+			return nil, &UnknownOutcomeError{}
+		}
 		return nil, statusError(response.StatusCode)
 	}
 	return readBoundedResponse(response.Body)
 }
 
-func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
+func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
 	client, cleanup, err := adapter.githubClient(ctx, request.Credential)
 	if err != nil {
 		return Result{}, err
@@ -389,8 +427,10 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, conf
 	owner, repository := configuration["owner"], configuration["repository"]
 	switch request.Operation {
 	case "github.repository.metadata.read":
-		provider, response, err := client.Repositories.Get(ctx, owner, repository)
-		if err := githubError(response, err); err != nil {
+		provider, err := githubRead(ctx, capability, func() (*github.Repository, *github.Response, error) {
+			return client.Repositories.Get(ctx, owner, repository)
+		})
+		if err != nil {
 			return Result{}, err
 		}
 		projection := struct {
@@ -406,35 +446,30 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, conf
 		}
 		return successfulResult(string(summary), request, "github-repository:"+strconv.FormatInt(provider.GetID(), 10)), nil
 	case "github.issue.create":
-		return adapter.createGitHubIssue(ctx, client, owner, repository, request, canonicalInput)
+		return adapter.createGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)
+	case "github.issue.list":
+		return adapter.listGitHubIssues(ctx, client, owner, repository, request, capability, canonicalInput)
+	case "github.issue.read":
+		return adapter.readGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)
+	case "github.issue.comment.create":
+		return adapter.createGitHubIssueComment(ctx, client, owner, repository, request, capability, canonicalInput)
 	case "github.issue.update":
-		return adapter.updateGitHubIssue(ctx, client, owner, repository, request, canonicalInput)
+		return adapter.updateGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)
 	default:
 		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
 }
 
-func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, canonicalInput []byte) (Result, error) {
+func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, canonicalInput []byte) (Result, error) {
 	var input struct{ Title, Body string }
 	if json.Unmarshal(canonicalInput, &input) != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	marker := "<!-- kodex-effect:" + request.EffectKey + " -->"
-	for page := 1; page <= 10; page++ {
-		issues, response, err := client.Issues.ListByRepo(ctx, owner, repository, &github.IssueListByRepoOptions{
-			State: "all", ListOptions: github.ListOptions{Page: page, PerPage: 100},
-		})
-		if err := githubError(response, err); err != nil {
-			return Result{}, err
-		}
-		for _, issue := range issues {
-			if !issue.IsPullRequest() && strings.Contains(issue.GetBody(), marker) {
-				return githubIssueResult(issue, request)
-			}
-		}
-		if response == nil || response.NextPage == 0 {
-			break
-		}
+	if existing, err := findGitHubIssueByMarker(ctx, client, owner, repository, capability, marker); err != nil {
+		return Result{}, err
+	} else if existing != nil {
+		return githubIssueResult(existing, request, false)
 	}
 	body := strings.TrimSpace(input.Body)
 	if body != "" {
@@ -442,13 +477,18 @@ func (adapter *Adapter) createGitHubIssue(ctx context.Context, client *github.Cl
 	}
 	body += marker
 	issue, response, err := client.Issues.Create(ctx, owner, repository, &github.IssueRequest{Title: github.Ptr(input.Title), Body: github.Ptr(body)})
-	if err := githubError(response, err); err != nil {
-		return Result{}, err
+	if mutationErr := githubMutationError(response, err); mutationErr != nil {
+		if IsUnknownOutcome(mutationErr) {
+			if reconciled, reconcileErr := findGitHubIssueByMarker(ctx, client, owner, repository, capability, marker); reconcileErr == nil && reconciled != nil {
+				return githubIssueResult(reconciled, request, false)
+			}
+		}
+		return Result{}, mutationErr
 	}
-	return githubIssueResult(issue, request)
+	return githubIssueResult(issue, request, false)
 }
 
-func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, canonicalInput []byte) (Result, error) {
+func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Client, owner, repository string, request Request, capability integrationpackage.Capability, canonicalInput []byte) (Result, error) {
 	var input struct {
 		IssueNumber int64  `json:"issue_number"`
 		Title       string `json:"title"`
@@ -457,6 +497,15 @@ func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Cl
 	}
 	if json.Unmarshal(canonicalInput, &input) != nil || input.IssueNumber < 1 || input.IssueNumber > int64(^uint(0)>>1) ||
 		input.Title == "" && input.Body == "" && input.State == "" || input.State != "" && input.State != "open" && input.State != "closed" {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	current, err := githubRead(ctx, capability, func() (*github.Issue, *github.Response, error) {
+		return client.Issues.Get(ctx, owner, repository, int(input.IssueNumber))
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	if current.IsPullRequest() || current.GetNumber() != int(input.IssueNumber) {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	requestBody := &github.IssueRequest{}
@@ -470,26 +519,29 @@ func (adapter *Adapter) updateGitHubIssue(ctx context.Context, client *github.Cl
 		requestBody.State = github.Ptr(input.State)
 	}
 	issue, response, err := client.Issues.Edit(ctx, owner, repository, int(input.IssueNumber), requestBody)
-	if err := githubError(response, err); err != nil {
-		return Result{}, err
+	if mutationErr := githubMutationError(response, err); mutationErr != nil {
+		if IsUnknownOutcome(mutationErr) {
+			current, readErr := githubRead(ctx, capability, func() (*github.Issue, *github.Response, error) {
+				return client.Issues.Get(ctx, owner, repository, int(input.IssueNumber))
+			})
+			if readErr == nil && githubIssueMatchesUpdate(current, input.Title, input.Body, input.State) {
+				return githubIssueResult(current, request, false)
+			}
+		}
+		return Result{}, mutationErr
 	}
-	return githubIssueResult(issue, request)
+	return githubIssueResult(issue, request, false)
 }
 
-func githubIssueResult(issue *github.Issue, request Request) (Result, error) {
-	if issue == nil || issue.GetNumber() < 1 || issue.GetID() == 0 {
+func githubIssueResult(issue *github.Issue, request Request, includeBody bool) (Result, error) {
+	if issue == nil || issue.GetNumber() < 1 || issue.GetID() == 0 || issue.IsPullRequest() {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
-	projection := struct {
-		Number int    `json:"number"`
-		Title  string `json:"title"`
-		State  string `json:"state"`
-	}{issue.GetNumber(), issue.GetTitle(), issue.GetState()}
-	summary, err := json.Marshal(projection)
-	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	projection := map[string]any{"number": issue.GetNumber(), "title": issue.GetTitle(), "state": issue.GetState()}
+	if includeBody && issue.GetBody() != "" {
+		projection["body"] = issue.GetBody()
 	}
-	return successfulResult(string(summary), request, "github-issue:"+strconv.Itoa(issue.GetNumber())), nil
+	return providerResult(request, "github-issue:"+strconv.Itoa(issue.GetNumber()), projection)
 }
 
 func (adapter *Adapter) githubClient(ctx context.Context, credential *CredentialRevision) (*github.Client, func(), error) {

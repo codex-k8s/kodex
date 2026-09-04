@@ -195,7 +195,14 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if grants, ok := values["integrationGrants"].([]map[string]string); ok {
 		for _, grant := range grants {
-			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"], ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"], CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"], Risk: grant["risk"], Enabled: true})
+			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{
+				Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
+				DefinitionVersion: grant["definitionVersion"], DefinitionDigest: grant["definitionDigest"],
+				ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"],
+				CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"],
+				Operation: grant["operation"], InputSchema: grant["inputSchema"], InputSchemaSha256: grant["inputSchemaSha256"],
+				Risk: grant["risk"], Enabled: true,
+			})
 		}
 	}
 	if artifacts, ok := values["artifacts"].([]map[string]any); ok {
@@ -608,7 +615,7 @@ func (server *Server) GetIntegrationInvocation(ctx context.Context, request *con
 }
 
 func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
-	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), UnknownOutcome: request.GetUnknownOutcome(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	if receipt := request.GetEffectReceipt(); receipt != nil {
 		payload.ReceiptRef = receipt.GetRef()
 		payload.EffectKey = receipt.GetEffectKey()

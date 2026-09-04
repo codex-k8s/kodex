@@ -1,5 +1,13 @@
 version: 1
 packages:
+  - id: email-bridge-api-v1
+    format: openapi
+    owner: email-bridge
+    source: contracts/openapi/email-bridge/v1/openapi.yaml
+    generated:
+      go: services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go
+    consumers:
+      - integration-gateway
   - id: egress-gateway-policy-v1
     format: json-schema
     owner: egress-gateway

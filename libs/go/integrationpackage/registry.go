@@ -1,5 +1,7 @@
 package integrationpackage
 
+import "errors"
+
 // Закрытые значения package-контракта. Строковое представление сохраняется
 // намеренно: оно является wire-форматом YAML/JSON и не содержит секретов.
 type AdapterKey string
@@ -9,6 +11,9 @@ type Risk string
 type ApprovalPolicy string
 type ResourceKind string
 type IdempotencyMode string
+type AdapterOwner string
+type ExecutionRoute string
+type AdapterReadiness string
 
 const (
 	AdapterSyntheticHTTP AdapterKey = "SYNTHETIC_HTTP"
@@ -18,6 +23,15 @@ const (
 	AdapterConfluence    AdapterKey = "CONFLUENCE"
 	AdapterEmailHTTPS    AdapterKey = "EMAIL_HTTPS"
 	AdapterMattermost    AdapterKey = "MATTERMOST_INTERACTION"
+
+	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
+	OwnerInteractionGateway AdapterOwner = "interaction-gateway"
+
+	RouteManagedMCP  ExecutionRoute = "MANAGED_MCP"
+	RouteInteraction ExecutionRoute = "INTERACTION"
+
+	ReadinessReady    AdapterReadiness = "READY"
+	ReadinessNotReady AdapterReadiness = "NOT_READY"
 
 	FieldString  FieldType = "STRING"
 	FieldInteger FieldType = "INTEGER"
@@ -36,6 +50,43 @@ const (
 	IdempotencyProviderNative IdempotencyMode = "PROVIDER_NATIVE"
 )
 
+type AdapterDescriptor struct {
+	Owner     AdapterOwner
+	Route     ExecutionRoute
+	Readiness AdapterReadiness
+}
+
+var adapterRegistry = map[AdapterKey]AdapterDescriptor{
+	AdapterSyntheticHTTP: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterGitHub:        {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterGitLab:        {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterJira:          {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessNotReady},
+}
+
+func Adapter(key string) (AdapterDescriptor, bool) {
+	descriptor, ok := adapterRegistry[AdapterKey(key)]
+	return descriptor, ok
+}
+
+func ValidateAdapterBinding(definition Package) error {
+	descriptor, ok := Adapter(definition.Spec.Adapter)
+	if !ok || string(descriptor.Owner) != definition.Spec.AdapterOwner ||
+		string(descriptor.Route) != definition.Spec.ExecutionRoute ||
+		string(descriptor.Readiness) != definition.Spec.Readiness {
+		return errors.New("integration adapter binding is invalid")
+	}
+	return nil
+}
+
+func (definition Package) ExecutableBy(owner AdapterOwner, route ExecutionRoute) bool {
+	descriptor, ok := Adapter(definition.Spec.Adapter)
+	return ok && descriptor.Owner == owner && descriptor.Route == route &&
+		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil
+}
+
 var (
 	fieldFormats = map[FieldFormat]struct{}{
 		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {},
@@ -49,7 +100,7 @@ var (
 )
 
 func validAdapter(value string) bool {
-	_, ok := map[AdapterKey]struct{}{AdapterSyntheticHTTP: {}, AdapterGitHub: {}, AdapterGitLab: {}, AdapterJira: {}, AdapterConfluence: {}, AdapterEmailHTTPS: {}, AdapterMattermost: {}}[AdapterKey(value)]
+	_, ok := adapterRegistry[AdapterKey(value)]
 	return ok
 }
 

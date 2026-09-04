@@ -7595,19 +7595,21 @@ func (x *ScheduleRunOccurrence) GetRun() *Run {
 }
 
 type IntegrationCapability struct {
-	state            protoimpl.MessageState           `protogen:"open.v1"`
-	Key              string                           `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Name             string                           `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description      string                           `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Risk             string                           `protobuf:"bytes,4,opt,name=risk,proto3" json:"risk,omitempty"`
-	ApprovalRequired bool                             `protobuf:"varint,5,opt,name=approval_required,json=approvalRequired,proto3" json:"approval_required,omitempty"`
-	Operation        string                           `protobuf:"bytes,6,opt,name=operation,proto3" json:"operation,omitempty"`
-	TypedRisk        IntegrationRisk                  `protobuf:"varint,7,opt,name=typed_risk,json=typedRisk,proto3,enum=controlplane.v1.IntegrationRisk" json:"typed_risk,omitempty"`
-	ApprovalPolicy   IntegrationApprovalPolicy        `protobuf:"varint,8,opt,name=approval_policy,json=approvalPolicy,proto3,enum=controlplane.v1.IntegrationApprovalPolicy" json:"approval_policy,omitempty"`
-	ResourceKind     IntegrationResourceKind          `protobuf:"varint,9,opt,name=resource_kind,json=resourceKind,proto3,enum=controlplane.v1.IntegrationResourceKind" json:"resource_kind,omitempty"`
-	InputFields      []*IntegrationConfigurationField `protobuf:"bytes,10,rep,name=input_fields,json=inputFields,proto3" json:"input_fields,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state             protoimpl.MessageState           `protogen:"open.v1"`
+	Key               string                           `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Name              string                           `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description       string                           `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Risk              string                           `protobuf:"bytes,4,opt,name=risk,proto3" json:"risk,omitempty"`
+	ApprovalRequired  bool                             `protobuf:"varint,5,opt,name=approval_required,json=approvalRequired,proto3" json:"approval_required,omitempty"`
+	Operation         string                           `protobuf:"bytes,6,opt,name=operation,proto3" json:"operation,omitempty"`
+	TypedRisk         IntegrationRisk                  `protobuf:"varint,7,opt,name=typed_risk,json=typedRisk,proto3,enum=controlplane.v1.IntegrationRisk" json:"typed_risk,omitempty"`
+	ApprovalPolicy    IntegrationApprovalPolicy        `protobuf:"varint,8,opt,name=approval_policy,json=approvalPolicy,proto3,enum=controlplane.v1.IntegrationApprovalPolicy" json:"approval_policy,omitempty"`
+	ResourceKind      IntegrationResourceKind          `protobuf:"varint,9,opt,name=resource_kind,json=resourceKind,proto3,enum=controlplane.v1.IntegrationResourceKind" json:"resource_kind,omitempty"`
+	InputFields       []*IntegrationConfigurationField `protobuf:"bytes,10,rep,name=input_fields,json=inputFields,proto3" json:"input_fields,omitempty"`
+	InputSchema       string                           `protobuf:"bytes,11,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
+	InputSchemaSha256 string                           `protobuf:"bytes,12,opt,name=input_schema_sha256,json=inputSchemaSha256,proto3" json:"input_schema_sha256,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *IntegrationCapability) Reset() {
@@ -7708,6 +7710,20 @@ func (x *IntegrationCapability) GetInputFields() []*IntegrationConfigurationFiel
 		return x.InputFields
 	}
 	return nil
+}
+
+func (x *IntegrationCapability) GetInputSchema() string {
+	if x != nil {
+		return x.InputSchema
+	}
+	return ""
+}
+
+func (x *IntegrationCapability) GetInputSchemaSha256() string {
+	if x != nil {
+		return x.InputSchemaSha256
+	}
+	return ""
 }
 
 type IntegrationConfigurationField struct {
@@ -7866,6 +7882,9 @@ type IntegrationDefinition struct {
 	Digest              string                           `protobuf:"bytes,12,opt,name=digest,proto3" json:"digest,omitempty"`
 	Adapter             string                           `protobuf:"bytes,13,opt,name=adapter,proto3" json:"adapter,omitempty"`
 	CredentialSecretKey string                           `protobuf:"bytes,14,opt,name=credential_secret_key,json=credentialSecretKey,proto3" json:"credential_secret_key,omitempty"`
+	AdapterOwner        string                           `protobuf:"bytes,15,opt,name=adapter_owner,json=adapterOwner,proto3" json:"adapter_owner,omitempty"`
+	ExecutionRoute      string                           `protobuf:"bytes,16,opt,name=execution_route,json=executionRoute,proto3" json:"execution_route,omitempty"`
+	AdapterReadiness    string                           `protobuf:"bytes,17,opt,name=adapter_readiness,json=adapterReadiness,proto3" json:"adapter_readiness,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -7994,6 +8013,27 @@ func (x *IntegrationDefinition) GetAdapter() string {
 func (x *IntegrationDefinition) GetCredentialSecretKey() string {
 	if x != nil {
 		return x.CredentialSecretKey
+	}
+	return ""
+}
+
+func (x *IntegrationDefinition) GetAdapterOwner() string {
+	if x != nil {
+		return x.AdapterOwner
+	}
+	return ""
+}
+
+func (x *IntegrationDefinition) GetExecutionRoute() string {
+	if x != nil {
+		return x.ExecutionRoute
+	}
+	return ""
+}
+
+func (x *IntegrationDefinition) GetAdapterReadiness() string {
+	if x != nil {
+		return x.AdapterReadiness
 	}
 	return ""
 }
@@ -8171,6 +8211,11 @@ type IntegrationGrant struct {
 	TypedRisk             IntegrationRisk           `protobuf:"varint,15,opt,name=typed_risk,json=typedRisk,proto3,enum=controlplane.v1.IntegrationRisk" json:"typed_risk,omitempty"`
 	ApprovalPolicy        IntegrationApprovalPolicy `protobuf:"varint,16,opt,name=approval_policy,json=approvalPolicy,proto3,enum=controlplane.v1.IntegrationApprovalPolicy" json:"approval_policy,omitempty"`
 	ResourceScope         *IntegrationResourceScope `protobuf:"bytes,17,opt,name=resource_scope,json=resourceScope,proto3" json:"resource_scope,omitempty"`
+	DefinitionVersion     string                    `protobuf:"bytes,18,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	DefinitionDigest      string                    `protobuf:"bytes,19,opt,name=definition_digest,json=definitionDigest,proto3" json:"definition_digest,omitempty"`
+	Operation             string                    `protobuf:"bytes,20,opt,name=operation,proto3" json:"operation,omitempty"`
+	InputSchema           string                    `protobuf:"bytes,21,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
+	InputSchemaSha256     string                    `protobuf:"bytes,22,opt,name=input_schema_sha256,json=inputSchemaSha256,proto3" json:"input_schema_sha256,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -8322,6 +8367,41 @@ func (x *IntegrationGrant) GetResourceScope() *IntegrationResourceScope {
 		return x.ResourceScope
 	}
 	return nil
+}
+
+func (x *IntegrationGrant) GetDefinitionVersion() string {
+	if x != nil {
+		return x.DefinitionVersion
+	}
+	return ""
+}
+
+func (x *IntegrationGrant) GetDefinitionDigest() string {
+	if x != nil {
+		return x.DefinitionDigest
+	}
+	return ""
+}
+
+func (x *IntegrationGrant) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *IntegrationGrant) GetInputSchema() string {
+	if x != nil {
+		return x.InputSchema
+	}
+	return ""
+}
+
+func (x *IntegrationGrant) GetInputSchemaSha256() string {
+	if x != nil {
+		return x.InputSchemaSha256
+	}
+	return ""
 }
 
 type IntegrationConnection struct {
@@ -26770,18 +26850,19 @@ func (x *IntegrationEffectReceipt) GetResultSummary() string {
 }
 
 type CompleteIntegrationInvocationRequest struct {
-	state         protoimpl.MessageState    `protogen:"open.v1"`
-	Mutation      *MutationContext          `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	InvocationRef string                    `protobuf:"bytes,2,opt,name=invocation_ref,json=invocationRef,proto3" json:"invocation_ref,omitempty"`
-	LeaseRef      string                    `protobuf:"bytes,3,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
-	Fence         string                    `protobuf:"bytes,4,opt,name=fence,proto3" json:"fence,omitempty"`
-	Generation    int64                     `protobuf:"varint,5,opt,name=generation,proto3" json:"generation,omitempty"`
-	Success       bool                      `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
-	ResultSummary string                    `protobuf:"bytes,7,opt,name=result_summary,json=resultSummary,proto3" json:"result_summary,omitempty"`
-	SafeErrorCode string                    `protobuf:"bytes,8,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
-	EffectReceipt *IntegrationEffectReceipt `protobuf:"bytes,9,opt,name=effect_receipt,json=effectReceipt,proto3" json:"effect_receipt,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState    `protogen:"open.v1"`
+	Mutation       *MutationContext          `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	InvocationRef  string                    `protobuf:"bytes,2,opt,name=invocation_ref,json=invocationRef,proto3" json:"invocation_ref,omitempty"`
+	LeaseRef       string                    `protobuf:"bytes,3,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence          string                    `protobuf:"bytes,4,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation     int64                     `protobuf:"varint,5,opt,name=generation,proto3" json:"generation,omitempty"`
+	Success        bool                      `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
+	ResultSummary  string                    `protobuf:"bytes,7,opt,name=result_summary,json=resultSummary,proto3" json:"result_summary,omitempty"`
+	SafeErrorCode  string                    `protobuf:"bytes,8,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
+	EffectReceipt  *IntegrationEffectReceipt `protobuf:"bytes,9,opt,name=effect_receipt,json=effectReceipt,proto3" json:"effect_receipt,omitempty"`
+	UnknownOutcome bool                      `protobuf:"varint,10,opt,name=unknown_outcome,json=unknownOutcome,proto3" json:"unknown_outcome,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CompleteIntegrationInvocationRequest) Reset() {
@@ -26875,6 +26956,13 @@ func (x *CompleteIntegrationInvocationRequest) GetEffectReceipt() *IntegrationEf
 		return x.EffectReceipt
 	}
 	return nil
+}
+
+func (x *CompleteIntegrationInvocationRequest) GetUnknownOutcome() bool {
+	if x != nil {
+		return x.UnknownOutcome
+	}
+	return false
 }
 
 type CompleteIntegrationInvocationResponse struct {
@@ -42687,7 +42775,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\fschedule_ref\x18\x01 \x01(\tR\vscheduleRef\x122\n" +
 	"\x15schedule_revision_ref\x18\x02 \x01(\tR\x13scheduleRevisionRef\x12+\n" +
 	"\x11schedule_revision\x18\x03 \x01(\x03R\x10scheduleRevision\x12&\n" +
-	"\x03run\x18\x04 \x01(\v2\x14.controlplane.v1.RunR\x03run\"\xf6\x03\n" +
+	"\x03run\x18\x04 \x01(\v2\x14.controlplane.v1.RunR\x03run\"\xc9\x04\n" +
 	"\x15IntegrationCapability\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -42700,7 +42788,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0fapproval_policy\x18\b \x01(\x0e2*.controlplane.v1.IntegrationApprovalPolicyR\x0eapprovalPolicy\x12M\n" +
 	"\rresource_kind\x18\t \x01(\x0e2(.controlplane.v1.IntegrationResourceKindR\fresourceKind\x12Q\n" +
 	"\finput_fields\x18\n" +
-	" \x03(\v2..controlplane.v1.IntegrationConfigurationFieldR\vinputFields\"\x94\x03\n" +
+	" \x03(\v2..controlplane.v1.IntegrationConfigurationFieldR\vinputFields\x12!\n" +
+	"\finput_schema\x18\v \x01(\tR\vinputSchema\x12.\n" +
+	"\x13input_schema_sha256\x18\f \x01(\tR\x11inputSchemaSha256\"\x94\x03\n" +
 	"\x1dIntegrationConfigurationField\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x12\n" +
@@ -42718,7 +42808,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"hasMinimum\x12\x1f\n" +
 	"\vhas_maximum\x18\f \x01(\bR\n" +
 	"hasMaximum\x12%\n" +
-	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\xe5\x04\n" +
+	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\xe0\x05\n" +
 	"\x15IntegrationDefinition\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -42734,7 +42824,10 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06origin\x18\v \x01(\x0e2,.controlplane.v1.IntegrationDefinitionOriginR\x06origin\x12\x16\n" +
 	"\x06digest\x18\f \x01(\tR\x06digest\x12\x18\n" +
 	"\aadapter\x18\r \x01(\tR\aadapter\x122\n" +
-	"\x15credential_secret_key\x18\x0e \x01(\tR\x13credentialSecretKey\"\xfa\x01\n" +
+	"\x15credential_secret_key\x18\x0e \x01(\tR\x13credentialSecretKey\x12#\n" +
+	"\radapter_owner\x18\x0f \x01(\tR\fadapterOwner\x12'\n" +
+	"\x0fexecution_route\x18\x10 \x01(\tR\x0eexecutionRoute\x12+\n" +
+	"\x11adapter_readiness\x18\x11 \x01(\tR\x10adapterReadiness\"\xfa\x01\n" +
 	"\x18IntegrationResourceScope\x12<\n" +
 	"\x04kind\x18\x01 \x01(\x0e2(.controlplane.v1.IntegrationResourceKindR\x04kind\x12M\n" +
 	"\x06values\x18\x02 \x03(\v25.controlplane.v1.IntegrationResourceScope.ValuesEntryR\x06values\x12\x16\n" +
@@ -42752,7 +42845,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17secret_resource_version\x18\x05 \x01(\tR\x15secretResourceVersion\x12%\n" +
 	"\x0econtent_sha256\x18\x06 \x01(\tR\rcontentSha256\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xee\x05\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xbb\a\n" +
 	"\x10IntegrationGrant\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -42774,7 +42867,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"typed_risk\x18\x0f \x01(\x0e2 .controlplane.v1.IntegrationRiskR\ttypedRisk\x12S\n" +
 	"\x0fapproval_policy\x18\x10 \x01(\x0e2*.controlplane.v1.IntegrationApprovalPolicyR\x0eapprovalPolicy\x12P\n" +
-	"\x0eresource_scope\x18\x11 \x01(\v2).controlplane.v1.IntegrationResourceScopeR\rresourceScope\"\xcc\a\n" +
+	"\x0eresource_scope\x18\x11 \x01(\v2).controlplane.v1.IntegrationResourceScopeR\rresourceScope\x12-\n" +
+	"\x12definition_version\x18\x12 \x01(\tR\x11definitionVersion\x12+\n" +
+	"\x11definition_digest\x18\x13 \x01(\tR\x10definitionDigest\x12\x1c\n" +
+	"\toperation\x18\x14 \x01(\tR\toperation\x12!\n" +
+	"\finput_schema\x18\x15 \x01(\tR\vinputSchema\x12.\n" +
+	"\x13input_schema_sha256\x18\x16 \x01(\tR\x11inputSchemaSha256\"\xcc\a\n" +
 	"\x15IntegrationConnection\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -44306,7 +44404,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\finput_digest\x18\x03 \x01(\tR\vinputDigest\x12.\n" +
 	"\x13provider_effect_ref\x18\x04 \x01(\tR\x11providerEffectRef\x12'\n" +
 	"\x0fresponse_digest\x18\x05 \x01(\tR\x0eresponseDigest\x12%\n" +
-	"\x0eresult_summary\x18\x06 \x01(\tR\rresultSummary\"\x99\x03\n" +
+	"\x0eresult_summary\x18\x06 \x01(\tR\rresultSummary\"\xc2\x03\n" +
 	"$CompleteIntegrationInvocationRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12%\n" +
 	"\x0einvocation_ref\x18\x02 \x01(\tR\rinvocationRef\x12\x1b\n" +
@@ -44318,7 +44416,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\asuccess\x18\x06 \x01(\bR\asuccess\x12%\n" +
 	"\x0eresult_summary\x18\a \x01(\tR\rresultSummary\x12&\n" +
 	"\x0fsafe_error_code\x18\b \x01(\tR\rsafeErrorCode\x12P\n" +
-	"\x0eeffect_receipt\x18\t \x01(\v2).controlplane.v1.IntegrationEffectReceiptR\reffectReceipt\"\x80\x01\n" +
+	"\x0eeffect_receipt\x18\t \x01(\v2).controlplane.v1.IntegrationEffectReceiptR\reffectReceipt\x12'\n" +
+	"\x0funknown_outcome\x18\n" +
+	" \x01(\bR\x0eunknownOutcome\"\x80\x01\n" +
 	"%CompleteIntegrationInvocationResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
 	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xa6\x02\n" +

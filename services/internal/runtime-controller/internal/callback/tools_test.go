@@ -2,6 +2,8 @@ package callback
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -37,23 +39,38 @@ func (*unavailableIntegrationClient) ResolveIntegrationInvocation(_ context.Cont
 	return nil, status.Error(codes.Unavailable, "transient control-plane failure")
 }
 
+func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
+	inputSchema := `{"additionalProperties":false,"properties":{"value":{"maxLength":4096,"minLength":1,"type":"string"}},"required":["value"],"type":"object"}`
+	digest := sha256.Sum256([]byte(inputSchema))
+	return runtimecontract.RunnerIntegrationGrant{
+		Ref: "igr_12345678", ConnectionRef: "icon_12345678", DefinitionKey: "synthetic",
+		ConnectionName: "Synthetic", CapabilityKey: "synthetic.journal.write", CapabilityName: "Write journal",
+		CapabilityDescription: "Write one bounded journal value.", Risk: "WRITE", DefinitionVersion: "3.1.0",
+		DefinitionDigest: strings.Repeat("a", 64), Operation: "synthetic.journal.write", InputSchema: inputSchema,
+		InputSchemaSHA256: hex.EncodeToString(digest[:]),
+	}
+}
+
+func integrationArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
+	return map[string]any{
+		"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey,
+		"definition_version": grant.DefinitionVersion, "definition_digest": grant.DefinitionDigest,
+		"input_schema_sha256": grant.InputSchemaSHA256, "input": map[string]any{"value": value},
+	}
+}
+
 func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
 	t.Parallel()
 	server := &Server{
 		config:  Config{RequestTimeout: time.Second},
 		control: &controlplaneclient.Client{Runtime: &rejectedIntegrationClient{}},
 	}
+	grant := integrationGrantFixture()
 	input := runtimecontract.RunnerInput{
 		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
-			Ref: "igr_12345678", ConnectionRef: "icon_12345678",
-			CapabilityKey: "synthetic.journal.write", Risk: "WRITE",
-		}},
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
 	}
-	result, err := server.invoke(t.Context(), input, map[string]any{
-		"connection_ref": "icon_12345678", "capability_key": "synthetic.journal.write",
-		"input": map[string]any{"value": "rejected"},
-	}, json.RawMessage(`"call-1"`))
+	result, err := server.invoke(t.Context(), input, integrationArguments(grant, "rejected"), json.RawMessage(`"call-1"`))
 	if err != nil {
 		t.Fatalf("invoke rejected integration: %v", err)
 	}
@@ -69,17 +86,12 @@ func TestInvokePreservesIntegrationResolutionStatus(t *testing.T) {
 		config:  Config{RequestTimeout: time.Second},
 		control: &controlplaneclient.Client{Runtime: &unavailableIntegrationClient{}},
 	}
+	grant := integrationGrantFixture()
 	input := runtimecontract.RunnerInput{
 		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
-		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
-			Ref: "igr_12345678", ConnectionRef: "icon_12345678",
-			CapabilityKey: "synthetic.journal.write", Risk: "WRITE",
-		}},
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
 	}
-	_, err := server.invoke(t.Context(), input, map[string]any{
-		"connection_ref": "icon_12345678", "capability_key": "synthetic.journal.write",
-		"input": map[string]any{"value": "unavailable"},
-	}, json.RawMessage(`"call-1"`))
+	_, err := server.invoke(t.Context(), input, integrationArguments(grant, "unavailable"), json.RawMessage(`"call-1"`))
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("integration resolution status was lost: %v", err)
 	}

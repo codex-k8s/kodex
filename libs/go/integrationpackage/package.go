@@ -51,6 +51,9 @@ type Spec struct {
 	Description         string               `yaml:"description" json:"description"`
 	Category            string               `yaml:"category" json:"category"`
 	Adapter             string               `yaml:"adapter" json:"adapter"`
+	AdapterOwner        string               `yaml:"adapterOwner" json:"adapterOwner"`
+	ExecutionRoute      string               `yaml:"executionRoute" json:"executionRoute"`
+	Readiness           string               `yaml:"readiness" json:"readiness"`
 	Credential          *Credential          `yaml:"credential,omitempty" json:"credential,omitempty"`
 	ConfigurationFields []Field              `yaml:"configurationFields" json:"configurationFields"`
 	NetworkDestinations []NetworkDestination `yaml:"networkDestinations" json:"networkDestinations"`
@@ -156,6 +159,9 @@ func LoadShipped() (map[string]Package, error) {
 		if err != nil {
 			return nil, fmt.Errorf("load shipped integration package %s: %w", filename, err)
 		}
+		if err := ValidateAdapterBinding(definition); err != nil {
+			return nil, fmt.Errorf("load shipped integration package %s: %w", filename, err)
+		}
 		if _, exists := result[definition.Metadata.Key]; exists {
 			return nil, errors.New("duplicate shipped integration package key")
 		}
@@ -227,6 +233,61 @@ func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
 // ValidateOutput принимает только безопасную проекцию с закрытым набором полей.
 func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
 	return validateObject(raw, capability.OutputFields, "output")
+}
+
+// InputSchema возвращает закрытую JSON Schema, связанную с package digest.
+func (capability Capability) InputSchema() ([]byte, error) {
+	properties := make(map[string]any, len(capability.InputFields))
+	required := make([]string, 0, len(capability.InputFields))
+	for _, field := range capability.InputFields {
+		property := map[string]any{}
+		switch field.Type {
+		case "STRING":
+			property["type"] = "string"
+			property["minLength"] = 1
+			property["maxLength"] = field.MaximumLength
+			if len(field.AllowedValues) != 0 {
+				property["enum"] = append([]string(nil), field.AllowedValues...)
+			}
+			if field.Format == "EMAIL" {
+				property["format"] = "email"
+			} else if field.Format == "HTTPS_URL" || field.Format == "HTTPS_ORIGIN" {
+				property["format"] = "uri"
+			}
+		case "INTEGER":
+			property["type"] = "integer"
+			property["minimum"] = field.Minimum
+			if field.Maximum != 0 {
+				property["maximum"] = field.Maximum
+			}
+		case "BOOLEAN":
+			property["type"] = "boolean"
+		default:
+			return nil, errors.New("integration input schema field type is invalid")
+		}
+		properties[field.Key] = property
+		if field.Required {
+			required = append(required, field.Key)
+		}
+	}
+	schema := map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties":           properties,
+	}
+	if len(required) != 0 {
+		schema["required"] = required
+	}
+	return json.Marshal(schema)
+}
+
+func (capability Capability) InputSchemaDigest() (string, error) {
+	schema, err := capability.InputSchema()
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(schema)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
@@ -370,7 +431,7 @@ func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
-		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) ||
+		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) || ValidateAdapterBinding(*result) != nil ||
 		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
 		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 48 {
 		return errors.New("integration package metadata or bounds are invalid")

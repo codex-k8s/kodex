@@ -308,6 +308,7 @@ func castIntegrationCapability(value entity.IntegrationCapability) *controlplane
 		Key: value.Key, Name: value.Name, Description: value.Description, Operation: value.Operation,
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalRequired: value.ApprovalPolicy != "NONE",
 		ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy), ResourceKind: integrationResourceKind(value.ResourceKind),
+		InputSchema: value.InputSchema, InputSchemaSha256: value.InputSchemaSHA256,
 	}
 	for _, field := range value.InputFields {
 		result.InputFields = append(result.InputFields, castIntegrationField(field))
@@ -498,6 +499,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 		SchemaVersion: value.SchemaVersion, DefinitionVersion: value.DefinitionVersion,
 		Origin: controlplanev1.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED,
 		Digest: value.Digest, Adapter: value.Adapter, CredentialSecretKey: value.CredentialSecretKey,
+		AdapterOwner: value.AdapterOwner, ExecutionRoute: value.ExecutionRoute, AdapterReadiness: value.AdapterReadiness,
 	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
