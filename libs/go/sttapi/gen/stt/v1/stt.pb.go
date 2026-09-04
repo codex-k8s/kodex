@@ -77,6 +77,7 @@ const (
 	ProtectedPathStage_PROTECTED_PATH_STAGE_CREDENTIAL          ProtectedPathStage = 3
 	ProtectedPathStage_PROTECTED_PATH_STAGE_EGRESS              ProtectedPathStage = 4
 	ProtectedPathStage_PROTECTED_PATH_STAGE_READY               ProtectedPathStage = 5
+	ProtectedPathStage_PROTECTED_PATH_STAGE_PROVIDER            ProtectedPathStage = 6
 )
 
 // Enum value maps for ProtectedPathStage.
@@ -88,6 +89,7 @@ var (
 		3: "PROTECTED_PATH_STAGE_CREDENTIAL",
 		4: "PROTECTED_PATH_STAGE_EGRESS",
 		5: "PROTECTED_PATH_STAGE_READY",
+		6: "PROTECTED_PATH_STAGE_PROVIDER",
 	}
 	ProtectedPathStage_value = map[string]int32{
 		"PROTECTED_PATH_STAGE_UNSPECIFIED":         0,
@@ -96,6 +98,7 @@ var (
 		"PROTECTED_PATH_STAGE_CREDENTIAL":          3,
 		"PROTECTED_PATH_STAGE_EGRESS":              4,
 		"PROTECTED_PATH_STAGE_READY":               5,
+		"PROTECTED_PATH_STAGE_PROVIDER":            6,
 	}
 )
 
@@ -133,6 +136,7 @@ type TranscribeRequest struct {
 	//	*TranscribeRequest_Metadata
 	//	*TranscribeRequest_Chunk
 	//	*TranscribeRequest_Commit
+	//	*TranscribeRequest_AvailabilityCheck
 	Body          isTranscribeRequest_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -202,6 +206,15 @@ func (x *TranscribeRequest) GetCommit() *TranscribeCommit {
 	return nil
 }
 
+func (x *TranscribeRequest) GetAvailabilityCheck() *CheckProtectedPathRequest {
+	if x != nil {
+		if x, ok := x.Body.(*TranscribeRequest_AvailabilityCheck); ok {
+			return x.AvailabilityCheck
+		}
+	}
+	return nil
+}
+
 type isTranscribeRequest_Body interface {
 	isTranscribeRequest_Body()
 }
@@ -218,11 +231,18 @@ type TranscribeRequest_Commit struct {
 	Commit *TranscribeCommit `protobuf:"bytes,3,opt,name=commit,proto3,oneof"`
 }
 
+type TranscribeRequest_AvailabilityCheck struct {
+	// Единственное сообщение, затем CloseSend. Без audio и billable effect.
+	AvailabilityCheck *CheckProtectedPathRequest `protobuf:"bytes,4,opt,name=availability_check,json=availabilityCheck,proto3,oneof"`
+}
+
 func (*TranscribeRequest_Metadata) isTranscribeRequest_Body() {}
 
 func (*TranscribeRequest_Chunk) isTranscribeRequest_Body() {}
 
 func (*TranscribeRequest_Commit) isTranscribeRequest_Body() {}
+
+func (*TranscribeRequest_AvailabilityCheck) isTranscribeRequest_Body() {}
 
 type TranscribeMetadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -329,9 +349,11 @@ func (x *TranscribeCommit) GetSha256() string {
 }
 
 type TranscribeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	Receipt       *TranscriptionReceipt  `protobuf:"bytes,2,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Text    string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Receipt *TranscriptionReceipt  `protobuf:"bytes,2,opt,name=receipt,proto3" json:"receipt,omitempty"`
+	// Заполнено только для availability_check; text и receipt отсутствуют.
+	Availability  *CheckProtectedPathResponse `protobuf:"bytes,3,opt,name=availability,proto3" json:"availability,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -376,6 +398,13 @@ func (x *TranscribeResponse) GetText() string {
 func (x *TranscribeResponse) GetReceipt() *TranscriptionReceipt {
 	if x != nil {
 		return x.Receipt
+	}
+	return nil
+}
+
+func (x *TranscribeResponse) GetAvailability() *CheckProtectedPathResponse {
+	if x != nil {
+		return x.Availability
 	}
 	return nil
 }
@@ -645,9 +674,11 @@ func (*CheckProtectedPathRequest) Descriptor() ([]byte, []int) {
 }
 
 type CheckProtectedPathResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	Stage         ProtectedPathStage     `protobuf:"varint,2,opt,name=stage,proto3,enum=stt.v1.ProtectedPathStage" json:"stage,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Ready bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	Stage ProtectedPathStage     `protobuf:"varint,2,opt,name=stage,proto3,enum=stt.v1.ProtectedPathStage" json:"stage,omitempty"`
+	// Верхняя граница свежести: min(authority, config, credential, 30 секунд).
+	ValidUntil    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=valid_until,json=validUntil,proto3" json:"valid_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -694,6 +725,13 @@ func (x *CheckProtectedPathResponse) GetStage() ProtectedPathStage {
 		return x.Stage
 	}
 	return ProtectedPathStage_PROTECTED_PATH_STAGE_UNSPECIFIED
+}
+
+func (x *CheckProtectedPathResponse) GetValidUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ValidUntil
+	}
+	return nil
 }
 
 // DelegatedAuthorityLocator — единый locator/echo для обоих projection RPC.
@@ -1233,11 +1271,12 @@ var File_stt_v1_stt_proto protoreflect.FileDescriptor
 
 const file_stt_v1_stt_proto_rawDesc = "" +
 	"\n" +
-	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa1\x01\n" +
+	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf5\x01\n" +
 	"\x11TranscribeRequest\x128\n" +
 	"\bmetadata\x18\x01 \x01(\v2\x1a.stt.v1.TranscribeMetadataH\x00R\bmetadata\x12\x16\n" +
 	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunk\x122\n" +
-	"\x06commit\x18\x03 \x01(\v2\x18.stt.v1.TranscribeCommitH\x00R\x06commitB\x06\n" +
+	"\x06commit\x18\x03 \x01(\v2\x18.stt.v1.TranscribeCommitH\x00R\x06commit\x12R\n" +
+	"\x12availability_check\x18\x04 \x01(\v2!.stt.v1.CheckProtectedPathRequestH\x00R\x11availabilityCheckB\x06\n" +
 	"\x04body\"R\n" +
 	"\x12TranscribeMetadata\x12\x1d\n" +
 	"\n" +
@@ -1247,10 +1286,11 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\x10TranscribeCommit\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x01 \x01(\x04R\tsizeBytes\x12\x16\n" +
-	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"`\n" +
+	"\x06sha256\x18\x02 \x01(\tR\x06sha256\"\xa8\x01\n" +
 	"\x12TranscribeResponse\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x126\n" +
-	"\areceipt\x18\x02 \x01(\v2\x1c.stt.v1.TranscriptionReceiptR\areceipt\"\xfe\x04\n" +
+	"\areceipt\x18\x02 \x01(\v2\x1c.stt.v1.TranscriptionReceiptR\areceipt\x12F\n" +
+	"\favailability\x18\x03 \x01(\v2\".stt.v1.CheckProtectedPathResponseR\favailability\"\xfe\x04\n" +
 	"\x14TranscriptionReceipt\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
@@ -1272,10 +1312,12 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\x15CheckReadinessRequest\".\n" +
 	"\x16CheckReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\"\x1b\n" +
-	"\x19CheckProtectedPathRequest\"d\n" +
+	"\x19CheckProtectedPathRequest\"\xa1\x01\n" +
 	"\x1aCheckProtectedPathResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\x120\n" +
-	"\x05stage\x18\x02 \x01(\x0e2\x1a.stt.v1.ProtectedPathStageR\x05stage\"\x8e\x04\n" +
+	"\x05stage\x18\x02 \x01(\x0e2\x1a.stt.v1.ProtectedPathStageR\x05stage\x12;\n" +
+	"\vvalid_until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"validUntil\"\x8e\x04\n" +
 	"\x19DelegatedAuthorityLocator\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12%\n" +
@@ -1330,14 +1372,15 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\tauthority\x18\a \x01(\v2!.stt.v1.DelegatedAuthorityLocatorR\tauthority*e\n" +
 	"\x12TranscriptionStage\x12#\n" +
 	"\x1fTRANSCRIPTION_STAGE_UNSPECIFIED\x10\x00\x12*\n" +
-	"&TRANSCRIPTION_STAGE_PROVIDER_COMPLETED\x10\x01*\xef\x01\n" +
+	"&TRANSCRIPTION_STAGE_PROVIDER_COMPLETED\x10\x01*\x92\x02\n" +
 	"\x12ProtectedPathStage\x12$\n" +
 	" PROTECTED_PATH_STAGE_UNSPECIFIED\x10\x00\x12,\n" +
 	"(PROTECTED_PATH_STAGE_DELEGATED_AUTHORITY\x10\x01\x12\x1f\n" +
 	"\x1bPROTECTED_PATH_STAGE_POLICY\x10\x02\x12#\n" +
 	"\x1fPROTECTED_PATH_STAGE_CREDENTIAL\x10\x03\x12\x1f\n" +
 	"\x1bPROTECTED_PATH_STAGE_EGRESS\x10\x04\x12\x1e\n" +
-	"\x1aPROTECTED_PATH_STAGE_READY\x10\x052\x8a\x02\n" +
+	"\x1aPROTECTED_PATH_STAGE_READY\x10\x05\x12!\n" +
+	"\x1dPROTECTED_PATH_STAGE_PROVIDER\x10\x062\x8a\x02\n" +
 	"\x13SpeechToTextService\x12E\n" +
 	"\n" +
 	"Transcribe\x12\x19.stt.v1.TranscribeRequest\x1a\x1a.stt.v1.TranscribeResponse(\x01\x12O\n" +
@@ -1385,34 +1428,37 @@ var file_stt_v1_stt_proto_goTypes = []any{
 var file_stt_v1_stt_proto_depIdxs = []int32{
 	3,  // 0: stt.v1.TranscribeRequest.metadata:type_name -> stt.v1.TranscribeMetadata
 	4,  // 1: stt.v1.TranscribeRequest.commit:type_name -> stt.v1.TranscribeCommit
-	6,  // 2: stt.v1.TranscribeResponse.receipt:type_name -> stt.v1.TranscriptionReceipt
-	0,  // 3: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
-	1,  // 4: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
-	12, // 5: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
-	12, // 6: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
-	12, // 7: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
-	17, // 8: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 9: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	17, // 10: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 11: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	11, // 12: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	17, // 13: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
-	11, // 14: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	2,  // 15: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
-	7,  // 16: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
-	9,  // 17: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
-	13, // 18: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
-	15, // 19: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
-	5,  // 20: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
-	8,  // 21: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
-	10, // 22: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
-	14, // 23: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
-	16, // 24: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
-	20, // [20:25] is the sub-list for method output_type
-	15, // [15:20] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	9,  // 2: stt.v1.TranscribeRequest.availability_check:type_name -> stt.v1.CheckProtectedPathRequest
+	6,  // 3: stt.v1.TranscribeResponse.receipt:type_name -> stt.v1.TranscriptionReceipt
+	10, // 4: stt.v1.TranscribeResponse.availability:type_name -> stt.v1.CheckProtectedPathResponse
+	0,  // 5: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
+	1,  // 6: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
+	17, // 7: stt.v1.CheckProtectedPathResponse.valid_until:type_name -> google.protobuf.Timestamp
+	12, // 8: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
+	12, // 9: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
+	12, // 10: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
+	17, // 11: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 12: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	17, // 13: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 14: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	11, // 15: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	17, // 16: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
+	11, // 17: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	2,  // 18: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
+	7,  // 19: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
+	9,  // 20: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
+	13, // 21: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
+	15, // 22: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
+	5,  // 23: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
+	8,  // 24: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
+	10, // 25: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
+	14, // 26: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
+	16, // 27: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
+	23, // [23:28] is the sub-list for method output_type
+	18, // [18:23] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_stt_v1_stt_proto_init() }
@@ -1424,6 +1470,7 @@ func file_stt_v1_stt_proto_init() {
 		(*TranscribeRequest_Metadata)(nil),
 		(*TranscribeRequest_Chunk)(nil),
 		(*TranscribeRequest_Commit)(nil),
+		(*TranscribeRequest_AvailabilityCheck)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
