@@ -1305,6 +1305,24 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	}
 }
 
+// Defines values for InteractionIdentityState.
+const (
+	InteractionIdentityStateACTIVE  InteractionIdentityState = "ACTIVE"
+	InteractionIdentityStateREVOKED InteractionIdentityState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the InteractionIdentityState enum.
+func (e InteractionIdentityState) Valid() bool {
+	switch e {
+	case InteractionIdentityStateACTIVE:
+		return true
+	case InteractionIdentityStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ManagedConfigurationKind.
 const (
 	ManagedConfigurationKindINTEGRATIONDEFINITION ManagedConfigurationKind = "INTEGRATION_DEFINITION"
@@ -4583,22 +4601,22 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case ListArtifactsParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case ListArtifactsParamsLifecycleStateDELETED:
 		return true
-	case PURGED:
+	case ListArtifactsParamsLifecycleStatePURGED:
 		return true
-	case PURGEPENDING:
+	case ListArtifactsParamsLifecycleStatePURGEPENDING:
 		return true
 	default:
 		return false
@@ -5008,11 +5026,12 @@ type AgentRuntimeConfigurationView struct {
 
 // AgentRuntimeEnvironmentBinding defines model for AgentRuntimeEnvironmentBinding.
 type AgentRuntimeEnvironmentBinding struct {
-	AgentRef       OpaqueRef `json:"agentRef"`
-	Digest         string    `json:"digest"`
-	EnvironmentRef OpaqueRef `json:"environmentRef"`
-	Ref            OpaqueRef `json:"ref"`
-	Version        int64     `json:"version"`
+	AgentRef       OpaqueRef  `json:"agentRef"`
+	Digest         string     `json:"digest"`
+	EnvironmentRef OpaqueRef  `json:"environmentRef"`
+	Ref            OpaqueRef  `json:"ref"`
+	Version        int64      `json:"version"`
+	VersionRef     *OpaqueRef `json:"versionRef,omitempty"`
 }
 
 // Artifact defines model for Artifact.
@@ -5655,6 +5674,36 @@ type IntegrationResourceScope struct {
 
 // IntegrationResourceScopeKind defines model for IntegrationResourceScope.Kind.
 type IntegrationResourceScopeKind string
+
+// InteractionIdentity defines model for InteractionIdentity.
+type InteractionIdentity struct {
+	ConnectionRef      OpaqueRef                `json:"connectionRef"`
+	ConnectionVersion  int64                    `json:"connectionVersion"`
+	ExternalChannelRef string                   `json:"externalChannelRef"`
+	ExternalTeamRef    string                   `json:"externalTeamRef"`
+	ExternalUserDigest string                   `json:"externalUserDigest"`
+	Ref                OpaqueRef                `json:"ref"`
+	State              InteractionIdentityState `json:"state"`
+	SubjectRef         OpaqueRef                `json:"subjectRef"`
+	Version            int64                    `json:"version"`
+}
+
+// InteractionIdentityState defines model for InteractionIdentity.State.
+type InteractionIdentityState string
+
+// InteractionIdentityBindInput defines model for InteractionIdentityBindInput.
+type InteractionIdentityBindInput struct {
+	ExternalChannelRef string    `json:"externalChannelRef"`
+	ExternalTeamRef    string    `json:"externalTeamRef"`
+	ExternalUserDigest string    `json:"externalUserDigest"`
+	SubjectRef         OpaqueRef `json:"subjectRef"`
+}
+
+// InteractionIdentityPage defines model for InteractionIdentityPage.
+type InteractionIdentityPage struct {
+	Items         []InteractionIdentity `json:"items"`
+	NextPageToken string                `json:"nextPageToken"`
+}
 
 // ManagedConfiguration defines model for ManagedConfiguration.
 type ManagedConfiguration struct {
@@ -6617,6 +6666,18 @@ type RuntimeEnvironmentBindingInput struct {
 	EnvironmentRef OpaqueRef `json:"environmentRef"`
 }
 
+// RuntimeEnvironmentConsumer defines model for RuntimeEnvironmentConsumer.
+type RuntimeEnvironmentConsumer struct {
+	AgentRef       OpaqueRef `json:"agentRef"`
+	AgentVersion   int64     `json:"agentVersion"`
+	BindingRef     OpaqueRef `json:"bindingRef"`
+	BindingVersion int64     `json:"bindingVersion"`
+	ProjectRef     OpaqueRef `json:"projectRef"`
+
+	// VersionRef Прежняя версия окружения в binding; не целевая версия из path.
+	VersionRef OpaqueRef `json:"versionRef"`
+}
+
 // RuntimeEnvironmentDraft defines model for RuntimeEnvironmentDraft.
 type RuntimeEnvironmentDraft struct {
 	Diagnostics                []string   `json:"diagnostics"`
@@ -6665,6 +6726,17 @@ type RuntimeEnvironmentImage struct {
 	Reference        string    `json:"reference"`
 }
 
+// RuntimeEnvironmentImpact defines model for RuntimeEnvironmentImpact.
+type RuntimeEnvironmentImpact struct {
+	Consumers          []RuntimeEnvironmentConsumer `json:"consumers"`
+	EnvironmentRef     OpaqueRef                    `json:"environmentRef"`
+	EnvironmentVersion int64                        `json:"environmentVersion"`
+	NextPageToken      string                       `json:"nextPageToken"`
+	TargetDigest       string                       `json:"targetDigest"`
+	TargetVersionRef   OpaqueRef                    `json:"targetVersionRef"`
+	Total              int64                        `json:"total"`
+}
+
 // RuntimeEnvironmentInput defines model for RuntimeEnvironmentInput.
 type RuntimeEnvironmentInput struct {
 	Description      string                        `json:"description"`
@@ -6711,6 +6783,16 @@ type RuntimeEnvironmentReadiness struct {
 	PublishedVersionDigest string    `json:"publishedVersionDigest"`
 	PublishedVersionRef    OpaqueRef `json:"publishedVersionRef"`
 	Ready                  bool      `json:"ready"`
+}
+
+// RuntimeEnvironmentRebindInput defines model for RuntimeEnvironmentRebindInput.
+type RuntimeEnvironmentRebindInput struct {
+	Consumers []RuntimeEnvironmentConsumer `json:"consumers"`
+}
+
+// RuntimeEnvironmentRebindResult defines model for RuntimeEnvironmentRebindResult.
+type RuntimeEnvironmentRebindResult struct {
+	Bindings []AgentRuntimeEnvironmentBinding `json:"bindings"`
 }
 
 // RuntimeEnvironmentRollbackInput defines model for RuntimeEnvironmentRollbackInput.
@@ -7523,6 +7605,9 @@ type IfMatchOptional = string
 // ImpactDigest defines model for ImpactDigest.
 type ImpactDigest = string
 
+// InteractionIdentityRef defines model for InteractionIdentityRef.
+type InteractionIdentityRef = OpaqueRef
+
 // MembershipRef defines model for MembershipRef.
 type MembershipRef = OpaqueRef
 
@@ -7564,6 +7649,9 @@ type RuntimeEnvironmentDraftRef = OpaqueRef
 
 // RuntimeEnvironmentRef defines model for RuntimeEnvironmentRef.
 type RuntimeEnvironmentRef = OpaqueRef
+
+// RuntimeEnvironmentVersionRef defines model for RuntimeEnvironmentVersionRef.
+type RuntimeEnvironmentVersionRef = OpaqueRef
 
 // ScheduleRef defines model for ScheduleRef.
 type ScheduleRef = OpaqueRef
@@ -8064,6 +8152,19 @@ type ChangeIntegrationGrantParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListInteractionIdentitiesParams defines parameters for ListInteractionIdentities.
+type ListInteractionIdentitiesParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// BindInteractionIdentityParams defines parameters for BindInteractionIdentity.
+type BindInteractionIdentityParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // CreateIntegrationDefinitionDraftParams defines parameters for CreateIntegrationDefinitionDraft.
 type CreateIntegrationDefinitionDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
@@ -8098,6 +8199,13 @@ type ListIntegrationDefinitionsParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// RevokeInteractionIdentityParams defines parameters for RevokeInteractionIdentity.
+type RevokeInteractionIdentityParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ListManagedConfigurationsParams defines parameters for ListManagedConfigurations.
@@ -8654,6 +8762,19 @@ type PublishRuntimeEnvironmentVersionParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// RebindRuntimeEnvironmentParams defines parameters for RebindRuntimeEnvironment.
+type RebindRuntimeEnvironmentParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetRuntimeEnvironmentImpactParams defines parameters for GetRuntimeEnvironmentImpact.
+type GetRuntimeEnvironmentImpactParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListOrganizationRuntimeSecretsParams defines parameters for ListOrganizationRuntimeSecrets.
 type ListOrganizationRuntimeSecretsParams struct {
 	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
@@ -8967,6 +9088,9 @@ type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCreden
 // ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
 type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
+// BindInteractionIdentityJSONRequestBody defines body for BindInteractionIdentity for application/json ContentType.
+type BindInteractionIdentityJSONRequestBody = InteractionIdentityBindInput
+
 // CreateIntegrationDefinitionDraftJSONRequestBody defines body for CreateIntegrationDefinitionDraft for application/json ContentType.
 type CreateIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
@@ -9071,6 +9195,9 @@ type RollbackRuntimeEnvironmentJSONRequestBody = RuntimeEnvironmentRollbackInput
 
 // PublishRuntimeEnvironmentVersionJSONRequestBody defines body for PublishRuntimeEnvironmentVersion for application/json ContentType.
 type PublishRuntimeEnvironmentVersionJSONRequestBody = RuntimeEnvironmentInput
+
+// RebindRuntimeEnvironmentJSONRequestBody defines body for RebindRuntimeEnvironment for application/json ContentType.
+type RebindRuntimeEnvironmentJSONRequestBody = RuntimeEnvironmentRebindInput
 
 // RotateRuntimeSecretJSONRequestBody defines body for RotateRuntimeSecret for application/json ContentType.
 type RotateRuntimeSecretJSONRequestBody = RuntimeSecretRotateInput
@@ -9327,6 +9454,12 @@ type ServerInterface interface {
 	// (POST /api/v1/integration-connections/{connectionRef}/grants)
 	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
 
+	// (GET /api/v1/integration-connections/{connectionRef}/interaction-identities)
+	ListInteractionIdentities(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ListInteractionIdentitiesParams)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/interaction-identities)
+	BindInteractionIdentity(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BindInteractionIdentityParams)
+
 	// (POST /api/v1/integration-definition-configurations/drafts)
 	CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, params CreateIntegrationDefinitionDraftParams)
 
@@ -9341,6 +9474,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/integration-definitions)
 	ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, params ListIntegrationDefinitionsParams)
+
+	// (DELETE /api/v1/interaction-identities/{identityRef})
+	RevokeInteractionIdentity(w http.ResponseWriter, r *http.Request, identityRef InteractionIdentityRef, params RevokeInteractionIdentityParams)
 
 	// (GET /api/v1/managed-configurations)
 	ListManagedConfigurations(w http.ResponseWriter, r *http.Request, params ListManagedConfigurationsParams)
@@ -9608,6 +9744,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/runtime-environments/{environmentRef}/versions)
 	PublishRuntimeEnvironmentVersion(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, params PublishRuntimeEnvironmentVersionParams)
+
+	// (POST /api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings)
+	RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, versionRef RuntimeEnvironmentVersionRef, params RebindRuntimeEnvironmentParams)
+
+	// (GET /api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact)
+	GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, versionRef RuntimeEnvironmentVersionRef, params GetRuntimeEnvironmentImpactParams)
 
 	// (GET /api/v1/runtime-secrets)
 	ListOrganizationRuntimeSecrets(w http.ResponseWriter, r *http.Request, params ListOrganizationRuntimeSecretsParams)
@@ -15540,6 +15682,173 @@ func (siw *ServerInterfaceWrapper) ChangeIntegrationGrant(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListInteractionIdentities operation middleware
+func (siw *ServerInterfaceWrapper) ListInteractionIdentities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListInteractionIdentitiesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInteractionIdentities(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BindInteractionIdentity operation middleware
+func (siw *ServerInterfaceWrapper) BindInteractionIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BindInteractionIdentityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BindInteractionIdentity(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateIntegrationDefinitionDraft operation middleware
 func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -16047,6 +16356,112 @@ func (siw *ServerInterfaceWrapper) ListIntegrationDefinitions(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIntegrationDefinitions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeInteractionIdentity operation middleware
+func (siw *ServerInterfaceWrapper) RevokeInteractionIdentity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "identityRef" -------------
+	var identityRef InteractionIdentityRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "identityRef", r.PathValue("identityRef"), &identityRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "identityRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeInteractionIdentityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeInteractionIdentity(w, r, identityRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -23443,6 +23858,191 @@ func (siw *ServerInterfaceWrapper) PublishRuntimeEnvironmentVersion(w http.Respo
 	handler.ServeHTTP(w, r)
 }
 
+// RebindRuntimeEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) RebindRuntimeEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "environmentRef" -------------
+	var environmentRef RuntimeEnvironmentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environmentRef", r.PathValue("environmentRef"), &environmentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environmentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "versionRef" -------------
+	var versionRef RuntimeEnvironmentVersionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionRef", r.PathValue("versionRef"), &versionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RebindRuntimeEnvironmentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RebindRuntimeEnvironment(w, r, environmentRef, versionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRuntimeEnvironmentImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "environmentRef" -------------
+	var environmentRef RuntimeEnvironmentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environmentRef", r.PathValue("environmentRef"), &environmentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environmentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "versionRef" -------------
+	var versionRef RuntimeEnvironmentVersionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "versionRef", r.PathValue("versionRef"), &versionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "versionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRuntimeEnvironmentImpactParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeEnvironmentImpact(w, r, environmentRef, versionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrganizationRuntimeSecrets operation middleware
 func (siw *ServerInterfaceWrapper) ListOrganizationRuntimeSecrets(w http.ResponseWriter, r *http.Request) {
 
@@ -26244,11 +26844,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings", wrapper.RebindIntegrationDefinitionConsumers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-definitions", wrapper.ListIntegrationDefinitions)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/interaction-identities/{identityRef}", wrapper.RevokeInteractionIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations", wrapper.ListManagedConfigurations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/copies", wrapper.CopyGitManagedConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/detachment", wrapper.DetachGitManagedConfiguration)
@@ -26338,6 +26941,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/rollbacks", wrapper.RollbackRuntimeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions", wrapper.ListRuntimeEnvironmentVersions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions", wrapper.PublishRuntimeEnvironmentVersion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings", wrapper.RebindRuntimeEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact", wrapper.GetRuntimeEnvironmentImpact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets", wrapper.ListOrganizationRuntimeSecrets)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.RevokeRuntimeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets/{secretRef}", wrapper.GetRuntimeSecret)
