@@ -12,7 +12,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-const repositoryPolicyDigest = "68820472113d636607336da46d1481c73126c6ab55ec8e0c59de4077dfc2ad89"
+const repositoryPolicyDigest = "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218"
 
 func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")
@@ -27,9 +27,25 @@ func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	if actualDigest != repositoryPolicyDigest {
 		t.Fatalf("repository policy digest mismatch: got %s", actualDigest)
 	}
-	active, err := Load(value, "2026-08-28.1", repositoryPolicyDigest)
+	active, err := Load(value, "2026-09-05.1", repositoryPolicyDigest)
 	if err != nil {
 		t.Fatal(err)
+	}
+	profile, err := active.ForProfile(STTProfileName)
+	if err != nil || profile.Digest() != active.Digest() || profile.Revision() != active.Revision() ||
+		!profile.Allows("api.openai.com", 443) || profile.Allows("auth.openai.com", 443) || profile.Allows("github.com", 443) ||
+		len(profile.Destinations()) != 1 {
+		t.Fatalf("unexpected STT profile: %v", err)
+	}
+	if name, workload, operation := profile.ProfileIdentity(); name != STTProfileName || workload != STTWorkload || operation != STTOperation {
+		t.Fatal("STT profile identity mismatch")
+	}
+	profile.Destinations()[0].Hostname = "github.com"
+	if profile.Destinations()[0].Hostname != "api.openai.com" {
+		t.Fatal("profile destination snapshot is mutable")
+	}
+	if _, err := active.ForProfile("unknown"); err == nil {
+		t.Fatal("unknown profile accepted")
 	}
 	expected := []string{"api.github.com", "api.openai.com", "auth.openai.com", "chatgpt.com", "github.com"}
 	if destinations := active.Destinations(); len(destinations) != len(expected) {

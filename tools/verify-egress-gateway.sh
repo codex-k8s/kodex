@@ -9,6 +9,7 @@ base_render="$temporary_directory/base.yaml"
 staging_render="$temporary_directory/staging.yaml"
 production_render="$temporary_directory/production.yaml"
 consumer_render="$temporary_directory/integration-gateway.yaml"
+stt_render="$temporary_directory/stt-tts-service.yaml"
 synthetic_digest="sha256:$(printf '1%.0s' {1..64})"
 synthetic_registry="registry-pull.example.com"
 renderer="$repository_root/tools/render-egress-gateway.sh"
@@ -25,6 +26,7 @@ kubectl kustomize "$repository_root/deploy/k8s/base/egress-gateway" >"$base_rend
 "$renderer" staging "$synthetic_digest" "$synthetic_registry" >"$staging_render"
 "$renderer" production "$synthetic_digest" "$synthetic_registry" >"$production_render"
 kubectl kustomize "$repository_root/deploy/k8s/base/integration-gateway" >"$consumer_render"
+kubectl kustomize "$repository_root/deploy/k8s/base/stt-tts-service" >"$stt_render"
 
 label_61="$(printf 'a%.0s' {1..61})"
 label_63="$(printf 'a%.0s' {1..63})"
@@ -80,14 +82,27 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
   yq -e 'select(.kind == "Service" and .metadata.name == "egress-gateway") |
     .spec.selector."app.kubernetes.io/name" == "egress-gateway" and
     .spec.selector."app.kubernetes.io/component" == "platform-egress" and
-    ([.spec.ports[] | select(.name == "connect" and .port == 8080)] | length == 1)' "$gateway_render" >/dev/null
+    ([.spec.ports[] | select(.name == "connect" and .port == 8080)] | length == 1) and
+    ([.spec.ports[] | select(.name == "stt-connect" and .port == 8081 and .targetPort == "stt-connect")] | length == 1) and
+    (.spec.ports | length == 2)' "$gateway_render" >/dev/null
+
+  yq -e 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
+    ([.spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_STT_CONNECT_LISTEN" and .value == ":8081")] | length == 1) and
+    ([.spec.template.spec.containers[0].ports[] | select(.name == "stt-connect" and .containerPort == 8081)] | length == 1)' "$gateway_render" >/dev/null
 
   yq -e 'select(.kind == "Service" and .metadata.name == "egress-gateway-technical") |
     .spec.publishNotReadyAddresses == true and
     ([.spec.ports[] | select(.name == "metrics" and .port == 9090)] | length == 1)' "$gateway_render" >/dev/null
 
   yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths") |
-    (.spec.ingress | length == 2) and (.spec.egress | length == 3) and
+    (.spec.ingress | length == 3) and (.spec.egress | length == 3) and
+    ([.spec.ingress[] | select(.ports[].port == 8081) | .from[]] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8081) | .from[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "stt-tts-service" and
+        .podSelector.matchLabels."app.kubernetes.io/component" == "internal-service")] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
+      select(.podSelector.matchLabels."app.kubernetes.io/name" == "stt-tts-service")] | length == 0) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "integration-gateway" and
@@ -97,7 +112,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
         .podSelector.matchLabels."app.kubernetes.io/name" == "interaction-gateway" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "interaction-adapter")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8080) | .from[] |
-      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-runtime" and
         .podSelector.matchLabels."app.kubernetes.io/name" == "agent-runner" and
         .podSelector.matchLabels."app.kubernetes.io/component" == "role-runtime" and
         .podSelector.matchLabels."runtime.kodex.dev/managed" == "true")] | length == 1) and
@@ -127,6 +142,14 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     exit 1
   fi
 done
+
+yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "stt-tts-service-exact-runtime-paths") |
+  ([.spec.egress[] | select(.ports[].port == 8081) | .to[] |
+    select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
+      .podSelector.matchLabels."app.kubernetes.io/name" == "egress-gateway" and
+      .podSelector.matchLabels."app.kubernetes.io/component" == "platform-egress")] | length == 1) and
+  ([.spec.egress[] | select(.ports[].port == 8080 or .ports[].port == 443)] | length == 0) and
+  ([.spec.egress[] | select(.to == null)] | length == 0)' "$stt_render" >/dev/null
 
 for environment_name in staging production; do
   delivered_render="$temporary_directory/$environment_name.yaml"
@@ -207,11 +230,11 @@ fi
 
 rollout_base="$temporary_directory/rollout-base"
 cp -R "$repository_root/deploy/k8s/base/egress-gateway" "$rollout_base"
-jq '.metadata.revision = "2026-08-28.2"' "$rollout_base/policy.json" >"$rollout_base/policy.next.json"
+jq '.metadata.revision = "2026-09-05.2"' "$rollout_base/policy.json" >"$rollout_base/policy.next.json"
 mv "$rollout_base/policy.next.json" "$rollout_base/policy.json"
 next_digest="$(cd "$repository_root/services/external/egress-gateway" && go run ./cmd/policy-digest "$rollout_base/policy.json")"
 sed -i \
-  -e 's/2026-08-28\.1/2026-08-28.2/g' \
+  -e 's/2026-09-05\.1/2026-09-05.2/g' \
   -e "s/$policy_digest/$next_digest/g" \
   "$rollout_base/deployment.yaml"
 next_render="$temporary_directory/next-policy.yaml"

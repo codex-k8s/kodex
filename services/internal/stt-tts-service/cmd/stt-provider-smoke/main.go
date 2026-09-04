@@ -14,9 +14,20 @@ import (
 const maximumCredentialBytes = 16 << 10
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	fixture, err := providersmoke.VerifyFixture(ctx, os.Getenv("KODEX_STT_ACCEPTANCE_FIXTURE"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer fixture.Close()
+	if len(os.Args) == 2 && os.Args[1] == "--fixture-only" {
+		log.Print("STT fixture preflight passed; live provider NOT RUN")
+		return
+	}
 	credentialFile := os.Getenv("KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY_FILE")
 	if credentialFile == "" {
-		log.Fatal("STT provider smoke credential file is required")
+		log.Fatal("STT live provider NOT RUN: separate test credential file is required")
 	}
 	rawKey, err := securefile.Read(credentialFile, maximumCredentialBytes)
 	if err != nil {
@@ -27,13 +38,6 @@ func main() {
 	if len(key) == 0 {
 		log.Fatal("STT provider smoke credential is empty")
 	}
-	fixture, err := providersmoke.VerifyFixture(os.Getenv("KODEX_STT_ACCEPTANCE_FIXTURE"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer fixture.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 	if err := fixture.Run(ctx, key); err != nil {
 		log.Fatal(err)
 	}
