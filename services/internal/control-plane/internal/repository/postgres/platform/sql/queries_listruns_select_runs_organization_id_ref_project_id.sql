@@ -24,10 +24,8 @@ LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.sys
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id=r.input_attachment_set_id
 WHERE r.organization_id=$1::uuid
   AND ($2='' OR p.ref=$2)
-  AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-    SELECT 1 FROM control_plane.memberships m
-    WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)
-  ))
   AND ($5='' OR r.title ILIKE '%'||$5||'%' OR r.task ILIKE '%'||$5||'%')
-ORDER BY r.created_at DESC
+  AND ($7 = '' OR r.ref > $7)
+  AND (cardinality($8::text[]) = 0 OR r.state = ANY($8::text[]))
+ORDER BY r.ref
 LIMIT $6

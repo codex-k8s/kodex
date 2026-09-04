@@ -599,6 +599,10 @@ func organizationTarget(ref string) entity.AccessScope {
 
 func visibilityPermission(kind string) string {
 	switch kind {
+	case "RUNTIME_ENVIRONMENT":
+		return "project.view"
+	case "MEMBERSHIP":
+		return "access.manage"
 	case "PROJECT":
 		return "project.view"
 	case "AGENT":

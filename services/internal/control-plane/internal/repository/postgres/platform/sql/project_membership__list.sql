@@ -21,18 +21,8 @@ JOIN control_plane.memberships platform_membership
  AND platform_membership.subject_id = subject.id
  AND platform_membership.project_id IS NULL
 WHERE project.organization_id = @organization_id::uuid
-  AND project.ref = @project_ref
-  AND (
-      @actor_platform_role IN ('OWNER', 'ADMINISTRATOR')
-      OR EXISTS (
-          SELECT 1
-          FROM control_plane.memberships actor_membership
-          WHERE actor_membership.organization_id = project.organization_id
-            AND actor_membership.project_id = project.id
-            AND actor_membership.subject_id = @actor_id::uuid
-            AND actor_membership.active
-            AND 'MANAGE_MEMBERS' = ANY(actor_membership.permissions)
-      )
-  )
-ORDER BY subject.display_name, subject.ref
+  AND (@project_ref = '' OR project.ref = @project_ref)
+  AND (@query = '' OR subject.display_name ILIKE '%' || @query || '%' OR subject.email_masked ILIKE '%' || @query || '%')
+  AND (@cursor_ref = '' OR project_membership.ref > @cursor_ref)
+ORDER BY project_membership.ref
 LIMIT @page_size;

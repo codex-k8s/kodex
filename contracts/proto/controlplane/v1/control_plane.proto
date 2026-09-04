@@ -71,6 +71,7 @@ service PlatformQueryService {
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
+  rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
 }
@@ -1447,6 +1448,14 @@ message BootstrapState {
   UserSummary current_user = 5;
   repeated NextAction next_actions = 6;
   PlatformRole platform_role = 7;
+  SpeechTranscriptionAvailability speech_transcription = 8;
+}
+
+message SpeechTranscriptionAvailability {
+  bool eligible = 1;
+  // available вычисляет gateway после проверки живого STT пути; owner не заявляет готовность сервиса.
+  bool available = 2;
+  string reason = 3;
 }
 
 message Overview {
@@ -1682,6 +1691,7 @@ message RemovePlatformMembershipResponse {
 message ListProjectMembershipsRequest {
   string project_ref = 1;
   PageRequest page = 2;
+  string query = 3;
 }
 message ListProjectMembershipsResponse {
   repeated Membership memberships = 1;
@@ -4417,6 +4427,17 @@ message CopyGitManagedConfigurationResponse {
 message ListManagedConfigurationHistoryRequest {
   string configuration_ref = 1;
   PageRequest page = 2;
+}
+message ListManagedConfigurationsRequest {
+  string project_ref = 1;
+  ManagedConfigurationKind kind = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+message ListManagedConfigurationsResponse {
+  repeated ManagedConfigurationSet configurations = 1;
+  int64 total = 2;
+  PageInfo page = 3;
 }
 message ListManagedConfigurationHistoryResponse {
   ManagedConfigurationSet configuration = 1;

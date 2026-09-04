@@ -64,61 +64,35 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	}
 	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
 	filter.Query = strings.TrimSpace(filter.Query)
-	if filter.ProjectRef == "" || len([]rune(filter.Query)) > 200 {
+	if len([]rune(filter.Query)) > 200 {
 		return nil, "", errs.ErrInvalid
-	}
-	cursor, err := decodeRuntimeSecretListCursor(filter.Page.Token, filter.ProjectRef, filter.Query)
-	if err != nil {
-		return nil, "", err
 	}
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
 	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	project, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "PROJECT", ResourceRef: filter.ProjectRef})
-	if err != nil || principal.ProjectRef != "" && principal.ProjectRef != project.projectID {
-		return nil, "", errs.ErrNotFound
-	}
-	if err := repository.requireAccess(ctx, tx, current, "secret.view", project); err != nil {
-		return nil, "", errs.ErrNotFound
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := tx.Query(ctx, queryRuntimeSecretsList, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "project_ref": filter.ProjectRef,
-		"query": filter.Query, "cursor_ref": cursor.Ref, "page_size": limit + 1,
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	items := make([]entity.RuntimeSecret, 0, limit+1)
-	for rows.Next() {
-		item, scanErr := scanRuntimeSecret(rows)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		items = append(items, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next, err = encodeRuntimeSecretListCursor(filter.ProjectRef, filter.Query, items[len(items)-1].Ref)
-		if err != nil || next == filter.Page.Token {
-			return nil, "", errs.ErrConflict
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, "", errs.ErrConflict
-	}
-	return items, next, nil
+	return authorizedCatalog(ctx, repository, current, "SECRET", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeSecret, error) {
+			rows, err := tx.Query(ctx, queryRuntimeSecretsList, pgx.StrictNamedArgs{
+				"organization_id": current.organizationID, "project_ref": filter.ProjectRef,
+				"query": filter.Query, "cursor_ref": cursor, "page_size": limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.RuntimeSecret
+			for rows.Next() {
+				item, err := scanRuntimeSecret(rows)
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.RuntimeSecret) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SECRET", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, _ *entity.RuntimeSecret, _ func(string) bool) error { return nil })
 }
 
 func runtimeSecretListFilterDigest(projectRef, queryValue string) string {

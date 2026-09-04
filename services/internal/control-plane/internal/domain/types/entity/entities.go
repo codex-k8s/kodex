@@ -266,6 +266,11 @@ type SystemSTTConfiguration struct {
 	ReadinessBlockers                                         []string
 }
 
+type SpeechTranscriptionAvailability struct {
+	Eligible bool
+	Reason   string
+}
+
 type ProviderAuthorization struct {
 	Ref, Method, State, VerificationURI, UserCode, SafeFailureCode string
 	ExpiresAt                                                      *time.Time
