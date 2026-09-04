@@ -1,0 +1,27 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "email-bridge-runtime",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge-runtime"
+    }
+  },
+  "data": {
+    "EMAIL_BRIDGE_CONFIGURATION_FILE": "/var/run/email/config/mailboxes.yaml",
+    "EMAIL_BRIDGE_SECRETS_ROOT": "/var/run/email/mail",
+    "EMAIL_BRIDGE_DSN_FILE": "/var/run/email/database/dsn",
+    "EMAIL_BRIDGE_CERTIFICATE_FILE": "/var/run/email/tls/tls.crt",
+    "EMAIL_BRIDGE_PRIVATE_KEY_FILE": "/var/run/email/tls/tls.key",
+    "EMAIL_BRIDGE_CA_FILE": "/var/run/email/tls/ca.crt",
+    "EMAIL_BRIDGE_AUTHORITY_BEARER_FILE": "/var/run/email/authority/service-bearer",
+    "EMAIL_BRIDGE_HEALTH_TOKEN_FILE": "/var/run/email/authority/health-token",
+    "EMAIL_BRIDGE_AUTHORITY_URL": "https://control-plane.kodex-system.svc.cluster.local:8444",
+    "EMAIL_BRIDGE_EGRESS_ADDRESS": "egress-gateway.kodex-system.svc:8080",
+    "DEPLOYMENT_ENVIRONMENT": "staging",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "otel-collector.kodex-system.svc:4317",
+    "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME": "otel-collector.kodex-system.svc.cluster.local",
+    "OTEL_EXPORTER_OTLP_CA_FILE": "/var/run/email/tls/ca.crt"
+  }
+}

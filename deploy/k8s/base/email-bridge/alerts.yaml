@@ -1,0 +1,43 @@
+{
+  "apiVersion": "monitoring.coreos.com/v1",
+  "kind": "PrometheusRule",
+  "metadata": {
+    "name": "email-bridge",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge"
+    }
+  },
+  "spec": {
+    "groups": [
+      {
+        "name": "email-bridge",
+        "rules": [
+          {
+            "alert": "EmailBridgeUnknownOutcome",
+            "expr": "increase(kodex_email_bridge_operations_total{outcome=\"unknown\"}[10m]) > 0",
+            "labels": {
+              "severity": "warning"
+            },
+            "annotations": {
+              "summary": "Неопределённый исход почтовой операции",
+              "runbook_url": "https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/email-bridge.md"
+            }
+          },
+          {
+            "alert": "EmailBridgeNotReady",
+            "expr": "kodex_email_bridge_readiness{ready=\"true\"} == 0",
+            "for": "5m",
+            "labels": {
+              "severity": "warning"
+            },
+            "annotations": {
+              "summary": "Почтовый bridge не готов",
+              "runbook_url": "https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/email-bridge.md"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
