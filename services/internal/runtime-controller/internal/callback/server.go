@@ -398,7 +398,7 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 	content := response.GetContent()
 	digest := sha256.Sum256(content)
 	actualDigest := "sha256:" + hex.EncodeToString(digest[:])
-	if artifact.GetRef() != expected.Ref || artifact.GetFileName() != expected.FileName ||
+	if artifact.GetRef() != expected.Ref || artifact.GetProjectRef() != input.ProjectRef || artifact.GetFileName() != expected.FileName ||
 		artifact.GetMediaType() != expected.MediaType || artifact.GetSizeBytes() != expected.SizeBytes ||
 		int64(len(content)) != expected.SizeBytes || artifact.GetRevision() != int32(expected.Revision) ||
 		artifact.GetVersion() != expected.Version || subtle.ConstantTimeCompare([]byte(artifact.GetDigest()), []byte(expected.Digest)) != 1 ||
@@ -474,7 +474,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerCompletionRequest
-	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
 		http.Error(writer, "invalid runtime completion", http.StatusBadRequest)
 		return
 	}
@@ -491,14 +491,15 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	server.coordinator.Complete(input.LeaseRef)
-	go func() {
-		cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(request.Context()), 10*time.Second)
-		defer cleanupCancel()
-		if cleanupErr := server.manager.DeleteTurn(cleanup, input.LeaseRef); cleanupErr != nil {
-			server.logger.ErrorContext(cleanup, "runtime resource cleanup failed", "error_class", "kubernetes")
-		}
-	}()
 	writer.WriteHeader(http.StatusNoContent)
+	// Ответ о durable commit отправляется до удаления вызывающего Pod;
+	// cleanup остаётся частью handler, которого дожидается HTTP shutdown.
+	_ = http.NewResponseController(writer).Flush()
+	cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(request.Context()), 10*time.Second)
+	defer cleanupCancel()
+	if cleanupErr := server.manager.DeleteTurn(cleanup, input.LeaseRef); cleanupErr != nil {
+		server.logger.ErrorContext(cleanup, "runtime resource cleanup failed", "error_class", "kubernetes")
+	}
 }
 
 type mcpRequest struct {
@@ -573,9 +574,35 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if len(input.IntegrationGrants) != 0 {
-		result = append(result, map[string]any{"name": "invoke_integration", "description": "Invoke an allowed typed integration capability.", "inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"connection_ref", "capability_key", "input"}, "properties": map[string]any{"connection_ref": map[string]string{"type": "string"}, "capability_key": map[string]string{"type": "string"}, "input": map[string]string{"type": "object"}}}})
+		result = append(result, integrationTool(input.IntegrationGrants))
 	}
 	return result
+}
+
+func integrationTool(grants []runtimecontract.RunnerIntegrationGrant) map[string]any {
+	variants := make([]any, 0, len(grants))
+	for _, grant := range grants {
+		var inputSchema map[string]any
+		if json.Unmarshal([]byte(grant.InputSchema), &inputSchema) != nil {
+			continue
+		}
+		variants = append(variants, map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"},
+			"properties": map[string]any{
+				"connection_ref":      map[string]any{"type": "string", "const": grant.ConnectionRef},
+				"capability_key":      map[string]any{"type": "string", "const": grant.CapabilityKey},
+				"definition_version":  map[string]any{"type": "string", "const": grant.DefinitionVersion},
+				"definition_digest":   map[string]any{"type": "string", "const": grant.DefinitionDigest},
+				"input_schema_sha256": map[string]any{"type": "string", "const": grant.InputSchemaSHA256},
+				"input":               inputSchema,
+			},
+		})
+	}
+	return map[string]any{
+		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision.",
+		"inputSchema": map[string]any{"oneOf": variants},
+	}
 }
 
 func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
@@ -1198,11 +1225,19 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 }
 
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
+	if !onlyKeys(arguments, "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
+		return nil, errors.New("integration input is invalid")
+	}
 	connection, _ := arguments["connection_ref"].(string)
 	capability, _ := arguments["capability_key"].(string)
+	definitionVersion, _ := arguments["definition_version"].(string)
+	definitionDigest, _ := arguments["definition_digest"].(string)
+	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
 	allowed := false
 	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
+		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
+			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
+			grant.InputSchemaSHA256 == inputSchemaDigest {
 			allowed = true
 			break
 		}
@@ -1238,6 +1273,8 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 			return map[string]any{"ok": true, "result": state.GetResultSummary()}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
 			return map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()}, nil
+		case "UNKNOWN_OUTCOME":
+			return map[string]any{"ok": false, "error_code": "INTEGRATION_OUTCOME_UNKNOWN", "owner_decision_required": true}, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -1253,7 +1290,26 @@ func (server *Server) authorize(request *http.Request, leaseRef string) (runtime
 		return runtimecontract.RunnerInput{}, false
 	}
 	input, err := server.manager.ResolveTurn(request.Context(), leaseRef, token)
-	return input, err == nil
+	return input, err == nil && executionHeadersMatch(request, input)
+}
+
+func executionHeadersMatch(request *http.Request, input runtimecontract.RunnerInput) bool {
+	method := ""
+	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if len(parts) == 5 && parts[3] == "artifacts" {
+		method = "artifact"
+	} else if len(parts) == 4 {
+		method = parts[3]
+	}
+	return method != "" && request.Header.Get("X-Kodex-Callback-Method") == method &&
+		request.Header.Get("X-Kodex-Organization-Ref") == input.OrganizationRef &&
+		request.Header.Get("X-Kodex-Project-Ref") == input.ProjectRef && request.Header.Get("X-Kodex-Run-Ref") == input.RunRef &&
+		request.Header.Get("X-Kodex-Node-Ref") == input.NodeRef && request.Header.Get("X-Kodex-Session-Ref") == input.SessionRef &&
+		request.Header.Get("X-Kodex-Turn-Ref") == input.TurnRef && request.Header.Get("X-Kodex-Attempt") == strconv.FormatInt(int64(input.Attempt), 10) &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Runtime-Revision-Digest")), []byte(input.RuntimeRevisionDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Input-Digest")), []byte(input.InputDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Execution-Binding-Digest")), []byte(input.ExecutionBindingDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-MCP-Binding-Digest")), []byte(input.MCPBindingDigest)) == 1
 }
 
 func bearer(request *http.Request) (string, bool) {

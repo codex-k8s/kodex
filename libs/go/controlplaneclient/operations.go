@@ -46,6 +46,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.schedules.get":                             controlplanev1.PlatformQueryService_GetSchedule_FullMethodName,
 		"platform.query.schedule-revisions.list":                   controlplanev1.PlatformQueryService_ListScheduleRevisions_FullMethodName,
 		"platform.query.schedule-runs.list":                        controlplanev1.PlatformQueryService_ListScheduleRuns_FullMethodName,
+		"platform.query.schedules.preview":                         controlplanev1.PlatformQueryService_PreviewSchedule_FullMethodName,
 		"platform.query.provider-definitions.list":                 controlplanev1.PlatformQueryService_ListProviderDefinitions_FullMethodName,
 		"platform.query.models.list":                               controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName,
 		"platform.query.provider-accounts.list":                    controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName,
@@ -305,7 +306,9 @@ func ImagePromotionOperations() map[string]string {
 func AutomationSchedulerOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime.schedules.claim":       controlplanev1.RuntimeWorkService_ClaimDueSchedules_FullMethodName,
+		"platform.runtime.schedules.renew":       controlplanev1.RuntimeWorkService_RenewScheduleOccurrence_FullMethodName,
 		"platform.runtime.schedules.materialize": controlplanev1.RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName,
+		"platform.runtime.schedules.fail":        controlplanev1.RuntimeWorkService_FailScheduleOccurrence_FullMethodName,
 	}
 }
 

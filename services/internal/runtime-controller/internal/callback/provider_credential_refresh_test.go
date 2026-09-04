@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,6 +59,7 @@ func TestProviderCredentialRefreshRouteCommitsOnlyMaterializedMetadata(t *testin
 	for attempt := 0; attempt < 2; attempt++ {
 		request := httptest.NewRequest(http.MethodPost, "/v1/executions/"+input.LeaseRef+"/provider-credential-refresh", bytes.NewReader(body))
 		request.Header.Set("Authorization", "Bearer "+ticket)
+		bindTestExecutionHeaders(request, input, "provider-credential-refresh")
 		response := httptest.NewRecorder()
 		server.route(response, request)
 		if response.Code != http.StatusNoContent {
@@ -98,10 +100,55 @@ func TestProviderCredentialRefreshRouteRejectsRevisionMismatchBeforeMaterializat
 	body, _ := json.Marshal(payload)
 	request := httptest.NewRequest(http.MethodPost, "/v1/executions/"+input.LeaseRef+"/provider-credential-refresh", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+ticket)
+	bindTestExecutionHeaders(request, input, "provider-credential-refresh")
 	response := httptest.NewRecorder()
 	server.route(response, request)
 	if response.Code != http.StatusBadRequest || len(runtimeClient.requests) != 0 {
 		t.Fatalf("revision mismatch status=%d commits=%d", response.Code, len(runtimeClient.requests))
+	}
+}
+
+func bindTestExecutionHeaders(request *http.Request, input runtimecontract.RunnerInput, method string) {
+	request.Header.Set("X-Kodex-Organization-Ref", input.OrganizationRef)
+	request.Header.Set("X-Kodex-Project-Ref", input.ProjectRef)
+	request.Header.Set("X-Kodex-Run-Ref", input.RunRef)
+	request.Header.Set("X-Kodex-Node-Ref", input.NodeRef)
+	request.Header.Set("X-Kodex-Session-Ref", input.SessionRef)
+	request.Header.Set("X-Kodex-Turn-Ref", input.TurnRef)
+	request.Header.Set("X-Kodex-Attempt", strconv.FormatInt(int64(input.Attempt), 10))
+	request.Header.Set("X-Kodex-Runtime-Revision-Digest", input.RuntimeRevisionDigest)
+	request.Header.Set("X-Kodex-Input-Digest", input.InputDigest)
+	request.Header.Set("X-Kodex-Execution-Binding-Digest", input.ExecutionBindingDigest)
+	request.Header.Set("X-Kodex-MCP-Binding-Digest", input.MCPBindingDigest)
+	request.Header.Set("X-Kodex-Callback-Method", method)
+}
+
+func TestExecutionHeadersRejectCrossBoundaryAndStaleProjection(t *testing.T) {
+	input := validWarmExecutionInput()
+	request := httptest.NewRequest(http.MethodPost, "/v1/executions/"+input.LeaseRef+"/progress", nil)
+	bindTestExecutionHeaders(request, input, "progress")
+	if !executionHeadersMatch(request, input) {
+		t.Fatal("exact execution headers were rejected")
+	}
+	for name, header := range map[string]string{
+		"organization": "X-Kodex-Organization-Ref",
+		"project":      "X-Kodex-Project-Ref",
+		"session":      "X-Kodex-Session-Ref",
+		"turn":         "X-Kodex-Turn-Ref",
+		"attempt":      "X-Kodex-Attempt",
+		"input digest": "X-Kodex-Input-Digest",
+		"execution":    "X-Kodex-Execution-Binding-Digest",
+		"MCP":          "X-Kodex-MCP-Binding-Digest",
+		"method":       "X-Kodex-Callback-Method",
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := request.Clone(request.Context())
+			candidate.Header = request.Header.Clone()
+			candidate.Header.Set(header, "mismatch")
+			if executionHeadersMatch(candidate, input) {
+				t.Fatalf("mismatched header %q was accepted", header)
+			}
+		})
 	}
 }
 
@@ -134,7 +181,7 @@ func TestProviderCredentialRefreshReadbackRequiresExactNewRevision(t *testing.T)
 	}
 }
 
-func providerCredentialRefreshRouteFixture(t *testing.T) (*workload.Manager, *fake.Clientset, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest, string) {
+func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runtimecontract.RunnerInput)) (*workload.Manager, *fake.Clientset, runtimecontract.RunnerInput, runtimecontract.RunnerProviderCredentialRefreshRequest, string) {
 	t.Helper()
 	client := fake.NewSimpleClientset()
 	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
@@ -185,8 +232,18 @@ func providerCredentialRefreshRouteFixture(t *testing.T) (*workload.Manager, *fa
 	}
 	input.EffectiveKubernetesAccess = access
 	input.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, input.EnvironmentImage, nil, policy)
+	for _, apply := range configure {
+		apply(&input)
+	}
+	input.RuntimeRevisionDigest, _ = runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: source.Name, SecretUID: string(source.UID), SecretResourceVersion: source.ResourceVersion,
+	})
+	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
 	binding := workload.ProviderSecretBinding{Name: source.Name, UID: string(source.UID), ResourceVersion: source.ResourceVersion, ContentSHA256: oldDigestHex}
-	if err := manager.EnsureTurn(context.Background(), input, binding); err != nil {
+	projection := workload.CredentialProjection{Namespace: "kodex-runtime", SecretName: "runtime-credentials-0123456789abcdef0123456789abcdef01234567",
+		SecretUID: "40000000-0000-4000-8000-000000000001", SecretResourceVersion: "19", ContentSHA256: strings.Repeat("c", 64),
+		ProviderAuthKey: "provider-auth.json", RuntimeSecretKeys: map[string]string{}}
+	if err := manager.EnsureTurn(context.Background(), input, binding, projection); err != nil {
 		t.Fatalf("EnsureTurn() error = %v", err)
 	}
 	ticketName := callbackTicketName(input.LeaseRef)

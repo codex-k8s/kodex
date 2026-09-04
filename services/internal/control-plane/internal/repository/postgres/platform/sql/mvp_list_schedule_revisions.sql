@@ -1,7 +1,10 @@
 -- name: mvp_list_schedule_revisions :many
 SELECT revision.ref, revision.revision, revision.digest, revision.name, revision.target_type,
        revision.target_ref, revision.preset, revision.cron_expression, revision.timezone,
-       revision.input, revision.session_policy, revision.notification_policy, revision.created_at
+       revision.input, revision.session_policy, revision.notification_policy,
+       revision.dst_gap_policy, revision.dst_fold_policy, revision.misfire_policy,
+       revision.overlap_policy, revision.target_version, revision.target_digest,
+       revision.automation_text, revision.prompt_inputs, revision.created_at
 FROM control_plane.schedule_revisions revision
 JOIN control_plane.schedules schedule ON schedule.id = revision.schedule_id
 WHERE revision.organization_id = @organization_id::uuid

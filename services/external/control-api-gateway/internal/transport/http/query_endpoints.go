@@ -7,6 +7,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (server *Server) GetBootstrapState(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +333,31 @@ func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref 
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "schedules")
+}
+func (server *Server) PreviewSchedule(w http.ResponseWriter, r *http.Request, _ generated.PreviewScheduleParams) {
+	body, ok := decodeJSON[generated.SchedulePreviewInput](w, r)
+	if !ok {
+		return
+	}
+	limit := int32(10)
+	if body.Limit != nil {
+		limit = int32(*body.Limit)
+	}
+	request := &controlplanev1.PreviewScheduleRequest{
+		Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay),
+		DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, DstGapPolicy: string(body.DstGapPolicy),
+		DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy),
+		OverlapPolicy: string(body.OverlapPolicy), Limit: limit,
+	}
+	if body.After != nil {
+		request.After = timestamppb.New(*body.After)
+	}
+	response, err := server.control.Query.PreviewSchedule(r.Context(), request)
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "")
 }
 func (server *Server) GetSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef) {
 	response, err := server.control.Query.GetSchedule(r.Context(), &controlplanev1.GetScheduleRequest{ScheduleRef: ref})

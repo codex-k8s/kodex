@@ -172,3 +172,30 @@ func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 		t.Fatalf("unsupported authentication mode error = %v", err)
 	}
 }
+
+func TestValidateRuntimeSelectionRejectsUnknownModelReasoningToolAndMCP(t *testing.T) {
+	valid := model.Input{Provider: "openai", Model: "gpt-5.4", ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Name: "Shell", Command: "sh", Description: "Shell"}}}
+	if err := validateRuntimeSelection(valid); err != nil {
+		t.Fatalf("valid runtime selection rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*model.Input){
+		"provider":        func(input *model.Input) { input.Provider = "foreign" },
+		"model":           func(input *model.Input) { input.Model = "future-model" },
+		"model reasoning": func(input *model.Input) { input.ConfigOverlay = "model_reasoning_effort = \"max\"\n" },
+		"TOML key":        func(input *model.Input) { input.ConfigOverlay = "unknown = true\n" },
+		"MCP configuration": func(input *model.Input) {
+			input.ConfigOverlay = "[mcp_servers.foreign]\nurl = \"https://example.invalid\"\n"
+		},
+		"tool": func(input *model.Input) { input.EnvironmentTools[0].Command = "kodex-tool-that-does-not-exist" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := valid
+			input.EnvironmentTools = append([]runtimecontract.RuntimeEnvironmentTool(nil), valid.EnvironmentTools...)
+			mutate(&input)
+			if err := validateRuntimeSelection(input); !errors.Is(err, ErrRuntimeProfile) {
+				t.Fatalf("unknown runtime selection error = %v", err)
+			}
+		})
+	}
+}

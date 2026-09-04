@@ -69,6 +69,16 @@ func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	if err != nil || !strings.Contains(result.Summary, `"count":1`) {
 		t.Fatalf("synthetic read = %#v, %v", result, err)
 	}
+	for index, input := range []map[string]any{
+		{"action": "UPDATE", "expected_sequence": 1, "value": "second"},
+		{"action": "DELETE", "expected_sequence": 2},
+	} {
+		request := invocationRequest(t, adapter.definitions["synthetic"], "synthetic.journal.write", input, nil)
+		request.EffectKey += strings.Repeat("a", index+1)
+		if _, err := adapter.Execute(t.Context(), request); err != nil {
+			t.Fatalf("synthetic CRUD: %v", err)
+		}
+	}
 }
 
 func TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository(t *testing.T) {
@@ -104,6 +114,8 @@ func TestGitHubMetadataCreateRetryAndUpdateStayInsideRepository(t *testing.T) {
 		case request.Method == http.MethodPatch && request.URL.Path == "/repos/acme/repo/issues/3":
 			updateCalls++
 			_, _ = writer.Write([]byte(`{"id":77,"number":3,"title":"updated","state":"closed"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/repos/acme/repo/issues/3":
+			_, _ = writer.Write([]byte(`{"id":77,"number":3,"title":"created","state":"open"}`))
 		default:
 			http.NotFound(writer, request)
 		}

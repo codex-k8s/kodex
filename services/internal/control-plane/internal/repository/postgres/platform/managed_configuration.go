@@ -126,6 +126,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if kind == revisionservice.KindSystemSTT && locked.ContentFormat != "JSON" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if kind == revisionservice.KindIntegrationDefinition {
+			if _, err := revisionservice.IntegrationPackage(locked.ContentFormat, locked.Content); err != nil {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+		}
 		item, setVersion, updatedAt, publishErr := scanPublishedManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationPublishRevision, pgx.StrictNamedArgs{
 			"configuration_set_id": configuration.id, "revision_id": locked.RefID, "expected_version": configuration.Version,
 		}))

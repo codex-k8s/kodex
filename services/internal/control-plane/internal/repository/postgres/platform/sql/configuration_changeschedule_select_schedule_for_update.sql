@@ -19,6 +19,14 @@ SELECT s.id::text,
        current_revision.input,
        current_revision.session_policy,
        current_revision.notification_policy,
+       current_revision.dst_gap_policy,
+       current_revision.dst_fold_policy,
+       current_revision.misfire_policy,
+       current_revision.overlap_policy,
+       current_revision.target_version,
+       current_revision.target_digest,
+       current_revision.automation_text,
+       current_revision.prompt_inputs,
        current_revision.created_at
 FROM control_plane.schedules s
 JOIN control_plane.projects p ON p.id = s.project_id

@@ -4,8 +4,8 @@ title: Диагностика runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 2.1.0
-updated: 2026-08-28
+version: 3.0.0
+updated: 2026-09-04
 ---
 
 # Диагностика runtime-controller
@@ -25,17 +25,25 @@ broad ServiceAccount или host access закрыто отклоняются ad
 Проверять runtime ticket можно только по metadata: `immutable=true`, labels,
 owner Pod и annotations exact RuntimeRevision/runtime config/environment
 digests. Не выводить `.data`, `stringData`, decoded `runtime.json` или process
-environment. Ticket должен содержать только `runtime.json`, execution token и
-ключи `environment-<16 hex>`; наличие Secret value в control-plane response,
-runner input, логах или audit является инцидентом.
+environment. Turn ticket должен содержать ровно `runtime.json` и execution
+token; наличие credential value в ticket, control-plane response, runner input,
+логах или audit является инцидентом.
 
-Для Secret projection сверить descriptor из авторитетной environment version с
-metadata source Secret: name, UID и `resourceVersion`; content digest проверяет
-только controller во время materialization. Pod `provider-runtime` должен
-ссылаться на execution ticket и непрозрачный projection key, а не на source
-Secret. У `role-runtime` не должно быть `env.secretKeyRef`. Несовпадение любого
-из этих инвариантов требует остановить новые materializations; обход через
-новый mutable Secret или ручную правку ticket запрещён.
+Для credential projection сверить только metadata descriptor Secret Broker:
+namespace, name, UID, `resourceVersion`, content digest, expiry и exact
+project/session/turn/attempt/lease/generation/RuntimeRevision/input binding.
+Pod annotations и volume должны ссылаться на тот же immutable
+`runtime-credentials-<40 hex>`. `provider-runtime` получает `provider-auth.json`
+и разрешённые env keys из этого Secret; `role-runtime` не должен иметь
+`env.secretKeyRef` или credential mount. Не читать Secret data. Несовпадение
+любого поля требует остановить новые materializations; обход через mutable
+Secret или ручную правку ticket запрещён.
+
+Runtime ConfigMap должен быть immutable и содержать ровно девять непустых
+файлов: `runtime.json`, `workspace-policy.json`, `inputs.json`, `results.json`,
+`skills.json`, `memories.json`, `mcp.json`, `callback.json`,
+`provider-auth.sha256`. Их annotations должны совпадать с Pod по organization,
+project, session, turn, attempt, execution/MCP binding и всем policy digests.
 
 ## Always-hot assistant
 
@@ -65,6 +73,21 @@ control-plane не отправляются.
 - control-plane/provider/integration/interaction service не вызываются на probe;
 - working-path outage возвращает typed `Unavailable` и bounded retry.
 
+Readiness execution Pod проверяет фактический writable result path операциями
+create, write, file `fsync`, atomic rename, directory `fsync`, read и delete.
+Canary обязан удалить временные файлы. Допустимы только safe reasons:
+`READ_ONLY`, `QUOTA_EXCEEDED`, `PATH_OUTSIDE_WORKSPACE`, `RUNTIME_IO_ERROR`.
+Reason не должен содержать local path или file body. Для первых трёх проверить
+mount mode/quota/symlink либо traversal; `RUNTIME_IO_ERROR` означает прочую
+ошибку storage и требует проверки node/PVC events без чтения payload.
+
+Матрица runtime Pod: UID 10001 role/init, UID 10002 provider, UID 10003 relay,
+`fsGroup=29000`, `readOnlyRootFilesystem=true`, dropped capabilities и
+`RuntimeDefault` seccomp; provider использует только утверждённый optional
+AppArmor profile и отдельный seccomp режим для bubblewrap. `input`, `knowledge`,
+runtime ConfigMap, ticket, callback TLS и credentials read-only. На запись
+допустимы workspace/result outbox, session PVC, `/tmp` и закрытые UDS volumes.
+
 Kubernetes transport failure допускает bounded LKG. Signature/digest mismatch,
 revision rollback/conflict, expired ticket или grace period немедленно закрывают
 materialization. Один и тот же отказ/restore логируется только как transition.
@@ -75,13 +98,26 @@ Controller не делает Run terminal по состоянию Pod. Cancel п
 server-owned graph command, закрывает attempt/grants/leases и затем Pod. Retry
 имеет новую attempt/RuntimeRevision/Pod; старый Pod не переиспользуется.
 Cleanup разрешён только после signed handoff и authoritative terminal readback;
-PVC следует отдельной retention policy.
+PVC следует отдельной retention policy. Controller удаляет Pod, ticket,
+ConfigMap, execution ServiceAccount, Role/RoleBinding и NetworkPolicy. Secret
+Broker recovery удаляет credential projection после owner validation вернул
+revoked, terminal, expired или changed binding. Проверить отсутствие старой
+attempt и наличие новой; результаты читать через authoritative
+`ControlPlaneQueryService.GetArtifact`/`ListArtifacts` и
+`ArtifactTransferService.DownloadArtifact`, не через Pod/PVC.
+`RuntimeWorkService.ReadExecutionArtifact` используется только для inputs
+активной lease; после terminal этот RPC закрыто отклоняется.
+
+Для глобального system-assistant без project холодный запуск пока блокирует
+project-required credential projection policy. Не назначать фиктивный project
+и не обходить Secret Broker. Совместимый warm turn работает в своей точной
+organization/session boundary; холодный путь требует согласования #1023/#1024.
 
 ## Локальная проверка
 
 ```bash
 cd services/internal/runtime-controller
-GOWORK=off go test ./...
+GOWORK=off go test ./internal/credentialprojection ./internal/workload ./internal/app ./internal/callback
 cd ../../..
 make test-web-only-release
 ```

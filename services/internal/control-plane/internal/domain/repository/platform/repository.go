@@ -311,6 +311,7 @@ type Repository interface {
 	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
 	FailProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
+	RenewScheduleOccurrence(context.Context, value.Principal, command.OccurrenceInput) (map[string]any, error)
 	ClaimIntegrationConnectionTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	ResolveIntegrationInvocation(context.Context, value.Principal, map[string]string, map[string]any) (map[string]any, error)
 	ClaimIntegrationInvocations(context.Context, value.Principal, string, int32) ([]map[string]any, error)

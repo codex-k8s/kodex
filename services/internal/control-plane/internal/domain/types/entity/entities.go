@@ -514,13 +514,21 @@ type Schedule struct {
 	NextActions                                                                   []string
 	CurrentRevision                                                               ScheduleRevision
 	ContinueSessionRef                                                            string
+	LastOutcome                                                                   string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, TargetDigest       string
+	TargetVersion                                                                 int64
+	AutomationText                                                                string
+	PromptInputs                                                                  map[string]any
 }
 
 type ScheduleRevision struct {
 	Ref, Digest, Name, Preset, CronExpression, Timezone, SessionPolicy, NotificationPolicy string
+	DSTGapPolicy, DSTFoldPolicy, MisfirePolicy, OverlapPolicy, TargetDigest                string
 	Revision                                                                               int64
+	TargetVersion                                                                          int64
 	Target                                                                                 RunTarget
-	Input                                                                                  map[string]any
+	Input, PromptInputs                                                                    map[string]any
+	AutomationText                                                                         string
 	CreatedAt                                                                              time.Time
 }
 
@@ -531,14 +539,16 @@ type ScheduleRunOccurrence struct {
 }
 
 type IntegrationCapability struct {
-	Key            string                          `json:"key"`
-	Name           string                          `json:"name"`
-	Description    string                          `json:"description"`
-	Operation      string                          `json:"operation"`
-	Risk           string                          `json:"risk"`
-	ApprovalPolicy string                          `json:"approvalPolicy"`
-	ResourceKind   string                          `json:"resourceKind"`
-	InputFields    []IntegrationConfigurationField `json:"inputFields"`
+	Key               string                          `json:"key"`
+	Name              string                          `json:"name"`
+	Description       string                          `json:"description"`
+	Operation         string                          `json:"operation"`
+	Risk              string                          `json:"risk"`
+	ApprovalPolicy    string                          `json:"approvalPolicy"`
+	ResourceKind      string                          `json:"resourceKind"`
+	InputFields       []IntegrationConfigurationField `json:"inputFields"`
+	InputSchema       string                          `json:"inputSchema"`
+	InputSchemaSHA256 string                          `json:"inputSchemaSha256"`
 }
 
 type IntegrationConfigurationField struct {
@@ -558,6 +568,7 @@ type IntegrationConfigurationField struct {
 type IntegrationDefinition struct {
 	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
 	Origin, Digest, Adapter, CredentialSecretKey                       string
+	AdapterOwner, ExecutionRoute, AdapterReadiness                     string
 	Optional, Enabled                                                  bool
 	Capabilities                                                       []IntegrationCapability
 	ConfigurationFields                                                []IntegrationConfigurationField

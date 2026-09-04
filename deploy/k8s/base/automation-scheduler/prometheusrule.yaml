@@ -14,15 +14,15 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: Automation scheduler reconciliation is failing
+            summary: Ошибки рабочего цикла планировщика
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/automation-scheduler.md
-        - alert: AutomationSchedulerClaimBacklog
-          expr: kodex_automation_scheduler_tracked_claims > 200
+        - alert: AutomationSchedulerOccurrenceFailures
+          expr: sum by (namespace, pod) (increase(kodex_automation_scheduler_occurrences_total{outcome=~"invalid|renew_error|materialize_error"}[10m])) > 2
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: Automation scheduler transient claim tracking is near its bound
+            summary: Повторные ошибки обработки запусков по расписанию
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/automation-scheduler.md
         - alert: AutomationSchedulerProtectedPathUnavailable
           expr: kodex_automation_scheduler_readiness{ready="false"} == 1
@@ -30,5 +30,5 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: Automation scheduler protected control-plane path is unavailable
+            summary: Локальный контур полномочий планировщика не готов
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/automation-scheduler.md

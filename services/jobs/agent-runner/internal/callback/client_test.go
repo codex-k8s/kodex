@@ -39,6 +39,7 @@ func TestNextWarmAcceptsTurnWithCompatibleRuntime(t *testing.T) {
 	warm.Mode = runtimecontract.RunnerModeWarm
 	warm.RunRef, warm.NodeRef, warm.TurnRef = "", "", ""
 	warm.Attempt, warm.LeaseRef, warm.LeaseFence, warm.LeaseGeneration = 0, "", "", 0
+	warm.InputDigest, warm.ExecutionBindingDigest, warm.MCPBindingDigest = "", "", ""
 	warm.Task = ""
 	warm.RuntimeRevisionRef = "system-assistant-core-v1"
 	warm.RuntimeRevisionDigest = strings.Repeat("f", 64)
@@ -62,7 +63,7 @@ func TestPostReportsOnlySafeHTTPStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket"}
-	err = client.post(context.Background(), "/complete", map[string]string{"result": "bounded"})
+	err = client.post(context.Background(), validWarmTurnFixture(), "/complete", map[string]string{"result": "bounded"})
 	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
 		t.Fatalf("post() error = %v", err)
 	}
@@ -113,7 +114,7 @@ func TestCompleteRetriesTransientCallbackWithoutChangingPayload(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond, time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	if err := client.Complete(context.Background(), input, payload); err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -198,7 +199,7 @@ func TestCompleteDoesNotRetryStateConflict(t *testing.T) {
 	}
 	client := &Client{http: server.Client(), base: base, token: "ticket", retryDelays: []time.Duration{time.Millisecond}}
 	input := validWarmTurnFixture()
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: true, ResultSummary: "done"}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "done"}
 	err = client.Complete(context.Background(), input, payload)
 	if err == nil || err.Error() != "runtime callback rejected request with status 409" {
 		t.Fatalf("Complete() error = %v", err)
@@ -349,6 +350,25 @@ func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T
 	}
 }
 
+func TestCompleteRejectsMismatchedAttemptBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { called = true }))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt + 1, Success: true, ResultSummary: "done"}
+	if err := client.Complete(context.Background(), input, payload); err == nil {
+		t.Fatal("completion with a foreign attempt was accepted")
+	}
+	if called {
+		t.Fatal("foreign attempt reached transport")
+	}
+}
+
 func TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
@@ -373,15 +393,21 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
-	return runtimecontract.RunnerInput{
+	input := runtimecontract.RunnerInput{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
+		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
-		SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
+		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
 		Attempt: 1, LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
+		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
 		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256: strings.Repeat("d", 64), SystemAssistant: true,
+		RoleRuntimeContractSHA256: strings.Repeat("d", 64), RoleDefinitionRef: "roledef_abcdefgh",
+		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
+		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
+		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
+		PromptMaterializationDigest: strings.Repeat("7", 64), SystemAssistant: true,
 		Instructions: "Complete the bounded task.", Task: "Prepare the customer response.",
 		Provider: "openai", Model: "codex", ProviderAccountRef: "pacc_abcdefgh",
 		ProviderCredentialRef: "pcr_abcdefgh", ProviderCredentialRevision: 1,
@@ -391,8 +417,8 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
-		RuntimeEnvironmentDigest:  environmentDigest,
-		EnvironmentPolicy:         policy,
+		RuntimeEnvironmentDigest: environmentDigest,
+		EnvironmentPolicy:        policy, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(),
 		EffectiveKubernetesAccess: access,
 		EnvironmentBindingRef:     "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox:        "read-only",
@@ -408,4 +434,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(input.BoundedInput)
+	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
+	return input
 }

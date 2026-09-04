@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: email
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Электронная почта
   description: Отправка писем через provider-neutral HTTPS bridge с нативной идемпотентностью.
   category: communications
   adapter: EMAIL_HTTPS
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   credential: {secretKey: token, kind: TOKEN}
   configurationFields:
     - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
@@ -43,3 +46,16 @@ spec:
         - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
         - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
       execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 500}
+    - key: email.message.status.read
+      name: Прочитать статус сообщения
+      description: Возвращает статус одного сообщения у HTTPS email bridge.
+      operation: email.message.status.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
+      inputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}

@@ -79,8 +79,17 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if agentRef == "" {
 		agentRef = mapString(values, "assistantRef")
 	}
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
+	result.InstructionRef = mapString(values, "instructionRef")
+	result.InstructionDigest = mapString(values, "instructionDigest")
+	result.PromptTemplateRef = mapString(values, "promptTemplateRef")
+	result.PromptTemplateDigest = mapString(values, "promptTemplateDigest")
+	result.PromptMaterializationDigest = mapString(values, "promptMaterializationDigest")
+	result.SystemSttConfigurationRef = mapString(values, "systemSTTConfigurationRef")
+	result.SystemSttConfigurationRevisionRef = mapString(values, "systemSTTConfigurationRevisionRef")
+	result.SystemSttConfigurationVersion = mapInt64(values, "systemSTTConfigurationVersion")
+	result.SystemSttConfigurationDigest = mapString(values, "systemSTTConfigurationDigest")
 	result.RoleImageRecipeRef = mapString(values, "roleImageRecipeRef")
 	result.RoleImageArtifactRef = mapString(values, "roleImageArtifactRef")
 	result.RoleImageRecipeGeneration = mapInt64(values, "roleImageRecipeGeneration")
@@ -186,7 +195,14 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if grants, ok := values["integrationGrants"].([]map[string]string); ok {
 		for _, grant := range grants {
-			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"], ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"], CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"], Risk: grant["risk"], Enabled: true})
+			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{
+				Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
+				DefinitionVersion: grant["definitionVersion"], DefinitionDigest: grant["definitionDigest"],
+				ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"],
+				CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"],
+				Operation: grant["operation"], InputSchema: grant["inputSchema"], InputSchemaSha256: grant["inputSchemaSha256"],
+				Risk: grant["risk"], Enabled: true,
+			})
 		}
 	}
 	if artifacts, ok := values["artifacts"].([]map[string]any); ok {
@@ -479,6 +495,9 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 			OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor"),
 			InputDigest: mapString(item, "inputDigest"), ScheduleRevisionRef: mapString(item, "scheduleRevisionRef"),
 			ScheduleRevision: mapInt64(item, "scheduleRevision"), ScheduleRevisionDigest: mapString(item, "scheduleRevisionDigest"),
+			Attempt: int32(mapInt64(item, "attempt")), TargetRef: mapString(item, "targetRef"),
+			TargetVersion: mapInt64(item, "targetVersion"), TargetDigest: mapString(item, "targetDigest"),
+			AutomationTextDigest: mapString(item, "automationTextDigest"), PromptInputsDigest: mapString(item, "promptInputsDigest"),
 		})
 	}
 	return response, nil
@@ -491,6 +510,33 @@ func (server *Server) MaterializeScheduleOccurrence(ctx context.Context, request
 		return nil, err
 	}
 	return &controlplanev1.MaterializeScheduleOccurrenceResponse{Run: castRun(*result.Run), Schedule: castSchedule(*result.Schedule)}, nil
+}
+
+func (server *Server) RenewScheduleOccurrence(ctx context.Context, request *controlplanev1.RenewScheduleOccurrenceRequest) (*controlplanev1.RenewScheduleOccurrenceResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_RenewScheduleOccurrence_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.RenewScheduleOccurrence(ctx, p, command.OccurrenceInput{
+		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.RenewScheduleOccurrenceResponse{Lease: castLease(result)}, nil
+}
+
+func (server *Server) FailScheduleOccurrence(ctx context.Context, request *controlplanev1.FailScheduleOccurrenceRequest) (*controlplanev1.FailScheduleOccurrenceResponse, error) {
+	payload := command.OccurrenceInput{
+		OccurrenceRef: request.GetOccurrenceRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
+		Generation: request.GetGeneration(), SafeErrorCode: request.GetSafeErrorCode(), Retryable: request.GetRetryable(),
+	}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_FailScheduleOccurrence_FullMethodName,
+		command.FailScheduleOccurrence, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.FailScheduleOccurrenceResponse{State: mapString(result.Runtime, "state"), Attempt: int32(mapInt64(result.Runtime, "attempt"))}, nil
 }
 
 func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, request *controlplanev1.ClaimIntegrationConnectionTestsRequest) (*controlplanev1.ClaimIntegrationConnectionTestsResponse, error) {
@@ -599,7 +645,7 @@ func (server *Server) GetIntegrationInvocation(ctx context.Context, request *con
 }
 
 func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request *controlplanev1.CompleteIntegrationInvocationRequest) (*controlplanev1.CompleteIntegrationInvocationResponse, error) {
-	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
+	payload := command.IntegrationInvocationInput{InvocationRef: request.GetInvocationRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), UnknownOutcome: request.GetUnknownOutcome(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	if receipt := request.GetEffectReceipt(); receipt != nil {
 		payload.ReceiptRef = receipt.GetRef()
 		payload.EffectKey = receipt.GetEffectKey()

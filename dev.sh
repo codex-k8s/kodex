@@ -152,6 +152,7 @@ if [[ "$command_name" == down ]]; then
     runtime-execution-rbac
     runtime-execution-service-account
     runtime-execution-ticket-exact-projection
+    runtime-revision-exact-configmap-projection
     runtime-role-pod-exact-secret-projection
   )
   kubectl delete validatingadmissionpolicybindings.admissionregistration.k8s.io \

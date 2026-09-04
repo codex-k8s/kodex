@@ -107,11 +107,13 @@ func TestValidateRequestRequiresExactExecutionBinding(t *testing.T) {
 func TestValidateRequestAcceptsOnlyCompatibleWarmTurn(t *testing.T) {
 	turn, payload := validRelayFixture()
 	turn.SystemAssistant = true
+	turn.ExecutionBindingDigest, turn.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(turn)
 	payload.Input = turn
 	warm := turn
 	warm.Mode = runtimecontract.RunnerModeWarm
 	warm.RunRef, warm.NodeRef, warm.TurnRef = "", "", ""
 	warm.Attempt, warm.LeaseRef, warm.LeaseFence, warm.LeaseGeneration = 0, "", "", 0
+	warm.InputDigest, warm.ExecutionBindingDigest, warm.MCPBindingDigest = "", "", ""
 	warm.Task = ""
 	warm.RuntimeRevisionRef = "system-assistant-core-v1"
 	warm.RuntimeRevisionDigest = strings.Repeat("f", 64)
@@ -146,13 +148,19 @@ func validRelayFixture() (model.Input, request) {
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := model.Input{
 		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
+		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
-		SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
+		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
 		Attempt: 1, LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
+		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("a", 64), ImageReference: "registry.example/roles@" + imageDigest,
 		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256: strings.Repeat("d", 64), Instructions: "Complete the bounded task.",
+		RoleRuntimeContractSHA256: strings.Repeat("d", 64), RoleDefinitionRef: "roledef_abcdefgh",
+		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
+		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
+		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
+		PromptMaterializationDigest: strings.Repeat("7", 64), Instructions: "Complete the bounded task.",
 		Task: "Prepare the customer response.", Provider: "openai", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("b", 64),
@@ -161,7 +169,7 @@ func validRelayFixture() (model.Input, request) {
 		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
-		RuntimeEnvironmentDigest: environmentDigest, EnvironmentPolicy: policy, EffectiveKubernetesAccess: access,
+		RuntimeEnvironmentDigest: environmentDigest, EnvironmentPolicy: policy, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(), EffectiveKubernetesAccess: access,
 		EnvironmentBindingRef: "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never", CallbackURL: "https://10.0.0.10:8444",
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: "runtime-controller-callback.kodex-system.svc.cluster.local",
@@ -171,6 +179,8 @@ func validRelayFixture() (model.Input, request) {
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
 	}
+	input.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(input.BoundedInput)
+	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)
 	payload := request{Input: input, Refresh: runtimecontract.RunnerProviderCredentialRefreshRequest{
 		RuntimeRevisionDigest:         input.RuntimeRevisionDigest,
 		PreviousCredentialRevisionRef: input.ProviderCredentialRef,

@@ -117,6 +117,16 @@ func (store *Store) Read(journal, effectKey string) Projection {
 	}
 }
 
+func (store *Store) ReadEffect(journal, effectKey string) (Projection, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	stored, exists := store.receipts[effectKey]
+	if !exists || stored.projection.Journal != journal {
+		return Projection{}, false
+	}
+	return stored.projection, true
+}
+
 func (store *Store) ReadDiagnostic(journal string) DiagnosticProjection {
 	store.mu.Lock()
 	defer store.mu.Unlock()

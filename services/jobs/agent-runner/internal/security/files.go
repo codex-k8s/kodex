@@ -71,7 +71,9 @@ func ensureWorkspaceDirectory(relative string, mode uint32, shared bool) error {
 		return errors.New("open workspace directory")
 	}
 	defer func() { _ = unix.Close(current) }()
+	traversed := ""
 	for _, part := range strings.Split(clean, string(os.PathSeparator)) {
+		traversed = filepath.Join(traversed, part)
 		if part == "" || part == "." || part == ".." {
 			return errors.New("workspace directory component is invalid")
 		}
@@ -83,16 +85,22 @@ func ensureWorkspaceDirectory(relative string, mode uint32, shared bool) error {
 			return errors.New("open workspace directory component")
 		}
 		var stat unix.Stat_t
-		if unix.Fstat(next, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR || stat.Uid != uint32(os.Geteuid()) {
+		if unix.Fstat(next, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR {
+			unix.Close(next)
+			return errors.New("workspace directory component is unsafe")
+		}
+		owned := stat.Uid == uint32(os.Geteuid())
+		volumeRoot := shared && isWorkspaceVolumeRoot(traversed, stat)
+		if !owned && !volumeRoot {
 			unix.Close(next)
 			return errors.New("workspace directory component is unsafe")
 		}
 		if shared {
-			if err := unix.Fchown(next, -1, 29000); err != nil || unix.Fchmod(next, mode) != nil {
+			if owned && (stat.Gid != 29000 || stat.Mode&0o7777 != mode) && (unix.Fchown(next, -1, 29000) != nil || unix.Fchmod(next, mode) != nil) {
 				unix.Close(next)
 				return errors.New("protect shared workspace directory")
 			}
-		} else if stat.Mode&0o077 != 0 {
+		} else if !owned || stat.Mode&0o077 != 0 {
 			unix.Close(next)
 			return errors.New("workspace directory component is unsafe")
 		}
@@ -100,4 +108,11 @@ func ensureWorkspaceDirectory(relative string, mode uint32, shared bool) error {
 		current = next
 	}
 	return nil
+}
+
+// Kubelet оставляет у emptyDir исходные other bits (по умолчанию 0777).
+// Исключение относится только к точным корням томов из controller Pod ABI.
+func isWorkspaceVolumeRoot(relative string, stat unix.Stat_t) bool {
+	return (relative == "input" || relative == "knowledge" || relative == ".kodex/state") &&
+		stat.Uid == 0 && stat.Gid == 29000 && stat.Mode&unix.S_IFMT == unix.S_IFDIR && stat.Mode&0o070 == 0o070
 }

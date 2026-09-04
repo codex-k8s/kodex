@@ -51,6 +51,9 @@ type Spec struct {
 	Description         string               `yaml:"description" json:"description"`
 	Category            string               `yaml:"category" json:"category"`
 	Adapter             string               `yaml:"adapter" json:"adapter"`
+	AdapterOwner        string               `yaml:"adapterOwner" json:"adapterOwner"`
+	ExecutionRoute      string               `yaml:"executionRoute" json:"executionRoute"`
+	Readiness           string               `yaml:"readiness" json:"readiness"`
 	Credential          *Credential          `yaml:"credential,omitempty" json:"credential,omitempty"`
 	ConfigurationFields []Field              `yaml:"configurationFields" json:"configurationFields"`
 	NetworkDestinations []NetworkDestination `yaml:"networkDestinations" json:"networkDestinations"`
@@ -156,6 +159,9 @@ func LoadShipped() (map[string]Package, error) {
 		if err != nil {
 			return nil, fmt.Errorf("load shipped integration package %s: %w", filename, err)
 		}
+		if err := ValidateAdapterBinding(definition); err != nil {
+			return nil, fmt.Errorf("load shipped integration package %s: %w", filename, err)
+		}
 		if _, exists := result[definition.Metadata.Key]; exists {
 			return nil, errors.New("duplicate shipped integration package key")
 		}
@@ -227,6 +233,61 @@ func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
 // ValidateOutput принимает только безопасную проекцию с закрытым набором полей.
 func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
 	return validateObject(raw, capability.OutputFields, "output")
+}
+
+// InputSchema возвращает закрытую JSON Schema, связанную с package digest.
+func (capability Capability) InputSchema() ([]byte, error) {
+	properties := make(map[string]any, len(capability.InputFields))
+	required := make([]string, 0, len(capability.InputFields))
+	for _, field := range capability.InputFields {
+		property := map[string]any{}
+		switch field.Type {
+		case "STRING":
+			property["type"] = "string"
+			property["minLength"] = 1
+			property["maxLength"] = field.MaximumLength
+			if len(field.AllowedValues) != 0 {
+				property["enum"] = append([]string(nil), field.AllowedValues...)
+			}
+			if field.Format == "EMAIL" {
+				property["format"] = "email"
+			} else if field.Format == "HTTPS_URL" || field.Format == "HTTPS_ORIGIN" {
+				property["format"] = "uri"
+			}
+		case "INTEGER":
+			property["type"] = "integer"
+			property["minimum"] = field.Minimum
+			if field.Maximum != 0 {
+				property["maximum"] = field.Maximum
+			}
+		case "BOOLEAN":
+			property["type"] = "boolean"
+		default:
+			return nil, errors.New("integration input schema field type is invalid")
+		}
+		properties[field.Key] = property
+		if field.Required {
+			required = append(required, field.Key)
+		}
+	}
+	schema := map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties":           properties,
+	}
+	if len(required) != 0 {
+		schema["required"] = required
+	}
+	return json.Marshal(schema)
+}
+
+func (capability Capability) InputSchemaDigest() (string, error) {
+	schema, err := capability.InputSchema()
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(schema)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
@@ -370,7 +431,7 @@ func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
-		!validKey(result.Spec.Category) || !oneOf(result.Spec.Adapter, "SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION") ||
+		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) || ValidateAdapterBinding(*result) != nil ||
 		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
 		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 48 {
 		return errors.New("integration package metadata or bounds are invalid")
@@ -417,13 +478,12 @@ func validate(result *Package) error {
 	for _, capability := range result.Spec.Capabilities {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
-			!oneOf(capability.Risk, "READ", "WRITE", "SENSITIVE", "DESTRUCTIVE") ||
-			!oneOf(capability.ApprovalPolicy, "NONE", "HUMAN_EACH_EFFECT") ||
+			!validRisk(capability.Risk) || !validApprovalPolicy(capability.ApprovalPolicy) ||
 			(capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") ||
-			!oneOf(capability.ResourceScope.Kind, "SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL") ||
+			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
-			!oneOf(capability.Execution.Idempotency, "READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE") ||
+			!validIdempotency(capability.Execution.Idempotency) ||
 			capability.Execution.TimeoutSeconds < 1 || capability.Execution.TimeoutSeconds > 120 ||
 			capability.Execution.MaxAttempts < 1 || capability.Execution.MaxAttempts > 4 ||
 			capability.Execution.RetryBackoffMilliseconds < 50 || capability.Execution.RetryBackoffMilliseconds > 5000 ||
@@ -466,8 +526,7 @@ func validate(result *Package) error {
 func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
-		if !validKey(field.Key) || !oneOf(field.Type, "STRING", "INTEGER", "BOOLEAN") ||
-			(field.Format != "" && !oneOf(field.Format, "PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER")) ||
+		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||

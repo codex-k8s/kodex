@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: HTTPS email-bridge
+  version: 1.0.0
+  description: Контракт #1037 для integration-gateway #1028. POP и SMTP принадлежат bridge.
+servers:
+  - url: https://email.example.test
+security:
+  - bridgeToken: []
+paths:
+  /v1/health:
+    get:
+      operationId: getHealth
+      parameters:
+        - $ref: '#/components/parameters/Sender'
+      responses:
+        '200':
+          description: Готовность авторизованного отправителя и очереди доставки.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+        '503': {description: Bridge или его зависимости не готовы.}
+  /v1/messages:
+    post:
+      operationId: sendMessage
+      description: Ключ и hash запроса сохраняются до SMTP. Повтор возвращает ту же receipt; mismatch возвращает 409. Неизвестный SMTP outcome не повторяется автоматически.
+      parameters:
+        - $ref: '#/components/parameters/Sender'
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MessageInput'}
+      responses:
+        '202':
+          description: Устойчивая receipt, не утверждение о доставке адресату.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MessageStatus'}
+        '409': {description: Ключ уже связан с другим входом.}
+        '503': {description: Неизвестный outcome; разрешена только сверка GET.}
+  /v1/messages/{message_id}:
+    get:
+      operationId: getMessageStatus
+      parameters:
+        - $ref: '#/components/parameters/Sender'
+        - in: path
+          name: message_id
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 255}
+      responses:
+        '200':
+          description: Статус только внутри sender и credential boundary.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MessageStatus'}
+        '404': {description: Не существует или принадлежит другому отправителю.}
+  /v1/messages/by-idempotency-key/{effect_key}:
+    get:
+      operationId: reconcileMessage
+      description: Отсутствие receipt не разрешает повтор POST после неизвестного исхода.
+      parameters:
+        - $ref: '#/components/parameters/Sender'
+        - in: path
+          name: effect_key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+      responses:
+        '200':
+          description: Устойчивая receipt точного ключа в sender boundary.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MessageStatus'}
+        '404': {description: Receipt отсутствует; требуется решение владельца.}
+components:
+  securitySchemes:
+    bridgeToken: {type: http, scheme: bearer}
+  parameters:
+    Sender:
+      in: query
+      name: sender
+      required: true
+      description: Bridge проверяет разрешение credential на sender; поле не предоставляет полномочия.
+      schema: {type: string, minLength: 3, maxLength: 320}
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {type: string, enum: [ready, not_ready]}
+    MessageInput:
+      type: object
+      additionalProperties: false
+      required: [from, to, subject, body_text]
+      properties:
+        from: {type: string, minLength: 3, maxLength: 320}
+        to: {type: string, minLength: 3, maxLength: 320}
+        subject: {type: string, minLength: 1, maxLength: 998}
+        body_text: {type: string, minLength: 1, maxLength: 65536}
+    MessageStatus:
+      type: object
+      additionalProperties: false
+      required: [message_id, status]
+      properties:
+        message_id: {type: string, minLength: 1, maxLength: 255}
+        status: {type: string, enum: [accepted, delivered, failed, unknown]}
