@@ -420,6 +420,104 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Agent' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationAgents
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: ИИ-сотрудники доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/workflows:
+    get:
+      tags: [Workflows]
+      operationId: listOrganizationWorkflows
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Процессы доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/schedules:
+    get:
+      tags: [Automations]
+      operationId: listOrganizationSchedules
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Автоматизации доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulePage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/runtime-environments:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationRuntimeEnvironmentSets
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Окружения доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeEnvironmentPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/runtime-secrets:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationRuntimeSecrets
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасные описания секретов доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/vfs/nodes:
+    get:
+      tags: [Artifacts]
+      operationId: listVFSNodes
+      description: Путь выбирает виртуальный каталог и не является полномочием или путём object storage.
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { name: path, in: query, required: false, schema: { type: string, maxLength: 1000, default: /projects } }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/VFSPageToken' }
+      responses:
+        '200':
+          description: Разрешённые элементы виртуального каталога
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VFSNodePage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/vfs/search:
+    get:
+      tags: [Artifacts]
+      operationId: searchVFS
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { name: query, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 200 } }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/VFSPageToken' }
+      responses:
+        '200':
+          description: Результаты поиска доступных виртуальных файлов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VFSNodePage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}:
     parameters: [{ $ref: '#/components/parameters/AgentRef' }]
     get:
@@ -3031,6 +3129,11 @@ components:
       in: query
       required: false
       schema: { type: string, maxLength: 512 }
+    VFSPageToken:
+      name: pageToken
+      in: query
+      required: false
+      schema: { type: string, maxLength: 2048 }
   responses:
     Problem:
       description: Безопасная ошибка API
@@ -3747,6 +3850,38 @@ components:
       properties:
         action: { type: string, enum: [VALIDATE, PUBLISH, ROLLBACK] }
         publishedInstructionRef: { $ref: '#/components/schemas/OpaqueRef' }
+    VFSNode:
+      type: object
+      additionalProperties: false
+      required: [ref, path, parentPath, name, kind, directory, projectRef, entityRef, runRef, sizeBytes, digest]
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 1000 }
+        path: { type: string, minLength: 1, maxLength: 1000 }
+        parentPath: { type: string, maxLength: 1000 }
+        name: { type: string, maxLength: 1000 }
+        kind: { type: string, enum: [DIRECTORY, PROJECT, AGENT, WORKFLOW, RUN, INPUT, RESULT, SKILL, MEMORY] }
+        directory: { type: boolean }
+        projectRef: { type: string, maxLength: 128 }
+        entityRef: { type: string, maxLength: 128 }
+        runRef: { type: string, maxLength: 128 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        digest: { type: string, maxLength: 128 }
+        modifiedAt: { $ref: '#/components/schemas/Timestamp' }
+    VFSNodePage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/VFSNode' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 2048 }
+    SchedulePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Schedule' } }
+        nextPageToken: { type: string, maxLength: 512 }
     AgentPage:
       type: object
       additionalProperties: false
