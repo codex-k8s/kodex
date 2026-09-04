@@ -72,6 +72,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if json.Unmarshal(storedPayload, &result) != nil {
 			return command.Result{}, errs.ErrConflict
 		}
+		if err := repository.refreshMemoryReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
 			if err := repository.applyResultActionPermissions(ctx, tx, scope, &result, ""); err != nil {
 				return command.Result{}, err
@@ -124,7 +127,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
-	encoded, err := json.Marshal(outcome.result)
+	encoded, err := json.Marshal(memoryReceiptMetadata(outcome.result))
 	if err != nil {
 		return command.Result{}, errs.ErrConflict
 	}
@@ -221,6 +224,8 @@ func exposesActorActions(workload string) bool {
 
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
+	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
+		return repository.changeMemoryRecord(ctx, tx, scope, input)
 	case command.CompleteOnboarding:
 		return repository.completeOnboarding(ctx, tx, scope)
 	case command.CreateProject:

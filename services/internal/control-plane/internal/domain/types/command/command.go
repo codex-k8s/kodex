@@ -12,6 +12,13 @@ import (
 type Kind string
 
 const (
+	CreateMemoryRecord              Kind = "CREATE_MEMORY_RECORD"
+	ReviseMemoryRecord              Kind = "REVISE_MEMORY_RECORD"
+	ArchiveMemoryRecord             Kind = "ARCHIVE_MEMORY_RECORD"
+	RestoreMemoryRecord             Kind = "RESTORE_MEMORY_RECORD"
+	PurgeMemoryRecord               Kind = "PURGE_MEMORY_RECORD"
+	BindAgentMemoryRecord           Kind = "BIND_AGENT_MEMORY_RECORD"
+	UnbindAgentMemoryRecord         Kind = "UNBIND_AGENT_MEMORY_RECORD"
 	CompleteOnboarding              Kind = "COMPLETE_ONBOARDING"
 	CreateProject                   Kind = "CREATE_PROJECT"
 	UpdateProject                   Kind = "UPDATE_PROJECT"
@@ -197,6 +204,16 @@ type RuntimeSecretRebindInput struct {
 	SecretRef  string
 	Revision   int64
 	Selections []entity.RuntimeSecretRebindSelection
+}
+
+type MemoryRecordInput struct {
+	RecordRef, ProjectRef, AgentRef string
+	Specification                   entity.MemoryRecordSpecification
+}
+
+type AgentContextBindingInput struct {
+	AgentRef, ResourceRef, RevisionRef string
+	ExpectedBindingVersion             int64
 }
 
 type RuntimeEnvironmentBindingInput struct {
@@ -387,6 +404,8 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	MemoryRecord            *entity.KodexMemoryRecord
+	ContextBinding          *entity.AgentContextBinding
 	InteractionIdentity     *entity.InteractionIdentity
 	EnvironmentBindings     []entity.AgentRuntimeEnvironmentBinding
 	RuntimeEnvironmentDraft *entity.RuntimeEnvironmentDraft

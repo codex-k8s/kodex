@@ -215,6 +215,9 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetMemoryRecord(context.Context, value.Principal, string) (entity.KodexMemoryRecord, error)
+	ListMemoryRecords(context.Context, value.Principal, query.Filter) ([]entity.KodexMemoryRecord, int64, string, error)
+	ListMemoryRecordRevisions(context.Context, value.Principal, string, query.Page) ([]entity.MemoryRecordRevision, int64, string, error)
 	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
 	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, query.Page) (entity.RuntimeSecretImpact, error)
 	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
