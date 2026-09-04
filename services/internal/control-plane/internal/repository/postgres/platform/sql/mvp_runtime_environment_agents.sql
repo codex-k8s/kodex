@@ -6,6 +6,7 @@ JOIN control_plane.agents agent ON agent.id = binding.agent_id
 WHERE environment.organization_id = @organization_id::uuid
   AND environment.ref = @environment_ref
   AND agent.state <> 'ARCHIVED'
+  AND (@query = '' OR agent.name ILIKE '%' || @query || '%' OR agent.ref ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR agent.ref > @cursor_ref)
 ORDER BY agent.ref
 LIMIT @page_size;

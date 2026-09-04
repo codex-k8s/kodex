@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -278,8 +279,10 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 
 type claimableExecution struct {
 	nodeID, nodeRef, runID, runRef, rootRunID, projectID, projectRef                      string
-	initiatorRef                                                                          string
-	sessionID, sessionRef, task, agentRef, runtimeKey, runtimeRevision                    string
+	initiatorRef, initiatorName, organizationRef, organizationName, projectName           string
+	sessionID, sessionRef, task, source, workflowRef, automationRef, workflowStepKey      string
+	agentRef, agentName, runtimeKey                                                       string
+	runtimeRevision                                                                       string
 	provider, model, providerAccountID, providerAccountRef                                string
 	providerCredentialID, providerCredentialRef                                           string
 	providerSecretName, providerSecretUID, providerSecretResourceVersion                  string
@@ -295,12 +298,13 @@ type claimableExecution struct {
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                 string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext       string
 	codexSessionID                                                                        string
-	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration               int64
+	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber   int64
 	roleRuntimeContractRevision                                                           int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                     int64
 	environmentBindingVersion, runtimeEnvironmentVersion                                  int64
 	attempt                                                                               int32
-	capabilities, knowledge                                                               []string
+	capabilities, userProjectPermissions, workflowCapabilities, knowledge                 []string
+	userPlatformRole                                                                      string
 	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets []byte
 	rawSessionContext                                                                     []byte
 	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                       []byte
@@ -328,14 +332,18 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	for rows.Next() {
 		candidate := claimableExecution{}
 		if err := rows.Scan(&candidate.nodeID, &candidate.nodeRef, &candidate.runID, &candidate.runRef,
-			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.initiatorRef, &candidate.sessionID,
-			&candidate.sessionRef, &candidate.task, &candidate.agentRef, &candidate.runtimeKey,
+			&candidate.rootRunID, &candidate.projectID, &candidate.projectRef, &candidate.initiatorRef,
+			&candidate.initiatorName, &candidate.organizationRef, &candidate.organizationName, &candidate.projectName,
+			&candidate.sessionID, &candidate.sessionRef, &candidate.task, &candidate.source,
+			&candidate.workflowRef, &candidate.automationRef, &candidate.workflowStepKey,
+			&candidate.turnNumber, &candidate.agentRef, &candidate.agentName, &candidate.runtimeKey,
 			&candidate.runtimeRevision, &candidate.provider, &candidate.model, &candidate.providerAccountID,
 			&candidate.providerAccountRef, &candidate.providerCredentialID, &candidate.providerCredentialRef,
 			&candidate.providerCredentialRevisionNumber, &candidate.providerSecretName,
 			&candidate.providerSecretUID, &candidate.providerSecretResourceVersion,
 			&candidate.providerCredentialSHA256, &candidate.instructionRef, &candidate.instructionDigest,
-			&candidate.instructions, &candidate.capabilities, &candidate.knowledge, &candidate.rawInput,
+			&candidate.instructions, &candidate.capabilities, &candidate.userPlatformRole,
+			&candidate.userProjectPermissions, &candidate.workflowCapabilities, &candidate.knowledge, &candidate.rawInput,
 			&candidate.inputAttachmentSetRef, &candidate.inputAttachmentSetManifestDigest, &candidate.inputAttachmentContext,
 			&candidate.rawAttachmentSets, &candidate.rawArtifacts,
 			&candidate.attempt, &candidate.generation, &candidate.turnRef, &candidate.stableKey,
@@ -499,10 +507,100 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		var assistantContext map[string]any
 		_ = jsonUnmarshal(rawAssistantContext, &assistantContext)
+		targetKind := promptservice.TargetAgent
+		workflowStage, automation, continuation := "", "", ""
+		if candidate.workflowStepKey != "" {
+			targetKind = promptservice.TargetWorkflowStage
+			workflowStage = candidate.workflowStepKey + ": " + task
+		}
+		if candidate.source == "SCHEDULE" {
+			targetKind = promptservice.TargetAutomation
+			automation = task
+		}
+		if candidate.turnNumber > 1 {
+			targetKind = promptservice.TargetSessionContinuation
+			continuation = string(rawSessionContext)
+		}
+		connectionCapabilities := make([]string, 0, len(integrationGrants))
+		for _, grant := range integrationGrants {
+			if capability := grant["capabilityKey"]; capability != "" {
+				connectionCapabilities = append(connectionCapabilities, capability)
+			}
+		}
+		userCapabilities := promptUserCapabilities(candidate.userPlatformRole, candidate.userProjectPermissions,
+			capabilities, connectionCapabilities)
+		var workflowCapabilities []string
+		if candidate.workflowRef != "" {
+			workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
+		}
+		targetRef := agentRef
+		if targetKind == promptservice.TargetWorkflowStage {
+			targetRef = candidate.workflowStepKey
+		}
+		if targetKind == promptservice.TargetAutomation {
+			targetRef = candidate.automationRef
+			if targetRef == "" {
+				targetRef = runRef
+			}
+		}
+		if targetKind == promptservice.TargetSessionContinuation {
+			targetRef = sessionRef
+		}
+		toolNames := make([]string, 0, len(environmentTools))
+		for _, tool := range environmentTools {
+			toolNames = append(toolNames, tool.Name)
+		}
+		sort.Strings(toolNames)
+		structuredPromptVariables, err := promptStructuredVariables(
+			artifacts, environmentTools, environmentImage, runtimeEnvironmentRef, inputAttachmentSetRef, candidate.workflowRef,
+		)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		promptSnapshot := entity.PromptMaterializationSnapshot{
+			TargetKind: targetKind, TargetRef: targetRef, ProjectRef: projectRef, RunRef: runRef,
+			SessionRef: sessionRef, TemplateRef: instructionRef, TemplateDigest: instructionDigest,
+			TemplateContent: instructions,
+			Variables: map[string]string{
+				"user.ref": candidate.initiatorRef, "user.name": candidate.initiatorName,
+				"organization.ref": candidate.organizationRef, "organization.name": candidate.organizationName,
+				"project.name": candidate.projectName, "agent.ref": agentRef, "agent.name": candidate.agentName,
+				"workflow.ref": candidate.workflowRef, "workflow.stage.key": candidate.workflowStepKey,
+				"automation.ref": candidate.automationRef, "task": task, "node.ref": nodeRef,
+				"environment.ref": runtimeEnvironmentRef, "tools.summary": strings.Join(toolNames, ", "), "turn.ref": turnRef,
+			},
+			StructuredVariables: structuredPromptVariables,
+			UserCapabilities:    userCapabilities, AgentCapabilities: capabilities,
+			WorkflowCapabilities: workflowCapabilities, ConnectionCapabilities: connectionCapabilities,
+			WorkflowStage: workflowStage, Automation: automation,
+			SessionContinuation: continuation,
+		}
+		materializedPrompt, err := promptservice.Materialize(instructions, promptservice.Snapshot{
+			TargetKind: promptSnapshot.TargetKind, TargetRef: promptSnapshot.TargetRef,
+			ProjectRef: promptSnapshot.ProjectRef, RunRef: promptSnapshot.RunRef, SessionRef: promptSnapshot.SessionRef,
+			TemplateRef: promptSnapshot.TemplateRef, TemplateDigest: promptSnapshot.TemplateDigest,
+			Variables: promptSnapshot.Variables, StructuredVariables: promptSnapshot.StructuredVariables,
+			UserCapabilities:  promptSnapshot.UserCapabilities,
+			AgentCapabilities: promptSnapshot.AgentCapabilities, WorkflowCapabilities: promptSnapshot.WorkflowCapabilities,
+			ConnectionCapabilities: promptSnapshot.ConnectionCapabilities, HumanGateCapabilities: promptSnapshot.HumanGateCapabilities,
+			WorkflowStage: promptSnapshot.WorkflowStage, Automation: promptSnapshot.Automation,
+			SessionContinuation: promptSnapshot.SessionContinuation,
+		})
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		instructions = materializedPrompt.Prompt
+		capabilities = materializedPrompt.EffectiveCapabilities
+		integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
+		rawEffectiveIntegrationGrants, err := json.Marshal(integrationGrants)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
 		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
 		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
-		integrationGrantsDigest := sha256.Sum256(rawIntegrationGrants)
+		integrationGrantsDigest := sha256.Sum256(rawEffectiveIntegrationGrants)
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
+		workspacePolicy := runtimeWorkspacePolicy()
 		revisionDigestHex := runtimeRevisionDigest(runtimeEnvironmentDigest,
 			runtimeRevision, provider, model, resolvedInstructionsDigestHex,
 			providerAccountRef, providerCredentialRef, providerSecretName,
@@ -520,6 +618,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
 			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
 			environmentBindingRef, strconv.FormatInt(environmentBindingVersion, 10), environmentBindingDigest,
+			workspacePolicy.Digest,
 			codexSessionID,
 		)
 		revisionRef, err := newRef("rrev")
@@ -540,6 +639,15 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"providerSecretResourceVersion":    providerSecretResourceVersion,
 			"providerCredentialSHA256":         providerCredentialSHA256,
 			"instructionDigest":                instructionDigest, "instructions": instructions,
+			"promptTemplateRef":           materializedPrompt.TemplateRef,
+			"promptTemplateDigest":        materializedPrompt.TemplateDigest,
+			"promptMaterializationDigest": materializedPrompt.Digest,
+			"promptTargetKind":            targetKind,
+			"promptSnapshot":              promptSnapshot,
+			"promptAuthority": map[string]any{
+				"user": userCapabilities, "agent": promptSnapshot.AgentCapabilities, "workflow": workflowCapabilities,
+				"connection": connectionCapabilities, "humanGate": nil,
+			},
 			"capabilities": capabilities, "integrationGrants": integrationGrants,
 			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
 			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
@@ -564,7 +672,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"environmentValues": environmentValues, "secretProjections": secretProjections,
 			"environmentImage": environmentImage, "environmentTools": environmentTools,
 			"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
-			"codexSessionID": codexSessionID,
+			"workspacePolicy": workspacePolicy,
+			"codexSessionID":  codexSessionID,
 		}
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
@@ -748,6 +857,73 @@ func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credenti
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
+
+func promptUserCapabilities(platformRole string, projectPermissions, agentCapabilities, connectionCapabilities []string) []string {
+	eligible := promptservice.Union(agentCapabilities, connectionCapabilities)
+	if platformRole == "OWNER" || platformRole == "ADMINISTRATOR" {
+		return eligible
+	}
+	permissions := make(map[string]struct{}, len(projectPermissions))
+	for _, permission := range projectPermissions {
+		permissions[permission] = struct{}{}
+	}
+	connection := make(map[string]struct{}, len(connectionCapabilities))
+	for _, capability := range connectionCapabilities {
+		connection[capability] = struct{}{}
+	}
+	required := map[string]string{
+		"platform.project.manage":    "MANAGE",
+		"platform.agent.manage":      "MANAGE_AGENTS",
+		"platform.run.launch":        "LAUNCH_RUNS",
+		"platform.run.delegate":      "MANAGE_AGENTS",
+		"platform.gate.resolve":      "RESOLVE_GATES",
+		"platform.artifact.manage":   "MANAGE_ARTIFACTS",
+		"platform.schedule.manage":   "MANAGE_SCHEDULES",
+		"platform.integration.grant": "MANAGE_INTEGRATIONS",
+		"platform.stt.use":           "VIEW",
+	}
+	result := make([]string, 0, len(eligible))
+	for _, capability := range eligible {
+		permission := required[capability]
+		if _, ok := connection[capability]; ok {
+			permission = "MANAGE_INTEGRATIONS"
+		}
+		if _, ok := permissions[permission]; permission != "" && ok {
+			result = append(result, capability)
+		}
+	}
+	return result
+}
+
+func filterIntegrationGrants(grants []map[string]string, capabilities []string) []map[string]string {
+	allowed := make(map[string]struct{}, len(capabilities))
+	for _, capability := range capabilities {
+		allowed[capability] = struct{}{}
+	}
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if _, ok := allowed[grant["capabilityKey"]]; ok {
+			result = append(result, grant)
+		}
+	}
+	return result
+}
+
+func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	policy := entity.RuntimeWorkspacePolicy{
+		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
+		Rules: []entity.RuntimeWorkspacePathRule{
+			{Path: "/workspace/input", Access: "READ_ONLY"},
+			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
+			{Path: "/workspace", Access: "WRITABLE"},
+		},
+		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+	}
+	raw, _ := json.Marshal(policy)
+	digest := sha256.Sum256(raw)
+	policy.Digest = hex.EncodeToString(digest[:])
+	return policy
+}
 
 func runtimeRevisionDigest(runtimeEnvironmentDigest string, parts ...string) string {
 	material := append(append([]string(nil), parts...), "runtime-environment", runtimeEnvironmentDigest)

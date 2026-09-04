@@ -34,6 +34,11 @@ const (
 )
 
 const runtimeSecretRecoveryCursorVersion = "v1"
+const runtimeSecretListCursorVersion = "v1"
+
+type runtimeSecretListCursor struct {
+	Version, FilterDigest, Ref string
+}
 
 type lockedRuntimeSecret struct {
 	id, ref, projectID, projectRef, name, description, valueType, state, namespace string
@@ -57,12 +62,18 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	if principal.Permission != "secret.view" {
 		return nil, "", errs.ErrForbidden
 	}
-	current, err := repository.resolveScope(ctx, principal)
+	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
+	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.ProjectRef == "" || len([]rune(filter.Query)) > 200 {
+		return nil, "", errs.ErrInvalid
+	}
+	cursor, err := decodeRuntimeSecretListCursor(filter.Page.Token, filter.ProjectRef, filter.Query)
 	if err != nil {
 		return nil, "", err
 	}
-	if filter.ProjectRef == "" || filter.Page.Token != "" && (!strings.HasPrefix(filter.Page.Token, "sec_") || len(filter.Page.Token) > 96) {
-		return nil, "", errs.ErrInvalid
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, "", err
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
 	if err != nil {
@@ -79,7 +90,7 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	limit := boundedPage(filter.Page)
 	rows, err := tx.Query(ctx, queryRuntimeSecretsList, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "project_ref": filter.ProjectRef,
-		"query": strings.TrimSpace(filter.Query), "cursor_ref": filter.Page.Token, "page_size": limit + 1,
+		"query": filter.Query, "cursor_ref": cursor.Ref, "page_size": limit + 1,
 	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
@@ -99,12 +110,52 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 	next := ""
 	if len(items) > int(limit) {
 		items = items[:limit]
-		next = items[len(items)-1].Ref
+		next, err = encodeRuntimeSecretListCursor(filter.ProjectRef, filter.Query, items[len(items)-1].Ref)
+		if err != nil || next == filter.Page.Token {
+			return nil, "", errs.ErrConflict
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, "", errs.ErrConflict
 	}
 	return items, next, nil
+}
+
+func runtimeSecretListFilterDigest(projectRef, queryValue string) string {
+	digest := sha256.Sum256([]byte(projectRef + "\x00" + queryValue))
+	return hex.EncodeToString(digest[:])
+}
+
+func encodeRuntimeSecretListCursor(projectRef, queryValue, ref string) (string, error) {
+	if !strings.HasPrefix(ref, "sec_") || len(ref) > 96 {
+		return "", errs.ErrInvalid
+	}
+	raw, err := json.Marshal(runtimeSecretListCursor{Version: runtimeSecretListCursorVersion,
+		FilterDigest: runtimeSecretListFilterDigest(projectRef, queryValue), Ref: ref})
+	if err != nil {
+		return "", errs.ErrUnavailable
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func decodeRuntimeSecretListCursor(token, projectRef, queryValue string) (runtimeSecretListCursor, error) {
+	if token == "" {
+		return runtimeSecretListCursor{}, nil
+	}
+	if len(token) > 512 {
+		return runtimeSecretListCursor{}, errs.ErrInvalid
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return runtimeSecretListCursor{}, errs.ErrInvalid
+	}
+	var cursor runtimeSecretListCursor
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != runtimeSecretListCursorVersion ||
+		cursor.FilterDigest != runtimeSecretListFilterDigest(projectRef, queryValue) ||
+		!strings.HasPrefix(cursor.Ref, "sec_") || len(cursor.Ref) > 96 {
+		return runtimeSecretListCursor{}, errs.ErrInvalid
+	}
+	return cursor, nil
 }
 
 func (repository *Repository) GetRuntimeSecret(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeSecret, error) {

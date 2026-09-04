@@ -4,8 +4,8 @@ title: Диагностика control-plane
 type: runbook
 status: approved
 owner: sre
-version: 2.1.0
-updated: 2026-08-28
+version: 2.2.0
+updated: 2026-09-04
 ---
 
 # Диагностика control-plane
@@ -26,6 +26,9 @@ Fresh установка применяет baseline
 и следующие versioned forward-only migrations по номеру. Контекстные планы и
 Run activity добавляет
 `services/internal/control-plane/cmd/cli/migrations/20260828099700_contextual_plans_and_run_activity.sql`.
+Managed revisions, custom cron, materialized prompt snapshots и system STT
+configuration добавляет
+`services/internal/control-plane/cmd/cli/migrations/20260904000100_issue_1019_control_plane.sql`.
 
 Migration Job вызывает `control-plane-cli up` и читает только
 `CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE`. `control-plane-cli status` выполняет
@@ -57,6 +60,98 @@ readback. Legacy source DSN, ручной backfill/cutover и schema down в р�
 Human Gate разрешается специализированной командой с OCC. Повтор exact intent
 возвращает receipt, stale version — conflict/winner readback и не создаёт вторую
 continuation.
+
+## Prompt materialization и effective authority
+
+При расхождении preview и фактического Run проверить безопасные metadata:
+
+1. target kind: `AGENT`, `WORKFLOW_STAGE`, `AUTOMATION` или
+   `SESSION_CONTINUATION`;
+2. template ref/digest и materialization digest в preview и `RuntimeRevision`;
+3. exact Agent, Workflow, schedule, Session/Turn и environment refs/revisions;
+4. закрытое пересечение user, Agent, Workflow, eligible Connection и Human
+   Gate capabilities;
+5. наличие явных service blocks, включая неиспользованные slots;
+6. audit, idempotency receipt и отсутствие нового Run при validation failure.
+
+Prompt content, contextual values и полный materialized prompt в incident log
+не выводить. Для сравнения использовать только opaque refs, versions и digests.
+
+## Runtime workspace policy
+
+В каждом новом `RuntimeRevision` проверить `workspace_policy.revision`, root,
+quota и digest. Для revision `1` сервер публикует longest-prefix матрицу:
+
+- `/workspace/input` — `READ_ONLY`;
+- `/workspace/knowledge` — `READ_ONLY`;
+- `/workspace` — `WRITABLE`;
+- не более 1 GiB writable content и 10 000 файлов.
+
+Browser или runner payload не может изменить paths, access либо quota. До
+filesystem effect consumer обязан проверить policy digest и выбрать самое
+длинное совпавшее правило; отсутствие совпадения означает
+`PATH_OUTSIDE_WORKSPACE`. Отказ возвращает только один machine-safe reason:
+`READ_ONLY`, `QUOTA_EXCEEDED`, `PATH_OUTSIDE_WORKSPACE` или
+`RUNTIME_IO_ERROR`. File body, fragment и secret material в audit/provenance
+не записываются.
+
+Control-plane подтверждает producer-side snapshot в PostgreSQL и claim RPC.
+Фактическое применение mount/path/quota и readback denial принадлежит внешним
+units `runtime-controller` и `agent-runner`; до их отдельного обновления этот
+consumer path отмечать как `NOT RUN`, а не как readiness control-plane.
+
+## Managed configuration
+
+Для PromptTemplate, RoleImage, IntegrationDefinition и system STT проверить:
+
+1. set version, `managed_by`, source и source revision;
+2. единственный mutable draft и переход `DRAFT -> VALID/INVALID -> PUBLISHED`;
+3. immutable published content/digest и полную history;
+4. impact digest непосредственно перед selective rebind;
+5. exact consumer kind/ref/revision/version после rebind;
+6. readiness descriptor фактического consumer path.
+
+До selective rebind прежняя binding должна продолжать читать immutable
+`SUPERSEDED` revision. После rebind проверить специализированный consumer path:
+`GetRuntimeEnvironmentRoleImageConfiguration`,
+`GetIntegrationConnectionDefinitionConfiguration`, effective prompt либо
+`GetSystemSTTConfiguration`. Несколько active bindings одного configuration
+kind на один consumer являются дефектом. Managed lifecycle не имеет отдельного
+domain event; восстановление выполняется через exact binding snapshot.
+
+Git-owned set нельзя редактировать через UI. Использовать только явный
+`detach` или `copy`; прямое изменение SQL, published revision или binding
+запрещено. Для environment и runtime secret применять их специализированные
+version/revision lifecycle, а не generic managed configuration.
+
+## Search, VFS и cursor
+
+Для пропуска, повтора или межтенантного результата зафиксировать query,
+optional project ref, page size и opaque token без декодирования в журнале.
+Проверить `total`, устойчивое ordering и membership пользователя. Token связан
+с исходным фильтром: его повтор как следующего token или применение с другим
+query/project/path должно завершаться закрытым отказом.
+
+VFS возвращает только metadata. Появление content, secret value или узла
+недоступного Project является security incident. Исправлять cursor или VFS
+projection прямым SQL запрещено.
+
+## Models, provider accounts и system STT
+
+Model считается доступной только при enabled provider definition и хотя бы
+одном подходящем `AUTHORIZED` account с текущей credential revision. Проверить
+точные `readinessBlockers`, provider definition key и eligible account refs.
+
+Device flow использует отдельные verify и reauthorize operations. Удаление
+разрешено только account, чьей последней успешной authorization method была
+`API_KEY`: результат — terminal `REVOKED` tombstone и durable credential
+cleanup, а не удаление audit/state rows. Для system STT дополнительно проверить
+published configuration revision, permission `platform.stt.use`, model и
+provider eligibility; credential material через этот read path не выдаётся.
+Поле `safe_status_reason` должно содержать только закрытый lifecycle/failure
+code; произвольный provider text через него не выдаётся. Reauthorize до запуска
+нового device flow обязан отвязать прежнюю credential revision и поставить её
+durable cleanup. Исполнение STT и credential access относятся к Issue #1020.
 
 ## System assistant title и plans
 

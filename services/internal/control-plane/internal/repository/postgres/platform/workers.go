@@ -148,6 +148,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if ownerInstructions != "" {
 		resolvedInstructions += "\n\n<owner-instructions>\n" + ownerInstructions + "\n</owner-instructions>"
 	}
+	workspacePolicy := runtimeWorkspacePolicy()
 	revisionDigest := sha256.Sum256([]byte(strings.Join([]string{
 		assistant.DesiredRuntimeRevision, profileRevision, provider, model, promptDigest,
 		providerAccountRef, providerCredentialRef, providerSecretName, providerSecretUID,
@@ -158,7 +159,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		configOverlayRef, configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentDigest,
 		environmentBindingRef, environmentBindingDigest,
 		environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
-		environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
+		environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest, workspacePolicy.Digest,
 	}, "\x00")))
 	snapshot := map[string]any{
 		"assistantRef": assistant.Ref, "agentRef": assistant.Ref,
@@ -204,6 +205,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"environmentTools":            environmentTools,
 		"environmentPolicy":           environmentPolicy,
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
+		"workspacePolicy":             workspacePolicy,
 		"revisionDigest":              hex.EncodeToString(revisionDigest[:]),
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -500,14 +502,15 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		return nil, errs.ErrUnavailable
 	}
 	type expiredOccurrence struct {
-		id, ref, scheduleRef, inputDigest string
-		scheduledFor                      time.Time
-		scheduleVersion, generation       int64
+		id, ref, scheduleRef, inputDigest, scheduleRevisionRef, scheduleRevisionDigest string
+		scheduledFor                                                                   time.Time
+		scheduleVersion, generation, scheduleRevision                                  int64
 	}
 	expired := make([]expiredOccurrence, 0, limit)
 	for expiredRows.Next() {
 		var item expiredOccurrence
-		if err := expiredRows.Scan(&item.id, &item.ref, &item.scheduleRef, &item.scheduledFor, &item.scheduleVersion, &item.inputDigest, &item.generation); err != nil {
+		if err := expiredRows.Scan(&item.id, &item.ref, &item.scheduleRef, &item.scheduledFor, &item.scheduleVersion,
+			&item.inputDigest, &item.generation, &item.scheduleRevisionRef, &item.scheduleRevision, &item.scheduleRevisionDigest); err != nil {
 			expiredRows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -528,7 +531,11 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		} else if err != nil {
 			return nil, errs.ErrUnavailable
 		}
-		result = append(result, map[string]any{"scheduleRef": item.scheduleRef, "occurrenceRef": item.ref, "scheduledFor": item.scheduledFor, "leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expires, "scheduleVersion": item.scheduleVersion, "inputDigest": item.inputDigest})
+		result = append(result, map[string]any{"scheduleRef": item.scheduleRef, "occurrenceRef": item.ref, "scheduledFor": item.scheduledFor,
+			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expires,
+			"scheduleVersion": item.scheduleVersion, "scheduleRevisionRef": item.scheduleRevisionRef,
+			"scheduleRevision": item.scheduleRevision, "scheduleRevisionDigest": item.scheduleRevisionDigest,
+			"inputDigest": item.inputDigest})
 	}
 	remaining := int(limit) - len(result)
 	if remaining == 0 {
@@ -543,15 +550,17 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 	}
 	type dueSchedule struct {
 		id, ref, preset, cron, timezone, name, targetType, targetRef string
-		currentRevisionID                                            string
+		currentRevisionID, currentRevisionRef, currentRevisionDigest string
 		input                                                        []byte
 		scheduledFor                                                 time.Time
-		version                                                      int64
+		version, currentRevision                                     int64
 	}
 	due := make([]dueSchedule, 0, limit)
 	for rows.Next() {
 		var item dueSchedule
-		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone, &item.name, &item.targetType, &item.targetRef, &item.input, &item.currentRevisionID); err != nil {
+		if err := rows.Scan(&item.id, &item.ref, &item.scheduledFor, &item.version, &item.preset, &item.cron, &item.timezone,
+			&item.name, &item.targetType, &item.targetRef, &item.input, &item.currentRevisionID,
+			&item.currentRevisionRef, &item.currentRevision, &item.currentRevisionDigest); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -584,7 +593,11 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		if _, err := tx.Exec(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, item.scheduledFor, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID); err != nil {
 			return nil, mapWriteError(err)
 		}
-		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": item.scheduledFor, "leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires, "scheduleVersion": item.version, "inputDigest": hex.EncodeToString(inputDigest[:])})
+		result = append(result, map[string]any{"scheduleRef": item.ref, "occurrenceRef": occurrenceRef, "scheduledFor": item.scheduledFor,
+			"leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires,
+			"scheduleVersion": item.version, "scheduleRevisionRef": item.currentRevisionRef,
+			"scheduleRevision": item.currentRevision, "scheduleRevisionDigest": item.currentRevisionDigest,
+			"inputDigest": hex.EncodeToString(inputDigest[:])})
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict

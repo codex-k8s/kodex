@@ -235,6 +235,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createAgent(ctx, tx, scope, input.Payload)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
+	case command.SetAgentAvatar, command.RemoveAgentAvatar:
+		return repository.changeAgentAvatar(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
 		return repository.changeInstructions(ctx, tx, scope, input)
 	case command.PublishAgentRuntimeConfig, command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft,
@@ -264,7 +266,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateSchedule, command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule:
 		return repository.changeSchedule(ctx, tx, scope, input)
 	case command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
-		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled:
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled:
 		return repository.changeProviderAccount(ctx, tx, scope, input)
 	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
@@ -295,6 +297,16 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateAccessRole, command.CreateAccessRoleVersion, command.ArchiveAccessRole,
 		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
 		return repository.applyAccessCommand(ctx, tx, scope, input)
+	case command.CreatePromptTemplateDraft, command.ValidatePromptTemplateDraft,
+		command.PublishPromptTemplateDraft, command.RebindPromptTemplate,
+		command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
+		command.PublishRoleImageRevision, command.RebindRoleImage,
+		command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
+		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
+		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
+		command.PublishSystemSTTDraft, command.RebindSystemSTT,
+		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration:
+		return repository.changeManagedConfiguration(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -711,6 +723,11 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
+	_, avatarArtifactRef, _ := parseAvatarArtifactURL(item.AvatarURL)
+	item.Avatar, err = repository.syncAgentAvatar(ctx, tx, scope, item.Ref, avatarArtifactRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	if err := repository.bootstrapAgentRuntime(ctx, tx, scope.organizationID, agentID, projectID, runtime, scope.actorID); err != nil {
 		return commandOutcome{}, fmt.Errorf("bootstrap agent runtime configuration: %v: %w", err, errs.ErrUnavailable)
 	}
@@ -816,6 +833,11 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
+		_, avatarArtifactRef, _ := parseAvatarArtifactURL(item.AvatarURL)
+		item.Avatar, err = repository.syncAgentAvatar(ctx, tx, scope, item.Ref, avatarArtifactRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 	case command.SetAgentEnabled:
 		state := "DISABLED"
 		if payload.Enabled {
@@ -837,9 +859,10 @@ func (repository *Repository) changeAgent(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, mapWriteError(err)
 		}
 	}
-	if err := tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangeagentSelectAgentsRef, item.Ref).Scan(&item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	setAgentAvatarReadback(&item)
 	if input.Kind == command.ArchiveAgent || input.Kind == command.SetAgentEnabled && !payload.Enabled {
 		if err := repository.suspendTargetSchedules(ctx, tx, scope, projectID, item.ProjectRef, "AGENT", item.Ref); err != nil {
 			return commandOutcome{}, err
@@ -955,6 +978,22 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	if current != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	grantCapability := payload.BindingRef
+	if input.Kind == command.ChangeAgentGrant {
+		grantCapability = "platform.integration.grant"
+	}
+	if payload.Enabled {
+		var allowed bool
+		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingActorCanGrant, pgx.StrictNamedArgs{
+			"actor_platform_role": scope.role, "organization_id": scope.organizationID,
+			"project_id": projectID, "actor_id": scope.actorID, "capability_key": grantCapability,
+		}).Scan(&allowed); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !allowed {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+	}
 	if input.Kind == command.ChangeAgentGrant {
 		if payload.Enabled {
 			tag, err := tx.Exec(ctx, queryCommandsChangeagentbindingEnableIntegrationGrant, scope.organizationID, payload.BindingRef, payload.AgentRef)
@@ -997,12 +1036,14 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectAgentReadback, scope.organizationID, payload.AgentRef).Scan(
 		&agent.Ref, &agent.ProjectRef, &agent.RoleDefinitionRef, &agent.RoleDefinitionName,
 		&agent.Name, &agent.Purpose, &agent.RoleDescription, &agent.AvatarURL,
+		&agent.Avatar.ArtifactRef, &agent.Avatar.ArtifactRevision,
 		&agent.State, &agent.Enabled, &agent.Version, &agent.RuntimeKey,
 		&agent.RuntimeName, &agent.Provider, &agent.Model, &agent.RuntimeRevision,
 		&agent.Capabilities, &agent.KnowledgeArtifactRefs, &agent.CreatedAt, &agent.UpdatedAt,
 	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	setAgentAvatarReadback(&agent)
 	agent.NextActions = agentActions(agent, true, true)
 	return commandOutcome{result: command.Result{Agent: &agent}, projectID: projectID, projectRef: projectRef, resourceKind: "AGENT", resourceRef: payload.AgentRef, summary: "i18n:AGENT_PERMISSIONS_UPDATED", platformEvent: "AGENT_CHANGED"}, nil
 }

@@ -160,6 +160,22 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 					Verbs: append([]string(nil), rule.Verbs...), ResourceNames: append([]string(nil), rule.ResourceNames...)})
 		}
 	}
+	if policy, ok := values["workspacePolicy"].(entity.RuntimeWorkspacePolicy); ok {
+		result.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{
+			Revision: policy.Revision, Root: policy.Root, MaximumWritableBytes: policy.MaximumWritableBytes,
+			MaximumFileCount: policy.MaximumFileCount, Digest: policy.Digest,
+		}
+		for _, rule := range policy.Rules {
+			result.WorkspacePolicy.Rules = append(result.WorkspacePolicy.Rules, &controlplanev1.RuntimeWorkspacePathRule{
+				Path:   rule.Path,
+				Access: controlplanev1.RuntimeWorkspaceAccess(controlplanev1.RuntimeWorkspaceAccess_value["RUNTIME_WORKSPACE_ACCESS_"+rule.Access]),
+			})
+		}
+		for _, reason := range policy.DenialReasons {
+			result.WorkspacePolicy.DenialReasons = append(result.WorkspacePolicy.DenialReasons,
+				controlplanev1.RuntimeWorkspaceDenialReason(controlplanev1.RuntimeWorkspaceDenialReason_value["RUNTIME_WORKSPACE_DENIAL_REASON_"+reason]))
+		}
+	}
 	profileRevision := mapString(values, "profileRevision")
 	if profileRevision == "" {
 		profileRevision = mapString(values, "runtimeRevision")
@@ -458,7 +474,12 @@ func (server *Server) ClaimDueSchedules(ctx context.Context, request *controlpla
 	}
 	response := &controlplanev1.ClaimDueSchedulesResponse{}
 	for _, item := range items {
-		response.Claims = append(response.Claims, &controlplanev1.ScheduleClaim{Schedule: &controlplanev1.Schedule{Ref: mapString(item, "scheduleRef"), Version: mapInt64(item, "scheduleVersion")}, OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor"), InputDigest: mapString(item, "inputDigest")})
+		response.Claims = append(response.Claims, &controlplanev1.ScheduleClaim{
+			Schedule:      &controlplanev1.Schedule{Ref: mapString(item, "scheduleRef"), Version: mapInt64(item, "scheduleVersion")},
+			OccurrenceRef: mapString(item, "occurrenceRef"), Lease: castLease(item), ScheduledFor: mapTime(item, "scheduledFor"),
+			InputDigest: mapString(item, "inputDigest"), ScheduleRevisionRef: mapString(item, "scheduleRevisionRef"),
+			ScheduleRevision: mapInt64(item, "scheduleRevision"), ScheduleRevisionDigest: mapString(item, "scheduleRevisionDigest"),
+		})
 	}
 	return response, nil
 }

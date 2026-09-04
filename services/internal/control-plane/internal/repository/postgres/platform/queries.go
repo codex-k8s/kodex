@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -132,33 +133,96 @@ func (repository *Repository) ListRuntimes(ctx context.Context, principal value.
 	return result, rows.Err()
 }
 
-func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, error) {
+func (repository *Repository) Search(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.SearchResult, int64, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, err
+		return nil, 0, "", err
 	}
-	limit := filter.Limit
-	if limit < 1 {
-		limit = 20
-	}
+	limit := boundedPage(filter.Page)
 	if limit > 50 {
 		limit = 50
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesSearchSelectEligibleResources,
-		scope.organizationID, scope.role, scope.actorID, filter.Query, limit)
+	cursor, err := decodeSearchCursor(filter.Page.Token, filter.Query, filter.ProjectRef)
 	if err != nil {
-		return nil, errs.ErrUnavailable
+		return nil, 0, "", err
+	}
+	rows, err := repository.pool.Query(ctx, queryQueriesSearchSelectEligibleResources, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_platform_role": scope.role, "actor_id": scope.actorID,
+		"query": filter.Query, "project_ref": strings.TrimSpace(filter.ProjectRef), "cursor_time": cursor.Time,
+		"cursor_relevance": cursor.Relevance, "cursor_kind": cursor.Kind, "cursor_ref": cursor.Ref,
+		"page_size": limit + 1,
+	})
+	if err != nil {
+		return nil, 0, "", errs.ErrUnavailable
 	}
 	defer rows.Close()
-	var result []entity.SearchResult
-	for rows.Next() {
-		var item entity.SearchResult
-		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle, &item.State, &item.UpdatedAt); err != nil {
-			return nil, errs.ErrUnavailable
-		}
-		result = append(result, item)
+	type rankedResult struct {
+		entity.SearchResult
+		relevance int
 	}
-	return result, rows.Err()
+	var ranked []rankedResult
+	var total int64
+	for rows.Next() {
+		var item rankedResult
+		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
+			&item.State, &item.UpdatedAt, &item.relevance, &total); err != nil {
+			return nil, 0, "", errs.ErrUnavailable
+		}
+		ranked = append(ranked, item)
+	}
+	if rows.Err() != nil {
+		return nil, 0, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(ranked) > int(limit) {
+		ranked = ranked[:limit]
+		last := ranked[len(ranked)-1]
+		next = encodeSearchCursor(searchCursor{Relevance: last.relevance, Time: &last.UpdatedAt, Kind: last.Kind, Ref: last.Ref}, filter.Query, filter.ProjectRef)
+		if next == filter.Page.Token {
+			return nil, 0, "", errs.ErrConflict
+		}
+	}
+	result := make([]entity.SearchResult, 0, len(ranked))
+	for _, item := range ranked {
+		result = append(result, item.SearchResult)
+	}
+	return result, total, next, nil
+}
+
+type searchCursor struct {
+	Version   int        `json:"v"`
+	Filter    string     `json:"f"`
+	Relevance int        `json:"r"`
+	Time      *time.Time `json:"t"`
+	Kind      string     `json:"k"`
+	Ref       string     `json:"i"`
+}
+
+func searchFilterDigest(queryValue, projectRef string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(queryValue) + "\x00" + strings.TrimSpace(projectRef)))
+	return base64.RawURLEncoding.EncodeToString(digest[:12])
+}
+
+func encodeSearchCursor(cursor searchCursor, queryValue, projectRef string) string {
+	cursor.Version, cursor.Filter = 1, searchFilterDigest(queryValue, projectRef)
+	raw, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeSearchCursor(token, queryValue, projectRef string) (searchCursor, error) {
+	if strings.TrimSpace(token) == "" {
+		return searchCursor{}, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) > 512 {
+		return searchCursor{}, errs.ErrInvalid
+	}
+	var cursor searchCursor
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Filter != searchFilterDigest(queryValue, projectRef) ||
+		cursor.Time == nil || cursor.Relevance < 0 || cursor.Relevance > 2 || cursor.Kind == "" || cursor.Ref == "" {
+		return searchCursor{}, errs.ErrInvalid
+	}
+	return cursor, nil
 }
 
 func (repository *Repository) ListProjects(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
@@ -402,9 +466,10 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	for rows.Next() {
 		var item entity.Agent
 		var canManage, canLaunch bool
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
+		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
+		setAgentAvatarReadback(&item)
 		item.NextActions = agentActions(item, canManage, canLaunch)
 		result = append(result, item)
 	}
@@ -428,13 +493,14 @@ func (repository *Repository) GetAgent(ctx context.Context, principal value.Prin
 	var item entity.Agent
 	var canManage, canLaunch bool
 	err = repository.pool.QueryRow(ctx, queryQueriesGetagentSelectAgentsOrganizationIdRefSystemKey, scope.organizationID, ref, scope.role, scope.actorID).Scan(
-		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
+		&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.Agent{}, errs.ErrNotFound
 	}
 	if err != nil {
 		return entity.Agent{}, errs.ErrUnavailable
 	}
+	setAgentAvatarReadback(&item)
 	item.System = item.SystemKey != ""
 	item.NextActions = agentActions(item, canManage, canLaunch)
 	if err := repository.attachInstructions(ctx, scope, &item); err != nil {

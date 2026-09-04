@@ -73,6 +73,7 @@ const (
 	AuthorizeProviderAPIKey       Kind = "AUTHORIZE_PROVIDER_API_KEY"
 	RefreshProviderAuthorization  Kind = "REFRESH_PROVIDER_AUTHORIZATION"
 	RevokeProviderAccount         Kind = "REVOKE_PROVIDER_ACCOUNT"
+	DeleteProviderAccount         Kind = "DELETE_PROVIDER_ACCOUNT"
 	SetProviderAccountEnabled     Kind = "SET_PROVIDER_ACCOUNT_ENABLED"
 	CreateConnection              Kind = "CREATE_INTEGRATION_CONNECTION"
 	UpdateConnection              Kind = "UPDATE_INTEGRATION_CONNECTION"
@@ -115,6 +116,24 @@ const (
 	CreateAccessBinding           Kind = "CREATE_ACCESS_BINDING"
 	ChangeAccessBinding           Kind = "CHANGE_ACCESS_BINDING"
 	RevokeAccessBinding           Kind = "REVOKE_ACCESS_BINDING"
+	CreatePromptTemplateDraft     Kind = "CREATE_PROMPT_TEMPLATE_DRAFT"
+	ValidatePromptTemplateDraft   Kind = "VALIDATE_PROMPT_TEMPLATE_DRAFT"
+	PublishPromptTemplateDraft    Kind = "PUBLISH_PROMPT_TEMPLATE_DRAFT"
+	RebindPromptTemplate          Kind = "REBIND_PROMPT_TEMPLATE_CONSUMERS"
+	CreateRoleImageRevisionDraft  Kind = "CREATE_ROLE_IMAGE_REVISION_DRAFT"
+	ValidateRoleImageRevision     Kind = "VALIDATE_ROLE_IMAGE_REVISION_DRAFT"
+	PublishRoleImageRevision      Kind = "PUBLISH_ROLE_IMAGE_REVISION_DRAFT"
+	RebindRoleImage               Kind = "REBIND_ROLE_IMAGE_CONSUMERS"
+	CreateIntegrationDefinition   Kind = "CREATE_INTEGRATION_DEFINITION_DRAFT"
+	ValidateIntegrationDefinition Kind = "VALIDATE_INTEGRATION_DEFINITION_DRAFT"
+	PublishIntegrationDefinition  Kind = "PUBLISH_INTEGRATION_DEFINITION_DRAFT"
+	RebindIntegrationDefinition   Kind = "REBIND_INTEGRATION_DEFINITION_CONSUMERS"
+	CreateSystemSTTDraft          Kind = "CREATE_SYSTEM_STT_CONFIGURATION_DRAFT"
+	ValidateSystemSTTDraft        Kind = "VALIDATE_SYSTEM_STT_CONFIGURATION_DRAFT"
+	PublishSystemSTTDraft         Kind = "PUBLISH_SYSTEM_STT_CONFIGURATION_DRAFT"
+	RebindSystemSTT               Kind = "REBIND_SYSTEM_STT_CONSUMERS"
+	DetachGitManagedConfiguration Kind = "DETACH_GIT_MANAGED_CONFIGURATION"
+	CopyGitManagedConfiguration   Kind = "COPY_GIT_MANAGED_CONFIGURATION"
 )
 
 const CommitProviderCredentialRefresh Kind = "COMMIT_PROVIDER_CREDENTIAL_REFRESH"
@@ -323,6 +342,11 @@ type InteractionMessageInput struct {
 	ExternalChannelRef, ExternalUserDigest, Message, Decision             string
 }
 
+type ManagedConfigurationInput struct {
+	ConfigurationRef, ProjectRef, Name, Kind, ContentFormat, Content, RevisionRef, ImpactDigest string
+	Consumers                                                                                   []entity.ManagedConfigurationConsumer
+}
+
 type Result struct {
 	Project              *entity.Project
 	Membership           *entity.Membership
@@ -350,4 +374,6 @@ type Result struct {
 	AccessBinding        *entity.AccessBinding
 	ProviderAccount      *entity.ProviderAccount
 	PromotionReceipt     *entity.RoleImagePromotionReceipt
+	ManagedConfiguration *entity.ManagedConfigurationSet
+	ManagedRevision      *entity.ManagedConfigurationRevision
 }

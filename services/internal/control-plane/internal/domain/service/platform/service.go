@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -116,16 +117,44 @@ func (service *Service) ListRuntimes(ctx context.Context, p value.Principal) ([]
 	}
 	return service.repository.ListRuntimes(ctx, p)
 }
-func (service *Service) Search(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.SearchResult, error) {
+func (service *Service) Search(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.SearchResult, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, err
+		return nil, 0, "", err
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
 	if len([]rune(filter.Query)) < 2 || len([]rune(filter.Query)) > 200 {
-		return nil, errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
+	}
+	if filter.Page.Size == 0 {
+		filter.Page.Size = filter.Limit
 	}
 	return service.repository.Search(ctx, p, filter)
+}
+func (service *Service) ListVFSNodes(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.VFSNode, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.ResourceRef == "" {
+		filter.ResourceRef = "/projects"
+	}
+	if !strings.HasPrefix(filter.ResourceRef, "/") || strings.Contains(filter.ResourceRef, "..") || len(filter.ResourceRef) > 1000 {
+		return nil, 0, "", errs.ErrInvalid
+	}
+	return service.repository.ListVFSNodes(ctx, p, filter)
+}
+func (service *Service) SearchVFS(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.VFSNode, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if len([]rune(filter.Query)) < 2 || len([]rune(filter.Query)) > 200 {
+		return nil, 0, "", errs.ErrInvalid
+	}
+	return service.repository.SearchVFS(ctx, p, filter)
 }
 func (service *Service) ListProjects(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Project, string, []string, error) {
 	p, err := service.principal(ctx, p)
@@ -293,11 +322,12 @@ func (service *Service) RecoverRuntimeSecretMaterialization(ctx context.Context,
 	}
 	return service.repository.RecoverRuntimeSecretMaterialization(ctx, p, input)
 }
-func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, string, error) {
+func (service *Service) ListTemplateVariables(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.TemplateVariable, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
+	filter.Query = strings.TrimSpace(filter.Query)
 	return service.repository.ListTemplateVariables(ctx, p, filter)
 }
 func (service *Service) ListProviderDefinitions(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderDefinition, string, error) {
@@ -306,6 +336,139 @@ func (service *Service) ListProviderDefinitions(ctx context.Context, p value.Pri
 		return nil, "", err
 	}
 	return service.repository.ListProviderDefinitions(ctx, p, filter)
+}
+
+func (service *Service) ValidatePromptTemplate(ctx context.Context, p value.Principal, template string) ([]promptservice.Diagnostic, error) {
+	if _, err := service.principal(ctx, p); err != nil {
+		return nil, err
+	}
+	return promptservice.Validate(template, promptservice.Catalog()), nil
+}
+
+func (service *Service) PreviewPromptTemplate(ctx context.Context, p value.Principal, template, targetKind, targetRef string, includeFull bool) (promptservice.Materialization, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return promptservice.Materialization{}, err
+	}
+	if targetKind == "" {
+		targetKind = "SYNTHETIC"
+	}
+	var snapshot entity.PromptMaterializationSnapshot
+	authorizationTarget := organizationTargetForPreview(p.AuthorityTenant)
+	switch targetKind {
+	case "SYNTHETIC":
+		if targetRef != "" || strings.TrimSpace(template) == "" {
+			return promptservice.Materialization{}, errs.ErrInvalid
+		}
+		snapshot = syntheticPromptSnapshot(template)
+	case "RUN", "SESSION":
+		if strings.TrimSpace(targetRef) == "" {
+			return promptservice.Materialization{}, errs.ErrInvalid
+		}
+		snapshot, err = service.repository.GetPromptMaterializationSnapshot(ctx, p, targetKind, targetRef)
+		if err != nil {
+			return promptservice.Materialization{}, err
+		}
+		authorizationTarget = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: snapshot.ProjectRef,
+			ResourceKind: targetKind, ResourceRef: targetRef}
+	default:
+		return promptservice.Materialization{}, errs.ErrInvalid
+	}
+	if strings.TrimSpace(template) == "" {
+		template = snapshot.TemplateContent
+	} else {
+		digest := sha256.Sum256([]byte(template))
+		snapshot.TemplateDigest = hex.EncodeToString(digest[:])
+		snapshot.TemplateRef = "preview_" + snapshot.TemplateDigest[:24]
+		snapshot.TemplateContent = template
+	}
+	materialized, err := promptservice.Materialize(template, promptservice.Snapshot{
+		TargetKind: snapshot.TargetKind, TargetRef: snapshot.TargetRef, ProjectRef: snapshot.ProjectRef,
+		RunRef: snapshot.RunRef, SessionRef: snapshot.SessionRef, TemplateRef: snapshot.TemplateRef,
+		TemplateDigest: snapshot.TemplateDigest, Variables: snapshot.Variables, StructuredVariables: snapshot.StructuredVariables,
+		UserCapabilities: snapshot.UserCapabilities, AgentCapabilities: snapshot.AgentCapabilities,
+		WorkflowCapabilities: snapshot.WorkflowCapabilities, ConnectionCapabilities: snapshot.ConnectionCapabilities,
+		HumanGateCapabilities: snapshot.HumanGateCapabilities, WorkflowStage: snapshot.WorkflowStage,
+		Automation: snapshot.Automation, SessionContinuation: snapshot.SessionContinuation,
+	})
+	if err != nil {
+		return materialized, errs.ErrInvalid
+	}
+	if includeFull {
+		access, accessErr := service.repository.QueryEffectiveAccess(ctx, p, "", authorizationTarget,
+			[]string{"prompt.full.view"}, time.Now().UTC())
+		if accessErr != nil || len(access.Decisions) != 1 || !access.Decisions[0].Allowed {
+			return promptservice.Materialization{}, errs.ErrForbidden
+		}
+	}
+	return materialized, nil
+}
+
+func syntheticPromptSnapshot(template string) entity.PromptMaterializationSnapshot {
+	digest := sha256.Sum256([]byte(template))
+	digestHex := hex.EncodeToString(digest[:])
+	variables := promptservice.Catalog()
+	variables["user.ref"], variables["user.name"] = "usr_preview0001", "Пользователь"
+	variables["organization.ref"], variables["organization.name"] = "org_preview0001", "Организация"
+	variables["project.ref"], variables["project.name"] = "prj_preview0001", "Проект"
+	variables["agent.ref"], variables["agent.name"] = "agt_preview0001", "Агент"
+	return entity.PromptMaterializationSnapshot{
+		TargetKind: promptservice.TargetAgent, TargetRef: "agt_preview0001", ProjectRef: "prj_preview0001",
+		TemplateRef: "preview_" + digestHex[:24], TemplateDigest: digestHex, TemplateContent: template,
+		Variables: variables, UserCapabilities: []string{}, AgentCapabilities: []string{},
+	}
+}
+
+func organizationTargetForPreview(ref string) entity.AccessScope {
+	return entity.AccessScope{Kind: "ORGANIZATION", ResourceKind: "ORGANIZATION", ResourceRef: ref}
+}
+func (service *Service) ListModelCapabilities(ctx context.Context, p value.Principal, definitionKey, accountRef string, filter query.Filter) ([]entity.ModelCapability, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	return service.repository.ListModelCapabilities(ctx, p, strings.TrimSpace(definitionKey), strings.TrimSpace(accountRef), filter)
+}
+func (service *Service) ListManagedConfigurationHistory(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", err
+	}
+	if strings.TrimSpace(ref) == "" {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrInvalid
+	}
+	return service.repository.ListManagedConfigurationHistory(ctx, p, strings.TrimSpace(ref), page)
+}
+func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p value.Principal, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ManagedConfigurationImpact{}, err
+	}
+	if strings.TrimSpace(ref) == "" || strings.TrimSpace(revisionRef) == "" {
+		return entity.ManagedConfigurationImpact{}, errs.ErrInvalid
+	}
+	return service.repository.GetManagedConfigurationImpact(ctx, p, strings.TrimSpace(ref), strings.TrimSpace(revisionRef))
+}
+func (service *Service) GetEffectiveManagedConfiguration(ctx context.Context, p value.Principal, kind, consumerKind, consumerRef string) (entity.ManagedConfigurationBindingSnapshot, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ManagedConfigurationBindingSnapshot{}, err
+	}
+	kind, consumerKind, consumerRef = strings.TrimSpace(kind), strings.TrimSpace(consumerKind), strings.TrimSpace(consumerRef)
+	allowed := kind == "ROLE_IMAGE" && consumerKind == "RUNTIME_ENVIRONMENT" ||
+		kind == "INTEGRATION_DEFINITION" && consumerKind == "INTEGRATION_CONNECTION"
+	if !allowed || consumerRef == "" {
+		return entity.ManagedConfigurationBindingSnapshot{}, errs.ErrInvalid
+	}
+	return service.repository.GetEffectiveManagedConfiguration(ctx, p, kind, consumerKind, consumerRef)
+}
+func (service *Service) GetSystemSTTConfiguration(ctx context.Context, p value.Principal) (entity.SystemSTTConfiguration, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.SystemSTTConfiguration{}, err
+	}
+	return service.repository.GetSystemSTTConfiguration(ctx, p)
 }
 func (service *Service) ListProviderAccounts(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
 	p, err := service.principal(ctx, p)
@@ -856,6 +1019,7 @@ func knownCommand(kind command.Kind) bool {
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
+		command.SetAgentAvatar, command.RemoveAgentAvatar,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,
 		command.RollbackInstructions, command.PublishAgentRuntimeConfig,
 		command.CreateConfigOverlayDraft, command.ValidateConfigOverlayDraft, command.PublishConfigOverlayDraft,
@@ -871,7 +1035,7 @@ func knownCommand(kind command.Kind) bool {
 		command.RemoveAttachmentSetItems, command.FinalizeAttachmentSet, command.CreateSchedule,
 		command.UpdateSchedule, command.SetScheduleEnabled, command.ArchiveSchedule, command.DeleteSchedule,
 		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
-		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.SetProviderAccountEnabled,
+		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
@@ -889,7 +1053,16 @@ func knownCommand(kind command.Kind) bool {
 		command.CompleteIntegrationInvocation, command.CompleteInteractionDelivery,
 		command.AcceptInteractionMessage, command.CreateAccessRole,
 		command.CreateAccessRoleVersion, command.ArchiveAccessRole,
-		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding:
+		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding,
+		command.CreatePromptTemplateDraft, command.ValidatePromptTemplateDraft,
+		command.PublishPromptTemplateDraft, command.RebindPromptTemplate,
+		command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
+		command.PublishRoleImageRevision, command.RebindRoleImage,
+		command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
+		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
+		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
+		command.PublishSystemSTTDraft, command.RebindSystemSTT,
+		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration:
 		return true
 	default:
 		return false

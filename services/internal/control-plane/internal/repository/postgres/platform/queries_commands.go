@@ -91,6 +91,8 @@ var (
 	queryCommandsChangeagentbindingSelectAgentsOrganizationIdRef string
 	//go:embed sql/commands_changeagentbinding_select_enabled_capability.sql
 	queryCommandsChangeagentbindingSelectEnabledCapability string
+	//go:embed sql/commands_changeagentbinding_actor_can_grant.sql
+	queryCommandsChangeagentbindingActorCanGrant string
 	//go:embed sql/commands_changeagentbinding_enable_integration_grant.sql
 	queryCommandsChangeagentbindingEnableIntegrationGrant string
 	//go:embed sql/commands_changeagentbinding_revoke_integration_grant.sql

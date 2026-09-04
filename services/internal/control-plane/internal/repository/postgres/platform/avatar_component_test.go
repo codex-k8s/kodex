@@ -87,22 +87,23 @@ func TestAvatarLifecycleComponent(t *testing.T) {
 	assertAvatarUpdateError(t, ctx, service, owner, agent, avatarArtifactContentURL(foreignArtifact.Ref), "avatar-reject-foreign", domainerrs.ErrInvalid)
 
 	first := uploadAvatarFixture(t, ctx, service, owner, primary.Ref, "agent-avatar.png", "image/png", avatarPNG(t), "avatar-first")
-	updated := updateAvatar(t, ctx, service, owner, agent, avatarArtifactContentURL(first.Ref), "avatar-apply-first")
-	if updated.AvatarURL != avatarArtifactContentURL(first.Ref) {
-		t.Fatalf("agent lost canonical avatar URL: %q", updated.AvatarURL)
+	updated := setAvatar(t, ctx, service, owner, agent, first, "avatar-apply-first")
+	if updated.AvatarURL != avatarArtifactContentURL(first.Ref) || updated.Avatar.ArtifactRef != first.Ref ||
+		updated.Avatar.ArtifactRevision != first.Revision || updated.Avatar.Source != "ARTIFACT" {
+		t.Fatalf("agent lost immutable avatar revision: %#v", updated)
 	}
 	second := uploadAvatarFixture(t, ctx, service, owner, primary.Ref, "agent-avatar.png", "image/png", avatarPNG(t), "avatar-second")
 	if second.Ref == first.Ref || second.Revision != first.Revision+1 {
 		t.Fatalf("avatar crop did not create an immutable revision: first=%#v second=%#v", first, second)
 	}
-	updated = updateAvatar(t, ctx, service, owner, updated, avatarArtifactContentURL(second.Ref), "avatar-apply-second")
-	deleteAvatarArtifact(t, ctx, service, owner, first, "avatar-delete-first")
+	updated = setAvatar(t, ctx, service, owner, updated, second, "avatar-apply-second")
+	assertRetiredAvatar(t, ctx, pool, first.Ref, agent.Ref)
 
-	updated = updateAvatar(t, ctx, service, owner, updated, "", "avatar-clear")
-	if updated.AvatarURL != "" {
-		t.Fatalf("avatar removal did not restore generated fallback: %q", updated.AvatarURL)
+	updated = removeAvatar(t, ctx, service, owner, updated, "avatar-clear")
+	if updated.AvatarURL != "" || updated.Avatar.Source != "FALLBACK" || updated.Avatar.ArtifactRef != "" {
+		t.Fatalf("avatar removal did not restore generated fallback: %#v", updated.Avatar)
 	}
-	deleteAvatarArtifact(t, ctx, service, owner, second, "avatar-delete-second")
+	assertRetiredAvatar(t, ctx, pool, second.Ref, agent.Ref)
 	assertAvatarUpdateError(t, ctx, service, owner, updated, avatarArtifactContentURL(second.Ref), "avatar-reject-deleted", domainerrs.ErrInvalid)
 }
 
@@ -141,20 +142,53 @@ func uploadAvatarFixture(t *testing.T, ctx context.Context, service *platformser
 	return artifact
 }
 
-func updateAvatar(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, avatarURL, key string) entity.Agent {
+func setAvatar(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, artifact entity.Artifact, key string) entity.Agent {
 	t.Helper()
 	version := agent.Version
 	result, err := service.Execute(ctx, command.Command{
-		Kind: command.UpdateAgent, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version},
-		Payload: command.AgentInput{
-			Ref: agent.Ref, Name: agent.Name, Purpose: agent.Purpose, RoleDescription: agent.RoleDescription,
-			RoleDefinitionRef: agent.RoleDefinitionRef, AvatarURL: avatarURL, RuntimeRef: agent.RuntimeKey,
-		},
+		Kind: command.SetAgentAvatar, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version},
+		Payload:  command.AgentAvatarInput{AgentRef: agent.Ref, ArtifactRef: artifact.Ref},
 	})
 	if err != nil || result.Agent == nil {
-		t.Fatalf("update avatar %s: agent=%#v err=%v", key, result.Agent, err)
+		t.Fatalf("set avatar %s: agent=%#v err=%v", key, result.Agent, err)
 	}
 	return *result.Agent
+}
+
+func removeAvatar(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, key string) entity.Agent {
+	t.Helper()
+	version := agent.Version
+	result, err := service.Execute(ctx, command.Command{
+		Kind: command.RemoveAgentAvatar, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version},
+		Payload:  command.AgentAvatarInput{AgentRef: agent.Ref},
+	})
+	if err != nil || result.Agent == nil {
+		t.Fatalf("remove avatar %s: agent=%#v err=%v", key, result.Agent, err)
+	}
+	return *result.Agent
+}
+
+func assertRetiredAvatar(t *testing.T, ctx context.Context, pool *pgxpool.Pool, artifactRef, agentRef string) {
+	t.Helper()
+	var lifecycle string
+	var bindings int
+	if err := pool.QueryRow(ctx, `
+		SELECT artifact.lifecycle_state, count(binding.artifact_id)::integer
+		FROM control_plane.artifacts AS artifact
+		LEFT JOIN control_plane.artifact_bindings AS binding
+		  ON binding.artifact_id = artifact.id
+		 AND binding.target_kind = 'AGENT'
+		 AND binding.target_ref = $2
+		WHERE artifact.ref = $1
+		GROUP BY artifact.lifecycle_state
+	`, artifactRef, agentRef).Scan(&lifecycle, &bindings); err != nil {
+		t.Fatalf("read retired avatar %s: %v", artifactRef, err)
+	}
+	if lifecycle != "DELETED" || bindings != 0 {
+		t.Fatalf("avatar %s left an orphan binding: lifecycle=%s bindings=%d", artifactRef, lifecycle, bindings)
+	}
 }
 
 func assertAvatarUpdateError(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, agent entity.Agent, avatarURL, key string, expected error) {

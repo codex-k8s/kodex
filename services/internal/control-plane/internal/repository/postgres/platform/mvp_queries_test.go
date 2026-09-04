@@ -72,6 +72,32 @@ func TestProviderAccountLifecycleStateMatrix(t *testing.T) {
 	}
 }
 
+func TestProviderAccountStatusReasonIsSafeAndDeterministic(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		item entity.ProviderAccount
+		want string
+	}{
+		{name: "authorized", item: entity.ProviderAccount{State: "AUTHORIZED"}, want: "AUTHORIZED"},
+		{name: "credential required", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION"}, want: "CREDENTIAL_CONFIGURATION_REQUIRED"},
+		{name: "device pending", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION", Authorization: &entity.ProviderAuthorization{State: "PENDING"}}, want: "DEVICE_AUTHORIZATION_PENDING"},
+		{name: "reauthorization", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: "REAUTHORIZATION_REQUIRED"},
+		{name: "safe provider failure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED", Authorization: &entity.ProviderAuthorization{SafeFailureCode: "DEVICE_AUTHORIZATION_EXPIRED"}}, want: "DEVICE_AUTHORIZATION_EXPIRED"},
+		{name: "unsafe provider failure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED", Authorization: &entity.ProviderAuthorization{SafeFailureCode: "raw provider detail"}}, want: "REAUTHORIZATION_REQUIRED"},
+		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: "ACCOUNT_DISABLED"},
+		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: "ACCOUNT_REVOKED"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := providerAccountStatusReason(test.item); got != test.want {
+				t.Fatalf("safe status reason = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestProviderAccountEnabledTransitionMatrix(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

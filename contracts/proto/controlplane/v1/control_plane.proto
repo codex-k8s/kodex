@@ -18,6 +18,8 @@ service PlatformQueryService {
   rpc ListPlatformCapabilities(ListPlatformCapabilitiesRequest) returns (ListPlatformCapabilitiesResponse);
   rpc ListRuntimeSelections(ListRuntimeSelectionsRequest) returns (ListRuntimeSelectionsResponse);
   rpc SearchPlatform(SearchPlatformRequest) returns (SearchPlatformResponse);
+  rpc ListVFSNodes(ListVFSNodesRequest) returns (ListVFSNodesResponse);
+  rpc SearchVFS(SearchVFSRequest) returns (SearchVFSResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   // ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -61,11 +63,15 @@ service PlatformQueryService {
   rpc ListRuntimeEnvironmentAgents(ListRuntimeEnvironmentAgentsRequest) returns (ListRuntimeEnvironmentAgentsResponse);
   rpc ListTemplateVariables(ListTemplateVariablesRequest) returns (ListTemplateVariablesResponse);
   rpc ListProviderDefinitions(ListProviderDefinitionsRequest) returns (ListProviderDefinitionsResponse);
+  rpc ListModelCapabilities(ListModelCapabilitiesRequest) returns (ListModelCapabilitiesResponse);
   rpc ListRoleImageRecipeRevisions(ListRoleImageRecipeRevisionsRequest) returns (ListRoleImageRecipeRevisionsResponse);
   rpc ValidatePromptTemplate(ValidatePromptTemplateRequest) returns (ValidatePromptTemplateResponse);
   rpc PreviewPromptTemplate(PreviewPromptTemplateRequest) returns (PreviewPromptTemplateResponse);
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
+  rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
+  rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
+  rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
 }
 
 service PlatformCommandService {
@@ -124,7 +130,10 @@ service PlatformCommandService {
   rpc StartProviderAccountDeviceAuthorization(StartProviderAccountDeviceAuthorizationRequest) returns (StartProviderAccountDeviceAuthorizationResponse);
   rpc AuthorizeProviderAccountAPIKey(AuthorizeProviderAccountAPIKeyRequest) returns (AuthorizeProviderAccountAPIKeyResponse);
   rpc RefreshProviderAccountAuthorization(RefreshProviderAccountAuthorizationRequest) returns (RefreshProviderAccountAuthorizationResponse);
+  rpc VerifyProviderAccountDeviceAuthorization(VerifyProviderAccountDeviceAuthorizationRequest) returns (VerifyProviderAccountDeviceAuthorizationResponse);
+  rpc ReauthorizeProviderAccountDeviceCode(ReauthorizeProviderAccountDeviceCodeRequest) returns (ReauthorizeProviderAccountDeviceCodeResponse);
   rpc RevokeProviderAccount(RevokeProviderAccountRequest) returns (RevokeProviderAccountResponse);
+  rpc DeleteProviderAccount(DeleteProviderAccountRequest) returns (DeleteProviderAccountResponse);
   rpc SetProviderAccountEnabled(SetProviderAccountEnabledRequest) returns (SetProviderAccountEnabledResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
@@ -149,6 +158,24 @@ service PlatformCommandService {
   rpc PrepareRotateRuntimeSecret(PrepareRotateRuntimeSecretRequest) returns (PrepareRotateRuntimeSecretResponse);
   rpc PrepareRevealRuntimeSecret(PrepareRevealRuntimeSecretRequest) returns (PrepareRevealRuntimeSecretResponse);
   rpc PrepareRevokeRuntimeSecret(PrepareRevokeRuntimeSecretRequest) returns (PrepareRevokeRuntimeSecretResponse);
+  rpc CreatePromptTemplateDraft(CreatePromptTemplateDraftRequest) returns (CreatePromptTemplateDraftResponse);
+  rpc ValidatePromptTemplateDraft(ValidatePromptTemplateDraftRequest) returns (ValidatePromptTemplateDraftResponse);
+  rpc PublishPromptTemplateDraft(PublishPromptTemplateDraftRequest) returns (PublishPromptTemplateDraftResponse);
+  rpc RebindPromptTemplateConsumers(RebindPromptTemplateConsumersRequest) returns (RebindPromptTemplateConsumersResponse);
+  rpc CreateRoleImageRevisionDraft(CreateRoleImageRevisionDraftRequest) returns (CreateRoleImageRevisionDraftResponse);
+  rpc ValidateRoleImageRevisionDraft(ValidateRoleImageRevisionDraftRequest) returns (ValidateRoleImageRevisionDraftResponse);
+  rpc PublishRoleImageRevisionDraft(PublishRoleImageRevisionDraftRequest) returns (PublishRoleImageRevisionDraftResponse);
+  rpc RebindRoleImageConsumers(RebindRoleImageConsumersRequest) returns (RebindRoleImageConsumersResponse);
+  rpc CreateIntegrationDefinitionDraft(CreateIntegrationDefinitionDraftRequest) returns (CreateIntegrationDefinitionDraftResponse);
+  rpc ValidateIntegrationDefinitionDraft(ValidateIntegrationDefinitionDraftRequest) returns (ValidateIntegrationDefinitionDraftResponse);
+  rpc PublishIntegrationDefinitionDraft(PublishIntegrationDefinitionDraftRequest) returns (PublishIntegrationDefinitionDraftResponse);
+  rpc RebindIntegrationDefinitionConsumers(RebindIntegrationDefinitionConsumersRequest) returns (RebindIntegrationDefinitionConsumersResponse);
+  rpc CreateSystemSTTConfigurationDraft(CreateSystemSTTConfigurationDraftRequest) returns (CreateSystemSTTConfigurationDraftResponse);
+  rpc ValidateSystemSTTConfigurationDraft(ValidateSystemSTTConfigurationDraftRequest) returns (ValidateSystemSTTConfigurationDraftResponse);
+  rpc PublishSystemSTTConfigurationDraft(PublishSystemSTTConfigurationDraftRequest) returns (PublishSystemSTTConfigurationDraftResponse);
+  rpc RebindSystemSTTConsumers(RebindSystemSTTConsumersRequest) returns (RebindSystemSTTConsumersResponse);
+  rpc DetachGitManagedConfiguration(DetachGitManagedConfigurationRequest) returns (DetachGitManagedConfigurationResponse);
+  rpc CopyGitManagedConfiguration(CopyGitManagedConfigurationRequest) returns (CopyGitManagedConfigurationResponse);
 }
 
 // RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
@@ -178,6 +205,9 @@ service SystemAssistantService {
 
 service RuntimeWorkService {
   rpc ClaimExecution(ClaimExecutionRequest) returns (ClaimExecutionResponse);
+  // GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
+  // immutable revision, выбранную binding конкретного RuntimeEnvironment.
+  rpc GetRuntimeEnvironmentRoleImageConfiguration(GetRuntimeEnvironmentRoleImageConfigurationRequest) returns (GetRuntimeEnvironmentRoleImageConfigurationResponse);
   rpc ReadExecutionArtifact(ReadExecutionArtifactRequest) returns (ReadExecutionArtifactResponse);
   rpc RenewExecution(RenewExecutionRequest) returns (RenewExecutionResponse);
   rpc ReportExecutionProgress(ReportExecutionProgressRequest) returns (ReportExecutionProgressResponse);
@@ -193,6 +223,9 @@ service RuntimeWorkService {
   rpc ClaimDueSchedules(ClaimDueSchedulesRequest) returns (ClaimDueSchedulesResponse);
   rpc MaterializeScheduleOccurrence(MaterializeScheduleOccurrenceRequest) returns (MaterializeScheduleOccurrenceResponse);
   rpc ClaimIntegrationConnectionTests(ClaimIntegrationConnectionTestsRequest) returns (ClaimIntegrationConnectionTestsResponse);
+  // GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
+  // payload consumer и разрешает её по opaque Connection ref внутри tenant.
+  rpc GetIntegrationConnectionDefinitionConfiguration(GetIntegrationConnectionDefinitionConfigurationRequest) returns (GetIntegrationConnectionDefinitionConfigurationResponse);
   rpc CompleteIntegrationConnectionTest(CompleteIntegrationConnectionTestRequest) returns (CompleteIntegrationConnectionTestResponse);
   rpc ResolveIntegrationInvocation(ResolveIntegrationInvocationRequest) returns (ResolveIntegrationInvocationResponse);
   rpc ClaimIntegrationInvocations(ClaimIntegrationInvocationsRequest) returns (ClaimIntegrationInvocationsResponse);
@@ -1445,9 +1478,62 @@ message SearchResult {
 message SearchPlatformRequest {
   string query = 1;
   int32 limit = 2;
+  string project_ref = 3;
+  PageRequest page = 4;
 }
 message SearchPlatformResponse {
   repeated SearchResult results = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+
+enum VFSNodeKind {
+  VFS_NODE_KIND_UNSPECIFIED = 0;
+  VFS_NODE_KIND_DIRECTORY = 1;
+  VFS_NODE_KIND_PROJECT = 2;
+  VFS_NODE_KIND_AGENT = 3;
+  VFS_NODE_KIND_WORKFLOW = 4;
+  VFS_NODE_KIND_RUN = 5;
+  VFS_NODE_KIND_INPUT = 6;
+  VFS_NODE_KIND_RESULT = 7;
+  VFS_NODE_KIND_SKILL = 8;
+  VFS_NODE_KIND_MEMORY = 9;
+}
+
+message VFSNode {
+  string ref = 1;
+  string path = 2;
+  string parent_path = 3;
+  string name = 4;
+  VFSNodeKind kind = 5;
+  bool directory = 6;
+  string project_ref = 7;
+  string entity_ref = 8;
+  string run_ref = 9;
+  int64 size_bytes = 10;
+  string digest = 11;
+  google.protobuf.Timestamp modified_at = 12;
+}
+
+message ListVFSNodesRequest {
+  string project_ref = 1;
+  string path = 2;
+  PageRequest page = 3;
+}
+message ListVFSNodesResponse {
+  repeated VFSNode nodes = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+message SearchVFSRequest {
+  string project_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message SearchVFSResponse {
+  repeated VFSNode nodes = 1;
+  int64 total = 2;
+  PageInfo page = 3;
 }
 
 message ListProjectsRequest {
@@ -2350,6 +2436,36 @@ message RuntimeRevisionSnapshot {
   RuntimeEnvironmentPolicy environment_policy = 55;
   RuntimeKubernetesAccess effective_kubernetes_access = 56;
   repeated RuntimeAttachmentSet attachment_sets = 57;
+  RuntimeWorkspacePolicy workspace_policy = 58;
+}
+
+enum RuntimeWorkspaceAccess {
+  RUNTIME_WORKSPACE_ACCESS_UNSPECIFIED = 0;
+  RUNTIME_WORKSPACE_ACCESS_READ_ONLY = 1;
+  RUNTIME_WORKSPACE_ACCESS_WRITABLE = 2;
+}
+
+enum RuntimeWorkspaceDenialReason {
+  RUNTIME_WORKSPACE_DENIAL_REASON_UNSPECIFIED = 0;
+  RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY = 1;
+  RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED = 2;
+  RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE = 3;
+  RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR = 4;
+}
+
+message RuntimeWorkspacePathRule {
+  string path = 1;
+  RuntimeWorkspaceAccess access = 2;
+}
+
+message RuntimeWorkspacePolicy {
+  int64 revision = 1;
+  string root = 2;
+  repeated RuntimeWorkspacePathRule rules = 3;
+  int64 maximum_writable_bytes = 4;
+  int64 maximum_file_count = 5;
+  string digest = 6;
+  repeated RuntimeWorkspaceDenialReason denial_reasons = 7;
 }
 
 message RuntimeInputArtifact {
@@ -2722,6 +2838,11 @@ message ScheduleClaim {
   WorkLease lease = 3;
   google.protobuf.Timestamp scheduled_for = 4;
   string input_digest = 5;
+  // Поля immutable revision позволяют consumer проверить exact snapshot,
+  // который уже закреплён за occurrence на стороне control-plane.
+  string schedule_revision_ref = 6;
+  int64 schedule_revision = 7;
+  string schedule_revision_digest = 8;
 }
 message ClaimDueSchedulesRequest {
   string workload_instance = 1;
@@ -2996,6 +3117,7 @@ message ListTemplateVariablesRequest {
 message ListTemplateVariablesResponse {
   repeated TemplateVariable variables = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 
 enum RuntimeSecretValueType {
@@ -3599,6 +3721,7 @@ message ProviderDefinition {
   bool available = 7;
   bool ready = 8;
   repeated string readiness_blockers = 9;
+  repeated ModelCapability models = 10;
 }
 message ListProviderDefinitionsRequest {
   PageRequest page = 1;
@@ -3607,6 +3730,29 @@ message ListProviderDefinitionsRequest {
 message ListProviderDefinitionsResponse {
   repeated ProviderDefinition definitions = 1;
   PageInfo page = 2;
+}
+
+message ModelCapability {
+  string id = 1;
+  string provider_definition_key = 2;
+  repeated string reasoning_efforts = 3;
+  string default_reasoning_effort = 4;
+  bool available = 5;
+  repeated string eligible_provider_account_refs = 6;
+  repeated string readiness_blockers = 7;
+}
+
+message ListModelCapabilitiesRequest {
+  string provider_definition_key = 1;
+  string provider_account_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+
+message ListModelCapabilitiesResponse {
+  repeated ModelCapability models = 1;
+  int64 total = 2;
+  PageInfo page = 3;
 }
 
 message RoleImageRecipeRevision {
@@ -3699,6 +3845,7 @@ message ProviderAccount {
   repeated NextAction next_actions = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
+  string safe_status_reason = 13;
 }
 
 message ListProviderAccountsRequest {
@@ -3748,11 +3895,34 @@ message RefreshProviderAccountAuthorizationRequest {
 message RefreshProviderAccountAuthorizationResponse {
   ProviderAccount account = 1;
 }
+message VerifyProviderAccountDeviceAuthorizationRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message VerifyProviderAccountDeviceAuthorizationResponse {
+  ProviderAccount account = 1;
+}
+message ReauthorizeProviderAccountDeviceCodeRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message ReauthorizeProviderAccountDeviceCodeResponse {
+  ProviderAccount account = 1;
+}
 message RevokeProviderAccountRequest {
   MutationContext mutation = 1;
   string account_ref = 2;
 }
 message RevokeProviderAccountResponse {
+  ProviderAccount account = 1;
+}
+// DeleteProviderAccount оставляет audit-visible tombstone REVOKED и удаляет
+// materialized API-key credential через durable cleanup lifecycle.
+message DeleteProviderAccountRequest {
+  MutationContext mutation = 1;
+  string account_ref = 2;
+}
+message DeleteProviderAccountResponse {
   ProviderAccount account = 1;
 }
 message SetProviderAccountEnabledRequest {
@@ -3860,7 +4030,291 @@ message PreviewPromptTemplateResponse {
   string safe_preview = 1;
   string full_materialized_prompt = 2;
   repeated PromptTemplateDiagnostic diagnostics = 3;
+  string template_ref = 4;
+  string template_digest = 5;
+  string materialization_digest = 6;
+  repeated string effective_capabilities = 7;
 }
+
+enum ManagedConfigurationKind {
+  MANAGED_CONFIGURATION_KIND_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE = 1;
+  MANAGED_CONFIGURATION_KIND_ROLE_IMAGE = 2;
+  MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION = 3;
+  MANAGED_CONFIGURATION_KIND_SYSTEM_STT = 4;
+}
+enum ManagedConfigurationState {
+  MANAGED_CONFIGURATION_STATE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_STATE_DRAFT = 1;
+  MANAGED_CONFIGURATION_STATE_VALID = 2;
+  MANAGED_CONFIGURATION_STATE_INVALID = 3;
+  MANAGED_CONFIGURATION_STATE_PUBLISHED = 4;
+  MANAGED_CONFIGURATION_STATE_SUPERSEDED = 5;
+}
+enum ManagedConfigurationOwner {
+  MANAGED_CONFIGURATION_OWNER_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_OWNER_UI = 1;
+  MANAGED_CONFIGURATION_OWNER_GIT = 2;
+}
+message ManagedConfigurationRevision {
+  string ref = 1;
+  int64 revision = 2;
+  ManagedConfigurationState state = 3;
+  string content_format = 4;
+  string content = 5;
+  string digest = 6;
+  repeated string validation_diagnostics = 7;
+  string parent_revision_ref = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp validated_at = 10;
+  google.protobuf.Timestamp published_at = 11;
+}
+message ManagedConfigurationSet {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  ManagedConfigurationKind kind = 4;
+  string name = 5;
+  ManagedConfigurationOwner managed_by = 6;
+  string source = 7;
+  string source_revision = 8;
+  ManagedConfigurationRevision current_revision = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+message ManagedConfigurationConsumer {
+  string kind = 1;
+  string ref = 2;
+  string revision_ref = 3;
+  int64 version = 4;
+}
+message ManagedConfigurationImpact {
+  string configuration_ref = 1;
+  string target_revision_ref = 2;
+  repeated ManagedConfigurationConsumer consumers = 3;
+  string digest = 4;
+}
+message ManagedConfigurationBindingSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string consumer_kind = 3;
+  string consumer_ref = 4;
+  ManagedConfigurationSet configuration = 5;
+  ManagedConfigurationRevision revision = 6;
+}
+message GetRuntimeEnvironmentRoleImageConfigurationRequest { string environment_ref = 1; }
+message GetRuntimeEnvironmentRoleImageConfigurationResponse { ManagedConfigurationBindingSnapshot binding = 1; }
+message GetIntegrationConnectionDefinitionConfigurationRequest { string connection_ref = 1; }
+message GetIntegrationConnectionDefinitionConfigurationResponse { ManagedConfigurationBindingSnapshot binding = 1; }
+message CreatePromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string content_format = 5;
+  string content = 6;
+}
+message CreatePromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ValidatePromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message ValidatePromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message PublishPromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message PublishPromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message RebindPromptTemplateConsumersRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string impact_digest = 4;
+  repeated ManagedConfigurationConsumer consumers = 5;
+}
+message RebindPromptTemplateConsumersResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message CreateRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string content_format = 5;
+  string content = 6;
+}
+message CreateRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ValidateRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message ValidateRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message PublishRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message PublishRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message RebindRoleImageConsumersRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string impact_digest = 4;
+  repeated ManagedConfigurationConsumer consumers = 5;
+}
+message RebindRoleImageConsumersResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message CreateIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string content_format = 5;
+  string content = 6;
+}
+message CreateIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ValidateIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message ValidateIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message PublishIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message PublishIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message RebindIntegrationDefinitionConsumersRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string impact_digest = 4;
+  repeated ManagedConfigurationConsumer consumers = 5;
+}
+message RebindIntegrationDefinitionConsumersResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message CreateSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string content_format = 5;
+  string content = 6;
+}
+message CreateSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ValidateSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message ValidateSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message PublishSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message PublishSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message RebindSystemSTTConsumersRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string impact_digest = 4;
+  repeated ManagedConfigurationConsumer consumers = 5;
+}
+message RebindSystemSTTConsumersResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message DetachGitManagedConfigurationRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+}
+message DetachGitManagedConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message CopyGitManagedConfigurationRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string name = 3;
+}
+message CopyGitManagedConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ListManagedConfigurationHistoryRequest {
+  string configuration_ref = 1;
+  PageRequest page = 2;
+}
+message ListManagedConfigurationHistoryResponse {
+  ManagedConfigurationSet configuration = 1;
+  repeated ManagedConfigurationRevision revisions = 2;
+  PageInfo page = 3;
+  int64 total = 4;
+}
+message GetManagedConfigurationImpactRequest {
+  string configuration_ref = 1;
+  string revision_ref = 2;
+}
+message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
+message SystemSTTConfiguration {
+  string configuration_ref = 1;
+  string revision_ref = 2;
+  int64 revision = 3;
+  string digest = 4;
+  string provider_account_ref = 5;
+  string model = 6;
+  string language = 7;
+  string permission_key = 8;
+  bool ready = 9;
+  repeated string readiness_blockers = 10;
+}
+message GetSystemSTTConfigurationRequest {}
+message GetSystemSTTConfigurationResponse { SystemSTTConfiguration configuration = 1; }
 
 message ProviderCredentialDescriptor {
   string secret_name = 1;

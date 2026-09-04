@@ -129,6 +129,26 @@ func (server *Server) ArchiveAgent(ctx context.Context, request *controlplanev1.
 	return &controlplanev1.ArchiveAgentResponse{Agent: castAgent(*result.Agent)}, nil
 }
 
+func (server *Server) SetAgentAvatar(ctx context.Context, request *controlplanev1.SetAgentAvatarRequest) (*controlplanev1.SetAgentAvatarResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SetAgentAvatar_FullMethodName,
+		command.SetAgentAvatar, request.GetMutation(), command.AgentAvatarInput{
+			AgentRef: request.GetAgentRef(), ArtifactRef: request.GetArtifactRef(),
+		})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.SetAgentAvatarResponse{Agent: castAgent(*result.Agent)}, nil
+}
+
+func (server *Server) RemoveAgentAvatar(ctx context.Context, request *controlplanev1.RemoveAgentAvatarRequest) (*controlplanev1.RemoveAgentAvatarResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RemoveAgentAvatar_FullMethodName,
+		command.RemoveAgentAvatar, request.GetMutation(), command.AgentAvatarInput{AgentRef: request.GetAgentRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RemoveAgentAvatarResponse{Agent: castAgent(*result.Agent)}, nil
+}
+
 func (server *Server) CreateInstructionDraft(ctx context.Context, request *controlplanev1.CreateInstructionDraftRequest) (*controlplanev1.CreateInstructionDraftResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateInstructionDraft_FullMethodName, command.CreateInstructions, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef(), Instructions: request.GetContent()})
 	if err != nil {

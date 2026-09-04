@@ -25,6 +25,8 @@ const (
 	PlatformQueryService_ListPlatformCapabilities_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
 	PlatformQueryService_ListRuntimeSelections_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
 	PlatformQueryService_SearchPlatform_FullMethodName                        = "/controlplane.v1.PlatformQueryService/SearchPlatform"
+	PlatformQueryService_ListVFSNodes_FullMethodName                          = "/controlplane.v1.PlatformQueryService/ListVFSNodes"
+	PlatformQueryService_SearchVFS_FullMethodName                             = "/controlplane.v1.PlatformQueryService/SearchVFS"
 	PlatformQueryService_ListProjects_FullMethodName                          = "/controlplane.v1.PlatformQueryService/ListProjects"
 	PlatformQueryService_GetProject_FullMethodName                            = "/controlplane.v1.PlatformQueryService/GetProject"
 	PlatformQueryService_ListPlatformMemberships_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
@@ -66,11 +68,15 @@ const (
 	PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentAgents"
 	PlatformQueryService_ListTemplateVariables_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
 	PlatformQueryService_ListProviderDefinitions_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListProviderDefinitions"
+	PlatformQueryService_ListModelCapabilities_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListModelCapabilities"
 	PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListRoleImageRecipeRevisions"
 	PlatformQueryService_ValidatePromptTemplate_FullMethodName                = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
 	PlatformQueryService_PreviewPromptTemplate_FullMethodName                 = "/controlplane.v1.PlatformQueryService/PreviewPromptTemplate"
 	PlatformQueryService_ListRuntimeSecrets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
 	PlatformQueryService_GetRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
+	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
+	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
+	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -83,6 +89,8 @@ type PlatformQueryServiceClient interface {
 	ListPlatformCapabilities(ctx context.Context, in *ListPlatformCapabilitiesRequest, opts ...grpc.CallOption) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(ctx context.Context, in *ListRuntimeSelectionsRequest, opts ...grpc.CallOption) (*ListRuntimeSelectionsResponse, error)
 	SearchPlatform(ctx context.Context, in *SearchPlatformRequest, opts ...grpc.CallOption) (*SearchPlatformResponse, error)
+	ListVFSNodes(ctx context.Context, in *ListVFSNodesRequest, opts ...grpc.CallOption) (*ListVFSNodesResponse, error)
+	SearchVFS(ctx context.Context, in *SearchVFSRequest, opts ...grpc.CallOption) (*SearchVFSResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -126,11 +134,15 @@ type PlatformQueryServiceClient interface {
 	ListRuntimeEnvironmentAgents(ctx context.Context, in *ListRuntimeEnvironmentAgentsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentAgentsResponse, error)
 	ListTemplateVariables(ctx context.Context, in *ListTemplateVariablesRequest, opts ...grpc.CallOption) (*ListTemplateVariablesResponse, error)
 	ListProviderDefinitions(ctx context.Context, in *ListProviderDefinitionsRequest, opts ...grpc.CallOption) (*ListProviderDefinitionsResponse, error)
+	ListModelCapabilities(ctx context.Context, in *ListModelCapabilitiesRequest, opts ...grpc.CallOption) (*ListModelCapabilitiesResponse, error)
 	ListRoleImageRecipeRevisions(ctx context.Context, in *ListRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListRoleImageRecipeRevisionsResponse, error)
 	ValidatePromptTemplate(ctx context.Context, in *ValidatePromptTemplateRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(ctx context.Context, in *PreviewPromptTemplateRequest, opts ...grpc.CallOption) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
+	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
+	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
+	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -195,6 +207,26 @@ func (c *platformQueryServiceClient) SearchPlatform(ctx context.Context, in *Sea
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchPlatformResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_SearchPlatform_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListVFSNodes(ctx context.Context, in *ListVFSNodesRequest, opts ...grpc.CallOption) (*ListVFSNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListVFSNodesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListVFSNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) SearchVFS(ctx context.Context, in *SearchVFSRequest, opts ...grpc.CallOption) (*SearchVFSResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchVFSResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_SearchVFS_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -611,6 +643,16 @@ func (c *platformQueryServiceClient) ListProviderDefinitions(ctx context.Context
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListModelCapabilities(ctx context.Context, in *ListModelCapabilitiesRequest, opts ...grpc.CallOption) (*ListModelCapabilitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListModelCapabilitiesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListModelCapabilities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListRoleImageRecipeRevisions(ctx context.Context, in *ListRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListRoleImageRecipeRevisionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRoleImageRecipeRevisionsResponse)
@@ -661,6 +703,36 @@ func (c *platformQueryServiceClient) GetRuntimeSecret(ctx context.Context, in *G
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListManagedConfigurationHistoryResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListManagedConfigurationHistory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetManagedConfigurationImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetManagedConfigurationImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSystemSTTConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetSystemSTTConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
@@ -671,6 +743,8 @@ type PlatformQueryServiceServer interface {
 	ListPlatformCapabilities(context.Context, *ListPlatformCapabilitiesRequest) (*ListPlatformCapabilitiesResponse, error)
 	ListRuntimeSelections(context.Context, *ListRuntimeSelectionsRequest) (*ListRuntimeSelectionsResponse, error)
 	SearchPlatform(context.Context, *SearchPlatformRequest) (*SearchPlatformResponse, error)
+	ListVFSNodes(context.Context, *ListVFSNodesRequest) (*ListVFSNodesResponse, error)
+	SearchVFS(context.Context, *SearchVFSRequest) (*SearchVFSResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
@@ -714,11 +788,15 @@ type PlatformQueryServiceServer interface {
 	ListRuntimeEnvironmentAgents(context.Context, *ListRuntimeEnvironmentAgentsRequest) (*ListRuntimeEnvironmentAgentsResponse, error)
 	ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error)
 	ListProviderDefinitions(context.Context, *ListProviderDefinitionsRequest) (*ListProviderDefinitionsResponse, error)
+	ListModelCapabilities(context.Context, *ListModelCapabilitiesRequest) (*ListModelCapabilitiesResponse, error)
 	ListRoleImageRecipeRevisions(context.Context, *ListRoleImageRecipeRevisionsRequest) (*ListRoleImageRecipeRevisionsResponse, error)
 	ValidatePromptTemplate(context.Context, *ValidatePromptTemplateRequest) (*ValidatePromptTemplateResponse, error)
 	PreviewPromptTemplate(context.Context, *PreviewPromptTemplateRequest) (*PreviewPromptTemplateResponse, error)
 	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
+	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
+	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
+	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -746,6 +824,12 @@ func (UnimplementedPlatformQueryServiceServer) ListRuntimeSelections(context.Con
 }
 func (UnimplementedPlatformQueryServiceServer) SearchPlatform(context.Context, *SearchPlatformRequest) (*SearchPlatformResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SearchPlatform not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListVFSNodes(context.Context, *ListVFSNodesRequest) (*ListVFSNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVFSNodes not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) SearchVFS(context.Context, *SearchVFSRequest) (*SearchVFSResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchVFS not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
@@ -870,6 +954,9 @@ func (UnimplementedPlatformQueryServiceServer) ListTemplateVariables(context.Con
 func (UnimplementedPlatformQueryServiceServer) ListProviderDefinitions(context.Context, *ListProviderDefinitionsRequest) (*ListProviderDefinitionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProviderDefinitions not implemented")
 }
+func (UnimplementedPlatformQueryServiceServer) ListModelCapabilities(context.Context, *ListModelCapabilitiesRequest) (*ListModelCapabilitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListModelCapabilities not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) ListRoleImageRecipeRevisions(context.Context, *ListRoleImageRecipeRevisionsRequest) (*ListRoleImageRecipeRevisionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRoleImageRecipeRevisions not implemented")
 }
@@ -884,6 +971,15 @@ func (UnimplementedPlatformQueryServiceServer) ListRuntimeSecrets(context.Contex
 }
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurationHistory not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetManagedConfigurationImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSystemSTTConfiguration not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -1010,6 +1106,42 @@ func _PlatformQueryService_SearchPlatform_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).SearchPlatform(ctx, req.(*SearchPlatformRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListVFSNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVFSNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListVFSNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListVFSNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListVFSNodes(ctx, req.(*ListVFSNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_SearchVFS_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchVFSRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).SearchVFS(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_SearchVFS_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).SearchVFS(ctx, req.(*SearchVFSRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1752,6 +1884,24 @@ func _PlatformQueryService_ListProviderDefinitions_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListModelCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListModelCapabilitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListModelCapabilities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListModelCapabilities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListModelCapabilities(ctx, req.(*ListModelCapabilitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListRoleImageRecipeRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRoleImageRecipeRevisionsRequest)
 	if err := dec(in); err != nil {
@@ -1842,6 +1992,60 @@ func _PlatformQueryService_GetRuntimeSecret_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListManagedConfigurationHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListManagedConfigurationHistoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurationHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListManagedConfigurationHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurationHistory(ctx, req.(*ListManagedConfigurationHistoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetManagedConfigurationImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetManagedConfigurationImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetManagedConfigurationImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetManagedConfigurationImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetManagedConfigurationImpact(ctx, req.(*GetManagedConfigurationImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetSystemSTTConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSystemSTTConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetSystemSTTConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetSystemSTTConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetSystemSTTConfiguration(ctx, req.(*GetSystemSTTConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1872,6 +2076,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchPlatform",
 			Handler:    _PlatformQueryService_SearchPlatform_Handler,
+		},
+		{
+			MethodName: "ListVFSNodes",
+			Handler:    _PlatformQueryService_ListVFSNodes_Handler,
+		},
+		{
+			MethodName: "SearchVFS",
+			Handler:    _PlatformQueryService_SearchVFS_Handler,
 		},
 		{
 			MethodName: "ListProjects",
@@ -2038,6 +2250,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListProviderDefinitions_Handler,
 		},
 		{
+			MethodName: "ListModelCapabilities",
+			Handler:    _PlatformQueryService_ListModelCapabilities_Handler,
+		},
+		{
 			MethodName: "ListRoleImageRecipeRevisions",
 			Handler:    _PlatformQueryService_ListRoleImageRecipeRevisions_Handler,
 		},
@@ -2056,6 +2272,18 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRuntimeSecret",
 			Handler:    _PlatformQueryService_GetRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "ListManagedConfigurationHistory",
+			Handler:    _PlatformQueryService_ListManagedConfigurationHistory_Handler,
+		},
+		{
+			MethodName: "GetManagedConfigurationImpact",
+			Handler:    _PlatformQueryService_GetManagedConfigurationImpact_Handler,
+		},
+		{
+			MethodName: "GetSystemSTTConfiguration",
+			Handler:    _PlatformQueryService_GetSystemSTTConfiguration_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -2115,7 +2343,10 @@ const (
 	PlatformCommandService_StartProviderAccountDeviceAuthorization_FullMethodName  = "/controlplane.v1.PlatformCommandService/StartProviderAccountDeviceAuthorization"
 	PlatformCommandService_AuthorizeProviderAccountAPIKey_FullMethodName           = "/controlplane.v1.PlatformCommandService/AuthorizeProviderAccountAPIKey"
 	PlatformCommandService_RefreshProviderAccountAuthorization_FullMethodName      = "/controlplane.v1.PlatformCommandService/RefreshProviderAccountAuthorization"
+	PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName = "/controlplane.v1.PlatformCommandService/VerifyProviderAccountDeviceAuthorization"
+	PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName     = "/controlplane.v1.PlatformCommandService/ReauthorizeProviderAccountDeviceCode"
 	PlatformCommandService_RevokeProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformCommandService/RevokeProviderAccount"
+	PlatformCommandService_DeleteProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
 	PlatformCommandService_SetProviderAccountEnabled_FullMethodName                = "/controlplane.v1.PlatformCommandService/SetProviderAccountEnabled"
 	PlatformCommandService_CreateIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
 	PlatformCommandService_UpdateIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
@@ -2140,6 +2371,24 @@ const (
 	PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRotateRuntimeSecret"
 	PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevealRuntimeSecret"
 	PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevokeRuntimeSecret"
+	PlatformCommandService_CreatePromptTemplateDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/CreatePromptTemplateDraft"
+	PlatformCommandService_ValidatePromptTemplateDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/ValidatePromptTemplateDraft"
+	PlatformCommandService_PublishPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/PublishPromptTemplateDraft"
+	PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName            = "/controlplane.v1.PlatformCommandService/RebindPromptTemplateConsumers"
+	PlatformCommandService_CreateRoleImageRevisionDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/CreateRoleImageRevisionDraft"
+	PlatformCommandService_ValidateRoleImageRevisionDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateRoleImageRevisionDraft"
+	PlatformCommandService_PublishRoleImageRevisionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishRoleImageRevisionDraft"
+	PlatformCommandService_RebindRoleImageConsumers_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRoleImageConsumers"
+	PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/CreateIntegrationDefinitionDraft"
+	PlatformCommandService_ValidateIntegrationDefinitionDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/ValidateIntegrationDefinitionDraft"
+	PlatformCommandService_PublishIntegrationDefinitionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PublishIntegrationDefinitionDraft"
+	PlatformCommandService_RebindIntegrationDefinitionConsumers_FullMethodName     = "/controlplane.v1.PlatformCommandService/RebindIntegrationDefinitionConsumers"
+	PlatformCommandService_CreateSystemSTTConfigurationDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/CreateSystemSTTConfigurationDraft"
+	PlatformCommandService_ValidateSystemSTTConfigurationDraft_FullMethodName      = "/controlplane.v1.PlatformCommandService/ValidateSystemSTTConfigurationDraft"
+	PlatformCommandService_PublishSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/PublishSystemSTTConfigurationDraft"
+	PlatformCommandService_RebindSystemSTTConsumers_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindSystemSTTConsumers"
+	PlatformCommandService_DetachGitManagedConfiguration_FullMethodName            = "/controlplane.v1.PlatformCommandService/DetachGitManagedConfiguration"
+	PlatformCommandService_CopyGitManagedConfiguration_FullMethodName              = "/controlplane.v1.PlatformCommandService/CopyGitManagedConfiguration"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -2201,7 +2450,10 @@ type PlatformCommandServiceClient interface {
 	StartProviderAccountDeviceAuthorization(ctx context.Context, in *StartProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*StartProviderAccountDeviceAuthorizationResponse, error)
 	AuthorizeProviderAccountAPIKey(ctx context.Context, in *AuthorizeProviderAccountAPIKeyRequest, opts ...grpc.CallOption) (*AuthorizeProviderAccountAPIKeyResponse, error)
 	RefreshProviderAccountAuthorization(ctx context.Context, in *RefreshProviderAccountAuthorizationRequest, opts ...grpc.CallOption) (*RefreshProviderAccountAuthorizationResponse, error)
+	VerifyProviderAccountDeviceAuthorization(ctx context.Context, in *VerifyProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountDeviceAuthorizationResponse, error)
+	ReauthorizeProviderAccountDeviceCode(ctx context.Context, in *ReauthorizeProviderAccountDeviceCodeRequest, opts ...grpc.CallOption) (*ReauthorizeProviderAccountDeviceCodeResponse, error)
 	RevokeProviderAccount(ctx context.Context, in *RevokeProviderAccountRequest, opts ...grpc.CallOption) (*RevokeProviderAccountResponse, error)
+	DeleteProviderAccount(ctx context.Context, in *DeleteProviderAccountRequest, opts ...grpc.CallOption) (*DeleteProviderAccountResponse, error)
 	SetProviderAccountEnabled(ctx context.Context, in *SetProviderAccountEnabledRequest, opts ...grpc.CallOption) (*SetProviderAccountEnabledResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(ctx context.Context, in *UpdateIntegrationConnectionRequest, opts ...grpc.CallOption) (*UpdateIntegrationConnectionResponse, error)
@@ -2226,6 +2478,24 @@ type PlatformCommandServiceClient interface {
 	PrepareRotateRuntimeSecret(ctx context.Context, in *PrepareRotateRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRotateRuntimeSecretResponse, error)
 	PrepareRevealRuntimeSecret(ctx context.Context, in *PrepareRevealRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevealRuntimeSecretResponse, error)
 	PrepareRevokeRuntimeSecret(ctx context.Context, in *PrepareRevokeRuntimeSecretRequest, opts ...grpc.CallOption) (*PrepareRevokeRuntimeSecretResponse, error)
+	CreatePromptTemplateDraft(ctx context.Context, in *CreatePromptTemplateDraftRequest, opts ...grpc.CallOption) (*CreatePromptTemplateDraftResponse, error)
+	ValidatePromptTemplateDraft(ctx context.Context, in *ValidatePromptTemplateDraftRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateDraftResponse, error)
+	PublishPromptTemplateDraft(ctx context.Context, in *PublishPromptTemplateDraftRequest, opts ...grpc.CallOption) (*PublishPromptTemplateDraftResponse, error)
+	RebindPromptTemplateConsumers(ctx context.Context, in *RebindPromptTemplateConsumersRequest, opts ...grpc.CallOption) (*RebindPromptTemplateConsumersResponse, error)
+	CreateRoleImageRevisionDraft(ctx context.Context, in *CreateRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*CreateRoleImageRevisionDraftResponse, error)
+	ValidateRoleImageRevisionDraft(ctx context.Context, in *ValidateRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*ValidateRoleImageRevisionDraftResponse, error)
+	PublishRoleImageRevisionDraft(ctx context.Context, in *PublishRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*PublishRoleImageRevisionDraftResponse, error)
+	RebindRoleImageConsumers(ctx context.Context, in *RebindRoleImageConsumersRequest, opts ...grpc.CallOption) (*RebindRoleImageConsumersResponse, error)
+	CreateIntegrationDefinitionDraft(ctx context.Context, in *CreateIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*CreateIntegrationDefinitionDraftResponse, error)
+	ValidateIntegrationDefinitionDraft(ctx context.Context, in *ValidateIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*ValidateIntegrationDefinitionDraftResponse, error)
+	PublishIntegrationDefinitionDraft(ctx context.Context, in *PublishIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*PublishIntegrationDefinitionDraftResponse, error)
+	RebindIntegrationDefinitionConsumers(ctx context.Context, in *RebindIntegrationDefinitionConsumersRequest, opts ...grpc.CallOption) (*RebindIntegrationDefinitionConsumersResponse, error)
+	CreateSystemSTTConfigurationDraft(ctx context.Context, in *CreateSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*CreateSystemSTTConfigurationDraftResponse, error)
+	ValidateSystemSTTConfigurationDraft(ctx context.Context, in *ValidateSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*ValidateSystemSTTConfigurationDraftResponse, error)
+	PublishSystemSTTConfigurationDraft(ctx context.Context, in *PublishSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*PublishSystemSTTConfigurationDraftResponse, error)
+	RebindSystemSTTConsumers(ctx context.Context, in *RebindSystemSTTConsumersRequest, opts ...grpc.CallOption) (*RebindSystemSTTConsumersResponse, error)
+	DetachGitManagedConfiguration(ctx context.Context, in *DetachGitManagedConfigurationRequest, opts ...grpc.CallOption) (*DetachGitManagedConfigurationResponse, error)
+	CopyGitManagedConfiguration(ctx context.Context, in *CopyGitManagedConfigurationRequest, opts ...grpc.CallOption) (*CopyGitManagedConfigurationResponse, error)
 }
 
 type platformCommandServiceClient struct {
@@ -2771,10 +3041,40 @@ func (c *platformCommandServiceClient) RefreshProviderAccountAuthorization(ctx c
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) VerifyProviderAccountDeviceAuthorization(ctx context.Context, in *VerifyProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountDeviceAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyProviderAccountDeviceAuthorizationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ReauthorizeProviderAccountDeviceCode(ctx context.Context, in *ReauthorizeProviderAccountDeviceCodeRequest, opts ...grpc.CallOption) (*ReauthorizeProviderAccountDeviceCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReauthorizeProviderAccountDeviceCodeResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) RevokeProviderAccount(ctx context.Context, in *RevokeProviderAccountRequest, opts ...grpc.CallOption) (*RevokeProviderAccountResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokeProviderAccountResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_RevokeProviderAccount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DeleteProviderAccount(ctx context.Context, in *DeleteProviderAccountRequest, opts ...grpc.CallOption) (*DeleteProviderAccountResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteProviderAccountResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DeleteProviderAccount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3021,6 +3321,186 @@ func (c *platformCommandServiceClient) PrepareRevokeRuntimeSecret(ctx context.Co
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) CreatePromptTemplateDraft(ctx context.Context, in *CreatePromptTemplateDraftRequest, opts ...grpc.CallOption) (*CreatePromptTemplateDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreatePromptTemplateDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreatePromptTemplateDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidatePromptTemplateDraft(ctx context.Context, in *ValidatePromptTemplateDraftRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidatePromptTemplateDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidatePromptTemplateDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishPromptTemplateDraft(ctx context.Context, in *PublishPromptTemplateDraftRequest, opts ...grpc.CallOption) (*PublishPromptTemplateDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishPromptTemplateDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishPromptTemplateDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindPromptTemplateConsumers(ctx context.Context, in *RebindPromptTemplateConsumersRequest, opts ...grpc.CallOption) (*RebindPromptTemplateConsumersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindPromptTemplateConsumersResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateRoleImageRevisionDraft(ctx context.Context, in *CreateRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*CreateRoleImageRevisionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateRoleImageRevisionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRoleImageRevisionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateRoleImageRevisionDraft(ctx context.Context, in *ValidateRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*ValidateRoleImageRevisionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateRoleImageRevisionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateRoleImageRevisionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishRoleImageRevisionDraft(ctx context.Context, in *PublishRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*PublishRoleImageRevisionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRoleImageRevisionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishRoleImageRevisionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindRoleImageConsumers(ctx context.Context, in *RebindRoleImageConsumersRequest, opts ...grpc.CallOption) (*RebindRoleImageConsumersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindRoleImageConsumersResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRoleImageConsumers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateIntegrationDefinitionDraft(ctx context.Context, in *CreateIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*CreateIntegrationDefinitionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateIntegrationDefinitionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateIntegrationDefinitionDraft(ctx context.Context, in *ValidateIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*ValidateIntegrationDefinitionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateIntegrationDefinitionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateIntegrationDefinitionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishIntegrationDefinitionDraft(ctx context.Context, in *PublishIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*PublishIntegrationDefinitionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishIntegrationDefinitionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishIntegrationDefinitionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindIntegrationDefinitionConsumers(ctx context.Context, in *RebindIntegrationDefinitionConsumersRequest, opts ...grpc.CallOption) (*RebindIntegrationDefinitionConsumersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindIntegrationDefinitionConsumersResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindIntegrationDefinitionConsumers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateSystemSTTConfigurationDraft(ctx context.Context, in *CreateSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*CreateSystemSTTConfigurationDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSystemSTTConfigurationDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateSystemSTTConfigurationDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateSystemSTTConfigurationDraft(ctx context.Context, in *ValidateSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*ValidateSystemSTTConfigurationDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateSystemSTTConfigurationDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateSystemSTTConfigurationDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishSystemSTTConfigurationDraft(ctx context.Context, in *PublishSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*PublishSystemSTTConfigurationDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishSystemSTTConfigurationDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishSystemSTTConfigurationDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindSystemSTTConsumers(ctx context.Context, in *RebindSystemSTTConsumersRequest, opts ...grpc.CallOption) (*RebindSystemSTTConsumersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindSystemSTTConsumersResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindSystemSTTConsumers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DetachGitManagedConfiguration(ctx context.Context, in *DetachGitManagedConfigurationRequest, opts ...grpc.CallOption) (*DetachGitManagedConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachGitManagedConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DetachGitManagedConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.Context, in *CopyGitManagedConfigurationRequest, opts ...grpc.CallOption) (*CopyGitManagedConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CopyGitManagedConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CopyGitManagedConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformCommandServiceServer is the server API for PlatformCommandService service.
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
@@ -3080,7 +3560,10 @@ type PlatformCommandServiceServer interface {
 	StartProviderAccountDeviceAuthorization(context.Context, *StartProviderAccountDeviceAuthorizationRequest) (*StartProviderAccountDeviceAuthorizationResponse, error)
 	AuthorizeProviderAccountAPIKey(context.Context, *AuthorizeProviderAccountAPIKeyRequest) (*AuthorizeProviderAccountAPIKeyResponse, error)
 	RefreshProviderAccountAuthorization(context.Context, *RefreshProviderAccountAuthorizationRequest) (*RefreshProviderAccountAuthorizationResponse, error)
+	VerifyProviderAccountDeviceAuthorization(context.Context, *VerifyProviderAccountDeviceAuthorizationRequest) (*VerifyProviderAccountDeviceAuthorizationResponse, error)
+	ReauthorizeProviderAccountDeviceCode(context.Context, *ReauthorizeProviderAccountDeviceCodeRequest) (*ReauthorizeProviderAccountDeviceCodeResponse, error)
 	RevokeProviderAccount(context.Context, *RevokeProviderAccountRequest) (*RevokeProviderAccountResponse, error)
+	DeleteProviderAccount(context.Context, *DeleteProviderAccountRequest) (*DeleteProviderAccountResponse, error)
 	SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(context.Context, *UpdateIntegrationConnectionRequest) (*UpdateIntegrationConnectionResponse, error)
@@ -3105,6 +3588,24 @@ type PlatformCommandServiceServer interface {
 	PrepareRotateRuntimeSecret(context.Context, *PrepareRotateRuntimeSecretRequest) (*PrepareRotateRuntimeSecretResponse, error)
 	PrepareRevealRuntimeSecret(context.Context, *PrepareRevealRuntimeSecretRequest) (*PrepareRevealRuntimeSecretResponse, error)
 	PrepareRevokeRuntimeSecret(context.Context, *PrepareRevokeRuntimeSecretRequest) (*PrepareRevokeRuntimeSecretResponse, error)
+	CreatePromptTemplateDraft(context.Context, *CreatePromptTemplateDraftRequest) (*CreatePromptTemplateDraftResponse, error)
+	ValidatePromptTemplateDraft(context.Context, *ValidatePromptTemplateDraftRequest) (*ValidatePromptTemplateDraftResponse, error)
+	PublishPromptTemplateDraft(context.Context, *PublishPromptTemplateDraftRequest) (*PublishPromptTemplateDraftResponse, error)
+	RebindPromptTemplateConsumers(context.Context, *RebindPromptTemplateConsumersRequest) (*RebindPromptTemplateConsumersResponse, error)
+	CreateRoleImageRevisionDraft(context.Context, *CreateRoleImageRevisionDraftRequest) (*CreateRoleImageRevisionDraftResponse, error)
+	ValidateRoleImageRevisionDraft(context.Context, *ValidateRoleImageRevisionDraftRequest) (*ValidateRoleImageRevisionDraftResponse, error)
+	PublishRoleImageRevisionDraft(context.Context, *PublishRoleImageRevisionDraftRequest) (*PublishRoleImageRevisionDraftResponse, error)
+	RebindRoleImageConsumers(context.Context, *RebindRoleImageConsumersRequest) (*RebindRoleImageConsumersResponse, error)
+	CreateIntegrationDefinitionDraft(context.Context, *CreateIntegrationDefinitionDraftRequest) (*CreateIntegrationDefinitionDraftResponse, error)
+	ValidateIntegrationDefinitionDraft(context.Context, *ValidateIntegrationDefinitionDraftRequest) (*ValidateIntegrationDefinitionDraftResponse, error)
+	PublishIntegrationDefinitionDraft(context.Context, *PublishIntegrationDefinitionDraftRequest) (*PublishIntegrationDefinitionDraftResponse, error)
+	RebindIntegrationDefinitionConsumers(context.Context, *RebindIntegrationDefinitionConsumersRequest) (*RebindIntegrationDefinitionConsumersResponse, error)
+	CreateSystemSTTConfigurationDraft(context.Context, *CreateSystemSTTConfigurationDraftRequest) (*CreateSystemSTTConfigurationDraftResponse, error)
+	ValidateSystemSTTConfigurationDraft(context.Context, *ValidateSystemSTTConfigurationDraftRequest) (*ValidateSystemSTTConfigurationDraftResponse, error)
+	PublishSystemSTTConfigurationDraft(context.Context, *PublishSystemSTTConfigurationDraftRequest) (*PublishSystemSTTConfigurationDraftResponse, error)
+	RebindSystemSTTConsumers(context.Context, *RebindSystemSTTConsumersRequest) (*RebindSystemSTTConsumersResponse, error)
+	DetachGitManagedConfiguration(context.Context, *DetachGitManagedConfigurationRequest) (*DetachGitManagedConfigurationResponse, error)
+	CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error)
 	mustEmbedUnimplementedPlatformCommandServiceServer()
 }
 
@@ -3271,8 +3772,17 @@ func (UnimplementedPlatformCommandServiceServer) AuthorizeProviderAccountAPIKey(
 func (UnimplementedPlatformCommandServiceServer) RefreshProviderAccountAuthorization(context.Context, *RefreshProviderAccountAuthorizationRequest) (*RefreshProviderAccountAuthorizationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshProviderAccountAuthorization not implemented")
 }
+func (UnimplementedPlatformCommandServiceServer) VerifyProviderAccountDeviceAuthorization(context.Context, *VerifyProviderAccountDeviceAuthorizationRequest) (*VerifyProviderAccountDeviceAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyProviderAccountDeviceAuthorization not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ReauthorizeProviderAccountDeviceCode(context.Context, *ReauthorizeProviderAccountDeviceCodeRequest) (*ReauthorizeProviderAccountDeviceCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReauthorizeProviderAccountDeviceCode not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) RevokeProviderAccount(context.Context, *RevokeProviderAccountRequest) (*RevokeProviderAccountResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeProviderAccount not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DeleteProviderAccount(context.Context, *DeleteProviderAccountRequest) (*DeleteProviderAccountResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteProviderAccount not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) SetProviderAccountEnabled(context.Context, *SetProviderAccountEnabledRequest) (*SetProviderAccountEnabledResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProviderAccountEnabled not implemented")
@@ -3345,6 +3855,60 @@ func (UnimplementedPlatformCommandServiceServer) PrepareRevealRuntimeSecret(cont
 }
 func (UnimplementedPlatformCommandServiceServer) PrepareRevokeRuntimeSecret(context.Context, *PrepareRevokeRuntimeSecretRequest) (*PrepareRevokeRuntimeSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareRevokeRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreatePromptTemplateDraft(context.Context, *CreatePromptTemplateDraftRequest) (*CreatePromptTemplateDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePromptTemplateDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidatePromptTemplateDraft(context.Context, *ValidatePromptTemplateDraftRequest) (*ValidatePromptTemplateDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidatePromptTemplateDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishPromptTemplateDraft(context.Context, *PublishPromptTemplateDraftRequest) (*PublishPromptTemplateDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishPromptTemplateDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindPromptTemplateConsumers(context.Context, *RebindPromptTemplateConsumersRequest) (*RebindPromptTemplateConsumersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindPromptTemplateConsumers not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateRoleImageRevisionDraft(context.Context, *CreateRoleImageRevisionDraftRequest) (*CreateRoleImageRevisionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRoleImageRevisionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateRoleImageRevisionDraft(context.Context, *ValidateRoleImageRevisionDraftRequest) (*ValidateRoleImageRevisionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateRoleImageRevisionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishRoleImageRevisionDraft(context.Context, *PublishRoleImageRevisionDraftRequest) (*PublishRoleImageRevisionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRoleImageRevisionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindRoleImageConsumers(context.Context, *RebindRoleImageConsumersRequest) (*RebindRoleImageConsumersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindRoleImageConsumers not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateIntegrationDefinitionDraft(context.Context, *CreateIntegrationDefinitionDraftRequest) (*CreateIntegrationDefinitionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateIntegrationDefinitionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateIntegrationDefinitionDraft(context.Context, *ValidateIntegrationDefinitionDraftRequest) (*ValidateIntegrationDefinitionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateIntegrationDefinitionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishIntegrationDefinitionDraft(context.Context, *PublishIntegrationDefinitionDraftRequest) (*PublishIntegrationDefinitionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishIntegrationDefinitionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindIntegrationDefinitionConsumers(context.Context, *RebindIntegrationDefinitionConsumersRequest) (*RebindIntegrationDefinitionConsumersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindIntegrationDefinitionConsumers not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateSystemSTTConfigurationDraft(context.Context, *CreateSystemSTTConfigurationDraftRequest) (*CreateSystemSTTConfigurationDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSystemSTTConfigurationDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateSystemSTTConfigurationDraft(context.Context, *ValidateSystemSTTConfigurationDraftRequest) (*ValidateSystemSTTConfigurationDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateSystemSTTConfigurationDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishSystemSTTConfigurationDraft(context.Context, *PublishSystemSTTConfigurationDraftRequest) (*PublishSystemSTTConfigurationDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishSystemSTTConfigurationDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindSystemSTTConsumers(context.Context, *RebindSystemSTTConsumersRequest) (*RebindSystemSTTConsumersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindSystemSTTConsumers not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DetachGitManagedConfiguration(context.Context, *DetachGitManagedConfigurationRequest) (*DetachGitManagedConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachGitManagedConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyGitManagedConfiguration not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
 }
@@ -4275,6 +4839,42 @@ func _PlatformCommandService_RefreshProviderAccountAuthorization_Handler(srv int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_VerifyProviderAccountDeviceAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyProviderAccountDeviceAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).VerifyProviderAccountDeviceAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).VerifyProviderAccountDeviceAuthorization(ctx, req.(*VerifyProviderAccountDeviceAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ReauthorizeProviderAccountDeviceCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReauthorizeProviderAccountDeviceCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ReauthorizeProviderAccountDeviceCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ReauthorizeProviderAccountDeviceCode(ctx, req.(*ReauthorizeProviderAccountDeviceCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_RevokeProviderAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokeProviderAccountRequest)
 	if err := dec(in); err != nil {
@@ -4289,6 +4889,24 @@ func _PlatformCommandService_RevokeProviderAccount_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).RevokeProviderAccount(ctx, req.(*RevokeProviderAccountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DeleteProviderAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProviderAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DeleteProviderAccount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DeleteProviderAccount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DeleteProviderAccount(ctx, req.(*DeleteProviderAccountRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4725,6 +5343,330 @@ func _PlatformCommandService_PrepareRevokeRuntimeSecret_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_CreatePromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePromptTemplateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreatePromptTemplateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreatePromptTemplateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreatePromptTemplateDraft(ctx, req.(*CreatePromptTemplateDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidatePromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidatePromptTemplateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidatePromptTemplateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidatePromptTemplateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidatePromptTemplateDraft(ctx, req.(*ValidatePromptTemplateDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishPromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishPromptTemplateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishPromptTemplateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishPromptTemplateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishPromptTemplateDraft(ctx, req.(*PublishPromptTemplateDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindPromptTemplateConsumers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindPromptTemplateConsumersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindPromptTemplateConsumers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindPromptTemplateConsumers(ctx, req.(*RebindPromptTemplateConsumersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateRoleImageRevisionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRoleImageRevisionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateRoleImageRevisionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateRoleImageRevisionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateRoleImageRevisionDraft(ctx, req.(*CreateRoleImageRevisionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateRoleImageRevisionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRoleImageRevisionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateRoleImageRevisionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateRoleImageRevisionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateRoleImageRevisionDraft(ctx, req.(*ValidateRoleImageRevisionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishRoleImageRevisionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRoleImageRevisionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishRoleImageRevisionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishRoleImageRevisionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishRoleImageRevisionDraft(ctx, req.(*PublishRoleImageRevisionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindRoleImageConsumers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindRoleImageConsumersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindRoleImageConsumers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindRoleImageConsumers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindRoleImageConsumers(ctx, req.(*RebindRoleImageConsumersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateIntegrationDefinitionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateIntegrationDefinitionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateIntegrationDefinitionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateIntegrationDefinitionDraft(ctx, req.(*CreateIntegrationDefinitionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateIntegrationDefinitionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateIntegrationDefinitionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateIntegrationDefinitionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateIntegrationDefinitionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateIntegrationDefinitionDraft(ctx, req.(*ValidateIntegrationDefinitionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishIntegrationDefinitionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishIntegrationDefinitionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishIntegrationDefinitionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishIntegrationDefinitionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishIntegrationDefinitionDraft(ctx, req.(*PublishIntegrationDefinitionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindIntegrationDefinitionConsumers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindIntegrationDefinitionConsumersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindIntegrationDefinitionConsumers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindIntegrationDefinitionConsumers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindIntegrationDefinitionConsumers(ctx, req.(*RebindIntegrationDefinitionConsumersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateSystemSTTConfigurationDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSystemSTTConfigurationDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateSystemSTTConfigurationDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateSystemSTTConfigurationDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateSystemSTTConfigurationDraft(ctx, req.(*CreateSystemSTTConfigurationDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateSystemSTTConfigurationDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateSystemSTTConfigurationDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateSystemSTTConfigurationDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateSystemSTTConfigurationDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateSystemSTTConfigurationDraft(ctx, req.(*ValidateSystemSTTConfigurationDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishSystemSTTConfigurationDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishSystemSTTConfigurationDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishSystemSTTConfigurationDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishSystemSTTConfigurationDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishSystemSTTConfigurationDraft(ctx, req.(*PublishSystemSTTConfigurationDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindSystemSTTConsumers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindSystemSTTConsumersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindSystemSTTConsumers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindSystemSTTConsumers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindSystemSTTConsumers(ctx, req.(*RebindSystemSTTConsumersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DetachGitManagedConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachGitManagedConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DetachGitManagedConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DetachGitManagedConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DetachGitManagedConfiguration(ctx, req.(*DetachGitManagedConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CopyGitManagedConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyGitManagedConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CopyGitManagedConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CopyGitManagedConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CopyGitManagedConfiguration(ctx, req.(*CopyGitManagedConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4929,8 +5871,20 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformCommandService_RefreshProviderAccountAuthorization_Handler,
 		},
 		{
+			MethodName: "VerifyProviderAccountDeviceAuthorization",
+			Handler:    _PlatformCommandService_VerifyProviderAccountDeviceAuthorization_Handler,
+		},
+		{
+			MethodName: "ReauthorizeProviderAccountDeviceCode",
+			Handler:    _PlatformCommandService_ReauthorizeProviderAccountDeviceCode_Handler,
+		},
+		{
 			MethodName: "RevokeProviderAccount",
 			Handler:    _PlatformCommandService_RevokeProviderAccount_Handler,
+		},
+		{
+			MethodName: "DeleteProviderAccount",
+			Handler:    _PlatformCommandService_DeleteProviderAccount_Handler,
 		},
 		{
 			MethodName: "SetProviderAccountEnabled",
@@ -5027,6 +5981,78 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PrepareRevokeRuntimeSecret",
 			Handler:    _PlatformCommandService_PrepareRevokeRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "CreatePromptTemplateDraft",
+			Handler:    _PlatformCommandService_CreatePromptTemplateDraft_Handler,
+		},
+		{
+			MethodName: "ValidatePromptTemplateDraft",
+			Handler:    _PlatformCommandService_ValidatePromptTemplateDraft_Handler,
+		},
+		{
+			MethodName: "PublishPromptTemplateDraft",
+			Handler:    _PlatformCommandService_PublishPromptTemplateDraft_Handler,
+		},
+		{
+			MethodName: "RebindPromptTemplateConsumers",
+			Handler:    _PlatformCommandService_RebindPromptTemplateConsumers_Handler,
+		},
+		{
+			MethodName: "CreateRoleImageRevisionDraft",
+			Handler:    _PlatformCommandService_CreateRoleImageRevisionDraft_Handler,
+		},
+		{
+			MethodName: "ValidateRoleImageRevisionDraft",
+			Handler:    _PlatformCommandService_ValidateRoleImageRevisionDraft_Handler,
+		},
+		{
+			MethodName: "PublishRoleImageRevisionDraft",
+			Handler:    _PlatformCommandService_PublishRoleImageRevisionDraft_Handler,
+		},
+		{
+			MethodName: "RebindRoleImageConsumers",
+			Handler:    _PlatformCommandService_RebindRoleImageConsumers_Handler,
+		},
+		{
+			MethodName: "CreateIntegrationDefinitionDraft",
+			Handler:    _PlatformCommandService_CreateIntegrationDefinitionDraft_Handler,
+		},
+		{
+			MethodName: "ValidateIntegrationDefinitionDraft",
+			Handler:    _PlatformCommandService_ValidateIntegrationDefinitionDraft_Handler,
+		},
+		{
+			MethodName: "PublishIntegrationDefinitionDraft",
+			Handler:    _PlatformCommandService_PublishIntegrationDefinitionDraft_Handler,
+		},
+		{
+			MethodName: "RebindIntegrationDefinitionConsumers",
+			Handler:    _PlatformCommandService_RebindIntegrationDefinitionConsumers_Handler,
+		},
+		{
+			MethodName: "CreateSystemSTTConfigurationDraft",
+			Handler:    _PlatformCommandService_CreateSystemSTTConfigurationDraft_Handler,
+		},
+		{
+			MethodName: "ValidateSystemSTTConfigurationDraft",
+			Handler:    _PlatformCommandService_ValidateSystemSTTConfigurationDraft_Handler,
+		},
+		{
+			MethodName: "PublishSystemSTTConfigurationDraft",
+			Handler:    _PlatformCommandService_PublishSystemSTTConfigurationDraft_Handler,
+		},
+		{
+			MethodName: "RebindSystemSTTConsumers",
+			Handler:    _PlatformCommandService_RebindSystemSTTConsumers_Handler,
+		},
+		{
+			MethodName: "DetachGitManagedConfiguration",
+			Handler:    _PlatformCommandService_DetachGitManagedConfiguration_Handler,
+		},
+		{
+			MethodName: "CopyGitManagedConfiguration",
+			Handler:    _PlatformCommandService_CopyGitManagedConfiguration_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -5832,27 +6858,29 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RuntimeWorkService_ClaimExecution_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
-	RuntimeWorkService_ReadExecutionArtifact_FullMethodName             = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
-	RuntimeWorkService_RenewExecution_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/RenewExecution"
-	RuntimeWorkService_ReportExecutionProgress_FullMethodName           = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
-	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName   = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
-	RuntimeWorkService_CompleteExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
-	RuntimeWorkService_DelegateExecution_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
-	RuntimeWorkService_ProposeAssistantPlan_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
-	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName          = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
-	RuntimeWorkService_ProposeRunMetadata_FullMethodName                = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
-	RuntimeWorkService_RecordRunToolCall_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/RecordRunToolCall"
-	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName              = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
-	RuntimeWorkService_ReportWarmRuntime_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
-	RuntimeWorkService_ClaimDueSchedules_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
-	RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName     = "/controlplane.v1.RuntimeWorkService/MaterializeScheduleOccurrence"
-	RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName   = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationConnectionTests"
-	RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest"
-	RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName      = "/controlplane.v1.RuntimeWorkService/ResolveIntegrationInvocation"
-	RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName       = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationInvocations"
-	RuntimeWorkService_GetIntegrationInvocation_FullMethodName          = "/controlplane.v1.RuntimeWorkService/GetIntegrationInvocation"
-	RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName     = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationInvocation"
+	RuntimeWorkService_ClaimExecution_FullMethodName                                  = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
+	RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName     = "/controlplane.v1.RuntimeWorkService/GetRuntimeEnvironmentRoleImageConfiguration"
+	RuntimeWorkService_ReadExecutionArtifact_FullMethodName                           = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
+	RuntimeWorkService_RenewExecution_FullMethodName                                  = "/controlplane.v1.RuntimeWorkService/RenewExecution"
+	RuntimeWorkService_ReportExecutionProgress_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/ReportExecutionProgress"
+	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
+	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
+	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
+	RuntimeWorkService_ProposeAssistantPlan_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
+	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
+	RuntimeWorkService_ProposeRunMetadata_FullMethodName                              = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
+	RuntimeWorkService_RecordRunToolCall_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/RecordRunToolCall"
+	RuntimeWorkService_ReconcileWarmRuntime_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ReconcileWarmRuntime"
+	RuntimeWorkService_ReportWarmRuntime_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/ReportWarmRuntime"
+	RuntimeWorkService_ClaimDueSchedules_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/ClaimDueSchedules"
+	RuntimeWorkService_MaterializeScheduleOccurrence_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/MaterializeScheduleOccurrence"
+	RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationConnectionTests"
+	RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName = "/controlplane.v1.RuntimeWorkService/GetIntegrationConnectionDefinitionConfiguration"
+	RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName               = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationConnectionTest"
+	RuntimeWorkService_ResolveIntegrationInvocation_FullMethodName                    = "/controlplane.v1.RuntimeWorkService/ResolveIntegrationInvocation"
+	RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/ClaimIntegrationInvocations"
+	RuntimeWorkService_GetIntegrationInvocation_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/GetIntegrationInvocation"
+	RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName                   = "/controlplane.v1.RuntimeWorkService/CompleteIntegrationInvocation"
 )
 
 // RuntimeWorkServiceClient is the client API for RuntimeWorkService service.
@@ -5860,6 +6888,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RuntimeWorkServiceClient interface {
 	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
+	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
+	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
+	GetRuntimeEnvironmentRoleImageConfiguration(ctx context.Context, in *GetRuntimeEnvironmentRoleImageConfigurationRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentRoleImageConfigurationResponse, error)
 	ReadExecutionArtifact(ctx context.Context, in *ReadExecutionArtifactRequest, opts ...grpc.CallOption) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(ctx context.Context, in *RenewExecutionRequest, opts ...grpc.CallOption) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(ctx context.Context, in *ReportExecutionProgressRequest, opts ...grpc.CallOption) (*ReportExecutionProgressResponse, error)
@@ -5875,6 +6906,9 @@ type RuntimeWorkServiceClient interface {
 	ClaimDueSchedules(ctx context.Context, in *ClaimDueSchedulesRequest, opts ...grpc.CallOption) (*ClaimDueSchedulesResponse, error)
 	MaterializeScheduleOccurrence(ctx context.Context, in *MaterializeScheduleOccurrenceRequest, opts ...grpc.CallOption) (*MaterializeScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(ctx context.Context, in *ClaimIntegrationConnectionTestsRequest, opts ...grpc.CallOption) (*ClaimIntegrationConnectionTestsResponse, error)
+	// GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
+	// payload consumer и разрешает её по opaque Connection ref внутри tenant.
+	GetIntegrationConnectionDefinitionConfiguration(ctx context.Context, in *GetIntegrationConnectionDefinitionConfigurationRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionDefinitionConfigurationResponse, error)
 	CompleteIntegrationConnectionTest(ctx context.Context, in *CompleteIntegrationConnectionTestRequest, opts ...grpc.CallOption) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(ctx context.Context, in *ResolveIntegrationInvocationRequest, opts ...grpc.CallOption) (*ResolveIntegrationInvocationResponse, error)
 	ClaimIntegrationInvocations(ctx context.Context, in *ClaimIntegrationInvocationsRequest, opts ...grpc.CallOption) (*ClaimIntegrationInvocationsResponse, error)
@@ -5894,6 +6928,16 @@ func (c *runtimeWorkServiceClient) ClaimExecution(ctx context.Context, in *Claim
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimExecutionResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_ClaimExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) GetRuntimeEnvironmentRoleImageConfiguration(ctx context.Context, in *GetRuntimeEnvironmentRoleImageConfigurationRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentRoleImageConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentRoleImageConfigurationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6050,6 +7094,16 @@ func (c *runtimeWorkServiceClient) ClaimIntegrationConnectionTests(ctx context.C
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) GetIntegrationConnectionDefinitionConfiguration(ctx context.Context, in *GetIntegrationConnectionDefinitionConfigurationRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionDefinitionConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIntegrationConnectionDefinitionConfigurationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) CompleteIntegrationConnectionTest(ctx context.Context, in *CompleteIntegrationConnectionTestRequest, opts ...grpc.CallOption) (*CompleteIntegrationConnectionTestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CompleteIntegrationConnectionTestResponse)
@@ -6105,6 +7159,9 @@ func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Con
 // for forward compatibility.
 type RuntimeWorkServiceServer interface {
 	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
+	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
+	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
+	GetRuntimeEnvironmentRoleImageConfiguration(context.Context, *GetRuntimeEnvironmentRoleImageConfigurationRequest) (*GetRuntimeEnvironmentRoleImageConfigurationResponse, error)
 	ReadExecutionArtifact(context.Context, *ReadExecutionArtifactRequest) (*ReadExecutionArtifactResponse, error)
 	RenewExecution(context.Context, *RenewExecutionRequest) (*RenewExecutionResponse, error)
 	ReportExecutionProgress(context.Context, *ReportExecutionProgressRequest) (*ReportExecutionProgressResponse, error)
@@ -6120,6 +7177,9 @@ type RuntimeWorkServiceServer interface {
 	ClaimDueSchedules(context.Context, *ClaimDueSchedulesRequest) (*ClaimDueSchedulesResponse, error)
 	MaterializeScheduleOccurrence(context.Context, *MaterializeScheduleOccurrenceRequest) (*MaterializeScheduleOccurrenceResponse, error)
 	ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error)
+	// GetIntegrationConnectionDefinitionConfiguration не доверяет definition из
+	// payload consumer и разрешает её по opaque Connection ref внутри tenant.
+	GetIntegrationConnectionDefinitionConfiguration(context.Context, *GetIntegrationConnectionDefinitionConfigurationRequest) (*GetIntegrationConnectionDefinitionConfigurationResponse, error)
 	CompleteIntegrationConnectionTest(context.Context, *CompleteIntegrationConnectionTestRequest) (*CompleteIntegrationConnectionTestResponse, error)
 	ResolveIntegrationInvocation(context.Context, *ResolveIntegrationInvocationRequest) (*ResolveIntegrationInvocationResponse, error)
 	ClaimIntegrationInvocations(context.Context, *ClaimIntegrationInvocationsRequest) (*ClaimIntegrationInvocationsResponse, error)
@@ -6137,6 +7197,9 @@ type UnimplementedRuntimeWorkServiceServer struct{}
 
 func (UnimplementedRuntimeWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) GetRuntimeEnvironmentRoleImageConfiguration(context.Context, *GetRuntimeEnvironmentRoleImageConfigurationRequest) (*GetRuntimeEnvironmentRoleImageConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentRoleImageConfiguration not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ReadExecutionArtifact(context.Context, *ReadExecutionArtifactRequest) (*ReadExecutionArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadExecutionArtifact not implemented")
@@ -6182,6 +7245,9 @@ func (UnimplementedRuntimeWorkServiceServer) MaterializeScheduleOccurrence(conte
 }
 func (UnimplementedRuntimeWorkServiceServer) ClaimIntegrationConnectionTests(context.Context, *ClaimIntegrationConnectionTestsRequest) (*ClaimIntegrationConnectionTestsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimIntegrationConnectionTests not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) GetIntegrationConnectionDefinitionConfiguration(context.Context, *GetIntegrationConnectionDefinitionConfigurationRequest) (*GetIntegrationConnectionDefinitionConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIntegrationConnectionDefinitionConfiguration not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) CompleteIntegrationConnectionTest(context.Context, *CompleteIntegrationConnectionTestRequest) (*CompleteIntegrationConnectionTestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteIntegrationConnectionTest not implemented")
@@ -6233,6 +7299,24 @@ func _RuntimeWorkService_ClaimExecution_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).ClaimExecution(ctx, req.(*ClaimExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentRoleImageConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).GetRuntimeEnvironmentRoleImageConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).GetRuntimeEnvironmentRoleImageConfiguration(ctx, req.(*GetRuntimeEnvironmentRoleImageConfigurationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6507,6 +7591,24 @@ func _RuntimeWorkService_ClaimIntegrationConnectionTests_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIntegrationConnectionDefinitionConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).GetIntegrationConnectionDefinitionConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).GetIntegrationConnectionDefinitionConfiguration(ctx, req.(*GetIntegrationConnectionDefinitionConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_CompleteIntegrationConnectionTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CompleteIntegrationConnectionTestRequest)
 	if err := dec(in); err != nil {
@@ -6609,6 +7711,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RuntimeWorkService_ClaimExecution_Handler,
 		},
 		{
+			MethodName: "GetRuntimeEnvironmentRoleImageConfiguration",
+			Handler:    _RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_Handler,
+		},
+		{
 			MethodName: "ReadExecutionArtifact",
 			Handler:    _RuntimeWorkService_ReadExecutionArtifact_Handler,
 		},
@@ -6667,6 +7773,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimIntegrationConnectionTests",
 			Handler:    _RuntimeWorkService_ClaimIntegrationConnectionTests_Handler,
+		},
+		{
+			MethodName: "GetIntegrationConnectionDefinitionConfiguration",
+			Handler:    _RuntimeWorkService_GetIntegrationConnectionDefinitionConfiguration_Handler,
 		},
 		{
 			MethodName: "CompleteIntegrationConnectionTest",

@@ -5,9 +5,13 @@ SELECT occurrence.id::text,
        occurrence.scheduled_for,
        occurrence.schedule_version,
        occurrence.input_digest,
-       occurrence.generation
+       occurrence.generation,
+       revision.ref,
+       revision.revision,
+       revision.digest
 FROM control_plane.schedule_occurrences occurrence
 JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
+JOIN control_plane.schedule_revisions revision ON revision.id = occurrence.schedule_revision_id
 WHERE occurrence.organization_id = $1::uuid
   AND occurrence.state = 'CLAIMED'
   AND occurrence.lease_expires_at <= clock_timestamp()

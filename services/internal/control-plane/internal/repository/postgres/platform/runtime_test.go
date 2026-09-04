@@ -49,6 +49,35 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
+func TestPromptUserCapabilitiesCannotExceedInitiatorAuthority(t *testing.T) {
+	got := promptUserCapabilities("MEMBER", []string{"LAUNCH_RUNS"},
+		[]string{"platform.run.launch", "platform.agent.manage"}, []string{"calendar.write"})
+	if len(got) != 1 || got[0] != "platform.run.launch" {
+		t.Fatalf("effective user capabilities = %#v", got)
+	}
+	owner := promptUserCapabilities("OWNER", nil,
+		[]string{"platform.agent.manage"}, []string{"calendar.write"})
+	if strings.Join(owner, ",") != "calendar.write,platform.agent.manage" {
+		t.Fatalf("owner capabilities = %#v", owner)
+	}
+}
+
+func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
+	policy := runtimeWorkspacePolicy()
+	if policy.Revision != 1 || policy.Root != "/workspace" || policy.MaximumWritableBytes != 1<<30 ||
+		policy.MaximumFileCount != 10_000 || len(policy.Digest) != 64 {
+		t.Fatalf("workspace policy = %#v", policy)
+	}
+	if len(policy.Rules) != 3 || policy.Rules[0].Path != "/workspace/input" ||
+		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[2].Path != "/workspace" ||
+		policy.Rules[2].Access != "WRITABLE" {
+		t.Fatalf("workspace path matrix = %#v", policy.Rules)
+	}
+	if strings.Join(policy.DenialReasons, ",") != "READ_ONLY,QUOTA_EXCEEDED,PATH_OUTSIDE_WORKSPACE,RUNTIME_IO_ERROR" {
+		t.Fatalf("workspace denial reasons = %#v", policy.DenialReasons)
+	}
+}
+
 func TestProviderCredentialRefreshValidationRequiresExactImmutableSecretBinding(t *testing.T) {
 	t.Parallel()
 	valid := command.ProviderCredentialRefreshInput{
@@ -145,5 +174,14 @@ func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 				t.Fatal("invalid stored token usage was accepted")
 			}
 		})
+	}
+}
+
+func TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities(t *testing.T) {
+	t.Parallel()
+	grants := []map[string]string{{"capabilityKey": "read"}, {"capabilityKey": "write"}}
+	filtered := filterIntegrationGrants(grants, []string{"read"})
+	if len(filtered) != 1 || filtered[0]["capabilityKey"] != "read" {
+		t.Fatalf("filtered grants = %#v", filtered)
 	}
 }

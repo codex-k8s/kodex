@@ -15,6 +15,7 @@ func TestNormalizeAndNext(t *testing.T) {
 		{name: "daily", spec: Spec{Preset: "DAILY", TimeOfDay: "09:30", Timezone: "Europe/Saratov"}, after: "2026-08-23T05:00:00Z", want: "2026-08-23T05:30:00Z"},
 		{name: "weekdays skip weekend", spec: Spec{Preset: "WEEKDAYS", TimeOfDay: "09:00", Timezone: "UTC"}, after: "2026-08-22T12:00:00Z", want: "2026-08-24T09:00:00Z"},
 		{name: "weekly", spec: Spec{Preset: "WEEKLY", TimeOfDay: "12:00", DayOfWeek: "WEDNESDAY", Timezone: "UTC"}, after: "2026-08-23T12:00:00Z", want: "2026-08-26T12:00:00Z"},
+		{name: "custom", spec: Spec{Preset: "CUSTOM", CronExpression: "*/15 9-10 * * 1-5", Timezone: "UTC"}, after: "2026-08-24T09:07:00Z", want: "2026-08-24T09:15:00Z"},
 		{name: "dst gap moves forward", spec: Spec{Preset: "DAILY", TimeOfDay: "02:30", Timezone: "Europe/Berlin"}, after: "2026-03-28T23:00:00Z", want: "2026-03-29T01:00:00Z"},
 	}
 	for _, test := range tests {
@@ -34,6 +35,8 @@ func TestNormalizeRejectsInvalidInput(t *testing.T) {
 		{Preset: "DAILY", TimeOfDay: "25:00", Timezone: "UTC"},
 		{Preset: "WEEKLY", TimeOfDay: "09:00", DayOfWeek: "", Timezone: "UTC"},
 		{Preset: "MONTHLY", TimeOfDay: "09:00", Timezone: "UTC"},
+		{Preset: "CUSTOM", CronExpression: "61 * * * *", Timezone: "UTC"},
+		{Preset: "CUSTOM", CronExpression: "* * *", Timezone: "UTC"},
 		{Preset: "DAILY", TimeOfDay: "09:00", Timezone: "Unknown/Nowhere"},
 	} {
 		if _, err := Normalize(spec, time.Now()); err == nil {
