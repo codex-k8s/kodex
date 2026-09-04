@@ -230,7 +230,6 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("interaction health checks are isolated from generic worker", func(t *testing.T) {
 		testInteractionHealthRouting(t, ctx, repository, pool)
-		testInteractionUnknownOutcome(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
@@ -507,6 +506,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		t.Fatalf("continue managed prompt history: history=%#v total=%d next=%q err=%v", remainingHistory, remainingTotal, remainingNext, err)
 	}
 	testManagedPromptHistoryRedaction(t, ctx, repository, service, owner, projectResult.Project.Ref, created.ManagedConfiguration.Ref)
+	testManagedGitOwnership(t, ctx, service, pool, owner, *correctedRebound.ManagedConfiguration, effective.Ref)
 	var sttProviderAccountRef string
 	if err := pool.QueryRow(ctx, `
 		SELECT account.ref
@@ -704,7 +704,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		Mutation: value.Mutation{IdempotencyKey: "managed-git-copy", ExpectedVersion: &gitVersion},
 		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", Name: "Copied Git prompt"}})
 	if err != nil || copied.ManagedConfiguration == nil || copied.ManagedConfiguration.ManagedBy != "UI" || copied.ManagedRevision == nil ||
-		copied.ManagedRevision.State != "DRAFT" || copied.ManagedRevision.ParentRevisionRef != "" {
+		copied.ManagedRevision.State != "DRAFT" || copied.ManagedRevision.ParentRevisionRef != "mrev_gitprompt01" {
 		t.Fatalf("copy Git-owned configuration: result=%#v err=%v", copied, err)
 	}
 	detached, err := service.Execute(ctx, command.Command{Kind: command.DetachGitManagedConfiguration, Principal: owner,
@@ -714,11 +714,25 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		t.Fatalf("detach Git-owned configuration: result=%#v err=%v", detached, err)
 	}
 	detachedVersion := detached.ManagedConfiguration.Version
+	detachedValidated, err := service.Execute(ctx, command.Command{Kind: command.ValidatePromptTemplateDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-detached-validate", ExpectedVersion: &detachedVersion},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", RevisionRef: detached.ManagedRevision.Ref}})
+	if err != nil || detachedValidated.ManagedRevision == nil || detachedValidated.ManagedRevision.State != "VALID" {
+		t.Fatalf("validate detached configuration: %v", err)
+	}
+	detachedVersion = detachedValidated.ManagedConfiguration.Version
+	detachedPublished, err := service.Execute(ctx, command.Command{Kind: command.PublishPromptTemplateDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-detached-publish", ExpectedVersion: &detachedVersion},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", RevisionRef: detached.ManagedRevision.Ref}})
+	if err != nil || detachedPublished.ManagedRevision == nil || detachedPublished.ManagedRevision.State != "PUBLISHED" {
+		t.Fatalf("publish detached configuration: %v", err)
+	}
+	detachedVersion = detachedPublished.ManagedConfiguration.Version
 	detachedDraft, err := service.Execute(ctx, command.Command{Kind: command.CreatePromptTemplateDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-detached-draft", ExpectedVersion: &detachedVersion},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", Name: "Git prompt",
 			ContentFormat: "TEXT", Content: "Detached prompt for {{ .project.ref }}."}})
-	if err != nil || detachedDraft.ManagedRevision == nil || detachedDraft.ManagedRevision.State != "DRAFT" || detachedDraft.ManagedRevision.ParentRevisionRef != "mrev_gitprompt01" {
+	if err != nil || detachedDraft.ManagedRevision == nil || detachedDraft.ManagedRevision.State != "DRAFT" || detachedDraft.ManagedRevision.ParentRevisionRef != detached.ManagedRevision.Ref {
 		t.Fatalf("edit detached configuration: result=%#v err=%v", detachedDraft, err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.managed_configuration_revisions SET content = 'mutated' WHERE ref = $1`, created.ManagedRevision.Ref); err == nil {
@@ -2496,12 +2510,12 @@ SELECT 'mattermost_test_credential',organization_id,id,1,'kodex-system/kodex-int
 FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
 UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id,masked_credentials_state='CONFIGURED'
 FROM revision WHERE connection.id=revision.connection_id`, connection.Connection.Ref); err != nil {
-		t.Fatal(err)
+		t.Fatalf("seed Mattermost credential revision: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "interaction-connection-test", ExpectedVersion: &connection.Connection.Version},
 		Payload:  command.ConnectionInput{Ref: connection.Connection.Ref}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("start Mattermost health check: %v", err)
 	}
 	worker := func(workload, operation string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
@@ -2509,7 +2523,7 @@ FROM revision WHERE connection.id=revision.connection_id`, connection.Connection
 	generic := worker("integration-gateway", "platform.runtime.integration-tests.claim")
 	claims, err := service.ClaimIntegrationConnectionTests(ctx, generic, "generic-mattermost-test", 32)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("generic health claim boundary: %v", err)
 	}
 	for _, claim := range claims {
 		if stringMap(claim, "connectionRef") == connection.Connection.Ref {

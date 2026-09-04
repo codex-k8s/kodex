@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func testInteractionUnknownOutcome(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testInteractionUnknownOutcome(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool, runRef string) {
 	t.Helper()
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -25,7 +25,7 @@ SELECT 'interaction_unknown_fixture', run.organization_id,run.project_id,g.conne
 FROM control_plane.integration_grants g
 JOIN control_plane.agents agent ON g.target_kind='AGENT' AND g.target_ref=agent.ref
 JOIN control_plane.runs run ON run.project_id=agent.project_id
-WHERE run.project_id IS NOT NULL ORDER BY run.id LIMIT 1 RETURNING id::text,organization_id::text`).Scan(&id, &tenant)
+WHERE run.ref=$1 AND g.ref='ack_inbound_grant' ORDER BY run.id LIMIT 1 RETURNING id::text,organization_id::text`, runRef).Scan(&id, &tenant)
 	if err != nil {
 		t.Fatal(err)
 	}
