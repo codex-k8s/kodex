@@ -621,6 +621,7 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 }
 
 type scope struct {
+	interactionIdentityID                                                               string
 	authorityProjectID                                                                  string
 	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
 	credentialAuthenticatedAt                                                           time.Time

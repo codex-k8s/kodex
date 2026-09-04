@@ -17,7 +17,9 @@ JOIN control_plane.integration_grants g
  AND g.definition_digest=c.definition_digest
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
-  AND d.enabled AND d.adapter_owner='integration-gateway' AND d.execution_route='MANAGED_MCP' AND d.adapter_readiness='READY'
+  AND d.enabled AND (d.adapter_owner,d.execution_route) IN
+      (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
+  AND d.adapter_readiness='READY'
   AND EXISTS (
     SELECT 1 FROM control_plane.runtime_revisions revision,
       jsonb_array_elements(COALESCE(revision.safe_snapshot->'integrationGrants','[]'::jsonb)) binding

@@ -418,8 +418,8 @@ SELECT n.id::text,
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
              AND definition.enabled
-             AND definition.adapter_owner = 'integration-gateway'
-             AND definition.execution_route = 'MANAGED_MCP'
+             AND (definition.adapter_owner,definition.execution_route) IN
+                 (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
              AND definition.adapter_readiness = 'READY'
              AND connection.enabled
              AND connection.state = 'CONNECTED'

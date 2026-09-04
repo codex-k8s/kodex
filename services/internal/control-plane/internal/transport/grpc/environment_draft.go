@@ -2,9 +2,11 @@ package grpc
 
 import (
 	"context"
+	"reflect"
 	"slices"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -68,6 +70,7 @@ func (server *Server) PublishRuntimeEnvironmentDraft(ctx context.Context, reques
 
 func castPublishedEnvironmentDraft(result command.Result) (*controlplanev1.PublishRuntimeEnvironmentDraftResponse, error) {
 	if result.RuntimeEnvironment == nil || result.RuntimeEnvironmentDraft == nil || result.RuntimeEnvironment.Ref == "" ||
+		result.RuntimeEnvironment.Version < 1 || result.RuntimeEnvironmentDraft.Version < 1 || result.RuntimeEnvironmentDraft.ValidationDigest == "" ||
 		result.RuntimeEnvironmentDraft.State != "PUBLISHED" || result.RuntimeEnvironmentDraft.PublishedEnvironmentRef != result.RuntimeEnvironment.Ref {
 		return nil, status.Error(codes.Internal, "runtime environment publication result is incomplete")
 	}
@@ -104,15 +107,17 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 		return nil
 	}
 	spec := input.Specification
-	policy := castRuntimeEnvironmentPolicy(spec.Policy)
-	specification := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: spec.Name, Description: spec.Description, ImageArtifactRef: spec.ImageArtifactRef,
-		Policy: &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind}}
-	for _, volume := range policy.Volumes {
-		specification.Policy.Volumes = append(specification.Policy.Volumes, &controlplanev1.RuntimeVolumeInput{Name: volume.Name, Kind: volume.Kind, SizeMib: volume.SizeMib})
-	}
-	for _, egress := range policy.Network.Egress {
-		if !slices.Contains(specification.Policy.NetworkDestinations, egress.Destination) {
-			specification.Policy.NetworkDestinations = append(specification.Policy.NetworkDestinations, egress.Destination)
+	specification := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: spec.Name, Description: spec.Description, ImageArtifactRef: spec.ImageArtifactRef}
+	if !reflect.DeepEqual(spec.Policy, runtimecontract.RuntimeEnvironmentPolicy{}) {
+		policy := castRuntimeEnvironmentPolicy(spec.Policy)
+		specification.Policy = &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind}
+		for _, volume := range policy.Volumes {
+			specification.Policy.Volumes = append(specification.Policy.Volumes, &controlplanev1.RuntimeVolumeInput{Name: volume.Name, Kind: volume.Kind, SizeMib: volume.SizeMib})
+		}
+		for _, egress := range policy.Network.Egress {
+			if !slices.Contains(specification.Policy.NetworkDestinations, egress.Destination) {
+				specification.Policy.NetworkDestinations = append(specification.Policy.NetworkDestinations, egress.Destination)
+			}
 		}
 	}
 	for _, value := range spec.Values {

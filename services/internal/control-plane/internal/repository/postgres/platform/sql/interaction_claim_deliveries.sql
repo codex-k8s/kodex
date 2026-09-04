@@ -62,10 +62,13 @@ SELECT
     claimed.lease_ref,
     claimed.fence,
     claimed.generation,
-    claimed.lease_expires_at
+    claimed.lease_expires_at,
+    COALESCE(gate.ref,''),COALESCE(gate.version,0),run.ref
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
 LEFT JOIN control_plane.integration_credential_revisions credential_revision
   ON credential_revision.id = c.credential_revision_id
 JOIN control_plane.projects project ON project.id = claimed.project_id
+JOIN control_plane.runs run ON run.id=claimed.root_run_id
+LEFT JOIN control_plane.owner_gates gate ON gate.id=claimed.gate_id
 ORDER BY claimed.created_at
