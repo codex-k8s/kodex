@@ -131,6 +131,8 @@ func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.In
 				ExternalPostRef: message.PostRef, ExternalRootPostRef: message.RootPostRef,
 				ExternalChannelRef: message.ChannelRef, ExternalUserDigest: message.UserDigest,
 				Message: message.Text, Decision: message.Decision,
+				ExternalTeamRef: message.TeamRef, GateRef: message.GateRef,
+				ExpectedGateVersion: message.GateVersion, RunRef: message.RunRef,
 			})
 			if err != nil {
 				return "", err

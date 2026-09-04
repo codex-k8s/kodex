@@ -29,6 +29,12 @@ Gateway не читает PostgreSQL и не меняет core lifecycle сам�
 Решение Human Gate использует тот же one-winner/OCC contract, что и Control
 Center, поэтому повтор с другой поверхности получает stale readback.
 
+Неопределённая отправка фиксируется как `UNKNOWN_OUTCOME` без автоматического
+повтора. Входящий gate reply подтверждается чтением post/root и точной связкой
+gate/run/version; внешнего user identifier недостаточно без server-owned
+привязки к субъекту Kodex. Детали жизненного цикла и оставшаяся область полного
+unit описаны в [контракте #1030](../../../docs/operations/interaction-gateway-1030.md).
+
 Пользовательский текст локализуется по locale подключения из embedded YAML.
 Credential material читается только из точного server-mounted файла и не
 попадает в API, логи или audit. Весь внешний трафик идёт через egress gateway к

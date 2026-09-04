@@ -70,7 +70,7 @@ func TestCreatePostDistinguishesNoEffectAndUnknown(t *testing.T) {
 				}
 				return testResponse(tc.status, tc.body), nil
 			}))
-			post, thread, err := createPost(t.Context(), client, testChannelID, "", "fixture message")
+			post, thread, err := createPost(t.Context(), client, testChannelID, "", "fixture message", nil)
 			if (err == nil) != tc.success || ConfirmedNoEffect(err) != tc.noEffect || calls != 1 {
 				t.Fatalf("result = %q, %q, %v; no effect=%v; calls=%d", post, thread, err, ConfirmedNoEffect(err), calls)
 			}

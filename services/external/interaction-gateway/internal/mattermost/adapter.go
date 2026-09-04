@@ -52,9 +52,13 @@ type Message struct {
 	PostRef     string
 	RootPostRef string
 	ChannelRef  string
+	TeamRef     string
 	UserDigest  string
 	Text        string
 	Decision    controlplanev1.OwnerGateDecision
+	GateRef     string
+	GateVersion int64
+	RunRef      string
 }
 
 type MessageHandler func(context.Context, Message) (string, error)
@@ -92,6 +96,10 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	if claim == nil || claim.GetMessageKey() == "" {
 		return "", "", errConfiguration
 	}
+	gate, err := gateFromClaim(claim)
+	if err != nil {
+		return "", "", err
+	}
 	client, _, channel, closeClient, err := adapter.client(ctx, claim)
 	if err != nil {
 		return "", "", err
@@ -112,7 +120,7 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 		return "", "", err
 	}
 	dispatched = true
-	return createPost(ctx, client, channel.Id, "", message)
+	return createPost(ctx, client, channel.Id, "", message, gate)
 }
 
 func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.InteractionSource, handler MessageHandler) error {
@@ -173,11 +181,23 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 				continue
 			}
 			post = verified
-			messageKey, handleErr := handler(ctx, Message{
+			gate, gateErr := readGateContext(ctx, client, post, channel.Id, me.Id)
+			if gateErr != nil {
+				return gateErr
+			}
+			decision := ParseDecision(post.Message)
+			if decision != controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED && gate == nil {
+				continue
+			}
+			message := Message{
 				EventRef: post.Id, PostRef: post.Id, RootPostRef: post.RootId,
-				ChannelRef: post.ChannelId, UserDigest: digest(post.UserId),
-				Text: strings.TrimSpace(post.Message), Decision: ParseDecision(post.Message),
-			})
+				ChannelRef: post.ChannelId, TeamRef: channel.TeamId, UserDigest: digest(post.UserId),
+				Text: strings.TrimSpace(post.Message), Decision: decision,
+			}
+			if gate != nil {
+				message.GateRef, message.GateVersion, message.RunRef = gate.ref, gate.version, gate.runRef
+			}
+			messageKey, handleErr := handler(ctx, message)
 			if handleErr != nil {
 				return handleErr
 			}

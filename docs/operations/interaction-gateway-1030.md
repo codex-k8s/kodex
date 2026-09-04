@@ -53,6 +53,30 @@ thread, изменённый текст либо удалённый post не п
 включая быстро отменённое промежуточное, ждёт завершения всей цепочки
 предшественников. При shutdown SDK reader дренируется до закрытия каналов.
 
+## Human Gate
+
+Серверная delivery несёт `gate_ref`, `gate_version` и `run_ref`. Gateway пишет
+эту связку в props bot post и сверяет полный success readback. Версия
+передаётся десятичной строкой, чтобы JSON не терял точность `int64`.
+
+Для ответа gateway сначала читает сам post, затем root post через Mattermost
+API. Root должен принадлежать тому же каналу и текущему bot user, не быть
+удалённым или вложенным ответом. Props обычного пользователя не превращаются
+в gate context. Полученные team/channel, digest внешнего пользователя и точная
+gate/run/version передаются в `AcceptInteractionMessage`.
+
+Владелец разрешает активную server-owned `InteractionIdentity`, связанную с
+версией подключения, в субъект Kodex. Его `gate.resolve` или `agent.launch`/
+`workflow.launch` проверяются на конкретном ресурсе; payload не содержит
+самоназначенного actor. Gate decision дополнительно должен совпасть с
+серверной delivery, gate/run/version и one-winner/OCC-переходом владельца.
+Повторное событие возвращает receipt, а не запускает новый Run.
+
+Административная привязка выполняется отдельными командами
+`BindInteractionIdentity`/`RevokeInteractionIdentity`, читается через
+`ListInteractionIdentities`. HTTP/PWA-поверхность этих новых producer-команд
+подключается в зависимых unit и пока не объявляется готовой этим checkpoint.
+
 ## Проверка checkpoint
 
 Локальная точка входа из каталога unit:
@@ -70,8 +94,8 @@ WebSocket fixture работает только на loopback без реаль�
 
 Это промежуточная реализация полного unit, не объявление готовности #1030.
 До полного PR остаются typed MCP catalog для teams/channels/posts/threads/
-search/files/reactions/send/update, подключение server-owned identity и gate
-tuple, durable inbound acknowledgement, readiness рабочего пути и сквозной
+search/files/reactions/send/update, HTTP/PWA управления identity,
+durable inbound acknowledgement, readiness рабочего пути и сквозной
 component-сценарий. Live Mattermost и staging не запускались.
 
 Проверена официальная спецификация

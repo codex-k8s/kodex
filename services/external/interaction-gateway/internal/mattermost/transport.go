@@ -32,8 +32,12 @@ func ConfirmedNoEffect(err error) bool {
 	return errors.As(err, &noEffect)
 }
 
-func createPost(ctx context.Context, client *model.Client4, channelID, rootID, message string) (string, string, error) {
-	post, response, err := client.CreatePost(ctx, &model.Post{ChannelId: channelID, RootId: rootID, Message: message})
+func createPost(ctx context.Context, client *model.Client4, channelID, rootID, message string, gate *gateContext) (string, string, error) {
+	input := &model.Post{ChannelId: channelID, RootId: rootID, Message: message}
+	if gate != nil {
+		gate.addToPost(input)
+	}
+	post, response, err := client.CreatePost(ctx, input)
 	if err != nil {
 		classified := classify(err)
 		if response != nil {
@@ -46,6 +50,12 @@ func createPost(ctx context.Context, client *model.Client4, channelID, rootID, m
 	}
 	if response == nil || response.StatusCode != http.StatusCreated || post == nil || !model.IsValidId(post.Id) || post.ChannelId != channelID || post.RootId != rootID || post.DeleteAt != 0 {
 		return "", "", errResponse
+	}
+	if gate != nil {
+		readback, err := gateFromPost(post)
+		if err != nil || readback == nil || *readback != *gate {
+			return "", "", errResponse
+		}
 	}
 	if rootID == "" {
 		rootID = post.Id
