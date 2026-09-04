@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,6 +95,16 @@ func NewReadinessOnly(parent context.Context, address string, readiness Readines
 	}, nil
 }
 
+// ShareConnectionLimit сохраняет общий бюджет до запуска обоих listener.
+func (server *Server) ShareConnectionLimit(primary *Server) error {
+	if primary == nil || primary == server || server.listener != nil || primary.listener != nil ||
+		cap(server.global) != cap(primary.global) || server.draining.Load() || primary.draining.Load() {
+		return errors.New("gateway shared connection budget is invalid")
+	}
+	server.global = primary.global
+	return nil
+}
+
 // Listen резервирует listener до readiness barrier.
 func (server *Server) Listen() error {
 	if server.listener != nil {
@@ -133,7 +144,6 @@ func (server *Server) Serve() error {
 			_ = connection.Close()
 			continue
 		}
-		server.wait.Add(1)
 		go func() {
 			defer server.wait.Done()
 			defer server.release(connection)
@@ -142,8 +152,8 @@ func (server *Server) Serve() error {
 	}
 }
 
-// Shutdown останавливает accept, закрывает tunnels и ограниченно ожидает join.
-func (server *Server) Shutdown(ctx context.Context) error {
+// Drain закрывает accept и tunnels до ожидания других listener.
+func (server *Server) Drain() {
 	server.draining.Store(true)
 	server.cancel()
 	if server.listener != nil {
@@ -154,6 +164,11 @@ func (server *Server) Shutdown(ctx context.Context) error {
 		_ = connection.Close()
 	}
 	server.mu.Unlock()
+}
+
+// Shutdown останавливает accept, закрывает tunnels и ограниченно ожидает join.
+func (server *Server) Shutdown(ctx context.Context) error {
+	server.Drain()
 	done := make(chan struct{})
 	go func() {
 		server.wait.Wait()
@@ -178,12 +193,17 @@ func (server *Server) handle(client net.Conn) {
 		server.writeCompatibilityReadiness(client, duration(limits.WriteTimeoutMilliseconds))
 		return
 	}
+	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+		server.metrics.Connection("rejected", "connect", "not_ready")
+		server.writeResponse(client, readinessNotReady, duration(limits.WriteTimeoutMilliseconds))
+		return
+	}
 	target := request.Target
 	if err := client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))); err != nil {
 		server.metrics.Connection("failed", "connect", "io")
 		return
 	}
-	if _, err := io.WriteString(client, connectEstablished); err != nil {
+	if _, err := io.WriteString(client, server.withPolicyReadback(connectEstablished)); err != nil {
 		server.metrics.Connection("failed", "connect", "io")
 		return
 	}
@@ -193,9 +213,17 @@ func (server *Server) handle(client net.Conn) {
 		server.metrics.Connection("rejected", "clienthello", tlsReason(err))
 		return
 	}
+	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+		server.metrics.Connection("rejected", "connect", "not_ready")
+		return
+	}
 	snapshot, err := server.resolver.Resolve(server.context, target.Hostname)
 	if err != nil {
 		server.metrics.Connection("rejected", "dns", dnsReason(err))
+		return
+	}
+	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}
 	upstream, err := server.dial(snapshot, target.Port, duration(limits.DialTimeoutMilliseconds))
@@ -217,14 +245,34 @@ func (server *Server) handle(client net.Conn) {
 }
 
 func (server *Server) writeCompatibilityReadiness(connection net.Conn, timeout time.Duration) {
+	response := readinessNotReady
+	if ready, _ := server.readiness.Ready(); ready && !server.draining.Load() {
+		response = readinessReady
+	}
+	server.writeResponse(connection, response, timeout)
+}
+
+func (server *Server) writeResponse(connection net.Conn, response string, timeout time.Duration) {
 	if err := connection.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
 		return
 	}
-	response := readinessNotReady
-	if ready, _ := server.readiness.Ready(); ready {
-		response = readinessReady
+	_, _ = io.WriteString(connection, server.withPolicyReadback(response))
+}
+
+func (server *Server) withPolicyReadback(response string) string {
+	active, ok := server.policy.(*policy.Active)
+	if !ok {
+		return response
 	}
-	_, _ = io.WriteString(connection, response)
+	name, workload, operation := active.ProfileIdentity()
+	headers := "X-Kodex-Egress-Revision: " + active.Revision() + "\r\n" +
+		"X-Kodex-Egress-Digest: " + active.Digest() + "\r\n" +
+		"X-Kodex-Egress-Profile: " + name + "\r\n"
+	if workload != "" {
+		headers += "X-Kodex-Egress-Workload: " + workload + "\r\n" +
+			"X-Kodex-Egress-Operation: " + operation + "\r\n"
+	}
+	return strings.TrimSuffix(response, "\r\n") + headers + "\r\n"
 }
 
 func (server *Server) dial(snapshot dnsresolver.Snapshot, port int, timeout time.Duration) (net.Conn, error) {
@@ -374,6 +422,8 @@ func (server *Server) acquire(connection net.Conn) bool {
 	}
 	server.perSource[source]++
 	server.active[connection] = struct{}{}
+	// Add находится под тем же lock, что drain: Wait не обгонит новый handler.
+	server.wait.Add(1)
 	server.metrics.AddActive(1)
 	return true
 }

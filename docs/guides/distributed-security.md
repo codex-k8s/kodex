@@ -553,6 +553,11 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- Отдельный сетевой профиль связывает immutable workload/operation/destination
+  с принадлежащим серверу listener и точными CNI selectors; caller header не
+  назначает профиль. Readiness и CONNECT возвращают фактически обслуживаемые
+  revision/digest/profile. Отрицательная readiness блокирует новые внешние
+  действия, а несколько listener сохраняют общий ресурсный и shutdown budget.
 - Итоговый render окружения проверяется после всех overlays. Исходная база
   или patch не доказывает результирующую политику: списки могут заменяться
   целиком.

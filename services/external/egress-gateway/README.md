@@ -4,8 +4,8 @@ title: Egress gateway
 type: service
 status: approved
 owner: security
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-09-05
 ---
 
 # Egress gateway
@@ -25,16 +25,24 @@ updated: 2026-08-23
 | Service | `egress-gateway` |
 | Полный Service DNS | `egress-gateway.kodex-system.svc.cluster.local` |
 | CONNECT port | `8080/TCP`, имя `connect`; bodyless `CONNECT` и compatibility `GET /readyz` |
+| STT CONNECT port | `8081/TCP`, имя `stt-connect`; только профиль `openai-stt` и workload `stt-tts-service` |
 | Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
 | Liveness | `GET /healthz` на technical port; проверяет только жизнь процесса |
-| Compatibility readiness | bodyless `GET /readyz` без query на `8080`: `204` только при effective `ACTIVE/READY`, иначе `503`; другие non-CONNECT routes закрыты |
+| Compatibility readiness | bodyless `GET /readyz` без query на `8080` и `8081`: `204` только при effective `ACTIVE/READY`, иначе `503`; другие non-CONNECT routes закрыты |
 | Technical readiness | `GET /readyz` на technical port |
 | Policy readback | `GET /policy` на technical port; только process/policy/resolver state, revision и SHA-256 digest |
 
 Consumer задаёт
 `HTTPS_PROXY=http://egress-gateway.kodex-system.svc.cluster.local:8080`.
+STT использует только порт `8081`; CNI не допускает этот workload к `8080`.
+Оба listener делят один глобальный connection budget и закрываются до общего
+bounded join. CONNECT проверяет readiness до ответа и до внешнего dial.
+Заголовки `X-Kodex-Egress-Revision`, `X-Kodex-Egress-Digest`,
+`X-Kodex-Egress-Profile`, а для STT также `X-Kodex-Egress-Workload` и
+`X-Kodex-Egress-Operation` подтверждают реально обслуживаемый snapshot на
+`GET /readyz` и `CONNECT 200`. Они не принимаются как полномочия из запроса.
 В `NO_PROXY` должны остаться `localhost`, loopback и внутренние зоны `.svc` и
 `.svc.cluster.local`, чтобы внутренние service calls не направлялись наружу.
 `NetworkPolicy` разрешает CONNECT не к объекту Service, а к указанным устойчивым
@@ -56,7 +64,7 @@ canonical SHA-256 digest независимо от файла. Digest вычис
 canonicalizer `cmd/policy-digest`, который использует runtime. При загрузке gateway
 строго отвергает неизвестные и повторяющиеся JSON-поля, неполную конфигурацию,
 неверные bounds, несовпадение version либо digest. Runtime mutation отсутствует.
-При таком отказе порт `8080` обслуживает только compatibility `/readyz=503`,
+При таком отказе порты `8080` и `8081` обслуживают только compatibility `/readyz=503`,
 любой CONNECT закрыто отклоняется, а ограниченный `/policy` readback показывает
 `policyState=INVALID` без ложной
 loaded revision/digest. Некорректный resolver primitive аналогично оставляет
@@ -67,7 +75,13 @@ policy `ACTIVE`, resolver `INVALID` и трафик закрытым.
 - `api.openai.com:443`;
 - `auth.openai.com:443`;
 - `chatgpt.com:443`;
+- `api.github.com:443`;
 - `github.com:443`.
+
+Этот список относится к исходному listener. Профиль `openai-stt` разрешает
+только `api.openai.com:443`, включает workload и operation в canonical digest
+и обязателен для запуска STT listener. Полная карта сценария и границы
+ответственности: [OPS-MVP-EGRESS-1029](../../../docs/operations/egress-stt-1029.md).
 
 Wildcard, suffix/pattern, IP literal, uppercase/trailing-dot alias и любой
 другой порт запрещены. Schema принимает только lowercase ASCII FQDN без
