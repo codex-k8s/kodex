@@ -400,15 +400,15 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		}
 	}
 	manager.addCatalog(&input, revision)
-	input.ExecutionBindingDigest, input.MCPBindingDigest, err = runtimecontract.RuntimeExecutionBindingDigests(input)
-	if err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
-	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
 	if err := validateRuntimeRevisionDigest(input, binding); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
+	input.ExecutionBindingDigest, input.MCPBindingDigest, err = runtimecontract.RuntimeExecutionBindingDigests(input)
+	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
 	}
 	return input, binding, validateRunnerInput(input)

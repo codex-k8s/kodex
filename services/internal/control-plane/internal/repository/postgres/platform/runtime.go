@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -725,7 +724,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,
 			leaseRef, scope.organizationID, runID, nodeID, runtimeRevisionID,
 			payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
-			hex.EncodeToString(inputDigest[:]), expiresAt); err != nil {
+			inputDigestHex, expiresAt); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrConflict)
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {

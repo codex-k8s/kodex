@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/credentialprojection"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -35,8 +36,13 @@ type turnLifecycle interface {
 	DeleteTurn(context.Context, string) error
 }
 
+type credentialMaterializer interface {
+	Materialize(context.Context, runtimecontract.RunnerInput) (credentialprojection.Projection, error)
+}
+
 type runtime struct {
 	control           controlplanev1.RuntimeWorkServiceClient
+	credentials       credentialMaterializer
 	manager           *workload.Manager
 	turns             turnLifecycle
 	coordinator       *callback.Coordinator
@@ -52,8 +58,8 @@ type runtime struct {
 	warmTicket        string
 }
 
-func newRuntime(control controlplanev1.RuntimeWorkServiceClient, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	return &runtime{control: control, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
+func newRuntime(control controlplanev1.RuntimeWorkServiceClient, credentials credentialMaterializer, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
+	return &runtime{control: control, credentials: credentials, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
 		capacity: make(chan struct{}, config.MaximumConcurrentTurns), inspectInterval: defaultTurnInspectionInterval,
 		terminalGrace: defaultTerminalCallbackGrace, completionRetries: defaultFailureCompletionRetryDelays[:]}
 }
@@ -194,8 +200,14 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			}
 		}
 		if !warmExecution {
-			if err := runtime.manager.EnsureTurn(ctx, input, providerBinding); err != nil {
-				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "kubernetes", "reason", err.Error())
+			projectionContext, cancelProjection := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+			projection, projectionErr := runtime.credentials.Materialize(projectionContext, input)
+			cancelProjection()
+			if projectionErr == nil {
+				projectionErr = runtime.manager.EnsureTurn(ctx, input, providerBinding, projection)
+			}
+			if projectionErr != nil {
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "dependency")
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue

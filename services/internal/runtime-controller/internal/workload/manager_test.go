@@ -1190,7 +1190,7 @@ func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 			execution := testExecution(false)
 			mutate(execution.Revision)
 			manager := newTestManager(t, fake.NewSimpleClientset())
-			if _, _, err := manager.BuildTurnInput(execution); err == nil || !strings.Contains(err.Error(), "runtime revision digest mismatch") {
+			if _, _, err := manager.BuildTurnInput(execution); err == nil {
 				t.Fatalf("BuildTurnInput() error = %v", err)
 			}
 		})

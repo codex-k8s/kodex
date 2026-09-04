@@ -14,3 +14,13 @@ spec:
           annotations:
             summary: Runtime controller is not ready
             runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/runtime-controller.md
+        - alert: RuntimeWorkspaceCanaryFailed
+          expr: >-
+            (kube_pod_container_status_ready{namespace="kodex-runtime",container="role-runtime"} == 0)
+            and on(namespace,pod)
+            (kube_pod_status_phase{namespace="kodex-runtime",phase="Running"} == 1)
+          for: 2m
+          labels: {severity: warning}
+          annotations:
+            summary: Runtime workspace readiness canary is failing
+            runbook_url: https://github.com/codex-k8s/kodex/blob/main/docs/runbooks/runtime-controller.md
