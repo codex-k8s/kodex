@@ -4739,7 +4739,7 @@ components:
     IntegrationDefinition:
       type: object
       additionalProperties: false
-      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter]
+      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter, adapterOwner, executionRoute, adapterReadiness]
       properties:
         key: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
@@ -4754,6 +4754,9 @@ components:
         origin: { type: string, enum: [SHIPPED] }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         adapter: { type: string, enum: [SYNTHETIC_HTTP, GITHUB, GITLAB, JIRA, CONFLUENCE, EMAIL_HTTPS, MATTERMOST_INTERACTION] }
+        adapterOwner: { type: string, enum: [integration-gateway, interaction-gateway] }
+        executionRoute: { type: string, enum: [MANAGED_MCP, INTERACTION] }
+        adapterReadiness: { type: string, enum: [READY, NOT_READY] }
         credentialSecretKey: { type: string, maxLength: 120 }
     IntegrationResourceScope:
       type: object

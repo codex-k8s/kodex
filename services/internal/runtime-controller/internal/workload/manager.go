@@ -737,7 +737,13 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 		if !grant.GetEnabled() {
 			continue
 		}
-		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(), ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(), CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(), Risk: grant.GetRisk()})
+		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{
+			Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(),
+			DefinitionVersion: grant.GetDefinitionVersion(), DefinitionDigest: grant.GetDefinitionDigest(),
+			ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(),
+			CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(),
+			Operation: grant.GetOperation(), InputSchema: grant.GetInputSchema(), InputSchemaSHA256: grant.GetInputSchemaSha256(), Risk: grant.GetRisk(),
+		})
 	}
 	input.AttachmentSetRef = revision.GetAttachmentSetRef()
 	input.AttachmentSetManifestDigest = revision.GetAttachmentSetManifestDigest()

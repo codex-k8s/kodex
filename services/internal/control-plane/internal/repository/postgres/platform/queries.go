@@ -1528,6 +1528,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 			&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled,
 			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
 			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
+			&item.AdapterOwner, &item.ExecutionRoute, &item.AdapterReadiness,
 		); err != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}

@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: Confluence
   description: Поиск и чтение страниц, а также создание и OCC-обновление черновиков в одном exact space.
   category: knowledge
   adapter: CONFLUENCE
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   credential: {secretKey: token, kind: TOKEN}
   configurationFields:
     - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
@@ -42,9 +45,11 @@ spec:
       inputFields:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
         - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+        - {key: cursor, type: STRING, format: PLAIN, required: false, maximumLength: 2048}
       outputFields:
         - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
         - {key: pages, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: next_cursor, type: STRING, format: PLAIN, required: false, maximumLength: 2048}
       execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 300}
     - key: confluence.page.read
       name: Прочитать страницу
@@ -97,3 +102,20 @@ spec:
         - {key: version, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
         - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
       execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: confluence.attachment.upload
+      name: Загрузить вложение страницы
+      description: Загружает один bounded attachment в страницу configured space после Human Gate.
+      operation: confluence.attachment.upload
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {key: page_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: file_name, type: STRING, format: PLAIN, required: true, maximumLength: 255}
+        - {key: media_type, type: STRING, format: IDENTIFIER, required: true, maximumLength: 127}
+        - {key: content_base64, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: attachment_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 255}
+        - {key: media_type, type: STRING, format: IDENTIFIER, required: true, maximumLength: 127}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 45, maxAttempts: 1, retryBackoffMilliseconds: 500}

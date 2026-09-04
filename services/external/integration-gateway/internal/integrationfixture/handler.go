@@ -137,6 +137,15 @@ func (handler *Handler) readJournal(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusBadRequest, "idempotency_key_invalid")
 		return
 	}
+	if effectKey != "" {
+		projection, exists := handler.store.ReadEffect(journal, effectKey)
+		if !exists {
+			writeError(writer, http.StatusNotFound, "effect_not_found")
+			return
+		}
+		writeJSON(writer, http.StatusOK, projection)
+		return
+	}
 	writeJSON(writer, http.StatusOK, handler.store.Read(journal, effectKey))
 }
 

@@ -326,6 +326,7 @@ type IntegrationInvocationInput struct {
 	ReceiptRef, EffectKey, InputDigest, ProviderEffectRef, ResponseDigest string
 	Generation                                                            int64
 	Success                                                               bool
+	UnknownOutcome                                                        bool
 }
 type IntegrationConnectionTestInput struct {
 	TestRef, LeaseRef, Fence, ResultSummary, SafeErrorCode string

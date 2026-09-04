@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-control-plane-postgres-${BASHPID}"
+test_pattern=${1:-'^TestBootstrapComponent$'}
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
@@ -52,11 +53,13 @@ run_migration() {
   run_migration status >/dev/null
   run_migration up
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
-      ./internal/repository/postgres/platform -run '^TestBootstrapComponent$'
-  KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
-      ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
+    env -u GOFLAGS GOENV=off GOWORK=off go test -v -count=1 \
+      ./internal/repository/postgres/platform -run "$test_pattern"
+  if [[ $# -eq 0 ]]; then
+    KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
+        ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
+  fi
 )
 
 printf 'Control-plane PostgreSQL tests passed\n'

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"strings"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -51,6 +52,14 @@ func (service *Service) ConfigureIntegrationCredential(
 		return entity.IntegrationConnection{}, errs.ErrVersionMismatch
 	}
 	if connection.CredentialSecretKey == "" || !containsString(connection.NextActions, "CONFIGURE_CREDENTIAL") {
+		return entity.IntegrationConnection{}, errs.ErrForbidden
+	}
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return entity.IntegrationConnection{}, errs.ErrUnavailable
+	}
+	definition, registered := definitions[connection.DefinitionKey]
+	if !registered || !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return entity.IntegrationConnection{}, errs.ErrForbidden
 	}
 	digest := sha256.Sum256([]byte(connectionRef + "\x00" + mutation.IdempotencyKey))

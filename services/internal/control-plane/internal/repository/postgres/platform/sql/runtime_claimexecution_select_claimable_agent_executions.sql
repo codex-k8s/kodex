@@ -384,10 +384,15 @@ SELECT n.id::text,
                'ref', integration_grant.ref,
                'connectionRef', connection.ref,
                'definitionKey', connection.definition_key,
+               'definitionVersion', connection.definition_version,
+               'definitionDigest', connection.definition_digest,
                'connectionName', connection.name,
                'capabilityKey', integration_grant.capability_key,
                'capabilityName', capability.value ->> 'name',
                'capabilityDescription', capability.value ->> 'description',
+               'operation', capability.value ->> 'operation',
+               'inputSchema', capability.value ->> 'inputSchema',
+               'inputSchemaSha256', capability.value ->> 'inputSchemaSha256',
                'risk', capability.value ->> 'risk'
            ) ORDER BY connection.name, integration_grant.capability_key)
            FROM control_plane.integration_grants integration_grant
@@ -399,12 +404,10 @@ SELECT n.id::text,
              AND integration_grant.target_kind = 'AGENT'
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
-             AND integration_grant.capability_key NOT IN (
-                 'mattermost.inbound',
-                 'mattermost.notifications',
-                 'mattermost.result_mirror',
-                 'mattermost.gate_decisions'
-             )
+             AND definition.enabled
+             AND definition.adapter_owner = 'integration-gateway'
+             AND definition.execution_route = 'MANAGED_MCP'
+             AND definition.adapter_readiness = 'READY'
              AND connection.enabled
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),

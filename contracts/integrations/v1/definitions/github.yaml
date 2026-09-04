@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 2.0.0
+  version: 2.1.0
   origin: SHIPPED
 spec:
   name: GitHub
   description: Метаданные репозитория и управляемые операции с issue в одном точно ограниченном репозитории.
   category: source-control
   adapter: GITHUB
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   credential:
     secretKey: token
     kind: TOKEN
@@ -75,6 +78,69 @@ spec:
         idempotency: EFFECT_KEY
         timeoutSeconds: 30
         maxAttempts: 2
+        retryBackoffMilliseconds: 500
+    - key: github.issue.list
+      name: Получить список issue
+      description: Возвращает одну bounded страницу issue без pull requests и opaque provider payload.
+      operation: github.issue.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [open, closed, all]}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: issues, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.read
+      name: Прочитать issue
+      description: Возвращает bounded проекцию одного issue и закрыто отклоняет pull request.
+      operation: github.issue.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      outputFields:
+        - {key: number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16}
+        - {key: body, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+      execution:
+        idempotency: READ_ONLY
+        timeoutSeconds: 20
+        maxAttempts: 3
+        retryBackoffMilliseconds: 250
+    - key: github.issue.comment.create
+      name: Добавить комментарий к issue
+      description: Добавляет один комментарий с effect marker после Human Gate.
+      operation: github.issue.comment.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope:
+        kind: GITHUB_REPOSITORY
+        connectionFields: [owner, repository]
+      inputFields:
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+      outputFields:
+        - {key: comment_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {key: issue_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+      execution:
+        idempotency: EFFECT_KEY
+        timeoutSeconds: 30
+        maxAttempts: 1
         retryBackoffMilliseconds: 500
     - key: github.issue.update
       name: Обновить issue

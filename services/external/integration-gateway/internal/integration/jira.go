@@ -48,8 +48,9 @@ func (adapter *Adapter) executeJira(ctx context.Context, request Request, capabi
 		return providerResult(request, "jira-project:"+provider.ID, map[string]any{"id": provider.ID, "key": provider.Key, "name": provider.Name})
 	case "jira.issue.search":
 		var input struct {
-			Query string `json:"query"`
-			Limit int64  `json:"limit"`
+			Query  string `json:"query"`
+			Cursor string `json:"cursor"`
+			Limit  int64  `json:"limit"`
 		}
 		if decodeProviderJSON(canonicalInput, &input) != nil {
 			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
@@ -59,12 +60,16 @@ func (adapter *Adapter) executeJira(ctx context.Context, request Request, capabi
 		}
 		jql := fmt.Sprintf(`project = "%s" AND (%s)`, strings.ReplaceAll(projectKey, `"`, `\"`), input.Query)
 		query := url.Values{"jql": {jql}, "maxResults": {strconv.FormatInt(input.Limit, 10)}, "fields": {"summary,status"}}
+		if input.Cursor != "" {
+			query.Set("nextPageToken", input.Cursor)
+		}
 		body, err := adapter.jiraJSON(ctx, request, capability, configuration, http.MethodGet, "/rest/api/3/search/jql", query, nil, "")
 		if err != nil {
 			return Result{}, err
 		}
 		var provider struct {
-			Issues []jiraIssue `json:"issues"`
+			Issues        []jiraIssue `json:"issues"`
+			NextPageToken string      `json:"nextPageToken"`
 		}
 		if decodeProviderJSON(body, &provider) != nil || int64(len(provider.Issues)) > input.Limit {
 			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
@@ -77,7 +82,11 @@ func (adapter *Adapter) executeJira(ctx context.Context, request Request, capabi
 			projection = append(projection, map[string]string{"key": issue.Key, "summary": issue.Fields.Summary, "status": issue.Fields.Status.Name})
 		}
 		encoded, _ := json.Marshal(projection)
-		return providerResult(request, "jira-search:"+request.EffectKey, map[string]any{"count": len(projection), "issues": string(encoded)})
+		output := map[string]any{"count": len(projection), "issues": string(encoded)}
+		if provider.NextPageToken != "" {
+			output["next_cursor"] = provider.NextPageToken
+		}
+		return providerResult(request, "jira-search:"+request.EffectKey, output)
 	case "jira.issue.read":
 		var input struct {
 			IssueKey string `json:"issue_key"`
@@ -238,7 +247,19 @@ func (adapter *Adapter) jiraJSON(ctx context.Context, request Request, capabilit
 }
 
 func jiraIssueInProject(issueKey, projectKey string) bool {
-	return strings.HasPrefix(issueKey, projectKey+"-") && len(issueKey) > len(projectKey)+1
+	if !strings.HasPrefix(issueKey, projectKey+"-") {
+		return false
+	}
+	number := strings.TrimPrefix(issueKey, projectKey+"-")
+	if number == "" {
+		return false
+	}
+	for _, value := range number {
+		if value < '0' || value > '9' {
+			return false
+		}
+	}
+	return strings.Trim(number, "0") != ""
 }
 
 func jiraADF(text string) map[string]any {

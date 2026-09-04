@@ -1128,6 +1128,8 @@ message IntegrationCapability {
   IntegrationApprovalPolicy approval_policy = 8;
   IntegrationResourceKind resource_kind = 9;
   repeated IntegrationConfigurationField input_fields = 10;
+  string input_schema = 11;
+  string input_schema_sha256 = 12;
 }
 
 message IntegrationConfigurationField {
@@ -1161,6 +1163,9 @@ message IntegrationDefinition {
   string digest = 12;
   string adapter = 13;
   string credential_secret_key = 14;
+  string adapter_owner = 15;
+  string execution_route = 16;
+  string adapter_readiness = 17;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -1199,6 +1204,11 @@ message IntegrationGrant {
   IntegrationRisk typed_risk = 15;
   IntegrationApprovalPolicy approval_policy = 16;
   IntegrationResourceScope resource_scope = 17;
+  string definition_version = 18;
+  string definition_digest = 19;
+  string operation = 20;
+  string input_schema = 21;
+  string input_schema_sha256 = 22;
 }
 
 message IntegrationConnection {
@@ -3002,6 +3012,7 @@ message CompleteIntegrationInvocationRequest {
   string result_summary = 7;
   string safe_error_code = 8;
   IntegrationEffectReceipt effect_receipt = 9;
+  bool unknown_outcome = 10;
 }
 message CompleteIntegrationInvocationResponse {
   Run run = 1;

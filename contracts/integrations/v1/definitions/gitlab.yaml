@@ -2,13 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: gitlab
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: GitLab
   description: Чтение проекта, репозитория, merge requests и pipelines, а также ограниченные изменения в одном exact project.
   category: source-control
   adapter: GITLAB
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
   credential: {secretKey: token, kind: TOKEN}
   configurationFields:
     - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
@@ -64,6 +67,23 @@ spec:
         - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
         - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
         - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.list
+      name: Получить список issue
+      description: Возвращает одну bounded страницу issue с server-scoped search внутри exact project.
+      operation: gitlab.issue.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [opened, closed, all]}
+        - {key: search, type: STRING, format: PLAIN, required: false, maximumLength: 512}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: issues, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
       execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
     - key: gitlab.issue.create
       name: Создать issue

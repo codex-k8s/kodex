@@ -363,6 +363,11 @@
         "capability_key",
         "capability_name",
         "capability_description",
+        "definition_version",
+        "definition_digest",
+        "operation",
+        "input_schema",
+        "input_schema_sha256",
         "risk"
       ],
       "properties": {
@@ -373,6 +378,11 @@
         "capability_key": {"type": "string", "minLength": 1, "maxLength": 255},
         "capability_name": {"type": "string", "minLength": 1, "maxLength": 160},
         "capability_description": {"type": "string", "maxLength": 2000},
+        "definition_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "definition_digest": {"$ref": "#/$defs/sha256"},
+        "operation": {"type": "string", "minLength": 1, "maxLength": 255},
+        "input_schema": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "input_schema_sha256": {"$ref": "#/$defs/sha256"},
         "risk": {"enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"]}
       }
     },
