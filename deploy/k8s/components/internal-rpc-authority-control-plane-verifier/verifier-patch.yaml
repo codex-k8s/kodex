@@ -7,6 +7,7 @@ spec:
     metadata:
       labels:
         kodex.dev/internal-rpc-authority-verifier: enabled
+        kodex.dev/internal-rpc-authority-abi: "2"
     spec:
       securityContext:
         fsGroup: 29000

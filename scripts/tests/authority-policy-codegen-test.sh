@@ -31,16 +31,20 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-  .policy_revision == 43 and
-  (.policy.authority_proof_producers | length) == 13 and
+	.policy_revision == 43 and .policy.authority_abi_version == 2 and
+	(.policy.authority_proof_producers | length) == 13 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and
   all(.policy.operation_bindings[];
     .permission != "" and .full_method != "" and
-    .authority_proof_producer_id != "") and
+    ((has("continuation") and (has("authority_proof_producer_id") | not)) or
+      ((has("continuation") | not) and .authority_proof_producer_id != "")) and
+    (.request_profile.mode == "UNARY_PROTO_SHA256" or .request_profile.mode == "STREAM_SESSION")) and
   ([.policy.operation_bindings[] |
-    select(.target_workload_id == "secret-broker" and .caller_workload_id == "control-plane") | .operation_id] | sort) == provider_operations and
-  all(.policy.operation_bindings[] | select(.target_workload_id == "secret-broker");
+		select(.authority_proof_producer_id == "secret-broker.provider-credential-materializer") | .operation_id] | sort) == provider_operations and
+	all(.policy.operation_bindings[] | select(.authority_proof_producer_id == "secret-broker.provider-credential-materializer");
+		.caller_workload_id == "control-plane" and
+		.caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/control-plane" and
     .target_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/secret-broker" and
     .audience == "urn:kodex:internal-rpc:secret-broker" and
     .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local") and
@@ -61,7 +65,27 @@ jq -e '
       .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
       .authority_sources == ["DOMAIN_STATE"] and
       .project_required == false)] | length) == 1 and
-  all(.policy.operation_bindings[] | select(.target_workload_id != "secret-broker");
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.stt.transcribe" and
+      .caller_workload_id == "control-api-gateway" and .target_workload_id == "stt-tts-service" and
+      .full_method == "/stt.v1.SpeechToTextService/Transcribe" and .project_required == true and
+      .request_profile == {"mode":"STREAM_SESSION","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+	all(.policy.operation_bindings[] | select(.operation_id == "platform.stt.policy.resolve" or .operation_id == "platform.stt.credential.project");
+		.caller_workload_id == "stt-tts-service" and .project_required == true and
+		.authority_sources == ["DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"] and
+    (has("authority_proof_producer_id") | not) and
+    .continuation.parent_operation_id == "platform.stt.transcribe" and
+    .continuation.parent_full_method == "/stt.v1.SpeechToTextService/Transcribe" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"}) and
+  all(.policy.operation_bindings[] | select(.operation_id ==
+      "platform.command.provider-accounts.device-authorize" or .operation_id ==
+      "platform.command.provider-accounts.device-verify" or .operation_id ==
+      "platform.command.provider-accounts.device-reauthorize");
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"}) and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-credentials.device-authorize.start" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"REQUIRED","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-credentials.device-authorize.get" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"REQUIRED","idempotency":"FORBIDDEN"})] | length) == 1 and
+  all(.policy.operation_bindings[] | select(.target_workload_id != "secret-broker" and .target_workload_id != "stt-tts-service");
     .target_workload_id == "control-plane") and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer")] | length) == 1 and
@@ -78,8 +102,7 @@ jq -e '
   ([.policy.authority_proof_producers[] | select(.producer_id == "secret-broker.runtime-credential-projection" and
     .caller_workload_id == "runtime-controller" and .allowed_operation_ids ==
       ["platform.runtime.credentials.materialize", "platform.runtime.credentials.readiness.check"])] | length) == 1 and
-  ([.policy.authority_proof_producers[] | select(.producer_id == "secret-broker.stt-credential-projection" and
-    .caller_workload_id == "stt-tts-service" and .allowed_operation_ids == ["platform.stt.credential.project"])] | length) == 1
+	([.policy.authority_proof_producers[] | select(.caller_workload_id == "stt-tts-service")] | length) == 0
 ' "$canonical" >/dev/null || fail 'canonical policy invariants are invalid'
 
 printf 'Authority policy codegen tests passed\n'

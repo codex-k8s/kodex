@@ -2,6 +2,14 @@ package controlplaneclient
 
 import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 
+func STTGatewayOperations() map[string]string {
+	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
+}
+
+func STTPolicyProjectionOperations() map[string]string {
+	return map[string]string{"platform.stt.policy.resolve": "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"}
+}
+
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{

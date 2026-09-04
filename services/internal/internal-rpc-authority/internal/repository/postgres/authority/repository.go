@@ -71,6 +71,27 @@ func (store *Store) Reserve(
 	return nil
 }
 
+// ReserveContinuation подтверждает durable parent acceptance и атомарно
+// резервирует детерминированный child JTI.
+func (store *Store) ReserveContinuation(
+	ctx context.Context,
+	parent repository.Reservation,
+	child repository.Reservation,
+) error {
+	args := continuationReservationArgs(parent, child)
+	var parentAccepted, childAccepted bool
+	if err := store.pool.QueryRow(ctx, store.queries.continuationReserve, args).Scan(&parentAccepted, &childAccepted); err != nil {
+		return fmt.Errorf("reserve authorization continuation: %w", err)
+	}
+	if !parentAccepted {
+		return repository.ErrParentNotAccepted
+	}
+	if !childAccepted {
+		return repository.ErrReplay
+	}
+	return nil
+}
+
 // ActivateSnapshot продвигает high-watermark обслуживаемого снимка.
 func (store *Store) ActivateSnapshot(
 	ctx context.Context,
@@ -232,6 +253,18 @@ func proofReservationArgs(value repository.Reservation) pgx.StrictNamedArgs {
 		"jti":                     value.JTI,
 		"canonical_digest_sha256": value.Digest,
 		"expires_at":              value.ExpiresAt.UTC(),
+	}
+}
+
+func continuationReservationArgs(parent, child repository.Reservation) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"parent_target_workload_id":      parent.ScopeID,
+		"parent_jti":                     parent.JTI,
+		"parent_canonical_digest_sha256": parent.Digest,
+		"caller_workload_id":             child.ScopeID,
+		"jti":                            child.JTI,
+		"canonical_digest_sha256":        child.Digest,
+		"expires_at":                     child.ExpiresAt.UTC(),
 	}
 }
 

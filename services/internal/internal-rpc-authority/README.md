@@ -4,8 +4,8 @@ title: Внутренний сервис internal-rpc-authority
 type: service
 status: approved
 owner: developer
-version: 2.0.0
-updated: 2026-08-25
+version: 2.1.0
+updated: 2026-09-04
 ---
 
 # Внутренний сервис internal-rpc-authority
@@ -37,6 +37,29 @@ proof от домена-владельца и связывается с зара
 
 Поля обычного запроса, произвольные идентификаторы клиента и сам mTLS не
 являются источником полномочий.
+
+## Карта lifecycle, trust и producer-client-consumer
+
+Карта фиксирует границу Issue #1023 до изменения кода. `Proto SHA-256` ниже
+вычисляется interceptor из фактически переданного protobuf-сообщения в
+детерминированном режиме; caller не передаёт готовый digest как authority.
+
+| Сценарий | Инициатор и trust | Producer / client / consumer | Exact binding | Durable переход |
+| --- | --- | --- | --- | --- |
+| Первичный unary RPC | workload mTLS + bearer/application credential; actor и tenant разрешает control-plane | control-plane proof resolver / локальный issuer / target verifier и domain handler | caller/target SPIFFE, полный method, operation, permission, actor/tenant/project provenance, `Proto SHA-256`, policy ABI и срок не более 30 секунд | issuer резервирует proof JTI и его monotonic revision; verifier одной PostgreSQL-командой принимает snapshot high-watermark и резервирует context JTI |
+| Первичный streaming RPC | те же trust layers; request ещё не существует при открытии stream | proof resolver / issuer stream interceptor / verifier stream interceptor | exact stream method/operation и one-time session JTI; request binding profile обязан быть `STREAM_SESSION` | verifier резервирует session JTI до передачи stream handler; повторное открытие требует нового proof |
+| STT policy continuation | уже принятый verifier контекст `platform.stt.transcribe`; locator из payload не является authority | `stt-tts-service` / continuation interceptor / control-plane projection | root actor/tenant/project и provenance наследуются без замены; parent target обязан быть `stt-tts-service`; child method и operation только `ResolveTranscriptionPolicy` / `platform.stt.policy.resolve`; child `Proto SHA-256`, request/correlation и `exp <= parent.exp` | issuer атомарно подтверждает наличие принятого parent JTI и резервирует один child JTI для `(parent, child operation, request)` |
+| STT credential continuation | тот же принятый root context; policy result остаётся locator/effect input | `stt-tts-service` / continuation interceptor / secret-broker projection | тот же root lineage; child method и operation только `ProjectTranscriptionCredential` / `platform.stt.credential.project`; digest связывает provider/config revision и generation | отдельная reservation допускает ровно один credential child для того же parent/request; retry создаёт новый root request, скрытая переигровка запрещена |
+| Device authorization materialization | OIDC session + gateway mTLS для command; control-plane platform worker grant для вызова secret-broker | gateway issuer/verifier -> control-plane -> control-plane issuer -> secret-broker verifier | первый RPC связан с полным Proto request; второй — с exact provider operation и активным grant, содержащим credential generation и ABI | control-plane принимает `(workload, credential generation, revision)` монотонно; несовместимый grant закрывает readiness до пользовательского RPC |
+
+Lifecycle continuation закрытый: parent сначала проходит обычную проверку и
+одноразовое резервирование; child выдаётся только локальному target parent,
+только по allowlist профиля и только пока parent действителен. Cancel, ошибка
+projection или terminal STT request не продлевают parent и не освобождают
+reservation. Повтор разрешён лишь новым первичным request/context; child
+никогда не меняет root actor, tenant, project, permission provenance или
+source snapshot. Unknown method, operation, ABI, request profile, отсутствующий
+bearer/context либо mTLS всегда дают закрытый отказ.
 
 ## Состав
 

@@ -49,20 +49,51 @@ func (server *IssuerServer) IssueAuthorizationContext(
 		return nil, authorizationError(errorSpecMalformedRequest, correlationID)
 	}
 	result, err := server.application.Issue(ctx, application.IssueCommand{
-		OperationID:  request.GetOperationId(),
-		ProofCompact: request.GetAuthorityProofCompactJws(),
+		OperationID:   request.GetOperationId(),
+		ProofCompact:  request.GetAuthorityProofCompactJws(),
+		RequestDigest: request.GetRequestDigestSha256(),
 	})
 	if err != nil {
 		return nil, mapError(err, correlationID)
 	}
 	return &internalrpcauthorityv1.IssueAuthorizationContextResponse{
-		CompactJws:         result.Compact,
-		ExpiresAt:          timestamppb.New(result.Claims.ExpiryTime()),
-		SourceRevision:     result.Claims.SourceRevision,
-		SourceDigestSha256: result.Claims.SourceDigestSHA256,
-		KeySetRevision:     result.Claims.KeySetRevision,
-		PolicyRevision:     result.Claims.PolicyRevision,
-		SignerGeneration:   result.Claims.SignerGeneration,
+		CompactJws:          result.Compact,
+		ExpiresAt:           timestamppb.New(result.Claims.ExpiryTime()),
+		SourceRevision:      result.Claims.SourceRevision,
+		SourceDigestSha256:  result.Claims.SourceDigestSHA256,
+		KeySetRevision:      result.Claims.KeySetRevision,
+		PolicyRevision:      result.Claims.PolicyRevision,
+		SignerGeneration:    result.Claims.SignerGeneration,
+		AuthorityAbiVersion: result.Claims.AuthorityABIVersion,
+	}, nil
+}
+
+// IssueContinuationAuthorizationContext выпускает child context из принятого parent.
+func (server *IssuerServer) IssueContinuationAuthorizationContext(
+	ctx context.Context,
+	request *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest,
+) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
+	correlationID := ""
+	if request != nil {
+		correlationID = request.GetCorrelationId()
+	}
+	if request == nil || grpcserver.HasMalformedProto(request) || request.GetOperationId() == "" ||
+		request.GetParentAuthorizationContextCompactJws() == "" || request.GetRequestId() == "" ||
+		len(request.GetParentAuthorizationContextCompactJws()) > internalrpcauth.MaxCompactJWSBytes || !validCorrelation(correlationID) {
+		return nil, authorizationError(errorSpecMalformedRequest, correlationID)
+	}
+	result, err := server.application.IssueContinuation(ctx, application.ContinuationCommand{
+		OperationID: request.GetOperationId(), ParentCompact: request.GetParentAuthorizationContextCompactJws(),
+		RequestID: request.GetRequestId(), CorrelationID: correlationID, RequestDigest: request.GetRequestDigestSha256(),
+	})
+	if err != nil {
+		return nil, mapError(err, correlationID)
+	}
+	return &internalrpcauthorityv1.IssueAuthorizationContextResponse{
+		CompactJws: result.Compact, ExpiresAt: timestamppb.New(result.Claims.ExpiryTime()),
+		SourceRevision: result.Claims.SourceRevision, SourceDigestSha256: result.Claims.SourceDigestSHA256,
+		KeySetRevision: result.Claims.KeySetRevision, PolicyRevision: result.Claims.PolicyRevision,
+		SignerGeneration: result.Claims.SignerGeneration, AuthorityAbiVersion: result.Claims.AuthorityABIVersion,
 	}, nil
 }
 
@@ -87,6 +118,7 @@ func (server *IssuerServer) CheckReadiness(
 		KeySetRevision:       state.KeySetRevision,
 		PolicyRevision:       state.PolicyRevision,
 		SignerGeneration:     state.SignerGeneration,
+		AuthorityAbiVersion:  model.AuthorityABIVersion,
 	}, nil
 }
 
@@ -121,9 +153,10 @@ func (server *VerifierServer) VerifyAuthorizationContext(
 		return nil, authorizationError(errorSpecMalformedRequest, correlationID)
 	}
 	claims, err := server.application.Verify(ctx, application.VerifyCommand{
-		Compact:            request.GetCompactJws(),
-		ObservedFullMethod: request.GetObservedFullMethod(),
-		DownstreamSPIFFEID: request.GetDownstreamPeer().GetSpiffeId(),
+		Compact:               request.GetCompactJws(),
+		ObservedFullMethod:    request.GetObservedFullMethod(),
+		DownstreamSPIFFEID:    request.GetDownstreamPeer().GetSpiffeId(),
+		ObservedRequestDigest: request.GetObservedRequestDigestSha256(),
 	})
 	if err != nil {
 		return nil, mapError(err, correlationID)
@@ -156,6 +189,7 @@ func (server *VerifierServer) CheckReadiness(
 		PolicyRevision:       state.PolicyRevision,
 		SignerGeneration:     state.SignerGeneration,
 		ReplayStoreReady:     true,
+		AuthorityAbiVersion:  model.AuthorityABIVersion,
 	}, nil
 }
 
@@ -185,6 +219,18 @@ func castVerifiedContext(
 		PolicyRevision:           claims.PolicyRevision,
 		SignerGeneration:         claims.SignerGeneration,
 		CallerCredentialRevision: claims.CallerCredentialRevision,
+		RequestDigestSha256:      claims.RequestDigestSHA256,
+		AuthorityAbiVersion:      claims.AuthorityABIVersion,
+		RequestBindingMode:       claims.RequestBindingMode,
+	}
+	if claims.Continuation != nil {
+		result.Continuation = &internalrpcauthorityv1.ContinuationLineage{
+			RootJti: claims.Continuation.RootJTI, RootOperationId: claims.Continuation.RootOperationID,
+			RootFullMethod: claims.Continuation.RootFullMethod, RootSourceRevision: claims.Continuation.RootSourceRevision,
+			RootSourceDigestSha256: claims.Continuation.RootSourceDigestSHA256, ParentJti: claims.Continuation.ParentJTI,
+			ParentOperationId: claims.Continuation.ParentOperationID, ParentFullMethod: claims.Continuation.ParentFullMethod,
+			RequestId: claims.Continuation.RequestID, CorrelationId: claims.Continuation.CorrelationID,
+		}
 	}
 	if claims.CredentialAuthentication != nil {
 		result.CredentialAuthenticatedAt = timestamppb.New(time.Unix(claims.CredentialAuthentication.AuthenticatedAt, 0))

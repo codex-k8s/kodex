@@ -10,4 +10,7 @@ resources:
   - servicemonitor.yaml
   - networkpolicy.yaml
   - prometheusrule.yaml
+components:
+  - ../../components/internal-rpc-authority-stt-tts-service-issuer
+  - ../../components/internal-rpc-authority-stt-tts-service-verifier
 patches: null

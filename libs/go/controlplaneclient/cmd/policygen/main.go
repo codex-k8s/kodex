@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
@@ -23,6 +24,11 @@ const (
 	secretBrokerPeer     = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
 	secretBrokerTLS      = "secret-broker.kodex-system.svc.cluster.local"
 	secretBrokerAudience = "urn:kodex:internal-rpc:secret-broker"
+	sttID                = "stt-tts-service"
+	sttPeer              = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
+	sttTLS               = "stt-tts-service.kodex-system.svc.cluster.local"
+	sttAudience          = "urn:kodex:internal-rpc:stt-tts-service"
+	sttTranscribeMethod  = "/stt.v1.SpeechToTextService/Transcribe"
 )
 
 type document struct {
@@ -32,6 +38,7 @@ type document struct {
 }
 
 type policy struct {
+	AuthorityABIVersion     uint32     `json:"authority_abi_version"`
 	TrustDomain             string     `json:"trust_domain"`
 	DefaultDecision         string     `json:"default_decision"`
 	TokenTTLSeconds         int64      `json:"token_ttl_seconds"`
@@ -69,22 +76,37 @@ type producer struct {
 }
 
 type binding struct {
-	OperationID         string    `json:"operation_id"`
-	CallerWorkloadID    string    `json:"caller_workload_id"`
-	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
-	Issuer              string    `json:"issuer"`
-	TargetWorkloadID    string    `json:"target_workload_id"`
-	TargetSPIFFEID      string    `json:"target_spiffe_id"`
-	Audience            string    `json:"audience"`
-	FullMethod          string    `json:"full_method"`
-	TargetTLSServerName string    `json:"target_tls_server_name"`
-	TargetTrustBundleID string    `json:"target_trust_bundle_id"`
-	Permission          string    `json:"permission"`
-	ProofProducerID     string    `json:"authority_proof_producer_id"`
-	AuthoritySources    []string  `json:"authority_sources"`
-	ProjectRequired     bool      `json:"project_required"`
-	LocalCaller         localPeer `json:"local_caller"`
-	LocalTarget         localPeer `json:"local_target"`
+	OperationID         string               `json:"operation_id"`
+	CallerWorkloadID    string               `json:"caller_workload_id"`
+	CallerSPIFFEID      string               `json:"caller_spiffe_id"`
+	Issuer              string               `json:"issuer"`
+	TargetWorkloadID    string               `json:"target_workload_id"`
+	TargetSPIFFEID      string               `json:"target_spiffe_id"`
+	Audience            string               `json:"audience"`
+	FullMethod          string               `json:"full_method"`
+	TargetTLSServerName string               `json:"target_tls_server_name"`
+	TargetTrustBundleID string               `json:"target_trust_bundle_id"`
+	Permission          string               `json:"permission"`
+	ProofProducerID     string               `json:"authority_proof_producer_id,omitempty"`
+	AuthoritySources    []string             `json:"authority_sources"`
+	ProjectRequired     bool                 `json:"project_required"`
+	LocalCaller         localPeer            `json:"local_caller"`
+	LocalTarget         localPeer            `json:"local_target"`
+	RequestProfile      requestProfile       `json:"request_profile"`
+	Continuation        *continuationProfile `json:"continuation,omitempty"`
+}
+
+type requestProfile struct {
+	Mode        string `json:"mode"`
+	Resource    string `json:"resource"`
+	Version     string `json:"version"`
+	Attempt     string `json:"attempt"`
+	Idempotency string `json:"idempotency"`
+}
+
+type continuationProfile struct {
+	ParentOperationID string `json:"parent_operation_id"`
+	ParentFullMethod  string `json:"parent_full_method"`
 }
 
 type localPeer struct {
@@ -99,6 +121,7 @@ type profile struct {
 	Operations                                                                                 map[string]string
 	ProjectRequired                                                                            map[string]struct{}
 	AuthoritySources                                                                           []string
+	Continuation                                                                               *continuationProfile
 }
 
 func main() {
@@ -115,6 +138,13 @@ func main() {
 			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience,
 			CredentialTrust: "kodex-oidc-signers-g1", Operations: controlplaneclient.ControlAPIGatewayOperations(),
 			ProjectRequired: controlplaneclient.ControlAPIGatewayProjectRequiredOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
+		},
+		{
+			ProducerID: "control-plane.oidc-stt", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
+			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
+			Operations: controlplaneclient.STTGatewayOperations(), ProjectRequired: requiredProjects(controlplaneclient.STTGatewayOperations()),
+			AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"}, TargetWorkloadID: sttID,
+			TargetSPIFFEID: sttPeer, TargetAudience: sttAudience, TargetTLSServerName: sttTLS,
 		},
 		worker("runtime-controller", "control-plane.runtime-controller", controlplaneclient.RuntimeOperations()),
 		worker("automation-scheduler", "control-plane.automation", controlplaneclient.AutomationSchedulerOperations()),
@@ -143,18 +173,12 @@ func main() {
 			secretBrokerAudience,
 			secretBrokerTLS,
 		),
-		delegatedTargetedWorker(
-			"stt-tts-service",
-			"secret-broker.stt-credential-projection",
-			controlplaneclient.STTCredentialProjectionOperations(),
-			secretBrokerID,
-			secretBrokerPeer,
-			secretBrokerAudience,
-			secretBrokerTLS,
-		),
+		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
+		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
 	value := document{Version: 1, PolicyRevision: 43, Policy: policy{
-		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
+		AuthorityABIVersion: 2,
+		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
 	for _, item := range profiles {
@@ -180,31 +204,39 @@ func main() {
 			targetTrustBundleID = "kodex-internal-ca-g1"
 		}
 		operations := sortedKeys(item.Operations)
-		value.Policy.ProofProducers = append(value.Policy.ProofProducers, producer{
-			ProducerID: item.ProducerID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer,
-			OwnerWorkloadID: controlPlaneID, OwnerSPIFFEID: controlPlanePeer, FullMethod: resolverMethod,
-			TLSServerName: controlPlaneTLS, TransportTrustBundleID: "kodex-internal-ca-g1",
-			ApplicationCredential: item.Credential, ApplicationCredentialMetadata: "authorization",
-			ApplicationCredentialIssuer: item.CredentialIssuer, ApplicationCredentialAudience: item.CredentialAudience,
-			ApplicationCredentialTrustBundleID: item.CredentialTrust,
-			AuthorityProofIssuer:               controlPlanePeer,
-			AuthorityProofAudience:             "urn:kodex:internal-rpc-authority-issuer:" + item.WorkloadID,
-			AuthorityProofTrustBundleID:        "control-plane-authority-proof-g1", AuthorityProofMaxAgeSeconds: 15,
-			DeadlineMilliseconds: 2000, MaxAttempts: 2, RetryableGRPCCodes: []string{"UNAVAILABLE", "DEADLINE_EXCEEDED"},
-			IdempotencyScope: "credential-subject-digest+caller-workload+operation+idempotency-key",
-			AuthoritySources: item.AuthoritySources, AllowedOperationIDs: operations,
-			ServerResolvedFields: []string{"actor", "tenant", "project", "ownership", "provenance"},
-		})
+		if item.Continuation == nil {
+			value.Policy.ProofProducers = append(value.Policy.ProofProducers, producer{
+				ProducerID: item.ProducerID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer,
+				OwnerWorkloadID: controlPlaneID, OwnerSPIFFEID: controlPlanePeer, FullMethod: resolverMethod,
+				TLSServerName: controlPlaneTLS, TransportTrustBundleID: "kodex-internal-ca-g1",
+				ApplicationCredential: item.Credential, ApplicationCredentialMetadata: "authorization",
+				ApplicationCredentialIssuer: item.CredentialIssuer, ApplicationCredentialAudience: item.CredentialAudience,
+				ApplicationCredentialTrustBundleID: item.CredentialTrust,
+				AuthorityProofIssuer:               controlPlanePeer,
+				AuthorityProofAudience:             "urn:kodex:internal-rpc-authority-issuer:" + item.WorkloadID,
+				AuthorityProofTrustBundleID:        "control-plane-authority-proof-g1", AuthorityProofMaxAgeSeconds: 15,
+				DeadlineMilliseconds: 2000, MaxAttempts: 2, RetryableGRPCCodes: []string{"UNAVAILABLE", "DEADLINE_EXCEEDED"},
+				IdempotencyScope: "credential-subject-digest+caller-workload+operation+idempotency-key",
+				AuthoritySources: item.AuthoritySources, AllowedOperationIDs: operations,
+				ServerResolvedFields: []string{"actor", "tenant", "project", "ownership", "provenance"},
+			})
+		}
 		for _, operationID := range operations {
 			_, projectRequired := item.ProjectRequired[operationID]
+			proofProducerID := item.ProducerID
+			if item.Continuation != nil {
+				proofProducerID = ""
+			}
 			value.Policy.OperationBindings = append(value.Policy.OperationBindings, binding{
 				OperationID: operationID, CallerWorkloadID: item.WorkloadID, CallerSPIFFEID: peer, Issuer: peer,
 				TargetWorkloadID: targetWorkloadID, TargetSPIFFEID: targetSPIFFEID, Audience: targetAudience,
 				FullMethod: item.Operations[operationID], TargetTLSServerName: targetTLSServerName,
 				TargetTrustBundleID: targetTrustBundleID, Permission: permissionForOperation(operationID),
-				ProofProducerID: item.ProducerID, AuthoritySources: item.AuthoritySources, ProjectRequired: projectRequired,
-				LocalCaller: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
-				LocalTarget: localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
+				ProofProducerID: proofProducerID, AuthoritySources: item.AuthoritySources, ProjectRequired: projectRequired,
+				LocalCaller:    localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
+				LocalTarget:    localPeer{UID: 10001, PrimaryGID: 10001, SharedFSGID: 29000},
+				RequestProfile: operationRequestProfile(operationID, item.Operations[operationID]),
+				Continuation:   item.Continuation,
 			})
 		}
 	}
@@ -222,6 +254,52 @@ func main() {
 	if err := os.WriteFile(*output, raw, 0o600); err != nil {
 		fatal("write policy: %v", err)
 	}
+}
+
+func continuationWorker(producerID string, operations map[string]string, targetID, targetPeer, targetAudience, targetTLS string) profile {
+	result := targetedWorker(sttID, producerID, operations, targetID, targetPeer, targetAudience, targetTLS)
+	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
+	result.ProjectRequired = requiredProjects(operations)
+	result.Continuation = &continuationProfile{ParentOperationID: "platform.stt.transcribe", ParentFullMethod: sttTranscribeMethod}
+	return result
+}
+
+func requiredProjects(operations map[string]string) map[string]struct{} {
+	result := make(map[string]struct{}, len(operations))
+	for operation := range operations {
+		result[operation] = struct{}{}
+	}
+	return result
+}
+
+func operationRequestProfile(operationID, fullMethod string) requestProfile {
+	mode := "UNARY_PROTO_SHA256"
+	if fullMethod == sttTranscribeMethod || strings.Contains(fullMethod, "/Upload") || strings.Contains(fullMethod, "/DownloadArtifact") {
+		mode = "STREAM_SESSION"
+	}
+	required := func(value bool) string {
+		if value {
+			return "REQUIRED"
+		}
+		return "FORBIDDEN"
+	}
+	switch operationID {
+	case "platform.stt.transcribe":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.stt.policy.resolve", "platform.stt.credential.project":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.provider-credentials.device-authorize.start":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "REQUIRED"}
+	case "platform.provider-credentials.device-authorize.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "FORBIDDEN"}
+	}
+	resource := strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+		strings.Contains(operationID, ".validate") || strings.Contains(operationID, ".publish") || strings.Contains(operationID, ".rebind") ||
+		strings.Contains(operationID, ".detach") || strings.Contains(operationID, ".copy") || strings.Contains(operationID, "device-")
+	version := strings.HasPrefix(operationID, "platform.command.") && !strings.Contains(operationID, ".create") && !strings.Contains(operationID, ".upload")
+	attempt := strings.Contains(operationID, ".claim") || strings.Contains(operationID, ".complete") || strings.Contains(operationID, ".recover")
+	idempotency := strings.HasPrefix(operationID, "platform.command.") || strings.Contains(operationID, ".claim") || strings.Contains(operationID, ".complete")
+	return requestProfile{Mode: mode, Resource: required(resource), Version: required(version), Attempt: required(attempt), Idempotency: required(idempotency)}
 }
 
 func permissionForOperation(operationID string) string {

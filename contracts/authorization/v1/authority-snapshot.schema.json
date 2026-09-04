@@ -398,11 +398,11 @@
         "target_tls_server_name",
         "target_trust_bundle_id",
         "permission",
-        "authority_proof_producer_id",
         "authority_sources",
         "project_required",
         "local_caller",
-        "local_target"
+        "local_target",
+        "request_profile"
       ],
       "properties": {
         "operation_id": {
@@ -458,7 +458,11 @@
               "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE",
-              "LEGACY_MIGRATION"
+              "LEGACY_MIGRATION",
+              "WORKLOAD_READINESS",
+              "PROVIDER_READBACK",
+              "GIT_RECONCILIATION",
+              "RUNTIME_EXECUTION"
             ]
           }
         },
@@ -470,7 +474,41 @@
         },
         "local_target": {
           "$ref": "#/$defs/localPeer"
+        },
+        "request_profile": {
+          "$ref": "#/$defs/requestProfile"
+        },
+        "continuation": {
+          "$ref": "#/$defs/continuationProfile"
         }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["continuation"]},
+          "then": {"not": {"required": ["authority_proof_producer_id"]}},
+          "else": {"required": ["authority_proof_producer_id"]}
+        }
+      ]
+    },
+    "requestProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "resource", "version", "attempt", "idempotency"],
+      "properties": {
+        "mode": {"enum": ["UNARY_PROTO_SHA256", "STREAM_SESSION"]},
+        "resource": {"enum": ["REQUIRED", "FORBIDDEN"]},
+        "version": {"enum": ["REQUIRED", "FORBIDDEN"]},
+        "attempt": {"enum": ["REQUIRED", "FORBIDDEN"]},
+        "idempotency": {"enum": ["REQUIRED", "FORBIDDEN"]}
+      }
+    },
+    "continuationProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parent_operation_id", "parent_full_method"],
+      "properties": {
+        "parent_operation_id": {"$ref": "#/$defs/operationId"},
+        "parent_full_method": {"$ref": "#/$defs/fullMethod"}
       }
     },
     "authorityProofProducer": {
@@ -545,6 +583,7 @@
             "ROLE_IMAGE_BUILD_GRANT",
             "IMAGE_ADMISSION_GRANT",
             "IMAGE_PROMOTION_GRANT"
+            ,"PLATFORM_WORKER_GRANT"
           ]
         },
         "application_credential_metadata": {
@@ -617,7 +656,11 @@
               "IMAGE_PROMOTION_CLAIM",
               "PROCESS_RUN",
               "AUTOMATION_OCCURRENCE",
-              "LEGACY_MIGRATION"
+              "LEGACY_MIGRATION",
+              "WORKLOAD_READINESS",
+              "PROVIDER_READBACK",
+              "GIT_RECONCILIATION",
+              "RUNTIME_EXECUTION"
             ]
           }
         },
@@ -659,6 +702,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "authority_abi_version",
         "trust_domain",
         "default_decision",
         "token_ttl_seconds",
@@ -668,6 +712,9 @@
         "operation_bindings"
       ],
       "properties": {
+        "authority_abi_version": {
+          "const": 2
+        },
         "trust_domain": {
           "type": "string",
           "minLength": 3,

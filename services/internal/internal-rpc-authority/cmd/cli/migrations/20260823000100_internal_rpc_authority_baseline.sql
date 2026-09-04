@@ -48,6 +48,12 @@ CREATE ROLE ira_secret_broker_issuer_g1
 CREATE ROLE ira_control_plane_issuer_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
+CREATE ROLE ira_stt_tts_service_issuer_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    NOREPLICATION NOBYPASSRLS;
+CREATE ROLE ira_stt_tts_service_verifier_g1
+    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+    NOREPLICATION NOBYPASSRLS;
 CREATE ROLE ira_secret_broker_verifier_g1
     LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
     NOREPLICATION NOBYPASSRLS;
@@ -86,6 +92,7 @@ GRANT internal_rpc_authority_issuer
        ira_automation_scheduler_issuer_g1,
        ira_secret_broker_issuer_g1,
        ira_control_plane_issuer_g1,
+       ira_stt_tts_service_issuer_g1,
        ira_control_api_gateway_issuer_g1,
        ira_integration_gateway_issuer_g1,
        ira_interaction_gateway_issuer_g1,
@@ -95,6 +102,8 @@ GRANT internal_rpc_authority_issuer
 GRANT internal_rpc_authority_verifier TO ira_control_plane_verifier_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 GRANT internal_rpc_authority_verifier TO ira_secret_broker_verifier_g1
+    WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
+GRANT internal_rpc_authority_verifier TO ira_stt_tts_service_verifier_g1
     WITH INHERIT FALSE, SET TRUE, ADMIN FALSE;
 GRANT internal_rpc_authority_readback_owner TO internal_rpc_authority_owner
     WITH INHERIT TRUE, SET TRUE, ADMIN FALSE;
@@ -110,6 +119,8 @@ GRANT CONNECT ON DATABASE internal_rpc_authority
        ira_automation_scheduler_issuer_g1,
        ira_secret_broker_issuer_g1,
        ira_control_plane_issuer_g1,
+       ira_stt_tts_service_issuer_g1,
+       ira_stt_tts_service_verifier_g1,
        ira_secret_broker_verifier_g1,
        ira_control_api_gateway_issuer_g1,
        ira_control_plane_verifier_g1,
@@ -1769,6 +1780,8 @@ ALTER TABLE "internal_rpc_authority"."authority_replay_reservations" ENABLE ROW 
 
 CREATE POLICY "authority_replay_reservations_verifier" ON "internal_rpc_authority"."authority_replay_reservations" TO "internal_rpc_authority_verifier" USING (true) WITH CHECK (true);
 
+CREATE POLICY "authority_replay_reservations_issuer_read" ON "internal_rpc_authority"."authority_replay_reservations" FOR SELECT TO "internal_rpc_authority_issuer" USING (true);
+
 
 --
 -- Name: authority_rotation_intents; Type: ROW SECURITY; Schema: internal_rpc_authority; Owner: internal_rpc_authority_readback_owner
@@ -2021,6 +2034,8 @@ GRANT SELECT ON TABLE "internal_rpc_authority"."authority_readback_trust_waterma
 --
 
 GRANT SELECT,INSERT,DELETE ON TABLE "internal_rpc_authority"."authority_replay_reservations" TO "internal_rpc_authority_verifier";
+
+GRANT SELECT ON TABLE "internal_rpc_authority"."authority_replay_reservations" TO "internal_rpc_authority_issuer";
 
 
 --

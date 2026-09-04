@@ -71,33 +71,45 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "local_runtime_starting")
 	metrics.SetReady(false)
+	issuer, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+		SocketPath: config.AuthorityIssuerSocket, ExpectedServerUID: config.AuthorityIssuerUID,
+		ExpectedServerGID: config.AuthorityIssuerGID, DialTimeout: config.ReadinessTimeout,
+	})
+	if err != nil {
+		return errors.New("connect STT authorization issuer")
+	}
 	dependencies, err := protectedrpc.Dial(startup, protectedrpc.Config{
 		Policy:          protectedrpc.TargetConfig{Target: config.PolicyTarget, TLSServerName: config.PolicyTLSServerName, CAFile: config.DependencyCAFile},
 		Credential:      protectedrpc.TargetConfig{Target: config.CredentialTarget, TLSServerName: config.CredentialTLSServerName, CAFile: config.DependencyCAFile},
 		CertificateFile: config.WorkloadCertificateFile, PrivateKeyFile: config.WorkloadPrivateKeyFile,
-		DialTimeout: config.ReadinessTimeout,
+		DialTimeout: config.ReadinessTimeout, Issuer: issuer.Issuer(),
 	})
 	if err != nil {
+		_ = issuer.Close()
 		return err
 	}
 	policy, err := projection.NewPolicy(dependencies.Policy, dependencies)
 	if err != nil {
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	credential, err := projection.NewCredential(dependencies.Credential, dependencies)
 	if err != nil {
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	provider, err := openai.New()
 	if err != nil {
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	domain, err := transcriptionservice.New(policy, credential, provider, outcomes, config.RequestTimeout)
 	if err != nil {
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
@@ -106,18 +118,21 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	})
 	if err != nil {
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return errors.New("connect STT authorization verifier")
 	}
 	handler, err := transportgrpc.New(domain, config.SpoolDirectory, readiness, config.RequestTimeout)
 	if err != nil {
 		_ = verifier.Close()
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	tlsConfig, err := serverTLS(config)
 	if err != nil {
 		_ = verifier.Close()
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return err
 	}
 	errorObserver := grpcserver.ErrorObserverFunc(func(ctx context.Context, method string, code codes.Code, _ error) {
@@ -139,6 +154,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		_ = verifier.Close()
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return errors.New("listen for STT gRPC")
 	}
 	technical, err := httpserver.New(httpserver.Config{
@@ -153,14 +169,16 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = grpcListener.Close()
 		_ = verifier.Close()
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return errors.New("listen for STT technical HTTP")
 	}
-	localChecks := []checker{domainLocalCheck{domain}, verifierReadiness{verifier.Verifier()}, spoolReadiness{config.SpoolDirectory}}
+	localChecks := []checker{domainLocalCheck{domain}, dependencies, verifierReadiness{verifier.Verifier()}, spoolReadiness{config.SpoolDirectory}}
 	if _, err := updateLocalReadiness(startup, readiness, metrics, localChecks...); err != nil {
 		_ = grpcListener.Close()
 		_ = technical.Shutdown(shutdownBase)
 		_ = verifier.Close()
 		_ = dependencies.Close()
+		_ = issuer.Close()
 		return errors.Join(errors.New("STT local startup barrier failed"), err)
 	}
 	workers := serviceruntime.StartWorkers(lifecycle, serveGRPC(grpcServer, grpcListener), serveHTTP(technical),
@@ -186,6 +204,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "STT workers", Timeout: 2 * time.Second, Run: workers.Wait},
 		serviceruntime.ShutdownOperation{Name: "STT dependency connections", Timeout: time.Second, Run: func(context.Context) error { return dependencies.Close() }},
 		serviceruntime.ShutdownOperation{Name: "STT verifier connection", Timeout: time.Second, Run: func(context.Context) error { return verifier.Close() }},
+		serviceruntime.ShutdownOperation{Name: "STT issuer connection", Timeout: time.Second, Run: func(context.Context) error { return issuer.Close() }},
 		serviceruntime.ShutdownOperation{Name: "STT tracing", Timeout: time.Second, Run: telemetry.ShutdownTracing},
 		serviceruntime.ShutdownOperation{Name: "STT Sentry", Timeout: time.Second, Run: telemetry.FlushSentry},
 	)

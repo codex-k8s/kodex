@@ -35,11 +35,23 @@ type Policy struct {
 	binder DelegatedBinder
 }
 
+type protectedPathChecker interface {
+	Check(context.Context) error
+}
+
 func NewPolicy(client sttv1.TranscriptionPolicyProjectionServiceClient, binder DelegatedBinder) (*Policy, error) {
 	if client == nil || binder == nil {
 		return nil, errors.New("transcription policy projection dependencies are required")
 	}
 	return &Policy{client: client, binder: binder}, nil
+}
+
+func (client *Policy) Check(ctx context.Context) error {
+	checker, ok := client.binder.(protectedPathChecker)
+	if !ok {
+		return errs.ErrDelegatedProofPending
+	}
+	return checker.Check(ctx)
 }
 
 func (client *Policy) Resolve(ctx context.Context, principal value.Principal, requestID, correlationID string) (value.Policy, error) {

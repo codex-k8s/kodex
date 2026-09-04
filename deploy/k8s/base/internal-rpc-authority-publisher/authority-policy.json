@@ -2,6 +2,7 @@
   "v": 1,
   "policy_revision": 43,
   "policy": {
+    "authority_abi_version": 2,
     "trust_domain": "kodex.local",
     "default_decision": "DENY",
     "token_ttl_seconds": 30,
@@ -441,6 +442,46 @@
         ]
       },
       {
+        "producer_id": "control-plane.oidc-stt",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "OIDC_BEARER",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "__KODEX_OIDC_ISSUER__",
+        "application_credential_audience": "kodex-control-api",
+        "application_credential_trust_bundle_id": "kodex-oidc-signers-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:control-api-gateway",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.stt.transcribe"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
         "producer_id": "control-plane.role-image-builder",
         "caller_workload_id": "role-image-builder",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
@@ -715,47 +756,6 @@
           "ownership",
           "provenance"
         ]
-      },
-      {
-        "producer_id": "secret-broker.stt-credential-projection",
-        "caller_workload_id": "stt-tts-service",
-        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
-        "owner_workload_id": "control-plane",
-        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
-        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
-        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
-        "transport_trust_bundle_id": "kodex-internal-ca-g1",
-        "application_credential": "PLATFORM_WORKER_GRANT",
-        "application_credential_metadata": "authorization",
-        "application_credential_issuer": "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/stt-tts-service",
-        "application_credential_audience": "urn:kodex:platform-worker:stt-tts-service",
-        "application_credential_trust_bundle_id": "stt-tts-service-platform-worker-grants-g1",
-        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
-        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:stt-tts-service",
-        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
-        "authority_proof_max_age_seconds": 15,
-        "deadline_milliseconds": 2000,
-        "max_attempts": 2,
-        "retryable_grpc_codes": [
-          "UNAVAILABLE",
-          "DEADLINE_EXCEEDED"
-        ],
-        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
-        "authority_sources": [
-          "DOMAIN_STATE",
-          "OIDC_SESSION",
-          "RUNTIME_EXECUTION"
-        ],
-        "allowed_operation_ids": [
-          "platform.stt.credential.project"
-        ],
-        "server_resolved_fields": [
-          "actor",
-          "tenant",
-          "project",
-          "ownership",
-          "provenance"
-        ]
       }
     ],
     "operation_bindings": [
@@ -786,6 +786,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -815,6 +822,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -844,6 +858,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -873,6 +894,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -902,6 +930,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -931,6 +966,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -960,6 +1002,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -989,6 +1038,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1018,6 +1074,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1047,6 +1110,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1076,6 +1146,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1105,6 +1182,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1134,6 +1218,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1163,6 +1254,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1192,6 +1290,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1221,6 +1326,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1250,6 +1362,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1279,6 +1398,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1308,6 +1434,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1337,6 +1470,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1366,6 +1506,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1395,6 +1542,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1424,6 +1578,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1453,6 +1614,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1482,6 +1650,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1511,6 +1686,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -1540,6 +1722,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1569,6 +1758,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1598,6 +1794,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1627,6 +1830,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1656,6 +1866,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1685,6 +1902,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1714,6 +1938,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1743,6 +1974,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "STREAM_SESSION",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1772,6 +2010,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1801,6 +2046,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1830,6 +2082,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1859,6 +2118,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1888,6 +2154,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1917,6 +2190,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "STREAM_SESSION",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1946,6 +2226,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -1975,6 +2262,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2004,6 +2298,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "STREAM_SESSION",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2033,6 +2334,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2062,6 +2370,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2091,6 +2406,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2120,6 +2442,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2149,6 +2478,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2178,6 +2514,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2207,6 +2550,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2236,6 +2586,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2265,6 +2622,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2294,6 +2658,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2323,6 +2694,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2352,6 +2730,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2381,6 +2766,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2410,6 +2802,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2439,6 +2838,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2468,6 +2874,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2497,6 +2910,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2526,6 +2946,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2555,6 +2982,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2584,6 +3018,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2613,6 +3054,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2642,6 +3090,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2671,6 +3126,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2700,6 +3162,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2729,6 +3198,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2758,6 +3234,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2787,6 +3270,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2816,6 +3306,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2845,6 +3342,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2874,6 +3378,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "STREAM_SESSION",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2903,6 +3414,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2932,6 +3450,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2961,6 +3486,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -2990,6 +3522,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3019,6 +3558,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3048,6 +3594,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3077,6 +3630,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3106,6 +3666,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3135,6 +3702,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3164,6 +3738,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3193,6 +3774,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3222,6 +3810,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3251,6 +3846,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3280,6 +3882,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3309,6 +3918,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3338,6 +3954,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3367,6 +3990,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3396,6 +4026,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3425,6 +4062,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3454,6 +4098,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3483,6 +4134,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3512,6 +4170,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3541,6 +4206,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3570,6 +4242,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3599,6 +4278,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3628,6 +4314,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3657,6 +4350,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3686,6 +4386,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3715,6 +4422,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3744,6 +4458,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3773,6 +4494,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3802,6 +4530,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3831,6 +4566,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3860,6 +4602,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3889,6 +4638,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3918,6 +4674,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3947,6 +4710,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -3976,6 +4746,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4005,6 +4782,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4034,6 +4818,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4063,6 +4854,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4092,6 +4890,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4121,6 +4926,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4150,6 +4962,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4179,6 +4998,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4208,6 +5034,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4237,6 +5070,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4266,6 +5106,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4295,6 +5142,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4324,6 +5178,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4353,6 +5214,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4382,6 +5250,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4410,6 +5285,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4438,6 +5320,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4466,6 +5355,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4494,6 +5390,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4522,6 +5425,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4550,6 +5460,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4578,6 +5495,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4606,6 +5530,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4634,6 +5565,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4662,6 +5600,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4690,6 +5635,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4718,6 +5670,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -4746,6 +5705,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4774,6 +5740,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4803,6 +5776,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4832,6 +5812,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4861,6 +5848,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4890,6 +5884,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4919,6 +5920,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4948,6 +5956,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -4977,6 +5992,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5006,6 +6028,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5035,6 +6064,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5064,6 +6100,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5093,6 +6136,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5122,6 +6172,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5151,6 +6208,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5180,6 +6244,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5209,6 +6280,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5238,6 +6316,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5267,6 +6352,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5296,6 +6388,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5325,6 +6424,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5354,6 +6460,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5383,6 +6496,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5412,6 +6532,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5441,6 +6568,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5470,6 +6604,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5499,6 +6640,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5528,6 +6676,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5557,6 +6712,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5586,6 +6748,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5615,6 +6784,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5644,6 +6820,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5673,6 +6856,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5702,6 +6892,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5731,6 +6928,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5760,6 +6964,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5789,6 +7000,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5818,6 +7036,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5847,6 +7072,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5876,6 +7108,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5905,6 +7144,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5934,6 +7180,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5963,6 +7216,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -5992,6 +7252,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6021,6 +7288,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6050,6 +7324,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6079,6 +7360,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6108,6 +7396,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6137,6 +7432,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6166,6 +7468,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6195,6 +7504,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6224,6 +7540,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6253,6 +7576,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6282,6 +7612,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6311,6 +7648,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6340,6 +7684,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6369,6 +7720,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6398,6 +7756,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6427,6 +7792,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6456,6 +7828,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6484,6 +7863,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6512,6 +7898,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6540,6 +7933,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6568,6 +7968,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6596,6 +8003,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6624,6 +8038,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6652,6 +8073,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6681,6 +8109,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6709,6 +8144,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6737,6 +8179,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6765,6 +8214,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6794,6 +8250,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6823,6 +8286,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6852,6 +8322,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6880,6 +8357,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6908,6 +8392,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -6936,6 +8427,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6964,6 +8462,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -6992,6 +8497,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7020,6 +8532,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7048,6 +8567,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7076,6 +8602,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7106,6 +8639,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7136,6 +8676,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7164,6 +8711,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7192,6 +8746,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7220,6 +8781,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7248,6 +8816,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7276,6 +8851,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7304,6 +8886,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7332,6 +8921,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7360,6 +8956,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7388,6 +8991,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7416,6 +9026,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7444,6 +9061,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7472,6 +9096,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7500,6 +9131,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7528,6 +9166,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7556,6 +9201,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7584,6 +9236,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7612,6 +9271,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7640,6 +9306,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7668,6 +9341,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7696,6 +9376,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7724,6 +9411,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7752,6 +9446,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7780,6 +9481,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7808,6 +9516,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7836,6 +9551,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7864,6 +9586,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "REQUIRED",
+          "idempotency": "REQUIRED"
         }
       },
       {
@@ -7892,6 +9621,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7920,6 +9656,13 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -7934,7 +9677,6 @@
         "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.stt.credential.project",
-        "authority_proof_producer_id": "secret-broker.stt-credential-projection",
         "authority_sources": [
           "DOMAIN_STATE",
           "OIDC_SESSION",
@@ -7950,6 +9692,93 @@
           "uid": 10001,
           "primary_gid": 10001,
           "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        },
+        "continuation": {
+          "parent_operation_id": "platform.stt.transcribe",
+          "parent_full_method": "/stt.v1.SpeechToTextService/Transcribe"
+        }
+      },
+      {
+        "operation_id": "platform.stt.policy.resolve",
+        "caller_workload_id": "stt-tts-service",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.stt.policy.resolve",
+        "authority_sources": [
+          "DOMAIN_STATE",
+          "OIDC_SESSION",
+          "RUNTIME_EXECUTION"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        },
+        "continuation": {
+          "parent_operation_id": "platform.stt.transcribe",
+          "parent_full_method": "/stt.v1.SpeechToTextService/Transcribe"
+        }
+      },
+      {
+        "operation_id": "platform.stt.transcribe",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "stt-tts-service",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
+        "audience": "urn:kodex:internal-rpc:stt-tts-service",
+        "full_method": "/stt.v1.SpeechToTextService/Transcribe",
+        "target_tls_server_name": "stt-tts-service.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.stt.transcribe",
+        "authority_proof_producer_id": "control-plane.oidc-stt",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "STREAM_SESSION",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
         }
       }
     ]

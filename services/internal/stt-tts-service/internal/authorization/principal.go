@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
@@ -25,6 +26,8 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if !ok || fullMethod != sttv1.SpeechToTextService_Transcribe_FullMethodName ||
 		verified.GetContractVersion() != 1 || verified.GetAudience() != expectedAudience ||
+		verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion ||
+		verified.GetRequestBindingMode() != internalrpcauth.RequestBindingStream ||
 		verified.GetTargetWorkloadId() != expectedWorkloadID || verified.GetCallerWorkloadId() != expectedCaller ||
 		verified.GetFullMethod() != fullMethod || verified.GetOperationId() != transcribeOperation ||
 		verified.GetPermission() != value.PermissionTranscribe || verified.GetAuthority() == nil ||

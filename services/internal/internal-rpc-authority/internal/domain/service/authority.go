@@ -73,6 +73,7 @@ func NewAuthority(
 	store repository.Store,
 ) (*Authority, error) {
 	if policy.Version != model.ContractVersion ||
+		policy.AuthorityABIVersion != model.AuthorityABIVersion ||
 		policy.DefaultDecision != "DENY" ||
 		policy.TokenTTLSeconds <= 0 ||
 		policy.TokenTTLSeconds > 30 ||
@@ -122,9 +123,14 @@ func NewAuthority(
 			binding.Permission == "" ||
 			binding.CallerSPIFFEID == "" ||
 			binding.TargetSPIFFEID == "" ||
-			binding.AuthorityProofIssuer == "" ||
-			binding.AuthorityProofAudience == "" ||
-			len(binding.AuthoritySources) == 0 {
+			(binding.Continuation == nil &&
+				(binding.AuthorityProofIssuer == "" || binding.AuthorityProofAudience == "")) ||
+			(binding.Continuation != nil &&
+				(binding.AuthorityProofIssuer != "" || binding.AuthorityProofAudience != "")) ||
+			len(binding.AuthoritySources) == 0 ||
+			!validRequestProfile(binding.RequestProfile) ||
+			binding.Continuation != nil &&
+				(!operationPattern.MatchString(binding.Continuation.ParentOperationID) || binding.Continuation.ParentFullMethod == "") {
 			return nil, failure.New(failure.SnapshotRejected, "invalid operation binding")
 		}
 		if _, duplicate := bindings[binding.OperationID]; duplicate {
@@ -148,6 +154,7 @@ func (authority *Authority) Issue(
 	ctx context.Context,
 	operationID string,
 	proofCompact string,
+	requestDigest string,
 ) (string, model.AuthorizationClaims, error) {
 	now := authority.now().UTC().Truncate(time.Second)
 	metadataValidUntil, err := authority.freshMetadataDeadline(now)
@@ -155,7 +162,7 @@ func (authority *Authority) Issue(
 		return "", model.AuthorizationClaims{}, err
 	}
 	binding, ok := authority.bindings[operationID]
-	if !ok {
+	if !ok || binding.Continuation != nil {
 		return "", model.AuthorizationClaims{}, failure.New(
 			failure.OperationNotAllowed,
 			"operation is not allowed",
@@ -214,7 +221,11 @@ func (authority *Authority) Issue(
 		)
 	}
 	if proof.Version != model.ContractVersion ||
+		proof.AuthorityABIVersion != model.AuthorityABIVersion ||
 		proof.OperationID != operationID ||
+		proof.RequestBindingMode != binding.RequestProfile.Mode ||
+		proof.RequestDigestSHA256 != requestDigest ||
+		!validRequestDigest(binding.RequestProfile.Mode, requestDigest) ||
 		proof.Issuer != binding.AuthorityProofIssuer ||
 		proof.Audience != binding.AuthorityProofAudience ||
 		proof.AuthorizationContextAudience != binding.Audience ||
@@ -322,6 +333,9 @@ func (authority *Authority) Issue(
 		SignerGeneration:         authority.policy.SignerGeneration,
 		CallerCredentialRevision: proof.CallerCredentialRevision,
 		CredentialAuthentication: proof.CredentialAuthentication,
+		RequestDigestSHA256:      requestDigest,
+		RequestBindingMode:       binding.RequestProfile.Mode,
+		AuthorityABIVersion:      model.AuthorityABIVersion,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(
 		claims,
@@ -339,6 +353,114 @@ func (authority *Authority) Issue(
 		)
 	}
 	return compact, claims, nil
+}
+
+// IssueContinuation выпускает child context только из принятого parent JWS.
+func (authority *Authority) IssueContinuation(
+	ctx context.Context,
+	operationID, parentCompact, requestID, correlationID, requestDigest string,
+) (string, model.AuthorizationClaims, error) {
+	now := authority.now().UTC().Truncate(time.Second)
+	metadataValidUntil, err := authority.freshMetadataDeadline(now)
+	if err != nil {
+		return "", model.AuthorizationClaims{}, err
+	}
+	binding, ok := authority.bindings[operationID]
+	if !ok || binding.Continuation == nil || !validRequestDigest(binding.RequestProfile.Mode, requestDigest) ||
+		!uuidPattern.MatchString(requestID) || correlationID == "" || len(correlationID) > 128 {
+		return "", model.AuthorizationClaims{}, failure.New(failure.OperationNotAllowed, "continuation operation is not allowed")
+	}
+	parent, parentBinding, parentDigest, err := authority.decodeContinuationParent(parentCompact, now)
+	if err != nil {
+		return "", model.AuthorizationClaims{}, err
+	}
+	profile := binding.Continuation
+	if parent.OperationID != profile.ParentOperationID || parent.FullMethod != profile.ParentFullMethod ||
+		parentBinding.OperationID != profile.ParentOperationID ||
+		parent.Target.WorkloadID != binding.CallerWorkloadID || parent.Target.SPIFFEID != binding.CallerSPIFFEID {
+		return "", model.AuthorizationClaims{}, failure.New(failure.BindingMismatch, "continuation parent binding failed")
+	}
+	rootJTI, rootOperation, rootMethod := parent.JTI, parent.OperationID, parent.FullMethod
+	rootRevision, rootDigest := parent.SourceRevision, parent.SourceDigestSHA256
+	if parent.Continuation != nil {
+		rootJTI, rootOperation, rootMethod = parent.Continuation.RootJTI, parent.Continuation.RootOperationID, parent.Continuation.RootFullMethod
+		rootRevision, rootDigest = parent.Continuation.RootSourceRevision, parent.Continuation.RootSourceDigestSHA256
+	}
+	expiresAt := authorizationExpiry(now, time.Duration(binding.TokenTTLSeconds)*time.Second, metadataValidUntil)
+	if parent.ExpiryTime().Before(expiresAt) {
+		expiresAt = parent.ExpiryTime()
+	}
+	claims := model.AuthorizationClaims{
+		Version: model.ContractVersion, Issuer: binding.Issuer, Audience: binding.Audience,
+		Subject: binding.CallerSPIFFEID, Caller: model.Workload{WorkloadID: binding.CallerWorkloadID, SPIFFEID: binding.CallerSPIFFEID},
+		Target:     model.Workload{WorkloadID: binding.TargetWorkloadID, SPIFFEID: binding.TargetSPIFFEID},
+		FullMethod: binding.FullMethod, OperationID: binding.OperationID, Authority: parent.Authority,
+		Permission: binding.Permission, JTI: deterministicContinuationJTI(parent.JTI, operationID, requestID),
+		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(), ReplayMode: model.ReplayModeOneTime,
+		SourceRevision: authority.policy.SourceRevision, SourceDigestSHA256: authority.policy.SourceDigestSHA256,
+		KeySetRevision: authority.policy.KeySetRevision, PolicyRevision: authority.policy.PolicyRevision,
+		SignerGeneration: authority.policy.SignerGeneration, CallerCredentialRevision: parent.CallerCredentialRevision,
+		CredentialAuthentication: parent.CredentialAuthentication, RequestDigestSHA256: requestDigest,
+		RequestBindingMode: binding.RequestProfile.Mode, AuthorityABIVersion: model.AuthorityABIVersion,
+		Continuation: &model.ContinuationLineage{
+			RootJTI: rootJTI, RootOperationID: rootOperation, RootFullMethod: rootMethod,
+			RootSourceRevision: rootRevision, RootSourceDigestSHA256: rootDigest,
+			ParentJTI: parent.JTI, ParentOperationID: parent.OperationID, ParentFullMethod: parent.FullMethod,
+			RequestID: requestID, CorrelationID: correlationID,
+		},
+	}
+	compact, err := internalrpcauth.SignCanonicalJSON(claims, authority.signingKey, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorizationContextProtectedType, KeyID: authority.policy.SignerKeyID})
+	if err != nil {
+		return "", model.AuthorizationClaims{}, failure.Wrap(failure.Internal, "sign continuation context", err)
+	}
+	childDigest := sha256.Sum256([]byte(compact))
+	if err := authority.store.ReserveContinuation(ctx,
+		repository.Reservation{Kind: repository.ReservationAuthorizationContext, ScopeID: binding.CallerWorkloadID, JTI: parent.JTI, Digest: parentDigest, ExpiresAt: parent.ExpiryTime()},
+		repository.Reservation{Kind: repository.ReservationAuthorityProof, ScopeID: binding.CallerWorkloadID, OperationID: operationID, Issuer: binding.Issuer, Revision: parent.SourceRevision, JTI: claims.JTI, Digest: hex.EncodeToString(childDigest[:]), ExpiresAt: expiresAt},
+	); err != nil {
+		if errors.Is(err, repository.ErrReplay) || errors.Is(err, repository.ErrParentNotAccepted) {
+			return "", model.AuthorizationClaims{}, failure.Wrap(failure.ReplayDetected, "continuation replay rejected", err)
+		}
+		return "", model.AuthorizationClaims{}, failure.Wrap(failure.PersistenceUnavailable, "continuation replay store unavailable", err)
+	}
+	return compact, claims, nil
+}
+
+func (authority *Authority) decodeContinuationParent(compact string, now time.Time) (model.AuthorizationClaims, model.OperationBinding, string, error) {
+	header, err := internalrpcauth.ParseProtectedHeader(compact)
+	if err != nil || header.Type != internalrpcauth.AuthorizationContextProtectedType {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.Wrap(failure.Unauthenticated, "continuation parent header failed", err)
+	}
+	key, ok := authority.verificationKeys[header.KeyID]
+	if !ok {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.New(failure.Unauthenticated, "continuation parent key is not trusted")
+	}
+	verified, err := internalrpcauth.VerifyCanonicalJSON(compact, key.Key, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorizationContextProtectedType, KeyID: header.KeyID})
+	if err != nil {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.Wrap(failure.Unauthenticated, "continuation parent verification failed", err)
+	}
+	var claims model.AuthorizationClaims
+	if err := internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &claims); err != nil {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.Wrap(failure.Unauthenticated, "continuation parent claims failed", err)
+	}
+	binding, ok := authority.bindings[claims.OperationID]
+	if !ok || validateAuthorizationTimes(now, claims, binding, authority.policy.AllowedClockSkewSeconds) != nil ||
+		claims.Version != model.ContractVersion || claims.AuthorityABIVersion != model.AuthorityABIVersion || claims.ReplayMode != model.ReplayModeOneTime ||
+		claims.Issuer != binding.Issuer || key.Issuer != claims.Issuer || key.Generation != claims.SignerGeneration ||
+		(key.Status != keyStatusCurrent && key.Status != keyStatusPrevious) || key.Purpose != contextKeyPurpose || !keyAllowsAudience(key, claims.Audience) ||
+		claims.Audience != binding.Audience || claims.Subject != binding.CallerSPIFFEID || claims.Caller.WorkloadID != binding.CallerWorkloadID ||
+		claims.Caller.SPIFFEID != binding.CallerSPIFFEID || claims.Target.WorkloadID != binding.TargetWorkloadID || claims.Target.SPIFFEID != binding.TargetSPIFFEID ||
+		claims.FullMethod != binding.FullMethod || claims.Permission != binding.Permission || claims.SourceRevision != authority.policy.SourceRevision ||
+		claims.SourceDigestSHA256 != authority.policy.SourceDigestSHA256 || claims.KeySetRevision != authority.policy.KeySetRevision ||
+		claims.PolicyRevision != authority.policy.PolicyRevision || claims.RequestBindingMode != binding.RequestProfile.Mode ||
+		!validRequestDigest(binding.RequestProfile.Mode, claims.RequestDigestSHA256) || !uuidPattern.MatchString(claims.JTI) {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.New(failure.BindingMismatch, "continuation parent binding failed")
+	}
+	if err := validateAuthority(claims.Authority, binding); err != nil {
+		return model.AuthorizationClaims{}, model.OperationBinding{}, "", failure.Wrap(failure.AuthorityRejected, "continuation parent authority failed", err)
+	}
+	digest := sha256.Sum256([]byte(compact))
+	return claims, binding, hex.EncodeToString(digest[:]), nil
 }
 
 func validCredentialAuthentication(value *model.CredentialAuthentication, actorKind string, now time.Time, clockSkew time.Duration) bool {
@@ -368,6 +490,7 @@ func (authority *Authority) Verify(
 	compact string,
 	observedFullMethod string,
 	downstreamSPIFFEID string,
+	observedRequestDigest string,
 ) (model.AuthorizationClaims, error) {
 	if _, err := authority.freshMetadataDeadline(
 		authority.now().UTC().Truncate(time.Second),
@@ -420,14 +543,7 @@ func (authority *Authority) Verify(
 		)
 	}
 	now := authority.now().UTC().Truncate(time.Second)
-	if err := internalrpcauth.ValidateTimes(
-		now,
-		claims.IssuedTime(),
-		claims.NotBeforeTime(),
-		claims.ExpiryTime(),
-		time.Duration(binding.TokenTTLSeconds)*time.Second,
-		time.Duration(authority.policy.AllowedClockSkewSeconds)*time.Second,
-	); err != nil {
+	if err := validateAuthorizationTimes(now, claims, binding, authority.policy.AllowedClockSkewSeconds); err != nil {
 		return model.AuthorizationClaims{}, failure.Wrap(
 			failure.Unauthenticated,
 			"authorization context time binding failed",
@@ -435,6 +551,10 @@ func (authority *Authority) Verify(
 		)
 	}
 	if claims.Version != model.ContractVersion ||
+		claims.AuthorityABIVersion != model.AuthorityABIVersion ||
+		claims.RequestBindingMode != binding.RequestProfile.Mode ||
+		claims.RequestDigestSHA256 != observedRequestDigest ||
+		!validRequestDigest(binding.RequestProfile.Mode, observedRequestDigest) ||
 		claims.ReplayMode != model.ReplayModeOneTime ||
 		claims.Issuer != binding.Issuer ||
 		verificationKey.Issuer != claims.Issuer ||
@@ -459,7 +579,9 @@ func (authority *Authority) Verify(
 		claims.SourceDigestSHA256 != authority.policy.SourceDigestSHA256 ||
 		claims.KeySetRevision != authority.policy.KeySetRevision ||
 		claims.PolicyRevision != authority.policy.PolicyRevision ||
-		claims.JTI == "" {
+		claims.JTI == "" ||
+		(binding.Continuation == nil) != (claims.Continuation == nil) ||
+		claims.Continuation != nil && !validContinuation(*claims.Continuation, binding) {
 		return model.AuthorizationClaims{}, failure.New(
 			failure.BindingMismatch,
 			"authorization context binding failed",
@@ -655,6 +777,66 @@ func validateAuthority(authority model.Authority, binding model.OperationBinding
 		return fmt.Errorf("project authority is forbidden")
 	}
 	return nil
+}
+
+func validRequestProfile(value model.RequestProfile) bool {
+	if value.Mode != model.RequestBindingUnary && value.Mode != model.RequestBindingStream {
+		return false
+	}
+	for _, binding := range []string{value.Resource, value.Version, value.Attempt, value.Idempotency} {
+		if binding != model.ProfileBindingRequired && binding != model.ProfileBindingForbidden {
+			return false
+		}
+	}
+	return true
+}
+
+func validRequestDigest(mode, digest string) bool {
+	if mode == model.RequestBindingStream {
+		return digest == ""
+	}
+	return digestPattern.MatchString(digest)
+}
+
+func validateAuthorizationTimes(
+	now time.Time,
+	claims model.AuthorizationClaims,
+	binding model.OperationBinding,
+	allowedClockSkewSeconds int64,
+) error {
+	maximumTTL := time.Duration(binding.TokenTTLSeconds) * time.Second
+	actualTTL := maximumTTL
+	if binding.Continuation != nil {
+		actualTTL = claims.ExpiryTime().Sub(claims.IssuedTime())
+		if actualTTL <= 0 || actualTTL > maximumTTL {
+			return errors.New("invalid continuation token lifetime")
+		}
+	}
+	return internalrpcauth.ValidateTimes(
+		now,
+		claims.IssuedTime(),
+		claims.NotBeforeTime(),
+		claims.ExpiryTime(),
+		actualTTL,
+		time.Duration(allowedClockSkewSeconds)*time.Second,
+	)
+}
+
+func validContinuation(value model.ContinuationLineage, binding model.OperationBinding) bool {
+	return binding.Continuation != nil && uuidPattern.MatchString(value.RootJTI) &&
+		uuidPattern.MatchString(value.ParentJTI) && uuidPattern.MatchString(value.RequestID) &&
+		operationPattern.MatchString(value.RootOperationID) && operationPattern.MatchString(value.ParentOperationID) &&
+		value.RootFullMethod != "" && value.ParentFullMethod == binding.Continuation.ParentFullMethod &&
+		value.ParentOperationID == binding.Continuation.ParentOperationID && value.RootSourceRevision > 0 &&
+		digestPattern.MatchString(value.RootSourceDigestSHA256) && value.CorrelationID != "" && len(value.CorrelationID) <= 128
+}
+
+func deterministicContinuationJTI(parentJTI, operationID, requestID string) string {
+	digest := sha256.Sum256([]byte(parentJTI + "\x00" + operationID + "\x00" + requestID))
+	digest[6] = (digest[6] & 0x0f) | 0x50
+	digest[8] = (digest[8] & 0x3f) | 0x80
+	encoded := hex.EncodeToString(digest[:16])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
 }
 
 // Ready подтверждает готовность хранилища и активированного снимка.

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
@@ -77,6 +78,8 @@ func validVerifiedAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthori
 		Authority:  &internalrpcauthorityv1.CallerAuthority{Actor: identity("actor"), Tenant: identity("tenant"), Project: identity("prj_abcdefgh")},
 		Jti:        uuid.NewString(), ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)),
 		SourceRevision: 7, SourceDigestSha256: digest, PolicyRevision: 19,
+		AuthorityAbiVersion: internalrpcauth.AuthorityABIVersion,
+		RequestBindingMode:  internalrpcauth.RequestBindingStream,
 	}
 }
 
@@ -93,7 +96,7 @@ func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.Ver
 	base = metadata.NewIncomingContext(base, metadata.Pairs(authorityclient.AuthorizationMetadata, "compact"))
 	interceptor := authorityclient.VerifierUnaryServerInterceptor(principalVerifier{verified: verified})
 	var authorized context.Context
-	_, err = interceptor(base, nil, &grpc.UnaryServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(ctx context.Context, _ any) (any, error) {
+	_, err = interceptor(base, &sttv1.TranscribeRequest{}, &grpc.UnaryServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(ctx context.Context, _ any) (any, error) {
 		authorized = ctx
 		return nil, nil
 	})

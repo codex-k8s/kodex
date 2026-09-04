@@ -17,7 +17,10 @@
     "jti",
     "iat",
     "nbf",
-    "exp"
+    "exp",
+    "caller_credential_revision",
+    "request_binding_mode",
+    "authority_abi_version"
   ],
   "properties": {
     "v": {
@@ -50,6 +53,21 @@
     "signer_generation": {
       "$ref": "#/$defs/revision"
     },
+    "caller_credential_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "request_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "request_binding_mode": {
+      "enum": [
+        "UNARY_PROTO_SHA256",
+        "STREAM_SESSION"
+      ]
+    },
+    "authority_abi_version": {
+      "const": 2
+    },
     "jti": {
       "$ref": "#/$defs/uuid"
     },
@@ -63,6 +81,22 @@
       "$ref": "#/$defs/unixTime"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"request_binding_mode": {"const": "UNARY_PROTO_SHA256"}},
+        "required": ["request_binding_mode"]
+      },
+      "then": {"required": ["request_digest_sha256"]}
+    },
+    {
+      "if": {
+        "properties": {"request_binding_mode": {"const": "STREAM_SESSION"}},
+        "required": ["request_binding_mode"]
+      },
+      "then": {"not": {"required": ["request_digest_sha256"]}}
+    }
+  ],
   "$defs": {
     "uuid": {
       "type": "string",
@@ -180,7 +214,11 @@
             "IMAGE_PROMOTION_CLAIM",
             "PROCESS_RUN",
             "AUTOMATION_OCCURRENCE",
-            "LEGACY_MIGRATION"
+            "LEGACY_MIGRATION",
+            "WORKLOAD_READINESS",
+            "PROVIDER_READBACK",
+            "GIT_RECONCILIATION",
+            "RUNTIME_EXECUTION"
           ]
         },
         "reference": {

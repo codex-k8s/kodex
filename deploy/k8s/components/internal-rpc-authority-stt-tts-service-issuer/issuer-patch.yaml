@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: control-api-gateway
+  name: stt-tts-service
 spec:
   template:
     metadata:
@@ -27,10 +27,10 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: internal-rpc-authority-sockets
+            - name: authority-sockets
               mountPath: /run/kodex
       containers:
-        - name: control-api-gateway
+        - name: stt-tts-service
           env:
             - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
               value: /run/kodex/internal-rpc-authority/issuer.sock
@@ -44,7 +44,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
           volumeMounts:
-            - name: internal-rpc-authority-sockets
+            - name: authority-sockets
               mountPath: /run/kodex
               readOnly: true
         - name: internal-rpc-authority-issuer
@@ -69,9 +69,9 @@ spec:
             - name: SENTRY_EXPECTED_HOST
               value: sentry-relay.observability.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
-              value: control-api-gateway
+              value: stt-tts-service
             - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID
-              value: spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway
+              value: spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
               value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
             - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
@@ -93,7 +93,7 @@ spec:
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
               valueFrom:
                 secretKeyRef:
-                  name: internal-rpc-authority-control-api-gateway-issuer-postgresql
+                  name: internal-rpc-authority-stt-tts-service-issuer-postgresql
                   key: username
           ports:
             - name: auth-metrics
@@ -135,7 +135,7 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: internal-rpc-authority-sockets
+            - name: authority-sockets
               mountPath: /run/kodex
             - name: internal-rpc-authority-snapshot
               mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
@@ -199,7 +199,7 @@ spec:
             items:
               - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
               - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
-        - name: internal-rpc-authority-sockets
+        - name: authority-sockets
           emptyDir:
             medium: ""
             sizeLimit: 32Mi
@@ -209,19 +209,19 @@ spec:
             defaultMode: 0440
         - name: internal-rpc-authority-manifest-trust
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-manifest-trust
+            secretName: internal-rpc-authority-stt-tts-service-manifest-trust
             defaultMode: 292
         - name: internal-rpc-authority-proof-trust
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-proof-trust
+            secretName: internal-rpc-authority-stt-tts-service-proof-trust
             defaultMode: 292
         - name: internal-rpc-authority-issuer-key
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-key
+            secretName: internal-rpc-authority-stt-tts-service-issuer-key
             defaultMode: 292
         - name: internal-rpc-authority-workload-tls
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-workload-tls
+            secretName: internal-rpc-authority-stt-tts-service-workload-tls
             defaultMode: 0440
         - name: internal-rpc-authority-readback-attestor-ca
           configMap:
@@ -247,7 +247,7 @@ spec:
                 path: restore-role-trust.jws
         - name: internal-rpc-authority-postgresql
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-postgresql
+            secretName: internal-rpc-authority-stt-tts-service-issuer-postgresql
             defaultMode: 0440
             items:
               - key: dsn
@@ -272,17 +272,17 @@ spec:
                 path: sentry-dsn
         - name: authority-readback-credential
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-readback-credential
+            secretName: internal-rpc-authority-stt-tts-service-issuer-readback-credential
             defaultMode: 292
         - name: authority-readback-possession
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-readback-possession
+            secretName: internal-rpc-authority-stt-tts-service-issuer-readback-possession
             defaultMode: 292
         - name: authority-restore-credential
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-restore-credential
+            secretName: internal-rpc-authority-stt-tts-service-issuer-restore-credential
             defaultMode: 292
         - name: authority-restore-ack
           secret:
-            secretName: internal-rpc-authority-control-api-gateway-issuer-restore-ack
+            secretName: internal-rpc-authority-stt-tts-service-issuer-restore-ack
             defaultMode: 292

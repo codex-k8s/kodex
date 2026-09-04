@@ -132,6 +132,7 @@ type proofTrustDocument = internalrpcauth.AuthorityProofTrustDocument
 type proofTrustKey = internalrpcauth.AuthorityProofTrustKey
 
 type policy struct {
+	AuthorityABIVersion     uint32                   `json:"authority_abi_version"`
 	TrustDomain             string                   `json:"trust_domain"`
 	DefaultDecision         string                   `json:"default_decision"`
 	TokenTTLSeconds         int64                    `json:"token_ttl_seconds"`
@@ -169,22 +170,37 @@ type authorityProofProducer struct {
 }
 
 type operationBinding struct {
-	OperationID         string    `json:"operation_id"`
-	CallerWorkloadID    string    `json:"caller_workload_id"`
-	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
-	Issuer              string    `json:"issuer"`
-	TargetWorkloadID    string    `json:"target_workload_id"`
-	TargetSPIFFEID      string    `json:"target_spiffe_id"`
-	Audience            string    `json:"audience"`
-	FullMethod          string    `json:"full_method"`
-	TargetTLSServerName string    `json:"target_tls_server_name"`
-	TargetTrustBundleID string    `json:"target_trust_bundle_id"`
-	Permission          string    `json:"permission"`
-	ProofProducerID     string    `json:"authority_proof_producer_id"`
-	AuthoritySources    []string  `json:"authority_sources"`
-	ProjectRequired     bool      `json:"project_required"`
-	LocalCaller         localPeer `json:"local_caller"`
-	LocalTarget         localPeer `json:"local_target"`
+	OperationID         string               `json:"operation_id"`
+	CallerWorkloadID    string               `json:"caller_workload_id"`
+	CallerSPIFFEID      string               `json:"caller_spiffe_id"`
+	Issuer              string               `json:"issuer"`
+	TargetWorkloadID    string               `json:"target_workload_id"`
+	TargetSPIFFEID      string               `json:"target_spiffe_id"`
+	Audience            string               `json:"audience"`
+	FullMethod          string               `json:"full_method"`
+	TargetTLSServerName string               `json:"target_tls_server_name"`
+	TargetTrustBundleID string               `json:"target_trust_bundle_id"`
+	Permission          string               `json:"permission"`
+	ProofProducerID     string               `json:"authority_proof_producer_id"`
+	AuthoritySources    []string             `json:"authority_sources"`
+	ProjectRequired     bool                 `json:"project_required"`
+	LocalCaller         localPeer            `json:"local_caller"`
+	LocalTarget         localPeer            `json:"local_target"`
+	RequestProfile      requestProfile       `json:"request_profile"`
+	Continuation        *continuationProfile `json:"continuation,omitempty"`
+}
+
+type requestProfile struct {
+	Mode        string `json:"mode"`
+	Resource    string `json:"resource"`
+	Version     string `json:"version"`
+	Attempt     string `json:"attempt"`
+	Idempotency string `json:"idempotency"`
+}
+
+type continuationProfile struct {
+	ParentOperationID string `json:"parent_operation_id"`
+	ParentFullMethod  string `json:"parent_full_method"`
 }
 
 type localPeer struct {
@@ -235,6 +251,7 @@ func Load(options LoadOptions) (Loaded, error) {
 		return Loaded{}, fmt.Errorf("decode signed authority snapshot: %w", err)
 	}
 	if snapshot.Version != model.ContractVersion ||
+		snapshot.Policy.AuthorityABIVersion != model.AuthorityABIVersion ||
 		snapshot.SourceRevision == 0 ||
 		snapshot.KeySetRevision == 0 ||
 		snapshot.PolicyRevision == 0 ||
@@ -302,9 +319,15 @@ func Load(options LoadOptions) (Loaded, error) {
 		if !bindingApplies(options.Role, options.WorkloadID, binding) {
 			continue
 		}
-		producer, ok := producers[binding.ProofProducerID]
-		if !ok {
-			return Loaded{}, errors.New("operation binding references unknown authority proof producer")
+		var proofIssuer, proofAudience string
+		if binding.Continuation == nil {
+			producer, ok := producers[binding.ProofProducerID]
+			if !ok {
+				return Loaded{}, errors.New("operation binding references unknown authority proof producer")
+			}
+			proofIssuer, proofAudience = producer.AuthorityProofIssuer, producer.AuthorityProofAudience
+		} else if binding.ProofProducerID != "" {
+			return Loaded{}, errors.New("continuation binding must not reference authority proof producer")
 		}
 		bindings = append(bindings, model.OperationBinding{
 			OperationID:            binding.OperationID,
@@ -316,11 +339,17 @@ func Load(options LoadOptions) (Loaded, error) {
 			Audience:               binding.Audience,
 			FullMethod:             binding.FullMethod,
 			Permission:             binding.Permission,
-			AuthorityProofIssuer:   producer.AuthorityProofIssuer,
-			AuthorityProofAudience: producer.AuthorityProofAudience,
+			AuthorityProofIssuer:   proofIssuer,
+			AuthorityProofAudience: proofAudience,
 			AuthoritySources:       append([]string(nil), binding.AuthoritySources...),
 			ProjectRequired:        binding.ProjectRequired,
 			TokenTTLSeconds:        snapshot.Policy.TokenTTLSeconds,
+			RequestProfile: model.RequestProfile{
+				Mode: binding.RequestProfile.Mode, Resource: binding.RequestProfile.Resource,
+				Version: binding.RequestProfile.Version, Attempt: binding.RequestProfile.Attempt,
+				Idempotency: binding.RequestProfile.Idempotency,
+			},
+			Continuation: castContinuationProfile(binding.Continuation),
 		})
 	}
 	if len(bindings) == 0 && len(snapshot.Policy.OperationBindings) != 0 {
@@ -350,6 +379,7 @@ func buildPolicySnapshot(
 ) model.PolicySnapshot {
 	return model.PolicySnapshot{
 		Version:                 snapshot.Version,
+		AuthorityABIVersion:     snapshot.Policy.AuthorityABIVersion,
 		TrustDomain:             snapshot.Policy.TrustDomain,
 		DefaultDecision:         snapshot.Policy.DefaultDecision,
 		TokenTTLSeconds:         snapshot.Policy.TokenTTLSeconds,
@@ -367,6 +397,13 @@ func buildPolicySnapshot(
 		History:                 modelHistory(snapshot.History),
 		OperationBindings:       bindings,
 	}
+}
+
+func castContinuationProfile(value *continuationProfile) *model.ContinuationProfile {
+	if value == nil {
+		return nil
+	}
+	return &model.ContinuationProfile{ParentOperationID: value.ParentOperationID, ParentFullMethod: value.ParentFullMethod}
 }
 
 func loadManifestVerificationKey(

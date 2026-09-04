@@ -14,6 +14,7 @@ func TestConfigRejectsAlternateSecurityBoundary(t *testing.T) {
 		PolicyTarget: policyTarget, PolicyTLSServerName: policySNI,
 		CredentialTarget: credentialTarget, CredentialTLSServerName: credentialSNI,
 		AuthorityVerifierSocket: authorityclient.VerifierSocketPath, AuthorityVerifierUID: 29002, AuthorityVerifierGID: 29000,
+		AuthorityIssuerSocket: authorityclient.IssuerSocketPath, AuthorityIssuerUID: 29001, AuthorityIssuerGID: 29000,
 		RequestTimeout: requestTimeout, StartupTimeout: startupTimeout, ReadinessTimeout: readinessTimeout, ShutdownTimeout: shutdownTimeout,
 	}
 	if err := valid.validate(); err != nil {
@@ -25,6 +26,7 @@ func TestConfigRejectsAlternateSecurityBoundary(t *testing.T) {
 	}{
 		{name: "другой policy target", mutate: func(config *Config) { config.PolicyTarget = "dns:///other:8443" }},
 		{name: "другой credential SNI", mutate: func(config *Config) { config.CredentialTLSServerName = "other" }},
+		{name: "другой issuer UID", mutate: func(config *Config) { config.AuthorityIssuerUID = 1 }},
 		{name: "относительный spool", mutate: func(config *Config) { config.SpoolDirectory = "spool" }},
 		{name: "другой request timeout", mutate: func(config *Config) { config.RequestTimeout++ }},
 		{name: "другой shutdown timeout", mutate: func(config *Config) { config.ShutdownTimeout-- }},

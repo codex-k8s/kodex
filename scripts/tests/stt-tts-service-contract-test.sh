@@ -12,7 +12,10 @@ kubectl kustomize "$repository_root/deploy/k8s/base/stt-tts-service-provider-smo
 for profile in web-only web-with-mattermost; do
   render="$temporary_root/${profile}.yaml"
   kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$render"
-  if rg -n 'stt-tts-service|stt-provider-smoke' "$render"; then
+  if yq -e 'select(
+    (.kind == "Deployment" and .metadata.name == "stt-tts-service") or
+    (.kind == "Job" and .metadata.name == "stt-provider-smoke")
+  )' "$render" >/dev/null; then
     printf 'Incomplete STT unit entered active %s render\n' "$profile" >&2
     exit 1
   fi
@@ -36,6 +39,26 @@ yq -e 'select(.kind == "ConfigMap" and .metadata.name == "stt-tts-service-runtim
 yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
   (.spec.template.spec.containers[] | select(.name == "stt-tts-service") |
    .readinessProbe.httpGet.path == "/readyz")' "$temporary_root/production.yaml" >/dev/null
+yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
+  (.spec.template.metadata.labels."kodex.dev/internal-rpc-authority-abi" == "2" and
+   ([.spec.template.spec.containers[].name] | contains([
+     "stt-tts-service", "internal-rpc-authority-issuer", "internal-rpc-authority-verifier"
+   ])) and
+   ([.spec.template.spec.containers[] | select(.name == "stt-tts-service") | .env[]?.name] |
+     contains(["INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET", "INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET"])))' \
+  "$temporary_root/production.yaml" >/dev/null
+
+jq -e '
+  .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.stt.policy.resolve") |
+    select(has("authority_proof_producer_id") | not) |
+    select(.continuation.parent_operation_id == "platform.stt.transcribe")] | length == 1) and
+  ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.stt.credential.project") |
+    select(has("authority_proof_producer_id") | not) |
+    select(.continuation.parent_operation_id == "platform.stt.transcribe")] | length == 1)
+' "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json" >/dev/null
 
 yq -e 'select(.kind == "Job" and .metadata.name == "stt-provider-smoke") |
   (.spec.backoffLimit == 0 and .spec.activeDeadlineSeconds == 90 and

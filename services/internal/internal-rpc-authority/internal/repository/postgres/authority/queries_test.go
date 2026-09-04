@@ -120,6 +120,34 @@ func TestProofReservationAllowsConcurrentOutOfOrderProofs(t *testing.T) {
 	}
 }
 
+func TestContinuationReservationAtomicallyRequiresAcceptedParent(t *testing.T) {
+	parent := repository.Reservation{
+		ScopeID: "stt-tts-service", JTI: "00000000-0000-4000-8000-000000000001",
+		Digest: strings.Repeat("a", 64),
+	}
+	child := repository.Reservation{
+		ScopeID: "stt-tts-service", JTI: "00000000-0000-4000-8000-000000000002",
+		Digest: strings.Repeat("b", 64), ExpiresAt: time.Now().Add(time.Minute),
+	}
+	args := continuationReservationArgs(parent, child)
+	if _, _, err := args.RewriteQuery(context.Background(), nil, continuationReserveSQL, nil); err != nil {
+		t.Fatalf("continuation arguments are not exact: %v", err)
+	}
+	for _, required := range []string{
+		"WITH parent AS MATERIALIZED",
+		"FROM internal_rpc_authority.authority_replay_reservations",
+		"canonical_digest_sha256 = @parent_canonical_digest_sha256",
+		"expires_at > clock_timestamp()",
+		"INSERT INTO internal_rpc_authority.authority_proof_reservations",
+		"FROM parent",
+		"ON CONFLICT (caller_workload_id, jti) DO NOTHING",
+	} {
+		if !strings.Contains(continuationReserveSQL, required) {
+			t.Fatalf("continuation reservation lost invariant %q", required)
+		}
+	}
+}
+
 func TestReadinessReservationUsesModeSpecificWritePath(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 0, 0, 0, 0, time.UTC)
 	tests := []struct {

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: secret-broker
+  name: stt-tts-service
 spec:
   template:
     metadata:
@@ -24,13 +24,13 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: internal-rpc-authority-sockets, mountPath: /run/kodex}
+            - {name: authority-sockets, mountPath: /run/kodex}
       containers:
-        - name: secret-broker
+        - name: stt-tts-service
           env:
             - {name: INTERNAL_RPC_AUTHORITY_VERIFIER_SOCKET, value: /run/kodex/internal-rpc-authority/verifier.sock}
           volumeMounts:
-            - {name: internal-rpc-authority-sockets, mountPath: /run/kodex, readOnly: true}
+            - {name: authority-sockets, mountPath: /run/kodex, readOnly: true}
         - name: internal-rpc-authority-verifier
           image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-verifier]
@@ -43,8 +43,8 @@ spec:
             - {name: OTEL_TRACES_SAMPLER_ARG, value: "0.1"}
             - {name: SENTRY_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn}
             - {name: SENTRY_EXPECTED_HOST, value: sentry-relay.observability.svc:8443}
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: secret-broker}
-            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: spiffe://kodex.local/ns/kodex-system/sa/secret-broker}
+            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID, value: stt-tts-service}
+            - {name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID, value: spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS, value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME, value: internal-rpc-authority-readback-attestor.kodex-system.svc}
             - {name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE, value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem}
@@ -55,7 +55,7 @@ spec:
             - {name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID, value: "10001"}
             - {name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE, value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn}
             - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
-              valueFrom: {secretKeyRef: {name: internal-rpc-authority-secret-broker-verifier-postgresql, key: username}}
+              valueFrom: {secretKeyRef: {name: internal-rpc-authority-stt-tts-service-verifier-postgresql, key: username}}
           ports: [{name: verify-metrics, containerPort: 9092, protocol: TCP}]
           startupProbe: {httpGet: {path: /healthz, port: verify-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 60}
           readinessProbe: {httpGet: {path: /readyz, port: verify-metrics}, periodSeconds: 5, timeoutSeconds: 3}
@@ -71,7 +71,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: internal-rpc-authority-sockets, mountPath: /run/kodex}
+            - {name: authority-sockets, mountPath: /run/kodex}
             - {name: internal-rpc-authority-snapshot, mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot, readOnly: true}
             - {name: internal-rpc-authority-manifest-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust, readOnly: true}
             - {name: internal-rpc-authority-workload-tls, mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls, readOnly: true}
@@ -79,26 +79,26 @@ spec:
             - {name: internal-rpc-authority-restore-controller-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/restore, readOnly: true}
             - {name: internal-rpc-authority-restore-controller-certificate, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust, readOnly: true}
             - {name: internal-rpc-authority-restore-role-trust, mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust, readOnly: true}
-            - {name: internal-rpc-authority-secret-broker-verifier-postgres, mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres, readOnly: true}
+            - {name: internal-rpc-authority-stt-tts-service-verifier-postgres, mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres, readOnly: true}
             - {name: internal-rpc-authority-postgresql-ca, mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql, readOnly: true}
             - {name: internal-rpc-authority-observability, mountPath: /var/run/config/kodex/internal-rpc-authority/observability, readOnly: true}
             - {name: internal-rpc-authority-sentry-dsn, mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability, readOnly: true}
             - {name: authority-bootstrap-roots, mountPath: /usr/local/share/internal-rpc-authority/manifest-root, readOnly: true}
-            - {name: secret-broker-verifier-readback-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential, readOnly: true}
-            - {name: secret-broker-verifier-readback-possession, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession, readOnly: true}
-            - {name: secret-broker-verifier-restore-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential, readOnly: true}
-            - {name: secret-broker-verifier-restore-ack, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack, readOnly: true}
+            - {name: stt-tts-service-verifier-readback-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential, readOnly: true}
+            - {name: stt-tts-service-verifier-readback-possession, mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession, readOnly: true}
+            - {name: stt-tts-service-verifier-restore-credential, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential, readOnly: true}
+            - {name: stt-tts-service-verifier-restore-ack, mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack, readOnly: true}
       volumes:
-        - name: internal-rpc-authority-secret-broker-verifier-postgres
+        - name: internal-rpc-authority-stt-tts-service-verifier-postgres
           secret:
-            secretName: internal-rpc-authority-secret-broker-verifier-postgresql
+            secretName: internal-rpc-authority-stt-tts-service-verifier-postgresql
             defaultMode: 0440
             items: [{key: dsn, path: dsn}]
-        - name: secret-broker-verifier-readback-credential
-          secret: {secretName: internal-rpc-authority-secret-broker-verifier-readback-credential, defaultMode: 292}
-        - name: secret-broker-verifier-readback-possession
-          secret: {secretName: internal-rpc-authority-secret-broker-verifier-readback-possession, defaultMode: 292}
-        - name: secret-broker-verifier-restore-credential
-          secret: {secretName: internal-rpc-authority-secret-broker-verifier-restore-credential, defaultMode: 292}
-        - name: secret-broker-verifier-restore-ack
-          secret: {secretName: internal-rpc-authority-secret-broker-verifier-restore-ack, defaultMode: 292}
+        - name: stt-tts-service-verifier-readback-credential
+          secret: {secretName: internal-rpc-authority-stt-tts-service-verifier-readback-credential, defaultMode: 292}
+        - name: stt-tts-service-verifier-readback-possession
+          secret: {secretName: internal-rpc-authority-stt-tts-service-verifier-readback-possession, defaultMode: 292}
+        - name: stt-tts-service-verifier-restore-credential
+          secret: {secretName: internal-rpc-authority-stt-tts-service-verifier-restore-credential, defaultMode: 292}
+        - name: stt-tts-service-verifier-restore-ack
+          secret: {secretName: internal-rpc-authority-stt-tts-service-verifier-restore-ack, defaultMode: 292}

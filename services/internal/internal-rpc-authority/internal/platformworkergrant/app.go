@@ -60,6 +60,7 @@ type claims struct {
 	TenantOwner          bool   `json:"tenant_owner"`
 	Revision             uint64 `json:"revision"`
 	CredentialGeneration uint64 `json:"credential_generation"`
+	AuthorityABIVersion  uint32 `json:"authority_abi_version"`
 	JTI                  string `json:"jti"`
 	IssuedAt             int64  `json:"iat"`
 	NotBefore            int64  `json:"nbf"`
@@ -150,7 +151,8 @@ func rotate(configuration config, key internalrpcauth.ES256Key, now func() time.
 		Subject:  "kodex-system-subject", CallerSPIFFEID: workloadSPIFFE,
 		WorkloadID: configuration.WorkloadID, OrganizationID: "kodex-installation",
 		Revision: uint64(issuedAt.Unix()), CredentialGeneration: credentialGeneration, JTI: uuid.NewString(),
-		IssuedAt: issuedAt.Unix(), NotBefore: issuedAt.Unix(), ExpiresAt: issuedAt.Add(grantTTL).Unix(),
+		AuthorityABIVersion: internalrpcauth.AuthorityABIVersion,
+		IssuedAt:            issuedAt.Unix(), NotBefore: issuedAt.Unix(), ExpiresAt: issuedAt.Add(grantTTL).Unix(),
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(value, key, internalrpcauth.ProtectedHeaderExpectation{Type: grantType, KeyID: key.KeyID})
 	if err != nil {
@@ -212,6 +214,7 @@ func readBack(configuration config, key internalrpcauth.ES256Key, now time.Time)
 	if internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &value) != nil ||
 		generationErr != nil || value.WorkloadID != configuration.WorkloadID || value.Revision != uint64(now.Unix()) ||
 		value.CredentialGeneration != credentialGeneration || uuid.Validate(value.JTI) != nil ||
+		value.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion ||
 		internalrpcauth.ValidateTimes(now, time.Unix(value.IssuedAt, 0), time.Unix(value.NotBefore, 0), time.Unix(value.ExpiresAt, 0), grantTTL, 5*time.Second) != nil {
 		return errors.New("platform worker grant readback binding is invalid")
 	}

@@ -15,6 +15,9 @@ var ErrSnapshotRollback = errors.New("snapshot rollback or mutation rejected")
 // ErrNotReady сообщает, что обслуживаемый снимок ещё не подтверждён.
 var ErrNotReady = errors.New("served snapshot is not ready")
 
+// ErrParentNotAccepted сообщает, что continuation не связан с ранее принятым parent.
+var ErrParentNotAccepted = errors.New("continuation parent is not accepted")
+
 // ReservationKind различает одноразовые proof и authorization context.
 type ReservationKind string
 
@@ -66,6 +69,7 @@ type RevisionDigest struct {
 // Store владеет replay reservations и persistent snapshot high-watermark.
 type Store interface {
 	Reserve(ctx context.Context, reservation Reservation) error
+	ReserveContinuation(ctx context.Context, parent Reservation, child Reservation) error
 	ActivateSnapshot(ctx context.Context, state SnapshotState) error
 	AcceptVerification(
 		ctx context.Context,

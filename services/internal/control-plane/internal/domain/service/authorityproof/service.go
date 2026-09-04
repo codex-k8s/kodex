@@ -37,12 +37,14 @@ type AuthorityOwner interface {
 type Config struct {
 	PolicyFile, SignerPrivateJWKFile, SignerTrustFile string
 	WorkerGrantTrustFiles                             map[string]string
+	ReadinessWorkerGrantFile                          string
 	OIDC                                              oidcverifier.Config
 	Now                                               func() time.Time
 }
 
 type ResolveInput struct {
-	PeerSPIFFEID, Authorization, OperationID, ProjectReference, IdempotencyKey, CorrelationID string
+	PeerSPIFFEID, Authorization, OperationID, ResourceReference, ProjectReference string
+	IdempotencyKey, CorrelationID, RequestDigestSHA256                            string
 }
 
 type ResolveResult struct {
@@ -67,6 +69,7 @@ type Service struct {
 	signerGeneration uint64
 	signerThumbprint string
 	workerKeys       map[string]internalrpcauth.ES256Key
+	readinessGrant   string
 	oidcIssuer       string
 	oidcAudience     string
 	now              func() time.Time
@@ -76,6 +79,7 @@ type policyDocument struct {
 	Version        int    `json:"v"`
 	PolicyRevision uint64 `json:"policy_revision"`
 	Policy         struct {
+		AuthorityABIVersion     uint32             `json:"authority_abi_version"`
 		TrustDomain             string             `json:"trust_domain"`
 		DefaultDecision         string             `json:"default_decision"`
 		TokenTTLSeconds         int64              `json:"token_ttl_seconds"`
@@ -114,22 +118,37 @@ type proofProducer struct {
 }
 
 type operationBinding struct {
-	OperationID         string    `json:"operation_id"`
-	CallerWorkloadID    string    `json:"caller_workload_id"`
-	CallerSPIFFEID      string    `json:"caller_spiffe_id"`
-	Issuer              string    `json:"issuer"`
-	TargetWorkloadID    string    `json:"target_workload_id"`
-	TargetSPIFFEID      string    `json:"target_spiffe_id"`
-	Audience            string    `json:"audience"`
-	FullMethod          string    `json:"full_method"`
-	TargetTLSServerName string    `json:"target_tls_server_name"`
-	TargetTrustBundleID string    `json:"target_trust_bundle_id"`
-	Permission          string    `json:"permission"`
-	ProducerID          string    `json:"authority_proof_producer_id"`
-	AuthoritySources    []string  `json:"authority_sources"`
-	ProjectRequired     bool      `json:"project_required"`
-	LocalCaller         localPeer `json:"local_caller"`
-	LocalTarget         localPeer `json:"local_target"`
+	OperationID         string               `json:"operation_id"`
+	CallerWorkloadID    string               `json:"caller_workload_id"`
+	CallerSPIFFEID      string               `json:"caller_spiffe_id"`
+	Issuer              string               `json:"issuer"`
+	TargetWorkloadID    string               `json:"target_workload_id"`
+	TargetSPIFFEID      string               `json:"target_spiffe_id"`
+	Audience            string               `json:"audience"`
+	FullMethod          string               `json:"full_method"`
+	TargetTLSServerName string               `json:"target_tls_server_name"`
+	TargetTrustBundleID string               `json:"target_trust_bundle_id"`
+	Permission          string               `json:"permission"`
+	ProducerID          string               `json:"authority_proof_producer_id"`
+	AuthoritySources    []string             `json:"authority_sources"`
+	ProjectRequired     bool                 `json:"project_required"`
+	LocalCaller         localPeer            `json:"local_caller"`
+	LocalTarget         localPeer            `json:"local_target"`
+	RequestProfile      requestProfile       `json:"request_profile"`
+	Continuation        *continuationProfile `json:"continuation,omitempty"`
+}
+
+type requestProfile struct {
+	Mode        string `json:"mode"`
+	Resource    string `json:"resource"`
+	Version     string `json:"version"`
+	Attempt     string `json:"attempt"`
+	Idempotency string `json:"idempotency"`
+}
+
+type continuationProfile struct {
+	ParentOperationID string `json:"parent_operation_id"`
+	ParentFullMethod  string `json:"parent_full_method"`
 }
 
 type localPeer struct {
@@ -180,6 +199,9 @@ type proofClaims struct {
 	IssuedAt                     int64                     `json:"iat"`
 	NotBefore                    int64                     `json:"nbf"`
 	ExpiresAt                    int64                     `json:"exp"`
+	RequestDigestSHA256          string                    `json:"request_digest_sha256,omitempty"`
+	RequestBindingMode           string                    `json:"request_binding_mode"`
+	AuthorityABIVersion          uint32                    `json:"authority_abi_version"`
 }
 
 type workerGrantClaims struct {
@@ -194,6 +216,7 @@ type workerGrantClaims struct {
 	TenantOwner          bool   `json:"tenant_owner"`
 	Revision             uint64 `json:"revision"`
 	CredentialGeneration uint64 `json:"credential_generation"`
+	AuthorityABIVersion  uint32 `json:"authority_abi_version"`
 	JTI                  string `json:"jti"`
 	IssuedAt             int64  `json:"iat"`
 	NotBefore            int64  `json:"nbf"`
@@ -209,7 +232,7 @@ func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, er
 		return nil, errors.New("read authority proof policy")
 	}
 	var document policyDocument
-	if err := internalrpcauth.DecodeStrictJSON(raw, &document); err != nil || document.Version != 1 || document.PolicyRevision == 0 || document.Policy.TrustDomain != "kodex.local" || document.Policy.DefaultDecision != "DENY" {
+	if err := internalrpcauth.DecodeStrictJSON(raw, &document); err != nil || document.Version != 1 || document.PolicyRevision == 0 || document.Policy.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion || document.Policy.TrustDomain != "kodex.local" || document.Policy.DefaultDecision != "DENY" {
 		return nil, errors.New("authority proof policy is invalid")
 	}
 	digest := sha256.Sum256(raw)
@@ -249,7 +272,7 @@ func New(ctx context.Context, owner AuthorityOwner, config Config) (*Service, er
 		owner: owner, oidc: oidc, policy: document, policyDigest: hex.EncodeToString(digest[:]),
 		signer: signer, signerGeneration: generation, signerThumbprint: thumbprint,
 		workerKeys: workerKeys, oidcIssuer: config.OIDC.Issuer, oidcAudience: config.OIDC.Audience,
-		now: config.Now,
+		readinessGrant: config.ReadinessWorkerGrantFile, now: config.Now,
 	}
 	if service.now == nil {
 		service.now = time.Now
@@ -280,8 +303,17 @@ func (service *Service) indexPolicy() error {
 		service.producers[producer.ProducerID] = producer
 	}
 	for _, binding := range service.policy.Policy.OperationBindings {
+		if binding.Continuation != nil {
+			if binding.ProducerID != "" || binding.OperationID == "" || binding.CallerWorkloadID == "" ||
+				binding.CallerSPIFFEID == "" || binding.Audience == "" || binding.FullMethod == "" ||
+				binding.Permission == "" || binding.Continuation.ParentOperationID == "" ||
+				binding.Continuation.ParentFullMethod == "" || !validRequestProfile(binding.RequestProfile) {
+				return errors.New("authority continuation operation binding is invalid")
+			}
+			continue
+		}
 		producer, ok := service.producers[binding.ProducerID]
-		if !ok || binding.OperationID == "" || binding.CallerWorkloadID != producer.CallerWorkloadID || binding.CallerSPIFFEID != producer.CallerSPIFFEID || binding.Audience == "" || binding.FullMethod == "" || binding.Permission == "" || !contains(producer.AllowedOperationIDs, binding.OperationID) {
+		if !ok || binding.OperationID == "" || binding.CallerWorkloadID != producer.CallerWorkloadID || binding.CallerSPIFFEID != producer.CallerSPIFFEID || binding.Audience == "" || binding.FullMethod == "" || binding.Permission == "" || !contains(producer.AllowedOperationIDs, binding.OperationID) || !validRequestProfile(binding.RequestProfile) {
 			return errors.New("authority proof operation binding is invalid")
 		}
 		if _, duplicate := service.bindings[binding.OperationID]; duplicate {
@@ -303,6 +335,10 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	if binding.ProjectRequired && input.ProjectReference == "" || !binding.ProjectRequired && input.ProjectReference != "" {
 		return ResolveResult{}, errors.New("authority proof project binding is invalid")
+	}
+	if binding.RequestProfile.Mode == internalrpcauth.RequestBindingUnary && !validDigest(input.RequestDigestSHA256) ||
+		binding.RequestProfile.Mode == internalrpcauth.RequestBindingStream && input.RequestDigestSHA256 != "" {
+		return ResolveResult{}, errors.New("authority proof request digest binding is invalid")
 	}
 	credential := strings.TrimPrefix(input.Authorization, "Bearer ")
 	if credential == input.Authorization || credential == "" || strings.TrimSpace(credential) != credential {
@@ -337,7 +373,8 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}
 		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{
 			WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision,
-			IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
+			CredentialGeneration: grant.CredentialGeneration,
+			IssuedAt:             time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
 		}); err != nil {
 			return ResolveResult{}, fmt.Errorf("accept worker grant: %w", err)
 		}
@@ -378,6 +415,8 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		OperationID: input.OperationID, AuthorizationContextAudience: binding.Audience, Authority: proofAuthority,
 		ProofRevision: revision, SignerGeneration: service.signerGeneration, CallerCredentialRevision: callerCredentialRevision, CredentialAuthentication: authentication, JTI: uuid.NewString(),
 		IssuedAt: now.Unix(), NotBefore: now.Unix(), ExpiresAt: expiresAt.Unix(),
+		RequestDigestSHA256: input.RequestDigestSHA256, RequestBindingMode: binding.RequestProfile.Mode,
+		AuthorityABIVersion: internalrpcauth.AuthorityABIVersion,
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorityProofProtectedType, KeyID: service.signer.KeyID})
 	if err != nil {
@@ -403,7 +442,7 @@ func (service *Service) verifyWorkerGrant(compact string, producer proofProducer
 	now := service.now().UTC().Truncate(time.Second)
 	credentialGeneration, generationErr := internalrpcauth.KeyGeneration(key.KeyID)
 	if err := internalrpcauth.ValidateTimes(now, time.Unix(claims.IssuedAt, 0), time.Unix(claims.NotBefore, 0), time.Unix(claims.ExpiresAt, 0), workerGrantTTL, 5*time.Second); err != nil ||
-		generationErr != nil || claims.Version != 1 || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || claims.CredentialGeneration != credentialGeneration || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
+		generationErr != nil || claims.Version != 1 || claims.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || claims.CredentialGeneration != credentialGeneration || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
 		return workerGrantClaims{}, errors.New("worker application grant binding is rejected")
 	}
 	return claims, nil
@@ -415,7 +454,57 @@ func (service *Service) Ready(ctx context.Context) (Readiness, error) {
 	if err := service.owner.Ready(ctx); err != nil {
 		return Readiness{}, err
 	}
+	if service.readinessGrant != "" {
+		raw, err := readBounded(service.readinessGrant)
+		if err != nil {
+			return Readiness{}, errors.New("read readiness worker grant")
+		}
+		producer, ok := serviceProducer(service.producers, "control-plane")
+		if !ok {
+			return Readiness{}, errors.New("readiness worker grant profile is unavailable")
+		}
+		grant, err := service.verifyWorkerGrant(string(raw), producer)
+		if err != nil {
+			return Readiness{}, errors.New("readiness worker grant is incompatible")
+		}
+		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision, CredentialGeneration: grant.CredentialGeneration, IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0)}); err != nil {
+			return Readiness{}, errors.New("readiness worker grant is rejected")
+		}
+	}
 	return Readiness{PolicyRevision: service.policy.PolicyRevision, SignerGeneration: service.signerGeneration, PolicyDigestSHA256: service.policyDigest, SignerThumbprintSHA256: service.signerThumbprint}, nil
+}
+
+func serviceProducer(values map[string]proofProducer, workloadID string) (proofProducer, bool) {
+	for _, value := range values {
+		if value.CallerWorkloadID == workloadID {
+			return value, true
+		}
+	}
+	return proofProducer{}, false
+}
+
+func validRequestProfile(value requestProfile) bool {
+	if value.Mode != internalrpcauth.RequestBindingUnary && value.Mode != internalrpcauth.RequestBindingStream {
+		return false
+	}
+	for _, binding := range []string{value.Resource, value.Version, value.Attempt, value.Idempotency} {
+		if binding != internalrpcauth.ProfileBindingRequired && binding != internalrpcauth.ProfileBindingForbidden {
+			return false
+		}
+	}
+	return true
+}
+
+func validDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' && character < 'a' || character > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 func domainIdentity(source, id string, revision uint64) identity {

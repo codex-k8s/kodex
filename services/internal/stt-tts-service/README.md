@@ -4,16 +4,17 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.1.1
+version: 1.2.0
 updated: 2026-09-04
 ---
 
 # stt-tts-service
 
 `stt-tts-service` — подготовленный, но неактивный stateless-владелец
-server-side распознавания речи. TTS отсутствует. Пока #1019, #1021, #1023 и
-#1024 не материализовали producer RPC, gateway route, единый continuation
-proof и authority sidecars, unit не входит в `web-only`,
+server-side распознавания речи. TTS отсутствует. #1019 и #1032 материализовали
+сервис и producer RPC, а #1023 — единый continuation proof и authority
+sidecars. Пока #1021 и #1024 не материализовали gateway route и владельцев
+policy/credential projection, unit не входит в `web-only`,
 `web-with-mattermost` и release image set. Base и owner overlays существуют
 только для contract/render-проверки; развёртывать их сейчас нельзя.
 
@@ -24,7 +25,7 @@ proof и authority sidecars, unit не входит в `web-only`,
 | 1 | #1021 принимает bounded browser multipart и создаёт client-stream `Transcribe` | browser payload не назначает actor/tenant/project |
 | 2 | local `internalrpcauth` verifier проверяет mTLS, exact caller/target/full method/operation, permission, expiry и root actor/tenant/project provenance | transport передаёт домену только `VerifiedAuthorizationContext` |
 | 3 | stream interceptor до первого `Recv` резервирует один из двух slots и задаёт server-owned deadline `min(20s, authority expiry)`; metadata затем резервирует весь заявленный byte budget | stalled stream, trailing message/data и mismatch закрыто отклоняются, slot/bytes освобождаются |
-| 4 | policy adapter обязан получить server-owned delegated/continuation proof для root actor/tenant/project, request/correlation, source revision+digest/provenance и exact RPC | до реализации #1023 adapter возвращает ошибку до сетевого RPC; locator/echo не authority |
+| 4 | policy adapter получает через local issuer server-owned continuation proof ABI 2 для root actor/tenant/project, request/correlation, source revision+digest/provenance, request digest и exact RPC | issuer атомарно подтверждает durable-accepted parent и резервирует child JTI; locator/echo не authority |
 | 5 | домен проверяет server-pinned `gpt-transcribe`, `ru`, limits и MP3/WAV frames/chunks | FLAC отклоняется: подменяемый STREAMINFO `total_samples` не доказывает frames |
 | 6 | credential adapter применяет тот же proof/locator contract и сверяет config/account/generation/expiry | #1024 выдаёт краткоживущий key; key очищается после вызова |
 | 7 | один `POST https://api.openai.com/v1/audio/transcriptions` идёт через exact egress proxy без автоматического retry | multipart состоит только из streaming file, `model=gpt-transcribe`, `language=ru` |
@@ -42,9 +43,9 @@ locator/credential generation и завершённый stage. Сервис не
   listeners, локальный verifier, pinned config и writable bounded spool;
 - `/diagnostics/protected-path` и gRPC `CheckProtectedPath` отдельно сообщают
   stage полного protected path и не участвуют в Kubernetes readiness;
-- diagnostic не вызывает OpenAI. В текущем неактивном unit он закрыто
-  возвращает `delegated_authority`, потому что continuation proof #1023 ещё не
-  материализован.
+- diagnostic не вызывает projection RPC или OpenAI. Он подтверждает, что local
+  issuer обслуживает authority ABI 2; mismatch, stale snapshot или недоступный
+  sidecar закрыто возвращают stage `delegated_authority`.
 
 Readiness не зависит от control-plane, secret-broker, DNS/egress или OpenAI и
 не утверждает готовность полного protected path.
@@ -91,7 +92,7 @@ fixture/Secret; в этом remediation deploy не выполняется.
 
 Эта проверка не является end-to-end acceptance: она обходит gRPC, authority,
 policy и credential projection. Полная gRPC acceptance остаётся обязательной,
-но `NOT RUN` до materialization #1019/#1021/#1023/#1024; зависимость результата
+но `NOT RUN` до materialization #1021/#1024; зависимость результата
 Issue #1020 отслеживается в #1031, и provider smoke не может дать ей `PASS`.
 
 ## Проверенные внешние документы

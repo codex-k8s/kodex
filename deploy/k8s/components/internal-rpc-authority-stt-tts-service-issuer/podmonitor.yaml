@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: stt-tts-service-internal-rpc-authority-issuer
+  labels:
+    app.kubernetes.io/name: internal-rpc-authority
+    app.kubernetes.io/component: issuer
+spec:
+  selector:
+    matchLabels:
+      kodex.dev/internal-rpc-authority-issuer: enabled
+  podMetricsEndpoints:
+    - port: auth-metrics
+      path: /metrics
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 5s
