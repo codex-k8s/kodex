@@ -965,6 +965,10 @@ func (service *Service) executeResolved(ctx context.Context, input command.Comma
 			return command.Result{}, errs.ErrProtected
 		}
 	}
+	if input.Kind == command.MaterializeOccurrence &&
+		(input.Principal.CallerWorkload != "automation-scheduler" || input.Principal.Permission != "platform.runtime.schedules.materialize") {
+		return command.Result{}, errs.ErrForbidden
+	}
 	if input.Kind == command.ArchiveAgent {
 		payload, ok := input.Payload.(command.AgentInput)
 		if !ok || payload.Ref == "system-assistant" {
@@ -1021,6 +1025,9 @@ func (service *Service) ClaimDueSchedules(ctx context.Context, p value.Principal
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return nil, err
+	}
+	if p.CallerWorkload != "automation-scheduler" || p.Permission != "platform.runtime.schedules.claim" {
+		return nil, errs.ErrForbidden
 	}
 	if strings.TrimSpace(instance) == "" || limit < 1 || limit > 128 {
 		return nil, errs.ErrInvalid
