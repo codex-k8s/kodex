@@ -34,10 +34,7 @@ describe("bootstrap Control Center", () => {
   });
 
   it("не наблюдает browser test artifacts и сохранённую OIDC-сессию", () => {
-    expect(viteConfigSource).toContain(
-      "clientPort: controlCenterRemoteHMRClientPort",
-    );
-    expect(viteConfigSource).toContain("port: controlCenterRemoteHMRPort");
+    expect(viteConfigSource).toContain("hmr: false");
     expect(viteConfigSource).not.toContain("ws: false");
     expect(viteConfigSource).toContain('"/__kodex_dev_revision"');
     expect(viteConfigSource).toContain('"**/.auth/**"');

@@ -5,9 +5,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import viteConfig, {
   controlCenterFileSystemBoundary,
-  controlCenterRemoteHMRClientPort,
-  controlCenterRemoteHMRPort,
   controlCenterReloadPollIntervalMs,
+  withoutViteHMRConnection,
   withoutViteHMRClient,
 } from "../../vite.config";
 
@@ -55,16 +54,23 @@ describe("filesystem boundary Vite dev-server", () => {
     expect(controlCenterReloadPollIntervalMs).toBe(1_000);
   });
 
-  it("отделяет Vite HMR transport от рабочего WebSocket proxy", () => {
-    expect(controlCenterRemoteHMRPort).toBe(24_678);
-    expect(controlCenterRemoteHMRClientPort).toBe(9);
-  });
-
   it("заменяет встроенный Vite HMR client на remote polling reload", () => {
     expect(
       withoutViteHMRClient(`<!doctype html>
 <html><head><script type="module" src="/@vite/client"></script></head></html>`),
     ).toBe("<!doctype html>\n<html><head></head></html>");
+  });
+
+  it("сохраняет Vite client helpers без подключения HMR transport", () => {
+    const source = `const transport = {};
+transport.connect(createHMRHandler(handleMessage));
+export { transport };`;
+    expect(withoutViteHMRConnection(source)).toBe(
+      "const transport = {};\nexport { transport };",
+    );
+    expect(() => withoutViteHMRConnection("export const value = 1;")).toThrow(
+      "Vite client HMR bootstrap is missing",
+    );
   });
 
   it.each([

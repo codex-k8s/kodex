@@ -12,15 +12,24 @@ const remoteDevelopmentEnabled = Boolean(
 );
 
 export const controlCenterReloadPollIntervalMs = 1_000;
-export const controlCenterRemoteHMRPort = 24_678;
-export const controlCenterRemoteHMRClientPort = 9;
 const controlCenterReloadClientPath = "/__kodex_dev_reload.js";
 const controlCenterRevisionPath = "/__kodex_dev_revision";
 const viteHMRClientScriptPattern =
   /<script\s+type=["']module["']\s+src=["'][^"']*\/@vite\/client["']><\/script>\s*/u;
+const viteClientModulePattern =
+  /[/\\]vite[/\\]dist[/\\]client[/\\]client\.mjs(?:\?.*)?$/u;
+const viteHMRConnectPattern =
+  /\ntransport\.connect\(createHMRHandler\(handleMessage\)\);\n/u;
 
 export function withoutViteHMRClient(html: string): string {
   return html.replace(viteHMRClientScriptPattern, "");
+}
+
+export function withoutViteHMRConnection(source: string): string {
+  const result = source.replace(viteHMRConnectPattern, "\n");
+  if (result === source)
+    throw new Error("Vite client HMR bootstrap is missing");
+  return result;
 }
 
 function controlCenterRemoteReloadPlugin(): Plugin {
@@ -29,6 +38,7 @@ function controlCenterRemoteReloadPlugin(): Plugin {
   return {
     name: "kodex:remote-live-reload",
     apply: "serve",
+    enforce: "post",
     configureServer(server) {
       const advanceRevision = (): void => {
         revision += 1;
@@ -78,6 +88,10 @@ function controlCenterRemoteReloadPlugin(): Plugin {
           ],
         };
       },
+    },
+    transform(source, id) {
+      if (!viteClientModulePattern.test(id)) return;
+      return { code: withoutViteHMRConnection(source), map: null };
     },
   };
 }
@@ -164,15 +178,7 @@ export default defineConfig({
     ...(developmentPublicHost && developmentApiTarget
       ? {
           allowedHosts: [developmentPublicHost],
-          // Vite client нужен CSS-модулям, но его HMR transport не должен
-          // занимать публичный WebSocket proxy; reload выполняет polling выше.
-          hmr: {
-            clientPort: controlCenterRemoteHMRClientPort,
-            host: "127.0.0.1",
-            overlay: false,
-            port: controlCenterRemoteHMRPort,
-            protocol: "ws",
-          },
+          hmr: false,
           watch: {
             ignored: [
               "**/.auth/**",
