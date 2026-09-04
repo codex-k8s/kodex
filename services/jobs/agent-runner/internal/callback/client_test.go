@@ -350,6 +350,25 @@ func TestCommitProviderCredentialRefreshUsesExecutionScopedCallback(t *testing.T
 	}
 }
 
+func TestCompleteRejectsMismatchedAttemptBeforeTransport(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { called = true }))
+	defer server.Close()
+	base, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &Client{http: server.Client(), base: base, token: "ticket"}
+	input := validWarmTurnFixture()
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt + 1, Success: true, ResultSummary: "done"}
+	if err := client.Complete(context.Background(), input, payload); err == nil {
+		t.Fatal("completion with a foreign attempt was accepted")
+	}
+	if called {
+		t.Fatal("foreign attempt reached transport")
+	}
+}
+
 func TestCommitProviderCredentialRefreshRejectsInvalidPayloadBeforeTransport(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))

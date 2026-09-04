@@ -136,6 +136,7 @@ func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 		{name: "authentication", err: ErrProviderAuthentication, failure: providerBrokerFailureAuthentication, want: ErrProviderAuthentication},
 		{name: "authority", err: ErrAuthorityRequestUnsupported, failure: providerBrokerFailureAuthority, want: ErrAuthorityRequestUnsupported},
 		{name: "mcp", err: ErrRequiredMCPUnavailable, failure: providerBrokerFailureMCP, want: ErrRequiredMCPUnavailable},
+		{name: "configuration", err: ErrRuntimeProfile, failure: providerBrokerFailureConfiguration, want: ErrRuntimeProfile},
 		{name: "provider", err: errors.New("transport"), failure: providerBrokerFailureProvider},
 	}
 	for _, test := range tests {

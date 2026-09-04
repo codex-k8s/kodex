@@ -19,6 +19,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -45,7 +46,10 @@ type MCPProxy struct {
 	localToken string
 }
 
-func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPProxy, error) {
+func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (*MCPProxy, error) {
+	if len(requiredTools) == 0 || len(requiredTools) > 256 {
+		return nil, errors.New("required MCP tool catalog is invalid")
+	}
 	upstream, err := url.Parse(input.CallbackURL)
 	if err != nil || upstream.Scheme != "https" || upstream.Host == "" {
 		return nil, errors.New("required MCP endpoint is invalid")
@@ -129,7 +133,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 		socketPath: mcpAuthoritySocket, localToken: localToken}
 	go func() { done <- server.Serve(secured) }()
 	localEndpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
-	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken); err != nil {
+	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken, requiredTools); err != nil {
 		_ = server.Close()
 		localTransport.CloseIdleConnections()
 		transport.CloseIdleConnections()
@@ -220,7 +224,7 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 		MaxResponseHeaderBytes: 16 << 10}, nil
 }
 
-func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string) error {
+func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string) error {
 	initialize := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
 	raw, mediaType, statusCode, err := postMCP(ctx, client, endpoint, token, initialize)
 	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
@@ -265,6 +269,34 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 		catalog.JSONRPC != "2.0" || catalog.ID != "agent-runner-tools" ||
 		len(catalog.Error) != 0 || len(catalog.Result.Tools) == 0 || len(catalog.Result.Tools) > 256 {
 		return errors.New("required MCP tool catalog is invalid")
+	}
+	want := append([]string(nil), requiredTools...)
+	actual := make([]string, 0, len(catalog.Result.Tools))
+	seen := make(map[string]struct{}, len(catalog.Result.Tools))
+	for _, rawTool := range catalog.Result.Tools {
+		var tool struct {
+			Name        string          `json:"name"`
+			Description string          `json:"description"`
+			InputSchema json.RawMessage `json:"inputSchema"`
+		}
+		toolDecoder := json.NewDecoder(bytes.NewReader(rawTool))
+		toolDecoder.DisallowUnknownFields()
+		if toolDecoder.Decode(&tool) != nil || toolDecoder.Decode(&struct{}{}) != io.EOF ||
+			strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || len(tool.Name) > 128 ||
+			strings.TrimSpace(tool.Description) == "" || len(tool.Description) > 2000 ||
+			len(tool.InputSchema) == 0 || tool.InputSchema[0] != '{' {
+			return errors.New("required MCP tool catalog is invalid")
+		}
+		if _, exists := seen[tool.Name]; exists {
+			return errors.New("required MCP tool catalog is invalid")
+		}
+		seen[tool.Name] = struct{}{}
+		actual = append(actual, tool.Name)
+	}
+	slices.Sort(want)
+	slices.Sort(actual)
+	if !slices.Equal(actual, want) {
+		return errors.New("required MCP tool catalog does not match RuntimeRevision")
 	}
 	return nil
 }

@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -99,134 +101,122 @@ func (stub *nativeToolRecorderStub) RecordNativeToolCall(_ context.Context, _ mo
 	return stub.err
 }
 
-func TestBuildPromptExplainsBoundedFileAccessWithArtifactCapability(t *testing.T) {
-	input := model.Input{
-		Mode:                        runtimecontract.RunnerModeTurn,
-		Task:                        "Analyze the attached customer brief.",
-		Capabilities:                []string{runtimecontract.ArtifactCapability},
-		AttachmentSetRef:            "aset_abcdefgh",
-		AttachmentSetManifestDigest: strings.Repeat("a", 64),
-		AttachmentContext:           "RUN_INPUT",
-		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			{Ref: "artifact_abcdefgh", FileName: "customer brief.txt", MediaType: "text/plain", Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER"},
-			{Ref: "artifact_ijklmnop", FileName: "terms.pdf", MediaType: "application/pdf", Scope: "INPUT", Position: 2, Source: "CONTROL_CENTER"},
-		},
+func materializedInstructions(kind string, capabilities []string) string {
+	blocks := map[string]string{
+		"workflow-stage":       `<workflow-stage used="false">unused</workflow-stage>`,
+		"automation":           `<automation used="false">unused</automation>`,
+		"session-continuation": `<session-continuation used="false">unused</session-continuation>`,
 	}
-	input = bindAttachmentCatalog(input)
+	if kind != "" {
+		blocks[kind] = "<" + kind + ` used="true">configured</` + kind + ">"
+	}
+	sorted := append([]string(nil), capabilities...)
+	sort.Strings(sorted)
+	capabilityBlock := `<effective-capabilities used="false">unused</effective-capabilities>`
+	if len(sorted) != 0 {
+		capabilityBlock = `<effective-capabilities used="true">` + strings.Join(sorted, ",") + `</effective-capabilities>`
+	}
+	return "Server materialized prompt.\n" + blocks["workflow-stage"] + "\n" + blocks["automation"] + "\n" + blocks["session-continuation"] + "\n" + capabilityBlock
+}
+
+func TestBuildInitialPromptUsesExactServerTask(t *testing.T) {
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "  Analyze the attached customer brief.\n"}
 	prompt, err := buildPrompt(input)
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
 	}
-	text := string(prompt)
-	for _, expected := range []string{
-		"# File access",
-		"The user attached 2 read-only file(s) to this turn.",
-		"`/workspace/input/aset_abcdefgh/files/0001-customer_brief.txt`",
-		"`/workspace/input/aset_abcdefgh/files/0002-terms.pdf`",
-		"Write every output file directly to `/workspace/.kodex/outbox/<safe-name>`.",
-		"The workspace root and all other paths are read-only",
-		"do not write output files to `/workspace` itself.",
-	} {
-		if !strings.Contains(text, expected) {
-			t.Fatalf("prompt does not contain %q: %s", expected, text)
-		}
-	}
-	if strings.Contains(text, input.InputArtifacts[0].Ref) {
-		t.Fatal("prompt exposed an opaque artifact ref instead of the materialized path")
+	if string(prompt) != input.Task {
+		t.Fatalf("initial prompt was rebuilt: %q", prompt)
 	}
 }
 
-func TestBuildPromptDoesNotPromiseFileAccessWithoutArtifactCapability(t *testing.T) {
-	prompt, err := buildPrompt(model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Summarize the request."})
+func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *testing.T) {
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", CodexSessionID: "00000000-0000-4000-8000-000000000001",
+		Attempt: 2, RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: 3, RuntimeRevisionDigest: strings.Repeat("a", 64),
+		Model: "gpt-5-codex", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64), ImageManifestDigest: "sha256:" + strings.Repeat("b", 64),
+		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 4, RuntimeConfigDigest: strings.Repeat("c", 64),
+		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 5, ProviderPolicyDigest: strings.Repeat("f", 64),
+		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 6,
+		ConfigOverlayDigest: strings.Repeat("d", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 7, RuntimeEnvironmentDigest: strings.Repeat("1", 64),
+		EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingVersion: 8, EnvironmentBindingDigest: strings.Repeat("2", 64),
+		MCPBindingDigest: strings.Repeat("e", 64), Capabilities: []string{"platform.artifact.manage"},
+		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Name: "Shell", Command: "sh", Description: "Shell"}},
+		Instructions:     materializedInstructions("session-continuation", []string{"platform.artifact.manage"}),
+	}
+	prompt, err := buildPrompt(input)
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
 	}
-	text := string(prompt)
-	for _, forbidden := range []string{"# File access", "/workspace/.kodex/outbox", "output file", "read-only"} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("prompt without artifact capability contains %q: %s", forbidden, text)
-		}
-	}
-}
-
-func TestRenderInstructionsExposesTypedFileScopes(t *testing.T) {
-	input := model.Input{
-		Instructions: `{{range .input.files}}{{.name}}|{{.media_type}}|{{.path}}|{{.source}}|{{.purpose}}|{{.version}}{{end}}
-{{range .session.files}}{{.name}};{{end}}
-{{range .project.files}}{{.name}};{{end}}
-{{.input.files_count}}|{{.input.files_dir}}|{{.input.manifest_path}}`,
-		ProjectRef: "prj_abcdefgh", SessionRef: "ses_abcdefgh", RunRef: "run_abcdefgh",
-		AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "SESSION_TURN",
-		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			runnerInputArtifact("artifact_abcdefgh", "new.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 2, "CONTROL_CENTER"),
-			runnerInputArtifact("artifact_ijklmnop", "prior.txt", "text/plain", runtimecontract.AttachmentScopeSession, 1, 1, "CONTROL_CENTER"),
-			runnerInputArtifact("artifact_qrstuvwx", "policy.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 3, "KNOWLEDGE_SOURCE"),
-		},
-	}
-	input.AttachmentSetManifestDigest = strings.Repeat("a", 64)
-	input = bindAttachmentCatalog(input)
-	rendered, err := renderInstructions(input)
-	if err != nil {
-		t.Fatalf("renderInstructions() error = %v", err)
-	}
 	for _, expected := range []string{
-		"new.txt|text/plain|/workspace/input/aset_abcdefgh/files/0001-new.txt|CONTROL_CENTER|SESSION_TURN|2",
-		"prior.txt;new.txt;",
-		"policy.md;",
-		"1|/workspace/input/aset_abcdefgh/files|/workspace/input/aset_abcdefgh/manifest.json",
+		"<runtime-revision-delta>", "attempt=2", "model=gpt-5-codex", "reasoning=high",
+		"tools=Shell:sh", "mcp=" + input.MCPBindingDigest, "files=::",
+		"config=rconf_abcdefgh:4:", "environment=renv_abcdefgh:7:",
+		`<session-continuation used="true">configured</session-continuation>`,
+		`<effective-capabilities used="true">platform.artifact.manage</effective-capabilities>`,
 	} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("rendered instructions do not contain %q: %s", expected, rendered)
+		if !strings.Contains(string(prompt), expected) {
+			t.Fatalf("continuation prompt does not contain %q: %s", expected, prompt)
 		}
 	}
 }
 
-func TestRenderInstructionsExposesOnlyEnvironmentSelectedTools(t *testing.T) {
-	input := model.Input{
-		Instructions: `{{range .runtime.environment.tools}}{{.command}}|{{.description}}|{{.usage_hint}}{{end}}
-{{.runtime.environment.image.reference}}|{{.runtime.environment.image.digest}}`,
-		EnvironmentImage: runtimecontract.RuntimeEnvironmentImage{
-			Reference: "registry.example/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			Digest:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		},
-		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{
-			Name: "GitHub CLI", Command: "gh", Description: "Работа с GitHub", UsageHint: "Используй gh api",
-		}},
+func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
+	tests := []struct {
+		name, kind   string
+		attempt      int32
+		continued    bool
+		resumeThread bool
+	}{
+		{name: "initial Agent", attempt: 1},
+		{name: "Process stage", kind: "workflow-stage", attempt: 1},
+		{name: "Automation", kind: "automation", attempt: 1},
+		{name: "Continuation", kind: "session-continuation", attempt: 1, continued: true, resumeThread: true},
+		{name: "Retry", kind: "session-continuation", attempt: 2, continued: true},
 	}
-	rendered, err := renderInstructions(input)
-	if err != nil {
-		t.Fatalf("renderInstructions() error = %v", err)
-	}
-	for _, expected := range []string{
-		"gh|Работа с GitHub|Используй gh api", "# Verified runtime tools", "`gh`",
-		input.EnvironmentImage.Reference + "|" + input.EnvironmentImage.Digest,
-	} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("rendered instructions do not contain %q: %s", expected, rendered)
-		}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := model.Input{
+				Mode: runtimecontract.RunnerModeTurn, Task: "Exact server task.", Attempt: test.attempt,
+				Instructions: materializedInstructions(test.kind, []string{"project.read"}), Capabilities: []string{"project.read"},
+				RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: int64(test.attempt), RuntimeRevisionDigest: strings.Repeat("a", 64),
+				Model: "gpt-5.4", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64),
+				ImageManifestDigest: "sha256:" + strings.Repeat("b", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+				MCPBindingDigest: strings.Repeat("c", 64), RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigDigest: strings.Repeat("d", 64),
+				ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyDigest: strings.Repeat("e", 64), ConfigOverlayRef: "cover_abcdefgh",
+				ConfigOverlayDigest: strings.Repeat("f", 64), RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentDigest: strings.Repeat("1", 64),
+				EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingDigest: strings.Repeat("2", 64),
+			}
+			if test.resumeThread {
+				input.CodexSessionID = "00000000-0000-4000-8000-000000000001"
+			}
+			if err := validateMaterializedInstructions(input); err != nil {
+				t.Fatalf("launch prompt rejected: %v", err)
+			}
+			prompt, err := buildPrompt(input)
+			if err != nil {
+				t.Fatalf("buildPrompt() error = %v", err)
+			}
+			hasDelta := strings.Contains(string(prompt), "<runtime-revision-delta>")
+			if hasDelta != test.continued {
+				t.Fatalf("continuation delta presence = %v, want %v: %s", hasDelta, test.continued, prompt)
+			}
+		})
 	}
 }
 
-func TestRenderInstructionsMaterializesRunWorkflowAndProjectFileScopes(t *testing.T) {
-	input := model.Input{
-		Instructions: `{{range .run.files}}{{.name}};{{end}}
-{{range .workflow.files}}{{.name}};{{end}}
-{{range .project.files}}{{.name}};{{end}}`,
-		AttachmentSetRef: "aset_abcdefgh", AttachmentContext: "WORKFLOW_INPUT",
-		InputArtifacts: []runtimecontract.RunnerInputArtifact{
-			runnerInputArtifact("artifact_abcdefgh", "workflow.txt", "text/plain", runtimecontract.AttachmentScopeInput, 1, 1, "CONTROL_CENTER"),
-			runnerInputArtifact("artifact_ijklmnop", "knowledge.md", "text/markdown", runtimecontract.AttachmentScopeKnowledge, 1, 1, "KNOWLEDGE_SOURCE"),
-		},
+func TestValidateInstructionsAcceptsOnlyServerMaterializedPrompt(t *testing.T) {
+	input := model.Input{Instructions: materializedInstructions("workflow-stage", []string{"project.read"}), Capabilities: []string{"project.read"}}
+	if err := validateMaterializedInstructions(input); err != nil {
+		t.Fatalf("validateMaterializedInstructions() error = %v", err)
 	}
-	input.AttachmentSetManifestDigest = strings.Repeat("a", 64)
-	input = bindAttachmentCatalog(input)
-	rendered, err := renderInstructions(input)
-	if err != nil {
-		t.Fatalf("renderInstructions() error = %v", err)
-	}
-	for _, expected := range []string{"workflow.txt;", "knowledge.md;"} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("rendered scopes do not contain %q: %s", expected, rendered)
+	for _, invalid := range []string{
+		"{{.task}}", "plain text",
+		strings.Replace(input.Instructions, `<automation used="false">unused</automation>`, `<automation used="true">configured</automation>`, 1),
+		strings.Replace(input.Instructions, "project.read", "foreign.write", 1),
+	} {
+		if err := validateMaterializedInstructions(model.Input{Instructions: invalid, Capabilities: input.Capabilities}); err == nil {
+			t.Fatalf("invalid materialized instructions were accepted: %q", invalid)
 		}
 	}
 }
@@ -262,6 +252,9 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		t.Fatalf("BuildAttachmentManifest(history) error = %v", err)
 	}
 	input.WorkspaceRoot = root
+	if err := os.MkdirAll(filepath.Join(root, "knowledge"), 0o770); err != nil {
+		t.Fatalf("MkdirAll(knowledge) error = %v", err)
+	}
 	for _, set := range input.AttachmentSets {
 		if err := os.MkdirAll(filepath.Join(root, "input", set.Ref), 0o750); err != nil {
 			t.Fatalf("MkdirAll() error = %v", err)
@@ -272,6 +265,9 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		"aset_history1":        history,
 	}, workspace); err != nil {
 		t.Fatalf("writeInputManifests() error = %v", err)
+	}
+	if err := protectReadOnlyWorkspaceTrees(root, "input", "knowledge"); err != nil {
+		t.Fatalf("protectReadOnlyWorkspaceTrees() error = %v", err)
 	}
 	for path, expected := range map[string][]byte{
 		filepath.Join(root, "input", input.AttachmentSetRef, "manifest.json"): direct.Bytes,
@@ -290,6 +286,18 @@ func TestWriteInputManifestsUsesCanonicalFullCatalog(t *testing.T) {
 		}
 		if info.Mode().Perm() != 0o440 {
 			t.Fatalf("manifest %s mode = %v", path, info.Mode().Perm())
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(root, "input"), filepath.Join(root, "input", input.AttachmentSetRef),
+		filepath.Join(root, "input", "aset_history1"), filepath.Join(root, "knowledge"),
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("Stat(%s) error = %v", path, err)
+		}
+		if info.Mode().Perm() != 0o750 || info.Mode()&os.ModeSetgid == 0 {
+			t.Fatalf("read-only directory mode for %s = %v", path, info.Mode())
 		}
 	}
 }
@@ -345,9 +353,22 @@ func TestVerifyInputArtifactsRejectsSymlinkWithoutTargetLeakage(t *testing.T) {
 	}
 }
 
-func TestRenderInstructionsDoesNotMaterializeUnpromisedNames(t *testing.T) {
+func TestVerifyInputArtifactsRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "input"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(root, "input", "manifest.json"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyInputArtifacts(model.Input{WorkspaceRoot: root}); err == nil {
+		t.Fatal("FIFO input was accepted")
+	}
+}
+
+func TestMaterializedInstructionsRejectUnpromisedNames(t *testing.T) {
 	for _, instructions := range []string{"{{ .agent.name }}", "{{ .project.name }}"} {
-		if _, err := renderInstructions(model.Input{Instructions: instructions}); err == nil {
+		if err := validateMaterializedInstructions(model.Input{Instructions: instructions}); err == nil {
 			t.Fatalf("unmaterialized template variable %q was accepted", instructions)
 		}
 	}

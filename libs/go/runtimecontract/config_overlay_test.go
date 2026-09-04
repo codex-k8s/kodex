@@ -11,12 +11,18 @@ func TestConfigOverlayStrictAllowlist(t *testing.T) {
 	if err != nil || canonical == "" || len(digest) != 64 {
 		t.Fatalf("CanonicalConfigOverlay() = %q, %q, %v", canonical, digest, err)
 	}
+	for _, effort := range []string{"none", "max"} {
+		if _, err := ParseConfigOverlay("model_reasoning_effort = \"" + effort + "\"\n"); err != nil {
+			t.Fatalf("canonical reasoning effort %q rejected: %v", effort, err)
+		}
+	}
 	for name, raw := range map[string]string{
 		"credential": `openai_api_key = "value"`,
 		"provider":   `model_provider = "attacker"`,
 		"sandbox":    `sandbox_mode = "danger-full-access"`,
 		"mcp":        `[mcp_servers.attacker]\nurl = "https://example.invalid"`,
 		"login":      `allow_login_shell = true`,
+		"reasoning":  `model_reasoning_effort = "minimal"`,
 		"syntax":     `history = [`,
 	} {
 		t.Run(name, func(t *testing.T) {
