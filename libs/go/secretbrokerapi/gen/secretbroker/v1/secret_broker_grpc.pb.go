@@ -277,3 +277,152 @@ var SecretBrokerService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "secretbroker/v1/secret_broker.proto",
 }
+
+const (
+	RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName             = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials"
+	RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName = "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness"
+)
+
+// RuntimeCredentialProjectionServiceClient is the client API for RuntimeCredentialProjectionService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RuntimeCredentialProjectionService материализует один immutable Secret,
+// ограниченный exact execution lease. Payload является locator; authority
+// берётся только из проверенного mTLS+bearer context.
+type RuntimeCredentialProjectionServiceClient interface {
+	MaterializeRuntimeCredentials(ctx context.Context, in *MaterializeRuntimeCredentialsRequest, opts ...grpc.CallOption) (*MaterializeRuntimeCredentialsResponse, error)
+	CheckRuntimeCredentialProjectionReadiness(ctx context.Context, in *CheckRuntimeCredentialProjectionReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
+}
+
+type runtimeCredentialProjectionServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRuntimeCredentialProjectionServiceClient(cc grpc.ClientConnInterface) RuntimeCredentialProjectionServiceClient {
+	return &runtimeCredentialProjectionServiceClient{cc}
+}
+
+func (c *runtimeCredentialProjectionServiceClient) MaterializeRuntimeCredentials(ctx context.Context, in *MaterializeRuntimeCredentialsRequest, opts ...grpc.CallOption) (*MaterializeRuntimeCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MaterializeRuntimeCredentialsResponse)
+	err := c.cc.Invoke(ctx, RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeCredentialProjectionServiceClient) CheckRuntimeCredentialProjectionReadiness(ctx context.Context, in *CheckRuntimeCredentialProjectionReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeCredentialProjectionReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRuntimeCredentialProjectionReadinessResponse)
+	err := c.cc.Invoke(ctx, RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RuntimeCredentialProjectionServiceServer is the server API for RuntimeCredentialProjectionService service.
+// All implementations must embed UnimplementedRuntimeCredentialProjectionServiceServer
+// for forward compatibility.
+//
+// RuntimeCredentialProjectionService материализует один immutable Secret,
+// ограниченный exact execution lease. Payload является locator; authority
+// берётся только из проверенного mTLS+bearer context.
+type RuntimeCredentialProjectionServiceServer interface {
+	MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error)
+	CheckRuntimeCredentialProjectionReadiness(context.Context, *CheckRuntimeCredentialProjectionReadinessRequest) (*CheckRuntimeCredentialProjectionReadinessResponse, error)
+	mustEmbedUnimplementedRuntimeCredentialProjectionServiceServer()
+}
+
+// UnimplementedRuntimeCredentialProjectionServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRuntimeCredentialProjectionServiceServer struct{}
+
+func (UnimplementedRuntimeCredentialProjectionServiceServer) MaterializeRuntimeCredentials(context.Context, *MaterializeRuntimeCredentialsRequest) (*MaterializeRuntimeCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MaterializeRuntimeCredentials not implemented")
+}
+func (UnimplementedRuntimeCredentialProjectionServiceServer) CheckRuntimeCredentialProjectionReadiness(context.Context, *CheckRuntimeCredentialProjectionReadinessRequest) (*CheckRuntimeCredentialProjectionReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeCredentialProjectionReadiness not implemented")
+}
+func (UnimplementedRuntimeCredentialProjectionServiceServer) mustEmbedUnimplementedRuntimeCredentialProjectionServiceServer() {
+}
+func (UnimplementedRuntimeCredentialProjectionServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRuntimeCredentialProjectionServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RuntimeCredentialProjectionServiceServer will
+// result in compilation errors.
+type UnsafeRuntimeCredentialProjectionServiceServer interface {
+	mustEmbedUnimplementedRuntimeCredentialProjectionServiceServer()
+}
+
+func RegisterRuntimeCredentialProjectionServiceServer(s grpc.ServiceRegistrar, srv RuntimeCredentialProjectionServiceServer) {
+	// If the following call panics, it indicates UnimplementedRuntimeCredentialProjectionServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RuntimeCredentialProjectionService_ServiceDesc, srv)
+}
+
+func _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MaterializeRuntimeCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeCredentialProjectionServiceServer).MaterializeRuntimeCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeCredentialProjectionServiceServer).MaterializeRuntimeCredentials(ctx, req.(*MaterializeRuntimeCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRuntimeCredentialProjectionReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeCredentialProjectionServiceServer).CheckRuntimeCredentialProjectionReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeCredentialProjectionServiceServer).CheckRuntimeCredentialProjectionReadiness(ctx, req.(*CheckRuntimeCredentialProjectionReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RuntimeCredentialProjectionService_ServiceDesc is the grpc.ServiceDesc for RuntimeCredentialProjectionService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RuntimeCredentialProjectionService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "secretbroker.v1.RuntimeCredentialProjectionService",
+	HandlerType: (*RuntimeCredentialProjectionServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "MaterializeRuntimeCredentials",
+			Handler:    _RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_Handler,
+		},
+		{
+			MethodName: "CheckRuntimeCredentialProjectionReadiness",
+			Handler:    _RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "secretbroker/v1/secret_broker.proto",
+}

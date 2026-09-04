@@ -198,6 +198,10 @@ func ControlAPIGatewayOperations() map[string]string {
 func SecretBrokerOperations() map[string]string {
 	return map[string]string{
 		"platform.runtime-secrets.readiness.check":         controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+		"platform.credential-projections.readiness.check":  controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
+		"platform.credential-projections.runtime.resolve":  controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.runtime.validate": controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.stt.resolve":      controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
 		"platform.runtime-secrets.operations.consume":      controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.complete":     controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
 		"platform.runtime-secrets.operations.fail":         controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
@@ -216,6 +220,23 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 		"platform.provider-credentials.api-key.materialize":     controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
 		"platform.provider-credentials.materialization.discard": controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
 		"platform.provider-credentials.cleanup":                 controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
+	}
+}
+
+// RuntimeCredentialProjectionOperations возвращает exact secret-broker API,
+// который материализует и проверяет credentials одной execution lease.
+func RuntimeCredentialProjectionOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime.credentials.materialize":     "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
+		"platform.runtime.credentials.readiness.check": "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
+	}
+}
+
+// STTCredentialProjectionOperations возвращает exact credential producer API
+// для одного защищённого STT-запроса.
+func STTCredentialProjectionOperations() map[string]string {
+	return map[string]string{
+		"platform.stt.credential.project": "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential",
 	}
 }
 

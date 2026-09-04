@@ -31,22 +31,27 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-  .policy_revision == 42 and
-  (.policy.authority_proof_producers | length) == 11 and
+  .policy_revision == 43 and
+  (.policy.authority_proof_producers | length) == 13 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and
   all(.policy.operation_bindings[];
     .permission != "" and .full_method != "" and
     .authority_proof_producer_id != "") and
   ([.policy.operation_bindings[] |
-    select(.target_workload_id == "secret-broker") | .operation_id] | sort) == provider_operations and
+    select(.target_workload_id == "secret-broker" and .caller_workload_id == "control-plane") | .operation_id] | sort) == provider_operations and
   all(.policy.operation_bindings[] | select(.target_workload_id == "secret-broker");
-    .caller_workload_id == "control-plane" and
-    .caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/control-plane" and
     .target_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/secret-broker" and
     .audience == "urn:kodex:internal-rpc:secret-broker" and
-    .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local" and
-    .authority_proof_producer_id == "secret-broker.provider-credential-materializer") and
+    .target_tls_server_name == "secret-broker.kodex-system.svc.cluster.local") and
+  ([.policy.operation_bindings[] | select(.caller_workload_id == "runtime-controller" and .target_workload_id == "secret-broker") | .operation_id] | sort) ==
+    ["platform.runtime.credentials.materialize", "platform.runtime.credentials.readiness.check"] and
+  all(.policy.operation_bindings[] | select(.caller_workload_id == "runtime-controller" and .target_workload_id == "secret-broker");
+    .project_required == true and .authority_sources == ["DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"]) and
+  ([.policy.operation_bindings[] | select(.caller_workload_id == "stt-tts-service" and .target_workload_id == "secret-broker") | .operation_id]) ==
+    ["platform.stt.credential.project"] and
+  all(.policy.operation_bindings[] | select(.caller_workload_id == "stt-tts-service" and .target_workload_id == "secret-broker");
+    .project_required == true and .authority_sources == ["DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"]) and
   ([.policy.operation_bindings[] |
     select(.operation_id == "platform.provider-credentials.cleanup" and
       .permission == "platform.provider-credentials.cleanup" and
@@ -69,7 +74,12 @@ jq -e '
     .application_credential_audience == "urn:kodex:platform-worker:control-plane" and
     .application_credential_trust_bundle_id == "control-plane-platform-worker-grants-g1" and
     .authority_sources == ["DOMAIN_STATE"] and
-    (.allowed_operation_ids | sort) == provider_operations)
+    (.allowed_operation_ids | sort) == provider_operations) and
+  ([.policy.authority_proof_producers[] | select(.producer_id == "secret-broker.runtime-credential-projection" and
+    .caller_workload_id == "runtime-controller" and .allowed_operation_ids ==
+      ["platform.runtime.credentials.materialize", "platform.runtime.credentials.readiness.check"])] | length) == 1 and
+  ([.policy.authority_proof_producers[] | select(.producer_id == "secret-broker.stt-credential-projection" and
+    .caller_workload_id == "stt-tts-service" and .allowed_operation_ids == ["platform.stt.credential.project"])] | length) == 1
 ' "$canonical" >/dev/null || fail 'canonical policy invariants are invalid'
 
 printf 'Authority policy codegen tests passed\n'

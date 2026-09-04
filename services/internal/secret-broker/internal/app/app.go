@@ -21,6 +21,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	controlowner "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/controlplane"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
@@ -60,6 +61,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		secretbrokerv1.SecretBrokerService_RevealSecret_FullMethodName:                                                   "reveal",
 		secretbrokerv1.SecretBrokerService_RevokeSecret_FullMethodName:                                                   "revoke",
 		secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName:                                                 "readiness",
+		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName:                   "runtime_credentials_materialize",
+		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName:       "runtime_credentials_readiness",
+		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName:                     "stt_credential_project",
 		controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName: "provider_readiness",
 		controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName:                     "provider_device_start",
 		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName:                   "provider_device_observe",
@@ -106,6 +110,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := reconciler.EnableExpiredClaimRecovery(owner, store, config.RuntimeNamespace); err != nil {
 		return err
 	}
+	if err := reconciler.EnableCredentialProjectionRecovery(owner, store); err != nil {
+		return err
+	}
 	appServer, err := providercredential.NewAppServerProcess(config.CodexBinary, config.ProviderAuthorizationRoot)
 	if err != nil {
 		return err
@@ -138,7 +145,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
 			telemetry.UnaryServerInterceptor(methods),
-			routeProviderCredentialUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier())),
+			routeProtectedUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier())),
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -155,6 +162,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		grpc.MaxRecvMsgSize(config.MaximumSecretBytes+(64<<10)), grpc.MaxSendMsgSize(config.MaximumSecretBytes+(64<<10)),
 	)
 	secretbrokerv1.RegisterSecretBrokerServiceServer(grpcServer, handler)
+	secretbrokerv1.RegisterRuntimeCredentialProjectionServiceServer(grpcServer, handler)
+	sttv1.RegisterTranscriptionCredentialProjectionServiceServer(grpcServer, handler)
 	controlplanev1.RegisterProviderCredentialMaterializerServiceServer(grpcServer, handler)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
@@ -199,7 +208,7 @@ func (checker providerVerifierReadiness) Check(ctx context.Context) error {
 	return nil
 }
 
-func routeProviderCredentialUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
 		case controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
@@ -207,7 +216,10 @@ func routeProviderCredentialUnary(protected grpc.UnaryServerInterceptor) grpc.Un
 			controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
-			controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName:
+			controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
+			secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName,
+			secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName,
+			sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName:
 			return protected(ctx, request, info, handler)
 		default:
 			return handler(ctx, request)

@@ -134,8 +134,26 @@ func main() {
 			secretBrokerAudience,
 			secretBrokerTLS,
 		),
+		delegatedTargetedWorker(
+			"runtime-controller",
+			"secret-broker.runtime-credential-projection",
+			controlplaneclient.RuntimeCredentialProjectionOperations(),
+			secretBrokerID,
+			secretBrokerPeer,
+			secretBrokerAudience,
+			secretBrokerTLS,
+		),
+		delegatedTargetedWorker(
+			"stt-tts-service",
+			"secret-broker.stt-credential-projection",
+			controlplaneclient.STTCredentialProjectionOperations(),
+			secretBrokerID,
+			secretBrokerPeer,
+			secretBrokerAudience,
+			secretBrokerTLS,
+		),
 	}
-	value := document{Version: 1, PolicyRevision: 42, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 43, Policy: policy{
 		TrustDomain: "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
 	}}
@@ -250,6 +268,24 @@ func targetedWorker(
 	result.TargetAudience = targetAudience
 	result.TargetTLSServerName = targetTLSServerName
 	result.TargetTrustBundleID = "kodex-internal-ca-g1"
+	return result
+}
+
+func delegatedTargetedWorker(
+	workloadID string,
+	producerID string,
+	operations map[string]string,
+	targetWorkloadID string,
+	targetSPIFFEID string,
+	targetAudience string,
+	targetTLSServerName string,
+) profile {
+	result := targetedWorker(workloadID, producerID, operations, targetWorkloadID, targetSPIFFEID, targetAudience, targetTLSServerName)
+	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
+	result.ProjectRequired = make(map[string]struct{}, len(operations))
+	for operation := range operations {
+		result.ProjectRequired[operation] = struct{}{}
+	}
 	return result
 }
 

@@ -213,6 +213,27 @@ func (store *Store) CreateProviderCredential(
 	return providerCredentialDescriptor(created, attemptRef, accountRef, digestText)
 }
 
+// ReadProviderCredentialExact возвращает копию auth.json только после exact
+// проверки server-owned account binding, UID, resourceVersion и digest.
+func (store *Store) ReadProviderCredentialExact(ctx context.Context, accountRef string, descriptor ProviderCredentialDescriptor) ([]byte, error) {
+	if !providerReferencePattern.MatchString(accountRef) || !validProviderCredentialDescriptor(descriptor) {
+		return nil, ErrProviderCredentialInputInvalid
+	}
+	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, ErrProviderCredentialConflict
+	}
+	if err != nil {
+		return nil, errors.New("read exact provider credential")
+	}
+	defer clearSecretData(secret)
+	if string(secret.UID) != descriptor.SecretUID || secret.ResourceVersion != descriptor.SecretResourceVersion ||
+		!providerCredentialCleanupSecretMatches(secret, accountRef, descriptor) {
+		return nil, ErrProviderCredentialConflict
+	}
+	return append([]byte(nil), secret.Data[providerAuthJSONKey]...), nil
+}
+
 // DiscardProviderAuthorizationAttempt удаляет только тот attempt Secret,
 // который принадлежит exact materialization lineage. Terminal descriptor,
 // появившийся в гонке с отменой, удаляется по собственным UID/RV/digest.

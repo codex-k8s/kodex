@@ -539,9 +539,64 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || sttRebound.ManagedConfiguration == nil || sttRebound.ManagedConfiguration.Version != sttVersion+1 {
 		t.Fatalf("rebind system STT consumer: result=%#v err=%v", sttRebound, err)
 	}
+	if _, err := pool.Exec(ctx, `
+INSERT INTO control_plane.provider_authorization_attempts
+    (ref, organization_id, provider_account_id, method, state, created_by)
+SELECT 'pauth_component_stt_api_key', $1::uuid, account.id, 'API_KEY', 'AUTHORIZED', $2::uuid
+FROM control_plane.provider_accounts account
+WHERE account.organization_id = $1::uuid AND account.ref = $3
+`, ownerScope.organizationID, owner.ActorID, sttProviderAccountRef); err != nil {
+		t.Fatalf("materialize system STT API key authorization fixture: %v", err)
+	}
 	sttConfiguration, err := service.GetSystemSTTConfiguration(ctx, owner)
-	if err != nil || !sttConfiguration.Ready || sttConfiguration.RevisionRef != sttCreated.ManagedRevision.Ref || sttConfiguration.ProviderAccountRef != sttProviderAccountRef {
+	if err != nil || !sttConfiguration.Ready || sttConfiguration.RevisionRef != sttCreated.ManagedRevision.Ref ||
+		sttConfiguration.ProviderAccountRef != sttProviderAccountRef || sttConfiguration.ProviderCredentialGeneration == 0 {
 		t.Fatalf("read system STT configuration: configuration=%#v err=%v", sttConfiguration, err)
+	}
+	var sttProjectID string
+	if err := pool.QueryRow(ctx, `SELECT id::text FROM control_plane.projects WHERE ref = $1`, projectResult.Project.Ref).Scan(&sttProjectID); err != nil {
+		t.Fatalf("read system STT project identity: %v", err)
+	}
+	broker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "secret-broker", Operation: "platform.credential-projections.stt.resolve",
+	}, "secret-broker")
+	projectionInput := platformrepo.TranscriptionCredentialProjectionInput{
+		Authority: platformrepo.CredentialProjectionAuthority{
+			ActorID: owner.ActorID, TenantID: ownerScope.organizationID, ProjectID: sttProjectID,
+			SourceRevision: 9, SourceDigestSHA256: strings.Repeat("a", 64), ProofJTI: "9671137c-0288-4446-803e-f3c2d13dcbe8",
+			CallerWorkloadID: "stt-tts-service", CallerFullMethod: sttProjectionMethod,
+			CallerCredentialRevision: 3, ExpiresAt: time.Now().UTC().Add(30 * time.Second),
+		},
+		ProviderAccountRef: sttProviderAccountRef, ProviderCredentialGeneration: sttConfiguration.ProviderCredentialGeneration,
+		ConfigRevision: uint64(sttConfiguration.Revision), ConfigDigestSHA256: sttConfiguration.Digest,
+	}
+	credentialProjection, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput)
+	if err != nil || credentialProjection.ProviderCredential.AccountRef != sttProviderAccountRef ||
+		uint64(credentialProjection.ProviderCredential.CredentialRevision) != sttConfiguration.ProviderCredentialGeneration {
+		t.Fatalf("resolve exact system STT credential: projection=%#v err=%v", credentialProjection, err)
+	}
+	changedConfig := projectionInput
+	changedConfig.ConfigDigestSHA256 = strings.Repeat("f", 64)
+	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, changedConfig); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("changed system STT config was accepted: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET enabled = false, state = 'REVOKED', current_credential_revision_id = NULL WHERE ref = $1`, sttProviderAccountRef); err != nil {
+		t.Fatalf("revoke system STT account fixture: %v", err)
+	}
+	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("revoked system STT account was accepted: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+UPDATE control_plane.provider_accounts account
+SET enabled = true,
+    state = 'AUTHORIZED',
+    current_credential_revision_id = credential.id
+FROM control_plane.provider_credential_revisions credential
+WHERE account.ref = $1
+  AND credential.ref = $2
+  AND credential.provider_account_id = account.id`, sttProviderAccountRef, credentialProjection.ProviderCredential.CredentialRevisionRef); err != nil {
+		t.Fatalf("restore system STT account fixture: %v", err)
 	}
 	var environmentRef, environmentProjectRef string
 	if err := pool.QueryRow(ctx, `

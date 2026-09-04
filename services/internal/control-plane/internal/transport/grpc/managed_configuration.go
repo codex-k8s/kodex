@@ -191,7 +191,7 @@ func (server *Server) GetSystemSTTConfiguration(ctx context.Context, _ *controlp
 		ConfigurationRef: configuration.ConfigurationRef, RevisionRef: configuration.RevisionRef, Revision: configuration.Revision,
 		Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
 		Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
-		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...),
+		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
 	}}, nil
 }
 

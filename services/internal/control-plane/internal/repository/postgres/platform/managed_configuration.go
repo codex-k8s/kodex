@@ -572,11 +572,11 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var result entity.SystemSTTConfiguration
-	var eligible, providerEnabled bool
+	var eligible, providerEnabled, apiKey bool
 	var rawProviderCapabilities []byte
 	err = tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
 		&result.ConfigurationRef, &result.RevisionRef, &result.Revision, &result.Digest, &result.ProviderAccountRef, &result.Model, &result.Language, &result.PermissionKey,
-		&eligible, &providerEnabled, &rawProviderCapabilities)
+		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.SystemSTTConfiguration{}, errs.ErrNotFound
 	}
@@ -588,6 +588,9 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	}
 	if !eligible {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_ACCOUNT_INELIGIBLE")
+	}
+	if !apiKey {
+		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_CREDENTIAL_UNSUPPORTED")
 	}
 	var providerCapabilities map[string]any
 	if json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {

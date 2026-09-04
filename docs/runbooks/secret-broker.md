@@ -4,8 +4,8 @@ title: Диагностика secret-broker
 type: runbook
 status: approved
 owner: sre
-version: 1.1.0
-updated: 2026-08-29
+version: 1.2.0
+updated: 2026-09-04
 ---
 
 # Диагностика secret-broker
@@ -14,6 +14,14 @@ updated: 2026-08-29
 пользовательских Runtime Secrets. Метаданные, полномочия, operation lifecycle и
 audit принадлежат control-plane; broker хранит только неизменяемые versioned
 Kubernetes Secrets в выделенном installation runtime namespace.
+
+Кроме CRUD Runtime Secrets, broker производит две credential projection:
+
+- immutable Kubernetes Secret для одной exact execution lease;
+- ограниченную копию OpenAI API key для одного защищённого STT RPC.
+
+Authority берётся только из проверенного mTLS+bearer context. Locator, refs,
+generation и config digest из payload сами по себе полномочий не дают.
 
 ## Probes и метрики
 
@@ -27,9 +35,9 @@ Kubernetes Secrets в выделенном installation runtime namespace.
 - `kodex_secret_broker_recovery_runs_total{outcome}` отражает успешные и
   ошибочные bounded-проходы;
 - `kodex_secret_broker_recovery_actions_total{action}` учитывает только
-  `keep|delete|not_found|effect_present|claim_failed|claim_conflict`;
+  `keep|delete|not_found|effect_present|claim_failed|claim_conflict|projection_keep|projection_delete`;
 - `kodex_secret_broker_recovery_errors_total{stage}` использует закрытые этапы
-  `list|readback|decision|delete|protocol|work_list|work_lookup|work_fail|work_conflict|work_protocol`;
+  `list|readback|decision|delete|protocol|work_list|work_lookup|work_fail|work_conflict|work_protocol|projection_list|projection_decision|projection_delete`;
 - `kodex_secret_broker_recovery_backlog` равен числу materialization, которые
   последний проход не смог разрешить или удалить, и просроченных claim, которые
   не удалось безопасно завершить.
@@ -43,6 +51,9 @@ Kubernetes Secrets в выделенном installation runtime namespace.
   namespace broker Pod и не используется как target namespace;
 - `SECRET_BROKER_RECOVERY_INTERVAL` и `SECRET_BROKER_RECOVERY_TIMEOUT`
   ограничивают период и бюджет одного полного прохода.
+- `SECRET_BROKER_EXPECTED_CLIENT_SPIFFE_IDS` содержит ровно
+  `control-api-gateway`, `control-plane`, `runtime-controller` и
+  `stt-tts-service`; произвольный дополнительный client закрыто отклоняется.
 
 Отсутствующий `POD_UID`, другой runtime namespace или некорректный бюджет
 закрыто останавливают startup. Deployment должен передать эти env явно.
@@ -58,6 +69,32 @@ Kubernetes Secrets в выделенном installation runtime namespace.
 5. Проверить recovery/garbage-collection метрики и последние bounded ошибки.
 6. Повторить исходную команду только с тем же idempotency key и тем же intent.
    Новый intent требует новой команды и нового ключа.
+
+## Credential projection lifecycle
+
+1. `runtime-controller` предъявляет proof, связанный с root
+   actor/tenant/project, exact full method, lease, fence, workload instance,
+   RuntimeRevision, session, turn, attempt, input digest и generation.
+2. Control-plane внутри tenant boundary подтверждает активную `CLAIMED` lease,
+   текущую RuntimeRevision, текущую provider credential generation и каждую
+   активную RuntimeSecret revision.
+3. Broker exact-читает provider/runtime Secrets по name+UID+resourceVersion+
+   digest, создаёт один immutable projection Secret и возвращает только его
+   descriptor и имена keys.
+4. Reconciler повторно валидирует сохранённый immutable manifest. Terminal или
+   expired lease, revoke RuntimeSecret, новая provider credential generation и
+   смена config закрывают validation; projection удаляется с UID/RV
+   preconditions и проверкой отсутствия.
+5. `stt-tts-service` предъявляет exact delegated locator вместе с config
+   revision+digest, account ref и credential generation. Control-plane
+   подтверждает текущую опубликованную System STT binding, ready enabled
+   OpenAI account и API-key authorization; broker возвращает только API key с
+   bounded expiry.
+
+Config change, credential rotation/revoke и любой mismatch provenance,
+generation или digest дают закрытый отказ. До реализации server-owned
+continuation binder в #1023 STT consumer останавливается до сетевого RPC; это
+не является отказом producer path secret-broker.
 
 ## Инварианты восстановления
 
@@ -80,7 +117,8 @@ Kubernetes Secrets в выделенном installation runtime namespace.
   новое поколение claim, а immutable Secret содержит `operation_ref`;
 - `REVOKE` сначала атомарно закрывает secret в control-plane и повторно
   проверяет активные references; физическое удаление выполняется exact
-  UID/resourceVersion и может быть безопасно повторено reconciler;
+  UID/resourceVersion с absence readback. Незавершённый cleanup возвращает
+  `Unavailable`, даже если authoritative revoke уже зафиксирован;
 - stale claim, неизвестный Secret, чужой namespace и несовпадающий digest
   закрыто отклоняются;
 - каждая consumed operation получает ровно один terminal audit

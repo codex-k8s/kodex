@@ -12,6 +12,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	"google.golang.org/grpc/codes"
@@ -22,9 +23,13 @@ import (
 // Owner изолирует generated variadic grpc.CallOption от бизнесовой реализации.
 type Owner interface {
 	Check(context.Context) error
+	CheckCredentialProjection(context.Context) error
 	Consume(context.Context, string) (*controlplanev1.ConsumeRuntimeSecretOperationResponse, error)
 	Complete(context.Context, string, int64, *controlplanev1.RuntimeSecretMaterialization) (*controlplanev1.RuntimeSecret, error)
 	Fail(context.Context, string, int64, controlplanev1.RuntimeSecretFailureCode) error
+	ResolveRuntimeCredentialProjection(context.Context, *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error)
+	ValidateRuntimeCredentialProjection(context.Context, *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (bool, error)
+	ResolveTranscriptionCredentialProjection(context.Context, *controlplanev1.ResolveTranscriptionCredentialProjectionRequest) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error)
 }
 
 type Recovery interface {
@@ -38,10 +43,16 @@ type Store interface {
 	ResolveExact(context.Context, kubernetesstore.ExactDescriptor) (kubernetesstore.Materialization, error)
 	ReadExactValue(context.Context, kubernetesstore.ExactDescriptor) (kubernetesstore.Materialization, []byte, error)
 	DeleteExact(context.Context, kubernetesstore.Materialization) error
+	ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error)
+	MaterializeRuntimeCredentialProjection(context.Context, kubernetesstore.CredentialProjectionManifest) (kubernetesstore.CredentialProjection, error)
+	ListRuntimeCredentialProjections(context.Context) ([]kubernetesstore.CredentialProjection, error)
+	DeleteRuntimeCredentialProjection(context.Context, kubernetesstore.CredentialProjection) error
 }
 
 type Server struct {
 	secretbrokerv1.UnimplementedSecretBrokerServiceServer
+	secretbrokerv1.UnimplementedRuntimeCredentialProjectionServiceServer
+	sttv1.UnimplementedTranscriptionCredentialProjectionServiceServer
 	controlplanev1.UnimplementedProviderCredentialMaterializerServiceServer
 	owner               Owner
 	store               Store
@@ -188,7 +199,9 @@ func (server *Server) RevokeSecret(ctx context.Context, request *secretbrokerv1.
 	if err != nil {
 		return nil, preserveOwnerError(err)
 	}
-	server.cleanupRevoked(ctx, descriptors)
+	if err := server.cleanupRevoked(ctx, descriptors); err != nil {
+		return nil, status.Error(codes.Unavailable, "revoked secret cleanup is incomplete")
+	}
 	return &secretbrokerv1.RevokeSecretResponse{Secret: castSecret(secret)}, nil
 }
 
@@ -254,7 +267,7 @@ func (server *Server) failPermanent(ctx context.Context, operation *controlplane
 	return preserveOwnerError(err)
 }
 
-func (server *Server) cleanupRevoked(ctx context.Context, descriptors []kubernetesstore.ExactDescriptor) {
+func (server *Server) cleanupRevoked(ctx context.Context, descriptors []kubernetesstore.ExactDescriptor) error {
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	for _, descriptor := range descriptors {
@@ -263,12 +276,13 @@ func (server *Server) cleanupRevoked(ctx context.Context, descriptors []kubernet
 			continue
 		}
 		if err != nil {
-			return
+			return err
 		}
 		if err := server.store.DeleteExact(cleanup, materialized); err != nil {
-			return
+			return err
 		}
 	}
+	return nil
 }
 
 func (server *Server) CheckReadiness(ctx context.Context, _ *secretbrokerv1.CheckReadinessRequest) (*secretbrokerv1.CheckReadinessResponse, error) {

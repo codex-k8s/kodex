@@ -17,6 +17,122 @@ func (server *Server) CheckRuntimeSecretWorkReadiness(ctx context.Context, _ *co
 	return &controlplanev1.CheckRuntimeSecretWorkReadinessResponse{Ready: true}, nil
 }
 
+func (server *Server) CheckCredentialProjectionWorkReadiness(ctx context.Context, _ *controlplanev1.CheckCredentialProjectionWorkReadinessRequest) (*controlplanev1.CheckCredentialProjectionWorkReadinessResponse, error) {
+	if _, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName); err != nil {
+		return nil, err
+	}
+	if err := server.service.Ready(ctx); err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.CheckCredentialProjectionWorkReadinessResponse{Ready: true}, nil
+}
+
+func (server *Server) ResolveRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	input := runtimeCredentialProjectionInput(request.GetAuthority(), request.GetWorkloadInstance(), request.GetLeaseRef(), request.GetFence(),
+		request.GetGeneration(), request.GetRuntimeRevisionRef(), request.GetRuntimeRevisionDigest(), request.GetSessionRef(), request.GetTurnRef(), request.GetAttempt(), request.GetInputDigest())
+	result, err := server.service.ResolveRuntimeCredentialProjection(ctx, p, input)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return castRuntimeCredentialProjection(result), nil
+}
+
+func (server *Server) ValidateRuntimeCredentialProjection(ctx context.Context, request *controlplanev1.ValidateRuntimeCredentialProjectionRequest) (*controlplanev1.ValidateRuntimeCredentialProjectionResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	input := runtimeCredentialProjectionInput(request.GetAuthority(), request.GetWorkloadInstance(), request.GetLeaseRef(), "",
+		request.GetGeneration(), request.GetRuntimeRevisionRef(), request.GetRuntimeRevisionDigest(), request.GetSessionRef(), request.GetTurnRef(), request.GetAttempt(), request.GetInputDigest())
+	input.ProviderCredential = providerCredentialBinding(request.GetProviderCredential())
+	for _, item := range request.GetRuntimeSecrets() {
+		input.RuntimeSecrets = append(input.RuntimeSecrets, runtimeSecretProjectionBinding(item))
+	}
+	valid, err := server.service.ValidateRuntimeCredentialProjection(ctx, p, input)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.ValidateRuntimeCredentialProjectionResponse{Valid: valid}, nil
+}
+
+func (server *Server) ResolveTranscriptionCredentialProjection(ctx context.Context, request *controlplanev1.ResolveTranscriptionCredentialProjectionRequest) (*controlplanev1.ResolveTranscriptionCredentialProjectionResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	result, err := server.service.ResolveTranscriptionCredentialProjection(ctx, p, platformrepo.TranscriptionCredentialProjectionInput{
+		Authority: credentialProjectionAuthority(request.GetAuthority()), ProviderAccountRef: request.GetProviderAccountRef(),
+		ProviderCredentialGeneration: request.GetProviderCredentialGeneration(), ConfigRevision: request.GetConfigRevision(),
+		ConfigDigestSHA256: request.GetConfigDigestSha256(),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.ResolveTranscriptionCredentialProjectionResponse{
+		ProviderCredential: castProviderCredentialBinding(result.ProviderCredential), ExpiresAt: timestamp(result.ExpiresAt),
+	}, nil
+}
+
+func runtimeCredentialProjectionInput(authority *controlplanev1.CredentialProjectionAuthority, workload, lease, fence string, generation int64, revisionRef, revisionDigest, sessionRef, turnRef string, attempt int32, inputDigest string) platformrepo.RuntimeCredentialProjectionInput {
+	return platformrepo.RuntimeCredentialProjectionInput{Authority: credentialProjectionAuthority(authority), WorkloadInstance: workload,
+		LeaseRef: lease, Fence: fence, Generation: generation, RuntimeRevisionRef: revisionRef, RuntimeRevisionDigest: revisionDigest,
+		SessionRef: sessionRef, TurnRef: turnRef, Attempt: attempt, InputDigest: inputDigest}
+}
+
+func credentialProjectionAuthority(input *controlplanev1.CredentialProjectionAuthority) platformrepo.CredentialProjectionAuthority {
+	if input == nil || input.GetExpiresAt() == nil || input.GetExpiresAt().CheckValid() != nil {
+		return platformrepo.CredentialProjectionAuthority{}
+	}
+	return platformrepo.CredentialProjectionAuthority{ActorID: input.GetActorId(), TenantID: input.GetTenantId(), ProjectID: input.GetProjectId(),
+		SourceRevision: input.GetSourceRevision(), SourceDigestSHA256: input.GetSourceDigestSha256(), ProofJTI: input.GetProofJti(),
+		CallerWorkloadID: input.GetCallerWorkloadId(), CallerFullMethod: input.GetCallerFullMethod(),
+		CallerCredentialRevision: input.GetCallerCredentialRevision(), ExpiresAt: input.GetExpiresAt().AsTime().UTC()}
+}
+
+func providerCredentialBinding(input *controlplanev1.ProviderCredentialBinding) platformrepo.ProviderCredentialBinding {
+	if input == nil {
+		return platformrepo.ProviderCredentialBinding{}
+	}
+	return platformrepo.ProviderCredentialBinding{AccountRef: input.GetAccountRef(), CredentialRevisionRef: input.GetCredentialRevisionRef(),
+		CredentialRevision: input.GetCredentialRevision(), SecretName: input.GetSecretName(), SecretUID: input.GetSecretUid(),
+		SecretResourceVersion: input.GetSecretResourceVersion(), ContentSHA256: input.GetContentSha256()}
+}
+
+func castProviderCredentialBinding(input platformrepo.ProviderCredentialBinding) *controlplanev1.ProviderCredentialBinding {
+	return &controlplanev1.ProviderCredentialBinding{AccountRef: input.AccountRef, CredentialRevisionRef: input.CredentialRevisionRef,
+		CredentialRevision: input.CredentialRevision, SecretName: input.SecretName, SecretUid: input.SecretUID,
+		SecretResourceVersion: input.SecretResourceVersion, ContentSha256: input.ContentSHA256}
+}
+
+func runtimeSecretProjectionBinding(input *controlplanev1.RuntimeSecretDescriptor) platformrepo.RuntimeSecretProjectionBinding {
+	if input == nil {
+		return platformrepo.RuntimeSecretProjectionBinding{}
+	}
+	return platformrepo.RuntimeSecretProjectionBinding{Name: input.GetName(), SecretRef: input.GetSecretRef(), Descriptor: entity.RuntimeSecretRevisionDescriptor{
+		Revision: input.GetRevision(), Namespace: input.GetNamespace(), SecretName: input.GetSecretName(), SecretKey: input.GetSecretKey(),
+		SecretUID: input.GetSecretUid(), SecretResourceVersion: input.GetSecretResourceVersion(), ContentSHA256: input.GetContentSha256(),
+	}}
+}
+
+func castRuntimeSecretProjectionBinding(input platformrepo.RuntimeSecretProjectionBinding) *controlplanev1.RuntimeSecretDescriptor {
+	descriptor := input.Descriptor
+	return &controlplanev1.RuntimeSecretDescriptor{Name: input.Name, SecretRef: input.SecretRef, Revision: descriptor.Revision,
+		Namespace: descriptor.Namespace, SecretName: descriptor.SecretName, SecretKey: descriptor.SecretKey,
+		SecretUid: descriptor.SecretUID, SecretResourceVersion: descriptor.SecretResourceVersion, ContentSha256: descriptor.ContentSHA256}
+}
+
+func castRuntimeCredentialProjection(input platformrepo.RuntimeCredentialProjection) *controlplanev1.ResolveRuntimeCredentialProjectionResponse {
+	response := &controlplanev1.ResolveRuntimeCredentialProjectionResponse{ProviderCredential: castProviderCredentialBinding(input.ProviderCredential), ExpiresAt: timestamp(input.ExpiresAt)}
+	for _, item := range input.RuntimeSecrets {
+		response.RuntimeSecrets = append(response.RuntimeSecrets, castRuntimeSecretProjectionBinding(item))
+	}
+	return response
+}
+
 func (server *Server) ListRuntimeSecretRecoveryWork(ctx context.Context, request *controlplanev1.ListRuntimeSecretRecoveryWorkRequest) (*controlplanev1.ListRuntimeSecretRecoveryWorkResponse, error) {
 	p, err := principal(ctx, controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName)
 	if err != nil {

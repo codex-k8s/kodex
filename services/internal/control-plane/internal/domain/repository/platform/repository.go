@@ -162,6 +162,56 @@ type RuntimeSecretRecoveryPage struct {
 	Token string
 }
 
+type CredentialProjectionAuthority struct {
+	ActorID, TenantID, ProjectID             string
+	SourceDigestSHA256, ProofJTI             string
+	CallerWorkloadID, CallerFullMethod       string
+	SourceRevision, CallerCredentialRevision uint64
+	ExpiresAt                                time.Time
+}
+
+type ProviderCredentialBinding struct {
+	AccountRef, CredentialRevisionRef            string
+	SecretName, SecretUID, SecretResourceVersion string
+	ContentSHA256                                string
+	CredentialRevision                           int64
+}
+
+type RuntimeSecretProjectionBinding struct {
+	Name, SecretRef string
+	Descriptor      entity.RuntimeSecretRevisionDescriptor
+}
+
+type RuntimeCredentialProjectionInput struct {
+	Authority                                 CredentialProjectionAuthority
+	WorkloadInstance, LeaseRef, Fence         string
+	RuntimeRevisionRef, RuntimeRevisionDigest string
+	SessionRef, TurnRef, InputDigest          string
+	Generation                                int64
+	Attempt                                   int32
+	ProviderCredential                        ProviderCredentialBinding
+	RuntimeSecrets                            []RuntimeSecretProjectionBinding
+}
+
+type RuntimeCredentialProjection struct {
+	ProviderCredential ProviderCredentialBinding
+	RuntimeSecrets     []RuntimeSecretProjectionBinding
+	ExpiresAt          time.Time
+}
+
+type TranscriptionCredentialProjectionInput struct {
+	Authority                    CredentialProjectionAuthority
+	ProviderAccountRef           string
+	ProviderCredentialGeneration uint64
+	ConfigRevision               uint64
+	ConfigDigestSHA256           string
+}
+
+type TranscriptionCredentialProjection struct {
+	ProviderCredential ProviderCredentialBinding
+	ExpiresAt          time.Time
+}
+
 type Repository interface {
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
@@ -201,6 +251,9 @@ type Repository interface {
 	CompleteRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretCompleteInput) (entity.RuntimeSecret, error)
 	FailRuntimeSecretOperation(context.Context, value.Principal, RuntimeSecretFailInput) (RuntimeSecretFailureResult, error)
 	RecoverRuntimeSecretMaterialization(context.Context, value.Principal, RuntimeSecretRecoveryInput) (RuntimeSecretRecoveryResult, error)
+	ResolveRuntimeCredentialProjection(context.Context, value.Principal, RuntimeCredentialProjectionInput) (RuntimeCredentialProjection, error)
+	ValidateRuntimeCredentialProjection(context.Context, value.Principal, RuntimeCredentialProjectionInput) (bool, error)
+	ResolveTranscriptionCredentialProjection(context.Context, value.Principal, TranscriptionCredentialProjectionInput) (TranscriptionCredentialProjection, error)
 	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, int64, string, error)
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
 	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)

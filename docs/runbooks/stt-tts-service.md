@@ -4,14 +4,15 @@ title: Диагностика stt-tts-service
 type: runbook
 status: approved
 owner: sre
-version: 1.1.1
+version: 1.2.0
 updated: 2026-09-04
 ---
 
 # Диагностика stt-tts-service
 
 `stt-tts-service` не входит в shipped profiles до завершения
-#1019/#1021/#1023/#1024. Этот runbook описывает неактивный base deployable и не
+#1021/#1023. Policy foundation #1019 и credential producer #1024 уже
+материализованы. Этот runbook описывает неактивный base deployable и не
 разрешает его deployment. Не копируйте в evidence audio, transcript, API key,
 authority proof/grant или provider body.
 
@@ -44,9 +45,10 @@ audio, transcript, credential и grant не логируются.
 Успешный `/readyz` означает лишь способность Pod безопасно принять RPC. Он не
 проверяет и не обещает доступность control-plane, secret-broker, egress-gateway
 или OpenAI. В текущей ревизии `/diagnostics/protected-path` закрыто возвращает
-`stage=delegated_authority`: approved primitive server-owned continuation proof
-ещё не материализован #1023, поэтому оба projection adapter останавливаются до
-сетевого RPC.
+  `stage=delegated_authority`: approved primitive server-owned continuation
+  proof ещё не материализован #1023, поэтому оба projection adapter
+  останавливаются до сетевого RPC. Secret-broker уже реализует exact
+  config/account/generation validation и не является этим блокером.
 
 После materialization последовательно диагностируются policy, credential,
 egress и provider. Diagnostic не должен выполнять transcription/provider
@@ -88,8 +90,9 @@ acceptance. Полная gRPC acceptance обязательна после mater
 ## Восстановление
 
 Исправления выполняются только в owning unit: policy projection — #1019,
-browser/gateway stream — #1021, continuation proof и authority profile —
-#1023, credential projection — #1024. До materialization STT нельзя добавлять
+browser/gateway stream — #1021, continuation proof — #1023, credential
+projection — #1024. До materialization #1021/#1023 STT нельзя добавлять
 в active profile, release image set, owner-side ingress или общую certificate
 выдачу. Ручные Secret, direct provider egress и ослабление TLS/NetworkPolicy
-запрещены.
+запрещены. При config publish, account disable/revoke или credential rotation
+старый projection закрыто отклоняется по exact revision+digest+generation.

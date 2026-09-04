@@ -6111,12 +6111,16 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName     = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
-	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
-	RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ConsumeRuntimeSecretOperation"
-	RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName      = "/controlplane.v1.RuntimeSecretWorkService/CompleteRuntimeSecretOperation"
-	RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/FailRuntimeSecretOperation"
-	RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName = "/controlplane.v1.RuntimeSecretWorkService/RecoverRuntimeSecretMaterialization"
+	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
+	RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName   = "/controlplane.v1.RuntimeSecretWorkService/CheckCredentialProjectionWorkReadiness"
+	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName            = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
+	RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName            = "/controlplane.v1.RuntimeSecretWorkService/ConsumeRuntimeSecretOperation"
+	RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName           = "/controlplane.v1.RuntimeSecretWorkService/CompleteRuntimeSecretOperation"
+	RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName               = "/controlplane.v1.RuntimeSecretWorkService/FailRuntimeSecretOperation"
+	RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName      = "/controlplane.v1.RuntimeSecretWorkService/RecoverRuntimeSecretMaterialization"
+	RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName       = "/controlplane.v1.RuntimeSecretWorkService/ResolveRuntimeCredentialProjection"
+	RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName      = "/controlplane.v1.RuntimeSecretWorkService/ValidateRuntimeCredentialProjection"
+	RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName = "/controlplane.v1.RuntimeSecretWorkService/ResolveTranscriptionCredentialProjection"
 )
 
 // RuntimeSecretWorkServiceClient is the client API for RuntimeSecretWorkService service.
@@ -6127,11 +6131,15 @@ const (
 // grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceClient interface {
 	CheckRuntimeSecretWorkReadiness(ctx context.Context, in *CheckRuntimeSecretWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretWorkReadinessResponse, error)
+	CheckCredentialProjectionWorkReadiness(ctx context.Context, in *CheckCredentialProjectionWorkReadinessRequest, opts ...grpc.CallOption) (*CheckCredentialProjectionWorkReadinessResponse, error)
 	ListRuntimeSecretRecoveryWork(ctx context.Context, in *ListRuntimeSecretRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretRecoveryWorkResponse, error)
 	ConsumeRuntimeSecretOperation(ctx context.Context, in *ConsumeRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretOperationResponse, error)
 	CompleteRuntimeSecretOperation(ctx context.Context, in *CompleteRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretOperationResponse, error)
 	FailRuntimeSecretOperation(ctx context.Context, in *FailRuntimeSecretOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretOperationResponse, error)
 	RecoverRuntimeSecretMaterialization(ctx context.Context, in *RecoverRuntimeSecretMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretMaterializationResponse, error)
+	ResolveRuntimeCredentialProjection(ctx context.Context, in *ResolveRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveRuntimeCredentialProjectionResponse, error)
+	ValidateRuntimeCredentialProjection(ctx context.Context, in *ValidateRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ValidateRuntimeCredentialProjectionResponse, error)
+	ResolveTranscriptionCredentialProjection(ctx context.Context, in *ResolveTranscriptionCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveTranscriptionCredentialProjectionResponse, error)
 }
 
 type runtimeSecretWorkServiceClient struct {
@@ -6146,6 +6154,16 @@ func (c *runtimeSecretWorkServiceClient) CheckRuntimeSecretWorkReadiness(ctx con
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckRuntimeSecretWorkReadinessResponse)
 	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) CheckCredentialProjectionWorkReadiness(ctx context.Context, in *CheckCredentialProjectionWorkReadinessRequest, opts ...grpc.CallOption) (*CheckCredentialProjectionWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckCredentialProjectionWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6202,6 +6220,36 @@ func (c *runtimeSecretWorkServiceClient) RecoverRuntimeSecretMaterialization(ctx
 	return out, nil
 }
 
+func (c *runtimeSecretWorkServiceClient) ResolveRuntimeCredentialProjection(ctx context.Context, in *ResolveRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveRuntimeCredentialProjectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveRuntimeCredentialProjectionResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) ValidateRuntimeCredentialProjection(ctx context.Context, in *ValidateRuntimeCredentialProjectionRequest, opts ...grpc.CallOption) (*ValidateRuntimeCredentialProjectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateRuntimeCredentialProjectionResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretWorkServiceClient) ResolveTranscriptionCredentialProjection(ctx context.Context, in *ResolveTranscriptionCredentialProjectionRequest, opts ...grpc.CallOption) (*ResolveTranscriptionCredentialProjectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveTranscriptionCredentialProjectionResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RuntimeSecretWorkServiceServer is the server API for RuntimeSecretWorkService service.
 // All implementations must embed UnimplementedRuntimeSecretWorkServiceServer
 // for forward compatibility.
@@ -6210,11 +6258,15 @@ func (c *runtimeSecretWorkServiceClient) RecoverRuntimeSecretMaterialization(ctx
 // grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceServer interface {
 	CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error)
+	CheckCredentialProjectionWorkReadiness(context.Context, *CheckCredentialProjectionWorkReadinessRequest) (*CheckCredentialProjectionWorkReadinessResponse, error)
 	ListRuntimeSecretRecoveryWork(context.Context, *ListRuntimeSecretRecoveryWorkRequest) (*ListRuntimeSecretRecoveryWorkResponse, error)
 	ConsumeRuntimeSecretOperation(context.Context, *ConsumeRuntimeSecretOperationRequest) (*ConsumeRuntimeSecretOperationResponse, error)
 	CompleteRuntimeSecretOperation(context.Context, *CompleteRuntimeSecretOperationRequest) (*CompleteRuntimeSecretOperationResponse, error)
 	FailRuntimeSecretOperation(context.Context, *FailRuntimeSecretOperationRequest) (*FailRuntimeSecretOperationResponse, error)
 	RecoverRuntimeSecretMaterialization(context.Context, *RecoverRuntimeSecretMaterializationRequest) (*RecoverRuntimeSecretMaterializationResponse, error)
+	ResolveRuntimeCredentialProjection(context.Context, *ResolveRuntimeCredentialProjectionRequest) (*ResolveRuntimeCredentialProjectionResponse, error)
+	ValidateRuntimeCredentialProjection(context.Context, *ValidateRuntimeCredentialProjectionRequest) (*ValidateRuntimeCredentialProjectionResponse, error)
+	ResolveTranscriptionCredentialProjection(context.Context, *ResolveTranscriptionCredentialProjectionRequest) (*ResolveTranscriptionCredentialProjectionResponse, error)
 	mustEmbedUnimplementedRuntimeSecretWorkServiceServer()
 }
 
@@ -6227,6 +6279,9 @@ type UnimplementedRuntimeSecretWorkServiceServer struct{}
 
 func (UnimplementedRuntimeSecretWorkServiceServer) CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeSecretWorkReadiness not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) CheckCredentialProjectionWorkReadiness(context.Context, *CheckCredentialProjectionWorkReadinessRequest) (*CheckCredentialProjectionWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckCredentialProjectionWorkReadiness not implemented")
 }
 func (UnimplementedRuntimeSecretWorkServiceServer) ListRuntimeSecretRecoveryWork(context.Context, *ListRuntimeSecretRecoveryWorkRequest) (*ListRuntimeSecretRecoveryWorkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecretRecoveryWork not implemented")
@@ -6242,6 +6297,15 @@ func (UnimplementedRuntimeSecretWorkServiceServer) FailRuntimeSecretOperation(co
 }
 func (UnimplementedRuntimeSecretWorkServiceServer) RecoverRuntimeSecretMaterialization(context.Context, *RecoverRuntimeSecretMaterializationRequest) (*RecoverRuntimeSecretMaterializationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecoverRuntimeSecretMaterialization not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ResolveRuntimeCredentialProjection(context.Context, *ResolveRuntimeCredentialProjectionRequest) (*ResolveRuntimeCredentialProjectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveRuntimeCredentialProjection not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ValidateRuntimeCredentialProjection(context.Context, *ValidateRuntimeCredentialProjectionRequest) (*ValidateRuntimeCredentialProjectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateRuntimeCredentialProjection not implemented")
+}
+func (UnimplementedRuntimeSecretWorkServiceServer) ResolveTranscriptionCredentialProjection(context.Context, *ResolveTranscriptionCredentialProjectionRequest) (*ResolveTranscriptionCredentialProjectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveTranscriptionCredentialProjection not implemented")
 }
 func (UnimplementedRuntimeSecretWorkServiceServer) mustEmbedUnimplementedRuntimeSecretWorkServiceServer() {
 }
@@ -6279,6 +6343,24 @@ func _RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_Handler(srv inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeSecretWorkServiceServer).CheckRuntimeSecretWorkReadiness(ctx, req.(*CheckRuntimeSecretWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckCredentialProjectionWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).CheckCredentialProjectionWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).CheckCredentialProjectionWorkReadiness(ctx, req.(*CheckCredentialProjectionWorkReadinessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -6373,6 +6455,60 @@ func _RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_Handler(srv i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveRuntimeCredentialProjectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveRuntimeCredentialProjection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveRuntimeCredentialProjection(ctx, req.(*ResolveRuntimeCredentialProjectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRuntimeCredentialProjectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ValidateRuntimeCredentialProjection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ValidateRuntimeCredentialProjection(ctx, req.(*ValidateRuntimeCredentialProjectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveTranscriptionCredentialProjectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveTranscriptionCredentialProjection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretWorkServiceServer).ResolveTranscriptionCredentialProjection(ctx, req.(*ResolveTranscriptionCredentialProjectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RuntimeSecretWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeSecretWorkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -6383,6 +6519,10 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckRuntimeSecretWorkReadiness",
 			Handler:    _RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_Handler,
+		},
+		{
+			MethodName: "CheckCredentialProjectionWorkReadiness",
+			Handler:    _RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_Handler,
 		},
 		{
 			MethodName: "ListRuntimeSecretRecoveryWork",
@@ -6403,6 +6543,18 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecoverRuntimeSecretMaterialization",
 			Handler:    _RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_Handler,
+		},
+		{
+			MethodName: "ResolveRuntimeCredentialProjection",
+			Handler:    _RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_Handler,
+		},
+		{
+			MethodName: "ValidateRuntimeCredentialProjection",
+			Handler:    _RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_Handler,
+		},
+		{
+			MethodName: "ResolveTranscriptionCredentialProjection",
+			Handler:    _RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
