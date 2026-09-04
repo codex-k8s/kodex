@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"github.com/caarlos0/env/v11"
 	"io"
 	"os"
 	"regexp"
@@ -92,7 +93,11 @@ func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 	if fixture == nil || fixture.audio.Reader == nil || len(apiKey) == 0 {
 		return errors.New("STT provider smoke configuration is incomplete")
 	}
-	client, err := openai.New()
+	var egress openai.EgressConfig
+	if err := env.Parse(&egress); err != nil {
+		return errors.New("STT smoke egress expectations are required")
+	}
+	client, err := openai.New(egress)
 	if err != nil {
 		return errors.New("configure STT provider smoke client")
 	}

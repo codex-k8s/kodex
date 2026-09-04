@@ -94,7 +94,7 @@ func TestModelProbeIsExactNonBillableAndFailClosed(t *testing.T) {
 }
 
 func TestProductionTransportPinsTLSAndEgress(t *testing.T) {
-	client, err := New()
+	client, err := New(testEgressConfig())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,8 +125,9 @@ func TestReadinessIsLocalAndEgressIsDiagnostic(t *testing.T) {
 	calls := 0
 	client, _ := NewWithHTTPClient(doerFunc(func(*http.Request) (*http.Response, error) {
 		calls++
-		return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader(""))}, nil
+		return &http.Response{StatusCode: http.StatusNoContent, Header: testEgressHeaders(), Body: io.NopCloser(strings.NewReader(""))}, nil
 	}))
+	client.egress = testEgressConfig()
 	if err := client.CheckLocal(t.Context()); err != nil || calls != 0 {
 		t.Fatalf("local check: calls=%d err=%v", calls, err)
 	}

@@ -16,6 +16,15 @@ browser-проверка их объединённого результата н
 
 ## Критерий → свидетельство
 
+Дополнение1029: checkpoint `fd93e6f4ebd254be41fcb4cc9e7a4775a20f932b`
+слит с сохранением consumer NetworkPolicy8081. STT expectations сверяются
+с canonical digest и profile фактической rendered policy.
+`TestEgressReadbackRequiresEveryExactHeader` покрывает absent/wrong/duplicate
+для revision/digest/profile/workload/operation и 204/503.
+`TestEveryCONNECTChecksGenerationBeforeTLS` использует реальные локальные
+TCP/HTTP CONNECT: второй proxy response с устаревшим поколением не получает
+даже TLS ClientHello. Ключи и audio в этом тесте не передаются.
+
 | Критерий | Локальная проверка |
 | --- | --- |
 | Все девять расширений, реальная длительность | `TestAudioContainersDecodedSamplesAndBounds`: FFmpeg 8.0.1, реальные контейнеры; size/sample limits и обрезанный контейнер для каждого |

@@ -21,26 +21,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: egress-gateway-stt-ingress
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: egress-gateway
-      app.kubernetes.io/component: platform-egress
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: kodex-system}
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: stt-tts-service
-              app.kubernetes.io/component: internal-service
-      ports: [{protocol: TCP, port: 8080}]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
   name: stt-authority-attestor-ingress
 spec:
   podSelector:

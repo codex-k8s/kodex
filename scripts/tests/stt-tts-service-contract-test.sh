@@ -34,7 +34,22 @@ for profile in web-only web-with-mattermost; do
   jq -r '.secrets[] | select(.dynamic == true and (.name | startswith("internal-rpc-authority-stt-tts-service-"))) |
     .name' "$repository_root/tools/install/secret-projections.json" | sort >"$temporary_root/stt-secrets.txt"
   diff -u "$temporary_root/stt-secrets.txt" "$temporary_root/stt-rbac.txt"
-  for policy in control-plane-stt-projection-ingress egress-gateway-stt-ingress stt-authority-attestor-ingress stt-authority-restore-ingress stt-authority-postgresql-ingress; do
+  yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) |
+    .data."policy.json"' "$render" >"$temporary_root/policy.json"
+  digest=$(cd "$repository_root/services/external/egress-gateway" && env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/policy-digest "$temporary_root/policy.json")
+  revision=$(jq -r '.metadata.revision' "$temporary_root/policy.json")
+  for component in stt-tts-service egress-gateway; do
+    if [[ "$component" == stt-tts-service ]]; then
+      expected_revision=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "stt-tts-service-runtime") | .data.STT_EGRESS_EXPECTED_REVISION' "$render")
+      expected_digest=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "stt-tts-service-runtime") | .data.STT_EGRESS_EXPECTED_DIGEST' "$render")
+    else
+      expected_revision=$(yq -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_REVISION") | .value' "$render")
+      expected_digest=$(yq -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST") | .value' "$render")
+    fi
+    [[ "$expected_revision" == "$revision" && "$expected_digest" == "$digest" ]] || { printf 'STT egress generation mismatch in %s\n' "$profile" >&2; exit 1; }
+  done
+  jq -e '[.spec.profiles[] | select(.name == "openai-stt")] == [{"name":"openai-stt","workload":"stt-tts-service","operation":"openai.transcription","destinations":[{"hostname":"api.openai.com","port":443}]}]' "$temporary_root/policy.json" >/dev/null
+  for policy in control-plane-stt-projection-ingress stt-authority-attestor-ingress stt-authority-restore-ingress stt-authority-postgresql-ingress; do
     POLICY_NAME="$policy" yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == strenv(POLICY_NAME)) |
       .spec.ingress[0].from[0].podSelector.matchLabels."app.kubernetes.io/name" == "stt-tts-service"' "$render" >/dev/null
   done

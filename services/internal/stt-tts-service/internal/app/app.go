@@ -101,7 +101,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return err
 	}
-	provider, err := openai.New()
+	provider, err := openai.New(config.Egress)
 	if err != nil {
 		_ = dependencies.Close()
 		_ = issuer.Close()

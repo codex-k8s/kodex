@@ -21,7 +21,7 @@ import (
 
 const (
 	Endpoint             = "https://api.openai.com/v1/audio/transcriptions"
-	ProxyURL             = "http://egress-gateway.kodex-system.svc.cluster.local:8080"
+	ProxyURL             = "http://egress-gateway.kodex-system.svc.cluster.local:8081"
 	maximumResponseBytes = 1 << 20
 	multipartBoundary    = "kodex-stt-boundary-v1"
 )
@@ -33,19 +33,25 @@ type doer interface {
 type Client struct {
 	http      doer
 	readiness doer
+	egress    EgressConfig
 }
 
-func New() (*Client, error) {
+func New(config EgressConfig) (*Client, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 	proxy, err := url.Parse(ProxyURL)
 	if err != nil || proxy.String() != ProxyURL {
 		return nil, errors.New("OpenAI egress proxy configuration is invalid")
 	}
 	client, err := NewWithHTTPClient(&http.Client{Transport: &http.Transport{
 		Proxy: http.ProxyURL(proxy), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13},
+		OnProxyConnectResponse: config.onConnect,
 	}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("OpenAI redirect is rejected") }})
 	if err != nil {
 		return nil, err
 	}
+	client.egress = config
 	client.readiness = &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return errors.New("STT egress readiness redirect is rejected")
 	}}
@@ -82,7 +88,7 @@ func (client *Client) CheckEgress(ctx context.Context) error {
 		return errs.ErrEgressUnavailable
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusNoContent {
+	if client.egress.check(response.Header) != nil || response.StatusCode != http.StatusNoContent {
 		return errs.ErrEgressUnavailable
 	}
 	return nil

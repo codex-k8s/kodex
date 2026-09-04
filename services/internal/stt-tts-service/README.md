@@ -88,6 +88,17 @@ Singular `language` для gpt-transcribe не отправляется. Отв�
 
 ## Readiness и доступность микрофона
 
+Provider proxy — только `egress-gateway:8081`, профиль `openai-stt`, workload
+`stt-tts-service`, operation `openai.transcription`, destination
+`api.openai.com:443`. Обязательные deployment-owned
+`STT_EGRESS_EXPECTED_REVISION`/`STT_EGRESS_EXPECTED_DIGEST` загружаются typed
+config без default/fallback. GET `/readyz` и каждый CONNECT200 требуют всех
+пяти точных `X-Kodex-Egress-*` headers без дубликатов. CONNECT проверяется
+через `http.Transport.OnProxyConnectResponse` до TLS и передачи credential.
+Источник workload — CNI selector + listener1029, не caller header. TLS 1.3,
+SNI/CA и запрет redirect остаются в STT; на8080 fallback отсутствует.
+Render test вычисляет canonical digest фактической policy parser-ом1029.
+
 `/healthz` — процесс. `/readyz` и `CheckReadiness` — local runtime,
 issuer/verifier, decoder и writable spool, без удалённых вызовов.
 Обычные `/diagnostics/protected-path` и `CheckProtectedPath` не имеют
@@ -132,6 +143,10 @@ Cache availability не разделяется между users/organizations и
 По умолчанию используется embedded tracked fixture, не абсолютный home path.
 Optional `KODEX_STT_ACCEPTANCE_FIXTURE` обязан иметь тот же size/SHA256.
 Live Job не входит в active profiles и требует отдельного owner OK.
+После выделения listener1029 identity `stt-provider-smoke` не разрешена на8081;
+для live smoke нужен отдельно согласованный запуск в STT workload boundary
+с тестовым ключом и deployment egress expectations. Расширять ingress или
+выдавать smoke чужую workload identity нельзя. Fixture-only не требует сети.
 До staging live provider не вызывать без отдельного тестового ключа.
 
 ## Проверенные документы
@@ -142,6 +157,9 @@ Live Job не входит в active profiles и требует отдельно
 - [OpenAI Audio API](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
 - Context7 `/websites/ffmpeg_documentation`: protocol whitelist, decode/error options.
 - Context7 `/microsoft/playwright`: Chromium/Firefox/WebKit launch/close.
+- Для CONNECT callback Context7 не нашёл релевантный net/http; проверены
+  [официальная документация Go](https://pkg.go.dev/net/http#Transport)
+  и исходник установленного Go `net/http/transport.go`.
 
 Live account/model access и распознавание проверяются отдельно, не выводятся
 из документации, Docker build или fake provider.
