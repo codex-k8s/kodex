@@ -342,6 +342,30 @@ export type ManagedConfiguration = {
     updatedAt: Timestamp;
 };
 
+export type ManagedConfigurationSummary = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    name: string;
+    managedBy: 'UI' | 'GIT';
+    source: string;
+    sourceRevision: string;
+    currentRevision?: {
+        ref: OpaqueRef;
+        revision: number;
+        state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED';
+        digest: string;
+    };
+    updatedAt: Timestamp;
+};
+
+export type ManagedConfigurationPage = {
+    items: Array<ManagedConfigurationSummary>;
+    total: number;
+    nextPageToken?: string;
+};
+
 export type ManagedConfigurationResult = {
     configuration: ManagedConfiguration;
     revision: ManagedConfigurationRevision;
@@ -2468,7 +2492,11 @@ export type ListProjectMembershipsData = {
     path: {
         projectRef: OpaqueRef;
     };
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/projects/{projectRef}/members';
 };
 
@@ -2488,6 +2516,7 @@ export type ListProjectMembershipsResponses = {
     200: {
         items: Array<Membership>;
         nextActions: Array<NextAction>;
+        nextPageToken?: string;
     };
 };
 
@@ -2842,6 +2871,40 @@ export type CreateAgentResponses = {
 };
 
 export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type ListOrganizationProjectMembershipsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/project-memberships';
+};
+
+export type ListOrganizationProjectMembershipsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationProjectMembershipsError = ListOrganizationProjectMembershipsErrors[keyof ListOrganizationProjectMembershipsErrors];
+
+export type ListOrganizationProjectMembershipsResponses = {
+    /**
+     * Участники доступных проектов
+     */
+    200: {
+        items: Array<Membership>;
+        nextActions: Array<NextAction>;
+        nextPageToken?: string;
+    };
+};
+
+export type ListOrganizationProjectMembershipsResponse = ListOrganizationProjectMembershipsResponses[keyof ListOrganizationProjectMembershipsResponses];
 
 export type ListOrganizationAgentsData = {
     body?: never;
@@ -7806,6 +7869,37 @@ export type RebindSystemSttConsumersResponses = {
 };
 
 export type RebindSystemSttConsumersResponse = RebindSystemSttConsumersResponses[keyof RebindSystemSttConsumersResponses];
+
+export type ListManagedConfigurationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        kind?: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    };
+    url: '/api/v1/managed-configurations';
+};
+
+export type ListManagedConfigurationsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedConfigurationsError = ListManagedConfigurationsErrors[keyof ListManagedConfigurationsErrors];
+
+export type ListManagedConfigurationsResponses = {
+    /**
+     * Каталог доступных конфигураций без содержимого ревизий
+     */
+    200: ManagedConfigurationPage;
+};
+
+export type ListManagedConfigurationsResponse = ListManagedConfigurationsResponses[keyof ListManagedConfigurationsResponses];
 
 export type ListManagedConfigurationHistoryData = {
     body?: never;

@@ -724,3 +724,9 @@ SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: Системные точные полномочия для чувствительных операций
 SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
   other: Системные полномочия продуктовых backend lifecycle
+PERMISSION_PLATFORM_STT_USE_NAME:
+  other: Голосовой ввод
+PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
+  other: Преобразование речи в текст через настроенный сервис распознавания
+SCHEDULE_OCCURRENCE_FAILED:
+  other: Не удалось выполнить запуск по расписанию

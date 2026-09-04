@@ -71,6 +71,21 @@ func writeManagedResult(w http.ResponseWriter, statusCode int, value managedConf
 
 // Содержимое конфигурации не проходит общую нормализацию строк и enum.
 func managedConfigurationView(value *controlplanev1.ManagedConfigurationSet) (generated.ManagedConfiguration, error) {
+	result, err := managedConfigurationMetadataView(value)
+	if err != nil {
+		return generated.ManagedConfiguration{}, err
+	}
+	if value.GetCurrentRevision() != nil {
+		revision, err := managedRevisionView(value.GetCurrentRevision())
+		if err != nil {
+			return generated.ManagedConfiguration{}, err
+		}
+		result.CurrentRevision = &revision
+	}
+	return result, nil
+}
+
+func managedConfigurationMetadataView(value *controlplanev1.ManagedConfigurationSet) (generated.ManagedConfiguration, error) {
 	if value == nil || value.GetRef() == "" || !validManagedVersion(value.GetVersion()) || value.GetUpdatedAt() == nil || value.GetUpdatedAt().CheckValid() != nil {
 		return generated.ManagedConfiguration{}, errManagedConfigurationShape
 	}
@@ -90,13 +105,6 @@ func managedConfigurationView(value *controlplanev1.ManagedConfigurationSet) (ge
 		Kind:      generated.ManagedConfigurationKind(strings.TrimPrefix(value.GetKind().String(), "MANAGED_CONFIGURATION_KIND_")),
 		ManagedBy: generated.ManagedConfigurationManagedBy(strings.TrimPrefix(value.GetManagedBy().String(), "MANAGED_CONFIGURATION_OWNER_")),
 		Source:    value.GetSource(), SourceRevision: value.GetSourceRevision(), UpdatedAt: value.GetUpdatedAt().AsTime(),
-	}
-	if value.GetCurrentRevision() != nil {
-		revision, err := managedRevisionView(value.GetCurrentRevision())
-		if err != nil {
-			return generated.ManagedConfiguration{}, err
-		}
-		result.CurrentRevision = &revision
 	}
 	return result, nil
 }

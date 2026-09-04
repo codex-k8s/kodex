@@ -724,3 +724,9 @@ SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: System exact permissions for sensitive operations
 SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
   other: System permissions for product backend lifecycles
+PERMISSION_PLATFORM_STT_USE_NAME:
+  other: Voice input
+PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
+  other: Convert speech to text through the configured transcription service
+SCHEDULE_OCCURRENCE_FAILED:
+  other: Scheduled occurrence failed

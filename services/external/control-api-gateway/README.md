@@ -142,6 +142,8 @@ eligibility зависят от завершения #1046. Этот разде�
 | schedules | ListSchedules | Автоматизации доступных проектов |
 | runtime-environments | ListRuntimeEnvironmentSets | Безопасные описания окружений |
 | runtime-secrets | ListRuntimeSecrets | Метаданные без значений секретов |
+| project-memberships | ListProjectMemberships | Участники доступных проектов, поиск и cursor |
+| managed-configurations | ListManagedConfigurations | Компактные метаданные конфигураций и текущих ревизий |
 | vfs/nodes | ListVFSNodes | Типизированные элементы виртуальной папки |
 | vfs/search | SearchVFS | Серверный поиск разрешённых виртуальных ресурсов |
 
@@ -151,6 +153,13 @@ projectRef лишь сужает owner query; отсутствие фильтр�
 Control-plane разрешает eligibility, lifecycle и scan state; путь VFS не
 используется как authority или ключ физического хранилища. Чтения не создают
 события или mutable state, ответ и cursor являются авторитетным read path.
+
+Каталог конфигураций дополнительно фильтруется по закрытому kind. Он не
+передаёт source content каждой ревизии: полный текст остаётся в существующем
+защищённом history read path. Компактная текущая ревизия сохраняет точные
+ref/version/state/digest, а не подменяет отсутствующий текст пустой строкой.
+Проектный `/projects/{projectRef}/members` также принимает query и pagination.
+Project identity глобальных membership дополняется producer в #1046.
 
 Query, pageSize и pageToken ограничены до RPC, включая защиту от переполнения
 при преобразовании int в int32. Names/paths VFS сохраняются дословно, enum
@@ -162,6 +171,9 @@ secret metadata всегда no-store. Unknown kind и повреждённый 
 Проверки: TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout,
 TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC,
 TestOrganizationCatalogPropagatesAuthoritativeDenial,
+TestProjectMembershipsForwardSearchAndPagination,
+TestManagedCatalogPreservesSummaryAndFilters,
+TestManagedCatalogRejectsMalformedInputsAndProducer,
 TestVFSRoutesPreserveTypedSourceAndPagination,
 TestVFSRejectsMalformedPathAndUnknownProducerKind.
 
