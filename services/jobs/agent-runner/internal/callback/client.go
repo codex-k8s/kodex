@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -64,7 +65,7 @@ func (client *Client) Close() {
 func (client *Client) Token() string { return client.token }
 
 func (client *Client) Progress(ctx context.Context, input model.Input, code string) error {
-	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
+	return client.post(ctx, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Progress: code})
 }
 
 func (client *Client) Complete(ctx context.Context, input model.Input, payload runtimecontract.RunnerCompletionRequest) error {
@@ -73,7 +74,7 @@ func (client *Client) Complete(ctx context.Context, input model.Input, payload r
 	}
 	delivery, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackDeliveryTimeout)
 	defer cancel()
-	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
+	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/complete", payload)
 }
 
 func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Input, call runtimecontract.NativeToolCall) error {
@@ -83,14 +84,14 @@ func (client *Client) RecordNativeToolCall(ctx context.Context, input model.Inpu
 	}
 	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
 	defer cancel()
-	return client.postRetriable(delivery, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
+	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/native-tool-call", payload)
 }
 
 func (client *Client) CommitProviderCredentialRefresh(ctx context.Context, input model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
 	if err := payload.Validate(); err != nil {
 		return errors.New("validate provider credential refresh callback: " + err.Error())
 	}
-	return client.post(ctx, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/provider-credential-refresh", payload)
+	return client.post(ctx, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/provider-credential-refresh", payload)
 }
 
 func (client *Client) WriteArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, destination io.Writer) error {
@@ -101,6 +102,7 @@ func (client *Client) WriteArtifact(ctx context.Context, input model.Input, arti
 		return errors.New("create runtime artifact request")
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
+	bindExecutionHeaders(request, input, "artifact")
 	request.Header.Set("Accept", artifact.MediaType)
 	response, err := client.http.Do(request)
 	if err != nil {
@@ -171,19 +173,19 @@ func (client *Client) NextWarm(ctx context.Context, input model.Input) (model.In
 	return turn, true, nil
 }
 
-func (client *Client) post(ctx context.Context, path string, payload any) error {
-	return client.postWithRetry(ctx, path, payload, nil)
+func (client *Client) post(ctx context.Context, input model.Input, path string, payload any) error {
+	return client.postWithRetry(ctx, input, path, payload, nil)
 }
 
-func (client *Client) postRetriable(ctx context.Context, path string, payload any) error {
+func (client *Client) postRetriable(ctx context.Context, input model.Input, path string, payload any) error {
 	delays := client.retryDelays
 	if delays == nil {
 		delays = defaultCallbackRetryDelays[:]
 	}
-	return client.postWithRetry(ctx, path, payload, delays)
+	return client.postWithRetry(ctx, input, path, payload, delays)
 }
 
-func (client *Client) postWithRetry(ctx context.Context, path string, payload any, retryDelays []time.Duration) error {
+func (client *Client) postWithRetry(ctx context.Context, input model.Input, path string, payload any, retryDelays []time.Duration) error {
 	raw, err := json.Marshal(payload)
 	if err != nil || len(raw) > runtimecontract.MaximumCompletionBytes+1<<20 || len(retryDelays) > callbackMaximumRetryDelays {
 		return errors.New("encode runtime callback request")
@@ -203,7 +205,7 @@ func (client *Client) postWithRetry(ctx context.Context, path string, payload an
 		if len(retryDelays) > 0 {
 			attemptContext, cancel = context.WithTimeout(ctx, callbackAttemptTimeout)
 		}
-		retry, postErr := client.postOnce(attemptContext, endpoint.String(), raw)
+		retry, postErr := client.postOnce(attemptContext, input, endpoint.String(), raw)
 		cancel()
 		if postErr == nil {
 			return nil
@@ -226,12 +228,13 @@ func (client *Client) postWithRetry(ctx context.Context, path string, payload an
 	return lastErr
 }
 
-func (client *Client) postOnce(ctx context.Context, endpoint string, raw []byte) (bool, error) {
+func (client *Client) postOnce(ctx context.Context, input model.Input, endpoint string, raw []byte) (bool, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return false, errors.New("create runtime callback request")
 	}
 	request.Header.Set("Authorization", "Bearer "+client.token)
+	bindExecutionHeaders(request, input, strings.TrimPrefix(filepath.Base(request.URL.Path), "/"))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	response, err := client.http.Do(request)
@@ -245,6 +248,21 @@ func (client *Client) postOnce(ctx context.Context, endpoint string, raw []byte)
 	}
 	retry := retryableCallbackStatus(response.StatusCode)
 	return retry, errors.New("runtime callback rejected request with status " + strconv.Itoa(response.StatusCode))
+}
+
+func bindExecutionHeaders(request *http.Request, input model.Input, method string) {
+	request.Header.Set("X-Kodex-Organization-Ref", input.OrganizationRef)
+	request.Header.Set("X-Kodex-Project-Ref", input.ProjectRef)
+	request.Header.Set("X-Kodex-Run-Ref", input.RunRef)
+	request.Header.Set("X-Kodex-Node-Ref", input.NodeRef)
+	request.Header.Set("X-Kodex-Session-Ref", input.SessionRef)
+	request.Header.Set("X-Kodex-Turn-Ref", input.TurnRef)
+	request.Header.Set("X-Kodex-Attempt", strconv.FormatInt(int64(input.Attempt), 10))
+	request.Header.Set("X-Kodex-Runtime-Revision-Digest", input.RuntimeRevisionDigest)
+	request.Header.Set("X-Kodex-Input-Digest", input.InputDigest)
+	request.Header.Set("X-Kodex-Execution-Binding-Digest", input.ExecutionBindingDigest)
+	request.Header.Set("X-Kodex-MCP-Binding-Digest", input.MCPBindingDigest)
+	request.Header.Set("X-Kodex-Callback-Method", method)
 }
 
 func retryableCallbackStatus(code int) bool {

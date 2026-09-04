@@ -8,6 +8,7 @@
     "schema",
     "mode",
     "workload_instance",
+    "organization_ref",
     "session_ref",
     "agent_ref",
     "runtime_revision_ref",
@@ -18,6 +19,14 @@
     "environment_image",
     "role_runtime_contract_revision",
     "role_runtime_contract_sha256",
+    "role_definition_ref",
+    "runtime_profile_ref",
+    "runtime_profile_revision",
+    "instruction_ref",
+    "instruction_digest",
+    "prompt_template_ref",
+    "prompt_template_digest",
+    "prompt_materialization_digest",
     "system_assistant",
     "instructions",
     "provider",
@@ -51,6 +60,7 @@
     "execution_ticket_file",
     "provider_auth_file",
     "provider_auth_sha256_file",
+    "workspace_policy",
     "workspace_root",
     "outbox_root",
     "codex_home"
@@ -59,6 +69,7 @@
     "schema": {"const": "kodex.agent-runner-input.v6"},
     "mode": {"enum": ["TURN", "WARM"]},
     "workload_instance": {"type": "string", "minLength": 1, "maxLength": 128},
+    "organization_ref": {"$ref": "#/$defs/opaque_ref"},
     "run_ref": {"$ref": "#/$defs/opaque_ref"},
     "project_ref": {"$ref": "#/$defs/opaque_ref"},
     "node_ref": {"$ref": "#/$defs/opaque_ref"},
@@ -69,6 +80,7 @@
     "lease_ref": {"$ref": "#/$defs/opaque_ref"},
     "lease_fence": {"type": "string", "minLength": 1, "maxLength": 128},
     "lease_generation": {"type": "integer", "minimum": 1},
+    "input_digest": {"$ref": "#/$defs/sha256"},
     "runtime_revision_ref": {
       "type": "string",
       "pattern": "^([a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}|system-assistant-core-v[1-9][0-9]*)$"
@@ -90,6 +102,20 @@
     },
     "role_runtime_contract_revision": {"type": "integer", "minimum": 1},
     "role_runtime_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "role_definition_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_profile_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_profile_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+    "instruction_ref": {"$ref": "#/$defs/opaque_ref"},
+    "instruction_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_template_ref": {"$ref": "#/$defs/opaque_ref"},
+    "prompt_template_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_materialization_digest": {"$ref": "#/$defs/sha256"},
+    "system_stt_configuration_ref": {"$ref": "#/$defs/opaque_ref"},
+    "system_stt_configuration_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+    "system_stt_configuration_version": {"type": "integer", "minimum": 1},
+    "system_stt_configuration_digest": {"$ref": "#/$defs/sha256"},
+    "execution_binding_digest": {"$ref": "#/$defs/sha256"},
+    "mcp_binding_digest": {"$ref": "#/$defs/sha256"},
     "system_assistant": {"type": "boolean"},
     "instructions": {"type": "string", "minLength": 1, "maxLength": 1048576},
     "task": {"type": "string", "minLength": 1, "maxLength": 1048576},
@@ -176,6 +202,7 @@
     "execution_ticket_file": {"$ref": "#/$defs/secret_file"},
     "provider_auth_file": {"$ref": "#/$defs/secret_file"},
     "provider_auth_sha256_file": {"$ref": "#/$defs/secret_file"},
+    "workspace_policy": {"$ref": "#/$defs/workspace_policy"},
     "workspace_root": {"const": "/workspace"},
     "outbox_root": {"const": "/workspace/.kodex/outbox"},
     "codex_home": {"const": "/workspace/.kodex/state/codex-home"}
@@ -192,6 +219,9 @@
           "lease_ref",
           "lease_fence",
           "lease_generation",
+          "input_digest",
+          "execution_binding_digest",
+          "mcp_binding_digest",
           "task"
         ]
       }
@@ -209,7 +239,34 @@
             {"required": ["lease_ref"]},
             {"required": ["lease_fence"]},
             {"required": ["lease_generation"]},
+            {"required": ["input_digest"]},
             {"required": ["task"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capabilities": {"contains": {"const": "platform.stt.use"}}
+        },
+        "required": ["capabilities"]
+      },
+      "then": {
+        "required": [
+          "system_stt_configuration_ref",
+          "system_stt_configuration_revision_ref",
+          "system_stt_configuration_version",
+          "system_stt_configuration_digest"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["system_stt_configuration_ref"]},
+            {"required": ["system_stt_configuration_revision_ref"]},
+            {"required": ["system_stt_configuration_version"]},
+            {"required": ["system_stt_configuration_digest"]}
           ]
         }
       }
@@ -587,6 +644,29 @@
         "service_account_name": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"},
         "rules": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/kubernetes_rule"}},
         "digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workspace_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "access"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/workspace(?:/[A-Za-z0-9._-]+)*$"},
+        "access": {"enum": ["READ_ONLY", "WRITABLE"]}
+      }
+    },
+    "workspace_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "root", "rules", "maximum_writable_bytes", "maximum_file_count", "digest", "denial_reasons"],
+      "properties": {
+        "revision": {"type": "integer", "minimum": 1},
+        "root": {"const": "/workspace"},
+        "rules": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/workspace_rule"}},
+        "maximum_writable_bytes": {"type": "integer", "minimum": 1},
+        "maximum_file_count": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "denial_reasons": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"enum": ["READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"]}}
       }
     },
     "secret_projection": {

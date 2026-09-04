@@ -56,6 +56,7 @@ for admission_resource in \
   runtime-execution-rbac \
   runtime-execution-service-account \
   runtime-execution-ticket-exact-projection \
+  runtime-revision-exact-configmap-projection \
   runtime-role-pod-exact-secret-projection; do
   rg -F "$admission_resource" "$source_root/dev.sh" >/dev/null ||
     fail "local reset omits admission resource: $admission_resource"

@@ -398,7 +398,7 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 	content := response.GetContent()
 	digest := sha256.Sum256(content)
 	actualDigest := "sha256:" + hex.EncodeToString(digest[:])
-	if artifact.GetRef() != expected.Ref || artifact.GetFileName() != expected.FileName ||
+	if artifact.GetRef() != expected.Ref || artifact.GetProjectRef() != input.ProjectRef || artifact.GetFileName() != expected.FileName ||
 		artifact.GetMediaType() != expected.MediaType || artifact.GetSizeBytes() != expected.SizeBytes ||
 		int64(len(content)) != expected.SizeBytes || artifact.GetRevision() != int32(expected.Revision) ||
 		artifact.GetVersion() != expected.Version || subtle.ConstantTimeCompare([]byte(artifact.GetDigest()), []byte(expected.Digest)) != 1 ||
@@ -474,7 +474,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerCompletionRequest
-	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest {
+	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
 		http.Error(writer, "invalid runtime completion", http.StatusBadRequest)
 		return
 	}
@@ -491,14 +491,15 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	server.coordinator.Complete(input.LeaseRef)
-	go func() {
-		cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(request.Context()), 10*time.Second)
-		defer cleanupCancel()
-		if cleanupErr := server.manager.DeleteTurn(cleanup, input.LeaseRef); cleanupErr != nil {
-			server.logger.ErrorContext(cleanup, "runtime resource cleanup failed", "error_class", "kubernetes")
-		}
-	}()
 	writer.WriteHeader(http.StatusNoContent)
+	// Ответ о durable commit отправляется до удаления вызывающего Pod;
+	// cleanup остаётся частью handler, которого дожидается HTTP shutdown.
+	_ = http.NewResponseController(writer).Flush()
+	cleanup, cleanupCancel := context.WithTimeout(context.WithoutCancel(request.Context()), 10*time.Second)
+	defer cleanupCancel()
+	if cleanupErr := server.manager.DeleteTurn(cleanup, input.LeaseRef); cleanupErr != nil {
+		server.logger.ErrorContext(cleanup, "runtime resource cleanup failed", "error_class", "kubernetes")
+	}
 }
 
 type mcpRequest struct {
@@ -1253,7 +1254,26 @@ func (server *Server) authorize(request *http.Request, leaseRef string) (runtime
 		return runtimecontract.RunnerInput{}, false
 	}
 	input, err := server.manager.ResolveTurn(request.Context(), leaseRef, token)
-	return input, err == nil
+	return input, err == nil && executionHeadersMatch(request, input)
+}
+
+func executionHeadersMatch(request *http.Request, input runtimecontract.RunnerInput) bool {
+	method := ""
+	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	if len(parts) == 5 && parts[3] == "artifacts" {
+		method = "artifact"
+	} else if len(parts) == 4 {
+		method = parts[3]
+	}
+	return method != "" && request.Header.Get("X-Kodex-Callback-Method") == method &&
+		request.Header.Get("X-Kodex-Organization-Ref") == input.OrganizationRef &&
+		request.Header.Get("X-Kodex-Project-Ref") == input.ProjectRef && request.Header.Get("X-Kodex-Run-Ref") == input.RunRef &&
+		request.Header.Get("X-Kodex-Node-Ref") == input.NodeRef && request.Header.Get("X-Kodex-Session-Ref") == input.SessionRef &&
+		request.Header.Get("X-Kodex-Turn-Ref") == input.TurnRef && request.Header.Get("X-Kodex-Attempt") == strconv.FormatInt(int64(input.Attempt), 10) &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Runtime-Revision-Digest")), []byte(input.RuntimeRevisionDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Input-Digest")), []byte(input.InputDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-Execution-Binding-Digest")), []byte(input.ExecutionBindingDigest)) == 1 &&
+		subtle.ConstantTimeCompare([]byte(request.Header.Get("X-Kodex-MCP-Binding-Digest")), []byte(input.MCPBindingDigest)) == 1
 }
 
 func bearer(request *http.Request) (string, bool) {

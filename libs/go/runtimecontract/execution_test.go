@@ -8,6 +8,7 @@ import (
 func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.Capabilities = []string{ArtifactCapability}
+	refreshRunnerInputBindings(&input)
 	input.AttachmentSetRef = "aset_abcdefgh"
 	input.AttachmentSetManifestDigest = strings.Repeat("4", 64)
 	input.AttachmentContext = "RUN_INPUT"
@@ -21,6 +22,7 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 		Scope: "INPUT", Position: 1, Source: "CONTROL_CENTER", AttachmentSetRef: input.AttachmentSetRef,
 		AttachmentPurpose: input.AttachmentContext, Provenance: "CURRENT_TURN",
 	}}
+	refreshRunnerInputBindings(&input)
 	if _, err := EncodeRunnerInput(input); err != nil {
 		t.Fatalf("EncodeRunnerInput() rejected a valid artifact catalog: %v", err)
 	}
@@ -57,19 +59,29 @@ func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *tes
 		t.Fatalf("compatible warm and turn digests differ: %s != %s", warmDigest, turnDigest)
 	}
 
-	turn.Model = "different-model"
-	driftedDigest, err := WarmCompatibilityDigest(turn)
-	if err != nil {
-		t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
-	}
-	if driftedDigest == warmDigest {
-		t.Fatal("runtime drift retained the warm compatibility digest")
+	for name, mutate := range map[string]func(*RunnerInput){
+		"model":     func(input *RunnerInput) { input.Model = "different-model" },
+		"session":   func(input *RunnerInput) { input.SessionRef = "session_other123" },
+		"workspace": func(input *RunnerInput) { input.WorkspacePolicy.Digest = strings.Repeat("e", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			drifted := turn
+			mutate(&drifted)
+			driftedDigest, err := WarmCompatibilityDigest(drifted)
+			if err != nil {
+				t.Fatalf("WarmCompatibilityDigest(drifted turn) error = %v", err)
+			}
+			if driftedDigest == warmDigest {
+				t.Fatal("runtime drift retained the warm compatibility digest")
+			}
+		})
 	}
 }
 
 func TestRunnerInputAcceptsImmutableSystemRuntimeRevision(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.RuntimeRevisionRef = "system-assistant-runtime-" + strings.Repeat("a", 64)
+	refreshRunnerInputBindings(&input)
 	if err := input.Validate(); err != nil {
 		t.Fatalf("immutable system runtime revision rejected: %v", err)
 	}
@@ -88,6 +100,7 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 		CapabilityDescription: "Read bounded CRM records.", Risk: "READ",
 	}}
 	valid.Capabilities = []string{"crm.read"}
+	refreshRunnerInputBindings(&valid)
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("valid nested runner catalog rejected: %v", err)
 	}
@@ -106,6 +119,86 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 			mutate(&input)
 			if input.Validate() == nil {
 				t.Fatalf("invalid nested runner catalog accepted: %#v", input)
+			}
+		})
+	}
+}
+
+func TestRunnerInputRequiresExactRevisionAndSTTBindings(t *testing.T) {
+	for name, mutate := range map[string]func(*RunnerInput){
+		"organization":           func(input *RunnerInput) { input.OrganizationRef = "" },
+		"role definition":        func(input *RunnerInput) { input.RoleDefinitionRef = "" },
+		"runtime profile":        func(input *RunnerInput) { input.RuntimeProfileRevision = "" },
+		"instruction":            func(input *RunnerInput) { input.InstructionDigest = "" },
+		"prompt template":        func(input *RunnerInput) { input.PromptTemplateDigest = "" },
+		"prompt materialization": func(input *RunnerInput) { input.PromptMaterializationDigest = "" },
+		"workspace":              func(input *RunnerInput) { input.WorkspacePolicy.Digest = strings.Repeat("f", 64) },
+		"input":                  func(input *RunnerInput) { input.InputDigest = "" },
+		"execution digest":       func(input *RunnerInput) { input.ExecutionBindingDigest = strings.Repeat("f", 64) },
+		"MCP digest":             func(input *RunnerInput) { input.MCPBindingDigest = strings.Repeat("f", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := validRunnerInputFixture()
+			mutate(&input)
+			if input.Validate() == nil {
+				t.Fatal("incomplete or stale RuntimeRevision binding was accepted")
+			}
+		})
+	}
+	input := validRunnerInputFixture()
+	input.Capabilities = []string{"platform.stt.use"}
+	refreshRunnerInputBindings(&input)
+	if input.Validate() == nil {
+		t.Fatal("STT capability without an immutable configuration revision was accepted")
+	}
+	input.SystemSTTConfigurationRef = "sttcfg_abcdefgh"
+	input.SystemSTTConfigurationRevisionRef = "sttrev_abcdefgh"
+	input.SystemSTTConfigurationVersion = 3
+	input.SystemSTTConfigurationDigest = strings.Repeat("8", 64)
+	refreshRunnerInputBindings(&input)
+	if err := input.Validate(); err != nil {
+		t.Fatalf("exact STT binding was rejected: %v", err)
+	}
+}
+
+func TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant(t *testing.T) {
+	base := validRunnerInputFixture()
+	base.Capabilities = []string{"crm.read"}
+	base.IntegrationGrants = []RunnerIntegrationGrant{{Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh",
+		DefinitionKey: "crm", ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM", Risk: "READ"}}
+	refreshRunnerInputBindings(&base)
+	for name, mutate := range map[string]func(*RunnerInput){
+		"model": func(input *RunnerInput) { input.Model = "caller-model" },
+		"task":  func(input *RunnerInput) { input.Task = "Caller task" },
+		"credential": func(input *RunnerInput) {
+			input.ProviderCredentialRevision++
+		},
+		"role definition": func(input *RunnerInput) { input.RoleDefinitionRef = "role_other123" },
+		"reasoning": func(input *RunnerInput) {
+			input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
+			_, input.ConfigOverlayDigest, _ = CanonicalConfigOverlay(input.ConfigOverlay)
+		},
+		"prompt": func(input *RunnerInput) { input.Instructions += " caller text" },
+		"image": func(input *RunnerInput) {
+			input.ImageReference = "registry.example/roles@sha256:" + strings.Repeat("f", 64)
+			input.ImageManifestDigest = "sha256:" + strings.Repeat("f", 64)
+			input.EnvironmentImage.Reference, input.EnvironmentImage.Digest = input.ImageReference, input.ImageManifestDigest
+			input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+		},
+		"tool": func(input *RunnerInput) {
+			input.EnvironmentTools = []RuntimeEnvironmentTool{{Name: "Foreign", Command: "foreign", Description: "Foreign tool"}}
+			input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+		},
+		"MCP grant":     func(input *RunnerInput) { input.IntegrationGrants[0].CapabilityKey = "crm.write" },
+		"revoked grant": func(input *RunnerInput) { input.IntegrationGrants = nil },
+		"file":          func(input *RunnerInput) { input.AttachmentSetManifestDigest = strings.Repeat("f", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := base
+			input.IntegrationGrants = append([]RunnerIntegrationGrant(nil), base.IntegrationGrants...)
+			mutate(&input)
+			if input.Validate() == nil {
+				t.Fatal("mutable or caller-supplied RuntimeRevision drift was accepted")
 			}
 		})
 	}
@@ -134,7 +227,7 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 }
 
 func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
-	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Success: true,
+	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Attempt: 1, Success: true,
 		ResultSummary: "done", CodexSessionID: "00000000-0000-4000-8000-000000000001",
 		ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000001.jsonl",
 		ArchiveSHA256:       strings.Repeat("c", 64), ArchiveSizeBytes: 1024}
@@ -212,13 +305,19 @@ func validRunnerInputFixture() RunnerInput {
 	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := RunnerInput{
 		Schema: RunnerInputSchemaV6, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
-		RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
-		TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
+		OrganizationRef: "org_abcdefgh",
+		RunRef:          "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
+		ProjectRef: "prj_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
 		LeaseRef: "lease_abcdefgh", LeaseFence: "fence-1", LeaseGeneration: 1,
+		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
 		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
-		RoleRuntimeContractSHA256: strings.Repeat("d", 64), Instructions: "Complete the bounded task.",
+		RoleRuntimeContractSHA256: strings.Repeat("d", 64), RoleDefinitionRef: "roledef_abcdefgh",
+		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
+		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
+		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
+		PromptMaterializationDigest: strings.Repeat("7", 64), Instructions: "Complete the bounded task.",
 		Task: "Prepare the customer response.", Provider: "openai", Model: "codex",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("e", 64),
@@ -228,8 +327,8 @@ func validRunnerInputFixture() RunnerInput {
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,
-		EnvironmentPolicy:        policy,
-		EnvironmentBindingRef:    "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
+		EnvironmentPolicy:        policy, WorkspacePolicy: RuntimeWorkspacePolicyV1(),
+		EnvironmentBindingRef: "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
 		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
 		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
 			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",
@@ -244,5 +343,11 @@ func validRunnerInputFixture() RunnerInput {
 	}
 	input.EffectiveKubernetesAccess, _ = RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
 		RuntimeServiceAccountName(input.LeaseRef), RuntimeTurnPodName(input.LeaseRef))
+	input.InputDigest, _ = RuntimeBoundedInputDigest(input.BoundedInput)
+	refreshRunnerInputBindings(&input)
 	return input
+}
+
+func refreshRunnerInputBindings(input *RunnerInput) {
+	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = RuntimeExecutionBindingDigests(*input)
 }

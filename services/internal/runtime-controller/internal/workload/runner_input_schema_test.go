@@ -61,6 +61,7 @@ func TestRunnerInputSchemaV6CarriesOnlySecretDescriptors(t *testing.T) {
 		ContentSha256: projections[0].ContentSHA256,
 	}}
 	execution.Revision.RuntimeEnvironmentDigest = environmentDigest
+	sealTestTurnExecution(execution)
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(execution)
 	if err != nil {

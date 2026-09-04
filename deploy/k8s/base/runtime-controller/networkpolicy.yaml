@@ -39,6 +39,12 @@ spec:
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: control-plane}}}]
       ports: [{protocol: TCP, port: 8443}]
     - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: secret-broker
+              app.kubernetes.io/component: secret-broker
+      ports: [{protocol: TCP, port: 8443}]
+    - to:
         - ipBlock: {cidr: __KODEX_KUBERNETES_API_SERVICE_CIDR__}
       ports: [{protocol: TCP, port: 443}]
     - to:

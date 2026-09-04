@@ -2462,6 +2462,16 @@ message RuntimeRevisionSnapshot {
   RuntimeKubernetesAccess effective_kubernetes_access = 56;
   repeated RuntimeAttachmentSet attachment_sets = 57;
   RuntimeWorkspacePolicy workspace_policy = 58;
+  string instruction_ref = 59;
+  string instruction_digest = 60;
+  string prompt_template_ref = 61;
+  string prompt_template_digest = 62;
+  string prompt_materialization_digest = 63;
+  string system_stt_configuration_ref = 64;
+  int64 system_stt_configuration_version = 65;
+  string system_stt_configuration_digest = 66;
+  string system_stt_configuration_revision_ref = 67;
+  string organization_ref = 68;
 }
 
 enum RuntimeWorkspaceAccess {
