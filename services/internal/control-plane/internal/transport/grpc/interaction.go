@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest) (*controlplanev1.ListInteractionSourcesResponse, error) {
@@ -19,8 +21,13 @@ func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplan
 	}
 	response := &controlplanev1.ListInteractionSourcesResponse{}
 	for _, item := range items {
+		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+		if !ok || credential.Ref == "" {
+			return nil, transportError(errs.ErrUnavailable)
+		}
 		response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
-			ConnectionRef: itemString(item, "connectionRef"), CredentialMaterializationRef: itemString(item, "credentialRef"),
+			CredentialDescriptor: castIntegrationCredential(credential),
+			ConnectionRef:        itemString(item, "connectionRef"), CredentialMaterializationRef: itemString(item, "credentialRef"),
 			BaseUrl: itemString(item, "baseURL"), TeamName: itemString(item, "teamName"),
 			ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			EnabledCapabilities: itemStrings(item, "capabilities"),
@@ -42,8 +49,13 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 	response := &controlplanev1.ClaimInteractionDeliveriesResponse{}
 	for _, item := range items {
 		templateData, _ := item["templateData"].(map[string]any)
+		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+		if !ok || credential.Ref == "" {
+			return nil, transportError(errs.ErrUnavailable)
+		}
 		response.Claims = append(response.Claims, &controlplanev1.InteractionDeliveryClaim{
-			DeliveryRef: itemString(item, "deliveryRef"), ConnectionRef: itemString(item, "connectionRef"),
+			CredentialDescriptor: castIntegrationCredential(credential),
+			DeliveryRef:          itemString(item, "deliveryRef"), ConnectionRef: itemString(item, "connectionRef"),
 			CredentialMaterializationRef: itemString(item, "credentialRef"), BaseUrl: itemString(item, "baseURL"),
 			TeamName: itemString(item, "teamName"), ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			CapabilityKey: itemString(item, "capabilityKey"), MessageKey: itemString(item, "messageKey"),

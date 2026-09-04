@@ -421,6 +421,7 @@ SELECT n.id::text,
              AND (definition.adapter_owner,definition.execution_route) IN
                  (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
              AND definition.adapter_readiness = 'READY'
+             AND capability.value->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
              AND connection.enabled
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),

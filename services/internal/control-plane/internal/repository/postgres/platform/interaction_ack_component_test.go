@@ -36,6 +36,14 @@ FROM control_plane.integration_connections WHERE ref=$1`, connectionRef, agent.R
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.integration_connections SET credential_materialization_ref='ack_fixture_credential' WHERE ref=$1`, connectionRef); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `WITH revision AS (
+INSERT INTO control_plane.integration_credential_revisions
+(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+SELECT 'ack_credential_revision',organization_id,id,1,'kodex-system/kodex-integration-credentials#ack-token',gen_random_uuid(),'1',repeat('d',64),created_by
+FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id FROM revision WHERE connection.id=revision.connection_id`, connectionRef); err != nil {
+		t.Fatal(err)
+	}
 	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "interaction-gateway", Operation: "platform.interactions.messages.accept",
 	}, "interaction-gateway")
