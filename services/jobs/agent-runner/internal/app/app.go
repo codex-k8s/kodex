@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
-	"text/template"
 	"time"
 	"unicode/utf8"
 
@@ -31,11 +30,16 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
+	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
+	"golang.org/x/sys/unix"
 )
 
 const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 
-type health struct{ live, ready atomic.Bool }
+type health struct {
+	live, ready atomic.Bool
+	input       model.Input
+}
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
 	if len(args) != 2 {
@@ -85,7 +89,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
 		cancelSentry()
 	}()
-	state := &health{}
+	state := &health{input: input}
 	state.live.Store(true)
 	server, serverErrors := startHealthServer(lifecycleContext, state)
 	defer func() {
@@ -155,6 +159,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client) er
 	if err != nil {
 		return completeFailure(ctx, input, client, runtimeExecutionFailureCode(err))
 	}
+	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
+	}
 	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
 		return err
 	}
@@ -193,7 +200,7 @@ func recordNativeToolTimeline(ctx context.Context, input model.Input, recorder n
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary,
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
 		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
@@ -222,7 +229,7 @@ func completeFailureWithSummary(ctx context.Context, input model.Input, client *
 	return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, runtimecontract.TokenUsage{})
 }
 func completeFailureWithSummaryAndUsage(ctx context.Context, input model.Input, client *callback.Client, code, summary string, usage runtimecontract.TokenUsage) error {
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: usage}
 	if err := client.Complete(context.WithoutCancel(ctx), input, payload); err != nil {
 		return err
 	}
@@ -277,11 +284,13 @@ func materializeWorkspace(input model.Input) error {
 			return err
 		}
 	}
-	renderedInstructions, err := renderInstructions(input)
-	if err != nil {
+	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
 		return err
 	}
-	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(renderedInstructions+"\n")); err != nil {
+	if err := validateMaterializedInstructions(input.Instructions); err != nil {
+		return err
+	}
+	if err := writeWorkspaceFile(input.WorkspaceRoot, "AGENTS.md", []byte(strings.TrimSpace(input.Instructions)+"\n")); err != nil {
 		return err
 	}
 	prompt, err := buildPrompt(input)
@@ -668,7 +677,12 @@ func writeWorkspaceFile(root, relative string, payload []byte) error {
 
 func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.RunnerArtifact, error) {
 	artifacts := []runtimecontract.RunnerArtifact{artifact("result.md", "text/markdown", []byte(markdown))}
-	entries, err := os.ReadDir(input.OutboxRoot)
+	directory, err := workspacepolicy.OpenOutbox(input.WorkspaceRoot)
+	if err != nil {
+		return nil, errors.New("read runtime outbox")
+	}
+	defer directory.Close()
+	entries, err := directory.ReadDir(-1)
 	if err != nil {
 		return nil, errors.New("read runtime outbox")
 	}
@@ -681,9 +695,13 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		if entry.IsDir() || name == "result.md" || safeFileName(name) != name {
 			continue
 		}
-		path := filepath.Join(input.OutboxRoot, name)
-		file, err := os.Open(path)
+		descriptor, err := unix.Openat(int(directory.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err != nil {
+			return nil, errors.New("open runtime artifact")
+		}
+		file := os.NewFile(uintptr(descriptor), "runtime-artifact")
+		if file == nil {
+			_ = unix.Close(descriptor)
 			return nil, errors.New("open runtime artifact")
 		}
 		info, statErr := file.Stat()
@@ -717,6 +735,19 @@ func safeFileName(value string) string {
 }
 
 func startHealthServer(ctx context.Context, state *health) (*http.Server, <-chan error) {
+	server := &http.Server{Addr: ":9090", Handler: healthHandler(state), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	done := make(chan error, 1)
+	go func() {
+		err := server.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		done <- err
+	}()
+	return server, done
+}
+
+func healthHandler(state *health) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		if !state.live.Load() {
@@ -737,16 +768,11 @@ func startHealthServer(ctx context.Context, state *health) (*http.Server, <-chan
 			http.Error(writer, "runtime is not ready", http.StatusServiceUnavailable)
 			return
 		}
+		if err := workspacepolicy.RunCanary(state.input.WorkspaceRoot, state.input.WorkspacePolicy); err != nil {
+			http.Error(writer, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		writer.WriteHeader(http.StatusNoContent)
 	})
-	server := &http.Server{Addr: ":9090", Handler: mux, BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
-	done := make(chan error, 1)
-	go func() {
-		err := server.ListenAndServe()
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		done <- err
-	}()
-	return server, done
+	return mux
 }

@@ -87,10 +87,19 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string) (*MCPPr
 			request.Header.Del("X-Forwarded-Host")
 			request.Header.Del("X-Forwarded-Proto")
 			request.Header.Set("Authorization", "Bearer "+token)
+			request.Header.Set("X-Kodex-Organization-Ref", input.OrganizationRef)
+			request.Header.Set("X-Kodex-Project-Ref", input.ProjectRef)
 			request.Header.Set("X-Kodex-Run-Ref", input.RunRef)
+			request.Header.Set("X-Kodex-Node-Ref", input.NodeRef)
+			request.Header.Set("X-Kodex-Session-Ref", input.SessionRef)
 			request.Header.Set("X-Kodex-Turn-Ref", input.TurnRef)
 			request.Header.Set("X-Kodex-Attempt", strconv.FormatUint(uint64(input.Attempt), 10))
 			request.Header.Set("X-Kodex-MCP-Binding-Version", strconv.FormatInt(input.RuntimeRevisionVersion, 10))
+			request.Header.Set("X-Kodex-Runtime-Revision-Digest", input.RuntimeRevisionDigest)
+			request.Header.Set("X-Kodex-Input-Digest", input.InputDigest)
+			request.Header.Set("X-Kodex-Execution-Binding-Digest", input.ExecutionBindingDigest)
+			request.Header.Set("X-Kodex-MCP-Binding-Digest", input.MCPBindingDigest)
+			request.Header.Set("X-Kodex-Callback-Method", "mcp")
 		},
 		Transport: transport,
 		ErrorLog:  log.New(io.Discard, "", 0),
