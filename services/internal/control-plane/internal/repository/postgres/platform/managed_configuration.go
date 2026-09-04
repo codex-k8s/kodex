@@ -56,6 +56,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
+	if (action == "CREATE" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	switch action {
 	case "CREATE":
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || strings.TrimSpace(payload.Content) == "" || len(payload.Content) > 256<<10 {
@@ -194,9 +197,23 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		}
 		revision = &locked.ManagedConfigurationRevision
 	case "DETACH":
-		if configuration.ManagedBy != "GIT" {
+		if configuration.ManagedBy != "GIT" || configuration.CurrentRevision == nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		revisionRef, err := newRef("mrev")
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		source := configuration.CurrentRevision
+		draft, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
+			"revision_ref": revisionRef, "organization_id": current.organizationID, "configuration_set_id": configuration.id,
+			"content_format": source.ContentFormat, "content": source.Content, "digest": source.Digest,
+			"parent_revision_id": configuration.currentRevisionID, "actor_id": current.actorID,
+		}))
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		revision = &draft.ManagedConfigurationRevision
 		if err := tx.QueryRow(ctx, queryManagedConfigurationDetach, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "configuration_ref": configuration.Ref,
 			"expected_version": configuration.Version,
@@ -204,7 +221,6 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		configuration.ManagedBy, configuration.Source, configuration.SourceRevision = "UI", "control-center", ""
-		configuration.CurrentRevision = nil
 	}
 	return managedOutcome(configuration, revision), nil
 }
@@ -227,6 +243,13 @@ func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, 
 		}
 		if kind != "" && item.Kind != kind {
 			return managedSet{}, errs.ErrNotFound
+		}
+		if item.currentRevisionID != "" {
+			revision, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationCurrentRevision, current.organizationID, item.id, item.currentRevisionID))
+			if err != nil || revision.State != "PUBLISHED" {
+				return managedSet{}, errs.ErrUnavailable
+			}
+			item.CurrentRevision = &revision.ManagedConfigurationRevision
 		}
 		return item, nil
 	}
@@ -306,7 +329,6 @@ func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationCon
 }
 
 func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevision) commandOutcome {
-	set.CurrentRevision = nil
 	if revision != nil && revision.State == "PUBLISHED" {
 		set.CurrentRevision = revision
 	}
