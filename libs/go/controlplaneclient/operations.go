@@ -13,6 +13,30 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
+		"platform.query.skill-bundles.get":                         controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName,
+		"platform.query.skill-bundle-revisions.list":               controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName,
+		"platform.query.memory-records.list":                       controlplanev1.PlatformQueryService_ListMemoryRecords_FullMethodName,
+		"platform.query.memory-records.get":                        controlplanev1.PlatformQueryService_GetMemoryRecord_FullMethodName,
+		"platform.query.memory-record-revisions.list":              controlplanev1.PlatformQueryService_ListMemoryRecordRevisions_FullMethodName,
+		"platform.command.skill-bundle-drafts.create":              controlplanev1.PlatformCommandService_CreateSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.save":                controlplanev1.PlatformCommandService_SaveSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.validate":            controlplanev1.PlatformCommandService_ValidateSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.review":              controlplanev1.PlatformCommandService_ReviewSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.publish":             controlplanev1.PlatformCommandService_PublishSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.discard":             controlplanev1.PlatformCommandService_DiscardSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundles.archive":                   controlplanev1.PlatformCommandService_ArchiveSkillBundle_FullMethodName,
+		"platform.command.skill-bundles.restore":                   controlplanev1.PlatformCommandService_RestoreSkillBundle_FullMethodName,
+		"platform.command.skill-bundles.purge":                     controlplanev1.PlatformCommandService_PurgeSkillBundle_FullMethodName,
+		"platform.command.agent-skill-bundles.bind":                controlplanev1.PlatformCommandService_BindAgentSkillBundle_FullMethodName,
+		"platform.command.agent-skill-bundles.unbind":              controlplanev1.PlatformCommandService_UnbindAgentSkillBundle_FullMethodName,
+		"platform.command.memory-records.create":                   controlplanev1.PlatformCommandService_CreateMemoryRecord_FullMethodName,
+		"platform.command.memory-records.revise":                   controlplanev1.PlatformCommandService_ReviseMemoryRecord_FullMethodName,
+		"platform.command.memory-records.archive":                  controlplanev1.PlatformCommandService_ArchiveMemoryRecord_FullMethodName,
+		"platform.command.memory-records.restore":                  controlplanev1.PlatformCommandService_RestoreMemoryRecord_FullMethodName,
+		"platform.command.memory-records.purge":                    controlplanev1.PlatformCommandService_PurgeMemoryRecord_FullMethodName,
+		"platform.command.agent-memory-records.bind":               controlplanev1.PlatformCommandService_BindAgentMemoryRecord_FullMethodName,
+		"platform.command.agent-memory-records.unbind":             controlplanev1.PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName,
 		"platform.query.bootstrap.get":                             controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName,
 		"platform.query.event-cursor.get":                          controlplanev1.PlatformQueryService_GetPlatformEventCursor_FullMethodName,
 		"platform.query.overview.get":                              controlplanev1.PlatformQueryService_GetOverview_FullMethodName,
@@ -370,6 +394,8 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
+		"platform.command.skill-bundle-drafts.create":           {},
+		"platform.command.memory-records.create":                {},
 		"platform.query.projects.get":                           {},
 		"platform.query.membership-candidates.list":             {},
 		"platform.query.template-variables.list":                {},
