@@ -3929,13 +3929,13 @@ func (e SpeechTranscriptionReceiptCompletedStage) Valid() bool {
 
 // Defines values for SystemAssistantRemovable.
 const (
-	False SystemAssistantRemovable = false
+	SystemAssistantRemovableFalse SystemAssistantRemovable = false
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantRemovable enum.
 func (e SystemAssistantRemovable) Valid() bool {
 	switch e {
-	case False:
+	case SystemAssistantRemovableFalse:
 		return true
 	default:
 		return false
@@ -3986,13 +3986,61 @@ func (e SystemAssistantSystem) Valid() bool {
 
 // Defines values for SystemSTTConfigurationPermissionKey.
 const (
-	PlatformSttUse SystemSTTConfigurationPermissionKey = "platform.stt.use"
+	SystemSTTConfigurationPermissionKeyPlatformSttUse SystemSTTConfigurationPermissionKey = "platform.stt.use"
 )
 
 // Valid indicates whether the value is a known member of the SystemSTTConfigurationPermissionKey enum.
 func (e SystemSTTConfigurationPermissionKey) Valid() bool {
 	switch e {
-	case PlatformSttUse:
+	case SystemSTTConfigurationPermissionKeyPlatformSttUse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemSTTParametersChunkingStrategy.
+const (
+	Auto  SystemSTTParametersChunkingStrategy = "auto"
+	Empty SystemSTTParametersChunkingStrategy = ""
+)
+
+// Valid indicates whether the value is a known member of the SystemSTTParametersChunkingStrategy enum.
+func (e SystemSTTParametersChunkingStrategy) Valid() bool {
+	switch e {
+	case Auto:
+		return true
+	case Empty:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemSTTParametersStream.
+const (
+	SystemSTTParametersStreamFalse SystemSTTParametersStream = false
+)
+
+// Valid indicates whether the value is a known member of the SystemSTTParametersStream enum.
+func (e SystemSTTParametersStream) Valid() bool {
+	switch e {
+	case SystemSTTParametersStreamFalse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemSTTSpecificationPermissionKey.
+const (
+	SystemSTTSpecificationPermissionKeyPlatformSttUse SystemSTTSpecificationPermissionKey = "platform.stt.use"
+)
+
+// Valid indicates whether the value is a known member of the SystemSTTSpecificationPermissionKey enum.
+func (e SystemSTTSpecificationPermissionKey) Valid() bool {
+	switch e {
+	case SystemSTTSpecificationPermissionKeyPlatformSttUse:
 		return true
 	default:
 		return false
@@ -7377,21 +7425,71 @@ type SystemAssistantSystem bool
 
 // SystemSTTConfiguration defines model for SystemSTTConfiguration.
 type SystemSTTConfiguration struct {
-	ConfigurationRef             OpaqueRef                           `json:"configurationRef"`
-	Digest                       string                              `json:"digest"`
-	Language                     string                              `json:"language"`
-	Model                        string                              `json:"model"`
-	PermissionKey                SystemSTTConfigurationPermissionKey `json:"permissionKey"`
-	ProviderAccountRef           OpaqueRef                           `json:"providerAccountRef"`
-	ProviderCredentialGeneration int64                               `json:"providerCredentialGeneration"`
-	ReadinessBlockers            []string                            `json:"readinessBlockers"`
-	Ready                        bool                                `json:"ready"`
-	Revision                     int64                               `json:"revision"`
-	RevisionRef                  OpaqueRef                           `json:"revisionRef"`
+	ConfigurationRef                 OpaqueRef                           `json:"configurationRef"`
+	Digest                           string                              `json:"digest"`
+	Enabled                          bool                                `json:"enabled"`
+	Language                         string                              `json:"language"`
+	MaximumAudioBytes                int64                               `json:"maximumAudioBytes"`
+	MaximumAudioDurationMilliseconds int64                               `json:"maximumAudioDurationMilliseconds"`
+	Model                            string                              `json:"model"`
+	Parameters                       SystemSTTParameters                 `json:"parameters"`
+	PermissionKey                    SystemSTTConfigurationPermissionKey `json:"permissionKey"`
+	ProviderAccountRef               OpaqueRef                           `json:"providerAccountRef"`
+	ProviderCredentialGeneration     int64                               `json:"providerCredentialGeneration"`
+	ProviderTimeoutMilliseconds      int64                               `json:"providerTimeoutMilliseconds"`
+	ReadinessBlockers                []string                            `json:"readinessBlockers"`
+	Ready                            bool                                `json:"ready"`
+	Revision                         int64                               `json:"revision"`
+	RevisionRef                      OpaqueRef                           `json:"revisionRef"`
 }
 
 // SystemSTTConfigurationPermissionKey defines model for SystemSTTConfiguration.PermissionKey.
 type SystemSTTConfigurationPermissionKey string
+
+// SystemSTTConfigurationDraftInput defines model for SystemSTTConfigurationDraftInput.
+type SystemSTTConfigurationDraftInput struct {
+	ConfigurationRef *OpaqueRef             `json:"configurationRef,omitempty"`
+	Name             string                 `json:"name"`
+	Specification    SystemSTTSpecification `json:"specification"`
+}
+
+// SystemSTTParameters defines model for SystemSTTParameters.
+type SystemSTTParameters struct {
+	ChunkingStrategy SystemSTTParametersChunkingStrategy `json:"chunkingStrategy"`
+	Keywords         []string                            `json:"keywords"`
+	Languages        []string                            `json:"languages"`
+
+	// Prompt Дополнительно ограничен 896 UTF-8 bytes общим modelprofile.
+	Prompt string `json:"prompt"`
+
+	// Stream Синхронная диктовка; stream=true закрыто отклоняется.
+	Stream      SystemSTTParametersStream `json:"stream"`
+	Temperature float64                   `json:"temperature"`
+}
+
+// SystemSTTParametersChunkingStrategy defines model for SystemSTTParameters.ChunkingStrategy.
+type SystemSTTParametersChunkingStrategy string
+
+// SystemSTTParametersStream Синхронная диктовка; stream=true закрыто отклоняется.
+type SystemSTTParametersStream bool
+
+// SystemSTTSpecification defines model for SystemSTTSpecification.
+type SystemSTTSpecification struct {
+	Enabled                          bool   `json:"enabled"`
+	Language                         string `json:"language"`
+	MaximumAudioBytes                int64  `json:"maximumAudioBytes"`
+	MaximumAudioDurationMilliseconds int64  `json:"maximumAudioDurationMilliseconds"`
+
+	// Model Проверяется общим исполняемым modelprofile
+	Model                       string                              `json:"model"`
+	Parameters                  SystemSTTParameters                 `json:"parameters"`
+	PermissionKey               SystemSTTSpecificationPermissionKey `json:"permissionKey"`
+	ProviderAccountRef          OpaqueRef                           `json:"providerAccountRef"`
+	ProviderTimeoutMilliseconds int64                               `json:"providerTimeoutMilliseconds"`
+}
+
+// SystemSTTSpecificationPermissionKey defines model for SystemSTTSpecification.PermissionKey.
+type SystemSTTSpecificationPermissionKey string
 
 // TemplateVariable defines model for TemplateVariable.
 type TemplateVariable struct {
@@ -8993,6 +9091,13 @@ type CreateSystemSTTConfigurationDraftParams struct {
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
 }
 
+// CreateTypedSystemSTTConfigurationDraftParams defines parameters for CreateTypedSystemSTTConfigurationDraft.
+type CreateTypedSystemSTTConfigurationDraftParams struct {
+	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
+	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+}
+
 // RebindSystemSTTConsumersParams defines parameters for RebindSystemSTTConsumers.
 type RebindSystemSTTConsumersParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -9297,6 +9402,9 @@ type CommandSystemAssistantJSONRequestBody CommandSystemAssistantJSONBody
 
 // CreateSystemSTTConfigurationDraftJSONRequestBody defines body for CreateSystemSTTConfigurationDraft for application/json ContentType.
 type CreateSystemSTTConfigurationDraftJSONRequestBody = ManagedConfigurationDraftInput
+
+// CreateTypedSystemSTTConfigurationDraftJSONRequestBody defines body for CreateTypedSystemSTTConfigurationDraft for application/json ContentType.
+type CreateTypedSystemSTTConfigurationDraftJSONRequestBody = SystemSTTConfigurationDraftInput
 
 // RebindSystemSTTConsumersJSONRequestBody defines body for RebindSystemSTTConsumers for application/json ContentType.
 type RebindSystemSTTConsumersJSONRequestBody = ManagedConfigurationRebindInput
@@ -9900,6 +10008,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-stt-configurations/drafts)
 	CreateSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, params CreateSystemSTTConfigurationDraftParams)
+
+	// (POST /api/v1/system-stt-configurations/typed-drafts)
+	CreateTypedSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, params CreateTypedSystemSTTConfigurationDraftParams)
 
 	// (POST /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings)
 	RebindSystemSTTConsumers(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params RebindSystemSTTConsumersParams)
@@ -26090,6 +26201,99 @@ func (siw *ServerInterfaceWrapper) CreateSystemSTTConfigurationDraft(w http.Resp
 	handler.ServeHTTP(w, r)
 }
 
+// CreateTypedSystemSTTConfigurationDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateTypedSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateTypedSystemSTTConfigurationDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOptional
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTypedSystemSTTConfigurationDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RebindSystemSTTConsumers operation middleware
 func (siw *ServerInterfaceWrapper) RebindSystemSTTConsumers(w http.ResponseWriter, r *http.Request) {
 
@@ -27230,6 +27434,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-assistant/commands", wrapper.CommandSystemAssistant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-stt-configuration", wrapper.GetSystemSTTConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/drafts", wrapper.CreateSystemSTTConfigurationDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/typed-drafts", wrapper.CreateTypedSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings", wrapper.RebindSystemSTTConsumers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateSystemSTTConfigurationDraft)

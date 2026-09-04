@@ -396,6 +396,42 @@ export type ManagedConfigurationImpact = {
     digest: string;
 };
 
+export type SystemSttParameters = {
+    languages: Array<string>;
+    keywords: Array<string>;
+    /**
+     * Дополнительно ограничен 896 UTF-8 bytes общим modelprofile.
+     */
+    prompt: string;
+    temperature: number;
+    chunkingStrategy: '' | 'auto';
+    /**
+     * Синхронная диктовка; stream=true закрыто отклоняется.
+     */
+    stream: false;
+};
+
+export type SystemSttSpecification = {
+    enabled: boolean;
+    providerAccountRef: OpaqueRef;
+    /**
+     * Проверяется общим исполняемым modelprofile
+     */
+    model: string;
+    language: string;
+    permissionKey: 'platform.stt.use';
+    parameters: SystemSttParameters;
+    maximumAudioBytes: number;
+    maximumAudioDurationMilliseconds: number;
+    providerTimeoutMilliseconds: number;
+};
+
+export type SystemSttConfigurationDraftInput = {
+    configurationRef?: OpaqueRef;
+    name: string;
+    specification: SystemSttSpecification;
+};
+
 export type SystemSttConfiguration = {
     configurationRef: OpaqueRef;
     revisionRef: OpaqueRef;
@@ -408,6 +444,11 @@ export type SystemSttConfiguration = {
     ready: boolean;
     readinessBlockers: Array<string>;
     providerCredentialGeneration: number;
+    enabled: boolean;
+    parameters: SystemSttParameters;
+    maximumAudioBytes: number;
+    maximumAudioDurationMilliseconds: number;
+    providerTimeoutMilliseconds: number;
 };
 
 export type Project = {
@@ -8621,6 +8662,36 @@ export type CopyGitManagedConfigurationResponses = {
 };
 
 export type CopyGitManagedConfigurationResponse = CopyGitManagedConfigurationResponses[keyof CopyGitManagedConfigurationResponses];
+
+export type CreateTypedSystemSttConfigurationDraftData = {
+    body: SystemSttConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configurations/typed-drafts';
+};
+
+export type CreateTypedSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateTypedSystemSttConfigurationDraftError = CreateTypedSystemSttConfigurationDraftErrors[keyof CreateTypedSystemSttConfigurationDraftErrors];
+
+export type CreateTypedSystemSttConfigurationDraftResponses = {
+    /**
+     * Черновик; далее используются существующие validation и publication endpoints
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateTypedSystemSttConfigurationDraftResponse = CreateTypedSystemSttConfigurationDraftResponses[keyof CreateTypedSystemSttConfigurationDraftResponses];
 
 export type GetSystemSttConfigurationData = {
     body?: never;

@@ -416,7 +416,8 @@ func (server *Server) GetSystemSTTConfiguration(w http.ResponseWriter, r *http.R
 		return
 	}
 	value := result.GetConfiguration()
-	if value == nil || !validManagedVersion(value.GetRevision()) || value.GetProviderCredentialGeneration() > uint64(maximumSafeJSONInteger) || value.GetPermissionKey() != "platform.stt.use" {
+	specification, validSpecification := systemSTTSpecificationView(value)
+	if value == nil || !validSpecification || !validManagedVersion(value.GetRevision()) || value.GetProviderCredentialGeneration() > uint64(maximumSafeJSONInteger) || value.GetPermissionKey() != "platform.stt.use" {
 		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
 		return
 	}
@@ -425,5 +426,7 @@ func (server *Server) GetSystemSTTConfiguration(w http.ResponseWriter, r *http.R
 		ProviderAccountRef: value.GetProviderAccountRef(), ProviderCredentialGeneration: int64(value.GetProviderCredentialGeneration()),
 		Model: value.GetModel(), Language: value.GetLanguage(), PermissionKey: generated.SystemSTTConfigurationPermissionKey(value.GetPermissionKey()),
 		Ready: value.GetReady(), ReadinessBlockers: append([]string{}, value.GetReadinessBlockers()...),
+		Enabled: specification.Enabled, Parameters: specification.Parameters, MaximumAudioBytes: specification.MaximumAudioBytes,
+		MaximumAudioDurationMilliseconds: specification.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: specification.ProviderTimeoutMilliseconds,
 	})
 }
