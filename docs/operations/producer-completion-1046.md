@@ -290,9 +290,42 @@ SYSTEM OWNER/ADMINISTRATOR, которым не хватает `platform.stt.use
 PostgreSQL; проверены новая version, неизменность старой и перевод bindings.
 Полный suite после 00610: NOT RUN; последний полный PASS относится к STT params.
 
+## Managed draft Save и Discard
+
+Policy 53 и migration 00614 добавляют восемь специализированных RPC:
+`Save|Discard{PromptTemplate,RoleImageRevision,IntegrationDefinition,SystemSTTConfiguration}Draft`.
+Оба request содержат mutation/configuration_ref/revision_ref; Save дополнительно
+content_format/content. Response содержит configuration/revision.
+
+Owner разрешает существующий set по tenant до OCC/receipt, требует
+project.manage либо organization.manage и запрещает запись в Git-owned set.
+Save допускает неполное содержимое до 256 KiB в закрытом формате, переводит
+старый DRAFT/INVALID/VALID в DISCARDED и создаёт новый DRAFT с immutable parent.
+Новый revision_ref обязателен; set version увеличивается один раз. Discard
+терминален, не меняет current published revision и не переписывает content.
+Published/superseded revisions нельзя сохранить или discard. SQL trigger
+защищает immutable identity/content и закрытый граф переходов.
+
+В ответах history добавляется строковое state `DISCARDED`; source content
+остаётся в immutable истории. Идентификаторы operations:
+`platform.command.{prompt-templates,role-image-revisions,integration-definitions,system-stt}.{save-draft,discard-draft}`.
+Mutation, audit и receipt сохраняются одной owner-транзакцией. Новый domain
+event не вводится; авторитетный read path — ListManagedConfigurationHistory.
+
+Локально PASS: Proto lint/codegen, authority policy codegen, Go transport/domain;
+PostgreSQL `^TestBootstrapComponent$/(role_image_promotion|runtime_environment_lifecycle|managed)`.
+Проверены четыре kind, неполный save, lineage/history, OCC, terminal discard,
+новый draft после discard, published guard и Git write guard. Первые более
+узкие запуски FAIL из-за зависимостей старого managed scenario от environment
+и promoted-image fixtures; assertions не ослаблялись, зависимости включены явно.
+Один `managed_draft` subtest самодостаточен. Git import/writeback этим не реализованы.
+
 ## Оставшаяся реализация
 
-Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
+SkillBundle/Memory CRUD, bindings и реальные VFS context узлы реализованы:
+см. `context-contracts-1046.md`. Остаются runtime pins/materialization,
+рабочий scanner deploy/signature delivery, физический Memory retention GC,
+полный VFS дерева сущностей;
 сквозная credential matrix secret revisions; проверка Git lifecycle;
 полная STT credential matrix; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
