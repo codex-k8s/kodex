@@ -320,3 +320,33 @@ Shared CP/security ownership без согласования не изменяе
 Full protected issuer→CP SQL→EMAIL reconciliation: NOT RUN и не READY.
 Полный #1037 остаётся незавершённым. Mail route/ports, live mail, cluster,
 staging, deploy, push и PR: NOT RUN; запреты владельца сохранены.
+
+## Checkpoint b94400fa6 и зависимость #1059
+
+Consumer/migration/production activation зафиксированы в `b94400fa6`.
+Exact root `0765f3dadb901664da3b83e3701a4a739f209e54` перенесён без конфликтов;
+совместный checkpoint `80a0ae927`. EMAIL includes обоих профилей и третья
+PostgreSQL StatefulSet сохранены вместе с registry revision 7 и exact RBAC.
+
+На `80a0ae927` локально PASS:
+
+- `make check-email-bridge-codegen test-email-bridge-render test-worker-authority-projections`:
+  codegen, оба полных профиля, fixture release locks, exact issuer/key/ingress.
+- `make test-install-contract test-internal-rpc-authority-abi-render`:
+  install contract, IPv6 ingress и ABI sidecars.
+- EMAIL `go test -race ./internal/domain/service/reconciliation ./internal/clients/authority -count=1 -timeout=90s`.
+- Docker target migration, включая сборку runtime и migration binaries.
+
+`make test-web-only-release`: FAIL. Существующий assertion требует
+`project_required=true` у `platform.stt.credential.project`, но сохранённая
+policy52 правильно содержит ранее согласованное organization-only `false`.
+STT/shared policy не изменялись; расхождение передано root, FAIL не скрыт.
+
+Read-only проверен новый CP handoff `10266a2ef`: owner-selected reconciliation,
+worker trust и durable watermark реализованы у Bohr. Но исходники CP ещё не
+содержат handlers `ResolveEmailAuthorization` и `ReportEmailEffectReceipt`;
+handoff явно отмечает незавершённые mailbox projection и source authorization.
+CP checkpoint пока не переносился выборочно без полного producer handoff.
+Нужен согласованный полный checkpoint этих handlers/projection и deployment env
+`CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` с public key path из #1059. Этот env
+и CP domain остаются ownership Bohr/root, EMAIL не включает их обходным путём.
