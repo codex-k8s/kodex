@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, original := range definitions {
+		for index, capability := range original.Spec.Capabilities {
+			if capability.Risk == "READ" {
+				continue
+			}
+			changed := original
+			changed.Spec.Capabilities = append(changed.Spec.Capabilities[:0:0], original.Spec.Capabilities...)
+			changed.Spec.Capabilities[index].ApprovalPolicy = "NONE"
+			err := validate(&changed)
+			if (err == nil) != (key == "email") {
+				t.Fatalf("NONE approval boundary for %s: %v", capability.Operation, err)
+			}
+		}
+	}
+	email := definitions["email"]
+	for index := range email.Spec.Capabilities {
+		if email.Spec.Capabilities[index].Risk != "READ" {
+			email.Spec.Capabilities[index].Operation = "email.unregistered.effect"
+			if validate(&email) == nil {
+				t.Fatal("unregistered email operation inherited mailbox exception")
+			}
+			break
+		}
+	}
+}
+
 func TestLoadShippedDefinitions(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -37,7 +68,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
 		if key == "mattermost" {
 			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
-				definition.Spec.ExecutionRoute != string(RouteInteraction) || definition.Spec.Readiness != string(ReadinessNotReady) {
+				definition.Spec.ExecutionRoute != string(RouteInteraction) || !definition.ExecutableBy(OwnerInteractionGateway, RouteInteraction) {
 				t.Fatalf("Mattermost executable routing is invalid: %#v", definition.Spec)
 			}
 			continue
@@ -54,7 +85,7 @@ func TestParseRejectsAdapterRoutingMismatch(t *testing.T) {
 	for _, changed := range []string{
 		strings.Replace(base, "adapterOwner: interaction-gateway", "adapterOwner: integration-gateway", 1),
 		strings.Replace(base, "executionRoute: INTERACTION", "executionRoute: MANAGED_MCP", 1),
-		strings.Replace(base, "readiness: NOT_READY", "readiness: READY", 1),
+		strings.Replace(base, "readiness: READY", "readiness: NOT_READY", 1),
 	} {
 		if _, err := Parse([]byte(changed)); err == nil {
 			t.Fatal("Parse() accepted mismatched adapter routing")
@@ -88,14 +119,15 @@ func TestTypedOutput(t *testing.T) {
 	if !ok {
 		t.Fatal("email.message.send capability is missing")
 	}
-	canonical, err := capability.ValidateOutput([]byte(`{"status":"accepted","message_id":"msg-7"}`))
-	if err != nil || string(canonical) != `{"message_id":"msg-7","status":"accepted"}` {
+	canonical, err := capability.ValidateOutput([]byte(`{"status":"accepted","message_id":"msg-7","result_json":"{}"}`))
+	if err != nil || string(canonical) != `{"message_id":"msg-7","result_json":"{}","status":"accepted"}` {
 		t.Fatalf("ValidateOutput() = %s, %v", canonical, err)
 	}
 	for _, invalid := range []string{
 		`{"status":"accepted"}`,
-		`{"message_id":"msg-7","status":"accepted","token":"secret"}`,
-		`{"message_id":"msg-7","status":"accepted\nunsafe"}`,
+		`{"message_id":"msg-7","status":"accepted"}`,
+		`{"message_id":"msg-7","status":"accepted","result_json":"{}","token":"secret"}`,
+		`{"message_id":"msg-7","status":"accepted\nunsafe","result_json":"{}"}`,
 	} {
 		if _, err := capability.ValidateOutput([]byte(invalid)); err == nil {
 			t.Fatalf("ValidateOutput() accepted %s", invalid)

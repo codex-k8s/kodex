@@ -66,7 +66,7 @@ SELECT
            AND procedure.proname = 'publisher_append_snapshot_history'
            AND procedure.pronargs = 11
       )
-  AND (SELECT count(*) = 13
+  AND (SELECT count(*) = 14
          FROM pg_catalog.pg_roles
         WHERE rolname IN (
           'ira_restore_controller_g1',
@@ -81,6 +81,7 @@ SELECT
           'ira_control_plane_resolver_g1',
           'ira_integration_gateway_issuer_g1',
           'ira_interaction_gateway_issuer_g1',
+          'ira_email_bridge_issuer_g1',
           'ira_runtime_controller_issuer_g1'
         ) AND rolcanlogin)
   AND (SELECT count(*) = 2
@@ -126,6 +127,32 @@ SELECT
 SQL
 )
 [[ "$assertion" == "t" ]] || fail 'fresh authority baseline readback rejected'
+
+for principal in ira_email_bridge_issuer_g1 ira_interaction_gateway_issuer_g1; do
+  issuer_dsn="postgresql://${principal}@127.0.0.1:${port}/internal_rpc_authority?sslmode=disable"
+  issuer_assertion=$(psql "$issuer_dsn" --no-password --set ON_ERROR_STOP=1 \
+    --tuples-only --no-align --quiet <<'SQL'
+SET ROLE internal_rpc_authority_issuer;
+SELECT current_user = 'internal_rpc_authority_issuer'
+  AND session_user IN ('ira_email_bridge_issuer_g1', 'ira_interaction_gateway_issuer_g1')
+  AND (SELECT rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
+       AND NOT rolinherit AND NOT rolreplication AND NOT rolbypassrls
+       FROM pg_roles WHERE rolname = session_user)
+  AND (SELECT count(*) = 1 FROM pg_auth_members
+       WHERE member = (SELECT oid FROM pg_roles WHERE rolname = session_user)
+         AND roleid = (SELECT oid FROM pg_roles WHERE rolname = 'internal_rpc_authority_issuer')
+         AND set_option AND NOT inherit_option AND NOT admin_option);
+SQL
+  )
+  [[ "$issuer_assertion" == t ]] || fail 'optional issuer login or capability binding mismatch'
+  for forbidden in internal_rpc_authority_publisher internal_rpc_authority_verifier \
+    internal_rpc_authority_readback_attestor internal_rpc_authority_restore_controller; do
+    if psql "$issuer_dsn" --no-password --set ON_ERROR_STOP=1 \
+      --command "SET ROLE $forbidden" >/dev/null 2>&1; then
+      fail 'optional issuer acquired an unrelated authority capability'
+    fi
+  done
+done
 
 static_identity_assertion=$(psql "$authority_admin_dsn" --no-password --set ON_ERROR_STOP=1 \
   --tuples-only --no-align <<'SQL'

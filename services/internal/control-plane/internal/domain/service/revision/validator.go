@@ -12,7 +12,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
+	domainvalue "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -23,6 +25,7 @@ const (
 	KindRoleImage             = "ROLE_IMAGE"
 	KindIntegrationDefinition = "INTEGRATION_DEFINITION"
 	KindSystemSTT             = "SYSTEM_STT"
+	KindEmailMailbox          = "EMAIL_MAILBOX"
 )
 
 type Diagnostic struct{ Code, Message string }
@@ -34,7 +37,7 @@ type document struct {
 	BaseImage   string                 `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
 	Packages    []string               `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
 	Definition  *integrationDefinition `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
-	STT         *sttConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	STT         *STTConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
 }
 
 type integrationDefinition struct {
@@ -50,11 +53,37 @@ type integrationOperation struct {
 	Approval     string `json:"approval" yaml:"approval" toml:"approval"`
 	ResourceKind string `json:"resourceKind" yaml:"resourceKind" toml:"resourceKind"`
 }
-type sttConfiguration struct {
-	ProviderAccountRef string `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
-	Model              string `json:"model" yaml:"model" toml:"model"`
-	Language           string `json:"language" yaml:"language" toml:"language"`
-	PermissionKey      string `json:"permissionKey" yaml:"permissionKey" toml:"permissionKey"`
+type STTConfiguration struct {
+	Enabled                          bool                      `json:"enabled" yaml:"enabled" toml:"enabled"`
+	ProviderAccountRef               string                    `json:"providerAccountRef" yaml:"providerAccountRef" toml:"providerAccountRef"`
+	Model                            string                    `json:"model" yaml:"model" toml:"model"`
+	Language                         string                    `json:"language" yaml:"language" toml:"language"`
+	PermissionKey                    string                    `json:"permissionKey" yaml:"permissionKey" toml:"permissionKey"`
+	Parameters                       domainvalue.STTParameters `json:"parameters,omitempty" yaml:"parameters,omitempty" toml:"parameters,omitempty"`
+	MaximumAudioBytes                uint64                    `json:"maximumAudioBytes,omitempty" yaml:"maximumAudioBytes,omitempty" toml:"maximumAudioBytes,omitempty"`
+	MaximumAudioDurationMilliseconds uint64                    `json:"maximumAudioDurationMilliseconds,omitempty" yaml:"maximumAudioDurationMilliseconds,omitempty" toml:"maximumAudioDurationMilliseconds,omitempty"`
+	ProviderTimeoutMilliseconds      uint64                    `json:"providerTimeoutMilliseconds,omitempty" yaml:"providerTimeoutMilliseconds,omitempty" toml:"providerTimeoutMilliseconds,omitempty"`
+}
+
+func ParseSystemSTT(content string) (STTConfiguration, error) {
+	var document document
+	if err := decodeStrict("JSON", content, &document); err != nil {
+		return STTConfiguration{}, ErrInvalid
+	}
+	if err := validateDocument(KindSystemSTT, document); err != nil {
+		return STTConfiguration{}, err
+	}
+	result := *document.STT
+	if result.MaximumAudioBytes == 0 {
+		result.MaximumAudioBytes = modelprofile.RecommendedMaximumBytes
+	}
+	if result.MaximumAudioDurationMilliseconds == 0 {
+		result.MaximumAudioDurationMilliseconds = uint64(modelprofile.RecommendedMaximumDuration.Milliseconds())
+	}
+	if result.ProviderTimeoutMilliseconds == 0 {
+		result.ProviderTimeoutMilliseconds = uint64(modelprofile.MaximumProviderTimeout.Milliseconds())
+	}
+	return result, nil
 }
 
 func Validate(kind, format, content string) (string, []Diagnostic, error) {
@@ -98,14 +127,14 @@ func IntegrationDefinitionKey(format, content string) (string, error) {
 	return definition.Metadata.Key, nil
 }
 
-// UI закрепляет тот же versioned package, который поставлен с adapter.
-// Произвольный новый профиль требует поставки его исполняемого adapter path.
+// Управляемый package может сужать исполняемый contract поставленного adapter.
 func IntegrationPackage(format, content string) (integrationpackage.Package, error) {
 	if format != "JSON" && format != "YAML" {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	definition, err := integrationpackage.Parse([]byte(content))
-	if err != nil || !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+	if err != nil || !(definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
+		definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)) {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	registered, err := integrationpackage.LoadShipped()
@@ -113,7 +142,7 @@ func IntegrationPackage(format, content string) (integrationpackage.Package, err
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	profile, ok := registered[definition.Metadata.Key]
-	if !ok || profile.Digest != definition.Digest {
+	if !ok || integrationpackage.ValidateExecutableRevision(definition, profile) != nil {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	return definition, nil
@@ -170,6 +199,14 @@ func validateDocument(kind string, value document) error {
 		if value.STT == nil || value.Template != "" || value.BaseImage != "" || value.Definition != nil ||
 			value.STT.ProviderAccountRef == "" || value.STT.Model == "" || value.STT.PermissionKey != "platform.stt.use" {
 			return errors.New("system STT configuration is invalid")
+		}
+		if err := value.STT.Parameters.Validate(value.STT.Model, value.STT.Language); err != nil {
+			return err
+		}
+		if value.STT.MaximumAudioBytes != 0 && (value.STT.MaximumAudioBytes < modelprofile.MinimumAudioBytes || value.STT.MaximumAudioBytes > modelprofile.MaximumAudioBytes) ||
+			value.STT.MaximumAudioDurationMilliseconds != 0 && (value.STT.MaximumAudioDurationMilliseconds < uint64(modelprofile.MinimumAudioDuration.Milliseconds()) || value.STT.MaximumAudioDurationMilliseconds > uint64(modelprofile.MaximumAudioDuration.Milliseconds())) ||
+			value.STT.ProviderTimeoutMilliseconds != 0 && (value.STT.ProviderTimeoutMilliseconds < uint64(modelprofile.MinimumProviderTimeout.Milliseconds()) || value.STT.ProviderTimeoutMilliseconds > uint64(modelprofile.MaximumProviderTimeout.Milliseconds())) {
+			return errors.New("system STT limits are invalid")
 		}
 	default:
 		return errors.New("revision kind is invalid")

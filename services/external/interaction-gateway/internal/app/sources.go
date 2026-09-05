@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,25 +13,35 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type sourceSession struct {
 	fingerprint string
 	cancel      context.CancelFunc
+	done        <-chan struct{}
+}
+
+type sourceListener interface {
+	Listen(context.Context, *controlplanev1.InteractionSource, mattermost.MessageHandler) error
 }
 
 type sourceManager struct {
-	control *controlplaneclient.Client
-	adapter *mattermost.Adapter
-	logger  *slog.Logger
-	config  Config
-	mu      sync.Mutex
-	sources map[string]sourceSession
-	wait    sync.WaitGroup
+	control  controlplanev1.InteractionWorkServiceClient
+	adapter  sourceListener
+	logger   *slog.Logger
+	config   Config
+	mu       sync.Mutex
+	sources  map[string]sourceSession
+	draining map[string]<-chan struct{}
+	wait     sync.WaitGroup
+	closed   bool
 }
 
-func newSourceManager(control *controlplaneclient.Client, adapter *mattermost.Adapter, logger *slog.Logger, config Config) *sourceManager {
-	return &sourceManager{control: control, adapter: adapter, logger: logger, config: config, sources: map[string]sourceSession{}}
+func newSourceManager(control controlplanev1.InteractionWorkServiceClient, adapter sourceListener, logger *slog.Logger, config Config) *sourceManager {
+	return &sourceManager{control: control, adapter: adapter, logger: logger, config: config, sources: map[string]sourceSession{}, draining: map[string]<-chan struct{}{}}
 }
 
 func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client, logger *slog.Logger, config Config) serviceruntime.Worker {
@@ -50,9 +59,13 @@ func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client
 					degraded = false
 					logger.InfoContext(ctx, "interaction source discovery restored")
 				}
-			} else if !degraded {
-				degraded = true
-				logger.WarnContext(ctx, "interaction source discovery degraded", "error_class", "control_plane")
+			} else {
+				// Неподтверждённый owner snapshot не продлевает внешнюю подписку.
+				manager.Reconcile(ctx, nil)
+				if !degraded {
+					degraded = true
+					logger.WarnContext(ctx, "interaction source discovery degraded", "error_class", "control_plane")
+				}
 			}
 			select {
 			case <-ctx.Done():
@@ -66,13 +79,23 @@ func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client
 func (manager *sourceManager) Reconcile(parent context.Context, desired []*controlplanev1.InteractionSource) {
 	wanted := map[string]*controlplanev1.InteractionSource{}
 	for _, source := range desired {
-		if source == nil || source.GetConnectionRef() == "" || !sourceListens(source.GetEnabledCapabilities()) {
+		if source == nil || source.GetConnectionRef() == "" || !sourceListens(source.GetEnabledCapabilities()) || sourceFingerprint(source) == "" {
 			continue
 		}
 		wanted[source.GetConnectionRef()] = source
 	}
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
+	if manager.closed || parent.Err() != nil {
+		return
+	}
+	for reference, done := range manager.draining {
+		select {
+		case <-done:
+			delete(manager.draining, reference)
+		default:
+		}
+	}
 	for reference, session := range manager.sources {
 		source, ok := wanted[reference]
 		if ok && session.fingerprint == sourceFingerprint(source) {
@@ -80,32 +103,61 @@ func (manager *sourceManager) Reconcile(parent context.Context, desired []*contr
 			continue
 		}
 		session.cancel()
+		manager.draining[reference] = session.done
 		delete(manager.sources, reference)
 	}
 	for reference, source := range wanted {
 		child, cancel := context.WithCancel(parent)
-		manager.sources[reference] = sourceSession{fingerprint: sourceFingerprint(source), cancel: cancel}
+		done := make(chan struct{})
+		manager.sources[reference] = sourceSession{fingerprint: sourceFingerprint(source), cancel: cancel, done: done}
 		manager.wait.Add(1)
-		go manager.run(child, source)
+		go func(previous <-chan struct{}) {
+			defer manager.wait.Done()
+			defer close(done)
+			if previous != nil {
+				// Отменённое промежуточное поколение тоже дожидается предшественника.
+				<-previous
+			}
+			if child.Err() == nil {
+				manager.run(child, source)
+			}
+		}(manager.draining[reference])
 	}
 }
 
 func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.InteractionSource) {
-	defer manager.wait.Done()
 	degraded := false
 	for {
-		err := manager.adapter.Listen(ctx, source, func(messageContext context.Context, message mattermost.Message) (string, error) {
-			response, err := manager.control.Interaction.AcceptInteractionMessage(messageContext, &controlplanev1.AcceptInteractionMessageRequest{
+		err := manager.adapter.Listen(ctx, source, func(messageContext context.Context, message mattermost.Message) error {
+			acceptContext, cancel := context.WithTimeout(messageContext, manager.config.RequestTimeout)
+			defer cancel()
+			response, err := manager.control.AcceptInteractionMessage(acceptContext, &controlplanev1.AcceptInteractionMessageRequest{
 				Mutation:      &controlplanev1.MutationContext{IdempotencyKey: stableKey(source.GetConnectionRef(), message.EventRef)},
 				ConnectionRef: source.GetConnectionRef(), ExternalEventRef: message.EventRef,
 				ExternalPostRef: message.PostRef, ExternalRootPostRef: message.RootPostRef,
 				ExternalChannelRef: message.ChannelRef, ExternalUserDigest: message.UserDigest,
 				Message: message.Text, Decision: message.Decision,
+				ExternalTeamRef: message.TeamRef, GateRef: message.GateRef,
+				ExpectedGateVersion: message.GateVersion, RunRef: message.RunRef,
 			})
 			if err != nil {
-				return "", err
+				// Отказ отдельному отправителю не разрывает подписку всего канала.
+				switch status.Code(err) {
+				case codes.InvalidArgument, codes.PermissionDenied, codes.NotFound, codes.FailedPrecondition:
+					return nil
+				}
+				return err
 			}
-			return response.GetMessageKey(), nil
+			switch response.GetOutcome() {
+			case controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_IGNORED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_RUN_STARTED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_GATE_RESOLVED,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_STALE,
+				controlplanev1.InteractionMessageOutcome_INTERACTION_MESSAGE_OUTCOME_DUPLICATE:
+				return nil
+			default:
+				return errDeliveryResponse
+			}
 		})
 		if ctx.Err() != nil {
 			return
@@ -128,6 +180,7 @@ func (manager *sourceManager) run(ctx context.Context, source *controlplanev1.In
 
 func (manager *sourceManager) Close(ctx context.Context) error {
 	manager.mu.Lock()
+	manager.closed = true
 	for _, session := range manager.sources {
 		session.cancel()
 	}
@@ -147,13 +200,16 @@ func (manager *sourceManager) Close(ctx context.Context) error {
 }
 
 func sourceFingerprint(source *controlplanev1.InteractionSource) string {
-	capabilities := append([]string(nil), source.GetEnabledCapabilities()...)
-	sort.Strings(capabilities)
-	value := strings.Join([]string{
-		source.GetConnectionRef(), source.GetCredentialMaterializationRef(), source.GetBaseUrl(),
-		source.GetTeamName(), source.GetChannelName(), source.GetLocale(), strings.Join(capabilities, ","),
-	}, "\x00")
-	digest := sha256.Sum256([]byte(value))
+	if source == nil {
+		return ""
+	}
+	snapshot := proto.Clone(source).(*controlplanev1.InteractionSource)
+	sort.Strings(snapshot.EnabledCapabilities)
+	value, err := (proto.MarshalOptions{Deterministic: true}).Marshal(snapshot)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])
 }
 

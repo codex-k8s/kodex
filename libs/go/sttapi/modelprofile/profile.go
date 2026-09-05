@@ -9,10 +9,16 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "openai-file-2026-09-05.1"
+const Version = "openai-file-2026-09-05.2"
 const RecommendedModel = "gpt-transcribe"
 const RecommendedMaximumBytes = 10 << 20
 const RecommendedMaximumDuration = 120 * time.Second
+const MinimumAudioBytes = 1024
+const MaximumAudioBytes = 25 << 20
+const MinimumAudioDuration = time.Second
+const MaximumAudioDuration = 30 * time.Minute
+const MinimumProviderTimeout = time.Second
+const MaximumProviderTimeout = 15 * time.Second
 
 type Parameters struct {
 	Languages        []string
@@ -43,8 +49,8 @@ type Catalog struct {
 // observed_at означает дату проверки документации, не live account probe.
 func OpenAICatalog() Catalog {
 	result := Catalog{Version: Version, ObservedAt: time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC)}
-	for _, name := range []string{"gpt-transcribe", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-4o-mini-transcribe-2025-12-15", "whisper-1"} {
-		profile := Profile{Model: name, Legacy: name == "whisper-1", FileStreamSupported: name != "whisper-1", MaximumPromptBytes: 896,
+	for _, name := range []string{"gpt-transcribe", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-4o-mini-transcribe-2025-12-15", "gpt-4o-mini-transcribe-2025-03-20", "whisper-1"} {
+		profile := Profile{Model: name, Legacy: name == "whisper-1" || name == "gpt-4o-mini-transcribe-2025-03-20", FileStreamSupported: name != "whisper-1", MaximumPromptBytes: 896,
 			ParameterNames: []string{"language", "prompt", "temperature", "chunking_strategy", "stream"}, ChunkingStrategies: []string{""}}
 		if name != "whisper-1" {
 			profile.ChunkingStrategies = append(profile.ChunkingStrategies, "auto")

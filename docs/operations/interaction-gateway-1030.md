@@ -1,0 +1,229 @@
+---
+id: OPS-INTERACTION-1030
+title: Доставка Mattermost и привязка внешнего пользователя
+type: operational-contract
+status: approved
+owner: platform
+version: 1.4.0
+updated: 2026-09-05
+---
+
+# Контракт #1030
+
+Источник: эпик #1018, `MVP-UI-42`, Issue #1030. Владельцем подключения,
+пользовательской привязки, grants, receipts и переходов Run остаётся
+`control-plane`; `interaction-gateway` исполняет только точные Mattermost
+операции. Значения credentials в документе отсутствуют.
+
+## Карта доставки
+
+| Фаза | Инициатор и полномочия | Команда и состояние владельца | Результат и потребитель |
+| --- | --- | --- | --- |
+| Создание | Core lifecycle и активный connection grant | Для notification/result mirror сервер создаёт `WAITING_APPROVAL` и отдельный OwnerGate с точными pins | Решение владельца до внешнего действия |
+| Решение | Проверенный субъект с `gate.resolve` на ресурсе | `APPROVE` переводит intent в `DUE`, `REJECT`/`CANCEL` — в `CANCELLED` | Receipt, `OWNER_GATE_RESOLVED`, неизменные state/version core Run |
+| Claim | Проверенный workload interaction-gateway | `ClaimInteractionDeliveries`, точный lease/fence/generation | Одна доставка непосредственно перед исполнением |
+| Подготовка | Только выданный connection snapshot | Exact credential file, HTTPS origin, team/channel lookup | Нет внешнего изменяющего действия |
+| Отправка | Активная арендованная попытка | Mattermost `POST /api/v4/posts` в точном канале | Только HTTP 201 и совпадающие post/channel/thread образуют success |
+| Completion | Тот же workload и lease | `CompleteInteractionDelivery`; idempotency key включает lease и generation | `SUCCEEDED`, `FAILED` при confirmed-no-effect либо `UNKNOWN_OUTCOME` |
+| Истечение | Время БД владельца | Неоконченная claimed delivery становится `UNKNOWN_OUTCOME` | Не возвращается в автоматическую очередь отправки |
+| Сверка | Авторитетный read path control-plane | Incident и сохранённый delivery outcome | Ошибка optional delivery не меняет core Run на FAILED |
+
+Создание и решение отдельного OwnerGate атомарно публикуют `OWNER_GATE_OPENED`
+и `OWNER_GATE_RESOLVED`. Для claim/completion/expiry отдельное доменное событие
+consumer не требуется: очередь и incidents читаются через защищённые RPC
+владельца. События core Run не подменяются событиями доставки Mattermost.
+
+Изменение grant или выключение подключения закрывает ожидающие intents и
+открытые gates в той же транзакции; уже claimed отправка становится
+`UNKNOWN_OUTCOME`. Миграция 637 закрывает прежние неподтверждённые optional
+доставки, сохраняя их авторитетный read path. Она не создаёт одобрение задним числом.
+
+Тайм-аут или HTTP 5xx после попытки отправки не доказывает отсутствие post.
+Только ошибка до отправки либо документированный отказ HTTP 400/401/403/404/
+413/429 разрешает отметить confirmed-no-effect. Неизвестный результат и
+несовпадение readback не превращаются в success.
+
+Внешний вызов ограничен меньшим из срока цикла и lease с резервом на
+completion. Gateway не арендует сразу несколько последовательных сообщений,
+которые могли бы протухнуть, ожидая предыдущую отправку.
+
+## Сеть и входящие события
+
+Все HTTP-запросы идут через deployment-owned egress proxy и TLS 1.3 к точному
+origin из allowlist. Перенаправления запрещены, ответ ограничен 4 MiB,
+WebSocket frame ограничен 1 MiB, входящий текст ограничен 16 KiB.
+Названия и идентификаторы team/channel сверяются с authoritative vendor
+readback. Событие WebSocket подтверждается `GetPost`: другой канал, автор,
+thread, изменённый текст либо удалённый post не принимаются.
+
+Замена версии подключения или immutable credential descriptor отменяет старый
+listener даже при прежнем имени Secret. Удаление подключения также отменяет
+listener. Ошибка authoritative discovery отменяет прежние подписки до получения
+следующего подтверждённого snapshot. Новое поколение,
+включая быстро отменённое промежуточное, ждёт завершения всей цепочки
+предшественников. При shutdown SDK reader дренируется до закрытия каналов.
+
+ACK создаётся `control-plane` атомарно с acceptance receipt. Listener только
+передаёт проверенное сообщение владельцу и не создаёт отдельный post.
+`mattermost.acknowledgements` является внутренней delivery capability, а не
+доступным агенту инструментом. Claim содержит acceptance receipt и exact
+team/channel/root. Gateway сверяет канал и читает root перед отправкой, а
+completion передаёт team/channel/post/thread владельцу. Повреждённый readback
+после возможной отправки закрывается как `UNKNOWN_OUTCOME`.
+
+Отклонённое владельцем сообщение не создаёт ACK и не разрывает подписку
+канала: неправильный input, недоступный resource, отсутствие permission и
+неприменимое состояние относятся к конкретному сообщению. Ошибка аутентификации
+workload или недоступность владельца по-прежнему переводит listener в degraded.
+
+## Human Gate
+
+Серверная delivery несёт `gate_ref`, `gate_version` и `run_ref`. Gateway пишет
+эту связку в props bot post и сверяет полный success readback. Версия
+передаётся десятичной строкой, чтобы JSON не терял точность `int64`.
+
+Для ответа gateway сначала читает сам post, затем root post через Mattermost
+API. Root должен принадлежать тому же каналу и текущему bot user, не быть
+удалённым или вложенным ответом. Props обычного пользователя не превращаются
+в gate context. Полученные team/channel, digest внешнего пользователя и точная
+gate/run/version передаются в `AcceptInteractionMessage`.
+
+Владелец разрешает активную server-owned `InteractionIdentity`, связанную с
+версией подключения, в субъект Kodex. Его `gate.resolve` или `agent.launch`/
+`workflow.launch` проверяются на конкретном ресурсе; payload не содержит
+самоназначенного actor. Gate decision дополнительно должен совпасть с
+серверной delivery, gate/run/version и one-winner/OCC-переходом владельца.
+Повторное событие возвращает receipt, а не запускает новый Run.
+
+Административная привязка выполняется отдельными командами
+`BindInteractionIdentity`/`RevokeInteractionIdentity`, читается через
+`ListInteractionIdentities`. HTTP/PWA-поверхность этих новых producer-команд
+подключается в зависимых unit; удобный выбор внешнего пользователя и финальный
+сквозной сценарий не объявляются готовыми этим checkpoint.
+
+## Типизированные операции MCP
+
+Пакет Mattermost `2.2.0` содержит 18 capabilities. Две системные подписки
+`mattermost.inbound` и `mattermost.gate_decisions` не доступны как вызываемые
+агентом MCP tools. Остальные 16 операций исполняются только владельцем
+`interaction-gateway`:
+
+- чтение команды, канала и участников;
+- список, чтение и поиск posts, чтение threads;
+- список вложений и ограниченное чтение file ranges;
+- чтение, добавление и удаление reactions;
+- отправка, notification, result mirror и обновление собственного bot post.
+
+Каждая попытка сверяет version/digest пакета, exact scope, canonical input
+digest, risk и approval policy. Ответ проверяется по schema и связывается
+с effect key, input digest и response digest. Изменяющая операция без
+подтверждённого результата завершается `UNKNOWN_OUTCOME`.
+
+Connection test и invocation получают private `definition_package` вместе с
+точными version/digest от владельца. Gateway разбирает пакет каждой claim и
+проверяет его через общий `ValidateExecutableRevision`: UI/Git revision может
+сужать контракт поставленного adapter, но не менять маршрут, владельца,
+credential, сеть или output schema. Отсутствующий, повреждённый или не
+совпадающий с pins пакет отклоняется до чтения credential и обращения к
+Mattermost. Глобальный registry не меняется, поэтому параллельные подключения
+с разными revisions не подменяют пакет друг друга.
+
+Configuration, input, risk, approval и срок операции берутся из выбранной
+revision. Health check также выполняет объявленную typed read operation и
+проверяет output; его бюджет ограничен обоими пределами capability и health.
+Если read operation требует `HUMAN_EACH_EFFECT`, автоматический connection
+test закрыто отклоняется без внешнего вызова.
+
+Системные подписки и доставки также получают private package и connection
+version. Они проверяют actual configuration, enabled source capability и
+бюджет выбранной revision. Входящий gate decision проходит её input schema;
+неподдержанный либо исключённый из revision вариант не доходит до owner RPC.
+Notification/result mirror требует отдельные `approval_gate_ref/version` и
+проверяет локализованный message по actual schema до чтения credential.
+ACK остаётся связанным с исходной принятой source capability, а запрос решения
+gate — с `mattermost.gate_decisions`; они не получают выдуманный approval.
+
+Поиск принудительно ограничен каналом и не принимает пользовательские search
+operators. File download требует attachment membership в предварительно
+прочитанном post и exact Content-Range; публичные ссылки не выдаются. Агент
+не может изменить bot post, содержащий Human Gate. Credential читается из
+точного read-only Secret key с проверкой content digest и ограниченным
+временем ожидания проекции.
+
+Connection tests и invocations арендуются по одной непосредственно перед
+исполнением. Completion сохраняет lease/fence/generation и резерв времени;
+receipt от другого effect/input не принимается.
+
+## Проверка checkpoint
+
+Локальная точка входа из каталога unit:
+
+```bash
+go test ./... -count=1 -race -timeout=90s
+go vet ./...
+go build ./...
+```
+
+Тесты проверяют exact team/channel, отсутствие redirect, ограниченный body,
+HTTP success/error/timeout, lease deadline, отдельную identity каждой попытки,
+readback без `core_run_affected` и последовательную смену WebSocket listeners. Сетевой
+WebSocket fixture работает только на loopback без реальных credentials.
+
+Это промежуточная реализация полного unit, не объявление готовности #1030.
+Локальный component fixture соединяет claim validation, exact credential,
+официальный SDK, HTTP provider responses и effect receipt; отдельно проверяет
+ACK и readiness подключения. Fixture подменяет только HTTP transport, не
+отключает scope/schema/credential проверки. Kubernetes readiness сохраняет
+workload-local границу `GUIDE-DOC-003`; доступность конкретного подключения
+проверяется реальной typed connection-test операцией.
+
+Целевой PostgreSQL-прогон включает health routing, identity/revoke, durable ACK,
+UNKNOWN_OUTCOME и exact workload для connection tests. Зависимые HTTP/PWA
+управления identity и финальная общая приёмка остаются отдельными unit эпика.
+Live Mattermost и staging не запускались.
+
+Managed revision tests дополнительно проверяют конкурентное исполнение UI и
+Git revisions, выбранный deadline, неизменность registry, отклонение неверных
+package bytes/pins и недопустимого автоматического health check. Это evidence
+для connection tests и MCP invocations. Дополнительные системные тесты
+проверяют отсутствие любого provider-запроса при missing/mismatched package,
+approval и connection version; exact approved delivery, выбранный deadline,
+запрет gated inbound и остановку подписки при потере owner discovery.
+Owner PostgreSQL-сценарии отдельно проверяют approve/reject/cancel, stale pins
+и отзыв grant. Полный CFG lifecycle, Git write-back и live acceptance ещё не
+завершены; эти результаты не подменяют итоговую приёмку.
+
+## Совместная Сборка С Выдачей Ключей
+
+На `95373bb34` сохранён актуальный main `8026633a9` и подключён полный
+authority checkpoint #1059 (`0765f3dad`). Индивидуальный signer получает
+private key; gateway читает только application grant; CP получает отдельный
+public trust в optional-профиле. Issuer LOGIN, publisher Secret permissions
+и readback/restore/PostgreSQL пути материализуются установщиком.
+
+Дополнительные публичные проверки: `make test-interaction-gateway-render`
+сверяет оба профиля, socket UID/GID, write/read mounts grant, private key
+изоляцию и CP public trust; `make test-interaction-gateway-postgres` проверяет
+health routing, user binding/revoke, durable ACK, UNKNOWN и exact workload
+перед replay в одноразовой PostgreSQL. Общие проверки #1059 запускаются
+отдельно, потому что правильный mount сам по себе не доказывает доставку.
+
+Локальная Docker-сборка `95373bb34` прошла; образ запускает бинарь с
+`USER 10001:10001`. Сборка не означает успешный protected RPC, настройку
+реального Mattermost или deployment. `AllowedHosts` по умолчанию пуст:
+внешняя сеть требует отдельно настроенного exact host и egress policy.
+Ни wildcard host, ни обход проверки TLS в этом unit не добавляются.
+
+PR остаётся интеграционным до включения зависимых CP/authority коммитов
+в его base и общей проверки итогового SHA. Отдельные unit-review циклы
+пропущены по решению #1018; full-prototype acceptance не подменяется
+локальным provider fixture.
+
+Проверена официальная спецификация
+[Mattermost posts API](https://github.com/mattermost/mattermost-api-reference/blob/master/v4/source/posts.yaml)
+и установленный официальный Go SDK `server/public v0.4.3`.
+Context7 не вернул описание требуемой гарантии идемпотентности; гарантия
+дедупликации `CreatePost` не предполагается.
+Для file ranges дополнительно проверен официальный
+[WriteFileResponse](https://github.com/mattermost/mattermost/blob/master/server/platform/shared/web/files.go),
+использующий `http.ServeContent`; adapter требует точного Content-Range.

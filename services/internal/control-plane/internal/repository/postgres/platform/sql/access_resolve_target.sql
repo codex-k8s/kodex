@@ -28,17 +28,18 @@ FROM (
   WHERE @resource_kind = 'WORKFLOW' AND w.organization_id = @organization_id::uuid
     AND w.ref = @resource_ref AND w.state <> 'ARCHIVED'
   UNION ALL
-  SELECT run.id::text, p.id::text, p.ref, owner_subject.ref,
+  SELECT run.id::text, COALESCE(p.id::text, ''), COALESCE(p.ref, ''), owner_subject.ref,
          jsonb_strip_nulls(jsonb_build_object(
            'PROJECT', p.ref,
            'AGENT', CASE WHEN run.target_type = 'AGENT' THEN run.target_ref END,
            'WORKFLOW', CASE WHEN run.target_type = 'WORKFLOW' THEN run.target_ref END
          ))
   FROM control_plane.runs run
-  JOIN control_plane.projects p ON p.id = run.project_id
+  LEFT JOIN control_plane.projects p ON p.id = run.project_id
   JOIN control_plane.subjects owner_subject ON owner_subject.id = run.initiated_by
   WHERE @resource_kind = 'RUN' AND run.organization_id = @organization_id::uuid
     AND run.ref = @resource_ref
+    AND (run.project_id IS NOT NULL OR run.target_type = 'SYSTEM_ASSISTANT')
   UNION ALL
   SELECT session.id::text, COALESCE(project.id::text, ''), COALESCE(project.ref, ''), owner_subject.ref,
          jsonb_strip_nulls(jsonb_build_object(

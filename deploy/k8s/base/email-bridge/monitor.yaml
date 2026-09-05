@@ -1,0 +1,30 @@
+{
+  "apiVersion": "monitoring.coreos.com/v1",
+  "kind": "ServiceMonitor",
+  "metadata": {
+    "name": "email-bridge",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge"
+    }
+  },
+  "spec": {
+    "selector": {
+      "matchLabels": {
+        "app.kubernetes.io/name": "email-bridge"
+      }
+    },
+    "namespaceSelector": {
+      "matchNames": [
+        "kodex-system"
+      ]
+    },
+    "endpoints": [
+      {
+        "port": "metrics",
+        "path": "/metrics",
+        "interval": "30s"
+      }
+    ]
+  }
+}
