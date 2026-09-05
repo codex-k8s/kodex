@@ -16,4 +16,5 @@ var (
 	ErrIdempotencyReuse            = errors.New("idempotency key reused with different intent")
 	ErrProtected                   = errors.New("protected system resource")
 	ErrUnavailable                 = errors.New("temporarily unavailable")
+	ErrMailboxPublicationPending   = errors.New("mailbox publication is pending")
 )

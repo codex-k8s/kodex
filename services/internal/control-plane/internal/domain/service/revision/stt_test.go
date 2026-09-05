@@ -18,6 +18,11 @@ func TestSystemSTTImmutableParametersAndLimits(t *testing.T) {
 		strings.Replace(content, `"temperature":0.2`, `"temperature":2`, 1),
 		strings.Replace(content, `"model":"gpt-transcribe"`, `"model":"whisper-1"`, 1),
 		strings.Replace(content, `"enabled":true`, `"enabled":true,"maximumAudioBytes":26214401`, 1),
+		strings.Replace(content, `"enabled":true`, `"enabled":true,"maximumAudioBytes":1`, 1),
+		strings.Replace(content, `"enabled":true`, `"enabled":true,"maximumAudioDurationMilliseconds":1`, 1),
+		strings.Replace(content, `"enabled":true`, `"enabled":true,"maximumAudioDurationMilliseconds":1800001`, 1),
+		strings.Replace(content, `"enabled":true`, `"enabled":true,"providerTimeoutMilliseconds":1`, 1),
+		strings.Replace(content, `"enabled":true`, `"enabled":true,"providerTimeoutMilliseconds":60000`, 1),
 		strings.Replace(content, `"enabled":true`, `"enabled":true,"language":"ru"`, 1),
 		strings.Replace(content, `"enabled":true`, `"enabled":true,"credential":"forbidden"`, 1),
 	} {

@@ -26,6 +26,7 @@ type emailProjection struct {
 	store             emailProjectionStore
 	publisher         emailProjectionPublisher
 	interval, timeout time.Duration
+	delivery          *mailboxDelivery
 }
 
 func constructEmailCredentialMaterializer(config Config) (*credentialmaterializer.Kubernetes, error) {
@@ -48,13 +49,27 @@ func initializeEmailProjection(ctx context.Context, repository *platformreposito
 		return nil, err
 	}
 	projection := &emailProjection{store: repository, publisher: publisher, interval: config.ReadinessInterval, timeout: config.ReadinessTimeout}
-	if err := projection.reconcile(ctx); err != nil {
+	projection.delivery, err = newMailboxDelivery(repository, publisher, config.EmailGatewayPolicyDigest)
+	if err != nil {
+		return nil, err
+	}
+	if err := publisher.CheckPublicationAdmission(ctx); err != nil {
+		return nil, err
+	}
+	projection.delivery.sourceFile = config.EmailConfigurationFile
+	if err := projection.Check(ctx); err != nil {
 		return nil, err
 	}
 	return projection, nil
 }
 
 func (projection *emailProjection) reconcile(ctx context.Context) error {
+	if projection.delivery != nil {
+		found, err := projection.delivery.reconcile(ctx)
+		if found || err != nil {
+			return err
+		}
+	}
 	configuration, err := projection.store.EmailConfiguration(ctx)
 	if err != nil {
 		return err
@@ -72,6 +87,10 @@ func (projection *emailProjection) reconcile(ctx context.Context) error {
 func (projection *emailProjection) Check(ctx context.Context) error {
 	if projection == nil {
 		return nil
+	}
+	if projection.delivery != nil {
+		// PENDING не закрывает callback endpoint: READY принадлежит publication.
+		return projection.delivery.publisher.CheckPublicationAdmission(ctx)
 	}
 	configuration, err := projection.store.EmailConfiguration(ctx)
 	if err != nil {

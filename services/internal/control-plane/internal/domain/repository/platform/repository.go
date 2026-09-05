@@ -215,6 +215,12 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxConfigurationView, error)
+	ListEmailMailboxConfigurations(context.Context, value.Principal, string, string, query.Page) (entity.EmailMailboxPage, error)
+	ListEmailMailboxCredentials(context.Context, value.Principal, string, string, query.Page) ([]entity.EmailMailboxCredential, int64, string, error)
+	GetEmailMailboxCredentialReceipt(context.Context, value.Principal, string, string) (entity.EmailMailboxCredential, error)
+	PreviewEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxPreview, error)
+	ReportEmailConfigurationReadback(context.Context, value.Principal, int64, string) error
 	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
 	PrepareRuntimeSecretDraftImpact(context.Context, value.Principal, string, value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error)
 	GetRuntimeSecretDraftImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeSecretDraftImpactPage, error)

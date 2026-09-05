@@ -75,3 +75,48 @@ func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
 		t.Fatal("cancelled producer performed DNS work")
 	}
 }
+
+func TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority(t *testing.T) {
+	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var configuration api.Configuration
+	if err := api.Decode(raw, &configuration); err != nil {
+		t.Fatal(err)
+	}
+	resolver := &resolverFixture{snapshot: Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(time.Minute)}}
+	gatewayDigest := strings.Repeat("a", 64)
+	active, err := Produce(t.Context(), configuration, gatewayDigest, resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration.Mailboxes[0].Enabled = false
+	configuration.Revision++
+	resolver.calls = 0
+	disabled, err := Produce(t.Context(), configuration, gatewayDigest, resolver)
+	if err != nil || len(disabled.Destinations) != 0 || resolver.calls != 0 || disabled.Digest() == active.Digest() ||
+		disabled.ConfigurationDigest != api.Digest(configuration) || disabled.ConfigurationRevision != configuration.Revision {
+		t.Fatal("выключенный mailbox сохранил DNS или network authority")
+	}
+	files, err := RenderFiles(disabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policy struct {
+		Spec struct{ Egress []json.RawMessage }
+	}
+	if json.Unmarshal(files["mail-networkpolicy.json"], &policy) != nil || len(policy.Spec.Egress) != 0 {
+		t.Fatal("render сохранил egress выключенного mailbox")
+	}
+	// Другой активный mailbox с тем же endpoint сохраняет только свой допуск.
+	enabled := configuration.Mailboxes[0]
+	enabled.Id = "active-mailbox"
+	enabled.ConnectionId = "active-connection"
+	enabled.Enabled = true
+	configuration.Mailboxes = append(configuration.Mailboxes, enabled)
+	mixed, err := Produce(t.Context(), configuration, gatewayDigest, resolver)
+	if err != nil || len(mixed.Destinations) != len(active.Destinations) || resolver.calls != len(active.Destinations) {
+		t.Fatal("выключенный mailbox изменил допуск активного endpoint")
+	}
+}

@@ -25,6 +25,7 @@ const (
 	KindRoleImage             = "ROLE_IMAGE"
 	KindIntegrationDefinition = "INTEGRATION_DEFINITION"
 	KindSystemSTT             = "SYSTEM_STT"
+	KindEmailMailbox          = "EMAIL_MAILBOX"
 )
 
 type Diagnostic struct{ Code, Message string }
@@ -80,7 +81,7 @@ func ParseSystemSTT(content string) (STTConfiguration, error) {
 		result.MaximumAudioDurationMilliseconds = uint64(modelprofile.RecommendedMaximumDuration.Milliseconds())
 	}
 	if result.ProviderTimeoutMilliseconds == 0 {
-		result.ProviderTimeoutMilliseconds = 15000
+		result.ProviderTimeoutMilliseconds = uint64(modelprofile.MaximumProviderTimeout.Milliseconds())
 	}
 	return result, nil
 }
@@ -203,7 +204,9 @@ func validateDocument(kind string, value document) error {
 		if err := value.STT.Parameters.Validate(value.STT.Model, value.STT.Language); err != nil {
 			return err
 		}
-		if value.STT.MaximumAudioBytes > 25<<20 || value.STT.MaximumAudioDurationMilliseconds > 600000 || value.STT.ProviderTimeoutMilliseconds > 120000 {
+		if value.STT.MaximumAudioBytes != 0 && (value.STT.MaximumAudioBytes < modelprofile.MinimumAudioBytes || value.STT.MaximumAudioBytes > modelprofile.MaximumAudioBytes) ||
+			value.STT.MaximumAudioDurationMilliseconds != 0 && (value.STT.MaximumAudioDurationMilliseconds < uint64(modelprofile.MinimumAudioDuration.Milliseconds()) || value.STT.MaximumAudioDurationMilliseconds > uint64(modelprofile.MaximumAudioDuration.Milliseconds())) ||
+			value.STT.ProviderTimeoutMilliseconds != 0 && (value.STT.ProviderTimeoutMilliseconds < uint64(modelprofile.MinimumProviderTimeout.Milliseconds()) || value.STT.ProviderTimeoutMilliseconds > uint64(modelprofile.MaximumProviderTimeout.Milliseconds())) {
 			return errors.New("system STT limits are invalid")
 		}
 	default:

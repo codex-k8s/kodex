@@ -6,11 +6,13 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
+	github.com/codex-k8s/kodex/libs/go/dnsresolver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
@@ -27,8 +29,11 @@ require (
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
+	github.com/miekg/dns v1.1.72 // indirect
 	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 )
 
 require (
@@ -129,6 +134,10 @@ replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/g
 replace github.com/codex-k8s/kodex/libs/go/eventing => ../../../libs/go/eventing
 
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/emailbridgeapi
+
+replace github.com/codex-k8s/kodex/libs/go/mailpolicy => ../../../libs/go/mailpolicy
+
+replace github.com/codex-k8s/kodex/libs/go/dnsresolver => ../../../libs/go/dnsresolver
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcserver
 
