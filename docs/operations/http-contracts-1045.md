@@ -38,6 +38,13 @@ Producer gaps переданы root: архивирование assistant conver
 safe configuration пока отсутствуют в публичном Proto; worker projection RPC
 не открываются браузеру. Live/сквозная приёмка этих сценариев остаётся NOT RUN.
 
+MVP-UI-09: история assistant теперь передаёт `pageSize`/`pageToken` и optional
+project filter в существующий `ListAssistantConversations`. Ответ сохраняет
+nextPageToken; размер, refs и project mismatch проверяются до выдачи. Authority
+остаётся CP, новых state transitions/events нет. Серверного query и команды
+архивирования в текущем Proto нет: они запрошены у Bohr через root, HTTP не
+эмулирует их выборкой всех страниц или локальным скрытием conversation.
+
 Локально после добавления каталога: focused race HTTP/security/app и strict
 generated SDK typecheck PASS. `TestPublicRPCSurfaceHasHTTPConsumer` сверяет
 217 RPC с authority profile и handwritten consumers, отдельно проверяет
