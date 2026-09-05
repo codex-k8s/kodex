@@ -55,6 +55,10 @@ test-authority-policy-codegen:
 test-internal-rpc-authority-abi-render:
 	@./scripts/tests/internal-rpc-authority-abi-render-test.sh
 
+.PHONY: test-worker-authority-projections
+test-worker-authority-projections:
+	@./scripts/tests/worker-authority-projections-test.sh
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
