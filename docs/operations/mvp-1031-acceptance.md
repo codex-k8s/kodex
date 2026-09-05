@@ -83,6 +83,10 @@ backup-controller и точное назначение archive issuer не уд�
 Локальная интеграционная ветка также потребляет egress `f8da405af`, controller
 `9aaf738a3`, runner `731f2a7c3`, integration `7253f43b8`, interaction
 `1ab0d09f1`, authority `0765f3dad` и HTTP D1/D7 `03564b5f4`.
+Следующая интеграция потребляет HTTP/SDK D3/D5
+`cfb18a17e2048f5056ddd46c8fccbd3f1e18a3d6` и PWA assistant/impact
+`f36f9df41ba256ee8581fe8dde045b238d7093b7`. CP implementation сохранена;
+конфликтующие generated файлы пересобраны из объединённых Proto/OpenAPI.
 Это зависимости отдельных unit PR, а не завершённый `main` или допуск стенда.
 
 В обоих локальных профилях исполняются email-bridge, authority issuer и
@@ -124,6 +128,8 @@ make test-full-local-e2e-entrypoint test-local-go-cache-contract \
   test-local-image-cache-import-contract test-local-material-contract-revision \
   test-local-backup-controller-credentials-contract
 make test-automation-scheduler
+make test-web-only-release test-go-toolchain-contract check-integration-package-codegen
+bash scripts/tests/local-mail-projection-contract-test.sh
 timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
   --profile web-only --cache-root /tmp/kodex-1031-email-render-cache
 timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
