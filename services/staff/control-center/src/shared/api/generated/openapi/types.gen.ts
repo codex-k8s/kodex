@@ -2449,6 +2449,12 @@ export type EmailMailboxPublication = {
     failureCode: '' | 'EMAIL_MAILBOX_DELIVERY_EXPIRED' | 'EMAIL_MAILBOX_CONNECTION_CHANGED' | 'EMAIL_MAILBOX_DELIVERY_REJECTED';
 };
 
+export type EmailMailboxActionAvailability = {
+    action: 'CREATE_DRAFT' | 'SAVE' | 'VALIDATE' | 'PUBLISH' | 'DISCARD' | 'BIND' | 'UNBIND' | 'DETACH' | 'COPY';
+    enabled: boolean;
+    reason: 'NONE' | 'STATE' | 'GIT_MANAGED' | 'DELIVERY_PENDING' | 'NO_BINDING' | 'CONNECTION_DISABLED';
+};
+
 export type EmailMailboxConfigurationView = {
     connectionRef: OpaqueRef;
     connectionVersion: number;
@@ -2459,10 +2465,24 @@ export type EmailMailboxConfigurationView = {
     publication?: EmailMailboxPublication;
     boundRevisionRef: string;
     diagnostics: Array<EmailMailboxDiagnostic>;
+    nextActions: [
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability
+    ];
 };
 
 export type EmailMailboxConfigurationPage = {
     items: Array<EmailMailboxConfigurationView>;
+    nextActions: [
+        EmailMailboxActionAvailability
+    ];
     total: number;
     nextPageToken: string;
 };

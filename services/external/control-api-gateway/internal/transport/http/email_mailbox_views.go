@@ -95,10 +95,39 @@ func mailboxConfigurationView(v *cp.EmailMailboxConfigurationView) (generated.Em
 	if !ok {
 		return result, false
 	}
+	actions, ok := mailboxActionViews(v.GetNextActions(), false)
+	if !ok {
+		return result, false
+	}
 	if v.GetBoundRevisionRef() != "" && (!opaqueHTTPReference.MatchString(v.GetBoundRevisionRef()) || len(v.GetBoundRevisionRef()) > 96) {
 		return result, false
 	}
-	return generated.EmailMailboxConfigurationView{ConnectionRef: v.GetConnectionRef(), ConnectionVersion: v.GetConnectionVersion(), MailboxRef: v.GetMailboxRef(), Configuration: configuration, Revision: revision, Specification: *spec, Publication: publication, BoundRevisionRef: v.GetBoundRevisionRef(), Diagnostics: diagnostics}, true
+	return generated.EmailMailboxConfigurationView{ConnectionRef: v.GetConnectionRef(), ConnectionVersion: v.GetConnectionVersion(), MailboxRef: v.GetMailboxRef(), Configuration: configuration, Revision: revision, Specification: *spec, Publication: publication, BoundRevisionRef: v.GetBoundRevisionRef(), Diagnostics: diagnostics, NextActions: actions}, true
+}
+
+func mailboxActionViews(values []*cp.EmailMailboxActionAvailability, list bool) ([]generated.EmailMailboxActionAvailability, bool) {
+	expected := 9
+	if list {
+		expected = 1
+	}
+	if len(values) != expected {
+		return nil, false
+	}
+	result := make([]generated.EmailMailboxActionAvailability, 0, len(values))
+	seen := map[cp.EmailMailboxAction]bool{}
+	for _, value := range values {
+		if value == nil || seen[value.GetAction()] {
+			return nil, false
+		}
+		action := generated.EmailMailboxActionAvailabilityAction(strings.TrimPrefix(value.GetAction().String(), "EMAIL_MAILBOX_ACTION_"))
+		reason := generated.EmailMailboxActionAvailabilityReason(strings.TrimPrefix(value.GetReason().String(), "EMAIL_MAILBOX_ACTION_REASON_"))
+		if !action.Valid() || !reason.Valid() || value.GetEnabled() != (reason == "NONE") || list && action != "CREATE_DRAFT" {
+			return nil, false
+		}
+		seen[value.GetAction()] = true
+		result = append(result, generated.EmailMailboxActionAvailability{Action: action, Enabled: value.GetEnabled(), Reason: reason})
+	}
+	return result, true
 }
 
 func writeMailboxConfiguration(w http.ResponseWriter, status int, v *cp.EmailMailboxConfigurationView, connection, configuration, revision string) {

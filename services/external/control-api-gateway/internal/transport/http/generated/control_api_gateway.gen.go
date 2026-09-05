@@ -927,6 +927,75 @@ func (e EmailEffectOutcome) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxActionAvailabilityAction.
+const (
+	EmailMailboxActionAvailabilityActionBIND        EmailMailboxActionAvailabilityAction = "BIND"
+	EmailMailboxActionAvailabilityActionCOPY        EmailMailboxActionAvailabilityAction = "COPY"
+	EmailMailboxActionAvailabilityActionCREATEDRAFT EmailMailboxActionAvailabilityAction = "CREATE_DRAFT"
+	EmailMailboxActionAvailabilityActionDETACH      EmailMailboxActionAvailabilityAction = "DETACH"
+	EmailMailboxActionAvailabilityActionDISCARD     EmailMailboxActionAvailabilityAction = "DISCARD"
+	EmailMailboxActionAvailabilityActionPUBLISH     EmailMailboxActionAvailabilityAction = "PUBLISH"
+	EmailMailboxActionAvailabilityActionSAVE        EmailMailboxActionAvailabilityAction = "SAVE"
+	EmailMailboxActionAvailabilityActionUNBIND      EmailMailboxActionAvailabilityAction = "UNBIND"
+	EmailMailboxActionAvailabilityActionVALIDATE    EmailMailboxActionAvailabilityAction = "VALIDATE"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxActionAvailabilityAction enum.
+func (e EmailMailboxActionAvailabilityAction) Valid() bool {
+	switch e {
+	case EmailMailboxActionAvailabilityActionBIND:
+		return true
+	case EmailMailboxActionAvailabilityActionCOPY:
+		return true
+	case EmailMailboxActionAvailabilityActionCREATEDRAFT:
+		return true
+	case EmailMailboxActionAvailabilityActionDETACH:
+		return true
+	case EmailMailboxActionAvailabilityActionDISCARD:
+		return true
+	case EmailMailboxActionAvailabilityActionPUBLISH:
+		return true
+	case EmailMailboxActionAvailabilityActionSAVE:
+		return true
+	case EmailMailboxActionAvailabilityActionUNBIND:
+		return true
+	case EmailMailboxActionAvailabilityActionVALIDATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxActionAvailabilityReason.
+const (
+	EmailMailboxActionAvailabilityReasonCONNECTIONDISABLED EmailMailboxActionAvailabilityReason = "CONNECTION_DISABLED"
+	EmailMailboxActionAvailabilityReasonDELIVERYPENDING    EmailMailboxActionAvailabilityReason = "DELIVERY_PENDING"
+	EmailMailboxActionAvailabilityReasonGITMANAGED         EmailMailboxActionAvailabilityReason = "GIT_MANAGED"
+	EmailMailboxActionAvailabilityReasonNOBINDING          EmailMailboxActionAvailabilityReason = "NO_BINDING"
+	EmailMailboxActionAvailabilityReasonNONE               EmailMailboxActionAvailabilityReason = "NONE"
+	EmailMailboxActionAvailabilityReasonSTATE              EmailMailboxActionAvailabilityReason = "STATE"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxActionAvailabilityReason enum.
+func (e EmailMailboxActionAvailabilityReason) Valid() bool {
+	switch e {
+	case EmailMailboxActionAvailabilityReasonCONNECTIONDISABLED:
+		return true
+	case EmailMailboxActionAvailabilityReasonDELIVERYPENDING:
+		return true
+	case EmailMailboxActionAvailabilityReasonGITMANAGED:
+		return true
+	case EmailMailboxActionAvailabilityReasonNOBINDING:
+		return true
+	case EmailMailboxActionAvailabilityReasonNONE:
+		return true
+	case EmailMailboxActionAvailabilityReasonSTATE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailMailboxApprovalPolicy.
 const (
 	EmailMailboxApprovalPolicyALLOW     EmailMailboxApprovalPolicy = "ALLOW"
@@ -2870,19 +2939,19 @@ func (e RoleImageRecipeState) Valid() bool {
 
 // Defines values for RoleImageRecipeCommandAction.
 const (
-	ARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
-	REQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
-	RESTORE      RoleImageRecipeCommandAction = "RESTORE"
+	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageRecipeCommandAction enum.
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
-	case ARCHIVE:
+	case RoleImageRecipeCommandActionARCHIVE:
 		return true
-	case REQUESTBUILD:
+	case RoleImageRecipeCommandActionREQUESTBUILD:
 		return true
-	case RESTORE:
+	case RoleImageRecipeCommandActionRESTORE:
 		return true
 	default:
 		return false
@@ -3419,16 +3488,16 @@ func (e RuntimeEnvironmentSetState) Valid() bool {
 
 // Defines values for RuntimeKubernetesAccessKind.
 const (
-	NONE             RuntimeKubernetesAccessKind = "NONE"
-	READOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
+	RuntimeKubernetesAccessKindNONE             RuntimeKubernetesAccessKind = "NONE"
+	RuntimeKubernetesAccessKindREADOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeKubernetesAccessKind enum.
 func (e RuntimeKubernetesAccessKind) Valid() bool {
 	switch e {
-	case NONE:
+	case RuntimeKubernetesAccessKindNONE:
 		return true
-	case READOWNEXECUTION:
+	case RuntimeKubernetesAccessKindREADOWNEXECUTION:
 		return true
 	default:
 		return false
@@ -6255,6 +6324,19 @@ type EmailEffectReceiptView struct {
 	Receipt  EmailEffectReceipt           `json:"receipt"`
 }
 
+// EmailMailboxActionAvailability defines model for EmailMailboxActionAvailability.
+type EmailMailboxActionAvailability struct {
+	Action  EmailMailboxActionAvailabilityAction `json:"action"`
+	Enabled bool                                 `json:"enabled"`
+	Reason  EmailMailboxActionAvailabilityReason `json:"reason"`
+}
+
+// EmailMailboxActionAvailabilityAction defines model for EmailMailboxActionAvailability.Action.
+type EmailMailboxActionAvailabilityAction string
+
+// EmailMailboxActionAvailabilityReason defines model for EmailMailboxActionAvailability.Reason.
+type EmailMailboxActionAvailabilityReason string
+
 // EmailMailboxApprovalPolicy defines model for EmailMailboxApprovalPolicy.
 type EmailMailboxApprovalPolicy string
 
@@ -6269,21 +6351,23 @@ type EmailMailboxBindingInput struct {
 
 // EmailMailboxConfigurationPage defines model for EmailMailboxConfigurationPage.
 type EmailMailboxConfigurationPage struct {
-	Items         []EmailMailboxConfigurationView `json:"items"`
-	NextPageToken string                          `json:"nextPageToken"`
-	Total         int64                           `json:"total"`
+	Items         []EmailMailboxConfigurationView  `json:"items"`
+	NextActions   []EmailMailboxActionAvailability `json:"nextActions"`
+	NextPageToken string                           `json:"nextPageToken"`
+	Total         int64                            `json:"total"`
 }
 
 // EmailMailboxConfigurationView defines model for EmailMailboxConfigurationView.
 type EmailMailboxConfigurationView struct {
-	BoundRevisionRef  string                       `json:"boundRevisionRef"`
-	Configuration     ManagedConfiguration         `json:"configuration"`
-	ConnectionRef     OpaqueRef                    `json:"connectionRef"`
-	ConnectionVersion int64                        `json:"connectionVersion"`
-	Diagnostics       []EmailMailboxDiagnostic     `json:"diagnostics"`
-	MailboxRef        OpaqueRef                    `json:"mailboxRef"`
-	Publication       *EmailMailboxPublication     `json:"publication,omitempty"`
-	Revision          ManagedConfigurationRevision `json:"revision"`
+	BoundRevisionRef  string                           `json:"boundRevisionRef"`
+	Configuration     ManagedConfiguration             `json:"configuration"`
+	ConnectionRef     OpaqueRef                        `json:"connectionRef"`
+	ConnectionVersion int64                            `json:"connectionVersion"`
+	Diagnostics       []EmailMailboxDiagnostic         `json:"diagnostics"`
+	MailboxRef        OpaqueRef                        `json:"mailboxRef"`
+	NextActions       []EmailMailboxActionAvailability `json:"nextActions"`
+	Publication       *EmailMailboxPublication         `json:"publication,omitempty"`
+	Revision          ManagedConfigurationRevision     `json:"revision"`
 
 	// Specification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
 	Specification EmailMailboxSpecification `json:"specification"`
