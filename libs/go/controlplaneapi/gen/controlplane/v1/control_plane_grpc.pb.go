@@ -10607,6 +10607,7 @@ var InteractionWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName                  = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveProviderModelCatalog"
 	ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName = "/controlplane.v1.ProviderCredentialMaterializerService/CheckProviderCredentialMaterializerReadiness"
 	ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName                     = "/controlplane.v1.ProviderCredentialMaterializerService/StartDeviceAuthorization"
 	ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName                   = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveDeviceAuthorization"
@@ -10623,6 +10624,7 @@ const (
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceClient interface {
+	ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(ctx context.Context, in *CheckProviderCredentialMaterializerReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
 	ObserveDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error)
@@ -10642,6 +10644,16 @@ type providerCredentialMaterializerServiceClient struct {
 
 func NewProviderCredentialMaterializerServiceClient(cc grpc.ClientConnInterface) ProviderCredentialMaterializerServiceClient {
 	return &providerCredentialMaterializerServiceClient{cc}
+}
+
+func (c *providerCredentialMaterializerServiceClient) ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ObserveProviderModelCatalogResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *providerCredentialMaterializerServiceClient) CheckProviderCredentialMaterializerReadiness(ctx context.Context, in *CheckProviderCredentialMaterializerReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialMaterializerReadinessResponse, error) {
@@ -10712,6 +10724,7 @@ func (c *providerCredentialMaterializerServiceClient) CleanupProviderCredential(
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceServer interface {
+	ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(context.Context, *CheckProviderCredentialMaterializerReadinessRequest) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
 	ObserveDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error)
@@ -10733,6 +10746,9 @@ type ProviderCredentialMaterializerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedProviderCredentialMaterializerServiceServer struct{}
 
+func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ObserveProviderModelCatalog not implemented")
+}
 func (UnimplementedProviderCredentialMaterializerServiceServer) CheckProviderCredentialMaterializerReadiness(context.Context, *CheckProviderCredentialMaterializerReadinessRequest) (*CheckProviderCredentialMaterializerReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckProviderCredentialMaterializerReadiness not implemented")
 }
@@ -10771,6 +10787,24 @@ func RegisterProviderCredentialMaterializerServiceServer(s grpc.ServiceRegistrar
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ProviderCredentialMaterializerService_ServiceDesc, srv)
+}
+
+func _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ObserveProviderModelCatalogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveProviderModelCatalog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveProviderModelCatalog(ctx, req.(*ObserveProviderModelCatalogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -10888,6 +10922,10 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.ProviderCredentialMaterializerService",
 	HandlerType: (*ProviderCredentialMaterializerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ObserveProviderModelCatalog",
+			Handler:    _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler,
+		},
 		{
 			MethodName: "CheckProviderCredentialMaterializerReadiness",
 			Handler:    _ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_Handler,

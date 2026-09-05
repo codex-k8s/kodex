@@ -321,6 +321,7 @@ service InteractionWorkService {
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 service ProviderCredentialMaterializerService {
+  rpc ObserveProviderModelCatalog(ObserveProviderModelCatalogRequest) returns (ObserveProviderModelCatalogResponse);
   rpc CheckProviderCredentialMaterializerReadiness(CheckProviderCredentialMaterializerReadinessRequest) returns (CheckProviderCredentialMaterializerReadinessResponse);
   rpc StartDeviceAuthorization(ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse);
   rpc ObserveDeviceAuthorization(ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse);
@@ -2580,6 +2581,8 @@ message RuntimeRevisionSnapshot {
   string organization_ref = 68;
   repeated RuntimeSkillBundleSnapshot skill_bundles = 69;
   repeated RuntimeMemoryRecordSnapshot memory_records = 70;
+  // Server-owned effective effort из exact catalog default либо TOML override.
+  string effective_reasoning_effort = 71;
 }
 
 message SavePromptTemplateDraftRequest {
@@ -5305,6 +5308,51 @@ message ProviderCredentialDescriptor {
   string content_sha256 = 4;
 }
 message CheckProviderCredentialMaterializerReadinessRequest {}
+
+enum ProviderModelCatalogSource {
+  PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED = 0;
+  PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API = 1;
+  PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX = 2;
+}
+
+enum ProviderModelCatalogFailure {
+  PROVIDER_MODEL_CATALOG_FAILURE_UNSPECIFIED = 0;
+  PROVIDER_MODEL_CATALOG_FAILURE_NONE = 1;
+  PROVIDER_MODEL_CATALOG_FAILURE_UNAVAILABLE = 2;
+  PROVIDER_MODEL_CATALOG_FAILURE_UNVERIFIED_SOURCE = 3;
+  PROVIDER_MODEL_CATALOG_FAILURE_AUTHORIZATION_REJECTED = 4;
+}
+
+message ProviderModelCatalogRecord {
+  string id = 1;
+  string default_reasoning_effort = 2;
+  repeated string reasoning_efforts = 3;
+}
+
+// Все поля сверяются с active owner task в proof issuance до credential read.
+// expires_at только ограничивает budget; payload сам по себе не даёт authority.
+message ObserveProviderModelCatalogRequest {
+  string task_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  string fence = 4;
+  string account_ref = 5;
+  int64 account_version = 6;
+  string credential_revision_ref = 7;
+  int64 credential_revision = 8;
+  ProviderCredentialDescriptor credential = 9;
+  ProviderAuthorizationMethod authorization_method = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+
+message ObserveProviderModelCatalogResponse {
+  string account_ref = 1;
+  string credential_revision_ref = 2;
+  google.protobuf.Timestamp observed_at = 3;
+  ProviderModelCatalogSource source = 4;
+  repeated ProviderModelCatalogRecord models = 5;
+  ProviderModelCatalogFailure failure = 6;
+}
 message CheckProviderCredentialMaterializerReadinessResponse {
   bool ready = 1;
 }
