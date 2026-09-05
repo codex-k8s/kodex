@@ -89,6 +89,16 @@ render. Providercredential tests проверяют API intersection, пусто
 проверяют authority до materializer; synthetic TLS context/owner verifier
 не являются доказательством настоящего TLS/issuer/CP вызова.
 
+После сборки exact broker image отдельная публичная проверка выполняет
+`--version`, `initialize`, `model/list` и external token login на настоящем
+pinned Codex. Disposable контейнер использует `--network none`, read-only root,
+non-root UID и private tmpfs; передаётся только синтетический JWT. Команда не
+проверяет provider availability и не использует account credential:
+
+```bash
+make test-provider-model-catalog-codex KODEX_CATALOG_CODEX_TEST_IMAGE="$EXACT_BROKER_IMAGE"
+```
+
 Результаты привязываются к exact SHA в PR #1069. Full protected CP producer,
 real Codex/provider и browser acceptance требуют отдельного подтверждённого
 контура; до фактического запуска их статус — NOT RUN. Merge/staging общий gate
