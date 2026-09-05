@@ -187,7 +187,7 @@ async function reconcile(): Promise<void> {
 }
 </script>
 <template>
-  <section class="email-effect">
+  <section class="email-effect" :aria-label="t('emailEffect.title')">
     <h3>{{ t("emailEffect.title") }}</h3>
     <form class="email-search" @submit.prevent="load">
       <label

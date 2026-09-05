@@ -8,6 +8,8 @@ const sdk = vi.hoisted(() => ({
     vi.fn<(options: { headers: Record<string, string> }) => Promise<unknown>>(),
   saveEmailMailboxDraft: vi.fn(),
   bindEmailMailboxConfiguration: vi.fn(),
+  copyGitManagedConfiguration: vi.fn(),
+  detachGitManagedConfiguration: vi.fn(),
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => sdk);
 vi.mock("@/shared/api/client", () => ({
@@ -21,11 +23,26 @@ import {
   createMailboxDraft,
   saveMailboxDraft,
   bindMailbox,
+  changeMailboxSource,
 } from "./email-mailbox-api";
 const signal = new AbortController().signal;
 const key = "00000000-0000-4000-8000-000000000001";
 function view(): EmailMailboxConfigurationView {
+  const action = (
+    action: EmailMailboxConfigurationView["nextActions"][number]["action"],
+  ) => ({ action, enabled: false, reason: "STATE" as const });
   return {
+    nextActions: [
+      action("CREATE_DRAFT"),
+      action("SAVE"),
+      action("VALIDATE"),
+      action("PUBLISH"),
+      action("DISCARD"),
+      action("BIND"),
+      action("UNBIND"),
+      action("DETACH"),
+      action("COPY"),
+    ],
     connectionRef: "connection",
     connectionVersion: 8,
     mailboxRef: "mailbox",
@@ -73,6 +90,69 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("mailbox owner contract", () => {
+  it("COPY читает новую owner association без старой revision/binding, DETACH сохраняет set", async () => {
+    const original = view();
+    original.configuration.managedBy = "GIT";
+    const copied = view();
+    copied.configuration = { ...copied.configuration, ref: "copy", version: 1 };
+    copied.mailboxRef = "copied-mailbox";
+    copied.boundRevisionRef = "";
+    sdk.copyGitManagedConfiguration.mockResolvedValue(
+      response({
+        configuration: copied.configuration,
+        revision: copied.revision,
+      }),
+    );
+    sdk.getEmailMailboxConfiguration.mockResolvedValue(response(copied));
+    expect(
+      await changeMailboxSource(original, "COPY", "Copy", key, signal),
+    ).toEqual(copied);
+    expect(sdk.getEmailMailboxConfiguration.mock.calls[0]?.[0]).toMatchObject({
+      path: { connectionRef: "connection" },
+      query: { configurationRef: "copy" },
+    });
+    expect(
+      sdk.getEmailMailboxConfiguration.mock.calls[0]?.[0],
+    ).not.toHaveProperty("query.revisionRef");
+    expect(sdk.copyGitManagedConfiguration.mock.calls[0]?.[0]).toMatchObject({
+      body: { name: "Copy" },
+      headers: { "If-Match": '"3"', "Idempotency-Key": key },
+    });
+    const detached = view();
+    sdk.detachGitManagedConfiguration.mockResolvedValue(
+      response({ configuration: detached.configuration }),
+    );
+    sdk.getEmailMailboxConfiguration.mockResolvedValue(response(detached));
+    await changeMailboxSource(original, "DETACH", "", key, signal);
+    expect(sdk.getEmailMailboxConfiguration.mock.calls[1]?.[0]).toMatchObject({
+      query: { configurationRef: "configuration" },
+    });
+    sdk.copyGitManagedConfiguration.mockResolvedValue(
+      response({
+        configuration: detached.configuration,
+        revision: detached.revision,
+      }),
+    );
+    await expect(
+      changeMailboxSource(original, "COPY", "Copy", key, signal),
+    ).rejects.toThrow("receipt mismatch");
+  });
+  it("закрыто отклоняет повторяющиеся или противоречивые authority actions", () => {
+    const repeated = view();
+    repeated.nextActions[1] = repeated.nextActions[0];
+    expect(() => checkedMailbox(repeated, "connection")).toThrow(
+      "action projection",
+    );
+    const mismatch = view();
+    mismatch.nextActions[0] = {
+      action: "CREATE_DRAFT",
+      enabled: true,
+      reason: "STATE",
+    };
+    expect(() => checkedMailbox(mismatch, "connection")).toThrow(
+      "action projection",
+    );
+  });
   it("читает exact history и не приписывает latest delivery выбранной revision", async () => {
     const result = view();
     sdk.getEmailMailboxConfiguration.mockResolvedValue(response(result));

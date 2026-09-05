@@ -54,6 +54,29 @@ export async function checkEmailEffects(
       await route.fulfill({ json: connection });
       return;
     }
+    if (
+      path ===
+      `/api/v1/integration-connections/${connection.ref}/email-mailbox/configurations`
+    ) {
+      await route.fulfill({
+        json: {
+          items: [],
+          total: 0,
+          nextPageToken: "",
+          nextActions: [
+            { action: "CREATE_DRAFT", enabled: true, reason: "NONE" },
+          ],
+        },
+      });
+      return;
+    }
+    if (
+      path ===
+      `/api/v1/integration-connections/${connection.ref}/email-mailbox/credentials`
+    ) {
+      await route.fulfill({ json: { items: [], total: 0, nextPageToken: "" } });
+      return;
+    }
     await route.fallback();
   });
   await page.route(
@@ -107,7 +130,11 @@ export async function checkEmailEffects(
   await expect(
     dialog.getByText("Исход неизвестен", { exact: true }),
   ).toBeVisible();
-  await expect(dialog.getByRole("combobox")).toHaveCount(0);
+  await expect(
+    dialog
+      .getByRole("region", { name: "Почтовые операции" })
+      .getByRole("combobox"),
+  ).toHaveCount(0);
   await dialog
     .getByRole("button", { name: "Подтвердить через OIDC", exact: true })
     .click();
@@ -134,7 +161,10 @@ export async function checkEmailEffects(
     dialog.getByRole("button", { name: "Зафиксировать решение", exact: true }),
   ).toBeDisabled();
   expect(decisions).toBe(0);
-  await dialog.getByRole("combobox").selectOption("NO_EFFECT_CONFIRMED");
+  await dialog
+    .getByRole("region", { name: "Почтовые операции" })
+    .getByRole("combobox")
+    .selectOption("NO_EFFECT_CONFIRMED");
   await dialog
     .getByLabel("Примечание", { exact: true })
     .fill("Synthetic owner decision");

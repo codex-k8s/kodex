@@ -256,7 +256,10 @@ function changeWeight(accountRef: string, event: Event): void {
                       )
                     : $t("common.noData")
                 }}</small
-              ><small v-if="!item.account.enabled">{{
+              ><small v-if="item.account.safeStatusReason">{{
+                $t(`providers.reasons.${item.account.safeStatusReason}`)
+              }}</small
+              ><small v-else-if="!item.account.enabled">{{
                 $t("states.DISABLED")
               }}</small
               ><small v-else-if="!item.account.ready">{{

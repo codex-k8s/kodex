@@ -6,6 +6,7 @@ import type {
   EmailMailboxCredentialKind,
   EmailMailboxConfigurationPage,
   EmailMailboxCredentialPage,
+  EmailMailboxActionAvailability,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
   csrfToken,
@@ -22,6 +23,43 @@ export type {
   EmailMailboxDraftInput,
 };
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
+export const mailboxActions = [
+  "CREATE_DRAFT",
+  "SAVE",
+  "VALIDATE",
+  "PUBLISH",
+  "DISCARD",
+  "BIND",
+  "UNBIND",
+  "DETACH",
+  "COPY",
+] as const;
+export type MailboxAction = (typeof mailboxActions)[number];
+export function checkedMailboxActions(
+  values: EmailMailboxActionAvailability[],
+  expected: readonly MailboxAction[] = mailboxActions,
+): void {
+  if (
+    !Array.isArray(values) ||
+    values.length !== expected.length ||
+    new Set(values.map((item) => item.action)).size !== expected.length ||
+    values.some(
+      (item) =>
+        !expected.includes(item.action) ||
+        typeof item.enabled !== "boolean" ||
+        ![
+          "NONE",
+          "STATE",
+          "GIT_MANAGED",
+          "DELIVERY_PENDING",
+          "NO_BINDING",
+          "CONNECTION_DISABLED",
+        ].includes(item.reason) ||
+        item.enabled !== (item.reason === "NONE"),
+    )
+  )
+    throw new Error("Mailbox action projection is invalid");
+}
 function headers(value: MutationHeaders) {
   if (!value["If-Match"])
     throw new Error("Mailbox configuration version is unavailable");
@@ -33,6 +71,7 @@ export function checkedMailbox(
   configurationRef?: string,
   revisionRef?: string,
 ): EmailMailboxConfigurationView {
+  checkedMailboxActions(view.nextActions);
   if (
     view.connectionRef !== connectionRef ||
     !positive(view.connectionVersion) ||
@@ -118,6 +157,7 @@ export async function listMailboxes(
   result.items = result.items.map((view) =>
     checkedMailbox(view, connectionRef),
   );
+  checkedMailboxActions(result.nextActions, ["CREATE_DRAFT"]);
   if (
     new Set(result.items.map((view) => view.configuration.ref)).size !==
     result.items.length
@@ -318,4 +358,42 @@ export async function unbindMailbox(
   )
     throw new Error("Mailbox unbinding receipt mismatch");
   return result.data;
+}
+
+export async function changeMailboxSource(
+  view: EmailMailboxConfigurationView,
+  action: "DETACH" | "COPY",
+  name: string,
+  key: string,
+  signal: AbortSignal,
+): Promise<EmailMailboxConfigurationView> {
+  const result = await mutate(
+    (value) =>
+      action === "COPY"
+        ? sdk.copyGitManagedConfiguration({
+            path: { configurationRef: view.configuration.ref },
+            body: { name },
+            headers: headers(value),
+            signal: requestSignal(signal),
+          })
+        : sdk.detachGitManagedConfiguration({
+            path: { configurationRef: view.configuration.ref },
+            headers: headers(value),
+            signal: requestSignal(signal),
+          }),
+    view.configuration.version,
+    key,
+  );
+  const configuration = result.data.configuration;
+  if (
+    !configuration.ref ||
+    !positive(configuration.version) ||
+    configuration.kind !== "EMAIL_MAILBOX" ||
+    configuration.managedBy !== "UI" ||
+    (action === "DETACH"
+      ? configuration.ref !== view.configuration.ref
+      : configuration.ref === view.configuration.ref)
+  )
+    throw new Error("Mailbox source command receipt mismatch");
+  return readMailbox(view.connectionRef, signal, configuration.ref);
 }

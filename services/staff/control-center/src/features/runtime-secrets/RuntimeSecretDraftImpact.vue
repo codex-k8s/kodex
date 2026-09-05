@@ -384,7 +384,7 @@ onMounted(() => void restore());
         {{ t("runtimeSecrets.draft.clearSelection") }}
       </button>
       <label class="field"
-        ><span>{{ t("runtimeSecrets.search") }}</span
+        ><span>{{ t("runtimeSecrets.draft.searchConsumers") }}</span
         ><input v-model="query" type="search" :disabled="busy || pending"
       /></label>
       <button class="button" :disabled="busy" @click="refresh()">

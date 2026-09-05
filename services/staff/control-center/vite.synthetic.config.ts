@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        mailbox: fileURLToPath(
+          new URL("./e2e/fixtures/mailbox.html", import.meta.url),
+        ),
         runtimeDetail: fileURLToPath(
           new URL("./e2e/fixtures/runtime-detail.html", import.meta.url),
         ),

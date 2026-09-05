@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PackageOpen, RefreshCw } from "@lucide/vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   computed,
   onBeforeUnmount,
@@ -48,6 +48,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import InteractionIdentitiesPanel from "@/features/integrations/ui/InteractionIdentitiesPanel.vue";
 import EmailEffectPanel from "@/features/integrations/ui/EmailEffectPanel.vue";
 import EmailMailboxCredentialPanel from "@/features/integrations/ui/EmailMailboxCredentialPanel.vue";
+import EmailMailboxConfigurationPanel from "@/features/integrations/ui/EmailMailboxConfigurationPanel.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
@@ -222,7 +223,42 @@ const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
 const mailboxCredentialBusy = ref(false);
+const mailboxConfigurationBusy = ref(false);
+const mailboxConfigurationPanel = ref<{ canClose(): boolean }>();
 const route = useRoute();
+const router = useRouter();
+function closeConnectionDetails(): void {
+  if (
+    mailboxCredentialBusy.value ||
+    mailboxConfigurationBusy.value ||
+    mailboxConfigurationPanel.value?.canClose() === false
+  )
+    return;
+  detailsConnection.value = undefined;
+}
+function mailboxRouteRef(name: string): string | undefined {
+  const value = route.query[name];
+  return route.query.connectionRef === detailsConnection.value?.ref &&
+    typeof value === "string" &&
+    /^[A-Za-z0-9_-]{8,128}$/.test(value)
+    ? value
+    : undefined;
+}
+function selectMailboxRevision(
+  configurationRef: string,
+  revisionRef: string,
+): void {
+  const connectionRef = detailsConnection.value?.ref;
+  if (connectionRef)
+    void router.replace({
+      query: {
+        ...route.query,
+        connectionRef,
+        mailboxConfigurationRef: configurationRef,
+        mailboxRevisionRef: revisionRef,
+      },
+    });
+}
 let detailsGeneration = 0;
 const returnedInvocationRef = computed(() =>
   route.query.connectionRef === detailsConnection.value?.ref &&
@@ -238,9 +274,11 @@ watch(
     const current = ++detailsGeneration;
     if (
       typeof connectionRef !== "string" ||
-      typeof invocationRef !== "string" ||
       !/^[A-Za-z0-9_-]{8,128}$/.test(connectionRef) ||
-      !/^[A-Za-z0-9_-]{8,128}$/.test(invocationRef)
+      (invocationRef !== undefined &&
+        (typeof invocationRef !== "string" ||
+          !/^[A-Za-z0-9_-]{8,128}$/.test(invocationRef))) ||
+      detailsConnection.value?.ref === connectionRef
     )
       return;
     try {
@@ -977,9 +1015,9 @@ onBeforeUnmount(() => {
     <ModalDialog
       v-if="detailsConnection"
       :title="detailsConnection.name"
-      :busy="mailboxCredentialBusy"
+      :busy="mailboxCredentialBusy || mailboxConfigurationBusy"
       size="xl"
-      @close="detailsConnection = undefined"
+      @close="closeConnectionDetails"
     >
       <StatusBadge :state="detailsConnection.state" />
       <button
@@ -1012,8 +1050,27 @@ onBeforeUnmount(() => {
         v-if="detailsConnection.definitionKey === 'email'"
         :key="detailsConnection.ref"
         :connection="detailsConnection"
+        :disabled="mailboxConfigurationBusy"
         @saved="refreshConnectionDetails"
         @busy="mailboxCredentialBusy = $event"
+      />
+      <EmailMailboxConfigurationPanel
+        v-if="detailsConnection.definitionKey === 'email'"
+        :key="
+          JSON.stringify([
+            detailsConnection.ref,
+            mailboxRouteRef('mailboxConfigurationRef'),
+            mailboxRouteRef('mailboxRevisionRef'),
+          ])
+        "
+        ref="mailboxConfigurationPanel"
+        :connection="detailsConnection"
+        :disabled="mailboxCredentialBusy"
+        :initial-configuration-ref="mailboxRouteRef('mailboxConfigurationRef')"
+        :initial-revision-ref="mailboxRouteRef('mailboxRevisionRef')"
+        @busy="mailboxConfigurationBusy = $event"
+        @saved="refreshConnectionDetails"
+        @selected="selectMailboxRevision"
       />
       <EmailEffectPanel
         v-if="detailsConnection.definitionKey === 'email'"

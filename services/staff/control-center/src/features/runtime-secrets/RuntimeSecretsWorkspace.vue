@@ -454,7 +454,7 @@ onBeforeUnmount(() => {
   />
   <RuntimeSecretDraftDialog
     v-if="resumeOpen && initialDraftRef"
-    :key="initialDraftRef"
+    :key="JSON.stringify([initialDraftRef, initialPlanRef])"
     :project-ref="projectRef"
     :initial-draft-ref="initialDraftRef"
     :initial-plan-ref="initialPlanRef"
