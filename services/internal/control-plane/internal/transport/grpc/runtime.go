@@ -559,6 +559,7 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 			DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
 			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 		}
+		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 			claim.CredentialRevision = castIntegrationCredential(credential)
 		}
@@ -623,6 +624,7 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 			},
 			EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
 		}
+		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 			claim.CredentialRevision = castIntegrationCredential(credential)
 		}

@@ -707,6 +707,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	if _, err := service.GetEffectiveManagedConfiguration(ctx, integrationReader, "PROMPT_TEMPLATE", "INTEGRATION_CONNECTION", connection.Connection.Ref); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("generic managed configuration kind escalation was accepted: %v", err)
 	}
+	testManagedIntegrationPackageExecution(t, ctx, repository, service, owner, connection.Connection.Ref, integrationDefinition)
 	gitContent := "Git-owned prompt for {{ .project.ref }}."
 	gitDigest := sha256.Sum256([]byte(gitContent))
 	var gitConfigurationID, gitRevisionID string
