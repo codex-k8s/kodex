@@ -72,7 +72,7 @@ WITH projects AS (
     JOIN projects project ON project.id=bundle.project_id
     JOIN control_plane.skill_bundle_revisions revision ON revision.id=COALESCE(bundle.draft_revision_id,bundle.current_revision_id)
       AND revision.bundle_id=bundle.id AND revision.organization_id=bundle.organization_id
-    WHERE bundle.state='ACTIVE'
+    WHERE bundle.state=CASE WHEN @lifecycle_state='DELETED' THEN 'ARCHIVED' ELSE 'ACTIVE' END
       AND EXISTS (
           SELECT 1 FROM control_plane.catalog_access_targets target
           WHERE target.organization_id=bundle.organization_id AND target.kind='PROJECT' AND target.id=bundle.project_id
@@ -93,7 +93,7 @@ WITH projects AS (
       AND revision.record_id=memory.id AND revision.organization_id=memory.organization_id
     LEFT JOIN control_plane.agents agent ON agent.id=memory.agent_id AND agent.project_id=memory.project_id
     LEFT JOIN control_plane.runs source ON source.id=revision.source_run_id AND source.organization_id=memory.organization_id
-    WHERE memory.state='ACTIVE' AND revision.retention_until>@evaluated_at
+    WHERE memory.state=CASE WHEN @lifecycle_state='DELETED' THEN 'ARCHIVED' ELSE 'ACTIVE' END AND revision.retention_until>@evaluated_at
       AND control_plane.memory_record_visible(@organization_id::uuid,@actor_id::uuid,memory.id,@evaluated_at)
     UNION ALL
     SELECT 'dir:' || project.ref || ':entities:' || directory.name,
@@ -156,7 +156,7 @@ WITH projects AS (
      AND artifact.size_bytes = item.size_bytes
      AND artifact.digest = item.digest
      AND artifact.source = item.source
-    WHERE artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+    WHERE artifact.lifecycle_state = @lifecycle_state AND artifact.scan_state = 'CLEAN'
     UNION ALL
     SELECT 'artifact-result:' || run.ref || ':' || artifact.ref,
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/results/' || artifact.ref,
@@ -166,7 +166,7 @@ WITH projects AS (
     FROM control_plane.artifacts AS artifact
     JOIN control_plane.runs AS run ON run.id = artifact.run_id
     JOIN projects AS project ON project.id = artifact.project_id
-    WHERE artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+    WHERE artifact.lifecycle_state = @lifecycle_state
       AND artifact.source IN ('AGENT_RESULT', 'INTEGRATION_RESULT')
     UNION ALL
     SELECT 'file:' || artifact.ref,
@@ -175,7 +175,7 @@ WITH projects AS (
            project.ref, artifact.ref, '', artifact.size_bytes, artifact.digest, artifact.created_at,
            'ARTIFACT', artifact.ref
     FROM control_plane.artifacts AS artifact JOIN projects AS project ON project.id = artifact.project_id
-    WHERE artifact.run_id IS NULL AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+    WHERE artifact.run_id IS NULL AND artifact.lifecycle_state = @lifecycle_state
     UNION ALL
     SELECT 'environment:' || environment.ref,
            '/projects/' || project.ref || '/entities/environments/' || environment.ref,
@@ -210,30 +210,63 @@ WITH projects AS (
       AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'agent.view', 'AGENT',
           agent.id, agent.project_id, agent.created_by, jsonb_build_object('PROJECT', agent.project_id::text), @evaluated_at, false)
-), filtered AS (
-    SELECT * FROM nodes
-    WHERE ((@mode = 'TREE' AND parent_path = @path)
-        OR (@mode = 'SEARCH' AND (name ILIKE '%' || @query || '%' OR path ILIKE '%' || @query || '%')))
 ), visible AS MATERIALIZED (
     SELECT filtered.*
-    FROM filtered JOIN control_plane.catalog_access_targets target
+    FROM nodes filtered JOIN control_plane.catalog_access_targets target
       ON target.organization_id = @organization_id::uuid AND target.kind = filtered.access_kind AND target.ref = filtered.access_ref
     WHERE (@authority_project = '' OR target.project_id = NULLIF(@authority_project, '')::uuid)
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid,
           CASE filtered.access_kind WHEN 'PROJECT' THEN 'project.view' WHEN 'AGENT' THEN 'agent.view'
             WHEN 'WORKFLOW' THEN 'workflow.view' WHEN 'RUN' THEN 'run.view' WHEN 'ARTIFACT' THEN 'artifact.view'
             WHEN 'SCHEDULE' THEN 'schedule.view' ELSE '' END,
-          target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at, filtered.access_kind = 'PROJECT')
+          target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at, filtered.access_kind IN ('PROJECT','ARTIFACT'))
       AND (filtered.run_ref = '' OR filtered.access_kind = 'RUN' OR EXISTS (
           SELECT 1 FROM control_plane.catalog_access_targets parent
           WHERE parent.organization_id = @organization_id::uuid AND parent.kind = 'RUN' AND parent.ref = filtered.run_ref
             AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'run.view', 'RUN',
                 parent.id, parent.project_id, parent.owner_id, parent.related_ids, @evaluated_at, false)
       ))
+), enriched AS MATERIALIZED (
+    SELECT visible.*,
+        COALESCE(artifact.version,bundle.version,memory.version,0) AS version,
+        COALESCE(artifact.revision,skill_revision.revision,memory_revision.revision,0) AS revision,
+        COALESCE(skill_revision.ref,memory_revision.ref,'') AS revision_ref,
+        COALESCE(artifact.lifecycle_state,bundle.state,memory.state,'ACTIVE') AS lifecycle_state,
+        COALESCE(artifact.scan_state,skill_revision.scan_state,'') AS scan_state,
+        CASE WHEN artifact.id IS NOT NULL THEN 'ARTIFACT' WHEN bundle.id IS NOT NULL THEN 'SKILL_BUNDLE'
+            WHEN memory.id IS NOT NULL THEN 'MEMORY_RECORD' ELSE '' END AS resource_kind,
+        EXISTS (
+            SELECT 1 FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=@organization_id::uuid AND target.kind=visible.access_kind AND target.ref=visible.access_ref
+              AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+                  CASE visible.access_kind WHEN 'PROJECT' THEN 'project.manage' WHEN 'AGENT' THEN 'agent.manage' ELSE '' END,
+                  target.kind,target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at)
+        ) AS can_manage
+    FROM visible
+    LEFT JOIN control_plane.artifacts artifact ON artifact.organization_id=@organization_id::uuid AND visible.access_kind='ARTIFACT' AND artifact.ref=visible.entity_ref
+    LEFT JOIN control_plane.agent_context_bindings binding ON binding.organization_id=@organization_id::uuid AND visible.ref='context-binding:'||binding.ref
+    LEFT JOIN control_plane.skill_bundles bundle ON bundle.organization_id=@organization_id::uuid AND visible.kind='SKILL' AND bundle.ref=visible.entity_ref
+    LEFT JOIN control_plane.skill_bundle_revisions skill_revision ON skill_revision.organization_id=@organization_id::uuid
+      AND skill_revision.bundle_id=bundle.id AND skill_revision.id=COALESCE(binding.skill_revision_id,bundle.draft_revision_id,bundle.current_revision_id)
+    LEFT JOIN control_plane.memory_records memory ON memory.organization_id=@organization_id::uuid AND visible.kind='MEMORY' AND memory.ref=visible.entity_ref
+    LEFT JOIN control_plane.memory_record_revisions memory_revision ON memory_revision.organization_id=@organization_id::uuid
+      AND memory_revision.record_id=memory.id AND memory_revision.id=COALESCE(binding.memory_revision_id,memory.current_revision_id)
+), applicable AS MATERIALIZED (
+    SELECT * FROM enriched candidate
+    WHERE (candidate.directory OR candidate.lifecycle_state=CASE WHEN @lifecycle_state='DELETED' AND candidate.resource_kind IN ('SKILL_BUNDLE','MEMORY_RECORD') THEN 'ARCHIVED' ELSE @lifecycle_state END)
+      AND (candidate.kind <> 'DIRECTORY' OR EXISTS (
+          SELECT 1 FROM enriched child WHERE child.kind<>'DIRECTORY' AND starts_with(child.path,candidate.path||'/')
+            AND (child.directory OR child.lifecycle_state=CASE WHEN @lifecycle_state='DELETED' AND child.resource_kind IN ('SKILL_BUNDLE','MEMORY_RECORD') THEN 'ARCHIVED' ELSE @lifecycle_state END)
+      ))
+), filtered AS MATERIALIZED (
+    SELECT * FROM applicable
+    WHERE ((@mode='TREE' AND parent_path=@path) OR (@mode='SEARCH' AND (@path='' OR starts_with(path,@path||'/') OR path=@path)))
+      AND (@query='' OR strpos(lower(name),lower(@query))>0 OR (@mode='SEARCH' AND strpos(lower(path),lower(@query))>0))
+      AND (COALESCE(cardinality(@kinds::text[]),0)=0 OR kind=ANY(@kinds::text[]))
 ), page AS (
-    SELECT * FROM visible
+    SELECT * FROM filtered
     WHERE (@cursor_path = '' OR (path, ref) > (@cursor_path, @cursor_ref))
     ORDER BY path, ref LIMIT @page_size
 )
-SELECT COALESCE(jsonb_agg(to_jsonb(page) ORDER BY page.path, page.ref), '[]'::jsonb), (SELECT count(*) FROM visible)
+SELECT COALESCE(jsonb_agg(to_jsonb(page) ORDER BY page.path, page.ref), '[]'::jsonb), (SELECT count(*) FROM filtered)
 FROM page;

@@ -5645,6 +5645,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
 	}
 	testArtifactCatalogTotals(t, ctx, service, owner, project.Project.Ref)
+	testVFSEligibility(t, ctx, repository, service, owner)
 	uploadedVersion := uploaded.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-without-capability", ExpectedVersion: &uploadedVersion},

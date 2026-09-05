@@ -27,6 +27,10 @@ type VFSNode struct {
 	Directory                                                                bool
 	SizeBytes                                                                int64
 	ModifiedAt                                                               time.Time
+	Version, Revision                                                        int64
+	RevisionRef, LifecycleState, ScanState, ResourceKind, SelectionReason    string
+	Selectable                                                               bool
+	NextActions                                                              []string
 }
 
 type User struct {

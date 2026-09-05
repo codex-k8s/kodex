@@ -1687,12 +1687,24 @@ message VFSNode {
   int64 size_bytes = 10;
   string digest = 11;
   google.protobuf.Timestamp modified_at = 12;
+  int64 version = 13;
+  string revision_ref = 14;
+  int64 revision = 15;
+  string lifecycle_state = 16;
+  string scan_state = 17;
+  string resource_kind = 18;
+  bool selectable = 19;
+  string selection_reason = 20;
+  repeated string next_actions = 21;
 }
 
 message ListVFSNodesRequest {
   string project_ref = 1;
   string path = 2;
   PageRequest page = 3;
+  string query = 4;
+  string lifecycle_state = 5;
+  repeated VFSNodeKind kinds = 6;
 }
 message ListVFSNodesResponse {
   repeated VFSNode nodes = 1;
@@ -1703,6 +1715,9 @@ message SearchVFSRequest {
   string project_ref = 1;
   string query = 2;
   PageRequest page = 3;
+  string path = 4;
+  string lifecycle_state = 5;
+  repeated VFSNodeKind kinds = 6;
 }
 message SearchVFSResponse {
   repeated VFSNode nodes = 1;

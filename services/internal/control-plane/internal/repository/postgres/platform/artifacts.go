@@ -507,10 +507,10 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	var artifactID, projectID, scanState string
 	var artifactVersion int64
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactForGrant, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"artifact_ref":    ref,
-		"platform_role":   scope.role,
-		"subject_id":      scope.actorID,
+		"organization_id":   scope.organizationID,
+		"artifact_ref":      ref,
+		"authority_project": scope.authorityProjectID,
+		"subject_id":        scope.actorID,
 	}).Scan(&artifactID, &projectID, &artifactVersion, &scanState)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
@@ -523,6 +523,9 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	}
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, ref, scope.role, scope.actorID))
 	if err != nil {
+		return platformrepo.ArtifactDownload{}, err
+	}
+	if err := projectArtifactEligibility(ctx, tx, scope, &item); err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
 	if purpose == "PREVIEW" && item.PreviewState != "AVAILABLE" {

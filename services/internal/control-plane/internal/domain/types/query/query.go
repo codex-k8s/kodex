@@ -7,6 +7,7 @@ type Page struct {
 }
 
 type Filter struct {
+	VFSKinds                                                                        []string                 `json:",omitempty"`
 	TargetType, TargetRef                                                           string                   `json:",omitempty"`
 	ResumableSessionsOnly                                                           bool                     `json:",omitempty"`
 	ExpectedCatalogRevision, ExpectedCatalogDigest                                  string                   `json:",omitempty"`

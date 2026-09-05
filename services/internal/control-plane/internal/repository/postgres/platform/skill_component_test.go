@@ -54,6 +54,10 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || impact.Permitted || !containsString(impact.Blockers, "ARTIFACT_USED_BY_SKILL") {
 		t.Fatalf("skill artifact retention impact: permitted=%t blockers=%v err=%v", impact.Permitted, impact.Blockers, err)
 	}
+	files, fileTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, ResourceRef: "/projects/" + project.Project.Ref + "/files"})
+	if err != nil || fileTotal != 1 || len(files) != 1 || files[0].EntityRef != artifact.Ref || files[0].Selectable || files[0].SelectionReason != "ARTIFACT_USED_BY_SKILL" || containsString(files[0].NextActions, "DELETE") {
+		t.Fatalf("VFS offered deletion of retained skill source: total=%d err=%v", fileTotal, err)
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "skill-retained-artifact-delete", ExpectedVersion: &artifact.Version},
 		Payload:  command.ArtifactLifecycleInput{ArtifactRef: artifact.Ref, ImpactDigest: impact.Digest}}); !errors.Is(err, errs.ErrConflict) {
