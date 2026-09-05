@@ -99,6 +99,33 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
+	currentBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, assistant.Ref, "")
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, currentBinding.sessionID, providerAccountRef, configuration, configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	if retainedPolicy != nil {
+		providerPolicyRef, providerPolicyVersion, providerPolicyDigest = retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+	}
+	parsedOverlay, err := runtimecontract.ParseConfigOverlay(configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	effectiveEffort := parsedOverlay.ModelReasoningEffort
+	if effectiveEffort == "" {
+		effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+	}
+	reasoningMode := runtimecontract.ReasoningSupported
+	if effectiveEffort == "" {
+		reasoningMode = runtimecontract.ReasoningUnsupported
+	}
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
@@ -159,6 +186,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
 		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
+		"effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode,
 		"providerAccountRef":               providerAccountRef,
 		"providerCredentialRevisionRef":    providerCredentialRef,
 		"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
@@ -259,6 +287,10 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	}
 	if len(snapshot.desiredCandidates) == 0 {
 		return false, nil
+	}
+	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, snapshot.desiredCandidates)
+	if err != nil {
+		return false, err
 	}
 	desiredMode := "LEAST_USED"
 	if len(snapshot.desiredCandidates) == 1 {
@@ -392,6 +424,9 @@ func (repository *Repository) replaceWarmSession(
 		"created_by":          current.createdBy,
 	}).Scan(&nextSessionID); err != nil || nextSessionID == "" {
 		return errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, organizationID, nextSessionID, current.assistantRef); err != nil {
+		return err
 	}
 	var runtimeVersion int64
 	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSwitchSession, pgx.StrictNamedArgs{
@@ -890,6 +925,14 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	}
 	result := make([]map[string]any, 0, len(candidates))
 	for _, item := range candidates {
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
+		health, exists := definition.Capability(definition.Spec.HealthCheck.Operation)
+		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
+			return nil, errs.ErrForbidden
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
@@ -903,6 +946,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		_ = json.Unmarshal(item.configuration, &configuration)
 		claim := map[string]any{
 			"testRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
+			"definitionPackage": asJSON(definition),
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
@@ -998,9 +1042,9 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); err != nil {
 		return nil, errs.ErrForbidden
 	}
-	definition, exists := repository.integrationDefinitions[definitionKey]
+	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, input["connection_ref"], definitionKey, definitionVersion, definitionDigest)
 	capability, capabilityExists := definition.Capability(input["capability_key"])
-	if !exists || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
+	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
 		return nil, errs.ErrForbidden
 	}
@@ -1038,7 +1082,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
 	state := "READY"
-	if (definitionKey != "email" && risk != "READ") || mailboxGate {
+	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var invocationID, resolvedRef, resolvedState string
@@ -1170,6 +1214,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
 			continue
 		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("eff")
 		digest := sha256.Sum256([]byte(fence))
@@ -1186,7 +1234,8 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		_ = json.Unmarshal(item.resourceScope, &resourceScope)
 		claim := map[string]any{
 			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
-			"capabilityKey": item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
+			"definitionPackage": asJSON(definition),
+			"capabilityKey":     item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
 			"resourceKind": item.resourceKind, "resourceScope": resourceScope,

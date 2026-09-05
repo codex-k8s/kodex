@@ -489,8 +489,20 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION", resourceRef: item.Ref, summary: "i18n:INTEGRATION_CREDENTIAL_CONFIGURED", platformEvent: "INTEGRATION_CONNECTION_CHANGED"}, nil
 	}
 	if input.Kind == command.TestConnection {
+		locked, err := repository.lockIntegrationConnection(ctx, tx, scope.organizationID, payload.Ref)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		health, found := definition.Capability(definition.Spec.HealthCheck.Operation)
+		if !found || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 		var connectionID string
-		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionsStateLastTestSummaryVersion, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
+		err = tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionsStateLastTestSummaryVersion, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
@@ -583,9 +595,9 @@ func (repository *Repository) updateIntegrationConnection(
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	payload.Name = strings.TrimSpace(payload.Name)
-	definition, exists := repository.integrationDefinitions[locked.definitionKey]
+	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
 	configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
-	if payload.Name == "" || len(payload.Name) > 160 || !exists || !valid ||
+	if payload.Name == "" || len(payload.Name) > 160 || packageErr != nil || !valid ||
 		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -709,9 +721,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	definition, exists := repository.integrationDefinitions[definitionKey]
+	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, payload.ConnectionRef, definitionKey, definitionVersion, definitionDigest)
 	capability, valid := definition.Capability(payload.CapabilityKey)
-	if !exists || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
+	if packageErr != nil || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	configuration := map[string]string{}
@@ -918,6 +930,9 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
 	ref, _ := newRef("cnv")
 	resolvedContext, err := repository.resolveAssistantContext(ctx, tx, scope, payload.Context, payload.ProjectRef)
 	if err != nil {
@@ -1014,6 +1029,13 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
 	turnRef, _ := newRef("trn")
 	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE", false)
 	if err != nil {
@@ -1078,7 +1100,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, err
 	}
 	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
-	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	assistant, err = repository.getAssistantTx(ctx, tx, scope)
 	if err != nil {
 		return commandOutcome{}, err
 	}

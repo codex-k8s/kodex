@@ -113,7 +113,9 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 func (server *Server) PublishAgentRuntimeConfiguration(ctx context.Context, request *controlplanev1.PublishAgentRuntimeConfigurationRequest) (*controlplanev1.PublishAgentRuntimeConfigurationResponse, error) {
 	accounts := make([]entity.ProviderAccountCandidate, 0, len(request.GetProviderAccounts()))
 	for _, item := range request.GetProviderAccounts() {
-		accounts = append(accounts, entity.ProviderAccountCandidate{AccountRef: item.GetAccountRef(), Weight: item.GetWeight()})
+		accounts = append(accounts, entity.ProviderAccountCandidate{AccountRef: item.GetAccountRef(), Weight: item.GetWeight(),
+			CatalogRevision: item.GetCatalogRevision(), CatalogDigest: item.GetCatalogDigest(),
+			ProviderDefinitionKey: item.GetProviderDefinitionKey(), DefaultReasoningEffort: item.GetDefaultReasoningEffort()})
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName,
 		command.PublishAgentRuntimeConfig, request.GetMutation(), command.AgentRuntimeConfigurationInput{AgentRef: request.GetAgentRef(),

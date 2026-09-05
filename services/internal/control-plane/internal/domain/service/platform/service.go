@@ -1172,6 +1172,9 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 }
 
 func knownCommand(kind command.Kind) bool {
+	if kind == command.ConfigureRoleImageGitSource || kind == command.ConfigureIntegrationDefinitionGitSource || kind == command.RefreshRoleImageGitSource || kind == command.RefreshIntegrationDefinitionGitSource {
+		return true
+	}
 	switch kind {
 	case command.ReconcileEmailEffect, command.ReportEmailEffect:
 		return true

@@ -402,6 +402,32 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
 			continue
 		}
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, candidate.agentRef, candidate.runtimeConfigID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if configuration.Model != candidate.model {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, candidate.sessionID, candidate.providerAccountRef, configuration, candidate.configOverlay)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if retainedPolicy != nil {
+			candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest = retainedPolicy.PolicyID, retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+		}
+		overlayConfiguration, err := runtimecontract.ParseConfigOverlay(candidate.configOverlay)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		effectiveEffort := overlayConfiguration.ModelReasoningEffort
+		if effectiveEffort == "" {
+			effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+		}
+		reasoningMode := runtimecontract.ReasoningSupported
+		if effectiveEffort == "" {
+			reasoningMode = runtimecontract.ReasoningUnsupported
+		}
 		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 		sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
@@ -630,7 +656,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"turnRef": turnRef, "attempt": attempt, "task": task,
 			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
-			"runtimeModel": model, "instructionRef": instructionRef,
+			"runtimeModel": model, "effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode, "instructionRef": instructionRef,
 			"providerAccountRef":               providerAccountRef,
 			"providerCredentialRevisionRef":    providerCredentialRef,
 			"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
@@ -988,7 +1014,9 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		AttachmentSetRef: stringMap(values, "attachmentSetRef"), AttachmentSetManifestDigest: stringMap(values, "attachmentSetManifestDigest"),
 		AttachmentContext: stringMap(values, "attachmentContext"), Capabilities: runtimeRevisionStringSlice(values["capabilities"]),
 		Provider: stringMap(values, "runtimeProvider"), Model: stringMap(values, "runtimeModel"),
-		ProviderAccountRef: stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
+		EffectiveReasoningEffort: stringMap(values, "effectiveReasoningEffort"),
+		ReasoningMode:            stringMap(values, "reasoningMode"),
+		ProviderAccountRef:       stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
 		ProviderCredentialRevision: runtimeRevisionMapInt64(values, "providerCredentialRevisionNumber"),
 		ProviderCredentialSHA256:   stringMap(values, "providerCredentialSHA256"),
 		RuntimeConfigRef:           stringMap(values, "runtimeConfigRef"), RuntimeConfigVersion: runtimeRevisionMapInt64(values, "runtimeConfigVersion"), RuntimeConfigDigest: stringMap(values, "runtimeConfigDigest"),
@@ -1566,6 +1594,9 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		"created_by":          initiatorID,
 	}).Scan(&childSessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, childSessionID, payload.TargetAgentRef); err != nil {
+		return commandOutcome{}, err
 	}
 	childTask := strings.TrimSpace(payload.Task)
 	if workflowInstructions != "" {

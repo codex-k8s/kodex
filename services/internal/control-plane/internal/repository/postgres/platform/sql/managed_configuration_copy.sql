@@ -15,8 +15,8 @@ WITH source AS (
 ), inserted_revision AS (
     INSERT INTO control_plane.managed_configuration_revisions
         (ref, organization_id, configuration_set_id, revision, state, content_format, content, digest, parent_revision_id, created_by)
-    SELECT @revision_ref, source.organization_id, inserted_set.id, 1, 'DRAFT', source.content_format,
-           source.content, source.digest, source.revision_id, @actor_id::uuid
+    SELECT @revision_ref, source.organization_id, inserted_set.id, 1, 'DRAFT', @content_format,
+           @content, @digest, source.revision_id, @actor_id::uuid
     FROM source JOIN inserted_set ON true RETURNING *
 )
 SELECT inserted_set.id::text, inserted_set.ref, COALESCE(inserted_set.project_id::text, ''),

@@ -65,6 +65,7 @@ BEGIN
        OR OLD.provider_credential_revision_id IS DISTINCT FROM NEW.provider_credential_revision_id
        OR OLD.authorization_method IS DISTINCT FROM NEW.authorization_method OR OLD.created_at IS DISTINCT FROM NEW.created_at
        OR NEW.claim_generation < OLD.claim_generation
+       OR (OLD.state = 'CLAIMED' AND NEW.state NOT IN ('COMPLETED', 'CANCELLED'))
        OR OLD.state IN ('COMPLETED', 'CANCELLED') THEN
         RAISE EXCEPTION 'provider model catalog task binding is immutable';
     END IF;

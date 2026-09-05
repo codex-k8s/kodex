@@ -82,6 +82,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				return commandOutcome{}, errs.ErrInvalid
 			}
 			content := strings.TrimSpace(payload.Content)
+			if kind == revisionservice.KindIntegrationDefinition {
+				format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+			}
 			digest := sha256.Sum256([]byte(content))
 			ref, refErr := newRef("mrev")
 			if refErr != nil {
@@ -114,7 +117,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if configuration.ManagedBy != "UI" {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		digest := sha256.Sum256([]byte(strings.TrimSpace(payload.Content)))
+		content := strings.TrimSpace(payload.Content)
+		if kind == revisionservice.KindIntegrationDefinition {
+			format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+		}
+		digest := sha256.Sum256([]byte(content))
 		revisionRef, refErr := newRef("mrev")
 		if refErr != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -122,7 +129,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		item, itemErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
 			"revision_ref": revisionRef, "organization_id": current.organizationID,
 			"configuration_set_id": configuration.id, "content_format": format,
-			"content": strings.TrimSpace(payload.Content), "digest": hex.EncodeToString(digest[:]),
+			"content": content, "digest": hex.EncodeToString(digest[:]),
 			"parent_revision_id": configuration.currentRevisionID, "actor_id": current.actorID,
 		}))
 		if itemErr != nil {
@@ -244,6 +251,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			}).Scan(&allowed); err != nil || !allowed {
 				return commandOutcome{}, errs.ErrNotFound
 			}
+			if kind == revisionservice.KindIntegrationDefinition {
+				if err := repository.bindIntegrationPackage(ctx, tx, current, consumer.Ref, locked.ContentFormat, locked.Content); err != nil {
+					return commandOutcome{}, err
+				}
+			}
 			bindingRef, _ := newRef("mcbind")
 			var bindingRefReadback string
 			if err := tx.QueryRow(ctx, queryManagedConfigurationRebindConsumer, pgx.StrictNamedArgs{
@@ -269,9 +281,14 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		source := configuration.CurrentRevision
+		format, content := source.ContentFormat, source.Content
+		if kind == revisionservice.KindIntegrationDefinition || configuration.Kind == revisionservice.KindIntegrationDefinition {
+			format, content = repository.normalizeIntegrationDraft(format, content, "UI")
+		}
+		digest := sha256.Sum256([]byte(content))
 		draft, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
 			"revision_ref": revisionRef, "organization_id": current.organizationID, "configuration_set_id": configuration.id,
-			"content_format": source.ContentFormat, "content": source.Content, "digest": source.Digest,
+			"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
 			"parent_revision_id": configuration.currentRevisionID, "actor_id": current.actorID,
 		}))
 		if err != nil {
@@ -285,6 +302,20 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		configuration.ManagedBy, configuration.Source, configuration.SourceRevision = "UI", "control-center", ""
+		if configuration.GitSource != nil {
+			source, err := readConfigurationSource(ctx, tx, current.organizationID, configuration.Ref)
+			if err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryConfigurationSourceCancelWork, configuration.id); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			result, err := repository.sourceState(ctx, tx, current, source, entity.ConfigurationSourceDetached, "")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			configuration.GitSource = &result
+		}
 	}
 	return managedOutcome(configuration, revision), nil
 }
@@ -307,6 +338,9 @@ func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, 
 		}
 		if kind != "" && item.Kind != kind {
 			return managedSet{}, errs.ErrNotFound
+		}
+		if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &item); err != nil {
+			return managedSet{}, err
 		}
 		if item.currentRevisionID != "" {
 			revision, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationCurrentRevision, current.organizationID, item.id, item.currentRevisionID))
@@ -349,12 +383,25 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 	if input.Mutation.ExpectedVersion == nil || payload.ConfigurationRef == "" || strings.TrimSpace(payload.Name) == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	source, err := repository.resolveManagedSet(ctx, tx, current, payload, "", false)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if source.ManagedBy != "GIT" || source.CurrentRevision == nil {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	format, content := source.CurrentRevision.ContentFormat, source.CurrentRevision.Content
+	if source.Kind == revisionservice.KindIntegrationDefinition {
+		format, content = repository.normalizeIntegrationDraft(format, content, "UI")
+	}
+	digest := sha256.Sum256([]byte(content))
 	copyRef, _ := newRef("mcfg")
 	revisionRef, _ := newRef("mrev")
 	set, revision, err := scanManagedCopy(tx.QueryRow(ctx, queryManagedConfigurationCopy, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
 		"expected_version": *input.Mutation.ExpectedVersion, "copy_ref": copyRef, "revision_ref": revisionRef,
 		"name": strings.TrimSpace(payload.Name), "actor_id": current.actorID,
+		"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
 	}))
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
@@ -514,6 +561,9 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	}
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.view", "organization.view"); err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrNotFound
+	}
+	if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &set); err != nil {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", err
 	}
 	includeContent := true
 	if set.Kind == revisionservice.KindPromptTemplate {

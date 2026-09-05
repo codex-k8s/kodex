@@ -95,6 +95,15 @@ func (server *Server) ListModelCapabilities(ctx context.Context, request *contro
 
 func castModelCatalog(catalog entity.ModelCatalog) *controlplanev1.ListModelCapabilitiesResponse {
 	response := &controlplanev1.ListModelCapabilitiesResponse{Total: catalog.Total, Page: &controlplanev1.PageInfo{NextPageToken: catalog.NextPageToken}, CatalogRevision: catalog.Revision, CatalogDigest: catalog.Digest}
+	if catalog.Status != nil {
+		value := catalog.Status
+		response.CatalogStatus = &controlplanev1.ProviderModelCatalogStatus{
+			State:      controlplanev1.ProviderModelCatalogState(controlplanev1.ProviderModelCatalogState_value["PROVIDER_MODEL_CATALOG_STATE_"+value.State]),
+			Source:     controlplanev1.ProviderModelCatalogSource(controlplanev1.ProviderModelCatalogSource_value["PROVIDER_MODEL_CATALOG_SOURCE_"+value.Source]),
+			Failure:    controlplanev1.ProviderModelCatalogFailure(controlplanev1.ProviderModelCatalogFailure_value["PROVIDER_MODEL_CATALOG_FAILURE_"+value.Failure]),
+			ObservedAt: optionalTimestamp(value.ObservedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt),
+		}
+	}
 	for _, item := range catalog.Models {
 		response.Models = append(response.Models, castModelCapability(item))
 	}

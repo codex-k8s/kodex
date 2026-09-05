@@ -29,14 +29,14 @@ func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, 
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "agent.view", "AGENT", ref, "")
+	permission, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, scope, "agent.view", ref)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	if scope.authorityProjectID != "" && scope.authorityProjectID != target.projectID {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrForbidden
 	}
-	if err := repository.requireAccess(ctx, tx, scope, "agent.view", target); err != nil {
+	if err := repository.requireAccess(ctx, tx, scope, permission, target); err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, ref)

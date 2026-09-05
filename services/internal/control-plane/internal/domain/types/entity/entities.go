@@ -58,8 +58,12 @@ type RuntimeSelection struct {
 }
 
 type ProviderAccountCandidate struct {
-	AccountRef string `json:"accountRef"`
-	Weight     int32  `json:"weight"`
+	AccountRef             string `json:"accountRef"`
+	Weight                 int32  `json:"weight"`
+	CatalogRevision        string `json:"catalogRevision,omitempty"`
+	CatalogDigest          string `json:"catalogDigest,omitempty"`
+	ProviderDefinitionKey  string `json:"providerDefinitionKey,omitempty"`
+	DefaultReasoningEffort string `json:"defaultReasoningEffort,omitempty"`
 }
 
 type ProviderAccountPolicyVersion struct {
@@ -77,11 +81,13 @@ type AgentRuntimeConfiguration struct {
 }
 
 type ConfigOverlayVersion struct {
-	Ref, State, Content, Digest string
-	Version, Revision           int64
-	ValidationMessages          []string
-	CreatedAt                   time.Time
-	PublishedAt                 *time.Time
+	Ref, State, Content, Digest  string
+	Version, Revision            int64
+	ValidationMessages           []string
+	CreatedAt                    time.Time
+	PublishedAt                  *time.Time
+	Diagnostics                  []runtimecontract.ConfigOverlayDiagnostic
+	SchemaRevision, SchemaDigest string
 }
 
 type RuntimeEnvironmentValue struct {
@@ -158,6 +164,7 @@ type AgentRuntimeEnvironmentBinding struct {
 }
 
 type AgentRuntimeConfigurationView struct {
+	OverlaySchema                 runtimecontract.ConfigOverlaySchema
 	SkillBindings, MemoryBindings []AgentContextBinding
 	Configuration                 AgentRuntimeConfiguration
 	PublishedOverlay              ConfigOverlayVersion
@@ -204,6 +211,12 @@ type ModelCatalog struct {
 	Models                          []ModelCapability
 	Total                           int64
 	NextPageToken, Revision, Digest string
+	Status                          *ModelCatalogStatus
+}
+
+type ModelCatalogStatus struct {
+	State, Source, Failure string
+	ObservedAt, ExpiresAt  *time.Time
 }
 
 type RuntimeWorkspacePathRule struct {
@@ -617,6 +630,7 @@ type IntegrationGrant struct {
 }
 
 type IntegrationConnection struct {
+	TestRequiresApproval                                                    bool
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
 	CredentialSecretKey                                                     string
 	DefinitionVersion, DefinitionDigest                                     string

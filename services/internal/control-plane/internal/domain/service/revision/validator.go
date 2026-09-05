@@ -31,13 +31,14 @@ const (
 type Diagnostic struct{ Code, Message string }
 
 type document struct {
-	Name        string                 `json:"name" yaml:"name" toml:"name"`
-	Description string                 `json:"description,omitempty" yaml:"description,omitempty" toml:"description,omitempty"`
-	Template    string                 `json:"template,omitempty" yaml:"template,omitempty" toml:"template,omitempty"`
-	BaseImage   string                 `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
-	Packages    []string               `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
-	Definition  *integrationDefinition `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
-	STT         *STTConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	Name        string                  `json:"name" yaml:"name" toml:"name"`
+	Description string                  `json:"description,omitempty" yaml:"description,omitempty" toml:"description,omitempty"`
+	Template    string                  `json:"template,omitempty" yaml:"template,omitempty" toml:"template,omitempty"`
+	BaseImage   string                  `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
+	Packages    []string                `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
+	Definition  *integrationDefinition  `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
+	STT         *STTConfiguration       `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	RoleImage   *RoleImageConfiguration `json:"roleImage,omitempty" yaml:"roleImage,omitempty" toml:"roleImage,omitempty"`
 }
 
 type integrationDefinition struct {
@@ -127,8 +128,7 @@ func IntegrationDefinitionKey(format, content string) (string, error) {
 	return definition.Metadata.Key, nil
 }
 
-// UI закрепляет тот же versioned package, который поставлен с adapter.
-// Произвольный новый профиль требует поставки его исполняемого adapter path.
+// Управляемый package может сужать исполняемый contract поставленного adapter.
 func IntegrationPackage(format, content string) (integrationpackage.Package, error) {
 	if format != "JSON" && format != "YAML" {
 		return integrationpackage.Package{}, ErrInvalid
@@ -143,7 +143,7 @@ func IntegrationPackage(format, content string) (integrationpackage.Package, err
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	profile, ok := registered[definition.Metadata.Key]
-	if !ok || profile.Digest != definition.Digest {
+	if !ok || integrationpackage.ValidateExecutableRevision(definition, profile) != nil {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	return definition, nil
@@ -189,6 +189,13 @@ func validateDocument(kind string, value document) error {
 	}
 	switch kind {
 	case KindRoleImage:
+		if value.RoleImage != nil {
+			if value.BaseImage != "" || len(value.Packages) != 0 || value.Template != "" || value.Definition != nil || value.STT != nil ||
+				value.RoleImage.RoleDefinitionRef == "" || value.RoleImage.Environment.EnvironmentKey == "" {
+				return errors.New("role image specification is invalid")
+			}
+			return nil
+		}
 		if value.BaseImage == "" || len(value.Packages) > 128 || value.Template != "" || value.Definition != nil || value.STT != nil {
 			return errors.New("role image specification is invalid")
 		}
