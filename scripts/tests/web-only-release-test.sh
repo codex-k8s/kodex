@@ -180,7 +180,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["key-delivery-targets.yaml"]
 ' "$render" | yq -e '
-  .source_revision == 6 and
+  .source_revision == 7 and
   ([.targets[] | select(.workload_id == "control-plane" and
     .role == "AUTHORIZATION_ISSUER" and
     .database_identity.login_principal == "ira_control_plane_issuer_g1" and
