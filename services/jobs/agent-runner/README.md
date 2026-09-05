@@ -126,10 +126,19 @@ model/reasoning/image/tools/MCP/files/config bindings, а также обяза�
 `workflow-stage`, `automation`, `session-continuation` и
 `effective-capabilities` blocks.
 
-VFS inputs материализуются только после digest verification. Skills
-представлены exact `environment_tools` выбранного promoted image, memories —
-version-pinned knowledge artifacts в read-only `/workspace/knowledge`. Эти
-проекции не дополняются из mutable catalogs во время turn.
+VFS inputs материализуются только после digest verification. `environment_tools`
+остаются инструментами image, knowledge artifacts остаются файлами: ни один из
+этих видов не является SkillBundle либо KodexMemoryRecord.
+
+Отдельный контракт Skills/Memory и стыковка с CP/controller описаны в
+[`OPS-RUNNER-1026`](../../../docs/operations/runner-context-1026.md).
+`RuntimeContextSnapshot` закрепляет typed revisions, bindings, provenance,
+scan evidence и retention; review eligibility проверяет CP. Материализация использует отдельное read-only дерево
+`/workspace/context`, bounded file callback и полную проверку набора файлов.
+Нативный provider Skill получает проверенный `SKILL.md`; память передаётся
+отдельной typed projection, без записи внутреннего Codex memory store.
+Готовность producer/controller wiring проверяется на интегрированном SHA,
+наличие одних типов или consumer-функций её не доказывает.
 
 ## Workspace и результат
 

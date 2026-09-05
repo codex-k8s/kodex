@@ -16,6 +16,10 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 	for _, session := range []string{"", "existing-thread"} {
 		input := model.Input{Model: "gpt-6-astra", CodexSessionID: session, WorkspaceRoot: "/workspace",
 			CodexApprovalPolicy: "never", ConfigOverlay: "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n"}
+		input.OrganizationRef, input.ProjectRef, input.AgentRef = "org_abcdefgh", "proj_abcdefgh", "agt_abcdefgh"
+		snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
+		snapshot.Digest, _ = snapshot.ComputeDigest()
+		input.ContextSnapshot = &snapshot
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
 		if err != nil || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
