@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 58, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 59, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -297,6 +297,16 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
+	case "platform.email.configuration.report",
+		"platform.query.email-mailbox.configurations.list", "platform.query.email-mailbox.configurations.preview", "platform.query.email-mailbox.credentials.list":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.query.email-mailbox.configurations.get", "platform.query.email-mailbox.credential-receipts.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.email-mailbox.drafts.create":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.command.email-mailbox.drafts.save", "platform.command.email-mailbox.drafts.validate", "platform.command.email-mailbox.drafts.publish", "platform.command.email-mailbox.drafts.discard",
+		"platform.command.email-mailbox.configurations.bind", "platform.command.email-mailbox.configurations.unbind":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.email.effect-receipts.report":
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.command.email-effects.reconcile":
