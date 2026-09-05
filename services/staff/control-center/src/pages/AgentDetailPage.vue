@@ -199,7 +199,6 @@ function activateTab(tab: AgentDetailTab): void {
 }
 
 function selectTab(tab: AgentDetailTab): void {
-  activateTab(tab);
   if (route.query.tab !== tab) {
     void router.replace({ query: { ...route.query, tab } });
   }
