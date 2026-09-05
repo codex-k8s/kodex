@@ -3686,6 +3686,9 @@ message RuntimeSecretDraftWork {
   google.protobuf.Timestamp expires_at = 13;
   // Staging принадлежит namespace broker; namespace=5 — runtime publication.
   string staged_namespace = 14;
+  // Durable cleanup intent сохраняет exact UID/RV после удаления и потерянного ACK.
+  RuntimeSecretMaterialization recovery_materialization = 15;
+  RuntimeSecretDraftEncryptedDescriptor recovery_encrypted = 16;
 }
 
 message CheckRuntimeSecretDraftWorkReadinessRequest {}
