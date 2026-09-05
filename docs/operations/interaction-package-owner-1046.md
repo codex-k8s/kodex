@@ -62,6 +62,12 @@ transaction, чтение ошибки cursor и обработка Commit/Rollb
 SQL boundary, Proto/policy codegen и race/vet/build выполняются отдельно от
 browser и живого Mattermost. Последние остаются NOT RUN до общего gate.
 
+Дополнение source input проверено локально: scoped race — PASS (1.607s), полный
+CP vet/build — PASS; disposable PostgreSQL identity/ACK/approval/revoke и exact
+connection-test workload — PASS (0.846s). Контракты и SQL этим дополнением не
+изменяются. Тест с managed APPROVE-only revision отклоняет REJECT,
+REQUEST_CHANGES, неизвестное решение и отсутствующий gate ref.
+
 Вклад владельца `8e13b81c58527ccba99fd0dec7a88a8b526fa77e` перенесён в
 основной control-plane поверх `21fe59c5c8ad34ecb34a5e360b4a9e606de4fd6e`
 с сохранением SourceWork policy 62, catalog/runtime v7 и metadata Environment.

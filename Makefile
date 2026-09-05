@@ -181,7 +181,7 @@ test-email-bridge-install:
 .PHONY: test-integration-gateway-render
 .PHONY: test-integration-gateway-postgres
 test-integration-gateway-postgres:
-	@bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(provider_credential_refresh|integration|role_image|runtime_environment_lifecycle|managed_configuration)'
+	@bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(catalog_owner_probe|model_catalog_is_version_bound|provider_credential_refresh|integration|role_image|runtime_environment_lifecycle|managed_configuration)'
 
 test-integration-gateway-render:
 	@bash scripts/tests/integration-gateway-render-test.sh
