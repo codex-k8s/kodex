@@ -338,14 +338,7 @@ func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.R
 }
 
 func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
-	response, err := server.control.Query.ListTemplateVariables(r.Context(), &controlplanev1.ListTemplateVariablesRequest{
-		ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
-	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "variables")
+	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), p.PageSize, p.PageToken)
 }
 
 func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.ValidatePromptTemplateParams) {

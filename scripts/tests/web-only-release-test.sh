@@ -222,7 +222,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
 ' "$render" | jq -e '
-  .policy_revision == 54 and
+  .policy_revision == 55 and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and

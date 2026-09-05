@@ -247,18 +247,7 @@ func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, req
 }
 
 func (server *Server) ListTemplateVariables(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListTemplateVariablesParams) {
-	request, ok := withProjectReference(writer, request, projectRef)
-	if !ok {
-		return
-	}
-	response, err := server.control.Query.ListTemplateVariables(request.Context(), &controlplanev1.ListTemplateVariablesRequest{
-		ProjectRef: projectRef, Query: stringValue(parameters.Query), Page: page(parameters.PageSize, parameters.PageToken),
-	})
-	if err != nil {
-		writeRPCProblem(writer, err)
-		return
-	}
-	writeMessage(writer, http.StatusOK, response, "", "variables")
+	server.listTemplateVariables(writer, request, projectRef, stringValue(parameters.AgentRef), stringValue(parameters.RuntimeRevisionRef), stringValue(parameters.Query), parameters.PageSize, parameters.PageToken)
 }
 
 func providerAccountCandidates(input []generated.ProviderAccountCandidate) []*controlplanev1.ProviderAccountCandidate {

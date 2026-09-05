@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 54,
+  "policy_revision": 55,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -349,6 +349,7 @@
           "platform.command.config-overlays.rollback",
           "platform.command.config-overlays.validate",
           "platform.command.email-effects.reconcile",
+          "platform.command.email-mailbox.configure-credential",
           "platform.command.instructions.create-draft",
           "platform.command.instructions.publish",
           "platform.command.instructions.rollback",
@@ -2904,6 +2905,42 @@
         "request_profile": {
           "mode": "UNARY_PROTO_SHA256",
           "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.email-mailbox.configure-credential",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ConfigureEmailMailboxCredential",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.email-mailbox.configure-credential",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
           "version": "REQUIRED",
           "attempt": "FORBIDDEN",
           "idempotency": "REQUIRED"

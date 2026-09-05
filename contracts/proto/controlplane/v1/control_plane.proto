@@ -97,6 +97,7 @@ service PlatformCommandService {
   rpc SaveSystemSTTConfigurationDraft(SaveSystemSTTConfigurationDraftRequest) returns (SaveSystemSTTConfigurationDraftResponse);
   rpc DiscardSystemSTTConfigurationDraft(DiscardSystemSTTConfigurationDraftRequest) returns (DiscardSystemSTTConfigurationDraftResponse);
   rpc ReconcileEmailEffect(ReconcileEmailEffectRequest) returns (ReconcileEmailEffectResponse);
+  rpc ConfigureEmailMailboxCredential(ConfigureEmailMailboxCredentialRequest) returns (ConfigureEmailMailboxCredentialResponse);
   rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
   rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
   rpc ValidateSkillBundleDraft(ValidateSkillBundleDraftRequest) returns (ValidateSkillBundleDraftResponse);
@@ -3496,6 +3497,8 @@ message ListTemplateVariablesRequest {
   string project_ref = 1;
   string query = 2;
   PageRequest page = 3;
+  string agent_ref = 4;
+  string runtime_revision_ref = 5;
 }
 message ListTemplateVariablesResponse {
   repeated TemplateVariable variables = 1;
@@ -4208,6 +4211,15 @@ message AgentRuntimeConfigurationView {
   repeated AgentContextBinding memory_bindings = 9;
 }
 
+enum TemplateVariableAvailabilityReason {
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_UNSPECIFIED = 0;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_AVAILABLE = 1;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_PROJECT_CONTEXT_REQUIRED = 2;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_AGENT_CONTEXT_REQUIRED = 3;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_RUNTIME_CONTEXT_REQUIRED = 4;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_NOT_MATERIALIZED = 5;
+}
+
 message TemplateVariable {
   string name = 1;
   string value_type = 2;
@@ -4218,6 +4230,8 @@ message TemplateVariable {
   string item_value_type = 7;
   repeated TemplateVariableField item_fields = 8;
   string range_example = 9;
+  bool available = 10;
+  TemplateVariableAvailabilityReason reason = 11;
 }
 
 message TemplateVariableField {
@@ -4940,6 +4954,29 @@ enum EmailOperation {
   EMAIL_OPERATION_DRAFT_CREATE = 19;
   EMAIL_OPERATION_DRAFT_UPDATE = 20;
   EMAIL_OPERATION_DRAFT_DELETE = 21;
+}
+
+enum EmailMailboxCredentialKind {
+  EMAIL_MAILBOX_CREDENTIAL_KIND_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_CREDENTIAL_KIND_CA_CERTIFICATE = 1;
+  EMAIL_MAILBOX_CREDENTIAL_KIND_USERNAME = 2;
+  EMAIL_MAILBOX_CREDENTIAL_KIND_AUTH_SECRET = 3;
+}
+message EmailMailboxCredential {
+  string name = 1;
+  int64 generation = 2;
+  EmailMailboxCredentialKind kind = 3;
+  string connection_ref = 4;
+  int64 connection_version = 5;
+}
+message ConfigureEmailMailboxCredentialRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  EmailMailboxCredentialKind kind = 3;
+  bytes credential_value = 4;
+}
+message ConfigureEmailMailboxCredentialResponse {
+  EmailMailboxCredential credential = 1;
 }
 enum EmailApprovalPolicy {
   EMAIL_APPROVAL_POLICY_UNSPECIFIED = 0;

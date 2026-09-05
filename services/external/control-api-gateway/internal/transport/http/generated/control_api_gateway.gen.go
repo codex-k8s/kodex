@@ -927,6 +927,27 @@ func (e EmailEffectOutcome) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxCredentialKind.
+const (
+	AUTHSECRET    EmailMailboxCredentialKind = "AUTH_SECRET"
+	CACERTIFICATE EmailMailboxCredentialKind = "CA_CERTIFICATE"
+	USERNAME      EmailMailboxCredentialKind = "USERNAME"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxCredentialKind enum.
+func (e EmailMailboxCredentialKind) Valid() bool {
+	switch e {
+	case AUTHSECRET:
+		return true
+	case CACERTIFICATE:
+		return true
+	case USERNAME:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailReconciliationOutcome.
 const (
 	EmailReconciliationOutcomeEFFECTCONFIRMED   EmailReconciliationOutcome = "EFFECT_CONFIRMED"
@@ -4353,6 +4374,33 @@ func (e TemplateVariableValueType) Valid() bool {
 	}
 }
 
+// Defines values for TemplateVariableAvailabilityReason.
+const (
+	AGENTCONTEXTREQUIRED   TemplateVariableAvailabilityReason = "AGENT_CONTEXT_REQUIRED"
+	AVAILABLE              TemplateVariableAvailabilityReason = "AVAILABLE"
+	NOTMATERIALIZED        TemplateVariableAvailabilityReason = "NOT_MATERIALIZED"
+	PROJECTCONTEXTREQUIRED TemplateVariableAvailabilityReason = "PROJECT_CONTEXT_REQUIRED"
+	RUNTIMECONTEXTREQUIRED TemplateVariableAvailabilityReason = "RUNTIME_CONTEXT_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the TemplateVariableAvailabilityReason enum.
+func (e TemplateVariableAvailabilityReason) Valid() bool {
+	switch e {
+	case AGENTCONTEXTREQUIRED:
+		return true
+	case AVAILABLE:
+		return true
+	case NOTMATERIALIZED:
+		return true
+	case PROJECTCONTEXTREQUIRED:
+		return true
+	case RUNTIMECONTEXTREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TemplateVariableFieldValueType.
 const (
 	TemplateVariableFieldValueTypeBOOLEAN   TemplateVariableFieldValueType = "BOOLEAN"
@@ -5717,6 +5765,26 @@ type EmailEffectReceiptView struct {
 	Decision *EmailReconciliationDecision `json:"decision,omitempty"`
 	Receipt  EmailEffectReceipt           `json:"receipt"`
 }
+
+// EmailMailboxCredential defines model for EmailMailboxCredential.
+type EmailMailboxCredential struct {
+	ConnectionRef     OpaqueRef                  `json:"connectionRef"`
+	ConnectionVersion int64                      `json:"connectionVersion"`
+	Generation        int64                      `json:"generation"`
+	Kind              EmailMailboxCredentialKind `json:"kind"`
+	Name              string                     `json:"name"`
+}
+
+// EmailMailboxCredentialInput defines model for EmailMailboxCredentialInput.
+type EmailMailboxCredentialInput struct {
+	Kind EmailMailboxCredentialKind `json:"kind"`
+
+	// Value UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
+	Value *string `json:"value,omitempty"`
+}
+
+// EmailMailboxCredentialKind defines model for EmailMailboxCredentialKind.
+type EmailMailboxCredentialKind string
 
 // EmailReconciliationDecision defines model for EmailReconciliationDecision.
 type EmailReconciliationDecision struct {
@@ -7958,15 +8026,17 @@ type SystemSTTSpecificationPermissionKey string
 
 // TemplateVariable defines model for TemplateVariable.
 type TemplateVariable struct {
-	Collection    bool                           `json:"collection"`
-	Description   string                         `json:"description"`
-	Example       string                         `json:"example"`
-	ItemFields    []TemplateVariableField        `json:"itemFields"`
-	ItemValueType *TemplateVariableItemValueType `json:"itemValueType,omitempty"`
-	Name          string                         `json:"name"`
-	RangeExample  *string                        `json:"rangeExample,omitempty"`
-	Source        TemplateVariableSource         `json:"source"`
-	ValueType     TemplateVariableValueType      `json:"valueType"`
+	Available     bool                               `json:"available"`
+	Collection    bool                               `json:"collection"`
+	Description   string                             `json:"description"`
+	Example       string                             `json:"example"`
+	ItemFields    []TemplateVariableField            `json:"itemFields"`
+	ItemValueType *TemplateVariableItemValueType     `json:"itemValueType,omitempty"`
+	Name          string                             `json:"name"`
+	RangeExample  *string                            `json:"rangeExample,omitempty"`
+	Reason        TemplateVariableAvailabilityReason `json:"reason"`
+	Source        TemplateVariableSource             `json:"source"`
+	ValueType     TemplateVariableValueType          `json:"valueType"`
 }
 
 // TemplateVariableItemValueType defines model for TemplateVariable.ItemValueType.
@@ -7977,6 +8047,9 @@ type TemplateVariableSource string
 
 // TemplateVariableValueType defines model for TemplateVariable.ValueType.
 type TemplateVariableValueType string
+
+// TemplateVariableAvailabilityReason defines model for TemplateVariableAvailabilityReason.
+type TemplateVariableAvailabilityReason string
 
 // TemplateVariableField defines model for TemplateVariableField.
 type TemplateVariableField struct {
@@ -7992,6 +8065,7 @@ type TemplateVariableFieldValueType string
 type TemplateVariablePage struct {
 	Items         []TemplateVariable `json:"items"`
 	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Total         int64              `json:"total"`
 }
 
 // Timestamp defines model for Timestamp.
@@ -8298,6 +8372,12 @@ type SessionRef = OpaqueRef
 
 // SkillBundleRef defines model for SkillBundleRef.
 type SkillBundleRef = OpaqueRef
+
+// TemplateAgentRef defines model for TemplateAgentRef.
+type TemplateAgentRef = OpaqueRef
+
+// TemplateRuntimeRevisionRef defines model for TemplateRuntimeRevisionRef.
+type TemplateRuntimeRevisionRef = OpaqueRef
 
 // VFSPageToken defines model for VFSPageToken.
 type VFSPageToken = string
@@ -8828,6 +8908,13 @@ type ConfigureIntegrationConnectionCredentialParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ConfigureEmailMailboxCredentialParams defines parameters for ConfigureEmailMailboxCredential.
+type ConfigureEmailMailboxCredentialParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ChangeIntegrationGrantParams defines parameters for ChangeIntegrationGrant.
 type ChangeIntegrationGrantParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -9256,9 +9343,11 @@ type TranscribeSpeechParams struct {
 
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
 type ListTemplateVariablesParams struct {
-	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
 
 // ListWorkflowsParams defines parameters for ListWorkflows.
@@ -9318,10 +9407,12 @@ type ValidatePromptTemplateDraftParams struct {
 
 // ListPromptTemplateVariablesParams defines parameters for ListPromptTemplateVariables.
 type ListPromptTemplateVariablesParams struct {
-	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef         *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
 
 // PreviewPromptTemplateParams defines parameters for PreviewPromptTemplate.
@@ -10006,6 +10097,9 @@ type CommandIntegrationConnectionJSONRequestBody = IntegrationConnectionCommand
 // ConfigureIntegrationConnectionCredentialJSONRequestBody defines body for ConfigureIntegrationConnectionCredential for application/json ContentType.
 type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCredentialInput
 
+// ConfigureEmailMailboxCredentialJSONRequestBody defines body for ConfigureEmailMailboxCredential for application/json ContentType.
+type ConfigureEmailMailboxCredentialJSONRequestBody = EmailMailboxCredentialInput
+
 // ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
 type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
@@ -10431,6 +10525,9 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/integration-connections/{connectionRef}/credential)
 	ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureIntegrationConnectionCredentialParams)
+
+	// (PUT /api/v1/integration-connections/{connectionRef}/email-mailbox/credential)
+	ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureEmailMailboxCredentialParams)
 
 	// (POST /api/v1/integration-connections/{connectionRef}/grants)
 	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
@@ -17380,6 +17477,112 @@ func (siw *ServerInterfaceWrapper) ConfigureIntegrationConnectionCredential(w ht
 	handler.ServeHTTP(w, r)
 }
 
+// ConfigureEmailMailboxCredential operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureEmailMailboxCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureEmailMailboxCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ChangeIntegrationGrant operation middleware
 func (siw *ServerInterfaceWrapper) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request) {
 
@@ -22982,6 +23185,32 @@ func (siw *ServerInterfaceWrapper) ListTemplateVariables(w http.ResponseWriter, 
 		return
 	}
 
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtimeRevisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtimeRevisionRef", r.URL.Query(), &params.RuntimeRevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtimeRevisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtimeRevisionRef", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTemplateVariables(w, r, projectRef, params)
 	}))
@@ -23881,6 +24110,32 @@ func (siw *ServerInterfaceWrapper) ListPromptTemplateVariables(w http.ResponseWr
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtimeRevisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtimeRevisionRef", r.URL.Query(), &params.RuntimeRevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtimeRevisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtimeRevisionRef", Err: err})
 		}
 		return
 	}
@@ -31938,6 +32193,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.UpdateIntegrationConnection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credential", wrapper.ConfigureEmailMailboxCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
