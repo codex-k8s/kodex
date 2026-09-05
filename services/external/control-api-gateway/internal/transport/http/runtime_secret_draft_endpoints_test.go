@@ -148,7 +148,7 @@ func TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue(t *testing.T) {
 		{"/projects/prj_fixture01/runtime-secret-drafts", `{"name":"Fixture","description":"","valueType":"STRING","value":"fixture-only-value"}`, "SaveSecretDraft", "DRAFT", 201},
 		{"/runtime-secrets/sec_fixture01/drafts", `{"valueType":"STRING","value":"fixture-only-value"}`, "SaveSecretDraft", "DRAFT", 201},
 		{"/runtime-secret-drafts/sdft_fixture01/validate", "", "ValidateSecretDraft", "VALID", 200},
-		{"/runtime-secret-drafts/sdft_fixture01/publish", `{"expectedSecretVersion":7}`, "PublishSecretDraft", "PUBLISHED", 200},
+		{"/runtime-secret-drafts/sdft_fixture01/publish", `{"expectedSecretVersion":7,"impactPlanRef":"sdip_fixture01","selectedItemRefs":["sdit_fixture01"]}`, "PublishSecretDraft", "PUBLISHED", 200},
 		{"/runtime-secret-drafts/sdft_fixture01/discard", "", "DiscardSecretDraft", "DISCARDED", 200},
 	} {
 		for _, replay := range []bool{false, true} {
@@ -183,7 +183,7 @@ func TestSecretDraftRoutesKeepOwnerPinsAndWriteOnlyValue(t *testing.T) {
 					}
 				}
 				if input, ok := c.requests[0].(*cp.PreparePublishRuntimeSecretDraftRequest); ok {
-					if input.ExpectedSecretVersion != 7 || input.Mutation.GetExpectedVersion() != 3 {
+					if input.ExpectedSecretVersion != 7 || input.Mutation.GetExpectedVersion() != 3 || input.ImpactPlanRef != "sdip_fixture01" || len(input.SelectedItemRefs) != 1 || input.SelectedItemRefs[0] != "sdit_fixture01" {
 						t.Fatal("draft and Secret OCC mixed")
 					}
 				}

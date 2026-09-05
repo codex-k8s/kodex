@@ -89,10 +89,10 @@ func (s *Server) saveSecretDraft(w http.ResponseWriter, r *http.Request, input *
 }
 
 func (s *Server) ValidateRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeSecretDraftRef, p generated.ValidateRuntimeSecretDraftParams) {
-	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "VALID", 0)
+	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "VALID", nil)
 }
 func (s *Server) DiscardRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeSecretDraftRef, p generated.DiscardRuntimeSecretDraftParams) {
-	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "DISCARDED", 0)
+	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "DISCARDED", nil)
 }
 func (s *Server) PublishRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeSecretDraftRef, p generated.PublishRuntimeSecretDraftParams) {
 	setRuntimeSecretHeaders(w)
@@ -100,14 +100,22 @@ func (s *Server) PublishRuntimeSecretDraft(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	if !validManagedVersion(body.ExpectedSecretVersion) {
+	if !validManagedVersion(body.ExpectedSecretVersion) || !opaqueHTTPReference.MatchString(body.ImpactPlanRef) || len(body.ImpactPlanRef) > 96 || body.SelectedItemRefs == nil || len(body.SelectedItemRefs) > 1000 {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "PUBLISHED", body.ExpectedSecretVersion)
+	seen := map[string]bool{}
+	for _, item := range body.SelectedItemRefs {
+		if !opaqueHTTPReference.MatchString(item) || len(item) > 96 || seen[item] {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		seen[item] = true
+	}
+	s.changeSecretDraft(w, r, ref, p.IdempotencyKey, p.IfMatch, "PUBLISHED", &body)
 }
 
-func (s *Server) changeSecretDraft(w http.ResponseWriter, r *http.Request, ref, key, match, target string, secretVersion int64) {
+func (s *Server) changeSecretDraft(w http.ResponseWriter, r *http.Request, ref, key, match, target string, publication *generated.RuntimeSecretDraftPublishInput) {
 	setRuntimeSecretHeaders(w)
 	mutation, ok := requireMutation(w, key, match)
 	if !ok {
@@ -122,7 +130,7 @@ func (s *Server) changeSecretDraft(w http.ResponseWriter, r *http.Request, ref, 
 		op = response.GetOperation()
 	case "PUBLISHED":
 		var response *cp.PreparePublishRuntimeSecretDraftResponse
-		response, err = s.control.Command.PreparePublishRuntimeSecretDraft(r.Context(), &cp.PreparePublishRuntimeSecretDraftRequest{Mutation: mutation, DraftRef: ref, ExpectedSecretVersion: secretVersion})
+		response, err = s.control.Command.PreparePublishRuntimeSecretDraft(r.Context(), &cp.PreparePublishRuntimeSecretDraftRequest{Mutation: mutation, DraftRef: ref, ExpectedSecretVersion: publication.ExpectedSecretVersion, ImpactPlanRef: publication.ImpactPlanRef, SelectedItemRefs: append([]string{}, publication.SelectedItemRefs...)})
 		op = response.GetOperation()
 	case "DISCARDED":
 		var response *cp.PrepareDiscardRuntimeSecretDraftResponse
@@ -141,7 +149,7 @@ func (s *Server) changeSecretDraft(w http.ResponseWriter, r *http.Request, ref, 
 	if terminalSecretDraft(w, http.StatusOK, op, target) {
 		return
 	}
-	if target == "PUBLISHED" && draft.SecretVersion != secretVersion {
+	if target == "PUBLISHED" && draft.SecretVersion != publication.ExpectedSecretVersion {
 		invalidSecretDraft(w)
 		return
 	}

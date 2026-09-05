@@ -3339,6 +3339,57 @@ func (e RuntimeSecretDraftState) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeSecretDraftImpactItemOutcome.
+const (
+	RuntimeSecretDraftImpactItemOutcomeAPPLIED     RuntimeSecretDraftImpactItemOutcome = "APPLIED"
+	RuntimeSecretDraftImpactItemOutcomeCONFLICT    RuntimeSecretDraftImpactItemOutcome = "CONFLICT"
+	RuntimeSecretDraftImpactItemOutcomeFORBIDDEN   RuntimeSecretDraftImpactItemOutcome = "FORBIDDEN"
+	RuntimeSecretDraftImpactItemOutcomeNOTSELECTED RuntimeSecretDraftImpactItemOutcome = "NOT_SELECTED"
+	RuntimeSecretDraftImpactItemOutcomePENDING     RuntimeSecretDraftImpactItemOutcome = "PENDING"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeSecretDraftImpactItemOutcome enum.
+func (e RuntimeSecretDraftImpactItemOutcome) Valid() bool {
+	switch e {
+	case RuntimeSecretDraftImpactItemOutcomeAPPLIED:
+		return true
+	case RuntimeSecretDraftImpactItemOutcomeCONFLICT:
+		return true
+	case RuntimeSecretDraftImpactItemOutcomeFORBIDDEN:
+		return true
+	case RuntimeSecretDraftImpactItemOutcomeNOTSELECTED:
+		return true
+	case RuntimeSecretDraftImpactItemOutcomePENDING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeSecretDraftImpactPlanState.
+const (
+	RuntimeSecretDraftImpactPlanStateAPPLIED   RuntimeSecretDraftImpactPlanState = "APPLIED"
+	RuntimeSecretDraftImpactPlanStateCANCELLED RuntimeSecretDraftImpactPlanState = "CANCELLED"
+	RuntimeSecretDraftImpactPlanStateEXPIRED   RuntimeSecretDraftImpactPlanState = "EXPIRED"
+	RuntimeSecretDraftImpactPlanStatePREPARED  RuntimeSecretDraftImpactPlanState = "PREPARED"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeSecretDraftImpactPlanState enum.
+func (e RuntimeSecretDraftImpactPlanState) Valid() bool {
+	switch e {
+	case RuntimeSecretDraftImpactPlanStateAPPLIED:
+		return true
+	case RuntimeSecretDraftImpactPlanStateCANCELLED:
+		return true
+	case RuntimeSecretDraftImpactPlanStateEXPIRED:
+		return true
+	case RuntimeSecretDraftImpactPlanStatePREPARED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeSecretValueType.
 const (
 	RuntimeSecretValueTypeBINARY RuntimeSecretValueType = "BINARY"
@@ -7666,6 +7717,44 @@ type RuntimeSecretDraft struct {
 // RuntimeSecretDraftState defines model for RuntimeSecretDraft.State.
 type RuntimeSecretDraftState string
 
+// RuntimeSecretDraftImpactItem defines model for RuntimeSecretDraftImpactItem.
+type RuntimeSecretDraftImpactItem struct {
+	Consumer                    RuntimeSecretImpactConsumer         `json:"consumer"`
+	Outcome                     RuntimeSecretDraftImpactItemOutcome `json:"outcome"`
+	Ref                         OpaqueRef                           `json:"ref"`
+	ResultBindingRef            *OpaqueRef                          `json:"resultBindingRef,omitempty"`
+	ResultBindingVersion        *int64                              `json:"resultBindingVersion,omitempty"`
+	ResultEnvironmentVersionRef *OpaqueRef                          `json:"resultEnvironmentVersionRef,omitempty"`
+}
+
+// RuntimeSecretDraftImpactItemOutcome defines model for RuntimeSecretDraftImpactItem.Outcome.
+type RuntimeSecretDraftImpactItemOutcome string
+
+// RuntimeSecretDraftImpactPage defines model for RuntimeSecretDraftImpactPage.
+type RuntimeSecretDraftImpactPage struct {
+	Items         []RuntimeSecretDraftImpactItem `json:"items"`
+	NextPageToken string                         `json:"nextPageToken"`
+	Plan          RuntimeSecretDraftImpactPlan   `json:"plan"`
+	Total         int64                          `json:"total"`
+}
+
+// RuntimeSecretDraftImpactPlan defines model for RuntimeSecretDraftImpactPlan.
+type RuntimeSecretDraftImpactPlan struct {
+	Digest         string                            `json:"digest"`
+	DraftRef       OpaqueRef                         `json:"draftRef"`
+	DraftVersion   int64                             `json:"draftVersion"`
+	ExpiresAt      Timestamp                         `json:"expiresAt"`
+	Ref            OpaqueRef                         `json:"ref"`
+	SecretRef      OpaqueRef                         `json:"secretRef"`
+	SecretVersion  int64                             `json:"secretVersion"`
+	SourceRevision int64                             `json:"sourceRevision"`
+	State          RuntimeSecretDraftImpactPlanState `json:"state"`
+	Total          int64                             `json:"total"`
+}
+
+// RuntimeSecretDraftImpactPlanState defines model for RuntimeSecretDraftImpactPlan.State.
+type RuntimeSecretDraftImpactPlanState string
+
 // RuntimeSecretDraftPublication defines model for RuntimeSecretDraftPublication.
 type RuntimeSecretDraftPublication struct {
 	Draft  RuntimeSecretDraft `json:"draft"`
@@ -7674,7 +7763,11 @@ type RuntimeSecretDraftPublication struct {
 
 // RuntimeSecretDraftPublishInput defines model for RuntimeSecretDraftPublishInput.
 type RuntimeSecretDraftPublishInput struct {
-	ExpectedSecretVersion int64 `json:"expectedSecretVersion"`
+	ExpectedSecretVersion int64     `json:"expectedSecretVersion"`
+	ImpactPlanRef         OpaqueRef `json:"impactPlanRef"`
+
+	// SelectedItemRefs Пустой список публикует без замены потребителей.
+	SelectedItemRefs []OpaqueRef `json:"selectedItemRefs"`
 }
 
 // RuntimeSecretImpact defines model for RuntimeSecretImpact.
@@ -9938,8 +10031,22 @@ type GetRuntimeEnvironmentImpactParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// GetRuntimeSecretDraftImpactParams defines parameters for GetRuntimeSecretDraftImpact.
+type GetRuntimeSecretDraftImpactParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // DiscardRuntimeSecretDraftParams defines parameters for DiscardRuntimeSecretDraft.
 type DiscardRuntimeSecretDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// PrepareRuntimeSecretDraftImpactParams defines parameters for PrepareRuntimeSecretDraftImpact.
+type PrepareRuntimeSecretDraftImpactParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -11196,11 +11303,17 @@ type ServerInterface interface {
 	// (GET /api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact)
 	GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request, environmentRef RuntimeEnvironmentRef, versionRef RuntimeEnvironmentVersionRef, params GetRuntimeEnvironmentImpactParams)
 
+	// (GET /api/v1/runtime-secret-draft-impact-plans/{planRef})
+	GetRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Request, planRef OpaqueRef, params GetRuntimeSecretDraftImpactParams)
+
 	// (GET /api/v1/runtime-secret-drafts/{draftRef})
 	GetRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeSecretDraftRef)
 
 	// (POST /api/v1/runtime-secret-drafts/{draftRef}/discard)
 	DiscardRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeSecretDraftRef, params DiscardRuntimeSecretDraftParams)
+
+	// (POST /api/v1/runtime-secret-drafts/{draftRef}/impact-plans)
+	PrepareRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Request, draftRef RuntimeSecretDraftRef, params PrepareRuntimeSecretDraftImpactParams)
 
 	// (POST /api/v1/runtime-secret-drafts/{draftRef}/publish)
 	PublishRuntimeSecretDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeSecretDraftRef, params PublishRuntimeSecretDraftParams)
@@ -28290,6 +28403,80 @@ func (siw *ServerInterfaceWrapper) GetRuntimeEnvironmentImpact(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// GetRuntimeSecretDraftImpact operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "planRef" -------------
+	var planRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "planRef", r.PathValue("planRef"), &planRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "planRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRuntimeSecretDraftImpactParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeSecretDraftImpact(w, r, planRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRuntimeSecretDraft operation middleware
 func (siw *ServerInterfaceWrapper) GetRuntimeSecretDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -28419,6 +28606,112 @@ func (siw *ServerInterfaceWrapper) DiscardRuntimeSecretDraft(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DiscardRuntimeSecretDraft(w, r, draftRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PrepareRuntimeSecretDraftImpact operation middleware
+func (siw *ServerInterfaceWrapper) PrepareRuntimeSecretDraftImpact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftRef" -------------
+	var draftRef RuntimeSecretDraftRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftRef", r.PathValue("draftRef"), &draftRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PrepareRuntimeSecretDraftImpactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PrepareRuntimeSecretDraftImpact(w, r, draftRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -33283,8 +33576,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions", wrapper.PublishRuntimeEnvironmentVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings", wrapper.RebindRuntimeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact", wrapper.GetRuntimeEnvironmentImpact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secret-draft-impact-plans/{planRef}", wrapper.GetRuntimeSecretDraftImpact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secret-drafts/{draftRef}", wrapper.GetRuntimeSecretDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secret-drafts/{draftRef}/discard", wrapper.DiscardRuntimeSecretDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secret-drafts/{draftRef}/impact-plans", wrapper.PrepareRuntimeSecretDraftImpact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secret-drafts/{draftRef}/publish", wrapper.PublishRuntimeSecretDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runtime-secret-drafts/{draftRef}/validate", wrapper.ValidateRuntimeSecretDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-secrets", wrapper.ListOrganizationRuntimeSecrets)

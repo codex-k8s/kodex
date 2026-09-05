@@ -21,6 +21,8 @@ func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/validate"},
 		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/publish"},
 		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/discard"},
+		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/impact-plans"},
+		{"GET", "/api/v1/runtime-secret-draft-impact-plans/sdip_fixture01"},
 		{"PUT", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credential"},
 		{"GET", "/api/v1/prompt-templates/catalog"},
 		{"GET", "/api/v1/assistant-conversations"},

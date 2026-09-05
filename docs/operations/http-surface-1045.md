@@ -15,9 +15,9 @@ updated: 2026-09-05
 Зависимости: полный CP `8b4ac92f` принят merge; `78b812699` добавляет
 authoritative `secret_version`, broker `d11a1e0d9` передаёт тот же pin.
 Источники: #1045/#1046/#1068, MVP-UI-47, CFG-03 и
-`runtime-secret-draft-lifecycle-1046.md`. Это промежуточный SDK checkpoint:
-prepublication impact plan и выбор заменяемых потребителей ещё готовит CP;
-существующий postpublication impact/rebind не заменяет требование UI-47.
+`runtime-secret-draft-lifecycle-1046.md`. Prepublication impact plan и выбор
+заменяемых потребителей подключены ниже на producer `3ec3fe95b`; существующий
+postpublication impact/rebind не заменяет требование UI-47.
 
 | Инициатор и HTTP | RPC и полномочия | Fence, переход и результат |
 | --- | --- | --- |
@@ -64,8 +64,38 @@ CLAIMED/несовпавший intent дают Conflict. После terminal rep
 Ручная проверка: сохранить значение, перечитать draft после reload, проверить
 VALID, опубликовать с обоими pins, перечитать Secret; отдельно отменить draft.
 Повторить запрос с прежним ключом, чужим ref, stale If-Match и revoked session;
-проверить отсутствие значений/grants в responses. Prepublication impact требует
-следующего согласованного producer checkpoint, текущий SDK не завершает UI-47.
+проверить отсутствие значений/grants в responses. Перед publish подготовить
+impact plan, выбрать строки и после ответа перечитать per-item outcomes.
+
+### Prepublication Impact, schema e7944151f
+
+Этот раздел дополняет первоначальный D6 checkpoint; executable CP
+`3ec3fe95b` и policy58 приняты как prerequisite. Session actor → POST
+`runtime-secret-drafts/{draftRef}/impact-plans` →
+PrepareRuntimeSecretDraftImpact с If-Match Draft и Idempotency-Key → CP exact
+owner/eligibility → immutable bounded plan с Draft/Secret versions, source
+revision, digest, expiresAt. Публикация принимает обязательные impactPlanRef и
+selectedItemRefs (явный пустой список означает отсутствие замен, максимум 1000
+уникальных server item refs). Эти поля входят в exact intent prepare и не
+назначают authority. Broker request остаётся server grant, без public plan
+payload или повторной передачи plaintext.
+
+GET `runtime-secret-draft-impact-plans/{planRef}` → GetRuntimeSecretDraftImpact
+с query/page → CP current owner eligibility + immutable snapshot → safe items
+и per-item outcome. Plan.total — исходное immutable количество до 1000;
+page.total — текущий результат eligibility/query. Gateway только передаёт
+фильтр, не фильтрует страницу после LIMIT. Cursor связан с plan digest/state,
+query/actor; переход состояния требует начать итоговый отчёт с первой страницы.
+
+При APPLIED plan нет PENDING: каждая выбранная строка имеет APPLIED, CONFLICT
+либо FORBIDDEN, невыбранная NOT_SELECTED. Только APPLIED содержит новую
+environmentVersionRef и, для agent, прежний bindingRef с большей version.
+PREPARED/CANCELLED/EXPIRED допускают PENDING/NOT_SELECTED без result fields.
+HTTP отклоняет противоречивые состояния, duplicate item refs, прежнюю result
+revision, неверный binding pin и переполнение count. Отдельного event нет;
+owner activation и результаты читаются через GetDraft/GetSecret/GetImpact.
+Повтор publish с прежним intent не создаёт второй effect; per-item conflicts
+не превращаются в ложное подтверждение изменения всех выбранных потребителей.
 
 ## D4, CP 8e532589e
 
