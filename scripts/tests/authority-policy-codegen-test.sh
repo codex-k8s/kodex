@@ -31,8 +31,25 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 44 and .policy.authority_abi_version == 2 and
-	(.policy.authority_proof_producers | length) == 13 and
+	.policy_revision == 52 and .policy.authority_abi_version == 2 and
+	(.policy.authority_proof_producers | length) == 14 and
+  ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==
+    ["platform.email.authorization.resolve", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and
+  all(.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge");
+    .authority_proof_producer_id == "control-plane.email-bridge" and
+    .target_workload_id == "control-plane" and .project_required == false and
+    .authority_sources == ["DOMAIN_STATE"] and
+    .caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/email-bridge") and
+  ([.policy.authority_proof_producers[] | select(.producer_id == "control-plane.email-bridge" and
+    .caller_workload_id == "email-bridge" and .owner_workload_id == "control-plane" and
+    .application_credential == "PLATFORM_WORKER_GRANT" and
+    .application_credential_audience == "urn:kodex:platform-worker:email-bridge" and
+    .application_credential_trust_bundle_id == "email-bridge-platform-worker-grants-g1" and
+    .allowed_operation_ids == ["platform.email.authorization.resolve", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"])] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.email.effect-receipts.report" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.email-effects.reconcile" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
    (.policy.operation_bindings | length)) and
   all(.policy.operation_bindings[];

@@ -19,6 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
+	PlatformQueryService_ListSkillBundles_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
+	PlatformQueryService_GetSkillBundle_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetSkillBundle"
+	PlatformQueryService_ListSkillBundleRevisions_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListSkillBundleRevisions"
+	PlatformQueryService_ListMemoryRecords_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListMemoryRecords"
+	PlatformQueryService_GetMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetMemoryRecord"
+	PlatformQueryService_ListMemoryRecordRevisions_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListMemoryRecordRevisions"
 	PlatformQueryService_GetBootstrapState_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
 	PlatformQueryService_GetPlatformEventCursor_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
 	PlatformQueryService_GetOverview_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetOverview"
@@ -76,14 +83,26 @@ const (
 	PlatformQueryService_ListRuntimeSecrets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
 	PlatformQueryService_GetRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
 	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
+	PlatformQueryService_ListManagedConfigurations_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
 	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
+	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
+	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
+	PlatformQueryService_GetRuntimeSecretImpact_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretImpact"
+	PlatformQueryService_ListInteractionIdentities_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListInteractionIdentities"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
+	GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error)
+	ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error)
+	GetSkillBundle(ctx context.Context, in *GetSkillBundleRequest, opts ...grpc.CallOption) (*GetSkillBundleResponse, error)
+	ListSkillBundleRevisions(ctx context.Context, in *ListSkillBundleRevisionsRequest, opts ...grpc.CallOption) (*ListSkillBundleRevisionsResponse, error)
+	ListMemoryRecords(ctx context.Context, in *ListMemoryRecordsRequest, opts ...grpc.CallOption) (*ListMemoryRecordsResponse, error)
+	GetMemoryRecord(ctx context.Context, in *GetMemoryRecordRequest, opts ...grpc.CallOption) (*GetMemoryRecordResponse, error)
+	ListMemoryRecordRevisions(ctx context.Context, in *ListMemoryRecordRevisionsRequest, opts ...grpc.CallOption) (*ListMemoryRecordRevisionsResponse, error)
 	GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error)
 	GetPlatformEventCursor(ctx context.Context, in *GetPlatformEventCursorRequest, opts ...grpc.CallOption) (*GetPlatformEventCursorResponse, error)
 	GetOverview(ctx context.Context, in *GetOverviewRequest, opts ...grpc.CallOption) (*GetOverviewResponse, error)
@@ -143,8 +162,13 @@ type PlatformQueryServiceClient interface {
 	ListRuntimeSecrets(ctx context.Context, in *ListRuntimeSecretsRequest, opts ...grpc.CallOption) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(ctx context.Context, in *GetRuntimeSecretRequest, opts ...grpc.CallOption) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
+	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
+	GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error)
+	GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error)
+	GetRuntimeSecretImpact(ctx context.Context, in *GetRuntimeSecretImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretImpactResponse, error)
+	ListInteractionIdentities(ctx context.Context, in *ListInteractionIdentitiesRequest, opts ...grpc.CallOption) (*ListInteractionIdentitiesResponse, error)
 }
 
 type platformQueryServiceClient struct {
@@ -153,6 +177,76 @@ type platformQueryServiceClient struct {
 
 func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
 	return &platformQueryServiceClient{cc}
+}
+
+func (c *platformQueryServiceClient) GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmailEffectReceiptResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetEmailEffectReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSkillBundlesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListSkillBundles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetSkillBundle(ctx context.Context, in *GetSkillBundleRequest, opts ...grpc.CallOption) (*GetSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListSkillBundleRevisions(ctx context.Context, in *ListSkillBundleRevisionsRequest, opts ...grpc.CallOption) (*ListSkillBundleRevisionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSkillBundleRevisionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListSkillBundleRevisions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListMemoryRecords(ctx context.Context, in *ListMemoryRecordsRequest, opts ...grpc.CallOption) (*ListMemoryRecordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMemoryRecordsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListMemoryRecords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetMemoryRecord(ctx context.Context, in *GetMemoryRecordRequest, opts ...grpc.CallOption) (*GetMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListMemoryRecordRevisions(ctx context.Context, in *ListMemoryRecordRevisionsRequest, opts ...grpc.CallOption) (*ListMemoryRecordRevisionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMemoryRecordRevisionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListMemoryRecordRevisions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformQueryServiceClient) GetBootstrapState(ctx context.Context, in *GetBootstrapStateRequest, opts ...grpc.CallOption) (*GetBootstrapStateResponse, error) {
@@ -725,6 +819,16 @@ func (c *platformQueryServiceClient) ListManagedConfigurationHistory(ctx context
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListManagedConfigurationsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListManagedConfigurations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetManagedConfigurationImpactResponse)
@@ -745,10 +849,57 @@ func (c *platformQueryServiceClient) GetSystemSTTConfiguration(ctx context.Conte
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeEnvironmentImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecretImpact(ctx context.Context, in *GetRuntimeSecretImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Context, in *ListInteractionIdentitiesRequest, opts ...grpc.CallOption) (*ListInteractionIdentitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInteractionIdentitiesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListInteractionIdentities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformQueryServiceServer is the server API for PlatformQueryService service.
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
+	GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error)
+	ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error)
+	GetSkillBundle(context.Context, *GetSkillBundleRequest) (*GetSkillBundleResponse, error)
+	ListSkillBundleRevisions(context.Context, *ListSkillBundleRevisionsRequest) (*ListSkillBundleRevisionsResponse, error)
+	ListMemoryRecords(context.Context, *ListMemoryRecordsRequest) (*ListMemoryRecordsResponse, error)
+	GetMemoryRecord(context.Context, *GetMemoryRecordRequest) (*GetMemoryRecordResponse, error)
+	ListMemoryRecordRevisions(context.Context, *ListMemoryRecordRevisionsRequest) (*ListMemoryRecordRevisionsResponse, error)
 	GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error)
 	GetPlatformEventCursor(context.Context, *GetPlatformEventCursorRequest) (*GetPlatformEventCursorResponse, error)
 	GetOverview(context.Context, *GetOverviewRequest) (*GetOverviewResponse, error)
@@ -808,8 +959,13 @@ type PlatformQueryServiceServer interface {
 	ListRuntimeSecrets(context.Context, *ListRuntimeSecretsRequest) (*ListRuntimeSecretsResponse, error)
 	GetRuntimeSecret(context.Context, *GetRuntimeSecretRequest) (*GetRuntimeSecretResponse, error)
 	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
+	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
+	GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error)
+	GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error)
+	GetRuntimeSecretImpact(context.Context, *GetRuntimeSecretImpactRequest) (*GetRuntimeSecretImpactResponse, error)
+	ListInteractionIdentities(context.Context, *ListInteractionIdentitiesRequest) (*ListInteractionIdentitiesResponse, error)
 	mustEmbedUnimplementedPlatformQueryServiceServer()
 }
 
@@ -820,6 +976,27 @@ type PlatformQueryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformQueryServiceServer struct{}
 
+func (UnimplementedPlatformQueryServiceServer) GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmailEffectReceipt not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSkillBundles not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetSkillBundle(context.Context, *GetSkillBundleRequest) (*GetSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSkillBundle not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListSkillBundleRevisions(context.Context, *ListSkillBundleRevisionsRequest) (*ListSkillBundleRevisionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSkillBundleRevisions not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListMemoryRecords(context.Context, *ListMemoryRecordsRequest) (*ListMemoryRecordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMemoryRecords not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetMemoryRecord(context.Context, *GetMemoryRecordRequest) (*GetMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMemoryRecord not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListMemoryRecordRevisions(context.Context, *ListMemoryRecordRevisionsRequest) (*ListMemoryRecordRevisionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMemoryRecordRevisions not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) GetBootstrapState(context.Context, *GetBootstrapStateRequest) (*GetBootstrapStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBootstrapState not implemented")
 }
@@ -991,11 +1168,26 @@ func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecret(context.Context,
 func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurationHistory not implemented")
 }
+func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurations not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetManagedConfigurationImpact not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemSTTConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeEnvironmentImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretImpact(context.Context, *GetRuntimeSecretImpactRequest) (*GetRuntimeSecretImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListInteractionIdentities(context.Context, *ListInteractionIdentitiesRequest) (*ListInteractionIdentitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInteractionIdentities not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) mustEmbedUnimplementedPlatformQueryServiceServer() {}
 func (UnimplementedPlatformQueryServiceServer) testEmbeddedByValue()                              {}
@@ -1016,6 +1208,132 @@ func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQue
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
+}
+
+func _PlatformQueryService_GetEmailEffectReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmailEffectReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetEmailEffectReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetEmailEffectReceipt(ctx, req.(*GetEmailEffectReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListSkillBundles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSkillBundlesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListSkillBundles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListSkillBundles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListSkillBundles(ctx, req.(*ListSkillBundlesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetSkillBundle(ctx, req.(*GetSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListSkillBundleRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSkillBundleRevisionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListSkillBundleRevisions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListSkillBundleRevisions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListSkillBundleRevisions(ctx, req.(*ListSkillBundleRevisionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListMemoryRecords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMemoryRecordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListMemoryRecords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListMemoryRecords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListMemoryRecords(ctx, req.(*ListMemoryRecordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetMemoryRecord(ctx, req.(*GetMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListMemoryRecordRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMemoryRecordRevisionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListMemoryRecordRevisions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListMemoryRecordRevisions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListMemoryRecordRevisions(ctx, req.(*ListMemoryRecordRevisionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformQueryService_GetBootstrapState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2044,6 +2362,24 @@ func _PlatformQueryService_ListManagedConfigurationHistory_Handler(srv interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListManagedConfigurations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListManagedConfigurationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListManagedConfigurations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurations(ctx, req.(*ListManagedConfigurationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetManagedConfigurationImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetManagedConfigurationImpactRequest)
 	if err := dec(in); err != nil {
@@ -2080,6 +2416,78 @@ func _PlatformQueryService_GetSystemSTTConfiguration_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentDraft(ctx, req.(*GetRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeEnvironmentImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeEnvironmentImpact(ctx, req.(*GetRuntimeEnvironmentImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeSecretImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretImpact(ctx, req.(*GetRuntimeSecretImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListInteractionIdentities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInteractionIdentitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListInteractionIdentities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListInteractionIdentities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListInteractionIdentities(ctx, req.(*ListInteractionIdentitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformQueryService_ServiceDesc is the grpc.ServiceDesc for PlatformQueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2087,6 +2495,34 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.PlatformQueryService",
 	HandlerType: (*PlatformQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetEmailEffectReceipt",
+			Handler:    _PlatformQueryService_GetEmailEffectReceipt_Handler,
+		},
+		{
+			MethodName: "ListSkillBundles",
+			Handler:    _PlatformQueryService_ListSkillBundles_Handler,
+		},
+		{
+			MethodName: "GetSkillBundle",
+			Handler:    _PlatformQueryService_GetSkillBundle_Handler,
+		},
+		{
+			MethodName: "ListSkillBundleRevisions",
+			Handler:    _PlatformQueryService_ListSkillBundleRevisions_Handler,
+		},
+		{
+			MethodName: "ListMemoryRecords",
+			Handler:    _PlatformQueryService_ListMemoryRecords_Handler,
+		},
+		{
+			MethodName: "GetMemoryRecord",
+			Handler:    _PlatformQueryService_GetMemoryRecord_Handler,
+		},
+		{
+			MethodName: "ListMemoryRecordRevisions",
+			Handler:    _PlatformQueryService_ListMemoryRecordRevisions_Handler,
+		},
 		{
 			MethodName: "GetBootstrapState",
 			Handler:    _PlatformQueryService_GetBootstrapState_Handler,
@@ -2316,6 +2752,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListManagedConfigurationHistory_Handler,
 		},
 		{
+			MethodName: "ListManagedConfigurations",
+			Handler:    _PlatformQueryService_ListManagedConfigurations_Handler,
+		},
+		{
 			MethodName: "GetManagedConfigurationImpact",
 			Handler:    _PlatformQueryService_GetManagedConfigurationImpact_Handler,
 		},
@@ -2323,12 +2763,56 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetSystemSTTConfiguration",
 			Handler:    _PlatformQueryService_GetSystemSTTConfiguration_Handler,
 		},
+		{
+			MethodName: "GetRuntimeEnvironmentDraft",
+			Handler:    _PlatformQueryService_GetRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "GetRuntimeEnvironmentImpact",
+			Handler:    _PlatformQueryService_GetRuntimeEnvironmentImpact_Handler,
+		},
+		{
+			MethodName: "GetRuntimeSecretImpact",
+			Handler:    _PlatformQueryService_GetRuntimeSecretImpact_Handler,
+		},
+		{
+			MethodName: "ListInteractionIdentities",
+			Handler:    _PlatformQueryService_ListInteractionIdentities_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 
 const (
+	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
+	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
+	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
+	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
+	PlatformCommandService_ReviewSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/ReviewSkillBundleDraft"
+	PlatformCommandService_PublishSkillBundleDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/PublishSkillBundleDraft"
+	PlatformCommandService_DiscardSkillBundleDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/DiscardSkillBundleDraft"
+	PlatformCommandService_ArchiveSkillBundle_FullMethodName                       = "/controlplane.v1.PlatformCommandService/ArchiveSkillBundle"
+	PlatformCommandService_RestoreSkillBundle_FullMethodName                       = "/controlplane.v1.PlatformCommandService/RestoreSkillBundle"
+	PlatformCommandService_PurgeSkillBundle_FullMethodName                         = "/controlplane.v1.PlatformCommandService/PurgeSkillBundle"
+	PlatformCommandService_BindAgentSkillBundle_FullMethodName                     = "/controlplane.v1.PlatformCommandService/BindAgentSkillBundle"
+	PlatformCommandService_UnbindAgentSkillBundle_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UnbindAgentSkillBundle"
+	PlatformCommandService_CreateMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CreateMemoryRecord"
+	PlatformCommandService_ReviseMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/ReviseMemoryRecord"
+	PlatformCommandService_ArchiveMemoryRecord_FullMethodName                      = "/controlplane.v1.PlatformCommandService/ArchiveMemoryRecord"
+	PlatformCommandService_RestoreMemoryRecord_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RestoreMemoryRecord"
+	PlatformCommandService_PurgeMemoryRecord_FullMethodName                        = "/controlplane.v1.PlatformCommandService/PurgeMemoryRecord"
+	PlatformCommandService_BindAgentMemoryRecord_FullMethodName                    = "/controlplane.v1.PlatformCommandService/BindAgentMemoryRecord"
+	PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UnbindAgentMemoryRecord"
+	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
+	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
+	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
+	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
+	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
+	PlatformCommandService_RebindRuntimeEnvironment_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRuntimeEnvironment"
+	PlatformCommandService_RebindRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RebindRuntimeSecret"
+	PlatformCommandService_BindInteractionIdentity_FullMethodName                  = "/controlplane.v1.PlatformCommandService/BindInteractionIdentity"
+	PlatformCommandService_RevokeInteractionIdentity_FullMethodName                = "/controlplane.v1.PlatformCommandService/RevokeInteractionIdentity"
 	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
 	PlatformCommandService_CreateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateProject"
 	PlatformCommandService_UpdateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateProject"
@@ -2434,6 +2918,34 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error)
+	CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error)
+	SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error)
+	ValidateSkillBundleDraft(ctx context.Context, in *ValidateSkillBundleDraftRequest, opts ...grpc.CallOption) (*ValidateSkillBundleDraftResponse, error)
+	ReviewSkillBundleDraft(ctx context.Context, in *ReviewSkillBundleDraftRequest, opts ...grpc.CallOption) (*ReviewSkillBundleDraftResponse, error)
+	PublishSkillBundleDraft(ctx context.Context, in *PublishSkillBundleDraftRequest, opts ...grpc.CallOption) (*PublishSkillBundleDraftResponse, error)
+	DiscardSkillBundleDraft(ctx context.Context, in *DiscardSkillBundleDraftRequest, opts ...grpc.CallOption) (*DiscardSkillBundleDraftResponse, error)
+	ArchiveSkillBundle(ctx context.Context, in *ArchiveSkillBundleRequest, opts ...grpc.CallOption) (*ArchiveSkillBundleResponse, error)
+	RestoreSkillBundle(ctx context.Context, in *RestoreSkillBundleRequest, opts ...grpc.CallOption) (*RestoreSkillBundleResponse, error)
+	PurgeSkillBundle(ctx context.Context, in *PurgeSkillBundleRequest, opts ...grpc.CallOption) (*PurgeSkillBundleResponse, error)
+	BindAgentSkillBundle(ctx context.Context, in *BindAgentSkillBundleRequest, opts ...grpc.CallOption) (*BindAgentSkillBundleResponse, error)
+	UnbindAgentSkillBundle(ctx context.Context, in *UnbindAgentSkillBundleRequest, opts ...grpc.CallOption) (*UnbindAgentSkillBundleResponse, error)
+	CreateMemoryRecord(ctx context.Context, in *CreateMemoryRecordRequest, opts ...grpc.CallOption) (*CreateMemoryRecordResponse, error)
+	ReviseMemoryRecord(ctx context.Context, in *ReviseMemoryRecordRequest, opts ...grpc.CallOption) (*ReviseMemoryRecordResponse, error)
+	ArchiveMemoryRecord(ctx context.Context, in *ArchiveMemoryRecordRequest, opts ...grpc.CallOption) (*ArchiveMemoryRecordResponse, error)
+	RestoreMemoryRecord(ctx context.Context, in *RestoreMemoryRecordRequest, opts ...grpc.CallOption) (*RestoreMemoryRecordResponse, error)
+	PurgeMemoryRecord(ctx context.Context, in *PurgeMemoryRecordRequest, opts ...grpc.CallOption) (*PurgeMemoryRecordResponse, error)
+	BindAgentMemoryRecord(ctx context.Context, in *BindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*BindAgentMemoryRecordResponse, error)
+	UnbindAgentMemoryRecord(ctx context.Context, in *UnbindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*UnbindAgentMemoryRecordResponse, error)
+	CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error)
+	SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error)
+	ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error)
+	PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error)
+	DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error)
+	RebindRuntimeEnvironment(ctx context.Context, in *RebindRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RebindRuntimeEnvironmentResponse, error)
+	RebindRuntimeSecret(ctx context.Context, in *RebindRuntimeSecretRequest, opts ...grpc.CallOption) (*RebindRuntimeSecretResponse, error)
+	BindInteractionIdentity(ctx context.Context, in *BindInteractionIdentityRequest, opts ...grpc.CallOption) (*BindInteractionIdentityResponse, error)
+	RevokeInteractionIdentity(ctx context.Context, in *RevokeInteractionIdentityRequest, opts ...grpc.CallOption) (*RevokeInteractionIdentityResponse, error)
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
@@ -2546,6 +3058,286 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileEmailEffectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ReconcileEmailEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateSkillBundleDraft(ctx context.Context, in *ValidateSkillBundleDraftRequest, opts ...grpc.CallOption) (*ValidateSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ReviewSkillBundleDraft(ctx context.Context, in *ReviewSkillBundleDraftRequest, opts ...grpc.CallOption) (*ReviewSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReviewSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ReviewSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishSkillBundleDraft(ctx context.Context, in *PublishSkillBundleDraftRequest, opts ...grpc.CallOption) (*PublishSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardSkillBundleDraft(ctx context.Context, in *DiscardSkillBundleDraftRequest, opts ...grpc.CallOption) (*DiscardSkillBundleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardSkillBundleDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardSkillBundleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveSkillBundle(ctx context.Context, in *ArchiveSkillBundleRequest, opts ...grpc.CallOption) (*ArchiveSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RestoreSkillBundle(ctx context.Context, in *RestoreSkillBundleRequest, opts ...grpc.CallOption) (*RestoreSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RestoreSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PurgeSkillBundle(ctx context.Context, in *PurgeSkillBundleRequest, opts ...grpc.CallOption) (*PurgeSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PurgeSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) BindAgentSkillBundle(ctx context.Context, in *BindAgentSkillBundleRequest, opts ...grpc.CallOption) (*BindAgentSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindAgentSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_BindAgentSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UnbindAgentSkillBundle(ctx context.Context, in *UnbindAgentSkillBundleRequest, opts ...grpc.CallOption) (*UnbindAgentSkillBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnbindAgentSkillBundleResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UnbindAgentSkillBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateMemoryRecord(ctx context.Context, in *CreateMemoryRecordRequest, opts ...grpc.CallOption) (*CreateMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ReviseMemoryRecord(ctx context.Context, in *ReviseMemoryRecordRequest, opts ...grpc.CallOption) (*ReviseMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReviseMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ReviseMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveMemoryRecord(ctx context.Context, in *ArchiveMemoryRecordRequest, opts ...grpc.CallOption) (*ArchiveMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RestoreMemoryRecord(ctx context.Context, in *RestoreMemoryRecordRequest, opts ...grpc.CallOption) (*RestoreMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RestoreMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PurgeMemoryRecord(ctx context.Context, in *PurgeMemoryRecordRequest, opts ...grpc.CallOption) (*PurgeMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PurgeMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) BindAgentMemoryRecord(ctx context.Context, in *BindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*BindAgentMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindAgentMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_BindAgentMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UnbindAgentMemoryRecord(ctx context.Context, in *UnbindAgentMemoryRecordRequest, opts ...grpc.CallOption) (*UnbindAgentMemoryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnbindAgentMemoryRecordResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CreateRuntimeEnvironmentDraft(ctx context.Context, in *CreateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*CreateRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveRuntimeEnvironmentDraft(ctx context.Context, in *SaveRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*SaveRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateRuntimeEnvironmentDraft(ctx context.Context, in *ValidateRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*ValidateRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishRuntimeEnvironmentDraft(ctx context.Context, in *PublishRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*PublishRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardRuntimeEnvironmentDraft(ctx context.Context, in *DiscardRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*DiscardRuntimeEnvironmentDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardRuntimeEnvironmentDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindRuntimeEnvironment(ctx context.Context, in *RebindRuntimeEnvironmentRequest, opts ...grpc.CallOption) (*RebindRuntimeEnvironmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindRuntimeEnvironmentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRuntimeEnvironment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RebindRuntimeSecret(ctx context.Context, in *RebindRuntimeSecretRequest, opts ...grpc.CallOption) (*RebindRuntimeSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RebindRuntimeSecretResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RebindRuntimeSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) BindInteractionIdentity(ctx context.Context, in *BindInteractionIdentityRequest, opts ...grpc.CallOption) (*BindInteractionIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindInteractionIdentityResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_BindInteractionIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RevokeInteractionIdentity(ctx context.Context, in *RevokeInteractionIdentityRequest, opts ...grpc.CallOption) (*RevokeInteractionIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeInteractionIdentityResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RevokeInteractionIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error) {
@@ -3560,6 +4352,34 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error)
+	CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error)
+	SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error)
+	ValidateSkillBundleDraft(context.Context, *ValidateSkillBundleDraftRequest) (*ValidateSkillBundleDraftResponse, error)
+	ReviewSkillBundleDraft(context.Context, *ReviewSkillBundleDraftRequest) (*ReviewSkillBundleDraftResponse, error)
+	PublishSkillBundleDraft(context.Context, *PublishSkillBundleDraftRequest) (*PublishSkillBundleDraftResponse, error)
+	DiscardSkillBundleDraft(context.Context, *DiscardSkillBundleDraftRequest) (*DiscardSkillBundleDraftResponse, error)
+	ArchiveSkillBundle(context.Context, *ArchiveSkillBundleRequest) (*ArchiveSkillBundleResponse, error)
+	RestoreSkillBundle(context.Context, *RestoreSkillBundleRequest) (*RestoreSkillBundleResponse, error)
+	PurgeSkillBundle(context.Context, *PurgeSkillBundleRequest) (*PurgeSkillBundleResponse, error)
+	BindAgentSkillBundle(context.Context, *BindAgentSkillBundleRequest) (*BindAgentSkillBundleResponse, error)
+	UnbindAgentSkillBundle(context.Context, *UnbindAgentSkillBundleRequest) (*UnbindAgentSkillBundleResponse, error)
+	CreateMemoryRecord(context.Context, *CreateMemoryRecordRequest) (*CreateMemoryRecordResponse, error)
+	ReviseMemoryRecord(context.Context, *ReviseMemoryRecordRequest) (*ReviseMemoryRecordResponse, error)
+	ArchiveMemoryRecord(context.Context, *ArchiveMemoryRecordRequest) (*ArchiveMemoryRecordResponse, error)
+	RestoreMemoryRecord(context.Context, *RestoreMemoryRecordRequest) (*RestoreMemoryRecordResponse, error)
+	PurgeMemoryRecord(context.Context, *PurgeMemoryRecordRequest) (*PurgeMemoryRecordResponse, error)
+	BindAgentMemoryRecord(context.Context, *BindAgentMemoryRecordRequest) (*BindAgentMemoryRecordResponse, error)
+	UnbindAgentMemoryRecord(context.Context, *UnbindAgentMemoryRecordRequest) (*UnbindAgentMemoryRecordResponse, error)
+	CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error)
+	SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error)
+	ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error)
+	PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error)
+	DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error)
+	RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error)
+	RebindRuntimeSecret(context.Context, *RebindRuntimeSecretRequest) (*RebindRuntimeSecretResponse, error)
+	BindInteractionIdentity(context.Context, *BindInteractionIdentityRequest) (*BindInteractionIdentityResponse, error)
+	RevokeInteractionIdentity(context.Context, *RevokeInteractionIdentityRequest) (*RevokeInteractionIdentityResponse, error)
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
@@ -3674,6 +4494,90 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileEmailEffect not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateSkillBundleDraft(context.Context, *ValidateSkillBundleDraftRequest) (*ValidateSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ReviewSkillBundleDraft(context.Context, *ReviewSkillBundleDraftRequest) (*ReviewSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReviewSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishSkillBundleDraft(context.Context, *PublishSkillBundleDraftRequest) (*PublishSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardSkillBundleDraft(context.Context, *DiscardSkillBundleDraftRequest) (*DiscardSkillBundleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardSkillBundleDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveSkillBundle(context.Context, *ArchiveSkillBundleRequest) (*ArchiveSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveSkillBundle not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RestoreSkillBundle(context.Context, *RestoreSkillBundleRequest) (*RestoreSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreSkillBundle not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PurgeSkillBundle(context.Context, *PurgeSkillBundleRequest) (*PurgeSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeSkillBundle not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) BindAgentSkillBundle(context.Context, *BindAgentSkillBundleRequest) (*BindAgentSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindAgentSkillBundle not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UnbindAgentSkillBundle(context.Context, *UnbindAgentSkillBundleRequest) (*UnbindAgentSkillBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnbindAgentSkillBundle not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateMemoryRecord(context.Context, *CreateMemoryRecordRequest) (*CreateMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ReviseMemoryRecord(context.Context, *ReviseMemoryRecordRequest) (*ReviseMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReviseMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveMemoryRecord(context.Context, *ArchiveMemoryRecordRequest) (*ArchiveMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RestoreMemoryRecord(context.Context, *RestoreMemoryRecordRequest) (*RestoreMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PurgeMemoryRecord(context.Context, *PurgeMemoryRecordRequest) (*PurgeMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) BindAgentMemoryRecord(context.Context, *BindAgentMemoryRecordRequest) (*BindAgentMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindAgentMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UnbindAgentMemoryRecord(context.Context, *UnbindAgentMemoryRecordRequest) (*UnbindAgentMemoryRecordResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnbindAgentMemoryRecord not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CreateRuntimeEnvironmentDraft(context.Context, *CreateRuntimeEnvironmentDraftRequest) (*CreateRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveRuntimeEnvironmentDraft(context.Context, *SaveRuntimeEnvironmentDraftRequest) (*SaveRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateRuntimeEnvironmentDraft(context.Context, *ValidateRuntimeEnvironmentDraftRequest) (*ValidateRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishRuntimeEnvironmentDraft(context.Context, *PublishRuntimeEnvironmentDraftRequest) (*PublishRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardRuntimeEnvironmentDraft(context.Context, *DiscardRuntimeEnvironmentDraftRequest) (*DiscardRuntimeEnvironmentDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardRuntimeEnvironmentDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindRuntimeEnvironment(context.Context, *RebindRuntimeEnvironmentRequest) (*RebindRuntimeEnvironmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindRuntimeEnvironment not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RebindRuntimeSecret(context.Context, *RebindRuntimeSecretRequest) (*RebindRuntimeSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RebindRuntimeSecret not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) BindInteractionIdentity(context.Context, *BindInteractionIdentityRequest) (*BindInteractionIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindInteractionIdentity not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RevokeInteractionIdentity(context.Context, *RevokeInteractionIdentityRequest) (*RevokeInteractionIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeInteractionIdentity not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteOnboarding not implemented")
 }
@@ -3991,6 +4895,510 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_ReconcileEmailEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileEmailEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ReconcileEmailEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, req.(*ReconcileEmailEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateSkillBundleDraft(ctx, req.(*CreateSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveSkillBundleDraft(ctx, req.(*SaveSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateSkillBundleDraft(ctx, req.(*ValidateSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ReviewSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviewSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ReviewSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ReviewSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ReviewSkillBundleDraft(ctx, req.(*ReviewSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishSkillBundleDraft(ctx, req.(*PublishSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardSkillBundleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardSkillBundleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardSkillBundleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardSkillBundleDraft(ctx, req.(*DiscardSkillBundleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ArchiveSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ArchiveSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ArchiveSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ArchiveSkillBundle(ctx, req.(*ArchiveSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RestoreSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RestoreSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RestoreSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RestoreSkillBundle(ctx, req.(*RestoreSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PurgeSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PurgeSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PurgeSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PurgeSkillBundle(ctx, req.(*PurgeSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_BindAgentSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindAgentSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).BindAgentSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_BindAgentSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).BindAgentSkillBundle(ctx, req.(*BindAgentSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_UnbindAgentSkillBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnbindAgentSkillBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).UnbindAgentSkillBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_UnbindAgentSkillBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).UnbindAgentSkillBundle(ctx, req.(*UnbindAgentSkillBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateMemoryRecord(ctx, req.(*CreateMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ReviseMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviseMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ReviseMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ReviseMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ReviseMemoryRecord(ctx, req.(*ReviseMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ArchiveMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ArchiveMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ArchiveMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ArchiveMemoryRecord(ctx, req.(*ArchiveMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RestoreMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RestoreMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RestoreMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RestoreMemoryRecord(ctx, req.(*RestoreMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PurgeMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PurgeMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PurgeMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PurgeMemoryRecord(ctx, req.(*PurgeMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_BindAgentMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindAgentMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).BindAgentMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_BindAgentMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).BindAgentMemoryRecord(ctx, req.(*BindAgentMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_UnbindAgentMemoryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnbindAgentMemoryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).UnbindAgentMemoryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).UnbindAgentMemoryRecord(ctx, req.(*UnbindAgentMemoryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateRuntimeEnvironmentDraft(ctx, req.(*CreateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveRuntimeEnvironmentDraft(ctx, req.(*SaveRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateRuntimeEnvironmentDraft(ctx, req.(*ValidateRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishRuntimeEnvironmentDraft(ctx, req.(*PublishRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardRuntimeEnvironmentDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardRuntimeEnvironmentDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardRuntimeEnvironmentDraft(ctx, req.(*DiscardRuntimeEnvironmentDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindRuntimeEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindRuntimeEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeEnvironment(ctx, req.(*RebindRuntimeEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RebindRuntimeSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebindRuntimeSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RebindRuntimeSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RebindRuntimeSecret(ctx, req.(*RebindRuntimeSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_BindInteractionIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindInteractionIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).BindInteractionIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_BindInteractionIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).BindInteractionIdentity(ctx, req.(*BindInteractionIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RevokeInteractionIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeInteractionIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RevokeInteractionIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RevokeInteractionIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RevokeInteractionIdentity(ctx, req.(*RevokeInteractionIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_CompleteOnboarding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -5743,6 +7151,118 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ReconcileEmailEffect",
+			Handler:    _PlatformCommandService_ReconcileEmailEffect_Handler,
+		},
+		{
+			MethodName: "CreateSkillBundleDraft",
+			Handler:    _PlatformCommandService_CreateSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "SaveSkillBundleDraft",
+			Handler:    _PlatformCommandService_SaveSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "ValidateSkillBundleDraft",
+			Handler:    _PlatformCommandService_ValidateSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "ReviewSkillBundleDraft",
+			Handler:    _PlatformCommandService_ReviewSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "PublishSkillBundleDraft",
+			Handler:    _PlatformCommandService_PublishSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "DiscardSkillBundleDraft",
+			Handler:    _PlatformCommandService_DiscardSkillBundleDraft_Handler,
+		},
+		{
+			MethodName: "ArchiveSkillBundle",
+			Handler:    _PlatformCommandService_ArchiveSkillBundle_Handler,
+		},
+		{
+			MethodName: "RestoreSkillBundle",
+			Handler:    _PlatformCommandService_RestoreSkillBundle_Handler,
+		},
+		{
+			MethodName: "PurgeSkillBundle",
+			Handler:    _PlatformCommandService_PurgeSkillBundle_Handler,
+		},
+		{
+			MethodName: "BindAgentSkillBundle",
+			Handler:    _PlatformCommandService_BindAgentSkillBundle_Handler,
+		},
+		{
+			MethodName: "UnbindAgentSkillBundle",
+			Handler:    _PlatformCommandService_UnbindAgentSkillBundle_Handler,
+		},
+		{
+			MethodName: "CreateMemoryRecord",
+			Handler:    _PlatformCommandService_CreateMemoryRecord_Handler,
+		},
+		{
+			MethodName: "ReviseMemoryRecord",
+			Handler:    _PlatformCommandService_ReviseMemoryRecord_Handler,
+		},
+		{
+			MethodName: "ArchiveMemoryRecord",
+			Handler:    _PlatformCommandService_ArchiveMemoryRecord_Handler,
+		},
+		{
+			MethodName: "RestoreMemoryRecord",
+			Handler:    _PlatformCommandService_RestoreMemoryRecord_Handler,
+		},
+		{
+			MethodName: "PurgeMemoryRecord",
+			Handler:    _PlatformCommandService_PurgeMemoryRecord_Handler,
+		},
+		{
+			MethodName: "BindAgentMemoryRecord",
+			Handler:    _PlatformCommandService_BindAgentMemoryRecord_Handler,
+		},
+		{
+			MethodName: "UnbindAgentMemoryRecord",
+			Handler:    _PlatformCommandService_UnbindAgentMemoryRecord_Handler,
+		},
+		{
+			MethodName: "CreateRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_CreateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "SaveRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_SaveRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "ValidateRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_ValidateRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "PublishRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_PublishRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "DiscardRuntimeEnvironmentDraft",
+			Handler:    _PlatformCommandService_DiscardRuntimeEnvironmentDraft_Handler,
+		},
+		{
+			MethodName: "RebindRuntimeEnvironment",
+			Handler:    _PlatformCommandService_RebindRuntimeEnvironment_Handler,
+		},
+		{
+			MethodName: "RebindRuntimeSecret",
+			Handler:    _PlatformCommandService_RebindRuntimeSecret_Handler,
+		},
+		{
+			MethodName: "BindInteractionIdentity",
+			Handler:    _PlatformCommandService_BindInteractionIdentity_Handler,
+		},
+		{
+			MethodName: "RevokeInteractionIdentity",
+			Handler:    _PlatformCommandService_RevokeInteractionIdentity_Handler,
+		},
+		{
 			MethodName: "CompleteOnboarding",
 			Handler:    _PlatformCommandService_CompleteOnboarding_Handler,
 		},
@@ -7083,6 +8603,9 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeWorkService_ResolveEmailAuthorization_FullMethodName                       = "/controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization"
+	RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt"
+	RuntimeWorkService_ResolveEmailReconciliation_FullMethodName                      = "/controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation"
 	RuntimeWorkService_ClaimExecution_FullMethodName                                  = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
 	RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName     = "/controlplane.v1.RuntimeWorkService/GetRuntimeEnvironmentRoleImageConfiguration"
 	RuntimeWorkService_ReadExecutionArtifact_FullMethodName                           = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
@@ -7114,6 +8637,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RuntimeWorkServiceClient interface {
+	ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error)
+	ReportEmailEffectReceipt(ctx context.Context, in *ReportEmailEffectReceiptRequest, opts ...grpc.CallOption) (*ReportEmailEffectReceiptResponse, error)
+	ResolveEmailReconciliation(ctx context.Context, in *ResolveEmailReconciliationRequest, opts ...grpc.CallOption) (*ResolveEmailReconciliationResponse, error)
 	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
 	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
 	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -7151,6 +8677,36 @@ type runtimeWorkServiceClient struct {
 
 func NewRuntimeWorkServiceClient(cc grpc.ClientConnInterface) RuntimeWorkServiceClient {
 	return &runtimeWorkServiceClient{cc}
+}
+
+func (c *runtimeWorkServiceClient) ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveEmailAuthorizationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ResolveEmailAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReportEmailEffectReceipt(ctx context.Context, in *ReportEmailEffectReceiptRequest, opts ...grpc.CallOption) (*ReportEmailEffectReceiptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportEmailEffectReceiptResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ResolveEmailReconciliation(ctx context.Context, in *ResolveEmailReconciliationRequest, opts ...grpc.CallOption) (*ResolveEmailReconciliationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveEmailReconciliationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ResolveEmailReconciliation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *runtimeWorkServiceClient) ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error) {
@@ -7407,6 +8963,9 @@ func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Con
 // All implementations must embed UnimplementedRuntimeWorkServiceServer
 // for forward compatibility.
 type RuntimeWorkServiceServer interface {
+	ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error)
+	ReportEmailEffectReceipt(context.Context, *ReportEmailEffectReceiptRequest) (*ReportEmailEffectReceiptResponse, error)
+	ResolveEmailReconciliation(context.Context, *ResolveEmailReconciliationRequest) (*ResolveEmailReconciliationResponse, error)
 	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
 	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
 	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -7446,6 +9005,15 @@ type RuntimeWorkServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRuntimeWorkServiceServer struct{}
 
+func (UnimplementedRuntimeWorkServiceServer) ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveEmailAuthorization not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReportEmailEffectReceipt(context.Context, *ReportEmailEffectReceiptRequest) (*ReportEmailEffectReceiptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportEmailEffectReceipt not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ResolveEmailReconciliation(context.Context, *ResolveEmailReconciliationRequest) (*ResolveEmailReconciliationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveEmailReconciliation not implemented")
+}
 func (UnimplementedRuntimeWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
 }
@@ -7540,6 +9108,60 @@ func RegisterRuntimeWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeWorkSe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&RuntimeWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeWorkService_ResolveEmailAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveEmailAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailAuthorization(ctx, req.(*ResolveEmailAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReportEmailEffectReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportEmailEffectReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReportEmailEffectReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReportEmailEffectReceipt(ctx, req.(*ReportEmailEffectReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ResolveEmailReconciliation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveEmailReconciliationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailReconciliation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailReconciliation(ctx, req.(*ResolveEmailReconciliationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RuntimeWorkService_ClaimExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -7999,6 +9621,18 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.RuntimeWorkService",
 	HandlerType: (*RuntimeWorkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ResolveEmailAuthorization",
+			Handler:    _RuntimeWorkService_ResolveEmailAuthorization_Handler,
+		},
+		{
+			MethodName: "ReportEmailEffectReceipt",
+			Handler:    _RuntimeWorkService_ReportEmailEffectReceipt_Handler,
+		},
+		{
+			MethodName: "ResolveEmailReconciliation",
+			Handler:    _RuntimeWorkService_ResolveEmailReconciliation_Handler,
+		},
 		{
 			MethodName: "ClaimExecution",
 			Handler:    _RuntimeWorkService_ClaimExecution_Handler,
