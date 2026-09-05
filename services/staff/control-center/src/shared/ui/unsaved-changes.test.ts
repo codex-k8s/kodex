@@ -19,6 +19,24 @@ import { useUnsavedChanges } from "./unsaved-changes";
 describe("unsaved changes guard", () => {
   beforeEach(() => vi.resetAllMocks());
   afterEach(() => vi.unstubAllGlobals());
+  it("сохраняет черновики при смене query вкладки и защищает смену объекта", () => {
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("window", { confirm });
+    useUnsavedChanges(
+      computed(() => true),
+      () => "Discard changes?",
+      { ignoreQueryOnly: true },
+    );
+    const update = hooks.update.mock.calls[0]?.[0] as (
+      to: { path: string },
+      from: { path: string },
+    ) => boolean;
+    expect(update({ path: "/agents/one" }, { path: "/agents/one" })).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(update({ path: "/agents/two" }, { path: "/agents/one" })).toBe(
+      false,
+    );
+  });
   it("сохраняет dirty-форму при отмене, разрешает чистую навигацию и удаляет listener", () => {
     const confirm = vi.fn(() => false);
     const addEventListener = vi.fn();

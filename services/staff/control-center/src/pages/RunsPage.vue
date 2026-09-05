@@ -2,17 +2,15 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Search, RefreshCw, Plus } from "@lucide/vue";
 import { useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
 
 import { usePlatformStore } from "@/features/platform/store";
 import RunsBoard from "@/features/workboard/components/RunsBoard.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
 import { filterRuns, type RunFilter } from "@/features/workboard/model";
+import { useRunCatalogStore } from "@/features/workboard/run-catalog";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import { listRuns } from "@/shared/api/generated/openapi/sdk.gen";
-import type { Run } from "@/shared/api/generated/openapi/types.gen";
-import { requestSignal } from "@/shared/api/client";
-import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
 
 const platform = usePlatformStore();
 const route = useRoute();
@@ -28,17 +26,17 @@ const canCreateRun = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
 );
 const filter = ref<RunFilter>("ALL");
-const runsReady = ref(false);
+const catalog = useRunCatalogStore();
+const {
+  items: scopedRuns,
+  ready: runsReady,
+  pageToken,
+  loading,
+  problem,
+} = storeToRefs(catalog);
 const projectReady = ref(!projectRef.value || Boolean(project.value));
-const scopedRuns = ref<Run[]>([]);
 const search = ref("");
 const query = ref("");
-const pageToken = ref<string>();
-const loading = ref(false);
-const problem = ref<AppProblem>();
-const cursors = new Set<string>();
-let controller: AbortController | undefined;
-let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const list = computed(() =>
   filterRuns(
@@ -58,60 +56,10 @@ async function refreshRuns(): Promise<void> {
   await loadRuns();
 }
 async function loadRuns(more = false): Promise<void> {
-  if (more && (loading.value || !pageToken.value)) return;
-  controller?.abort();
-  const active = new AbortController();
-  controller = active;
-  const current = ++generation;
-  const project = projectRef.value;
-  const cursor = more ? pageToken.value : undefined;
-  loading.value = true;
-  problem.value = undefined;
-  if (!more) {
-    scopedRuns.value = [];
-    pageToken.value = undefined;
-    cursors.clear();
-  }
-  try {
-    const page = (
-      await unwrap(
-        listRuns({
-          query: {
-            projectRef: project,
-            query: query.value,
-            pageSize: 40,
-            pageToken: cursor,
-          },
-          signal: requestSignal(active.signal),
-        }),
-      )
-    ).data;
-    if (current !== generation) return;
-    if (
-      !Array.isArray(page.items) ||
-      page.items.some((run) => project && run.projectRef !== project) ||
-      (page.nextPageToken &&
-        (page.nextPageToken === cursor || cursors.has(page.nextPageToken)))
-    )
-      throw new Error("Invalid run catalog page");
-    const items = more ? [...scopedRuns.value, ...page.items] : page.items;
-    if (new Set(items.map((run) => run.ref)).size !== items.length)
-      throw new Error("Repeated run catalog item");
-    scopedRuns.value = items;
-    for (const run of page.items) {
-      const cached = platform.runs[run.ref];
-      if (!cached || cached.version <= run.version)
-        platform.runs[run.ref] = run;
-    }
-    pageToken.value = page.nextPageToken;
-    if (page.nextPageToken) cursors.add(page.nextPageToken);
-    runsReady.value = true;
-  } catch (error) {
-    if (current === generation && !active.signal.aborted)
-      problem.value = asProblem(error);
-  } finally {
-    if (current === generation) loading.value = false;
-  }
+  await catalog.load(
+    { projectRef: projectRef.value, query: query.value, filter: filter.value },
+    more,
+  );
 }
 
 async function refreshProject(): Promise<void> {
@@ -137,20 +85,34 @@ watch(
 );
 watch(search, () => {
   clearTimeout(timer);
-  controller?.abort();
-  generation++;
-  loading.value = false;
-  pageToken.value = undefined;
-  scopedRuns.value = [];
+  catalog.reset();
   timer = setTimeout(() => {
     query.value = search.value.trim();
     void refreshRuns();
   }, 500);
 });
-onBeforeUnmount(() => {
-  controller?.abort();
+watch(filter, () => {
   clearTimeout(timer);
-  generation++;
+  query.value = search.value.trim();
+  void refreshRuns();
+});
+watch(
+  () =>
+    Object.values(platform.runs)
+      .filter((run) => !projectRef.value || run.projectRef === projectRef.value)
+      .map((run) => `${run.ref}:${String(run.version)}`)
+      .sort()
+      .join("|"),
+  () =>
+    catalog.invalidate({
+      projectRef: projectRef.value,
+      query: query.value,
+      filter: filter.value,
+    }),
+);
+onBeforeUnmount(() => {
+  clearTimeout(timer);
+  catalog.reset();
 });
 </script>
 

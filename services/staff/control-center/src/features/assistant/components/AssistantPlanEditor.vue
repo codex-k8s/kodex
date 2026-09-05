@@ -255,6 +255,7 @@ function optionalNumber(event: Event): number | undefined {
         </span>
         <VoiceTextarea
           v-model="summary"
+          :disabled="!editable"
           rows="3"
           maxlength="2000"
           :aria-label="$t('assistant.planEditor.summary')"

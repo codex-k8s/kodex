@@ -221,7 +221,7 @@ onBeforeUnmount(invalidatePreview);
           language="markdown"
           :label="$t('agents.instructions')"
           :description="copy.instructions.markdown"
-          :readonly="!canEdit"
+          :readonly="!canEdit || busy"
           :validation-messages="validationMessages"
           :min-lines="18"
           :completion-provider="completeVariables"
@@ -379,6 +379,8 @@ onBeforeUnmount(invalidatePreview);
 <style scoped>
 .instructions-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 .instructions-panel__head,
@@ -598,7 +600,7 @@ onBeforeUnmount(invalidatePreview);
 }
 @media (max-width: 960px) {
   .instructions-panel__workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

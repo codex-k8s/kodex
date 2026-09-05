@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Play, Power, PowerOff } from "@lucide/vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute, useRouter } from "vue-router";
+import { onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 import AgentAccessPanel from "@/features/agents/detail/AgentAccessPanel.vue";
@@ -35,6 +42,7 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
@@ -83,6 +91,17 @@ const instructions = ref("");
 const task = ref("");
 const avatarFile = ref<File>();
 const busy = ref(false);
+const loaded = ref(false);
+let contextGeneration = 0;
+function captureScope(): () => boolean {
+  const generation = contextGeneration;
+  const agent = agentRef.value;
+  const project = projectRef.value;
+  return () =>
+    generation === contextGeneration &&
+    agent === agentRef.value &&
+    project === projectRef.value;
+}
 const capabilityBusy = ref("");
 const problem = ref<AppProblem>();
 const applyState = ref<"APPLIED" | "DRAFT" | "RUNNING" | "FAILED">("APPLIED");
@@ -138,6 +157,19 @@ const authoritativeInstructions = computed(
 );
 const instructionsDirty = computed(
   () => instructions.value !== authoritativeInstructions.value,
+);
+useUnsavedChanges(
+  computed(
+    () =>
+      busy.value ||
+      Boolean(capabilityBusy.value) ||
+      (loaded.value && (profileDirty.value || instructionsDirty.value)),
+  ),
+  () => t("managed.discard"),
+  { ignoreQueryOnly: true },
+);
+onBeforeRouteUpdate(
+  (to, from) => to.path !== from.path || (!busy.value && !capabilityBusy.value),
 );
 const applyReadback = computed(() => {
   const value = agent.value;
@@ -199,7 +231,7 @@ function activateTab(tab: AgentDetailTab): void {
 }
 
 function selectTab(tab: AgentDetailTab): void {
-  activateTab(tab);
+  if (busy.value || capabilityBusy.value) return;
   if (route.query.tab !== tab) {
     void router.replace({ query: { ...route.query, tab } });
   }
@@ -255,14 +287,17 @@ function syncInstructions(): void {
 }
 
 async function load(): Promise<void> {
+  const active = captureScope();
   await Promise.all([
     platform.loadProject(projectRef.value),
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
     platform.loadCapabilities(),
   ]);
+  if (!active()) return;
   syncProfile();
   syncInstructions();
+  loaded.value = true;
 }
 
 function avatarMutationHeaders(headers: MutationHeaders) {
@@ -317,39 +352,46 @@ function markAvatarApplied(): void {
 
 async function applyAvatar(file: File): Promise<void> {
   if (!agent.value || !canManageAvatar.value || busy.value) return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
     await uploadAvatar(file);
+    if (!active()) return;
     avatarFile.value = undefined;
     markAvatarApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function removeAvatar(): Promise<void> {
   if (!agent.value?.avatar?.artifactRef || !canManageAvatar.value || busy.value)
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
     await clearAvatar();
+    if (!active()) return;
     markAvatarApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 function updateProfile(value: AgentProfileDraft): void {
+  if (busy.value || !canEdit.value) return;
   profileDraft.value = value;
   if (sameProfileDraft(value, currentProfile.value))
     markCurrent(tabScope("profile"), "next-run");
@@ -357,6 +399,7 @@ function updateProfile(value: AgentProfileDraft): void {
 }
 
 function updateInstructions(value: string): void {
+  if (busy.value || !canEdit.value) return;
   instructions.value = value;
   if (value === authoritativeInstructions.value)
     markCurrent(tabScope("instructions"), "published");
@@ -364,7 +407,9 @@ function updateInstructions(value: string): void {
 }
 
 async function saveProfile(): Promise<void> {
-  if (!agent.value || !canEdit.value || !profileDirty.value) return;
+  if (busy.value || !agent.value || !canEdit.value || !profileDirty.value)
+    return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
@@ -380,23 +425,27 @@ async function saveProfile(): Promise<void> {
       },
       agent.value,
     );
+    if (!active()) return;
     syncProfile(updated);
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function saveInstructions(): Promise<void> {
   if (
+    busy.value ||
     !agent.value?.nextActions.includes("EDIT") ||
     !instructionsDirty.value ||
     !instructions.value.trim()
   )
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("instructions"), "published");
@@ -405,47 +454,60 @@ async function saveInstructions(): Promise<void> {
       agent.value,
       instructions.value,
     );
+    if (!active()) return;
     instructions.value =
       updated.draftInstructions?.content ??
       updated.publishedInstructions?.content ??
       "";
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function instructionAction(
   action: "VALIDATE" | "PUBLISH",
 ): Promise<void> {
-  if (!agent.value?.nextActions.includes(action) || instructionsDirty.value)
+  if (
+    busy.value ||
+    !agent.value?.nextActions.includes(action) ||
+    instructionsDirty.value
+  )
     return;
+  const active = captureScope();
+  const ref = agentRef.value;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("instructions"), "published");
   try {
     const updated = await platform.instructionCommand(agent.value, action);
+    if (!active()) return;
     instructions.value =
       updated.draftInstructions?.content ??
       updated.publishedInstructions?.content ??
       "";
-    await platform.loadInstructionVersions(agentRef.value);
+    await platform.loadInstructionVersions(ref);
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function rollbackInstructions(
   publishedInstructionRef: string,
 ): Promise<void> {
-  if (!agent.value?.nextActions.includes("ROLLBACK")) return;
+  if (busy.value || !agent.value?.nextActions.includes("ROLLBACK")) return;
+  const active = captureScope();
+  const ref = agentRef.value;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("instructions"), "published");
@@ -455,14 +517,17 @@ async function rollbackInstructions(
       "ROLLBACK",
       publishedInstructionRef,
     );
+    if (!active()) return;
     instructions.value = updated.publishedInstructions?.content ?? "";
-    await platform.loadInstructionVersions(agentRef.value);
+    await platform.loadInstructionVersions(ref);
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
@@ -475,8 +540,14 @@ function updateApplyState(
 }
 
 async function toggleCapability(key: string): Promise<void> {
-  if (!agent.value || !canManageCapabilities.value || capabilityBusy.value)
+  if (
+    busy.value ||
+    !agent.value ||
+    !canManageCapabilities.value ||
+    capabilityBusy.value
+  )
     return;
+  const active = captureScope();
   capabilityBusy.value = key;
   problem.value = undefined;
   markApplying(tabScope("access"), "next-run");
@@ -485,18 +556,26 @@ async function toggleCapability(key: string): Promise<void> {
       action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
       capabilityKey: key,
     });
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    capabilityBusy.value = "";
+    if (active()) capabilityBusy.value = "";
   }
 }
 
 async function launch(): Promise<void> {
-  if (!agent.value?.nextActions.includes("LAUNCH") || !task.value.trim())
+  if (
+    busy.value ||
+    !agent.value?.nextActions.includes("LAUNCH") ||
+    !task.value.trim()
+  )
     return;
+  const active = captureScope();
+  const project = projectRef.value;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -507,21 +586,26 @@ async function launch(): Promise<void> {
       title: task.value.trim().slice(0, 160),
       task: task.value.trim(),
     });
-    await router.push(runPath(run.ref, projectRef.value));
+    if (!active()) return;
+    busy.value = false;
+    await router.push(runPath(run.ref, project));
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function toggle(): Promise<void> {
   if (
+    busy.value ||
     !agent.value?.nextActions.includes(
       agent.value.enabled ? "DISABLE" : "ENABLE",
     )
   )
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
@@ -529,12 +613,14 @@ async function toggle(): Promise<void> {
     await platform.changeAgent(agent.value, {
       action: agent.value.enabled ? "DISABLE" : "ENABLE",
     });
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
@@ -546,6 +632,31 @@ watch(
   },
 );
 onMounted(() => void load());
+function resetContext(): void {
+  contextGeneration++;
+  busy.value = false;
+  loaded.value = false;
+  capabilityBusy.value = "";
+  problem.value = undefined;
+  profileDraft.value = { name: "", purpose: "", roleDescription: "" };
+  instructions.value = "";
+  task.value = "";
+  avatarFile.value = undefined;
+  for (const snapshot of Object.values(tabApplyStates))
+    snapshot.state = "APPLIED";
+  activateTab(agentDetailTabFromQuery(route.query.tab));
+}
+watch(
+  [projectRef, agentRef],
+  () => {
+    resetContext();
+    void load();
+  },
+  { flush: "sync" },
+);
+onBeforeUnmount(() => {
+  contextGeneration++;
+});
 </script>
 
 <template>
@@ -594,6 +705,7 @@ onMounted(() => void load());
             class="agent-tab"
             type="button"
             role="tab"
+            :disabled="busy || Boolean(capabilityBusy)"
             :aria-selected="activeTab === tab.id"
             :aria-controls="`agent-panel-${tab.id}`"
             @click="selectTab(tab.id)"
@@ -637,7 +749,12 @@ onMounted(() => void load());
               <h2>{{ $t("runs.new") }}</h2>
               <label class="field">
                 <span>{{ $t("runs.task") }}</span>
-                <VoiceTextarea v-model="task" required maxlength="8000" />
+                <VoiceTextarea
+                  v-model="task"
+                  :disabled="busy"
+                  required
+                  maxlength="8000"
+                />
               </label>
               <button
                 class="button button--primary"

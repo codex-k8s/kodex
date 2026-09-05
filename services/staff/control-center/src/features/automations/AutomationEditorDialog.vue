@@ -241,6 +241,7 @@ function submit(): void {
     <form
       id="automation-editor-form"
       class="automation-editor"
+      :inert="busy"
       @submit.prevent="submit"
     >
       <div class="automation-editor__notice">
@@ -396,6 +397,7 @@ function submit(): void {
           <span>{{ custom.task }}</span>
           <VoiceTextarea
             v-model="form.task"
+            :disabled="busy"
             rows="5"
             required
             maxlength="6000"

@@ -112,7 +112,12 @@ onMounted(() => void load());
       :title="$t('workflows.new')"
       :busy="busy"
       @close="dialog = false"
-      ><form id="workflow-form" class="form-grid" @submit.prevent="submit">
+      ><form
+        id="workflow-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field field--wide"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="160" /></label
@@ -120,6 +125,7 @@ onMounted(() => void load());
           ><span>{{ $t("common.purpose") }}</span
           ><VoiceTextarea
             v-model.trim="form.purpose"
+            :disabled="busy"
             required
             maxlength="1000" /></label
         ><label class="field field--wide"

@@ -5324,25 +5324,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
-	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
-	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
-	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
+	CLEAN       ListArtifactsParamsScanState = "CLEAN"
+	FAILED      ListArtifactsParamsScanState = "FAILED"
+	PENDING     ListArtifactsParamsScanState = "PENDING"
+	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	SCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsScanStateCLEAN:
+	case CLEAN:
 		return true
-	case ListArtifactsParamsScanStateFAILED:
+	case FAILED:
 		return true
-	case ListArtifactsParamsScanStatePENDING:
+	case PENDING:
 		return true
-	case ListArtifactsParamsScanStateQUARANTINED:
+	case QUARANTINED:
 		return true
-	case ListArtifactsParamsScanStateSCANNING:
+	case SCANNING:
 		return true
 	default:
 		return false

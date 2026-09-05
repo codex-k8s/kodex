@@ -177,7 +177,12 @@ onBeforeUnmount(() => {
       :title="$t('agents.new')"
       :busy="busy"
       @close="dialog = false"
-      ><form id="agent-form" class="form-grid" @submit.prevent="submit">
+      ><form
+        id="agent-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="120" /></label
@@ -191,12 +196,14 @@ onBeforeUnmount(() => {
           ><span>{{ $t("agents.role") }}</span
           ><VoiceTextarea
             v-model.trim="form.roleDescription"
+            :disabled="busy"
             required
             maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.instructions") }}</span
           ><VoiceTextarea
             v-model.trim="form.initialInstructions"
+            :disabled="busy"
             required
             maxlength="65536"
           />

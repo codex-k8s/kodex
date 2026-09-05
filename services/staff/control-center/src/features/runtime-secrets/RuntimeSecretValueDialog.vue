@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { jsonSyntaxIssue } from "@/shared/ui/json-diagnostic";
+import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -20,6 +21,8 @@ import { validateSecretValue } from "./model";
 
 const props = defineProps<{
   busy?: boolean;
+  locked?: boolean;
+  submitLabel?: string;
   problem?: AppProblem;
   secret?: RuntimeSecret;
 }>();
@@ -36,6 +39,10 @@ const valueType = ref<RuntimeSecretValueType>("STRING");
 const value = ref("");
 const showValue = ref(false);
 const submitted = ref(false);
+useUnsavedChanges(
+  computed(() => !props.busy && !props.locked && Boolean(value.value)),
+  () => t("runtimeSecrets.draft.unsavedValue"),
+);
 let revealTimer: ReturnType<typeof setTimeout> | undefined;
 const rotating = computed(() => Boolean(props.secret));
 const validation = computed(() =>
@@ -60,7 +67,6 @@ function clearPlaintext(): void {
 
 function close(): void {
   if (props.busy) return;
-  clearPlaintext();
   emit("close");
 }
 
@@ -128,6 +134,7 @@ onBeforeUnmount(clearPlaintext);
   >
     <div class="secret-form">
       <ProblemNotice v-if="problem" :problem="problem" compact />
+      <slot />
       <div v-if="secret" class="secret-form__target" role="note">
         <RotateCw :size="20" aria-hidden="true" />
         <div>
@@ -140,6 +147,7 @@ onBeforeUnmount(clearPlaintext);
         <span>{{ $t("common.name") }}</span>
         <input
           v-model="name"
+          :disabled="busy || locked"
           maxlength="120"
           autocomplete="off"
           :aria-invalid="submitted && !name.trim()"
@@ -153,7 +161,7 @@ onBeforeUnmount(clearPlaintext);
         <span>{{ $t("common.description") }}</span>
         <VoiceTextarea
           v-model="description"
-          :disabled="busy"
+          :disabled="busy || locked"
           maxlength="1000"
           rows="3"
         />
@@ -164,7 +172,7 @@ onBeforeUnmount(clearPlaintext);
         <select
           :value="valueType"
           :aria-label="$t('runtimeSecrets.valueType')"
-          :disabled="busy"
+          :disabled="busy || locked"
           @change="changeType"
         >
           <option value="STRING">
@@ -185,7 +193,7 @@ onBeforeUnmount(clearPlaintext);
             v-model="value"
             language="json"
             :label="$t('runtimeSecrets.value')"
-            :disabled="busy"
+            :disabled="busy || locked"
             sensitive
           />
           <textarea
@@ -193,7 +201,7 @@ onBeforeUnmount(clearPlaintext);
             v-model="value"
             :class="{ 'secret-form__masked': !showValue }"
             :aria-label="$t('runtimeSecrets.value')"
-            :disabled="busy"
+            :disabled="busy || locked"
             rows="8"
             maxlength="699052"
             autocomplete="new-password"
@@ -220,7 +228,7 @@ onBeforeUnmount(clearPlaintext);
           v-if="valueType === 'JSON' && showValue"
           class="button"
           type="button"
-          :disabled="busy || Boolean(validation)"
+          :disabled="busy || locked || Boolean(validation)"
           @click="formatJSON"
         >
           {{ $t("runtimeSecrets.formatJSON") }}
@@ -250,7 +258,8 @@ onBeforeUnmount(clearPlaintext);
         <RotateCw v-if="rotating" :size="16" aria-hidden="true" />
         <KeyRound v-else :size="16" aria-hidden="true" />
         {{
-          rotating ? $t("runtimeSecrets.rotate") : $t("runtimeSecrets.create")
+          submitLabel ??
+          (rotating ? $t("runtimeSecrets.rotate") : $t("runtimeSecrets.create"))
         }}
       </button>
     </template>

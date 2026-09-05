@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Save, ShieldCheck } from "@lucide/vue";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
@@ -34,6 +34,7 @@ import type {
   AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 
 const props = defineProps<{
   agentRef: string;
@@ -47,7 +48,7 @@ const emit = defineEmits<{
   ];
 }>();
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const view = ref<AgentRuntimeConfigurationView>();
 const runtimes = ref<RuntimeSelection[]>([]);
@@ -55,6 +56,8 @@ const loading = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const overlayContent = ref("");
+let generation = 0;
+let readController: AbortController | undefined;
 const modelAvailable = ref(false);
 const providerAccountEligibility = ref<"CONNECTING" | "READY" | "UNAVAILABLE">(
   "CONNECTING",
@@ -131,8 +134,10 @@ const runtimeDirty = computed(() => {
 });
 const overlayDirty = computed(
   () =>
+    Boolean(view.value) &&
     overlayContent.value !==
-    (view.value?.draftOverlay?.content ?? view.value?.publishedOverlay.content),
+      (view.value?.draftOverlay?.content ??
+        view.value?.publishedOverlay.content),
 );
 const overlayState = computed(
   () =>
@@ -143,24 +148,31 @@ const overlayState = computed(
 const overlayValidation = computed(
   () => view.value?.draftOverlay?.validationMessages ?? [],
 );
+useUnsavedChanges(
+  computed(() => busy.value || runtimeDirty.value || overlayDirty.value),
+  () => t("managed.discard"),
+);
 
 function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
   emit("apply-state", state, copy.value.runtime.title, "next-turn");
 }
 
-function sync(): void {
+function sync(preserveRuntime = false, preserveOverlay = false): void {
   const value = view.value;
   if (!value) return;
-  form.runtimeProfileRef = value.configuration.runtimeProfileRef;
-  form.model = value.configuration.model;
-  form.providerPolicyMode = value.configuration.providerPolicy.mode;
-  form.providerAccounts =
-    value.configuration.providerPolicy.accountCandidates.map((item) => ({
-      ...item,
-    }));
-  overlayContent.value =
-    value.draftOverlay?.content ?? value.publishedOverlay.content;
-  notify("APPLIED");
+  if (!preserveRuntime) {
+    form.runtimeProfileRef = value.configuration.runtimeProfileRef;
+    form.model = value.configuration.model;
+    form.providerPolicyMode = value.configuration.providerPolicy.mode;
+    form.providerAccounts =
+      value.configuration.providerPolicy.accountCandidates.map((item) => ({
+        ...item,
+      }));
+  }
+  if (!preserveOverlay)
+    overlayContent.value =
+      value.draftOverlay?.content ?? value.publishedOverlay.content;
+  notify(runtimeDirty.value || overlayDirty.value ? "DRAFT" : "APPLIED");
 }
 
 function selectedOrUnavailable(
@@ -225,6 +237,7 @@ function pickerValue(
 }
 
 function chooseProvider(value: string | null | readonly string[]): void {
+  if (busy.value || !props.canEdit) return;
   const provider = pickerValue(value);
   if (!provider) return;
   const previousProvider = selectedProvider.value;
@@ -240,6 +253,7 @@ function chooseProvider(value: string | null | readonly string[]): void {
 }
 
 function chooseModel(value: string | null | readonly string[]): void {
+  if (busy.value || !props.canEdit) return;
   const model = pickerValue(value);
   if (!model || !selectedRuntime.value) return;
   form.model = model;
@@ -247,6 +261,7 @@ function chooseModel(value: string | null | readonly string[]): void {
 }
 
 function chooseRuntime(value: string | null | readonly string[]): void {
+  if (busy.value || !props.canEdit) return;
   const runtimeRef = pickerValue(value);
   const selected = availableRuntimes.value.find(
     (item) => item.ref === runtimeRef,
@@ -258,6 +273,7 @@ function chooseRuntime(value: string | null | readonly string[]): void {
 }
 
 function chooseProviderPolicy(event: Event): void {
+  if (busy.value || !props.canEdit) return;
   const target = event.currentTarget;
   const value = target instanceof HTMLSelectElement ? target.value : undefined;
   if (!value || !isProviderPolicyMode(value)) return;
@@ -266,42 +282,59 @@ function chooseProviderPolicy(event: Event): void {
 }
 
 function updateOverlay(value: string): void {
+  if (busy.value || !props.canEdit) return;
   overlayContent.value = value;
   notify(overlayDirty.value ? "DRAFT" : "APPLIED");
 }
 
 async function load(): Promise<void> {
+  if (busy.value) return;
+  readController?.abort();
+  const controller = new AbortController();
+  readController = controller;
+  const current = ++generation;
   loading.value = true;
   problem.value = undefined;
   try {
     const [runtimeView, catalog] = await Promise.all([
-      loadAgentRuntime(props.agentRef),
-      loadRuntimeCatalog(),
+      loadAgentRuntime(props.agentRef, controller.signal),
+      loadRuntimeCatalog(controller.signal),
     ]);
+    if (current !== generation || controller.signal.aborted) return;
     view.value = runtimeView;
     runtimes.value = catalog;
     sync();
   } catch (error) {
-    problem.value = asProblem(error);
+    if (current === generation && !controller.signal.aborted)
+      problem.value = asProblem(error);
   } finally {
-    loading.value = false;
+    if (current === generation) loading.value = false;
   }
 }
 
 async function execute(
   action: () => Promise<AgentRuntimeConfigurationView>,
+  target: "RUNTIME" | "OVERLAY",
 ): Promise<void> {
+  if (busy.value || loading.value || !props.canEdit) return;
+  const preserveRuntime = target === "OVERLAY" && runtimeDirty.value;
+  const preserveOverlay = target === "RUNTIME" && overlayDirty.value;
+  const current = ++generation;
   busy.value = true;
   problem.value = undefined;
   notify("RUNNING");
   try {
-    view.value = await action();
-    sync();
+    const result = await action();
+    if (current !== generation) return;
+    view.value = result;
+    sync(preserveRuntime, preserveOverlay);
   } catch (error) {
-    problem.value = asProblem(error);
-    notify("FAILED");
+    if (current === generation) {
+      problem.value = asProblem(error);
+      notify("FAILED");
+    }
   } finally {
-    busy.value = false;
+    if (current === generation) busy.value = false;
   }
 }
 
@@ -315,41 +348,64 @@ async function saveRuntime(): Promise<void> {
     providerAccountEligibility.value !== "READY"
   )
     return;
-  await execute(() =>
-    saveAgentRuntime(
-      props.agentRef,
-      {
-        runtimeProfileRef: form.runtimeProfileRef,
-        model: form.model,
-        providerPolicyMode: form.providerPolicyMode,
-        providerAccounts: form.providerAccounts.map((item) => ({ ...item })),
-      },
-      current.agentVersion,
-    ),
+  await execute(
+    () =>
+      saveAgentRuntime(
+        props.agentRef,
+        {
+          runtimeProfileRef: form.runtimeProfileRef,
+          model: form.model,
+          providerPolicyMode: form.providerPolicyMode,
+          providerAccounts: form.providerAccounts.map((item) => ({ ...item })),
+        },
+        current.agentVersion,
+      ),
+    "RUNTIME",
   );
 }
 
 async function saveOverlay(): Promise<void> {
   const current = view.value;
   if (!current || !props.canEdit || !overlayDirty.value) return;
-  await execute(() =>
-    saveOverlayDraft(
-      props.agentRef,
-      overlayContent.value,
-      current.agentVersion,
-    ),
+  await execute(
+    () =>
+      saveOverlayDraft(
+        props.agentRef,
+        overlayContent.value,
+        current.agentVersion,
+      ),
+    "OVERLAY",
   );
 }
 
 async function changeOverlay(action: "VALIDATE" | "PUBLISH"): Promise<void> {
   const current = view.value;
   if (!current || !props.canEdit || overlayDirty.value) return;
-  await execute(() =>
-    changeRuntimeOverlay(props.agentRef, action, current.agentVersion),
+  await execute(
+    () => changeRuntimeOverlay(props.agentRef, action, current.agentVersion),
+    "OVERLAY",
   );
 }
 
-onMounted(() => void load());
+function reset(): void {
+  generation++;
+  readController?.abort();
+  view.value = undefined;
+  overlayContent.value = "";
+  busy.value = false;
+  loading.value = false;
+  problem.value = undefined;
+  modelAvailable.value = false;
+}
+watch(
+  () => props.agentRef,
+  () => {
+    reset();
+    void load();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(reset);
 </script>
 
 <template>
@@ -512,7 +568,7 @@ onMounted(() => void load());
           :label="copy.runtime.overlay"
           :description="copy.runtime.overlayHelp"
           :placeholder="copy.runtime.overlayPlaceholder"
-          :readonly="!canEdit"
+          :readonly="!canEdit || busy"
           :validation-messages="overlayValidation"
           :min-lines="13"
           @update:model-value="updateOverlay"

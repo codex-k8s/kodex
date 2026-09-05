@@ -25,10 +25,28 @@ import type { RuntimeSecret } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
-import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
+import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
+import type { RuntimeSecretDraft } from "./draft-api";
 import { useRuntimeSecretsStore } from "./store";
 
-const props = defineProps<{ projectRef: string; initialSecretRef?: string }>();
+const props = defineProps<{
+  projectRef: string;
+  initialSecretRef?: string;
+  initialDraftRef?: string;
+  initialPlanRef?: string;
+}>();
+const emit = defineEmits<{
+  draftSaved: [draftRef: string];
+  planPrepared: [draftRef: string, planRef: string];
+}>();
+function planPrepared(draftRef: string, planRef: string): void {
+  emit("planPrepared", draftRef, planRef);
+}
+const resumeOpen = ref(false);
+function draftSaved(draft: RuntimeSecretDraft): void {
+  emit("draftSaved", draft.ref);
+  if (draft.state !== "PUBLISHED") void store.reload();
+}
 const store = useRuntimeSecretsStore();
 const session = useSessionStore();
 const { locale } = useI18n();
@@ -66,30 +84,6 @@ function openRevoke(secret: RuntimeSecret): void {
   details.value = undefined;
 }
 
-async function createSecret(
-  input: Parameters<typeof store.create>[0],
-): Promise<void> {
-  try {
-    await store.create(input);
-    createOpen.value = false;
-    impactTarget.value = undefined;
-  } catch {
-    // Store передаёт безопасную problem-модель в открытый диалог.
-  }
-}
-
-async function rotateSecret(
-  input: Parameters<typeof store.rotate>[1],
-): Promise<void> {
-  if (!rotateTarget.value) return;
-  try {
-    await store.rotate(rotateTarget.value, input);
-    rotateTarget.value = undefined;
-  } catch {
-    // Store передаёт безопасную problem-модель в открытый диалог.
-  }
-}
-
 async function revokeSecret(): Promise<void> {
   if (!revokeTarget.value) return;
   try {
@@ -125,6 +119,14 @@ function restoreReauthenticatedReveal(): void {
     revealTarget.value = secret;
 }
 
+watch(
+  () => props.initialDraftRef,
+  (value) => {
+    if (value && !createOpen.value && !rotateTarget.value)
+      resumeOpen.value = true;
+  },
+  { immediate: true },
+);
 watch(search, (value) => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void store.load(props.projectRef, value), 500);
@@ -208,6 +210,14 @@ onBeforeUnmount(() => {
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
+        <button
+          v-if="initialDraftRef"
+          class="button"
+          :disabled="createOpen || Boolean(rotateTarget)"
+          @click="resumeOpen = true"
+        >
+          {{ $t("runtimeSecrets.draft.resume") }}
+        </button>
         <button
           class="button button--primary"
           type="button"
@@ -425,20 +435,33 @@ onBeforeUnmount(() => {
     :secret="revealTarget"
     @close="revealTarget = undefined"
   />
-  <RuntimeSecretValueDialog
+  <RuntimeSecretDraftDialog
     v-if="createOpen"
-    :busy="store.busyRef === 'create'"
-    :problem="store.mutationProblem"
+    :project-ref="projectRef"
     @close="createOpen = false"
-    @create="createSecret"
+    @saved="draftSaved"
+    @published="store.acceptPublication"
+    @plan-prepared="planPrepared"
   />
-  <RuntimeSecretValueDialog
+  <RuntimeSecretDraftDialog
     v-if="rotateTarget"
     :secret="rotateTarget"
-    :busy="store.busyRef === rotateTarget.ref"
-    :problem="store.mutationProblem"
+    :project-ref="projectRef"
     @close="rotateTarget = undefined"
-    @rotate="rotateSecret"
+    @saved="draftSaved"
+    @published="store.acceptPublication"
+    @plan-prepared="planPrepared"
+  />
+  <RuntimeSecretDraftDialog
+    v-if="resumeOpen && initialDraftRef"
+    :key="initialDraftRef"
+    :project-ref="projectRef"
+    :initial-draft-ref="initialDraftRef"
+    :initial-plan-ref="initialPlanRef"
+    @close="resumeOpen = false"
+    @saved="draftSaved"
+    @published="store.acceptPublication"
+    @plan-prepared="planPrepared"
   />
   <RuntimeSecretRevokeDialog
     v-if="revokeTarget"

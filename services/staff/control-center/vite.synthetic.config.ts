@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        runtimeDetail: fileURLToPath(
+          new URL("./e2e/fixtures/runtime-detail.html", import.meta.url),
+        ),
         checkpoint: fileURLToPath(
           new URL("./e2e/fixtures/checkpoint.html", import.meta.url),
         ),

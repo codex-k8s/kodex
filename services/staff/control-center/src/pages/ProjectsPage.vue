@@ -195,7 +195,12 @@ onBeforeUnmount(() => {
       :busy="busy"
       @close="dialog = false"
     >
-      <form id="project-form" class="form-grid" @submit.prevent="submit">
+      <form
+        id="project-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field field--wide"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="120" autofocus
@@ -204,6 +209,7 @@ onBeforeUnmount(() => {
           ><span>{{ $t("common.purpose") }}</span
           ><VoiceTextarea
             v-model.trim="form.purpose"
+            :disabled="busy"
             required
             maxlength="1000"
           />

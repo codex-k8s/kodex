@@ -414,17 +414,67 @@ safe descriptor и новую connection version после authoritative refres
 сохраняет исходные If-Match и Idempotency-Key. Значение и digest не сохраняются
 в browser storage/Pinia/логах; digest попытки существует только в памяти формы.
 
-Остаток для нового manager:
+Продолжение PWA после передачи:
+
+- D2 страницы каталога моделей связаны с авторитетными catalogRevision и
+  catalogDigest; последующие страницы передают оба expected-поля и закрыто
+  отклоняют смену snapshot. Runs получает ACTIVE/TERMINAL через server states,
+  сбрасывает cursor при смене фильтра и не принимает поздний ответ старого scope.
+- D4 Run details показывает безопасный исторический RuntimeRevision diff:
+  текущая материализованная ревизия и выбранная сервером предыдущая ревизия
+  той же Session. Это не preview будущего continuation. Первая ревизия и
+  отсутствие изменений имеют отдельные состояния; смена Run/version отменяет
+  прежнее чтение. Ошибка boundary не превращается в пустой успешный diff.
+- Runtime editor сохраняет независимые несохранённые правки модели и overlay
+  при сохранении другой части. Во время команды редактор и voice блокируются;
+  route leave предупреждает о правках. При смене агента/unmount отменяется
+  чтение, поздний mutation response не перезаписывает новый контекст.
+- Browser fixture runtime-detail проверяет read-only во время сохранения,
+  сохранность overlay после ответа и historical diff на 1440/390 px. Fixtures
+  не доказывают producer authority или runtime materialization.
+- D6 использует staged SecretDraft HTTP/SDK `3ad562f0f` и prepublication impact
+  `bcdfa2063`: save/create → authoritative GetDraft → validate → prepare impact
+  → explicit selection → publish → APPLIED outcomes. Ввод существует только
+  в открытой форме до подтверждённого save; неизвестная попытка повторяется с
+  прежними input/key/OCC. Закрытие неопределённой попытки требует явного
+  подтверждения потери возможности повторить ввод. Новая metadata-команда
+  читает свежую owner version, retry сохраняет исходный snapshot.
+- План показывает immutable total отдельно от текущей доступной выдачи,
+  поддерживает server search/cursor и environment-only строки. Пустой выбор
+  имеет отдельное действие публикации без замены. По умолчанию отмечены все
+  доступные строки: UI догружает серверные страницы в пределах 1000 элементов
+  и общего 15-секундного бюджета до разблокировки публикации. Пустой выбор
+  явно публикует без замены потребителей. После публикации APPLIED читается с
+  первой страницы, поскольку прежний cursor принадлежит PREPARED. Ошибки
+  CONFLICT/FORBIDDEN остаются результатами отдельных строк. Ссылки draftRef и
+  planRef в URL позволяют восстановить только безопасные метаданные; после
+  reload опубликованный Secret перечитывается авторитетно, без значения.
+
+Матрица D6: `draft-api.test.ts` проверяет scope, safe metadata, OCC и exact
+retry; `RuntimeSecretDraftDialog.test.ts` — lost ACK, блокировку повторного
+submit и свежий GetDraft; `draft-impact.test.ts` — plan/page totals, pins,
+cursor, explicit empty selection и частичные результаты;
+`RuntimeSecretDraftImpact.test.ts` — повтор публикации и смену owner pins.
+`e2e/fixtures/secrets.ts` проходит JSON save/validate/plan/select/publish,
+результат environment-only замены и reload по сохранённым ссылкам. Это
+synthetic-профиль; реальный путь CP/broker/runtime/staging остаётся NOT RUN.
+
+Для продолжения проверены Context7 Vue watcher cleanup, Pinia reset setup
+state, Playwright route mocking/viewports и CodeMirror dynamic configuration
+через Compartment. Версии библиотек не менялись.
+
+Остаток полного unit:
 
 - D3 не заменяет effective user∩agent capability projection. Каталог готовности
-  не доказывает runtime materialization; D4 exact target/diff остаётся зависимостью.
+  не доказывает runtime materialization; D4 exact target preview остаётся зависимостью.
 - D5 credential сохранён отдельно от mailbox publication: D5-config отсутствует.
   После закрытия/перезагрузки формы теряется контекст неопределённой попытки;
   durable recovery/read path требует отдельного согласованного решения, без
   сохранения credential или имитации authoritative receipt.
-- D2: version/digest model catalog и persisted reasoning effort; D4: exact
-  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview и RuntimeRevision diff;
-  D6: server-side staged SecretDraft lifecycle.
+- D2: model-specific validation опубликованного reasoning effort и catalog pin
+  на mutation; сохранение TOML через overlay уже доступно. D4: exact
+  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview. D6 UI lifecycle подключён выше;
+  его реальная сквозная приёмка проводится после общего integration gate.
 - Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
   Home server states, Mattermost selector eligibility, RoleImage ownership/build,
   UI/GIT IntegrationPackage execution. Полная MVP-UI-01..61 и staging-приёмка
@@ -515,12 +565,23 @@ Context7 проверен для `/authts/oidc-client-ts`; дополнител�
 установленной версии и `security-headers.conf`. Popup не используется: текущий
 COOP `same-origin` сохранён без ослабления защитных headers.
 
-`listRuns` в текущем SDK принимает только `projectRef/query/pageSize/pageToken`.
-Каталог использует настоящие страницы по 40 записей и общий cursor; scroll
-любой колонки догружает следующую общую страницу. Независимая server-side
-пагинация колонок и полные ACTIVE/TERMINAL фильтры требуют state/lane filter
-в producer и HTTP. До него фильтры отражают только загруженные записи;
-локальные lane counts не выдаются за серверные totals. Контракт не имитируется.
+После HTTP `9c1231ab7` каталог запусков передаёт серверу точные `states[]`
+для ACTIVE/TERMINAL. `features/workboard/run-catalog.ts` хранит страницы по 40
+записей, отменяет старый запрос и сбрасывает cursor при смене проекта, поиска
+или фильтра. Ответ с чужим проектом, состоянием вне запроса, дублем либо
+повторным cursor отклоняется. Scroll любой колонки догружает следующую общую
+страницу; локальные lane counts не выдаются за серверные totals.
+Unit проверяет scope, смену фильтра и поздний ответ; synthetic каталог запусков
+проверяет network states, сброс cursor и отображение нового набора.
+
+HTTP `5717e7cf4` добавил обязательные `catalogRevision/catalogDigest` и
+ожидаемый снимок для страниц моделей. `features/providers/model-catalog.ts`
+закрепляет эти поля на следующей странице и в exact ID lookup; несовпадение
+снимка закрыто останавливает выбор. Смена query/account начинает новое чтение.
+`model-catalog.test.ts` и `models.synthetic.spec.ts` проверяют pinning,
+pagination и исчезнувшую модель на 1440/390. Сохранение reasoning через
+опубликованный TOML overlay не заменяет отсутствующую server-side проверку
+модель/effort/catalog при публикации; эта producer-зависимость остаётся открытой.
 
 Уточнение после `261b577ce`: typed Skill/Memory HTTP и STT parameters уже
 получены. `src/features/context-resources` подключает отдельные каталоги,

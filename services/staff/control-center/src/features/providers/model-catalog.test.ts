@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelCapability } from "@/shared/api/generated/openapi/types.gen";
-const sdk = vi.hoisted(() => ({ listModelCapabilities: vi.fn() }));
+const sdk = vi.hoisted(() => ({
+  listModelCapabilities:
+    vi.fn<
+      (request: { query?: unknown; signal: AbortSignal }) => Promise<unknown>
+    >(),
+}));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => sdk);
 vi.mock("@/shared/api/client", () => ({
   requestSignal: (signal: AbortSignal) => signal,
@@ -21,7 +26,13 @@ const model: ModelCapability = {
   readinessBlockers: [],
 };
 const response = (items: ModelCapability[], nextPageToken = "") => ({
-  data: { items, nextPageToken, total: items.length },
+  data: {
+    items,
+    nextPageToken,
+    total: items.length,
+    catalogRevision: `mcat_${"a".repeat(64)}`,
+    catalogDigest: "a".repeat(64),
+  },
   response: new Response(null, { status: 200 }),
 });
 describe("model catalog", () => {
@@ -35,6 +46,7 @@ describe("model catalog", () => {
       "  model  ",
       "next",
       signal,
+      response([]).data,
     );
     expect(sdk.listModelCapabilities).toHaveBeenCalledWith({
       query: {
@@ -43,9 +55,58 @@ describe("model catalog", () => {
         query: "model",
         pageToken: "next",
         pageSize: 40,
+        expectedCatalogRevision: response([]).data.catalogRevision,
+        expectedCatalogDigest: response([]).data.catalogDigest,
       },
       signal,
     });
+  });
+  it("отклоняет пропавший или изменившийся снимок между страницами", async () => {
+    const first = response([], "next");
+    sdk.listModelCapabilities
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce({
+        ...response([model]),
+        data: {
+          ...response([model]).data,
+          catalogRevision: `mcat_${"b".repeat(64)}`,
+          catalogDigest: "b".repeat(64),
+        },
+      });
+    await expect(
+      resolveAccountModel(
+        "openai-codex",
+        "pacc_primary",
+        model.id,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("snapshot mismatch");
+    expect(sdk.listModelCapabilities.mock.lastCall?.[0].query).toMatchObject({
+      expectedCatalogRevision: first.data.catalogRevision,
+      expectedCatalogDigest: first.data.catalogDigest,
+    });
+    await expect(
+      loadModelCatalog(
+        "openai-codex",
+        "pacc_primary",
+        "",
+        "next",
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("pinned snapshot");
+    sdk.listModelCapabilities.mockResolvedValue({
+      ...first,
+      data: { ...first.data, catalogDigest: undefined },
+    });
+    await expect(
+      loadModelCatalog(
+        "openai-codex",
+        "pacc_primary",
+        "",
+        undefined,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("snapshot mismatch");
   });
   it("разрешает точный выбранный ID за первой страницей, не подменяя похожим", async () => {
     sdk.listModelCapabilities

@@ -1038,7 +1038,12 @@ onBeforeUnmount(() => {
       size="lg"
       @close="closeConnectionDialog"
     >
-      <form id="integration-form" class="form-grid" @submit.prevent="submit">
+      <form
+        id="integration-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <section class="field field--wide manifest-summary">
           <div>
             <strong>{{ selectedDefinition.name }}</strong>

@@ -6,13 +6,21 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
 
+export type ModelCatalogSnapshot = Pick<
+  ModelCapabilityPage,
+  "catalogRevision" | "catalogDigest"
+>;
+
 export async function loadModelCatalog(
   providerDefinitionKey: string,
   providerAccountRef: string | undefined,
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  snapshot?: ModelCatalogSnapshot,
 ): Promise<ModelCapabilityPage> {
+  if (cursor && !snapshot)
+    throw new Error("Model catalog cursor requires a pinned snapshot");
   const page = (
     await unwrap(
       listModelCapabilities({
@@ -21,12 +29,26 @@ export async function loadModelCatalog(
           ...(providerAccountRef ? { providerAccountRef } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(cursor ? { pageToken: cursor } : {}),
+          ...(snapshot
+            ? {
+                expectedCatalogRevision: snapshot.catalogRevision,
+                expectedCatalogDigest: snapshot.catalogDigest,
+              }
+            : {}),
           pageSize: 40,
         },
         signal: requestSignal(signal),
       }),
     )
   ).data;
+  if (
+    !/^[a-f0-9]{64}$/.test(page.catalogDigest) ||
+    page.catalogRevision !== `mcat_${page.catalogDigest}` ||
+    (snapshot &&
+      (page.catalogRevision !== snapshot.catalogRevision ||
+        page.catalogDigest !== snapshot.catalogDigest))
+  )
+    throw new Error("Model catalog snapshot mismatch");
   if (
     page.items.some(
       (item) => item.providerDefinitionKey !== providerDefinitionKey,
@@ -43,6 +65,7 @@ export async function resolveAccountModel(
   signal: AbortSignal,
 ): Promise<ModelCapability | undefined> {
   let cursor: string | undefined;
+  let snapshot: ModelCatalogSnapshot | undefined;
   const seen = new Set<string>();
   for (let count = 0; count < 30; count += 1) {
     signal.throwIfAborted();
@@ -52,8 +75,10 @@ export async function resolveAccountModel(
       modelId,
       cursor,
       signal,
+      snapshot,
     );
     signal.throwIfAborted();
+    snapshot = page;
     const model = page.items.find((item) => item.id === modelId);
     if (model) return model;
     if (!page.nextPageToken) return undefined;

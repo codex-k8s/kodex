@@ -52,6 +52,21 @@ describe("agent detail runtime api", () => {
     vi.unstubAllGlobals();
   });
 
+  it("прекращает runtime read retry после отмены контекста", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    mocks.getAgentRuntimeConfiguration.mockRejectedValue(
+      Object.assign(new Error("Unavailable"), { retryable: true }),
+    );
+    const reading = loadAgentRuntime("agent_sales", controller.signal);
+    const result = expect(reading).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1);
+    controller.abort();
+    await result;
+    await vi.runAllTimersAsync();
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledOnce();
+  });
+
   it("читает runtime catalog и передаёт серверу cursor-поиск окружений", async () => {
     mocks.listRuntimeSelections.mockResolvedValue({
       data: {

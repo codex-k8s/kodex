@@ -223,6 +223,11 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     );
   }
 
+  async function acceptPublication(secret: RuntimeSecret): Promise<void> {
+    if (secret.projectRef !== projectRef.value) return;
+    await reconcile(checkedReceipt(secret, projectRef.value));
+  }
+
   async function reconcile(receipt: RuntimeSecret): Promise<void> {
     const current = generation;
     retainReceipt(receipt);
@@ -302,6 +307,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     load,
     loadMore,
     reload,
+    acceptPublication,
     create,
     rotate,
     revoke,
