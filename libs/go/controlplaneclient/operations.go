@@ -14,6 +14,16 @@ func STTGatewayOperations() map[string]string {
 	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
 }
 
+func SecretDraftGatewayOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime-secret-drafts.save":      "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
+		"platform.runtime-secret-drafts.validate":  "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft",
+		"platform.runtime-secret-drafts.publish":   "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
+		"platform.runtime-secret-drafts.discard":   "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
+		"platform.runtime-secret-drafts.readiness": "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness",
+	}
+}
+
 func STTPolicyProjectionOperations() map[string]string {
 	return map[string]string{"platform.stt.policy.resolve": "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"}
 }
@@ -21,6 +31,11 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.command.runtime-secret-drafts.save":              controlplanev1.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.validate":          controlplanev1.PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.publish":           controlplanev1.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.discard":           controlplanev1.PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,
+		"platform.query.runtime-secret-drafts.get":                 controlplanev1.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName,
 		"platform.command.prompt-templates.save-draft":             controlplanev1.PlatformCommandService_SavePromptTemplateDraft_FullMethodName,
 		"platform.command.prompt-templates.discard-draft":          controlplanev1.PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName,
 		"platform.command.role-image-revisions.save-draft":         controlplanev1.PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName,
@@ -265,16 +280,23 @@ func ControlAPIGatewayOperations() map[string]string {
 
 func SecretBrokerOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime-secrets.readiness.check":         controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
-		"platform.credential-projections.readiness.check":  controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
-		"platform.credential-projections.runtime.resolve":  controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.runtime.validate": controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.stt.resolve":      controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
-		"platform.runtime-secrets.operations.consume":      controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.complete":     controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.fail":         controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.recover":      controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
-		"platform.runtime-secrets.materialization.recover": controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.readiness.check":         controlplanev1.RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+		"platform.runtime-secret-drafts.operations.consume":      controlplanev1.RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.complete":     controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.fail":         controlplanev1.RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.recover":      controlplanev1.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+		"platform.runtime-secret-drafts.materialization.recover": controlplanev1.RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.cleanup.complete":        controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+		"platform.runtime-secrets.readiness.check":               controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+		"platform.credential-projections.readiness.check":        controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
+		"platform.credential-projections.runtime.resolve":        controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.runtime.validate":       controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.stt.resolve":            controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+		"platform.runtime-secrets.operations.consume":            controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.complete":           controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.fail":               controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.recover":            controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
+		"platform.runtime-secrets.materialization.recover":       controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
 	}
 }
 

@@ -1,3 +1,4 @@
+-- name: email_authorization_test :one
 SELECT t.id::text,c.ref,actor.ref,'','','',t.ref,'email.delivery.health.read','',
        '{}'::jsonb,'{}'::jsonb,c.public_configuration,c.definition_version,c.definition_digest,'READ',false
 FROM control_plane.integration_connection_tests t
