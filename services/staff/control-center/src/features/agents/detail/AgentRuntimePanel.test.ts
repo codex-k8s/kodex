@@ -1,10 +1,13 @@
 import { defineComponent, ref, type Ref, type SetupContext } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
-import type {
-  AgentRuntimeConfigurationView,
-  AgentRuntimeConfigurationInput,
-} from "@/shared/api/generated/openapi/types.gen";
+import type { AgentRuntimeConfigurationView } from "@/shared/api/generated/openapi/types.gen";
+import {
+  overlaySchemaFixture,
+  catalogStatusFixture,
+} from "@/test-utils/runtime-catalog-fixture";
+import type { RuntimeForm } from "./runtime-input";
+import type { ModelSelection } from "@/features/providers/model-catalog";
 const api = vi.hoisted(() => ({
   loadAgentRuntime: vi.fn(),
   loadRuntimeCatalog: vi.fn(),
@@ -25,6 +28,7 @@ function runtimeView(
 ): AgentRuntimeConfigurationView {
   return {
     agentVersion: 3,
+    overlaySchema: overlaySchemaFixture,
     configuration: {
       runtimeProfileRef: "profile-one",
       model,
@@ -39,7 +43,8 @@ function runtimeView(
 }
 interface State {
   view: Ref<AgentRuntimeConfigurationView | undefined>;
-  form: AgentRuntimeConfigurationInput;
+  form: RuntimeForm;
+  modelSelection: Ref<ModelSelection | undefined>;
   overlayContent: Ref<string>;
   modelAvailable: Ref<boolean>;
   providerAccountEligibility: Ref<string>;
@@ -49,6 +54,7 @@ interface State {
   updateOverlay(value: string): void;
   saveRuntime(): Promise<void>;
   saveOverlay(): Promise<void>;
+  changeOverlay(action: "VALIDATE" | "PUBLISH"): Promise<void>;
 }
 async function panel(): Promise<State> {
   const setup = (
@@ -75,11 +81,59 @@ beforeEach(() => {
   api.loadRuntimeCatalog.mockResolvedValue([]);
 });
 describe("runtime editor: сохранение независимых черновиков", () => {
+  it("требует повторной проверки после изменения схемы перед публикацией", async () => {
+    const state = await panel();
+    const current = runtimeView();
+    current.draftOverlay = {
+      ref: "draft-one",
+      version: 1,
+      revision: 1,
+      content: "original",
+      state: "VALID",
+      digest: "a".repeat(64),
+      createdAt: "2026-09-05T00:00:00Z",
+      validationMessages: [],
+      diagnostics: [],
+      schemaRevision: "old-schema",
+      schemaDigest: "b".repeat(64),
+    };
+    state.view.value = current;
+    await state.changeOverlay("PUBLISH");
+    expect(api.changeOverlay).not.toHaveBeenCalled();
+    current.draftOverlay.schemaRevision = current.overlaySchema.revision;
+    current.draftOverlay.schemaDigest = current.overlaySchema.digest;
+    state.view.value = { ...current };
+    api.changeOverlay.mockResolvedValue(runtimeView());
+    await state.changeOverlay("PUBLISH");
+    expect(api.changeOverlay).toHaveBeenCalledWith("agent-one", "PUBLISH", 3);
+  });
   it("сохраняет несохранённый overlay при публикации модели и блокирует ввод во время запроса", async () => {
     const state = await panel();
     state.updateOverlay("unsaved overlay");
     state.form.model = "model-two";
     state.modelAvailable.value = true;
+    state.modelSelection.value = {
+      model: state.form.model,
+      providerDefinitionKey: "openai-codex",
+      accounts: [
+        {
+          accountRef: "account-one",
+          providerDefinitionKey: "openai-codex",
+          catalogRevision: `mcat_${"a".repeat(64)}`,
+          catalogDigest: "a".repeat(64),
+          catalogStatus: catalogStatusFixture,
+          model: {
+            id: state.form.model,
+            providerDefinitionKey: "openai-codex",
+            available: true,
+            eligibleProviderAccountRefs: ["account-one"],
+            readinessBlockers: [],
+            reasoningEfforts: ["low", "high"],
+            defaultReasoningEffort: "high",
+          },
+        },
+      ],
+    };
     state.providerAccountEligibility.value = "READY";
     api.saveAgentRuntime.mockResolvedValue(runtimeView("model-two"));
     const saving = state.saveRuntime();

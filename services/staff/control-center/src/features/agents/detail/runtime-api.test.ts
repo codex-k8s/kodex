@@ -125,7 +125,15 @@ describe("agent detail runtime api", () => {
       runtimeProfileRef: "runtime_openai",
       model: "gpt-5.6-sol",
       providerPolicyMode: "FIXED" as const,
-      providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+      providerAccounts: [
+        {
+          accountRef: "account-2",
+          weight: 1,
+          catalogRevision: `mcat_${"a".repeat(64)}`,
+          catalogDigest: "a".repeat(64),
+          providerDefinitionKey: "openai-codex",
+        },
+      ],
     };
     const ownResult = {
       agentVersion: 9,
@@ -185,7 +193,15 @@ describe("agent detail runtime api", () => {
         runtimeProfileRef: "runtime_openai",
         model: "gpt-5.6-sol",
         providerPolicyMode: "FIXED",
-        providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+        providerAccounts: [
+          {
+            accountRef: "account-2",
+            weight: 1,
+            catalogRevision: `mcat_${"a".repeat(64)}`,
+            catalogDigest: "a".repeat(64),
+            providerDefinitionKey: "openai-codex",
+          },
+        ],
       },
       8,
     );

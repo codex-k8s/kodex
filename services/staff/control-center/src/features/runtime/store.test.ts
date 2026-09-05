@@ -92,6 +92,7 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
+import { overlaySchemaFixture } from "@/test-utils/runtime-catalog-fixture";
 function view(model: string, version: number): AgentRuntimeConfigurationView {
   return {
     skillBindings: [],
@@ -107,7 +108,13 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
         ref: `policy_${String(version)}`,
         version,
         mode: "FIXED",
-        accountCandidates: [{ accountRef: "account_main", weight: 1 }],
+        accountCandidates: [
+          {
+            accountRef: "account_main",
+            weight: 1,
+            defaultReasoningEffort: "medium",
+          },
+        ],
         digest: "a".repeat(64),
         createdAt: "2026-08-28T08:00:00Z",
       },
@@ -157,6 +164,7 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
     },
     safeEffectiveConfig: `model = "${model}"`,
     agentVersion: version,
+    overlaySchema: overlaySchemaFixture,
   };
 }
 

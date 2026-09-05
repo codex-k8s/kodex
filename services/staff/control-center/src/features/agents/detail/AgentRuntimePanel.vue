@@ -7,6 +7,22 @@ import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import { ProviderAccountSelector } from "@/features/providers";
 import ProviderModelSelector from "@/features/providers/ProviderModelSelector.vue";
+import type { ModelSelection } from "@/features/providers/model-catalog";
+import {
+  pinnedRuntimeInput,
+  runtimeCandidates,
+  type RuntimeForm,
+} from "./runtime-input";
+import {
+  changeOverlayEffort,
+  overlayCompletions,
+  overlayEffort,
+  overlayHover,
+} from "./overlay-editor";
+import type {
+  CodeEditorCompletionProvider,
+  CodeEditorHoverProvider,
+} from "./code-editor";
 import {
   readyRuntimes,
   runtimeProviders,
@@ -22,7 +38,6 @@ import {
   saveOverlayDraft,
 } from "@/features/agents/detail/runtime-api";
 import type {
-  AgentRuntimeConfigurationInput,
   AgentRuntimeConfigurationView,
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -59,10 +74,11 @@ const overlayContent = ref("");
 let generation = 0;
 let readController: AbortController | undefined;
 const modelAvailable = ref(false);
+const modelSelection = ref<ModelSelection>();
 const providerAccountEligibility = ref<"CONNECTING" | "READY" | "UNAVAILABLE">(
   "CONNECTING",
 );
-const form = reactive<AgentRuntimeConfigurationInput>({
+const form = reactive<RuntimeForm>({
   runtimeProfileRef: "",
   model: "",
   providerPolicyMode: "FIXED",
@@ -129,7 +145,9 @@ const runtimeDirty = computed(() => {
     form.model !== current.model ||
     form.providerPolicyMode !== current.providerPolicy.mode ||
     JSON.stringify(form.providerAccounts) !==
-      JSON.stringify(current.providerPolicy.accountCandidates)
+      JSON.stringify(
+        runtimeCandidates(current.providerPolicy.accountCandidates),
+      )
   );
 });
 const overlayDirty = computed(
@@ -145,9 +163,81 @@ const overlayState = computed(
     view.value?.publishedOverlay.state ??
     "UNAVAILABLE",
 );
-const overlayValidation = computed(
-  () => view.value?.draftOverlay?.validationMessages ?? [],
+const overlayPublicationAvailable = computed(() => {
+  const current = view.value;
+  const draft = current?.draftOverlay;
+  return (
+    draft?.state === "VALID" &&
+    draft.schemaRevision === current?.overlaySchema.revision &&
+    draft.schemaDigest === current?.overlaySchema.digest &&
+    !draft.diagnostics?.length
+  );
+});
+const overlayValidation = computed(() =>
+  overlayDirty.value || view.value?.draftOverlay?.diagnostics?.length
+    ? []
+    : (view.value?.draftOverlay?.validationMessages ?? []).map((value) =>
+        value === "CONFIG_OVERLAY_INVALID_OR_PROTECTED"
+          ? t("runtimeOverlay.invalid")
+          : value,
+      ),
 );
+const overlayDiagnostics = computed(() =>
+  overlayDirty.value
+    ? []
+    : (view.value?.draftOverlay?.diagnostics ?? []).map((item) => ({
+        line: item.line,
+        column: item.column,
+        message: `${t(`runtimeOverlay.diagnostics.${item.code}`)}${item.key ? ` · ${item.key}` : ""}${item.line > 0 ? ` · ${t("runtimeOverlay.location", { line: item.line, column: item.column })}` : ""}`,
+      })),
+);
+const effortField = computed(() =>
+  view.value?.overlaySchema.fields.find(
+    (item) => item.key === "model_reasoning_effort",
+  ),
+);
+const selectedEffort = computed(() =>
+  view.value
+    ? overlayEffort(overlayContent.value, view.value.overlaySchema)
+    : undefined,
+);
+const effortOptions = computed(() => effortField.value?.allowedValues ?? []);
+function chooseEffort(event: Event): void {
+  if (
+    !props.canEdit ||
+    busy.value ||
+    !view.value ||
+    !(event.target instanceof HTMLSelectElement)
+  )
+    return;
+  try {
+    updateOverlay(
+      changeOverlayEffort(
+        overlayContent.value,
+        view.value.overlaySchema,
+        event.target.value,
+      ),
+    );
+  } catch {
+    problem.value = asProblem(
+      new Error(t("runtimeOverlay.repairBeforeEffort")),
+    );
+  }
+}
+const overlayCompletionProvider = computed<CodeEditorCompletionProvider>(() => {
+  const schema = view.value?.overlaySchema;
+  return (query, signal, context) => {
+    signal.throwIfAborted();
+    return Promise.resolve(
+      schema ? overlayCompletions(schema, query, context) : [],
+    );
+  };
+});
+const overlayHoverProvider = computed<CodeEditorHoverProvider>(() => {
+  const schema = view.value?.overlaySchema;
+  return (content, position) =>
+    schema ? overlayHover(schema, content, position) : undefined;
+});
 useUnsavedChanges(
   computed(() => busy.value || runtimeDirty.value || overlayDirty.value),
   () => t("managed.discard"),
@@ -164,10 +254,9 @@ function sync(preserveRuntime = false, preserveOverlay = false): void {
     form.runtimeProfileRef = value.configuration.runtimeProfileRef;
     form.model = value.configuration.model;
     form.providerPolicyMode = value.configuration.providerPolicy.mode;
-    form.providerAccounts =
-      value.configuration.providerPolicy.accountCandidates.map((item) => ({
-        ...item,
-      }));
+    form.providerAccounts = runtimeCandidates(
+      value.configuration.providerPolicy.accountCandidates,
+    );
   }
   if (!preserveOverlay)
     overlayContent.value =
@@ -352,12 +441,7 @@ async function saveRuntime(): Promise<void> {
     () =>
       saveAgentRuntime(
         props.agentRef,
-        {
-          runtimeProfileRef: form.runtimeProfileRef,
-          model: form.model,
-          providerPolicyMode: form.providerPolicyMode,
-          providerAccounts: form.providerAccounts.map((item) => ({ ...item })),
-        },
+        pinnedRuntimeInput(form, modelSelection.value, selectedProvider.value),
         current.agentVersion,
       ),
     "RUNTIME",
@@ -381,6 +465,7 @@ async function saveOverlay(): Promise<void> {
 async function changeOverlay(action: "VALIDATE" | "PUBLISH"): Promise<void> {
   const current = view.value;
   if (!current || !props.canEdit || overlayDirty.value) return;
+  if (action === "PUBLISH" && !overlayPublicationAvailable.value) return;
   await execute(
     () => changeRuntimeOverlay(props.agentRef, action, current.agentVersion),
     "OVERLAY",
@@ -396,6 +481,7 @@ function reset(): void {
   loading.value = false;
   problem.value = undefined;
   modelAvailable.value = false;
+  modelSelection.value = undefined;
 }
 watch(
   () => props.agentRef,
@@ -445,7 +531,55 @@ onBeforeUnmount(reset);
               :disabled="!canEdit || busy"
               @update:model-value="chooseModel"
               @availability-change="modelAvailable = $event"
+              @selection-change="modelSelection = $event"
             />
+            <label class="field">
+              <span>{{ $t("runtimeOverlay.effort") }}</span>
+              <select
+                :aria-label="$t('runtimeOverlay.effort')"
+                :value="selectedEffort"
+                :disabled="
+                  !canEdit ||
+                  busy ||
+                  selectedEffort === undefined ||
+                  !effortField
+                "
+                @change="chooseEffort"
+              >
+                <option value="">
+                  {{
+                    $t("runtimeOverlay.defaultEffort", {
+                      value: effortField?.defaultValue || "—",
+                    })
+                  }}
+                </option>
+                <option
+                  v-if="
+                    selectedEffort && !effortOptions.includes(selectedEffort)
+                  "
+                  :value="selectedEffort"
+                  disabled
+                >
+                  {{ selectedEffort }} · {{ $t("providers.modelUnavailable") }}
+                </option>
+                <option
+                  v-for="effort in effortOptions"
+                  :key="effort"
+                  :value="effort"
+                >
+                  {{ effort }}
+                </option>
+              </select>
+              <small>{{
+                $t("runtimeOverlay.effortHelp", {
+                  model: view.configuration.model,
+                })
+              }}</small>
+              <small>{{ $t("runtimeOverlay.effortCost") }}</small>
+              <small v-if="selectedEffort === undefined">{{
+                $t("runtimeOverlay.repairBeforeEffort")
+              }}</small>
+            </label>
           </label>
           <label class="field">
             <span>{{ copy.runtime.profile }}</span>
@@ -570,9 +704,28 @@ onBeforeUnmount(reset);
           :placeholder="copy.runtime.overlayPlaceholder"
           :readonly="!canEdit || busy"
           :validation-messages="overlayValidation"
+          :diagnostics="overlayDiagnostics"
+          :completion-provider="overlayCompletionProvider"
+          :hover-provider="overlayHoverProvider"
           :min-lines="13"
           @update:model-value="updateOverlay"
         />
+        <details class="runtime-overlay-schema">
+          <summary>{{ $t("runtimeOverlay.allowedFields") }}</summary>
+          <p>
+            {{ view.overlaySchema.revision }} · {{ view.overlaySchema.digest }}
+          </p>
+          <dl v-for="field in view.overlaySchema.fields" :key="field.key">
+            <dt>
+              <code>{{ field.key }}</code>
+            </dt>
+            <dd>
+              {{ field.description }} · {{ field.valueType }}<br />{{
+                field.allowedValues.join(" · ")
+              }}<br />{{ field.hover }}
+            </dd>
+          </dl>
+        </details>
         <div v-if="canEdit" class="overlay-panel__actions">
           <button
             class="button"
@@ -595,9 +748,7 @@ onBeforeUnmount(reset);
           <button
             class="button button--primary"
             type="button"
-            :disabled="
-              busy || overlayDirty || view.draftOverlay?.state !== 'VALID'
-            "
+            :disabled="busy || overlayDirty || !overlayPublicationAvailable"
             @click="changeOverlay('PUBLISH')"
           >
             {{ $t("runtime.publishOverlay") }}
@@ -737,6 +888,13 @@ onBeforeUnmount(reset);
   .runtime-layout {
     grid-template-columns: 1fr;
   }
+}
+.runtime-overlay-schema {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.runtime-overlay-schema dd {
+  margin-inline-start: 0;
 }
 @media (max-width: 640px) {
   .runtime-panel__summary {
