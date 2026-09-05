@@ -250,6 +250,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.conversations.list":                    controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                  controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.title.update":            controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
+		"platform.assistant.conversations.archive":                 controlplanev1.SystemAssistantService_ArchiveAssistantConversation_FullMethodName,
 		"platform.assistant.turns.add":                             controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
 		"platform.assistant.plans.apply":                           controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
 		"platform.assistant.plans.draft.update":                    controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,

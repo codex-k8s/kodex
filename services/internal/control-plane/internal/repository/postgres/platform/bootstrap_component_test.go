@@ -213,6 +213,7 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("system assistant proposes and applies typed plan", func(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
+	t.Run("assistant history search archive and actor cursor", func(t *testing.T) { testAssistantHistoryArchive(t, ctx, repository) })
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
 	})
@@ -5689,6 +5690,11 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		turn.Conversation.TitleRevision != 1 || turn.Conversation.Context.Route != "" ||
 		len(turn.Conversation.Context.AllowedOperations) != 2 {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-busy-archive", ExpectedVersion: &turn.Conversation.Version},
+		Payload:  command.AssistantConversationArchiveInput{ConversationRef: created.Conversation.Ref}}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("archived active assistant execution: %v", err)
 	}
 	queuedInputVersion := assistantInput.Version
 	var queuedRunRef, queuedRunTitle, queuedRunState string

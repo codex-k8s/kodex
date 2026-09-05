@@ -347,6 +347,31 @@ lint/codegen PASS. Промежуточные FAIL новых fixtures (доба
 VFS count; stale configuration version) исправлены порядком fixture и точным
 readback текущей version, без ослабления assertions.
 
+## История Assistant D1
+
+`ListAssistantConversationsRequest.query = 3`, `state = 4`;
+`AssistantConversation.state = 10`. Закрытый enum: ACTIVE, CLOSED, ARCHIVED;
+UNSPECIFIED в запросе означает ACTIVE. Поиск по title/ref ограничен 200 Unicode
+символами. SQL проверяет creator и актуальные project.view/organization.view
+до LIMIT. Keyset по created_at/ref связан с actor, organization, authority
+project и всеми фильтрами. История другого пользователя не выдаётся.
+
+`ArchiveAssistantConversation{mutation, conversation_ref}` возвращает
+`conversation`; операция `platform.assistant.conversations.archive`, policy 54.
+Owner разрешается до OCC/idempotency; чужой conversation возвращает NotFound.
+ACTIVE/CLOSED -> ARCHIVED допускается только без незавершённого run. В одной
+транзакции pending plans переходят в REJECTED, сохраняются command receipt,
+audit и SYSTEM_ASSISTANT_CHANGED. Повтор с исходным Idempotency-Key возвращает
+исходный результат. Новые turns требуют ACTIVE; архив не удаляет историю.
+Миграция: 20260904000622.
+
+Локально PASS: PostgreSQL `system_assistant_proposes|assistant_history` (owner,
+OCC, busy run, archive/replay, поиск, несколько страниц, подмена actor/filter);
+Go assistant transport/repository, controlplaneclient/race, policy codegen,
+Proto lint/codegen. Первые проверки FAIL из-за неподготовленного reader fixture
+и старого ожидаемого номера policy в тесте; исправлены fixture и revision, без
+ослабления проверок доступа. HTTP/browser путь: NOT RUN.
+
 ## Оставшаяся реализация
 
 SkillBundle/Memory CRUD, bindings и реальные VFS context узлы реализованы:

@@ -163,6 +163,10 @@ test-email-bridge:
 test-email-bridge-render:
 	@bash scripts/tests/email-bridge-render-test.sh
 
+.PHONY: test-email-projection-render
+test-email-projection-render:
+	@bash scripts/tests/email-projection-render-test.sh
+
 test-email-bridge-install:
 	@timeout 420 bash scripts/tests/email-bridge-install-test.sh
 .PHONY: test-integration-gateway-render
