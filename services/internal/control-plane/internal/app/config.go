@@ -58,6 +58,7 @@ type Config struct {
 	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
 	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
 	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
+	RuntimeSecretStagingNamespace   string        `env:"CONTROL_PLANE_RUNTIME_SECRET_STAGING_NAMESPACE"`
 	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
 	SecretBrokerTarget              string        `env:"CONTROL_PLANE_SECRET_BROKER_TARGET"`
 	SecretBrokerTLSServerName       string        `env:"CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME"`
@@ -79,6 +80,7 @@ type Config struct {
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
 	EmailGrantTrustFile             string        `env:"CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE"`
 	EmailConfigurationFile          string        `env:"CONTROL_PLANE_EMAIL_CONFIGURATION_FILE"`
+	EmailGatewayPolicyDigest        string        `env:"CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST"`
 	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
 	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
@@ -155,6 +157,7 @@ func loadConfig() (Config, error) {
 		IntegrationCredentialNamespace:  "kodex-system",
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
 		RuntimeSecretNamespace:          "kodex-runtime",
+		RuntimeSecretStagingNamespace:   "kodex-secret-drafts",
 		KubernetesAPITimeout:            3 * time.Second,
 		SecretBrokerTarget:              providerTarget,
 		SecretBrokerTLSServerName:       providerTLSServerName,
@@ -238,6 +241,7 @@ func (config Config) validate() error {
 		!validSHA256(config.DefaultProviderCredentialSHA256) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||
+		!validDNSLabel(config.RuntimeSecretStagingNamespace) || config.RuntimeSecretNamespace == config.RuntimeSecretStagingNamespace ||
 		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
 		!validProviderCredentialBoundary(config) ||
 		config.ProviderIssuerUID == 0 || config.ProviderIssuerGID == 0 ||

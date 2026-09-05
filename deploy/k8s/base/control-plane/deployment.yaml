@@ -58,6 +58,8 @@ spec:
               value: /var/run/config/kodex/control-plane/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
+            - name: CONTROL_PLANE_RUNTIME_SECRET_STAGING_NAMESPACE
+              value: kodex-secret-drafts
             - name: CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT
               valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
             - name: CONTROL_PLANE_OBJECT_STORAGE_REGION
@@ -94,6 +96,8 @@ spec:
               value: kodex-integration-credentials
             - name: CONTROL_PLANE_EMAIL_CONFIGURATION_FILE
               value: /var/run/config/kodex/control-plane/email/mailboxes.yaml
+            - name: CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST
+              value: 8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218
             - name: CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/application-grants/email-bridge.platform-worker.public.jwk
             - name: CONTROL_PLANE_KUBERNETES_API_TIMEOUT

@@ -142,6 +142,12 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, lockErr
 		}
 		_, diagnostics, validationErr := revisionservice.Validate(kind, locked.ContentFormat, locked.Content)
+		if kind == revisionservice.KindEmailMailbox {
+			diagnostics, validationErr = repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision)
+			if validationErr != nil && !errors.Is(validationErr, errs.ErrInvalid) {
+				return commandOutcome{}, validationErr
+			}
+		}
 		state := "VALID"
 		if validationErr != nil {
 			state = "INVALID"
@@ -169,6 +175,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		}
 		if kind == revisionservice.KindSystemSTT && locked.ContentFormat != "JSON" {
 			return commandOutcome{}, errs.ErrInvalid
+		}
+		if kind == revisionservice.KindEmailMailbox {
+			if _, err := repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision); err != nil {
+				return commandOutcome{}, errs.ErrInvalid
+			}
 		}
 		if kind == revisionservice.KindIntegrationDefinition {
 			if _, err := revisionservice.IntegrationPackage(locked.ContentFormat, locked.Content); err != nil {
@@ -348,11 +359,30 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
+	if set.Kind == revisionservice.KindEmailMailbox {
+		var connectionRef, sourceMailboxRef string
+		if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.ConfigurationRef).Scan(&connectionRef, &sourceMailboxRef); err != nil {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		mailboxRef, err := newMailboxRef()
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		tag, err := tx.Exec(ctx, queryEmailMailboxConfigurationInsertOwner, current.organizationID, set.Ref, connectionRef, mailboxRef)
+		if err != nil || tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
 	return managedOutcome(set, &revision), nil
 }
 
 func managedCommand(kind command.Kind) (string, string) {
 	mapping := map[command.Kind][2]string{
+		command.CreateEmailMailboxDraft:            {revisionservice.KindEmailMailbox, "CREATE"},
+		command.SaveEmailMailboxDraft:              {revisionservice.KindEmailMailbox, "SAVE"},
+		command.ValidateEmailMailboxDraft:          {revisionservice.KindEmailMailbox, "VALIDATE"},
+		command.PublishEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "PUBLISH"},
+		command.DiscardEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "DISCARD"},
 		command.SavePromptTemplateDraft:            {revisionservice.KindPromptTemplate, "SAVE"},
 		command.DiscardPromptTemplateDraft:         {revisionservice.KindPromptTemplate, "DISCARD"},
 		command.SaveRoleImageRevisionDraft:         {revisionservice.KindRoleImage, "SAVE"},
@@ -615,6 +645,13 @@ func (repository *Repository) GetEffectiveManagedConfiguration(ctx context.Conte
 }
 
 func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pgx.Tx, current scope, set managedSet, projectPermission, organizationPermission string) error {
+	if set.Kind == revisionservice.KindEmailMailbox {
+		var connectionRef, mailboxRef string
+		if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, set.Ref).Scan(&connectionRef, &mailboxRef); err != nil {
+			return errs.ErrNotFound
+		}
+		return repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: connectionRef})
+	}
 	if set.ProjectRef == "" {
 		return repository.requireAccess(ctx, tx, current, organizationPermission, organizationTarget(current.organizationRef))
 	}

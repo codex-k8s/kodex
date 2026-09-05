@@ -163,6 +163,8 @@ func TestBootstrapComponent(t *testing.T) {
 		})
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
+	t.Run("STT catalog requires organization management before configuration", func(t *testing.T) { testSTTCatalogAuthority(t, ctx, repository) })
 	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
 		var platformBefore, proofBefore int64
 		if err := pool.QueryRow(ctx, bootstrapComponentSequenceReadbackQuery).Scan(&platformBefore, &proofBefore); err != nil {
@@ -191,6 +193,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("email configuration is immutable and revokes old readers", func(t *testing.T) {
 		testEmailConfiguration(t, ctx, repository)
+	})
+	t.Run("email credentials are immutable owner bound and replayable", func(t *testing.T) {
+		testEmailCredentials(t, ctx, repository)
 	})
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
@@ -291,6 +296,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
 		testRuntimeSecretCrashConsistency(t, ctx, repository)
+	})
+	t.Run("runtime secret drafts preserve staged lifecycle and cleanup fences", func(t *testing.T) {
+		testRuntimeSecretDraftLifecycle(t, ctx, repository)
 	})
 	t.Run("provider auth rejection requires exact credential reauthorization", func(t *testing.T) {
 		testProviderAuthRejectionLifecycle(t, ctx, repository, pool)
@@ -1636,6 +1644,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if !ok || promptSnapshot.Variables["agent.name"] != agent.Name || promptSnapshot.Variables["project.name"] != project.Project.Name {
 		t.Fatalf("claim does not carry server-owned contextual names: %#v", lease["promptSnapshot"])
 	}
+	testTemplateVariableContext(t, ctx, repository, service, owner, agent.ProjectRef, agent.Ref, stringMap(lease, "runtimeRevisionRef"))
 	preview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", launched.Run.Ref, true)
 	if err != nil || preview.Digest != stringMap(lease, "promptMaterializationDigest") ||
 		preview.Prompt != stringMap(lease, "instructions") || strings.Contains(preview.SafePrompt, "immutable provider account affinity") {
@@ -1720,6 +1729,18 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("restored Session did not retain provider account: claims=%#v err=%v", recovered.RuntimeItems, err)
 	}
 	originalRunPreview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", launched.Run.Ref, false)
+	diff, diffErr := service.GetRuntimeRevisionDiff(ctx, owner, continued.Run.Ref, stringMap(recovered.RuntimeItems[0], "runtimeRevisionRef"))
+	if diffErr != nil || diff.Previous == nil || diff.Previous.Ref != stringMap(lease, "runtimeRevisionRef") ||
+		diff.Current.SessionRef != diff.Previous.SessionRef || diff.Current.RunRef != continued.Run.Ref {
+		t.Fatalf("runtime revision diff lost exact session predecessor: diff=%+v err=%v", diff, diffErr)
+	}
+	if _, err := service.GetRuntimeRevisionDiff(ctx, owner, launched.Run.Ref, diff.Current.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("runtime revision diff accepted current revision of another run: %v", err)
+	}
+	firstDiff, firstDiffErr := service.GetRuntimeRevisionDiff(ctx, owner, launched.Run.Ref, "")
+	if firstDiffErr != nil || firstDiff.Previous != nil || firstDiff.Current.Ref != stringMap(lease, "runtimeRevisionRef") {
+		t.Fatalf("first runtime revision has unexpected predecessor: diff=%+v err=%v", firstDiff, firstDiffErr)
+	}
 	if err != nil || originalRunPreview.Digest != preview.Digest {
 		t.Fatalf("exact original Run preview selected another root revision: preview=%#v err=%v", originalRunPreview, err)
 	}
@@ -4237,6 +4258,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
 		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
 	}
+	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {

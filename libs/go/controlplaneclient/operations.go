@@ -4,6 +4,7 @@ import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/co
 
 func EmailBridgeOperations() map[string]string {
 	return map[string]string{
+		"platform.email.configuration.report":   controlplanev1.RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName,
 		"platform.email.authorization.resolve":  controlplanev1.RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
 		"platform.email.effect-receipts.report": controlplanev1.RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
 		"platform.email.reconciliation.resolve": controlplanev1.RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
@@ -11,7 +12,20 @@ func EmailBridgeOperations() map[string]string {
 }
 
 func STTGatewayOperations() map[string]string {
-	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
+	return map[string]string{
+		"platform.stt.transcribe":        "/stt.v1.SpeechToTextService/Transcribe",
+		"platform.stt.model-catalog.get": "/stt.v1.SpeechToTextService/GetModelCatalog",
+	}
+}
+
+func SecretDraftGatewayOperations() map[string]string {
+	return map[string]string{
+		"platform.runtime-secret-drafts.save":      "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
+		"platform.runtime-secret-drafts.validate":  "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft",
+		"platform.runtime-secret-drafts.publish":   "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
+		"platform.runtime-secret-drafts.discard":   "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
+		"platform.runtime-secret-drafts.readiness": "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness",
+	}
 }
 
 func STTPolicyProjectionOperations() map[string]string {
@@ -21,6 +35,25 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.query.email-mailbox.configurations.list":         controlplanev1.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName,
+		"platform.query.email-mailbox.configurations.get":          controlplanev1.PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName,
+		"platform.query.email-mailbox.configurations.preview":      controlplanev1.PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName,
+		"platform.query.email-mailbox.credentials.list":            controlplanev1.PlatformQueryService_ListEmailMailboxCredentials_FullMethodName,
+		"platform.query.email-mailbox.credential-receipts.get":     controlplanev1.PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName,
+		"platform.command.email-mailbox.drafts.create":             controlplanev1.PlatformCommandService_CreateEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.save":               controlplanev1.PlatformCommandService_SaveEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.validate":           controlplanev1.PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.publish":            controlplanev1.PlatformCommandService_PublishEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.discard":            controlplanev1.PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.configurations.bind":       controlplanev1.PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName,
+		"platform.command.email-mailbox.configurations.unbind":     controlplanev1.PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName,
+		"platform.command.runtime-secret-drafts.save":              controlplanev1.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.impact.prepare":    controlplanev1.PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName,
+		"platform.query.runtime-secret-drafts.impact.get":          controlplanev1.PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName,
+		"platform.command.runtime-secret-drafts.validate":          controlplanev1.PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.publish":           controlplanev1.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.discard":           controlplanev1.PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,
+		"platform.query.runtime-secret-drafts.get":                 controlplanev1.PlatformQueryService_GetRuntimeSecretDraft_FullMethodName,
 		"platform.command.prompt-templates.save-draft":             controlplanev1.PlatformCommandService_SavePromptTemplateDraft_FullMethodName,
 		"platform.command.prompt-templates.discard-draft":          controlplanev1.PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName,
 		"platform.command.role-image-revisions.save-draft":         controlplanev1.PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName,
@@ -31,6 +64,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.system-stt.discard-draft":                controlplanev1.PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName,
 		"platform.query.email-effect-receipts.get":                 controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
 		"platform.command.email-effects.reconcile":                 controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
+		"platform.command.email-mailbox.configure-credential":      controlplanev1.PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName,
 		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
 		"platform.query.skill-bundles.get":                         controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName,
 		"platform.query.skill-bundle-revisions.list":               controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName,
@@ -89,6 +123,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.workflows.get":                             controlplanev1.PlatformQueryService_GetWorkflow_FullMethodName,
 		"platform.query.runs.list":                                 controlplanev1.PlatformQueryService_ListRuns_FullMethodName,
 		"platform.query.runs.get":                                  controlplanev1.PlatformQueryService_GetRun_FullMethodName,
+		"platform.query.runtime-revisions.diff":                    controlplanev1.PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName,
 		"platform.query.run-graph.get":                             controlplanev1.PlatformQueryService_GetRunGraph_FullMethodName,
 		"platform.query.run-events.list":                           controlplanev1.PlatformQueryService_ListRunEvents_FullMethodName,
 		"platform.query.owner-gates.list":                          controlplanev1.PlatformQueryService_ListOwnerGates_FullMethodName,
@@ -263,16 +298,23 @@ func ControlAPIGatewayOperations() map[string]string {
 
 func SecretBrokerOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime-secrets.readiness.check":         controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
-		"platform.credential-projections.readiness.check":  controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
-		"platform.credential-projections.runtime.resolve":  controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.runtime.validate": controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.stt.resolve":      controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
-		"platform.runtime-secrets.operations.consume":      controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.complete":     controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.fail":         controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.recover":      controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
-		"platform.runtime-secrets.materialization.recover": controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.readiness.check":         controlplanev1.RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+		"platform.runtime-secret-drafts.operations.consume":      controlplanev1.RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.complete":     controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.fail":         controlplanev1.RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.recover":      controlplanev1.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+		"platform.runtime-secret-drafts.materialization.recover": controlplanev1.RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.cleanup.complete":        controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+		"platform.runtime-secrets.readiness.check":               controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+		"platform.credential-projections.readiness.check":        controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
+		"platform.credential-projections.runtime.resolve":        controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.runtime.validate":       controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.stt.resolve":            controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+		"platform.runtime-secrets.operations.consume":            controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.complete":           controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.fail":               controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.recover":            controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
+		"platform.runtime-secrets.materialization.recover":       controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
 	}
 }
 

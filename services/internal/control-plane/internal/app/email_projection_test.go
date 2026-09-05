@@ -20,6 +20,10 @@ func (store projectionStoreFixture) EmailConfiguration(context.Context) (api.Con
 	return store.config, store.err
 }
 
+func (store projectionStoreFixture) EmailCredentialDigests(context.Context, api.Configuration) (map[string]string, error) {
+	return map[string]string{}, store.err
+}
+
 type projectionPublisherFixture struct {
 	mu        sync.Mutex
 	published int
@@ -27,7 +31,7 @@ type projectionPublisherFixture struct {
 	fail      bool
 }
 
-func (publisher *projectionPublisherFixture) Publish(_ context.Context, config api.Configuration) (emailprojection.Receipt, error) {
+func (publisher *projectionPublisherFixture) Publish(_ context.Context, config api.Configuration, _ map[string]string) (emailprojection.Receipt, error) {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
 	publisher.published++
@@ -36,7 +40,7 @@ func (publisher *projectionPublisherFixture) Publish(_ context.Context, config a
 	}
 	return emailprojection.Receipt{Revision: config.Revision, Digest: api.Digest(config)}, nil
 }
-func (publisher *projectionPublisherFixture) Check(_ context.Context, config api.Configuration) (emailprojection.Receipt, error) {
+func (publisher *projectionPublisherFixture) Check(_ context.Context, config api.Configuration, _ map[string]string) (emailprojection.Receipt, error) {
 	publisher.mu.Lock()
 	defer publisher.mu.Unlock()
 	publisher.checked++

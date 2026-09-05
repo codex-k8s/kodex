@@ -22,10 +22,8 @@ func (server *Server) GetRuntimeSecretImpact(ctx context.Context, request *contr
 		Page: &controlplanev1.PageInfo{NextPageToken: result.NextPageToken}}
 	for _, item := range result.Consumers {
 		consumer := &controlplanev1.RuntimeSecretImpactConsumer{EnvironmentRef: item.EnvironmentRef, EnvironmentVersion: item.EnvironmentVersion, EnvironmentVersionRef: item.EnvironmentVersionRef, SecretRevisions: item.SecretRevisions}
-		if item.Consumer.AgentRef != "" {
-			c := item.Consumer
-			consumer.Consumer = &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: c.AgentRef, AgentVersion: c.AgentVersion, BindingRef: c.BindingRef, BindingVersion: c.BindingVersion, VersionRef: c.VersionRef, ProjectRef: c.ProjectRef}
-		}
+		c := item.Consumer
+		consumer.Consumer = &controlplanev1.RuntimeEnvironmentConsumer{AgentRef: c.AgentRef, AgentVersion: c.AgentVersion, BindingRef: c.BindingRef, BindingVersion: c.BindingVersion, VersionRef: c.VersionRef, ProjectRef: c.ProjectRef}
 		response.Consumers = append(response.Consumers, consumer)
 	}
 	return response, nil

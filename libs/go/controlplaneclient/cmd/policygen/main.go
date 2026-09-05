@@ -177,7 +177,13 @@ func main() {
 		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
 		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
-	value := document{Version: 1, PolicyRevision: 54, Policy: policy{
+	profiles = append(profiles, profile{
+		ProducerID: "control-plane.oidc-secret-draft", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
+		CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
+		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
+		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
+	})
+	value := document{Version: 1, PolicyRevision: 60, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -275,6 +281,12 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	mode := "UNARY_PROTO_SHA256"
+	if strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	}
+	if operationID == "platform.command.runtime-secret-drafts.save" {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	}
 	if fullMethod == sttTranscribeMethod || strings.Contains(fullMethod, "/Upload") || strings.Contains(fullMethod, "/DownloadArtifact") {
 		mode = "STREAM_SESSION"
 	}
@@ -285,6 +297,16 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
+	case "platform.stt.model-catalog.get", "platform.email.configuration.report",
+		"platform.query.email-mailbox.configurations.list", "platform.query.email-mailbox.configurations.preview", "platform.query.email-mailbox.credentials.list":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.query.email-mailbox.configurations.get", "platform.query.email-mailbox.credential-receipts.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.email-mailbox.drafts.create":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.command.email-mailbox.drafts.save", "platform.command.email-mailbox.drafts.validate", "platform.command.email-mailbox.drafts.publish", "platform.command.email-mailbox.drafts.discard",
+		"platform.command.email-mailbox.configurations.bind", "platform.command.email-mailbox.configurations.unbind":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.email.effect-receipts.report":
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.command.email-effects.reconcile":
@@ -298,7 +320,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	case "platform.provider-credentials.device-authorize.get":
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "FORBIDDEN"}
 	}
-	resource := strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+	resource := operationID == "platform.command.runtime-secret-drafts.impact.prepare" || operationID == "platform.query.runtime-revisions.diff" || strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
 		strings.Contains(operationID, ".save") || strings.Contains(operationID, ".discard") ||
 		strings.Contains(operationID, ".validate") || strings.Contains(operationID, ".publish") || strings.Contains(operationID, ".rebind") ||
 		strings.Contains(operationID, ".detach") || strings.Contains(operationID, ".copy") || strings.Contains(operationID, "device-")
@@ -310,6 +332,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
+		"platform.stt.model-catalog.get":                       "system.configuration.manage",
 		"platform.stt.transcribe":                              "stt.transcribe",
 		"platform.command.agents.avatar.upload":                "agent.avatar.manage",
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",

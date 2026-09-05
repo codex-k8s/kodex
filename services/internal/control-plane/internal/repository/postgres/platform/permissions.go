@@ -272,6 +272,20 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.Ref, "")
+	case command.EmailCredentialInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.ConnectionRef, "")
+	case command.EmailMailboxInput:
+		connectionRef := payload.ConnectionRef
+		if payload.Managed.ConfigurationRef != "" {
+			var mailboxRef string
+			if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.Managed.ConfigurationRef).Scan(&connectionRef, &mailboxRef); err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+			if payload.ConnectionRef != "" && payload.ConnectionRef != connectionRef {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 	case command.IntegrationGrantInput:
 		if payload.AgentRef != "" {
 			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
@@ -296,13 +310,20 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		if payload.ConfigurationRef != "" {
-			var projectRef string
+			var projectRef, configurationKind string
 			if err := tx.QueryRow(ctx, queryManagedConfigurationAccessTarget, pgx.StrictNamedArgs{
 				"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
-			}).Scan(&projectRef); errors.Is(err, pgx.ErrNoRows) {
+			}).Scan(&projectRef, &configurationKind); errors.Is(err, pgx.ErrNoRows) {
 				return "", resolvedAccessTarget{}, errs.ErrNotFound
 			} else if err != nil {
 				return "", resolvedAccessTarget{}, errs.ErrUnavailable
+			}
+			if configurationKind == "EMAIL_MAILBOX" {
+				var connectionRef, mailboxRef string
+				if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.ConfigurationRef).Scan(&connectionRef, &mailboxRef); err != nil {
+					return "", resolvedAccessTarget{}, errs.ErrNotFound
+				}
+				return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 			}
 			if projectRef != "" {
 				return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)

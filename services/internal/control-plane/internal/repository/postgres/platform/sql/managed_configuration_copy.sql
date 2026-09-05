@@ -6,6 +6,7 @@ WITH source AS (
     JOIN control_plane.managed_configuration_revisions revision ON revision.id = configuration.current_revision_id
     WHERE configuration.organization_id = @organization_id::uuid AND configuration.ref = @configuration_ref
       AND configuration.managed_by = 'GIT' AND configuration.version = @expected_version
+    FOR UPDATE OF configuration
 ), inserted_set AS (
     INSERT INTO control_plane.managed_configuration_sets
         (ref, organization_id, project_id, kind, name, managed_by, source, created_by)

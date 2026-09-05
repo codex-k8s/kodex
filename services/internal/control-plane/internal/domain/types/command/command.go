@@ -12,6 +12,13 @@ import (
 type Kind string
 
 const (
+	CreateEmailMailboxDraft            Kind = "CREATE_EMAIL_MAILBOX_DRAFT"
+	SaveEmailMailboxDraft              Kind = "SAVE_EMAIL_MAILBOX_DRAFT"
+	ValidateEmailMailboxDraft          Kind = "VALIDATE_EMAIL_MAILBOX_DRAFT"
+	PublishEmailMailboxDraft           Kind = "PUBLISH_EMAIL_MAILBOX_DRAFT"
+	DiscardEmailMailboxDraft           Kind = "DISCARD_EMAIL_MAILBOX_DRAFT"
+	BindEmailMailboxConfiguration      Kind = "BIND_EMAIL_MAILBOX_CONFIGURATION"
+	UnbindEmailMailboxConfiguration    Kind = "UNBIND_EMAIL_MAILBOX_CONFIGURATION"
 	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
 	ReportEmailEffect                  Kind = "REPORT_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
@@ -108,6 +115,7 @@ const (
 	UpdateConnection                   Kind = "UPDATE_INTEGRATION_CONNECTION"
 	DeleteConnection                   Kind = "DELETE_INTEGRATION_CONNECTION"
 	ConfigureConnectionCredential      Kind = "CONFIGURE_INTEGRATION_CONNECTION_CREDENTIAL"
+	ConfigureEmailCredential           Kind = "CONFIGURE_EMAIL_MAILBOX_CREDENTIAL"
 	TestConnection                     Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled               Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant             Kind = "CHANGE_INTEGRATION_GRANT"
@@ -317,6 +325,12 @@ type AssistantConversationInput struct {
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
+
+type EmailCredentialInput struct {
+	ConnectionRef string
+	Credential    entity.EmailMailboxCredential
+	ReplayOnly    bool
+}
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
 }
@@ -431,7 +445,16 @@ type ManagedConfigurationInput struct {
 	Consumers                                                                                   []entity.ManagedConfigurationConsumer
 }
 
+type EmailMailboxInput struct {
+	ConnectionRef             string
+	ExpectedConnectionVersion int64
+	Managed                   ManagedConfigurationInput
+}
+
 type Result struct {
+	EmailMailbox            *entity.EmailMailboxConfigurationView
+	EmailPublication        *entity.EmailMailboxPublication
+	EmailConnectionVersion  int64
 	EmailReceipt            *entity.EmailEffectReceipt
 	EmailDecision           *entity.EmailReconciliationDecision
 	SkillBundle             *entity.SkillBundle
@@ -455,6 +478,7 @@ type Result struct {
 	Schedule                *entity.Schedule
 	Connection              *entity.IntegrationConnection
 	Conversation            *entity.AssistantConversation
+	EmailCredential         *entity.EmailMailboxCredential
 	Plan                    *entity.AssistantPlan
 	PlanReceipt             *entity.AssistantPlanReceipt
 	Assistant               *entity.SystemAssistant

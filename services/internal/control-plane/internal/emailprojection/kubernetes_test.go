@@ -2,6 +2,8 @@ package emailprojection
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -57,7 +59,7 @@ func TestPublishExactSnapshotAndNoCredentialMutation(t *testing.T) {
 	publisher, client, configuration := projectionFixture(t)
 	ctx := context.Background()
 	before, _ := client.CoreV1().Secrets("kodex-system").Get(ctx, SecretName, metav1.GetOptions{})
-	receipt, err := publisher.Publish(ctx, configuration)
+	receipt, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration))
 	if err != nil || receipt.Revision != 2 || receipt.Digest != api.Digest(configuration) || receipt.SecretUID != "fixture-secret" || receipt.ResourceVersion == "" {
 		t.Fatalf("publish/readback: %#v %v", receipt, err)
 	}
@@ -68,7 +70,7 @@ func TestPublishExactSnapshotAndNoCredentialMutation(t *testing.T) {
 		}
 	}
 	client.ClearActions()
-	if _, err := publisher.Publish(ctx, configuration); err != nil {
+	if _, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration)); err != nil {
 		t.Fatal(err)
 	}
 	for _, action := range client.Actions() {
@@ -77,23 +79,25 @@ func TestPublishExactSnapshotAndNoCredentialMutation(t *testing.T) {
 		}
 	}
 	configuration.Source = "different-source"
-	if _, err := publisher.Publish(ctx, configuration); !errors.Is(err, ErrConflict) {
+	if _, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration)); !errors.Is(err, ErrConflict) {
 		t.Fatalf("equivocation: %v", err)
 	}
 	configuration.Revision = 1
-	if _, err := publisher.Publish(ctx, configuration); !errors.Is(err, ErrConflict) {
+	if _, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration)); !errors.Is(err, ErrConflict) {
 		t.Fatalf("rollback: %v", err)
 	}
 }
 
 func TestPublishRequiresExactCredentialsAndExistingSeed(t *testing.T) {
-	for _, mode := range []string{"missing", "generation", "empty", "absent-secret", "corrupt-document"} {
+	for _, mode := range []string{"missing", "generation", "empty", "changed-value", "absent-secret", "corrupt-document"} {
 		t.Run(mode, func(t *testing.T) {
 			publisher, client, configuration := projectionFixture(t)
 			ctx := context.Background()
 			secret, _ := client.CoreV1().Secrets("kodex-system").Get(ctx, SecretName, metav1.GetOptions{})
 			key, _ := CredentialKey(configuration.Mailboxes[0].Smtp.Secret)
 			switch mode {
+			case "changed-value":
+				secret.Data[key] = []byte("unexpected-replacement")
 			case "missing":
 				delete(secret.Data, key)
 			case "empty":
@@ -111,7 +115,7 @@ func TestPublishRequiresExactCredentialsAndExistingSeed(t *testing.T) {
 				t.Fatal(err)
 			}
 			client.ClearActions()
-			if _, err := publisher.Publish(ctx, configuration); err == nil {
+			if _, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration)); err == nil {
 				t.Fatal("unsafe projection accepted")
 			}
 			for _, action := range client.Actions() {
@@ -128,7 +132,7 @@ func TestPublishReadbackRejectsLostUpdate(t *testing.T) {
 	client.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		return true, action.(k8stesting.UpdateAction).GetObject(), nil
 	})
-	if _, err := publisher.Publish(context.Background(), configuration); !errors.Is(err, ErrConflict) {
+	if _, err := publisher.Publish(context.Background(), configuration, fixtureCredentialDigests(configuration)); !errors.Is(err, ErrConflict) {
 		t.Fatalf("unserved update accepted: %v", err)
 	}
 }
@@ -142,7 +146,7 @@ func TestEmptyProjectionNeedsNoFakeCredential(t *testing.T) {
 	if _, err := client.CoreV1().Secrets("kodex-system").Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := publisher.Publish(ctx, configuration); err != nil {
+	if _, err := publisher.Publish(ctx, configuration, fixtureCredentialDigests(configuration)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -160,4 +164,21 @@ func TestCredentialKeyRejectsPathsAndSeparatesGenerations(t *testing.T) {
 	if err != nil || key != "ca.12" {
 		t.Fatal("descriptor key mismatch")
 	}
+}
+
+func fixtureCredentialDigests(configuration api.Configuration) map[string]string {
+	digest := sha256.Sum256([]byte("synthetic-fixture-material"))
+	result := map[string]string{}
+	for _, mailbox := range configuration.Mailboxes {
+		for _, endpoint := range []*api.Endpoint{&mailbox.Smtp, mailbox.Imap, mailbox.Pop} {
+			if endpoint == nil {
+				continue
+			}
+			for _, descriptor := range []api.Descriptor{endpoint.Ca, endpoint.Username, endpoint.Secret} {
+				key, _ := CredentialKey(descriptor)
+				result[key] = hex.EncodeToString(digest[:])
+			}
+		}
+	}
+	return result
 }

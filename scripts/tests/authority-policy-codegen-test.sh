@@ -31,10 +31,10 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 54 and .policy.authority_abi_version == 2 and
-	(.policy.authority_proof_producers | length) == 14 and
+	.policy_revision == 60 and .policy.authority_abi_version == 2 and
+	(.policy.authority_proof_producers | length) == 15 and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==
-    ["platform.email.authorization.resolve", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and
+    ["platform.email.authorization.resolve", "platform.email.configuration.report", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and
   all(.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge");
     .authority_proof_producer_id == "control-plane.email-bridge" and
     .target_workload_id == "control-plane" and .project_required == false and
@@ -45,9 +45,15 @@ jq -e '
     .application_credential == "PLATFORM_WORKER_GRANT" and
     .application_credential_audience == "urn:kodex:platform-worker:email-bridge" and
     .application_credential_trust_bundle_id == "email-bridge-platform-worker-grants-g1" and
-    .allowed_operation_ids == ["platform.email.authorization.resolve", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"])] | length) == 1 and
+    .allowed_operation_ids == ["platform.email.authorization.resolve", "platform.email.configuration.report", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"])] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.email.effect-receipts.report" and
     .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.email.configuration.report" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.email-mailbox.drafts.create" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.email-mailbox.configurations.bind" and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.email-effects.reconcile" and
     .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
   ((.policy.operation_bindings | map(.operation_id) | unique | length) ==
@@ -82,6 +88,11 @@ jq -e '
       .authority_proof_producer_id == "secret-broker.provider-credential-materializer" and
       .authority_sources == ["DOMAIN_STATE"] and
       .project_required == false)] | length) == 1 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.stt.model-catalog.get" and
+      .caller_workload_id == "control-api-gateway" and .target_workload_id == "stt-tts-service" and
+      .authority_proof_producer_id == "control-plane.oidc-stt" and
+      .full_method == "/stt.v1.SpeechToTextService/GetModelCatalog" and .project_required == false and .permission == "system.configuration.manage" and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.stt.transcribe" and
       .caller_workload_id == "control-api-gateway" and .target_workload_id == "stt-tts-service" and
       .full_method == "/stt.v1.SpeechToTextService/Transcribe" and .project_required == false and .permission == "stt.transcribe" and
