@@ -94,11 +94,20 @@ RPC не доказывает CP SQL, worker trust или key delivery. Local `/
 проверяет PostgreSQL/configuration и local issuer, не полный protected path.
 Полная проверка выполняется HEALTH с настоящим owner connection-test claim.
 Owner reconciliation consumer проверен с fake CP и disposable PostgreSQL;
-реальные CP producer/#1059 key delivery и утверждённый mail route требуют стыковки до
-финального SHA: существующий egress не разрешает mail mode. Зависимости не обходятся
+реальные CP producer/#1059 key delivery требуют сквозной проверки до
+финального staging SHA. Mail listener8082 реализован в #1029; пустая bootstrap
+проекция по-прежнему не разрешает live mail. Зависимости не обходятся
 локальным allow-all или прямым dial. Список доказательств и ограничений:
 `docs/operations/email-bridge-1037.md`; действия владельца:
 `docs/runbooks/email-bridge.md`.
+
+Каждый CONNECT проверяет семь exact readback headers до TLS/provider bytes.
+`EMAIL_BRIDGE_EGRESS_POLICY_DIGEST` обязателен и совпадает с
+`EGRESS_GATEWAY_MAIL_POLICY_DIGEST` из утверждённого render #1029. Source
+revision/digest вычисляются из текущего immutable reload snapshot, а не из
+caller headers. При смене конфигурации/DNS pins owner обновляет оба deployment
+ожидания; несовпадение во время rollout закрыто отклоняется без direct/8080
+fallback. STARTTLS greeting остаётся opaque, credentials передаются только после TLS.
 
 Production overlay включён в `web-only` и `web-with-mattermost`. Release manifest
 содержит `email-bridge:runtime` и `email-bridge-migration:migration` как разные

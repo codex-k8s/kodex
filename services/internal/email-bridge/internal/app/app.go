@@ -71,7 +71,7 @@ func Run(ctx, background context.Context, version string) error {
 	defer client.Close()
 	owner := &authority.Client{API: client.Runtime}
 	configurationState := &configurationRuntime{root: c.SecretsRoot, accept: repository.Configuration, build: func(snapshot *configuration.Snapshot) *mail.Service {
-		return &mail.Service{Reports: repository, Ledger: repository, CompletionBase: background, Config: snapshot.Configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: snapshot, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+		return &mail.Service{Reports: repository, Ledger: repository, CompletionBase: background, Config: snapshot.Configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: snapshot, Dialer: mailtransport.Tunnel{Address: c.EgressAddress, PolicyDigest: c.EgressPolicyDigest, ConfigurationRevision: snapshot.Configuration.Revision, ConfigurationDigest: api.Digest(snapshot.Configuration)}}, Receipts: repository}
 	}}
 	startup, cancel = context.WithTimeout(ctx, 20*time.Second)
 	e = configurationState.Refresh(startup)

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,7 +42,7 @@ func TestTunnelCancellationDuringCONNECT(t *testing.T) {
 		serverDone <- err
 	}()
 	start := time.Now()
-	conn, err := (Tunnel{Address: listener.Addr().String()}).Dial(ctx, "mail.example.test:993")
+	conn, err := (Tunnel{Address: listener.Addr().String(), PolicyDigest: strings.Repeat("a", 64), ConfigurationDigest: strings.Repeat("b", 64), ConfigurationRevision: 1}).Dial(ctx, "mail.example.test:993")
 	if conn != nil {
 		conn.Close()
 	}

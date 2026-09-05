@@ -9,6 +9,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
+	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/mailtransport"
 )
 
 const mailEgressAddress = "egress-gateway.kodex-system.svc:8082"
@@ -26,6 +27,7 @@ type Config struct {
 	AuthorityTarget               string `env:"EMAIL_BRIDGE_AUTHORITY_TARGET"`
 	ApplicationGrantFile          string `env:"EMAIL_BRIDGE_APPLICATION_GRANT_FILE,required,notEmpty"`
 	EgressAddress                 string `env:"EMAIL_BRIDGE_EGRESS_ADDRESS"`
+	EgressPolicyDigest            string `env:"EMAIL_BRIDGE_EGRESS_POLICY_DIGEST,required,notEmpty"`
 	Environment                   string `env:"DEPLOYMENT_ENVIRONMENT,required,notEmpty"`
 	OTLPEndpoint                  string `env:"OTEL_EXPORTER_OTLP_ENDPOINT,required,notEmpty"`
 	OTLPServerName                string `env:"OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,required,notEmpty"`
@@ -40,7 +42,7 @@ func loadConfig() (Config, error) {
 	if c.ReconciliationIntervalSeconds < 5 || c.ReconciliationIntervalSeconds > 300 || c.ReconciliationBatch < 1 || c.ReconciliationBatch > 64 {
 		return c, errors.New("invalid email reconciliation limits")
 	}
-	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != mailEgressAddress {
+	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != mailEgressAddress || !mailtransport.ValidEgressDigest(c.EgressPolicyDigest) {
 		return c, errors.New("invalid email bridge destinations")
 	}
 	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {

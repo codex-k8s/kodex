@@ -785,6 +785,9 @@ func TestProjectedCredentialRevocation(t *testing.T) {
 
 func TestCONNECTTransport(t *testing.T) {
 	f := newFixture(t, "starttls")
+	s, _, _ := service(t, f, "starttls", nil)
+	policyDigest := strings.Repeat("a", 64)
+	readback := fmt.Sprintf("X-Kodex-Egress-Revision: mail-%d\r\nX-Kodex-Egress-Digest: %s\r\nX-Kodex-Egress-Profile: email-mail\r\nX-Kodex-Egress-Workload: email-bridge\r\nX-Kodex-Egress-Operation: email.transport\r\nX-Kodex-Egress-Configuration-Revision: %d\r\nX-Kodex-Egress-Configuration-Digest: %s\r\n", s.Config.Revision, policyDigest, s.Config.Revision, api.Digest(s.Config))
 	listener, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
 		t.Fatal(e)
@@ -821,7 +824,7 @@ func TestCONNECTTransport(t *testing.T) {
 					return
 				}
 				defer upstream.Close()
-				io.WriteString(connection, "HTTP/1.1 200 Connection Established\r\n\r\n")
+				io.WriteString(connection, "HTTP/1.1 200 Connection Established\r\n"+readback+"\r\n")
 				done := make(chan struct{})
 				go func() { io.Copy(upstream, reader); upstream.Close(); close(done) }()
 				io.Copy(connection, upstream)
@@ -830,15 +833,15 @@ func TestCONNECTTransport(t *testing.T) {
 			}()
 		}
 	}()
-	s, _, _ := service(t, f, "starttls", nil)
-	s.Provider = &mailtransport.Provider{Secrets: &secrets{ca: f.ca}, Dialer: mailtransport.Tunnel{Address: listener.Addr().String()}}
+	tunnel := mailtransport.Tunnel{Address: listener.Addr().String(), PolicyDigest: policyDigest, ConfigurationRevision: s.Config.Revision, ConfigurationDigest: api.Digest(s.Config)}
+	s.Provider = &mailtransport.Provider{Secrets: &secrets{ca: f.ca}, Dialer: tunnel}
 	if execute(t, s, send(api.OperationSend, "connect")).Status != "accepted" {
 		t.Fatal("STARTTLS through CONNECT")
 	}
 	if execute(t, s, api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "uid-one"}).Status != "ok" {
 		t.Fatal("POP STLS through CONNECT")
 	}
-	if c, e := (mailtransport.Tunnel{Address: listener.Addr().String()}).Dial(t.Context(), "foreign.example.test:995"); e == nil {
+	if c, e := tunnel.Dial(t.Context(), "foreign.example.test:995"); e == nil {
 		c.Close()
 		t.Fatal("proxy denial bypassed")
 	}

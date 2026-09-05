@@ -34,6 +34,9 @@ egress:
   owner: egress-gateway
   issue: 1029
   endpoint: egress-gateway.kodex-system.svc:8082
+  policy_digest_env: EMAIL_BRIDGE_EGRESS_POLICY_DIGEST
+  source_identity: immutable-configuration-revision-and-digest
+  readback: every-connect-before-provider-bytes
   direct_dial: forbidden
 state:
   owner: email-bridge
