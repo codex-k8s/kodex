@@ -23,8 +23,6 @@ var (
 	queryInteractionResolveConnection string
 	//go:embed sql/interaction_enqueue_gate_deliveries.sql
 	queryInteractionEnqueueGateDeliveries string
-	//go:embed sql/interaction_enqueue_terminal_deliveries.sql
-	queryInteractionEnqueueTerminalDeliveries string
 	//go:embed sql/interaction_cancel_pending_gate_deliveries.sql
 	queryInteractionCancelPendingGateDeliveries string
 	//go:embed sql/interaction_list_failed_incidents.sql
@@ -33,4 +31,14 @@ var (
 	queryInteractionListRunIncidents string
 	//go:embed sql/interaction_count_active_adapters.sql
 	queryInteractionCountActiveAdapters string
+	//go:embed sql/interaction_terminal_candidates.sql
+	queryInteractionTerminalCandidates string
+	//go:embed sql/interaction_terminal_create_approval.sql
+	queryInteractionTerminalCreateApproval string
+	//go:embed sql/interaction_approval_resolve.sql
+	queryInteractionApprovalResolve string
+	//go:embed sql/interaction_approval_update.sql
+	queryInteractionApprovalUpdate string
+	//go:embed sql/interaction_approval_invalidate.sql
+	queryInteractionApprovalInvalidate string
 )

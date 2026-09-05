@@ -65,7 +65,7 @@ WHERE run.ref=$1 AND g.ref='ack_inbound_grant' ORDER BY run.id LIMIT 1 RETURNING
 			t.Fatalf("completion state=%s, want %s: %v", state, test.state, err)
 		}
 	}
-	incident := projectInteractionIncident(entity.Incident{}, "UNKNOWN_OUTCOME", 1)
+	incident := projectInteractionIncident(entity.Incident{}, "UNKNOWN_OUTCOME", 1, 1)
 	if incident.State != "OPEN" || incident.SafeNextStep != "i18n:INTERACTION_DELIVERY_RECONCILIATION_REQUIRED" {
 		t.Fatal("unknown outcome advertised automatic recovery")
 	}

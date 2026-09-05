@@ -1101,11 +1101,11 @@ func (repository *Repository) readRunWithIncidents(ctx context.Context, runner q
 	for rows.Next() {
 		var incident entity.Incident
 		var deliveryState string
-		var attempt int
-		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
+		var attempt, maximumAttempts int
+		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &maximumAttempts, &incident.CreatedAt); err != nil {
 			return entity.Run{}, errs.ErrUnavailable
 		}
-		incident = projectInteractionIncident(incident, deliveryState, attempt)
+		incident = projectInteractionIncident(incident, deliveryState, attempt, maximumAttempts)
 		item.Incidents = append(item.Incidents, incident)
 	}
 	if err := rows.Err(); err != nil {
@@ -1921,11 +1921,11 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	for incidentRows.Next() {
 		var incident entity.Incident
 		var deliveryState string
-		var attempt int
-		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
+		var attempt, maximumAttempts int
+		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &maximumAttempts, &incident.CreatedAt); err != nil {
 			return platformrepo.Administration{}, errs.ErrUnavailable
 		}
-		incident = projectInteractionIncident(incident, deliveryState, attempt)
+		incident = projectInteractionIncident(incident, deliveryState, attempt, maximumAttempts)
 		result.Incidents = append(result.Incidents, incident)
 	}
 	if err := incidentRows.Err(); err != nil {
