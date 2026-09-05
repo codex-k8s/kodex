@@ -43,6 +43,7 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("create draft: %v", err)
 	}
 	bundle := created.SkillBundle
+	testContextVFS(t, ctx, service, owner, project.Project.Ref, bundle.Ref, "SKILL", bundle.DraftRevision.Digest, true)
 	if bundle.CurrentRevision != nil || bundle.DraftRevision == nil || bundle.DraftRevision.ScanState != "PENDING" {
 		t.Fatal("draft acquired implicit publication or scan")
 	}
@@ -109,7 +110,10 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("publication: %v", err)
 	}
 	bundle = published.SkillBundle
-	testContextBinding(t, ctx, service, owner, project.Project.Ref, bundle.Ref, bundle.CurrentRevision.Ref, "skill-context", false)
+	testContextVFS(t, ctx, service, owner, project.Project.Ref, bundle.Ref, "SKILL", bundle.CurrentRevision.Digest, true)
+	reader := contextProjectReader(t, ctx, repository, service, owner, project.Project.Ref, "SKILL")
+	testContextVFS(t, ctx, service, reader, project.Project.Ref, bundle.Ref, "SKILL", bundle.CurrentRevision.Digest, false)
+	testContextBinding(t, ctx, repository, service, owner, project.Project.Ref, bundle.Ref, bundle.CurrentRevision.Ref, "skill-context", false)
 	listed, total, _, err := service.ListSkillBundles(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}})
 	if err != nil || total != 1 || len(listed) != 1 || listed[0].Ref != bundle.Ref {
 		t.Fatalf("skill catalog: %d %d %v", total, len(listed), err)
@@ -127,6 +131,7 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 			t.Fatalf("%s: %v", step.key, err)
 		}
 		bundle = result.SkillBundle
+		testContextVFS(t, ctx, service, owner, project.Project.Ref, bundle.Ref, "SKILL", bundle.CurrentRevision.Digest, bundle.State == "ACTIVE")
 	}
 	if bundle.State != "PURGED" || len(bundle.CurrentRevision.Files) != 0 {
 		t.Fatal("purged skill files remain visible")

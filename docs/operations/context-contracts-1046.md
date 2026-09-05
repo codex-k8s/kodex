@@ -104,6 +104,16 @@ Skill lifecycle/list/history: локальный targeted PostgreSQL PASS с я�
 scanner port; production Unix-socket client проверен Go/race protocol fixtures.
 Bind/unbind/rebind и readback проверены в обоих targeted PostgreSQL scenarios.
 Runtime materialization ещё не реализована.
+VFS tree/search уже читает реальные SkillBundle и MemoryRecord, не knowledge
+artifacts или selected tool names. Узлы содержат owner resource ref и digest
+текущей revision (для Skill открытая draft имеет приоритет, как в каталоге).
+Memory retention, archive/purge, source-run visibility и Skill artifact
+visibility проверяются в SQL до LIMIT. Списки Memory по agent_ref дополнительно
+требуют видимость самого агента, иначе не раскрывают наличие binding.
+Targeted PostgreSQL `memory_records|skill_bundle` проверяет tree/global search,
+archive/restore/purge и отрицательные project-only reader сценарии.
+Runtime pins, физический retention GC и VFS отдельных binding/file узлов
+остаются незавершёнными; эта проекция не материализует runtime content.
 STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.
 

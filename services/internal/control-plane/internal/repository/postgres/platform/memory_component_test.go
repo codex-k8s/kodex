@@ -52,7 +52,8 @@ func testMemoryRecords(t *testing.T, ctx context.Context, repository *Repository
 		t.Fatalf("stale revision: %v", err)
 	}
 	record = updated.MemoryRecord
-	testContextBinding(t, ctx, service, owner, project.Project.Ref, record.Ref, record.CurrentRevision.Ref, "memory-context", true)
+	testContextVFS(t, ctx, service, owner, project.Project.Ref, record.Ref, "MEMORY", record.CurrentRevision.Digest, true)
+	testContextBinding(t, ctx, repository, service, owner, project.Project.Ref, record.Ref, record.CurrentRevision.Ref, "memory-context", true)
 	history, total, next, err := service.ListMemoryRecordRevisions(ctx, owner, record.Ref, query.Page{Size: 1})
 	if err != nil || total != 2 || len(history) != 1 || next == "" {
 		t.Fatalf("history page: total=%d count=%d next=%t err=%v", total, len(history), next != "", err)
@@ -74,6 +75,7 @@ func testMemoryRecords(t *testing.T, ctx context.Context, repository *Repository
 			t.Fatalf("%s: %v", step.key, err)
 		}
 		record = result.MemoryRecord
+		testContextVFS(t, ctx, service, owner, project.Project.Ref, record.Ref, "MEMORY", record.CurrentRevision.Digest, record.State == "ACTIVE")
 	}
 	if record.State != "PURGED" || !record.CurrentRevision.Redacted || record.CurrentRevision.Summary != "" {
 		t.Fatal("purged summary remains visible")
