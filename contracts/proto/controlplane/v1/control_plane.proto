@@ -3614,6 +3614,8 @@ message RuntimeSecretDraft {
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
   google.protobuf.Timestamp expires_at = 13;
+  // Текущая owner version Secret из того же read/lock, включая PROVISIONING.
+  int64 secret_version = 14;
 }
 
 // Внутренний exact readback immutable ciphertext; не выдаётся browser.

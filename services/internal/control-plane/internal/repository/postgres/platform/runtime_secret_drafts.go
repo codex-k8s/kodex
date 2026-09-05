@@ -36,7 +36,7 @@ func scanSecretDraft(row pgx.Row) (secretDraftRow, error) {
 	var d secretDraftRow
 	var raw []byte
 	err := row.Scan(&d.id, &d.public.Ref, &d.public.Version, &d.public.Generation, &d.public.ProjectRef, &d.public.SecretRef, &d.public.Name, &d.public.Description, &d.public.ValueType,
-		&d.public.State, &d.public.PublishedRevision, &d.public.CreatedAt, &d.public.UpdatedAt, &d.public.ExpiresAt, &d.ownerID, &d.contentDigest, &raw, &d.secretID, &d.projectID, &d.namespace, &d.stagingNamespace, &d.secretState)
+		&d.public.State, &d.public.PublishedRevision, &d.public.CreatedAt, &d.public.UpdatedAt, &d.public.ExpiresAt, &d.ownerID, &d.contentDigest, &raw, &d.secretID, &d.projectID, &d.namespace, &d.stagingNamespace, &d.secretState, &d.public.SecretVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, errs.ErrNotFound
 	}

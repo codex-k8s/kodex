@@ -11,7 +11,7 @@ import (
 )
 
 func castSecretDraft(d entity.RuntimeSecretDraft) *cp.RuntimeSecretDraft {
-	return &cp.RuntimeSecretDraft{Ref: d.Ref, Version: d.Version, Generation: d.Generation, ProjectRef: d.ProjectRef, SecretRef: d.SecretRef, Name: d.Name, Description: d.Description, ValueType: runtimeSecretValueType(d.ValueType), State: cp.RuntimeSecretDraftState(cp.RuntimeSecretDraftState_value["RUNTIME_SECRET_DRAFT_STATE_"+d.State]), PublishedRevision: d.PublishedRevision, CreatedAt: timestamp(d.CreatedAt), UpdatedAt: timestamp(d.UpdatedAt), ExpiresAt: timestamp(d.ExpiresAt)}
+	return &cp.RuntimeSecretDraft{Ref: d.Ref, Version: d.Version, Generation: d.Generation, ProjectRef: d.ProjectRef, SecretRef: d.SecretRef, SecretVersion: d.SecretVersion, Name: d.Name, Description: d.Description, ValueType: runtimeSecretValueType(d.ValueType), State: cp.RuntimeSecretDraftState(cp.RuntimeSecretDraftState_value["RUNTIME_SECRET_DRAFT_STATE_"+d.State]), PublishedRevision: d.PublishedRevision, CreatedAt: timestamp(d.CreatedAt), UpdatedAt: timestamp(d.UpdatedAt), ExpiresAt: timestamp(d.ExpiresAt)}
 }
 func castDraftEncrypted(d *entity.RuntimeSecretDraftEncryptedDescriptor) *cp.RuntimeSecretDraftEncryptedDescriptor {
 	if d == nil {

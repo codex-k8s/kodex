@@ -58,6 +58,9 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 	}
 	input := repoport.RuntimeSecretDraftPrepareInput{Kind: "SAVE", ProjectRef: project.Project.Ref, Name: "draft-secret", ValueType: "STRING", ExpectedContentSHA256: runtimeSecretHashA, Mutation: value.Mutation{IdempotencyKey: "draft-save-original"}}
 	first := prepare(input)
+	if first.Draft.SecretVersion < 1 {
+		t.Fatal("new draft lacks authoritative secret version")
+	}
 	reissued := prepare(input)
 	if first.OperationRef != reissued.OperationRef || first.OperationGrant == reissued.OperationGrant {
 		t.Fatal("save replay did not rotate grant")
@@ -82,7 +85,7 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 	}
 	prepareNext := func(kind, key string, draft entity.RuntimeSecretDraft) entity.RuntimeSecretDraftWork {
 		t.Helper()
-		return claim(prepare(repoport.RuntimeSecretDraftPrepareInput{Kind: kind, DraftRef: draft.Ref, ExpectedSecretVersion: 1, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &draft.Version}}))
+		return claim(prepare(repoport.RuntimeSecretDraftPrepareInput{Kind: kind, DraftRef: draft.Ref, ExpectedSecretVersion: draft.SecretVersion, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &draft.Version}}))
 	}
 	validate := prepareNext("VALIDATE", "draft-validate-original", saved.Draft)
 	bad := *encrypted
@@ -148,6 +151,9 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 	published, err := finish(retry, "COMPLETE", encrypted, materialization)
 	if err != nil || published.Draft.State != "PUBLISHED" || published.Secret == nil || published.Secret.CurrentRevision != retry.TargetRevision {
 		t.Fatalf("publish retry: %+v %v", published, err)
+	}
+	if published.Draft.SecretVersion != published.Secret.Version {
+		t.Fatal("publish draft secret version is stale")
 	}
 	if _, err := finish(retry, "COMPLETE", encrypted, materialization); err != nil {
 		t.Fatalf("publish replay: %v", err)
