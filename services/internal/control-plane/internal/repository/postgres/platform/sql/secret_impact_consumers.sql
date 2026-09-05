@@ -18,6 +18,8 @@ WITH eligible AS MATERIALIZED (
     LEFT JOIN control_plane.agents agent ON agent.id=binding.agent_id
     LEFT JOIN control_plane.catalog_access_targets target ON target.organization_id=agent.organization_id AND target.kind='AGENT' AND target.id=agent.id
     WHERE environment.organization_id=@organization_id::uuid AND environment.state='ACTIVE'
+      AND (@query='' OR strpos(lower(environment.name || ' ' || environment.ref || ' ' ||
+          COALESCE(agent.name,'') || ' ' || COALESCE(agent.ref,'') || ' ' || project.ref),lower(@query))>0)
       AND (revision.id=environment.current_version_id OR binding.id IS NOT NULL)
       AND (@authority_project='' OR project.id=NULLIF(@authority_project,'')::uuid)
       AND control_plane.catalog_resource_visible(environment.organization_id,@actor_id::uuid,'project.manage',

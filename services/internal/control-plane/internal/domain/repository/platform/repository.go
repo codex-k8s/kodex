@@ -222,8 +222,8 @@ type Repository interface {
 	ListMemoryRecords(context.Context, value.Principal, query.Filter) ([]entity.KodexMemoryRecord, int64, string, error)
 	ListMemoryRecordRevisions(context.Context, value.Principal, string, query.Page) ([]entity.MemoryRecordRevision, int64, string, error)
 	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
-	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, query.Page) (entity.RuntimeSecretImpact, error)
-	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
+	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, string, query.Page) (entity.RuntimeSecretImpact, error)
+	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
 	ListInteractionIdentities(context.Context, value.Principal, string, query.Page) ([]entity.InteractionIdentity, string, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
