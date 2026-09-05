@@ -927,6 +927,45 @@ func (e EmailEffectOutcome) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxApprovalPolicy.
+const (
+	EmailMailboxApprovalPolicyALLOW     EmailMailboxApprovalPolicy = "ALLOW"
+	EmailMailboxApprovalPolicyDENY      EmailMailboxApprovalPolicy = "DENY"
+	EmailMailboxApprovalPolicyHUMANGATE EmailMailboxApprovalPolicy = "HUMAN_GATE"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxApprovalPolicy enum.
+func (e EmailMailboxApprovalPolicy) Valid() bool {
+	switch e {
+	case EmailMailboxApprovalPolicyALLOW:
+		return true
+	case EmailMailboxApprovalPolicyDENY:
+		return true
+	case EmailMailboxApprovalPolicyHUMANGATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxAuthMethod.
+const (
+	OAUTHBEARER EmailMailboxAuthMethod = "OAUTHBEARER"
+	PASSWORD    EmailMailboxAuthMethod = "PASSWORD"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxAuthMethod enum.
+func (e EmailMailboxAuthMethod) Valid() bool {
+	switch e {
+	case OAUTHBEARER:
+		return true
+	case PASSWORD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailMailboxCredentialKind.
 const (
 	AUTHSECRET    EmailMailboxCredentialKind = "AUTH_SECRET"
@@ -942,6 +981,162 @@ func (e EmailMailboxCredentialKind) Valid() bool {
 	case CACERTIFICATE:
 		return true
 	case USERNAME:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxDiagnosticCode.
+const (
+	EMAILMAILBOXCONFIGURATIONINVALID EmailMailboxDiagnosticCode = "EMAIL_MAILBOX_CONFIGURATION_INVALID"
+	EMAILMAILBOXCREDENTIALMISMATCH   EmailMailboxDiagnosticCode = "EMAIL_MAILBOX_CREDENTIAL_MISMATCH"
+	EMAILMAILBOXSYNTAXINVALID        EmailMailboxDiagnosticCode = "EMAIL_MAILBOX_SYNTAX_INVALID"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxDiagnosticCode enum.
+func (e EmailMailboxDiagnosticCode) Valid() bool {
+	switch e {
+	case EMAILMAILBOXCONFIGURATIONINVALID:
+		return true
+	case EMAILMAILBOXCREDENTIALMISMATCH:
+		return true
+	case EMAILMAILBOXSYNTAXINVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxOperation.
+const (
+	EmailMailboxOperationARCHIVE     EmailMailboxOperation = "ARCHIVE"
+	EmailMailboxOperationATTACHMENTS EmailMailboxOperation = "ATTACHMENTS"
+	EmailMailboxOperationDELETE      EmailMailboxOperation = "DELETE"
+	EmailMailboxOperationDOWNLOAD    EmailMailboxOperation = "DOWNLOAD"
+	EmailMailboxOperationDRAFTCREATE EmailMailboxOperation = "DRAFT_CREATE"
+	EmailMailboxOperationDRAFTDELETE EmailMailboxOperation = "DRAFT_DELETE"
+	EmailMailboxOperationDRAFTUPDATE EmailMailboxOperation = "DRAFT_UPDATE"
+	EmailMailboxOperationFETCH       EmailMailboxOperation = "FETCH"
+	EmailMailboxOperationFORWARD     EmailMailboxOperation = "FORWARD"
+	EmailMailboxOperationHEALTH      EmailMailboxOperation = "HEALTH"
+	EmailMailboxOperationLIST        EmailMailboxOperation = "LIST"
+	EmailMailboxOperationMAILBOXES   EmailMailboxOperation = "MAILBOXES"
+	EmailMailboxOperationMARKREAD    EmailMailboxOperation = "MARK_READ"
+	EmailMailboxOperationMARKUNREAD  EmailMailboxOperation = "MARK_UNREAD"
+	EmailMailboxOperationMOVE        EmailMailboxOperation = "MOVE"
+	EmailMailboxOperationRECEIPT     EmailMailboxOperation = "RECEIPT"
+	EmailMailboxOperationREPLY       EmailMailboxOperation = "REPLY"
+	EmailMailboxOperationREPLYALL    EmailMailboxOperation = "REPLY_ALL"
+	EmailMailboxOperationSEARCH      EmailMailboxOperation = "SEARCH"
+	EmailMailboxOperationSEND        EmailMailboxOperation = "SEND"
+	EmailMailboxOperationTHREAD      EmailMailboxOperation = "THREAD"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxOperation enum.
+func (e EmailMailboxOperation) Valid() bool {
+	switch e {
+	case EmailMailboxOperationARCHIVE:
+		return true
+	case EmailMailboxOperationATTACHMENTS:
+		return true
+	case EmailMailboxOperationDELETE:
+		return true
+	case EmailMailboxOperationDOWNLOAD:
+		return true
+	case EmailMailboxOperationDRAFTCREATE:
+		return true
+	case EmailMailboxOperationDRAFTDELETE:
+		return true
+	case EmailMailboxOperationDRAFTUPDATE:
+		return true
+	case EmailMailboxOperationFETCH:
+		return true
+	case EmailMailboxOperationFORWARD:
+		return true
+	case EmailMailboxOperationHEALTH:
+		return true
+	case EmailMailboxOperationLIST:
+		return true
+	case EmailMailboxOperationMAILBOXES:
+		return true
+	case EmailMailboxOperationMARKREAD:
+		return true
+	case EmailMailboxOperationMARKUNREAD:
+		return true
+	case EmailMailboxOperationMOVE:
+		return true
+	case EmailMailboxOperationRECEIPT:
+		return true
+	case EmailMailboxOperationREPLY:
+		return true
+	case EmailMailboxOperationREPLYALL:
+		return true
+	case EmailMailboxOperationSEARCH:
+		return true
+	case EmailMailboxOperationSEND:
+		return true
+	case EmailMailboxOperationTHREAD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxPublicationState.
+const (
+	EmailMailboxPublicationStateFAILED     EmailMailboxPublicationState = "FAILED"
+	EmailMailboxPublicationStatePENDING    EmailMailboxPublicationState = "PENDING"
+	EmailMailboxPublicationStateREADY      EmailMailboxPublicationState = "READY"
+	EmailMailboxPublicationStateSUPERSEDED EmailMailboxPublicationState = "SUPERSEDED"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxPublicationState enum.
+func (e EmailMailboxPublicationState) Valid() bool {
+	switch e {
+	case EmailMailboxPublicationStateFAILED:
+		return true
+	case EmailMailboxPublicationStatePENDING:
+		return true
+	case EmailMailboxPublicationStateREADY:
+		return true
+	case EmailMailboxPublicationStateSUPERSEDED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxReceiveProtocol.
+const (
+	IMAP EmailMailboxReceiveProtocol = "IMAP"
+	POP3 EmailMailboxReceiveProtocol = "POP3"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxReceiveProtocol enum.
+func (e EmailMailboxReceiveProtocol) Valid() bool {
+	switch e {
+	case IMAP:
+		return true
+	case POP3:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxTLSMode.
+const (
+	IMPLICIT EmailMailboxTLSMode = "IMPLICIT"
+	STARTTLS EmailMailboxTLSMode = "STARTTLS"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxTLSMode enum.
+func (e EmailMailboxTLSMode) Valid() bool {
+	switch e {
+	case IMPLICIT:
+		return true
+	case STARTTLS:
 		return true
 	default:
 		return false
@@ -1430,6 +1625,7 @@ func (e InteractionIdentityState) Valid() bool {
 
 // Defines values for ManagedConfigurationKind.
 const (
+	ManagedConfigurationKindEMAILMAILBOX          ManagedConfigurationKind = "EMAIL_MAILBOX"
 	ManagedConfigurationKindINTEGRATIONDEFINITION ManagedConfigurationKind = "INTEGRATION_DEFINITION"
 	ManagedConfigurationKindPROMPTTEMPLATE        ManagedConfigurationKind = "PROMPT_TEMPLATE"
 	ManagedConfigurationKindROLEIMAGE             ManagedConfigurationKind = "ROLE_IMAGE"
@@ -1439,6 +1635,8 @@ const (
 // Valid indicates whether the value is a known member of the ManagedConfigurationKind enum.
 func (e ManagedConfigurationKind) Valid() bool {
 	switch e {
+	case ManagedConfigurationKindEMAILMAILBOX:
+		return true
 	case ManagedConfigurationKindINTEGRATIONDEFINITION:
 		return true
 	case ManagedConfigurationKindPROMPTTEMPLATE:
@@ -1634,6 +1832,7 @@ func (e ManagedConfigurationSummaryCurrentRevisionState) Valid() bool {
 
 // Defines values for ManagedConfigurationSummaryKind.
 const (
+	ManagedConfigurationSummaryKindEMAILMAILBOX          ManagedConfigurationSummaryKind = "EMAIL_MAILBOX"
 	ManagedConfigurationSummaryKindINTEGRATIONDEFINITION ManagedConfigurationSummaryKind = "INTEGRATION_DEFINITION"
 	ManagedConfigurationSummaryKindPROMPTTEMPLATE        ManagedConfigurationSummaryKind = "PROMPT_TEMPLATE"
 	ManagedConfigurationSummaryKindROLEIMAGE             ManagedConfigurationSummaryKind = "ROLE_IMAGE"
@@ -1643,6 +1842,8 @@ const (
 // Valid indicates whether the value is a known member of the ManagedConfigurationSummaryKind enum.
 func (e ManagedConfigurationSummaryKind) Valid() bool {
 	switch e {
+	case ManagedConfigurationSummaryKindEMAILMAILBOX:
+		return true
 	case ManagedConfigurationSummaryKindINTEGRATIONDEFINITION:
 		return true
 	case ManagedConfigurationSummaryKindPROMPTTEMPLATE:
@@ -3044,22 +3245,22 @@ func (e RunNodeState) Valid() bool {
 
 // Defines values for RunNodeType.
 const (
-	AGENTEXECUTION RunNodeType = "AGENT_EXECUTION"
-	EXTERNALACTION RunNodeType = "EXTERNAL_ACTION"
-	HUMANGATE      RunNodeType = "HUMAN_GATE"
-	ROOTPROCESS    RunNodeType = "ROOT_PROCESS"
+	RunNodeTypeAGENTEXECUTION RunNodeType = "AGENT_EXECUTION"
+	RunNodeTypeEXTERNALACTION RunNodeType = "EXTERNAL_ACTION"
+	RunNodeTypeHUMANGATE      RunNodeType = "HUMAN_GATE"
+	RunNodeTypeROOTPROCESS    RunNodeType = "ROOT_PROCESS"
 )
 
 // Valid indicates whether the value is a known member of the RunNodeType enum.
 func (e RunNodeType) Valid() bool {
 	switch e {
-	case AGENTEXECUTION:
+	case RunNodeTypeAGENTEXECUTION:
 		return true
-	case EXTERNALACTION:
+	case RunNodeTypeEXTERNALACTION:
 		return true
-	case HUMANGATE:
+	case RunNodeTypeHUMANGATE:
 		return true
-	case ROOTPROCESS:
+	case RunNodeTypeROOTPROCESS:
 		return true
 	default:
 		return false
@@ -4763,22 +4964,22 @@ func (e WorkflowStepGateDecisions) Valid() bool {
 
 // Defines values for WorkflowStepInputGateDecisions.
 const (
-	APPROVE        WorkflowStepInputGateDecisions = "APPROVE"
-	CANCEL         WorkflowStepInputGateDecisions = "CANCEL"
-	REJECT         WorkflowStepInputGateDecisions = "REJECT"
-	REQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
+	WorkflowStepInputGateDecisionsAPPROVE        WorkflowStepInputGateDecisions = "APPROVE"
+	WorkflowStepInputGateDecisionsCANCEL         WorkflowStepInputGateDecisions = "CANCEL"
+	WorkflowStepInputGateDecisionsREJECT         WorkflowStepInputGateDecisions = "REJECT"
+	WorkflowStepInputGateDecisionsREQUESTCHANGES WorkflowStepInputGateDecisions = "REQUEST_CHANGES"
 )
 
 // Valid indicates whether the value is a known member of the WorkflowStepInputGateDecisions enum.
 func (e WorkflowStepInputGateDecisions) Valid() bool {
 	switch e {
-	case APPROVE:
+	case WorkflowStepInputGateDecisionsAPPROVE:
 		return true
-	case CANCEL:
+	case WorkflowStepInputGateDecisionsCANCEL:
 		return true
-	case REJECT:
+	case WorkflowStepInputGateDecisionsREJECT:
 		return true
-	case REQUESTCHANGES:
+	case WorkflowStepInputGateDecisionsREQUESTCHANGES:
 		return true
 	default:
 		return false
@@ -5021,6 +5222,7 @@ func (e GetArtifactImpactParamsAction) Valid() bool {
 
 // Defines values for ListManagedConfigurationsParamsKind.
 const (
+	EMAILMAILBOX          ListManagedConfigurationsParamsKind = "EMAIL_MAILBOX"
 	INTEGRATIONDEFINITION ListManagedConfigurationsParamsKind = "INTEGRATION_DEFINITION"
 	PROMPTTEMPLATE        ListManagedConfigurationsParamsKind = "PROMPT_TEMPLATE"
 	ROLEIMAGE             ListManagedConfigurationsParamsKind = "ROLE_IMAGE"
@@ -5030,6 +5232,8 @@ const (
 // Valid indicates whether the value is a known member of the ListManagedConfigurationsParamsKind enum.
 func (e ListManagedConfigurationsParamsKind) Valid() bool {
 	switch e {
+	case EMAILMAILBOX:
+		return true
 	case INTEGRATIONDEFINITION:
 		return true
 	case PROMPTTEMPLATE:
@@ -5120,25 +5324,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	CLEAN       ListArtifactsParamsScanState = "CLEAN"
-	FAILED      ListArtifactsParamsScanState = "FAILED"
-	PENDING     ListArtifactsParamsScanState = "PENDING"
-	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	SCANNING    ListArtifactsParamsScanState = "SCANNING"
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case CLEAN:
+	case ListArtifactsParamsScanStateCLEAN:
 		return true
-	case FAILED:
+	case ListArtifactsParamsScanStateFAILED:
 		return true
-	case PENDING:
+	case ListArtifactsParamsScanStatePENDING:
 		return true
-	case QUARANTINED:
+	case ListArtifactsParamsScanStateQUARANTINED:
 		return true
-	case SCANNING:
+	case ListArtifactsParamsScanStateSCANNING:
 		return true
 	default:
 		return false
@@ -5985,6 +6189,40 @@ type EmailEffectReceiptView struct {
 	Receipt  EmailEffectReceipt           `json:"receipt"`
 }
 
+// EmailMailboxApprovalPolicy defines model for EmailMailboxApprovalPolicy.
+type EmailMailboxApprovalPolicy string
+
+// EmailMailboxAuthMethod defines model for EmailMailboxAuthMethod.
+type EmailMailboxAuthMethod string
+
+// EmailMailboxBindingInput defines model for EmailMailboxBindingInput.
+type EmailMailboxBindingInput struct {
+	ConnectionRef             OpaqueRef `json:"connectionRef"`
+	ExpectedConnectionVersion int64     `json:"expectedConnectionVersion"`
+}
+
+// EmailMailboxConfigurationPage defines model for EmailMailboxConfigurationPage.
+type EmailMailboxConfigurationPage struct {
+	Items         []EmailMailboxConfigurationView `json:"items"`
+	NextPageToken string                          `json:"nextPageToken"`
+	Total         int64                           `json:"total"`
+}
+
+// EmailMailboxConfigurationView defines model for EmailMailboxConfigurationView.
+type EmailMailboxConfigurationView struct {
+	BoundRevisionRef  string                       `json:"boundRevisionRef"`
+	Configuration     ManagedConfiguration         `json:"configuration"`
+	ConnectionRef     OpaqueRef                    `json:"connectionRef"`
+	ConnectionVersion int64                        `json:"connectionVersion"`
+	Diagnostics       []EmailMailboxDiagnostic     `json:"diagnostics"`
+	MailboxRef        OpaqueRef                    `json:"mailboxRef"`
+	Publication       *EmailMailboxPublication     `json:"publication,omitempty"`
+	Revision          ManagedConfigurationRevision `json:"revision"`
+
+	// Specification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+	Specification EmailMailboxSpecification `json:"specification"`
+}
+
 // EmailMailboxCredential defines model for EmailMailboxCredential.
 type EmailMailboxCredential struct {
 	ConnectionRef     OpaqueRef                  `json:"connectionRef"`
@@ -6004,6 +6242,136 @@ type EmailMailboxCredentialInput struct {
 
 // EmailMailboxCredentialKind defines model for EmailMailboxCredentialKind.
 type EmailMailboxCredentialKind string
+
+// EmailMailboxCredentialPage defines model for EmailMailboxCredentialPage.
+type EmailMailboxCredentialPage struct {
+	Items         []EmailMailboxCredential `json:"items"`
+	NextPageToken string                   `json:"nextPageToken"`
+	Total         int64                    `json:"total"`
+}
+
+// EmailMailboxCredentialReference defines model for EmailMailboxCredentialReference.
+type EmailMailboxCredentialReference struct {
+	Generation *int64  `json:"generation,omitempty"`
+	Name       *string `json:"name,omitempty"`
+}
+
+// EmailMailboxDiagnostic defines model for EmailMailboxDiagnostic.
+type EmailMailboxDiagnostic struct {
+	Code    EmailMailboxDiagnosticCode `json:"code"`
+	Column  int32                      `json:"column"`
+	Line    int32                      `json:"line"`
+	Message string                     `json:"message"`
+	Path    string                     `json:"path"`
+}
+
+// EmailMailboxDiagnosticCode defines model for EmailMailboxDiagnostic.Code.
+type EmailMailboxDiagnosticCode string
+
+// EmailMailboxDraftContent Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+type EmailMailboxDraftContent struct {
+	// Specification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+	Specification *EmailMailboxSpecification `json:"specification,omitempty"`
+	Yaml          *string                    `json:"yaml,omitempty"`
+}
+
+// EmailMailboxDraftInput defines model for EmailMailboxDraftInput.
+type EmailMailboxDraftInput struct {
+	ConfigurationRef *OpaqueRef `json:"configurationRef,omitempty"`
+
+	// Content Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+	Content EmailMailboxDraftContent `json:"content"`
+	Name    string                   `json:"name"`
+}
+
+// EmailMailboxEndpoint defines model for EmailMailboxEndpoint.
+type EmailMailboxEndpoint struct {
+	AuthMethod *EmailMailboxAuthMethod          `json:"authMethod,omitempty"`
+	Ca         *EmailMailboxCredentialReference `json:"ca,omitempty"`
+	Host       *string                          `json:"host,omitempty"`
+	Port       *int32                           `json:"port,omitempty"`
+	Secret     *EmailMailboxCredentialReference `json:"secret,omitempty"`
+	ServerName *string                          `json:"serverName,omitempty"`
+	TlsMode    *EmailMailboxTLSMode             `json:"tlsMode,omitempty"`
+	Username   *EmailMailboxCredentialReference `json:"username,omitempty"`
+}
+
+// EmailMailboxLimits defines model for EmailMailboxLimits.
+type EmailMailboxLimits struct {
+	AttachmentBytes *int64 `json:"attachmentBytes,omitempty"`
+	MaxAttachments  *int32 `json:"maxAttachments,omitempty"`
+	MaxRecipients   *int32 `json:"maxRecipients,omitempty"`
+	MessageBytes    *int64 `json:"messageBytes,omitempty"`
+	PageSize        *int32 `json:"pageSize,omitempty"`
+	ScanMessages    *int32 `json:"scanMessages,omitempty"`
+	TimeoutSeconds  *int32 `json:"timeoutSeconds,omitempty"`
+}
+
+// EmailMailboxOperation defines model for EmailMailboxOperation.
+type EmailMailboxOperation string
+
+// EmailMailboxOperationPolicy defines model for EmailMailboxOperationPolicy.
+type EmailMailboxOperationPolicy struct {
+	Folders   *[]string                   `json:"folders,omitempty"`
+	Operation *EmailMailboxOperation      `json:"operation,omitempty"`
+	Policy    *EmailMailboxApprovalPolicy `json:"policy,omitempty"`
+}
+
+// EmailMailboxPreview defines model for EmailMailboxPreview.
+type EmailMailboxPreview struct {
+	CanonicalYaml string                   `json:"canonicalYaml"`
+	Diagnostics   []EmailMailboxDiagnostic `json:"diagnostics"`
+
+	// Specification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+	Specification *EmailMailboxSpecification `json:"specification,omitempty"`
+	Valid         bool                       `json:"valid"`
+}
+
+// EmailMailboxPublication defines model for EmailMailboxPublication.
+type EmailMailboxPublication struct {
+	ConfigurationRevisionRef string                       `json:"configurationRevisionRef"`
+	CreatedAt                Timestamp                    `json:"createdAt"`
+	Digest                   string                       `json:"digest"`
+	FailureCode              string                       `json:"failureCode"`
+	ReadyAt                  *Timestamp                   `json:"readyAt,omitempty"`
+	Ref                      OpaqueRef                    `json:"ref"`
+	Revision                 int64                        `json:"revision"`
+	State                    EmailMailboxPublicationState `json:"state"`
+}
+
+// EmailMailboxPublicationState defines model for EmailMailboxPublication.State.
+type EmailMailboxPublicationState string
+
+// EmailMailboxReceiveProtocol defines model for EmailMailboxReceiveProtocol.
+type EmailMailboxReceiveProtocol string
+
+// EmailMailboxSpecification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+type EmailMailboxSpecification struct {
+	AllowedFolders  *[]string                      `json:"allowedFolders,omitempty"`
+	ArchiveFolder   *string                        `json:"archiveFolder,omitempty"`
+	DraftsFolder    *string                        `json:"draftsFolder,omitempty"`
+	Enabled         *bool                          `json:"enabled,omitempty"`
+	Folder          *string                        `json:"folder,omitempty"`
+	HelloName       *string                        `json:"helloName,omitempty"`
+	Imap            *EmailMailboxEndpoint          `json:"imap,omitempty"`
+	Limits          *EmailMailboxLimits            `json:"limits,omitempty"`
+	Policies        *[]EmailMailboxOperationPolicy `json:"policies,omitempty"`
+	Pop             *EmailMailboxEndpoint          `json:"pop,omitempty"`
+	ReceiveProtocol *EmailMailboxReceiveProtocol   `json:"receiveProtocol,omitempty"`
+	Recipients      *[]string                      `json:"recipients,omitempty"`
+	ReplyTo         *string                        `json:"replyTo,omitempty"`
+	Sender          *string                        `json:"sender,omitempty"`
+	Smtp            *EmailMailboxEndpoint          `json:"smtp,omitempty"`
+}
+
+// EmailMailboxTLSMode defines model for EmailMailboxTLSMode.
+type EmailMailboxTLSMode string
+
+// EmailMailboxUnbinding defines model for EmailMailboxUnbinding.
+type EmailMailboxUnbinding struct {
+	ConnectionVersion int64                   `json:"connectionVersion"`
+	Publication       EmailMailboxPublication `json:"publication"`
+}
 
 // EmailReconciliationDecision defines model for EmailReconciliationDecision.
 type EmailReconciliationDecision struct {
@@ -9208,6 +9576,41 @@ type ReconcileEmailEffectParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// BindEmailMailboxConfigurationParams defines parameters for BindEmailMailboxConfiguration.
+type BindEmailMailboxConfigurationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// DiscardEmailMailboxDraftParams defines parameters for DiscardEmailMailboxDraft.
+type DiscardEmailMailboxDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// PublishEmailMailboxDraftParams defines parameters for PublishEmailMailboxDraft.
+type PublishEmailMailboxDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// SaveEmailMailboxDraftParams defines parameters for SaveEmailMailboxDraft.
+type SaveEmailMailboxDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ValidateEmailMailboxDraftParams defines parameters for ValidateEmailMailboxDraft.
+type ValidateEmailMailboxDraftParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ListIntegrationConnectionsParams defines parameters for ListIntegrationConnections.
 type ListIntegrationConnectionsParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -9249,11 +9652,55 @@ type ConfigureIntegrationConnectionCredentialParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// UnbindEmailMailboxConfigurationParams defines parameters for UnbindEmailMailboxConfiguration.
+type UnbindEmailMailboxConfigurationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetEmailMailboxConfigurationParams defines parameters for GetEmailMailboxConfiguration.
+type GetEmailMailboxConfigurationParams struct {
+	ConfigurationRef *OpaqueRef `form:"configurationRef,omitempty" json:"configurationRef,omitempty"`
+	RevisionRef      *OpaqueRef `form:"revisionRef,omitempty" json:"revisionRef,omitempty"`
+}
+
+// ListEmailMailboxConfigurationsParams defines parameters for ListEmailMailboxConfigurations.
+type ListEmailMailboxConfigurationsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ConfigureEmailMailboxCredentialParams defines parameters for ConfigureEmailMailboxCredential.
 type ConfigureEmailMailboxCredentialParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetEmailMailboxCredentialReceiptParams defines parameters for GetEmailMailboxCredentialReceipt.
+type GetEmailMailboxCredentialReceiptParams struct {
+	IdempotencyKey string `form:"idempotencyKey" json:"idempotencyKey"`
+}
+
+// ListEmailMailboxCredentialsParams defines parameters for ListEmailMailboxCredentials.
+type ListEmailMailboxCredentialsParams struct {
+	Kind      *EmailMailboxCredentialKind `form:"kind,omitempty" json:"kind,omitempty"`
+	PageSize  *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreateEmailMailboxDraftParams defines parameters for CreateEmailMailboxDraft.
+type CreateEmailMailboxDraftParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        *string        `json:"If-Match,omitempty"`
+}
+
+// PreviewEmailMailboxConfigurationParams defines parameters for PreviewEmailMailboxConfiguration.
+type PreviewEmailMailboxConfigurationParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
 // ChangeIntegrationGrantParams defines parameters for ChangeIntegrationGrant.
@@ -10493,6 +10940,12 @@ type RemoveAttachmentSetItemsJSONRequestBody = AttachmentSetRemoveItemsInput
 // ReconcileEmailEffectJSONRequestBody defines body for ReconcileEmailEffect for application/json ContentType.
 type ReconcileEmailEffectJSONRequestBody = EmailReconciliationInput
 
+// BindEmailMailboxConfigurationJSONRequestBody defines body for BindEmailMailboxConfiguration for application/json ContentType.
+type BindEmailMailboxConfigurationJSONRequestBody = EmailMailboxBindingInput
+
+// SaveEmailMailboxDraftJSONRequestBody defines body for SaveEmailMailboxDraft for application/json ContentType.
+type SaveEmailMailboxDraftJSONRequestBody = EmailMailboxDraftContent
+
 // CreateIntegrationConnectionJSONRequestBody defines body for CreateIntegrationConnection for application/json ContentType.
 type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
 
@@ -10507,6 +10960,12 @@ type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCreden
 
 // ConfigureEmailMailboxCredentialJSONRequestBody defines body for ConfigureEmailMailboxCredential for application/json ContentType.
 type ConfigureEmailMailboxCredentialJSONRequestBody = EmailMailboxCredentialInput
+
+// CreateEmailMailboxDraftJSONRequestBody defines body for CreateEmailMailboxDraft for application/json ContentType.
+type CreateEmailMailboxDraftJSONRequestBody = EmailMailboxDraftInput
+
+// PreviewEmailMailboxConfigurationJSONRequestBody defines body for PreviewEmailMailboxConfiguration for application/json ContentType.
+type PreviewEmailMailboxConfigurationJSONRequestBody = EmailMailboxDraftContent
 
 // ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
 type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
@@ -10922,6 +11381,21 @@ type ServerInterface interface {
 	// (POST /api/v1/email-effect-receipts/{receiptRef}/reconciliation)
 	ReconcileEmailEffect(w http.ResponseWriter, r *http.Request, receiptRef EmailEffectReceiptRef, params ReconcileEmailEffectParams)
 
+	// (POST /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding)
+	BindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params BindEmailMailboxConfigurationParams)
+
+	// (POST /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard)
+	DiscardEmailMailboxDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params DiscardEmailMailboxDraftParams)
+
+	// (POST /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication)
+	PublishEmailMailboxDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params PublishEmailMailboxDraftParams)
+
+	// (POST /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves)
+	SaveEmailMailboxDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params SaveEmailMailboxDraftParams)
+
+	// (POST /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation)
+	ValidateEmailMailboxDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params ValidateEmailMailboxDraftParams)
+
 	// (GET /api/v1/integration-connections)
 	ListIntegrationConnections(w http.ResponseWriter, r *http.Request, params ListIntegrationConnectionsParams)
 
@@ -10943,8 +11417,29 @@ type ServerInterface interface {
 	// (PUT /api/v1/integration-connections/{connectionRef}/credential)
 	ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureIntegrationConnectionCredentialParams)
 
+	// (DELETE /api/v1/integration-connections/{connectionRef}/email-mailbox/binding)
+	UnbindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params UnbindEmailMailboxConfigurationParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/email-mailbox/configuration)
+	GetEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params GetEmailMailboxConfigurationParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/email-mailbox/configurations)
+	ListEmailMailboxConfigurations(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ListEmailMailboxConfigurationsParams)
+
 	// (PUT /api/v1/integration-connections/{connectionRef}/email-mailbox/credential)
 	ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureEmailMailboxCredentialParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt)
+	GetEmailMailboxCredentialReceipt(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params GetEmailMailboxCredentialReceiptParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/email-mailbox/credentials)
+	ListEmailMailboxCredentials(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ListEmailMailboxCredentialsParams)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/email-mailbox/drafts)
+	CreateEmailMailboxDraft(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params CreateEmailMailboxDraftParams)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/email-mailbox/preview)
+	PreviewEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params PreviewEmailMailboxConfigurationParams)
 
 	// (POST /api/v1/integration-connections/{connectionRef}/grants)
 	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
@@ -17326,6 +17821,581 @@ func (siw *ServerInterfaceWrapper) ReconcileEmailEffect(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// BindEmailMailboxConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) BindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ConfigurationRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BindEmailMailboxConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BindEmailMailboxConfiguration(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardEmailMailboxDraft operation middleware
+func (siw *ServerInterfaceWrapper) DiscardEmailMailboxDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ConfigurationRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscardEmailMailboxDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardEmailMailboxDraft(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishEmailMailboxDraft operation middleware
+func (siw *ServerInterfaceWrapper) PublishEmailMailboxDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ConfigurationRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PublishEmailMailboxDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishEmailMailboxDraft(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveEmailMailboxDraft operation middleware
+func (siw *ServerInterfaceWrapper) SaveEmailMailboxDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ConfigurationRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SaveEmailMailboxDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveEmailMailboxDraft(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateEmailMailboxDraft operation middleware
+func (siw *ServerInterfaceWrapper) ValidateEmailMailboxDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef ConfigurationRevisionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ValidateEmailMailboxDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateEmailMailboxDraft(w, r, configurationRef, revisionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListIntegrationConnections operation middleware
 func (siw *ServerInterfaceWrapper) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
 
@@ -17921,6 +18991,247 @@ func (siw *ServerInterfaceWrapper) ConfigureIntegrationConnectionCredential(w ht
 	handler.ServeHTTP(w, r)
 }
 
+// UnbindEmailMailboxConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) UnbindEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnbindEmailMailboxConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnbindEmailMailboxConfiguration(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailMailboxConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEmailMailboxConfigurationParams
+
+	// ------------- Optional query parameter "configurationRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "configurationRef", r.URL.Query(), &params.ConfigurationRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "configurationRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "revisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "revisionRef", r.URL.Query(), &params.RevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "revisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailMailboxConfiguration(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEmailMailboxConfigurations operation middleware
+func (siw *ServerInterfaceWrapper) ListEmailMailboxConfigurations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEmailMailboxConfigurationsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEmailMailboxConfigurations(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ConfigureEmailMailboxCredential operation middleware
 func (siw *ServerInterfaceWrapper) ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request) {
 
@@ -18018,6 +19329,290 @@ func (siw *ServerInterfaceWrapper) ConfigureEmailMailboxCredential(w http.Respon
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfigureEmailMailboxCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailMailboxCredentialReceipt operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailMailboxCredentialReceipt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEmailMailboxCredentialReceiptParams
+
+	// ------------- Required query parameter "idempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "idempotencyKey", r.URL.Query(), &params.IdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "idempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "idempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailMailboxCredentialReceipt(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEmailMailboxCredentials operation middleware
+func (siw *ServerInterfaceWrapper) ListEmailMailboxCredentials(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEmailMailboxCredentialsParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEmailMailboxCredentials(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEmailMailboxDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateEmailMailboxDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateEmailMailboxDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEmailMailboxDraft(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewEmailMailboxConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) PreviewEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewEmailMailboxConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewEmailMailboxConfiguration(w, r, connectionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -33449,6 +35044,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/audit-events", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bootstrap", wrapper.GetBootstrapState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-effect-receipts/{receiptRef}/reconciliation", wrapper.ReconcileEmailEffect)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding", wrapper.BindEmailMailboxConfiguration)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard", wrapper.DiscardEmailMailboxDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishEmailMailboxDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves", wrapper.SaveEmailMailboxDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateEmailMailboxDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.ListIntegrationConnections)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.CreateIntegrationConnection)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.DeleteIntegrationConnection)
@@ -33456,7 +35056,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.UpdateIntegrationConnection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/binding", wrapper.UnbindEmailMailboxConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/configuration", wrapper.GetEmailMailboxConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/configurations", wrapper.ListEmailMailboxConfigurations)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credential", wrapper.ConfigureEmailMailboxCredential)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt", wrapper.GetEmailMailboxCredentialReceipt)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credentials", wrapper.ListEmailMailboxCredentials)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/drafts", wrapper.CreateEmailMailboxDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/preview", wrapper.PreviewEmailMailboxConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)

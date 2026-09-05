@@ -10,6 +10,58 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## D5: typed mailbox, schema 056547091
+
+Источники: #1045/#1046/#1018, MVP-UI-41, CFG и
+`mailbox-owner-lifecycle-1046.md`. HTTP потребляет специализированные CP RPC,
+не создаёт mailbox authority из browser payload. Полная producer/consumer
+готовность требует executable CP/policy и #1029/#1037 checkpoints; одна схема
+не означает READY или завершённый пользовательский сценарий.
+
+| HTTP под verified Session/tenant | Владелец и fence | Read/event/consumer |
+| --- | --- | --- |
+| GET integration-connections/{connectionRef}/email-mailbox/configurations | ListEmailMailboxConfigurations, exact existing EMAIL connection; query/page передаются CP | Safe managed lineage/revision/spec/publication, server total/cursor |
+| GET того же email-mailbox/configuration | GetEmailMailboxConfiguration, optional exact configurationRef/revisionRef | Authoritative selected snapshot после reload, без подмены latest |
+| GET email-mailbox/credentials либо credential-receipt?idempotencyKey | ListEmailMailboxCredentials либо GetEmailMailboxCredentialReceipt; owner connection и original actor/intent | Safe descriptor/generation/kind/connection version, без значения/digest; unknown receipt 404 |
+| POST email-mailbox/preview | PreviewEmailMailboxConfiguration, connection eligibility; CSRF | Ровно typed specification либо YAML; серверный strict parser, без записи |
+| POST email-mailbox/drafts | CreateEmailMailboxDraft, integration.manage; idempotency; existing set требует If-Match | Server refs/UI lineage; incomplete draft разрешён, caller source/owner запрещены |
+| POST email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves | SaveEmailMailboxDraft, If-Match set+idempotency | Новая immutable revision, прежняя закрыта; selected revision read |
+| POST того же revision /validation, /publication, /discard | Специализированные Validate/Publish/DiscardEmailMailboxDraft, set OCC+idempotency | Exact revision; validation повторно проверяет credentials/TLS/policy, publish не означает READY |
+| POST того же revision /binding | BindEmailMailboxConfiguration, set OCC и отдельная expectedConnectionVersion | PENDING publication; CP desired projection → shared policy/CNI/Deployment/Secret readback → EMAIL report → READY |
+| DELETE email-mailbox/binding | UnbindEmailMailboxConfiguration, connection OCC+idempotency | Publication без configurationRevisionRef, безопасный новый connectionVersion |
+
+Create/save/validate/publish/discard атомарно фиксируют owner state/receipt/audit,
+без отдельного domain event. Bind/rebind/READY используют существующий
+INTEGRATION_CONNECTION_CHANGED и owner outbox. EMAIL callback остаётся internal
+RuntimeWorkService и не выдаётся через HTTP; readiness относится к принятому
+consumer snapshot/rollout, не к SMTP provider health. Политика сети и delivery
+принадлежат CP/shared mailpolicy/EMAIL consumer, новых gateway портов нет.
+
+Typed specification допускает неполный DRAFT/INVALID. UNSPECIFIED enum выдаётся
+как отсутствующее optional поле, неизвестный enum закрыто отклоняется. HTTP
+сохраняет SMTP/IMAP/POP endpoints, exact credential refs/generation, limits,
+folders/recipients и все 21 operation policies без преобразования значений.
+Preview передаёт YAML серверу без локальной переписи. Неизвестные/protected/value
+поля typed JSON отклоняются до RPC; raw malformed YAML не сохраняет CP.
+Canonical stored revision имеет JSON format и bounded content. Diagnostics
+принимаются только из закрытого кода/сообщения, без value echo; line/column
+сохраняются. READY требует readyAt, PENDING его не имеет; SUPERSEDED может
+сохранить исторический readyAt.
+
+Все ответы no-store; mutations и GET selected view возвращают set ETag,
+credential receipt и unbind — connection ETag. После unknown write receipt
+проверяется тем же connection/actor/key, новый успех не синтезируется. Чужой
+connection/config/revision, stale OCC, Git-owned mutation и revoked Session
+сохраняют owner отказ. Git copy/detach/history остаются существующими managed
+RPC и теперь сохраняют kind EMAIL_MAILBOX; specialized mailbox lifecycle
+не заменяется универсальным mutation endpoint.
+
+Ручная проверка: создать неполный draft, preview YAML ошибки без утечки текста,
+выбрать доступные credentials, validate/publish, отдельно bind с обоими OCC;
+дождаться authoritative READY после consumer readback. Перечитать selected
+revision и original credential receipt после reload; повторить stale/чужой
+ref и Git-owned изменение. Live SMTP/IMAP/POP и rollout проверяются отдельно.
+
 ## D6: зашифрованный черновик Secret
 
 Зависимости: полный CP `8b4ac92f` принят merge; `78b812699` добавляет

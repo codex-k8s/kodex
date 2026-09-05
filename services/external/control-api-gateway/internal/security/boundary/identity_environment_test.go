@@ -15,6 +15,18 @@ import (
 
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
+		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/configurations"},
+		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/configuration"},
+		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credentials"},
+		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credential-receipt"},
+		{"POST", "/api/v1/integration-connections/conn_fixture01/email-mailbox/preview"},
+		{"POST", "/api/v1/integration-connections/conn_fixture01/email-mailbox/drafts"},
+		{"DELETE", "/api/v1/integration-connections/conn_fixture01/email-mailbox/binding"},
+		{"POST", "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
+		{"POST", "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01/validation"},
+		{"POST", "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01/publication"},
+		{"POST", "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
+		{"POST", "/api/v1/email-mailbox-configurations/mcfg_fixture01/revisions/mrev_fixture01/binding"},
 		{"POST", "/api/v1/projects/prj_fixture01/runtime-secret-drafts"},
 		{"POST", "/api/v1/runtime-secrets/sec_fixture01/drafts"},
 		{"GET", "/api/v1/runtime-secret-drafts/sdft_fixture01"},
