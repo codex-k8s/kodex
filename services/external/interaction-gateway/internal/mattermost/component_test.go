@@ -69,7 +69,7 @@ func TestClaimCredentialProviderAndReceiptTogether(t *testing.T) {
 func TestConnectionReadinessUsesWorkingCredentialAndChannel(t *testing.T) {
 	adapter, invocation := claimFixture(t, "mattermost.team.read", map[string]any{})
 	credential := configureProviderFixture(t, adapter, nil)
-	claim := &controlplanev1.IntegrationConnectionTestClaim{DefinitionKey: invocation.GetDefinitionKey(), DefinitionVersion: invocation.GetDefinitionVersion(), DefinitionDigest: invocation.GetDefinitionDigest(), PublicConfiguration: invocation.GetPublicConfiguration(), CredentialRevision: credential}
+	claim := &controlplanev1.IntegrationConnectionTestClaim{DefinitionPackage: invocation.GetDefinitionPackage(), DefinitionKey: invocation.GetDefinitionKey(), DefinitionVersion: invocation.GetDefinitionVersion(), DefinitionDigest: invocation.GetDefinitionDigest(), PublicConfiguration: invocation.GetPublicConfiguration(), CredentialRevision: credential}
 	if _, err := adapter.TestConnection(t.Context(), claim); err != nil {
 		t.Fatal(err)
 	}

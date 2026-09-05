@@ -4,7 +4,7 @@ title: Доставка Mattermost и привязка внешнего поль
 type: operational-contract
 status: approved
 owner: platform
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-05
 ---
 
@@ -110,6 +110,21 @@ digest, risk и approval policy. Ответ проверяется по schema �
 с effect key, input digest и response digest. Изменяющая операция без
 подтверждённого результата завершается `UNKNOWN_OUTCOME`.
 
+Connection test и invocation получают private `definition_package` вместе с
+точными version/digest от владельца. Gateway разбирает пакет каждой claim и
+проверяет его через общий `ValidateExecutableRevision`: UI/Git revision может
+сужать контракт поставленного adapter, но не менять маршрут, владельца,
+credential, сеть или output schema. Отсутствующий, повреждённый или не
+совпадающий с pins пакет отклоняется до чтения credential и обращения к
+Mattermost. Глобальный registry не меняется, поэтому параллельные подключения
+с разными revisions не подменяют пакет друг друга.
+
+Configuration, input, risk, approval и срок операции берутся из выбранной
+revision. Health check также выполняет объявленную typed read operation и
+проверяет output; его бюджет ограничен обоими пределами capability и health.
+Если read operation требует `HUMAN_EACH_EFFECT`, автоматический connection
+test закрыто отклоняется без внешнего вызова.
+
 Поиск принудительно ограничен каналом и не принимает пользовательские search
 operators. File download требует attachment membership в предварительно
 прочитанном post и exact Content-Range; публичные ссылки не выдаются. Агент
@@ -148,6 +163,13 @@ workload-local границу `GUIDE-DOC-003`; доступность конкр
 UNKNOWN_OUTCOME и exact workload для connection tests. Зависимые HTTP/PWA
 управления identity и финальная общая приёмка остаются отдельными unit эпика.
 Live Mattermost и staging не запускались.
+
+Managed revision tests дополнительно проверяют конкурентное исполнение UI и
+Git revisions, выбранный deadline, неизменность registry, отклонение неверных
+package bytes/pins и недопустимого автоматического health check. Это evidence
+для connection tests и MCP invocations. Полный CFG lifecycle также требует
+владельца Git source/write-back и отдельной проверки системных подписок и
+delivery при изменении binding; готовность этих путей здесь не заявляется.
 
 ## Совместная Сборка С Выдачей Ключей
 

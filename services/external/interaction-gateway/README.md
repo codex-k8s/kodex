@@ -4,8 +4,8 @@ title: Необязательный interaction gateway Kodex
 type: unit-readme
 status: approved
 owner: platform
-version: 1.0.0
-updated: 2026-08-23
+version: 1.1.0
+updated: 2026-09-05
 ---
 
 # interaction-gateway
@@ -48,6 +48,12 @@ key/content digest и реальный team/channel lookup, что рабочи�
 MCP claims и connection tests обрабатываются только по отдельному
 `InteractionGatewayOperations` профилю; generic integration worker их не
 получает.
+
+Connection test и MCP invocation проверяют private package bytes и точные
+version/digest каждой claim. Опубликованная UI/Git revision может сужать
+поставленный контракт; она не заменяет глобальный registry. Configuration,
+input и deadline проверяются по выбранной revision. Автоматический health
+check не выполняет операцию, которой требуется отдельный Human Gate.
 
 `/healthz` отражает жизнь собственного процесса. `/readyz` читает локальный
 снимок authority sidecar и не вызывает `control-plane` или Mattermost. Сбои
