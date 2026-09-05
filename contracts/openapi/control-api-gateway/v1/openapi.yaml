@@ -1877,6 +1877,13 @@ paths:
       operationId: listRoleImageRecipes
       parameters:
         - { $ref: '#/components/parameters/RoleDefinitionRefQuery' }
+        - name: query
+          in: query
+          description: Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+          schema: { type: string, maxLength: 128 }
+        - name: state
+          in: query
+          schema: { type: string, enum: [ACTIVE, ARCHIVED] }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
       responses:
@@ -6527,6 +6534,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         state: { type: string, enum: [ACTIVE, ARCHIVED] }
         environment: { $ref: '#/components/schemas/RoleEnvironmentSelection' }
+        managedLineage: { $ref: '#/components/schemas/RoleImageManagedLineage' }
         generation: { type: integer, format: int64, minimum: 1 }
         promotedImageReady: { type: boolean }
         activeImageArtifactRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -6534,6 +6542,19 @@ components:
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+    RoleImageManagedLineage:
+      type: object
+      additionalProperties: false
+      description: Авторитетное происхождение рецепта; у SHIPPED baseline может отсутствовать managed revision. Отсутствие lineage не назначает UI право изменения.
+      required: [managedBy, origin, sourceRef, sourceRevision]
+      properties:
+        managedBy: { type: string, enum: [UI, GIT, SHIPPED] }
+        origin: { type: string, enum: [MANAGED, BASELINE] }
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceRef: { type: string, maxLength: 1024 }
+        sourceRevision: { type: string, maxLength: 256 }
     RoleImageBuild:
       type: object
       additionalProperties: false
@@ -6543,6 +6564,7 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
         recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        configurationRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
         dockerfile: { type: string, minLength: 1, maxLength: 262144 }
         attempt: { type: integer, minimum: 1 }
         stage: { type: string, enum: [QUEUED, MATERIALIZATION, CONTEXT_VALIDATION, BASE_PULL, SOLVING, INSTALLATION, TRUSTED_RUNTIME_FINALIZATION, STAGING_PUSH, PROVENANCE, COMPLETED, FAILED, CANCELLED, EXPIRED, DEAD_LETTER] }
@@ -6576,10 +6598,11 @@ components:
     RoleImageRecipePage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
-        items: { type: array, items: { $ref: '#/components/schemas/RoleImageRecipe' } }
-        nextPageToken: { type: string }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RoleImageRecipe' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
     RoleImageRecipeDetail:
       type: object
       additionalProperties: false

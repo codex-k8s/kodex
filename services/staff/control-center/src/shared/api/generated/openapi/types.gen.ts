@@ -1709,6 +1709,7 @@ export type RoleImageRecipe = {
     name: string;
     state: 'ACTIVE' | 'ARCHIVED';
     environment: RoleEnvironmentSelection;
+    managedLineage?: RoleImageManagedLineage;
     generation: number;
     promotedImageReady: boolean;
     activeImageArtifactRef?: OpaqueRef;
@@ -1718,11 +1719,25 @@ export type RoleImageRecipe = {
     nextActions: Array<NextAction>;
 };
 
+/**
+ * Авторитетное происхождение рецепта; у SHIPPED baseline может отсутствовать managed revision. Отсутствие lineage не назначает UI право изменения.
+ */
+export type RoleImageManagedLineage = {
+    managedBy: 'UI' | 'GIT' | 'SHIPPED';
+    origin: 'MANAGED' | 'BASELINE';
+    configurationRef?: OpaqueRef;
+    revisionRef?: OpaqueRef;
+    revision?: number;
+    sourceRef: string;
+    sourceRevision: string;
+};
+
 export type RoleImageBuild = {
     ref: OpaqueRef;
     version: number;
     recipeRef: OpaqueRef;
     recipeGeneration: number;
+    configurationRevisionRef?: OpaqueRef;
     dockerfile: string;
     attempt: number;
     stage: 'QUEUED' | 'MATERIALIZATION' | 'CONTEXT_VALIDATION' | 'BASE_PULL' | 'SOLVING' | 'INSTALLATION' | 'TRUSTED_RUNTIME_FINALIZATION' | 'STAGING_PUSH' | 'PROVENANCE' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'DEAD_LETTER';
@@ -1751,6 +1766,7 @@ export type RoleImageRecipeCommand = {
 
 export type RoleImageRecipePage = {
     items: Array<RoleImageRecipe>;
+    total: number;
     nextPageToken?: string;
 };
 
@@ -6945,6 +6961,11 @@ export type ListRoleImageRecipesData = {
     };
     query?: {
         roleDefinitionRef?: OpaqueRef;
+        /**
+         * Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+         */
+        query?: string;
+        state?: 'ACTIVE' | 'ARCHIVED';
         pageSize?: number;
         pageToken?: string;
     };
