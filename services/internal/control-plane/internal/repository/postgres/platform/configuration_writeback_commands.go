@@ -108,6 +108,9 @@ func (repository *Repository) writeBackSource(ctx context.Context, tx pgx.Tx, cu
 		return source, work, "", "", err
 	}
 	operations := []string{"github.branch.create", "github.repository.content.update", "github.pull_request.create"}
+	if connection.DefinitionKey == "github" && !definition.HasNetworkDestination(integrationpackage.NetworkDestination{Key: "github_git", Source: "STATIC", Hostname: "github.com", Port: 443, TLS: "REQUIRED"}) {
+		return source, work, "", "", errs.ErrForbidden
+	}
 	if connection.DefinitionKey == "gitlab" {
 		operations = []string{"gitlab.branch.create", "gitlab.commit.create", "gitlab.merge_request.create"}
 	}

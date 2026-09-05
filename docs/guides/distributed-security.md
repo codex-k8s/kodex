@@ -740,3 +740,12 @@ disposable среды фиксируется как `NOT RUN` и не ослаб
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `INFRA-DOC-001`.
 Для защищённых агрегатов и графа выполнения дополнительно применяется
 `GUIDE-DOC-006`.
+
+Управляемый UI/GIT IntegrationPackage может удалять network destinations из
+поставленного набора, сохраняя каждый оставшийся tuple целиком. Изменение host,
+port, TLS, source либо configuration field не является сужением. Consumer
+проверяет необходимый destination в фактическом immutable package перед
+операцией; наличие destination только в shipped registry не выдаёт полномочий.
+GitHub API-only package сохраняет API возможности, но не разрешает Git transport
+без точного `github_git` / `github.com:443` / `TLS=REQUIRED`. SHIPPED revision
+по-прежнему требует exact digest, без исторического fallback.

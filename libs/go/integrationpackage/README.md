@@ -16,9 +16,15 @@
 Для UI/GIT доступны name/description/category/version, подмножество capabilities
 с сохранением health operation, усиление approval policy и ограничений полей,
 уменьшение timeout/attempts и увеличение ограниченного retry backoff.
-Adapter/owner/route/readiness, credential, network, operation/risk/idempotency,
+Adapter/owner/route/readiness, credential, operation/risk/idempotency,
 resource scope и выходная схема сохраняются. Наборы configuration/input fields
 сохраняются, потому что adapter может читать необязательное поле.
+Network допускает только точное подмножество поставленных tuples. Рабочая
+операция отдельно требует необходимый destination в actual package.
+JSON object carrier ограничен 512 KiB, package по-прежнему 256 KiB. Только
+GitHub `content.update.content_base64` имеет maximumLength 349528 для файла
+до 256 KiB; остальные поставленные field bounds сохранены. Управляемое
+сужение поля остаётся обязательным для owner и consumer.
 
 | Сценарий #1046 / #1028 | Проверка owner | Проверка consumer |
 | --- | --- | --- |
