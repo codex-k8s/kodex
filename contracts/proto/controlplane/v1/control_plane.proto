@@ -12,6 +12,7 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc GetRuntimeSecretDraft(GetRuntimeSecretDraftRequest) returns (GetRuntimeSecretDraftResponse);
   rpc GetRuntimeRevisionDiff(GetRuntimeRevisionDiffRequest) returns (GetRuntimeRevisionDiffResponse);
   rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
   rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
@@ -89,6 +90,10 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
+  rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
+  rpc PreparePublishRuntimeSecretDraft(PreparePublishRuntimeSecretDraftRequest) returns (PreparePublishRuntimeSecretDraftResponse);
+  rpc PrepareDiscardRuntimeSecretDraft(PrepareDiscardRuntimeSecretDraftRequest) returns (PrepareDiscardRuntimeSecretDraftResponse);
   rpc SavePromptTemplateDraft(SavePromptTemplateDraftRequest) returns (SavePromptTemplateDraftResponse);
   rpc DiscardPromptTemplateDraft(DiscardPromptTemplateDraftRequest) returns (DiscardPromptTemplateDraftResponse);
   rpc SaveRoleImageRevisionDraft(SaveRoleImageRevisionDraftRequest) returns (SaveRoleImageRevisionDraftResponse);
@@ -234,6 +239,17 @@ service PlatformCommandService {
 
 // RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
 // grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+service RuntimeSecretDraftWorkService {
+  rpc CheckRuntimeSecretDraftWorkReadiness(CheckRuntimeSecretDraftWorkReadinessRequest) returns (CheckRuntimeSecretDraftWorkReadinessResponse);
+  rpc ConsumeRuntimeSecretDraftOperation(ConsumeRuntimeSecretDraftOperationRequest) returns (ConsumeRuntimeSecretDraftOperationResponse);
+  rpc CompleteRuntimeSecretDraftOperation(CompleteRuntimeSecretDraftOperationRequest) returns (CompleteRuntimeSecretDraftOperationResponse);
+  rpc FailRuntimeSecretDraftOperation(FailRuntimeSecretDraftOperationRequest) returns (FailRuntimeSecretDraftOperationResponse);
+  rpc ListRuntimeSecretDraftRecoveryWork(ListRuntimeSecretDraftRecoveryWorkRequest) returns (ListRuntimeSecretDraftRecoveryWorkResponse);
+  rpc RecoverRuntimeSecretDraftMaterialization(RecoverRuntimeSecretDraftMaterializationRequest) returns (RecoverRuntimeSecretDraftMaterializationResponse);
+  rpc CompleteRuntimeSecretDraftCleanup(CompleteRuntimeSecretDraftCleanupRequest) returns (CompleteRuntimeSecretDraftCleanupResponse);
+}
+
 service RuntimeSecretWorkService {
   rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
   rpc CheckCredentialProjectionWorkReadiness(CheckCredentialProjectionWorkReadinessRequest) returns (CheckCredentialProjectionWorkReadinessResponse);
@@ -3563,6 +3579,167 @@ enum RuntimeSecretValueType {
   RUNTIME_SECRET_VALUE_TYPE_BINARY = 2;
   RUNTIME_SECRET_VALUE_TYPE_JSON = 3;
 }
+
+enum RuntimeSecretDraftState {
+  RUNTIME_SECRET_DRAFT_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_STATE_PREPARING = 1;
+  RUNTIME_SECRET_DRAFT_STATE_DRAFT = 2;
+  RUNTIME_SECRET_DRAFT_STATE_VALID = 3;
+  RUNTIME_SECRET_DRAFT_STATE_PUBLISHING = 4;
+  RUNTIME_SECRET_DRAFT_STATE_PUBLISHED = 5;
+  RUNTIME_SECRET_DRAFT_STATE_DISCARDED = 6;
+  RUNTIME_SECRET_DRAFT_STATE_EXPIRED = 7;
+  RUNTIME_SECRET_DRAFT_STATE_FAILED = 8;
+}
+enum RuntimeSecretDraftOperationKind {
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE = 1;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_VALIDATE = 2;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_PUBLISH = 3;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_DISCARD = 4;
+}
+
+// Безопасная публичная metadata, без digest значения, hint, ключей и локаторов.
+message RuntimeSecretDraft {
+  string ref = 1;
+  int64 version = 2;
+  int64 generation = 3;
+  string project_ref = 4;
+  string secret_ref = 5;
+  string name = 6;
+  string description = 7;
+  RuntimeSecretValueType value_type = 8;
+  RuntimeSecretDraftState state = 9;
+  int64 published_revision = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  google.protobuf.Timestamp expires_at = 13;
+}
+
+// Внутренний exact readback immutable ciphertext; не выдаётся browser.
+message RuntimeSecretDraftEncryptedDescriptor {
+  string namespace = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string ciphertext_sha256 = 6;
+  string encryption_key_id = 7;
+  int64 encryption_key_generation = 8;
+}
+
+message GetRuntimeSecretDraftRequest { string draft_ref = 1; }
+message GetRuntimeSecretDraftResponse { RuntimeSecretDraft draft = 1; }
+
+message PrepareSaveRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  RuntimeSecretValueType value_type = 6;
+  string expected_content_sha256 = 7;
+}
+message PrepareSaveRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PrepareValidateRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareValidateRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PreparePublishRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+  int64 expected_secret_version = 3;
+}
+message PreparePublishRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PrepareDiscardRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareDiscardRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+
+message RuntimeSecretDraftOperationReceipt {
+  string operation_grant = 1;
+  string operation_ref = 2;
+  RuntimeSecretOperationState state = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  RuntimeSecretDraft draft = 5;
+  RuntimeSecret terminal_secret = 6;
+  RuntimeSecretFailureCode failure_code = 7;
+}
+
+// Точное поручение broker. AEAD AAD связывает draft ref/generation,
+// project/secret/value type/expected digest из этого проверенного ответа.
+message RuntimeSecretDraftWork {
+  string operation_ref = 1;
+  RuntimeSecretDraftOperationKind kind = 2;
+  RuntimeSecretDraft draft = 3;
+  string expected_content_sha256 = 4;
+  string namespace = 5;
+  string staged_secret_name = 6;
+  string staged_secret_key = 7;
+  int64 target_revision = 8;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 9;
+  string claimant_id = 10;
+  int64 claim_generation = 11;
+  google.protobuf.Timestamp lease_deadline = 12;
+  google.protobuf.Timestamp expires_at = 13;
+}
+
+message CheckRuntimeSecretDraftWorkReadinessRequest {}
+message CheckRuntimeSecretDraftWorkReadinessResponse { bool ready = 1; }
+message ConsumeRuntimeSecretDraftOperationRequest {
+  string operation_grant = 1;
+  string claimant_id = 2;
+}
+message ConsumeRuntimeSecretDraftOperationResponse { RuntimeSecretDraftWork work = 1; }
+message CompleteRuntimeSecretDraftOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message CompleteRuntimeSecretDraftOperationResponse {
+  RuntimeSecretDraft draft = 1;
+  RuntimeSecret secret = 2;
+}
+message FailRuntimeSecretDraftOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretFailureCode failure_code = 4;
+}
+message FailRuntimeSecretDraftOperationResponse {
+  RuntimeSecretOperationState state = 1;
+  RuntimeSecretDraft draft = 2;
+}
+message ListRuntimeSecretDraftRecoveryWorkRequest { PageRequest page = 1; }
+message ListRuntimeSecretDraftRecoveryWorkResponse {
+  repeated RuntimeSecretDraftWork operations = 1;
+  PageInfo page = 2;
+}
+message RecoverRuntimeSecretDraftMaterializationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message RecoverRuntimeSecretDraftMaterializationResponse {
+  RuntimeSecretRecoveryAction encrypted_action = 1;
+  RuntimeSecretRecoveryAction materialization_action = 2;
+  RuntimeSecretDraft draft = 3;
+  RuntimeSecretOperationState operation_state = 4;
+}
+message CompleteRuntimeSecretDraftCleanupRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message CompleteRuntimeSecretDraftCleanupResponse { bool completed = 1; }
 
 enum RuntimeSecretOperationKind {
   RUNTIME_SECRET_OPERATION_KIND_UNSPECIFIED = 0;
