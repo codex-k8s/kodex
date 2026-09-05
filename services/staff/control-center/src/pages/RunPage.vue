@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
 import {
@@ -552,6 +553,7 @@ onBeforeUnmount(() => {
   refreshScheduler.dispose();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
 });
+const serverMessage = useServerMessage();
 </script>
 <template>
   <PageFrame
@@ -695,7 +697,7 @@ onBeforeUnmount(() => {
             <article v-for="gate in openGateList" :key="gate.ref">
               <div class="gate-question">
                 <p class="eyebrow">{{ $t("decisions.question") }}</p>
-                <h2>{{ gate.title }}</h2>
+                <h2>{{ serverMessage(gate.title) }}</h2>
                 <dl>
                   <div>
                     <dt>{{ $t("decisions.requestedBy") }}</dt>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -79,12 +80,13 @@ function scalarText(value: unknown): string {
     return translator.t(value ? "common.yes" : "common.no");
   if (typeof value !== "string" && typeof value !== "number") return "—";
   const text = String(value);
-  return opaqueRefPattern.test(text) ? "—" : text;
+  return opaqueRefPattern.test(text) ? "—" : serverMessage(text);
 }
 
 const entries = computed(() =>
   isRecord(props.value) ? Object.entries(props.value) : [],
 );
+const serverMessage = useServerMessage();
 </script>
 
 <template>

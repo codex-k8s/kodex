@@ -374,6 +374,62 @@ export type ManagedConfigurationRevision = {
     publishedAt?: Timestamp;
 };
 
+export type RoleImageGitSourceInput = {
+    connectionRef: OpaqueRef;
+    expectedConnectionVersion: number;
+    /**
+     * Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.
+     */
+    repositoryRef: string;
+    /**
+     * Git ref без управляющих символов; максимум 256 UTF-8 bytes.
+     */
+    refName: string;
+    /**
+     * Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.
+     */
+    path: string;
+    contentFormat: 'JSON' | 'YAML';
+};
+
+export type IntegrationDefinitionGitSourceInput = {
+    connectionRef: OpaqueRef;
+    expectedConnectionVersion: number;
+    /**
+     * Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.
+     */
+    repositoryRef: string;
+    /**
+     * Git ref без управляющих символов; максимум 256 UTF-8 bytes.
+     */
+    refName: string;
+    /**
+     * Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.
+     */
+    path: string;
+    contentFormat: 'JSON' | 'YAML';
+};
+
+/**
+ * Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+ */
+export type ManagedConfigurationGitSource = {
+    ref: OpaqueRef;
+    version: number;
+    generation: number;
+    connectionRef: OpaqueRef;
+    providerKey: 'github' | 'gitlab';
+    repositoryRef: string;
+    refName: string;
+    path: string;
+    state: 'QUEUED' | 'CLAIMED' | 'READY' | 'SYNC_BLOCKED' | 'DETACHED';
+    acceptedCommitSha?: string;
+    acceptedContentSha256?: string;
+    acceptedRevisionRef?: OpaqueRef;
+    syncedAt?: Timestamp;
+    failureCode?: 'UNAVAILABLE' | 'CREDENTIAL_REJECTED' | 'ACCESS_DENIED' | 'NOT_FOUND' | 'DIVERGED' | 'CONTENT_INVALID' | 'RESPONSE_INVALID';
+};
+
 export type ManagedConfiguration = {
     ref: OpaqueRef;
     version: number;
@@ -384,6 +440,7 @@ export type ManagedConfiguration = {
     source: string;
     sourceRevision: string;
     currentRevision?: ManagedConfigurationRevision;
+    gitSource?: ManagedConfigurationGitSource;
     updatedAt: Timestamp;
 };
 
@@ -396,6 +453,7 @@ export type ManagedConfigurationSummary = {
     managedBy: 'UI' | 'GIT';
     source: string;
     sourceRevision: string;
+    gitSource?: ManagedConfigurationGitSource;
     currentRevision?: {
         ref: OpaqueRef;
         revision: number;
@@ -9617,6 +9675,134 @@ export type RebindPromptTemplateConsumersResponses = {
 };
 
 export type RebindPromptTemplateConsumersResponse = RebindPromptTemplateConsumersResponses[keyof RebindPromptTemplateConsumersResponses];
+
+export type ConfigureRoleImageGitSourceData = {
+    body: RoleImageGitSourceInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/git-source';
+};
+
+export type ConfigureRoleImageGitSourceErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureRoleImageGitSourceError = ConfigureRoleImageGitSourceErrors[keyof ConfigureRoleImageGitSourceErrors];
+
+export type ConfigureRoleImageGitSourceResponses = {
+    /**
+     * Безопасные метаданные конфигурации и Git source без содержимого ревизий
+     */
+    200: ManagedConfigurationSummary;
+};
+
+export type ConfigureRoleImageGitSourceResponse = ConfigureRoleImageGitSourceResponses[keyof ConfigureRoleImageGitSourceResponses];
+
+export type RefreshRoleImageGitSourceData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/git-source/refresh';
+};
+
+export type RefreshRoleImageGitSourceErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RefreshRoleImageGitSourceError = RefreshRoleImageGitSourceErrors[keyof RefreshRoleImageGitSourceErrors];
+
+export type RefreshRoleImageGitSourceResponses = {
+    /**
+     * Безопасные метаданные конфигурации и Git source без содержимого ревизий
+     */
+    200: ManagedConfigurationSummary;
+};
+
+export type RefreshRoleImageGitSourceResponse = RefreshRoleImageGitSourceResponses[keyof RefreshRoleImageGitSourceResponses];
+
+export type ConfigureIntegrationDefinitionGitSourceData = {
+    body: IntegrationDefinitionGitSourceInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/git-source';
+};
+
+export type ConfigureIntegrationDefinitionGitSourceErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureIntegrationDefinitionGitSourceError = ConfigureIntegrationDefinitionGitSourceErrors[keyof ConfigureIntegrationDefinitionGitSourceErrors];
+
+export type ConfigureIntegrationDefinitionGitSourceResponses = {
+    /**
+     * Безопасные метаданные конфигурации и Git source без содержимого ревизий
+     */
+    200: ManagedConfigurationSummary;
+};
+
+export type ConfigureIntegrationDefinitionGitSourceResponse = ConfigureIntegrationDefinitionGitSourceResponses[keyof ConfigureIntegrationDefinitionGitSourceResponses];
+
+export type RefreshIntegrationDefinitionGitSourceData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh';
+};
+
+export type RefreshIntegrationDefinitionGitSourceErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RefreshIntegrationDefinitionGitSourceError = RefreshIntegrationDefinitionGitSourceErrors[keyof RefreshIntegrationDefinitionGitSourceErrors];
+
+export type RefreshIntegrationDefinitionGitSourceResponses = {
+    /**
+     * Безопасные метаданные конфигурации и Git source без содержимого ревизий
+     */
+    200: ManagedConfigurationSummary;
+};
+
+export type RefreshIntegrationDefinitionGitSourceResponse = RefreshIntegrationDefinitionGitSourceResponses[keyof RefreshIntegrationDefinitionGitSourceResponses];
 
 export type CreateRoleImageRevisionDraftData = {
     body: ManagedConfigurationDraftInput;

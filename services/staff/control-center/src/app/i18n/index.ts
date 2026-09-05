@@ -3,6 +3,40 @@ import { createI18n } from "vue-i18n";
 import { currentLocale } from "@/shared/locale";
 
 const ru = {
+  serverMessages: {
+    INTERACTION_AUTHORITY_CHANGED:
+      "Подключение или разрешения изменены. Отправка отменена.",
+    INTERACTION_DELIVERY_GATE_TITLE: "Подтверждение доставки во внешний канал",
+    INTERACTION_DELIVERY_GATE_PROMPT:
+      "Разрешить доставку результата запуска в указанный внешний канал?",
+    INTERACTION_DELIVERY_APPROVAL_REQUIRED:
+      "Для доставки результата требуется решение владельца.",
+  },
+  gitSource: {
+    title: "Источник Git",
+    acceptCurrent:
+      "Принять показанную новую версию и прекратить повтор (это не отменяет команду)",
+    state: "Состояние синхронизации",
+    connection: "Соединение",
+    repository: "Репозиторий",
+    ref: "Ветка или ссылка",
+    path: "Путь документа",
+    generation: "Поколение / версия источника",
+    accepted: "Принятая ревизия",
+    synced: "Последняя синхронизация",
+    failure: "Причина отказа",
+    unknown:
+      "Исход команды не подтверждён. Сохранён исходный запрос: повтор использует тот же ключ и версии.",
+    readback: "Ожидается авторитетное чтение конфигурации.",
+    paused:
+      "Автоматическое обновление приостановлено после 150 проверок. Обновите состояние вручную.",
+    retry: "Повторить исходную команду",
+    configure: "Подключить источник Git",
+    refresh: "Запросить синхронизацию",
+    providerOnly: "Для источника Git требуется GitHub или GitLab.",
+    transition:
+      "Подключение Git закрывает сохранённый неопубликованный черновик. История сохраняется; опубликованная ревизия действует до успешного принятия документа из Git.",
+  },
   runtimeDiff: {
     title: "Изменения ревизии выполнения",
     help: "Сравнение уже материализованной ревизии с предыдущей ревизией этой сессии.",
@@ -2758,6 +2792,40 @@ const ru = {
 
 const en = {
   ...ru,
+  serverMessages: {
+    INTERACTION_AUTHORITY_CHANGED:
+      "The connection or permissions changed. Delivery was cancelled.",
+    INTERACTION_DELIVERY_GATE_TITLE: "External channel delivery approval",
+    INTERACTION_DELIVERY_GATE_PROMPT:
+      "Allow delivery of the run result to the specified external channel?",
+    INTERACTION_DELIVERY_APPROVAL_REQUIRED:
+      "Owner approval is required to deliver the result.",
+  },
+  gitSource: {
+    title: "Git source",
+    acceptCurrent:
+      "Accept the displayed newer version and stop retrying (this does not cancel the command)",
+    state: "Synchronization state",
+    connection: "Connection",
+    repository: "Repository",
+    ref: "Branch or ref",
+    path: "Document path",
+    generation: "Source generation / version",
+    accepted: "Accepted revision",
+    synced: "Last synchronization",
+    failure: "Failure reason",
+    unknown:
+      "Command outcome is unconfirmed. The original request is saved: retry uses the same key and versions.",
+    readback: "Waiting for authoritative configuration readback.",
+    paused:
+      "Automatic refresh paused after 150 checks. Refresh the state manually.",
+    retry: "Retry original command",
+    configure: "Configure Git source",
+    refresh: "Request synchronization",
+    providerOnly: "A Git source requires GitHub or GitLab.",
+    transition:
+      "Connecting Git discards the saved unpublished draft. History is retained; the published revision remains active until the Git document is accepted.",
+  },
   runtimeDiff: {
     title: "Runtime revision changes",
     help: "Compare the materialized revision with its predecessor in the same session.",

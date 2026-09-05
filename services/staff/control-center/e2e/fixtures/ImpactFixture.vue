@@ -47,6 +47,11 @@ function saveRefs(draftRef: string, planRef?: string): void {
       @close="open = false"
     />
     <ConfigurationEditor
+      v-else-if="kind === 'git'"
+      kind="ROLE_IMAGE"
+      configuration-ref="configuration"
+    />
+    <ConfigurationEditor
       v-else-if="kind === 'managed'"
       kind="PROMPT_TEMPLATE"
       configuration-ref="configuration"

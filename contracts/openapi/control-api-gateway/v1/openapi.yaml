@@ -3407,6 +3407,76 @@ paths:
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/git-source:
+    post:
+      tags: [Administration]
+      operationId: configureRoleImageGitSource
+      description: >-
+        Назначить Git source существующей конфигурации и поставить синхронизацию в очередь.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageGitSourceInput' } } }
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/git-source/refresh:
+    post:
+      tags: [Administration]
+      operationId: refreshRoleImageGitSource
+      description: >-
+        Повторно поставить сохранённый Git source в очередь из READY либо SYNC_BLOCKED.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/git-source:
+    post:
+      tags: [Administration]
+      operationId: configureIntegrationDefinitionGitSource
+      description: >-
+        Назначить Git source существующей конфигурации и поставить синхронизацию в очередь.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionGitSourceInput' } } }
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh:
+    post:
+      tags: [Administration]
+      operationId: refreshIntegrationDefinitionGitSource
+      description: >-
+        Повторно поставить сохранённый Git source в очередь из READY либо SYNC_BLOCKED.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/role-image-configurations/drafts:
     post:
       tags: [Administration]
@@ -4803,6 +4873,52 @@ components:
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         validatedAt: { $ref: '#/components/schemas/Timestamp' }
         publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    RoleImageGitSourceInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion, repositoryRef, refName, path, contentFormat]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256, description: 'Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.' }
+        refName: { type: string, minLength: 1, maxLength: 256, description: 'Git ref без управляющих символов; максимум 256 UTF-8 bytes.' }
+        path: { type: string, minLength: 1, maxLength: 512, description: 'Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.' }
+        contentFormat: { type: string, enum: [JSON, YAML] }
+    IntegrationDefinitionGitSourceInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion, repositoryRef, refName, path, contentFormat]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256, description: 'Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.' }
+        refName: { type: string, minLength: 1, maxLength: 256, description: 'Git ref без управляющих символов; максимум 256 UTF-8 bytes.' }
+        path: { type: string, minLength: 1, maxLength: 512, description: 'Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.' }
+        contentFormat: { type: string, enum: [JSON, YAML] }
+    ManagedConfigurationGitSource:
+      type: object
+      additionalProperties: false
+      description: >-
+        Безопасная owner-проекция без credential, SourceWork, package и lease.
+        READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin.
+        SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта.
+        failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+      required: [ref, version, generation, connectionRef, providerKey, repositoryRef, refName, path, state]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        providerKey: { type: string, enum: [github, gitlab] }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256 }
+        refName: { type: string, minLength: 1, maxLength: 256 }
+        path: { type: string, minLength: 1, maxLength: 512 }
+        state: { type: string, enum: [QUEUED, CLAIMED, READY, SYNC_BLOCKED, DETACHED] }
+        acceptedCommitSha: { type: string, pattern: '^([a-f0-9]{40}|[a-f0-9]{64})$' }
+        acceptedContentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        acceptedRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        syncedAt: { $ref: '#/components/schemas/Timestamp' }
+        failureCode: { type: string, enum: [UNAVAILABLE, CREDENTIAL_REJECTED, ACCESS_DENIED, NOT_FOUND, DIVERGED, CONTENT_INVALID, RESPONSE_INVALID] }
     ManagedConfiguration:
       type: object
       additionalProperties: false
@@ -4817,6 +4933,7 @@ components:
         source: { type: string, maxLength: 2000 }
         sourceRevision: { type: string, maxLength: 2000 }
         currentRevision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        gitSource: { $ref: '#/components/schemas/ManagedConfigurationGitSource' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
     ManagedConfigurationSummary:
       type: object
@@ -4831,6 +4948,7 @@ components:
         managedBy: { type: string, enum: [UI, GIT] }
         source: { type: string, maxLength: 2000 }
         sourceRevision: { type: string, maxLength: 2000 }
+        gitSource: { $ref: '#/components/schemas/ManagedConfigurationGitSource' }
         currentRevision:
           type: object
           additionalProperties: false
