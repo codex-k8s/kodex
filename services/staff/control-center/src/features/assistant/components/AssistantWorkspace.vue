@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Activity,
+  Archive,
   Bot,
   Check,
   ChevronDown,
@@ -23,6 +24,7 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import { assistantContextIdentity } from "@/features/assistant/context";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
@@ -121,6 +123,10 @@ const canSend = computed(
     !store.busy &&
     assistantRuntimeState.value === "READY" &&
     Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
+    (!store.selectedConversation ||
+      store.selectedConversation.state === "ACTIVE") &&
+    (Boolean(store.selectedConversation) ||
+      (!store.historyQuery && store.historyState === "ACTIVE")) &&
     Boolean(store.selectedConversation || canCreateConversation.value) &&
     attachmentState.value.ready,
 );
@@ -215,9 +221,29 @@ function conversationDisplayTitle(title: string): string {
 }
 
 function startTitleEdit(): void {
-  if (!store.selectedConversation) return;
+  if (
+    !store.selectedConversation ||
+    store.selectedConversation.state === "ARCHIVED"
+  )
+    return;
   titleDraft.value = store.selectedConversation.title;
   titleEditing.value = true;
+}
+async function archiveSelected(): Promise<void> {
+  if (
+    !props.live ||
+    store.busy ||
+    store.loading ||
+    !store.selectedConversation ||
+    store.selectedConversation.state === "ARCHIVED"
+  )
+    return;
+  if (!window.confirm(t("assistant.archiveConfirm"))) return;
+  if (await handleStoreMutation(() => store.archiveSelected())) {
+    titleEditing.value = false;
+    openPlanRef.value = undefined;
+    attachmentComposer.value?.clear();
+  }
 }
 
 async function saveTitle(): Promise<void> {
@@ -421,6 +447,12 @@ onBeforeUnmount(() => {
             :aria-label="$t('assistant.history')"
           >
             <header>{{ $t("assistant.history") }}</header>
+            <AssistantHistoryFilter
+              :query="store.historyQuery"
+              :state="store.historyState"
+              :disabled="store.busy"
+              @change="store.filterHistory"
+            />
             <button
               v-for="conversation in store.sortedConversations"
               :key="conversation.ref"
@@ -485,6 +517,12 @@ onBeforeUnmount(() => {
         >
           <Plus :size="18" />{{ $t("assistant.newConversation") }}
         </button>
+        <AssistantHistoryFilter
+          :query="store.historyQuery"
+          :state="store.historyState"
+          :disabled="store.busy"
+          @change="store.filterHistory"
+        />
         <button
           v-for="conversation in store.sortedConversations"
           :key="conversation.ref"
@@ -521,6 +559,7 @@ onBeforeUnmount(() => {
         :plan="currentPlan"
         :receipt="store.receipt"
         :busy="store.busy"
+        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
         :problem="store.problem"
         @close="openPlanRef = undefined"
         @save="savePlan"
@@ -592,6 +631,7 @@ onBeforeUnmount(() => {
                   conversationDisplayTitle(store.selectedConversation.title)
                 }}</strong>
                 <button
+                  v-if="store.selectedConversation.state !== 'ARCHIVED'"
                   class="icon-button"
                   type="button"
                   :aria-label="$t('assistant.renameConversation')"
@@ -599,6 +639,20 @@ onBeforeUnmount(() => {
                 >
                   <Pencil :size="16" aria-hidden="true" />
                 </button>
+                <button
+                  v-if="store.selectedConversation.state !== 'ARCHIVED'"
+                  class="icon-button"
+                  type="button"
+                  :disabled="
+                    !live || store.busy || store.loading || !!store.problem
+                  "
+                  :aria-label="$t('assistant.archiveConversation')"
+                  :title="$t('assistant.archiveConversation')"
+                  @click="archiveSelected"
+                >
+                  <Archive :size="16" />
+                </button>
+                <StatusBadge v-else :state="store.selectedConversation.state" />
               </template>
             </section>
 
@@ -709,7 +763,12 @@ onBeforeUnmount(() => {
                 compact
                 purpose="ASSISTANT_MESSAGE"
                 :project-ref="projectRef"
-                :disabled="store.busy || !live"
+                :disabled="
+                  store.busy ||
+                  !live ||
+                  store.selectedConversation?.state === 'ARCHIVED' ||
+                  store.selectedConversation?.state === 'CLOSED'
+                "
                 @change="attachmentState = $event"
               />
               <div class="assistant-composer__field">
@@ -720,7 +779,12 @@ onBeforeUnmount(() => {
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"
                   :placeholder="$t('assistant.message')"
-                  :disabled="store.busy || !live"
+                  :disabled="
+                    store.busy ||
+                    !live ||
+                    store.selectedConversation?.state === 'ARCHIVED' ||
+                    store.selectedConversation?.state === 'CLOSED'
+                  "
                   @keydown="handleComposerKeydown"
                 />
                 <div>

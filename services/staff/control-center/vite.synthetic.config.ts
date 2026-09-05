@@ -14,6 +14,9 @@ export default mergeConfig(base, {
         models: fileURLToPath(
           new URL("./e2e/fixtures/models.html", import.meta.url),
         ),
+        impact: fileURLToPath(
+          new URL("./e2e/fixtures/impact.html", import.meta.url),
+        ),
       },
     },
   },

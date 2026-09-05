@@ -255,7 +255,7 @@ NOT RUN. Полный unit остаётся незавершённым по пе
 | 01, 07, 08, 53, 54: переводы, PWA, ошибки, поиск                    | `src/app/i18n`, `src/features/search`, `src/shared/api/search-result.ts`, `src/shared/config`                                                           | Search/session/PWA unit; полнота переводов всех экранов ещё проверяется                                                                                                       |
 | 02, 03, 04, 06, 10, 12, 13: shell, Home, проекты                    | `src/app/AppShell.vue`, `src/pages/HomePage.vue`, `src/pages/ProjectsPage.vue`, `src/features/projects`                                                 | `e2e/synthetic.spec.ts`; дополнительные detail viewport ещё проверяются                                                                                                       |
 | 05, 19, 22, 27: ограниченные списки, selectors, глобальные каталоги | `src/shared/ui/AsyncEntityPicker.vue`, `src/features/catalogs`, `src/features/managed-configurations/ConfigurationCatalog.vue`                          | Picker unit; synthetic catalog; распространение bounded/expand на все списки ещё выполняется                                                                                  |
-| 09: модальный ассистент                                             | `src/features/assistant`                                                                                                                                | API/store unit и `e2e/fixtures/assistant-history.ts`: настоящий cursor, scope, отмена и selected readback; server query/archive остаются D1                                   |
+| 09: модальный ассистент                                             | `src/features/assistant`                                                                                                                                | API/store unit и `e2e/fixtures/assistant-history.ts`: cursor, scope, search/state, archive OCC и read-only архив; debounce/отмена/неопределённая команда проверены отдельно   |
 | 11: продление сессии                                                | `src/features/session/store.ts`, `src/features/realtime`                                                                                                | Session renewal/backoff unit; exact expiry/reconnect после интеграции требует отдельной проверки                                                                              |
 | 14, 20, 55-60: общий voice и Tab                                    | `src/shared/ui/VoiceTextarea.vue`, `VoiceInputButton.vue`, `CodeEditor.vue`, `code-editor-keymap.ts`, `src/features/speech`, `src/shared/api/speech.ts` | Voice/lease/API unit, `e2e/voice.synthetic.spec.ts`, bootstrap STT в `e2e/synthetic.spec.ts`; real-provider smoke только у владельцев backend                                 |
 | 15, 16, 21, 23, 30, 31: инструкции, preview, runtime и полномочия   | `src/features/agents/detail`, `src/features/runtime`                                                                                                    | Существующие detail/runtime unit; сквозная матрица user∩agent и все preview ещё проверяются                                                                                   |
@@ -352,7 +352,24 @@ readback вместо использования первой глобально
 Ручная приёмка: открыть историю с более чем 40 диалогами, догрузить страницу,
 выбрать старый диалог, дождаться realtime refresh; затем сменить project во
 время догрузки и убедиться, что прежние результаты не добавляются.
-Поиск и архивирование истории не имитируются локальным фильтром.
+HTTP `03564b5f4` потреблён как `087960d39`: D1 использует настоящий
+query/state ACTIVE/CLOSED/ARCHIVED и специализированную archive-команду.
+Поиск отменяет старое чтение, сбрасывает cursor и выбор диалога, выполняется
+через 500 ms; поле несохранённого сообщения не перезаписывается. Архивирование
+требует явного подтверждения, exact version и idempotency; неизвестный исход
+не повторяется до нового чтения. Архивный диалог, вложения и планы read-only.
+`api.test.ts`/`store.test.ts` проверяют фильтры, debounce/cancellation,
+OCC/receipt и неопределённый исход; synthetic D1 lifecycle прошёл на 1440/390.
+
+D7 подключён в трёх impact-диалогах: environment, secret и managed configuration.
+Используются server query, pageSize=40, cursor и total; смена поиска очищает
+старую выборку, повтор cursor и изменившийся snapshot закрыто отклоняются.
+`e2e/impact.synthetic.spec.ts` проверяет каждый диалог на 1440/390:
+две страницы, поиск с новым cursor, сброс checkbox и exact selective rebind.
+Fixture `impact.html` не включена в production build. Эти шесть synthetic
+сценариев проверяют PWA с безопасными HTTP fixtures, не CP SQL или live authority.
+Через Context7 `/websites/vuejs` сверены watcher cleanup, AbortController,
+flush sync и освобождение timers при закрытии/unmount.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).

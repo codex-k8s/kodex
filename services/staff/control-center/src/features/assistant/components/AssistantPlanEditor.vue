@@ -33,6 +33,7 @@ const props = defineProps<{
   plan: AssistantPlan;
   receipt?: AssistantPlanReceipt;
   busy?: boolean;
+  readonly?: boolean;
   problem?: AppProblem;
 }>();
 const emit = defineEmits<{
@@ -71,7 +72,10 @@ const exactRevisionValidated = computed(
     props.plan.validatedRevision === props.plan.revision,
 );
 const editable = computed(
-  () => !props.busy && !["APPLIED", "REJECTED"].includes(props.plan.state),
+  () =>
+    !props.readonly &&
+    !props.busy &&
+    !["APPLIED", "REJECTED"].includes(props.plan.state),
 );
 const canSave = computed(
   () =>
@@ -82,12 +86,14 @@ const canSave = computed(
 );
 const canValidate = computed(
   () =>
+    !props.readonly &&
     !props.busy &&
     !["APPLIED", "REJECTED"].includes(props.plan.state) &&
     props.plan.state !== "VALID",
 );
 const canApply = computed(
   () =>
+    !props.readonly &&
     !props.busy &&
     exactRevisionValidated.value &&
     props.plan.nextActions.includes("APPLY_PLAN"),

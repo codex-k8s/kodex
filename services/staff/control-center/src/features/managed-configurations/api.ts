@@ -110,6 +110,8 @@ export async function impact(
   configuration: ManagedConfiguration,
   revision: ManagedConfigurationRevision,
   signal: AbortSignal,
+  query = "",
+  pageToken?: string,
 ) {
   return (
     await unwrap(
@@ -117,6 +119,11 @@ export async function impact(
         path: {
           configurationRef: configuration.ref,
           revisionRef: revision.ref,
+        },
+        query: {
+          pageSize: 40,
+          ...(pageToken ? { pageToken } : {}),
+          ...(query.trim() ? { query: query.trim() } : {}),
         },
         signal: AbortSignal.any([requestSignal(), signal]),
       }),

@@ -12,6 +12,7 @@ import { AppProblem } from "@/shared/api/problem";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
+const archiveConversationMock = vi.hoisted(() => vi.fn());
 const applyPlanDraftMock = vi.hoisted(() => vi.fn());
 const readAssistantMock = vi.hoisted(() => vi.fn());
 const readConversationsMock = vi.hoisted(() => vi.fn());
@@ -21,6 +22,7 @@ vi.mock("@/features/assistant/api", () => ({
   readConversations: readConversationsMock,
   createConversation: createConversationMock,
   appendTurn: appendTurnMock,
+  archiveConversation: archiveConversationMock,
   renameConversation: vi.fn(),
   savePlanDraft: vi.fn(),
   validatePlanDraft: vi.fn(),
@@ -75,6 +77,7 @@ function plan(state: AssistantPlan["state"] = "VALID"): AssistantPlan {
 function conversation(value: AssistantPlan = plan()): AssistantConversation {
   return {
     ref: "cnv_sales",
+    state: "ACTIVE",
     version: 2,
     title: "Настройка отдела продаж",
     titleSource: "AGENT_PROPOSED",
@@ -134,11 +137,76 @@ function deferred<T>(): {
 }
 
 describe("assistant workspace store", () => {
+  it("отменяет старую страницу и сбрасывает выбор до debounce поиска", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({
+      items: [conversation()],
+      nextPageToken: "old",
+    });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    const pending = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock.mockReturnValueOnce(pending.promise);
+    const more = store.loadMoreHistory();
+    const oldSignal = readConversationsMock.mock.calls.at(
+      -1,
+    )?.[2] as AbortSignal;
+    store.filterHistory("first", "ACTIVE");
+    store.filterHistory("second", "ACTIVE");
+    expect(oldSignal.aborted).toBe(true);
+    expect(store.selectedRef).toBeUndefined();
+    expect(store.nextPageToken).toBeUndefined();
+    expect(store.conversations).toEqual([]);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(readConversationsMock).toHaveBeenCalledTimes(2);
+    readConversationsMock.mockResolvedValueOnce({ items: [] });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(readConversationsMock).toHaveBeenLastCalledWith(
+      "prj_sales",
+      undefined,
+      expect.any(AbortSignal),
+      { query: "second", state: "ACTIVE" },
+    );
+    pending.resolve({ items: [conversation()] });
+    await more;
+    expect(store.conversations).toEqual([]);
+  });
+  it("перечитывает историю после архивации и не повторяет неопределённую команду", async () => {
+    const source = conversation();
+    const store = useAssistantStore();
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({ items: [source] });
+    await store.load(context, "prj_sales");
+    archiveConversationMock.mockRejectedValueOnce(new Error("Timeout"));
+    await expect(store.archiveSelected()).rejects.toBeDefined();
+    expect(store.selectedRef).toBe(source.ref);
+    expect(archiveConversationMock).toHaveBeenCalledTimes(1);
+    await store.archiveSelected();
+    expect(archiveConversationMock).toHaveBeenCalledTimes(1);
+    await store.load(context, "prj_sales");
+    archiveConversationMock.mockResolvedValueOnce({
+      ...source,
+      state: "ARCHIVED",
+      version: 3,
+    });
+    readConversationsMock.mockResolvedValueOnce({ items: [] });
+    await store.archiveSelected();
+    expect(store.selectedRef).toBeUndefined();
+    expect(store.conversations).toEqual([]);
+  });
+  it("архивный диалог не принимает новые сообщения", async () => {
+    const store = useAssistantStore();
+    store.conversations = [{ ...conversation(), state: "ARCHIVED" }];
+    store.selectedRef = "cnv_sales";
+    await expect(store.send("text")).rejects.toThrow("read-only");
+    expect(appendTurnMock).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     setActivePinia(createPinia());
     createConversationMock.mockReset();
     appendTurnMock.mockReset();
+    archiveConversationMock.mockReset();
     applyPlanDraftMock.mockReset();
     readAssistantMock.mockReset();
     readConversationsMock.mockReset();

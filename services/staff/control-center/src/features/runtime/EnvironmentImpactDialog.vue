@@ -21,6 +21,9 @@ const receipt = ref<RuntimeEnvironmentRebindResult>();
 const problem = ref<AppProblem>();
 const loading = ref(false);
 const busy = ref(false);
+const query = ref("");
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const cursors = new Set<string>();
 let generation = 0;
 let controller: AbortController | undefined;
 const selection = computed(
@@ -32,6 +35,7 @@ const selection = computed(
 async function load(more = false): Promise<void> {
   if (busy.value || (more && (loading.value || !impact.value?.nextPageToken)))
     return;
+  clearTimeout(searchTimer);
   const previous = impact.value;
   const current = ++generation;
   controller?.abort();
@@ -40,6 +44,7 @@ async function load(more = false): Promise<void> {
   loading.value = true;
   problem.value = undefined;
   if (!more) {
+    cursors.clear();
     selected.value.clear();
     receipt.value = undefined;
     impact.value = undefined;
@@ -50,8 +55,12 @@ async function load(more = false): Promise<void> {
       props.versionRef,
       more ? previous?.nextPageToken : undefined,
       active.signal,
+      query.value,
     );
     if (current !== generation) return;
+    if (more && previous?.nextPageToken) cursors.add(previous.nextPageToken);
+    if (page.nextPageToken && cursors.has(page.nextPageToken))
+      throw new Error("Environment impact cursor repeated");
     if (more && previous) {
       if (
         page.environmentVersion !== previous.environmentVersion ||
@@ -105,11 +114,27 @@ async function apply(): Promise<void> {
   }
 }
 watch(
+  query,
+  () => {
+    clearTimeout(searchTimer);
+    controller?.abort();
+    generation += 1;
+    impact.value = undefined;
+    selected.value.clear();
+    receipt.value = undefined;
+    problem.value = undefined;
+    loading.value = true;
+    searchTimer = setTimeout(() => void load(), 500);
+  },
+  { flush: "sync" },
+);
+watch(
   () => [props.environmentRef, props.versionRef],
   () => void load(),
   { immediate: true },
 );
 onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
   generation += 1;
   controller?.abort();
 });
@@ -133,6 +158,13 @@ onBeforeUnmount(() => {
         <RefreshCw :size="18" />
       </button>
     </div>
+    <input
+      v-model="query"
+      type="search"
+      :aria-label="$t('common.search')"
+      :placeholder="$t('common.search')"
+      :disabled="busy"
+    />
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
     <template v-if="impact">

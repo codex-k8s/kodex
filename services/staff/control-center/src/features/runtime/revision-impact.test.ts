@@ -75,6 +75,31 @@ const response = (data: unknown) => ({
 });
 describe("revision impact adapters", () => {
   beforeEach(() => vi.resetAllMocks());
+  it("передаёт query вместе с cursor в оба impact endpoint", async () => {
+    const signal = new AbortController().signal;
+    client.get.mockResolvedValueOnce(response(environment));
+    await readEnvironmentImpact(
+      "environment",
+      "target-version",
+      "page",
+      signal,
+      "  agent  ",
+    );
+    expect(client.get).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: { pageSize: 40, pageToken: "page", query: "agent" },
+        signal,
+      }),
+    );
+    client.get.mockResolvedValueOnce(response(secret));
+    await readSecretImpact("secret", 7, undefined, signal, " env ");
+    expect(client.get).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: { pageSize: 40, query: "env" },
+        signal,
+      }),
+    );
+  });
   it("передает исходную версию потребителя, целевую версию в path и OCC окружения", async () => {
     client.post.mockResolvedValue(response({ bindings: [binding] }));
     await applyEnvironmentRebind(environment, [consumer]);

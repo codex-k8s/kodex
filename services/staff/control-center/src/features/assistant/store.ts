@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 
 import {
   appendTurn,
+  archiveConversation,
   applyPlanDraft,
   createConversation,
   readAssistant,
@@ -56,8 +57,12 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const loadingMore = ref(false);
   const historyProblem = ref<AppProblem>();
   const historyCursors = new Set<string>();
+  const historyQuery = ref("");
+  const historyState = ref<AssistantConversation["state"]>("ACTIVE");
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   function cancelReads(): void {
+    clearTimeout(searchTimer);
     controller?.abort();
     generation += 1;
     loading.value = false;
@@ -70,6 +75,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): void {
     if (scope && page.items.some((item) => item.projectRef !== scope))
       throw new Error("Assistant history project scope mismatch");
+    if (page.items.some((item) => item.state !== historyState.value))
+      throw new Error("Assistant history state mismatch");
     if (page.nextPageToken && historyCursors.has(page.nextPageToken))
       throw new Error("Assistant history cursor repeated");
   }
@@ -100,6 +107,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function load(
     nextContext: AssistantContextDescriptor,
     nextProjectRef?: string,
+    select = true,
   ): Promise<void> {
     cancelReads();
     const current = ++generation;
@@ -125,7 +133,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     try {
       const [assistantValue, firstPage] = await Promise.all([
         readAssistant(signal),
-        readConversations(nextProjectRef, undefined, signal),
+        readConversations(nextProjectRef, undefined, signal, {
+          query: historyQuery.value,
+          state: historyState.value,
+        }),
       ]);
       if (current !== generation) return;
       checkPage(firstPage, nextProjectRef);
@@ -144,6 +155,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           nextProjectRef,
           page.nextPageToken,
           signal,
+          { query: historyQuery.value, state: historyState.value },
         );
         if (current !== generation) return;
         checkPage(page, nextProjectRef);
@@ -170,7 +182,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           true,
         ),
       );
-      selectMatchingConversation();
+      if (select) selectMatchingConversation();
     } catch (error) {
       if (current === generation) problem.value = asProblem(error);
     } finally {
@@ -190,6 +202,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         projectRef.value,
         cursor,
         controller.signal,
+        { query: historyQuery.value, state: historyState.value },
       );
       if (current !== generation) return;
       historyCursors.add(cursor);
@@ -201,6 +214,51 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     } finally {
       if (current === generation) loadingMore.value = false;
     }
+  }
+
+  function filterHistory(
+    query: string,
+    state: AssistantConversation["state"],
+  ): void {
+    if (busy.value) return;
+    const stateChanged = historyState.value !== state;
+    cancelReads();
+    historyQuery.value = query;
+    historyState.value = state;
+    conversations.value = [];
+    selectedRef.value = undefined;
+    nextPageToken.value = undefined;
+    historyProblem.value = undefined;
+    problem.value = undefined;
+    loading.value = true;
+    searchTimer = setTimeout(
+      () => {
+        if (context.value) void load(context.value, projectRef.value, false);
+        else loading.value = false;
+      },
+      stateChanged ? 0 : 500,
+    );
+  }
+
+  async function archiveSelected(): Promise<void> {
+    const conversation = selectedConversation.value;
+    if (
+      !conversation ||
+      conversation.state === "ARCHIVED" ||
+      busy.value ||
+      loading.value ||
+      problem.value
+    )
+      return;
+    await runMutation(async () => {
+      await archiveConversation(conversation);
+      conversations.value = conversations.value.filter(
+        (item) => item.ref !== conversation.ref,
+      );
+      selectedRef.value = undefined;
+      receipt.value = undefined;
+    });
+    if (context.value) await load(context.value, projectRef.value, false);
   }
 
   function setContext(
@@ -298,6 +356,12 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     if (!currentContext) throw new Error("Assistant context is unavailable");
     return runMutation(async () => {
       const value = await createConversation(currentContext, projectRef.value);
+      if (historyQuery.value || historyState.value !== "ACTIVE") {
+        conversations.value = [];
+        nextPageToken.value = undefined;
+      }
+      historyQuery.value = "";
+      historyState.value = "ACTIVE";
       upsertConversation(value);
       return value;
     });
@@ -305,7 +369,12 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
 
   async function changeTitle(value: string): Promise<void> {
     const conversation = selectedConversation.value;
-    if (!conversation || value.trim() === "") return;
+    if (
+      !conversation ||
+      conversation.state === "ARCHIVED" ||
+      value.trim() === ""
+    )
+      return;
     await runMutation(async () => {
       upsertConversation(await renameConversation(conversation, value.trim()));
     });
@@ -317,6 +386,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
+    if (
+      selectedConversation.value &&
+      selectedConversation.value.state !== "ACTIVE"
+    )
+      throw new Error("Assistant conversation is read-only");
     await runMutation(async () => {
       let conversation = selectedConversation.value;
       if (!conversation) {
@@ -398,6 +472,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     nextPageToken,
     loadingMore,
     historyProblem,
+    historyQuery,
+    historyState,
+    filterHistory,
+    archiveSelected,
     loadMoreHistory,
     cancelReads,
     load,

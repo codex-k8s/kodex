@@ -1,6 +1,7 @@
 import { requestSignal } from "@/shared/api/client";
 import {
   addAssistantTurn,
+  archiveAssistantConversation,
   applyAssistantPlan,
   createAssistantConversation,
   getSystemAssistant,
@@ -40,6 +41,7 @@ export async function readConversations(
   projectRef?: string,
   pageToken?: string,
   signal?: AbortSignal,
+  filter: { query?: string; state?: AssistantConversation["state"] } = {},
 ): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
@@ -50,6 +52,8 @@ export async function readConversations(
               pageSize: 40,
               ...(projectRef ? { projectRef } : {}),
               ...(pageToken ? { pageToken } : {}),
+              ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),
+              ...(filter.state ? { state: filter.state } : {}),
             },
             signal: requestSignal(signal),
           }),
@@ -57,6 +61,34 @@ export async function readConversations(
       ).data,
     signal,
   );
+}
+
+export async function archiveConversation(
+  conversation: AssistantConversation,
+): Promise<AssistantConversation> {
+  const result = (
+    await mutate(
+      (headers) =>
+        archiveAssistantConversation({
+          path: { conversationRef: conversation.ref },
+          headers: {
+            "If-Match": headers["If-Match"] ?? "",
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      conversation.version,
+    )
+  ).data;
+  if (
+    result.ref !== conversation.ref ||
+    result.projectRef !== conversation.projectRef ||
+    result.state !== "ARCHIVED" ||
+    result.version <= conversation.version
+  )
+    throw new Error("Assistant archive receipt mismatch");
+  return result;
 }
 
 export async function createConversation(

@@ -87,6 +87,22 @@ const comparison = computed(() => {
   }
 });
 const impactValue = ref<ManagedConfigurationImpact>();
+const impactOpen = ref(false);
+const impactQuery = ref("");
+const impactLoading = ref(false);
+const impactProblem = ref<AppProblem>();
+let impactGeneration = 0;
+let impactController: AbortController | undefined;
+let impactTimer: ReturnType<typeof setTimeout> | undefined;
+const impactCursors = new Set<string>();
+function closeImpact(): void {
+  clearTimeout(impactTimer);
+  impactController?.abort();
+  impactGeneration += 1;
+  impactOpen.value = false;
+  impactValue.value = undefined;
+  impactLoading.value = false;
+}
 const selected = ref<string[]>([]);
 const sourceAction = ref<"copy" | "detach">();
 const discardOpen = ref(false);
@@ -97,6 +113,7 @@ const editorMode = ref<"FORM" | "SOURCE">(
 const controller = new AbortController();
 let disposed = false;
 onBeforeUnmount(() => {
+  closeImpact();
   disposed = true;
   controller.abort();
   content.value = "";
@@ -177,7 +194,7 @@ function choose(item: ManagedConfigurationRevision): void {
   revision.value = item;
   content.value = item.content;
   format.value = item.contentFormat;
-  impactValue.value = undefined;
+  closeImpact();
   selected.value = [];
   historyOpen.value = false;
 }
@@ -192,7 +209,7 @@ function accept(result: ManagedConfigurationResult): void {
     result.revision,
     ...revisions.value.filter((item) => item.ref !== result.revision.ref),
   ];
-  impactValue.value = undefined;
+  closeImpact();
   selected.value = [];
 }
 async function perform(work: () => Promise<void>): Promise<void> {
@@ -249,7 +266,7 @@ async function load(more = false): Promise<void> {
       revision.value = result.items[0] ?? result.configuration.currentRevision;
       content.value = revision.value?.content ?? "";
       format.value = revision.value?.contentFormat ?? format.value;
-      impactValue.value = undefined;
+      closeImpact();
     }
   });
 }
@@ -338,23 +355,86 @@ async function transition(action: "validate" | "publish"): Promise<void> {
     accept(await api.transition(action, current, target)),
   );
 }
-async function showImpact(): Promise<void> {
+async function showImpact(more = false): Promise<void> {
   const current = configuration.value,
     target = revision.value;
-  if (!current || !target || dirty.value) return;
-  await perform(async () => {
-    const result = await api.impact(current, target, controller.signal);
-    if (disposed) return;
+  if (
+    !current ||
+    !target ||
+    dirty.value ||
+    busy.value ||
+    (more && (impactLoading.value || !impactValue.value?.nextPageToken))
+  )
+    return;
+  clearTimeout(impactTimer);
+  impactController?.abort();
+  const active = new AbortController();
+  impactController = active;
+  const generation = ++impactGeneration;
+  const previous = more ? impactValue.value : undefined;
+  impactOpen.value = true;
+  impactLoading.value = true;
+  impactProblem.value = undefined;
+  problem.value = undefined;
+  if (!more) {
+    impactValue.value = undefined;
+    selected.value = [];
+    impactCursors.clear();
+  }
+  try {
+    const result = await api.impact(
+      current,
+      target,
+      active.signal,
+      impactQuery.value,
+      previous?.nextPageToken,
+    );
+    if (disposed || generation !== impactGeneration) return;
+    if (previous?.nextPageToken) impactCursors.add(previous.nextPageToken);
+    const consumers = [...(previous?.consumers ?? []), ...result.consumers];
     if (
       result.configurationRef !== current.ref ||
       result.targetRevisionRef !== target.ref ||
-      !result.digest
+      !result.digest ||
+      !Number.isSafeInteger(result.total) ||
+      result.total < consumers.length ||
+      (result.nextPageToken && impactCursors.has(result.nextPageToken)) ||
+      (previous &&
+        (previous.digest !== result.digest ||
+          previous.total !== result.total)) ||
+      new Set(consumers.map(consumerKey)).size !== consumers.length ||
+      consumers.some(
+        (item) =>
+          !item.ref ||
+          !item.revisionRef ||
+          !Number.isSafeInteger(item.version) ||
+          item.version < 1,
+      )
     )
       throw new Error("Invalid configuration impact");
-    impactValue.value = result;
-    selected.value = [];
-  });
+    impactValue.value = { ...result, consumers };
+  } catch (error) {
+    if (!active.signal.aborted && generation === impactGeneration)
+      impactProblem.value = asProblem(error);
+  } finally {
+    if (generation === impactGeneration) impactLoading.value = false;
+  }
 }
+watch(
+  impactQuery,
+  () => {
+    if (!impactOpen.value) return;
+    clearTimeout(impactTimer);
+    impactController?.abort();
+    impactGeneration += 1;
+    impactValue.value = undefined;
+    selected.value = [];
+    impactProblem.value = undefined;
+    impactLoading.value = true;
+    impactTimer = setTimeout(() => void showImpact(), 500);
+  },
+  { flush: "sync" },
+);
 async function rebind(): Promise<void> {
   const current = configuration.value,
     target = revision.value,
@@ -364,7 +444,11 @@ async function rebind(): Promise<void> {
     !target ||
     target.state !== "PUBLISHED" ||
     !impact ||
-    !selected.value.length
+    !selected.value.length ||
+    problem.value ||
+    impactLoading.value ||
+    impactProblem.value ||
+    busy.value
   )
     return;
   await perform(async () =>
@@ -586,7 +670,7 @@ watch(
         v-if="configuration && revision"
         class="button"
         :disabled="busy || dirty"
-        @click="showImpact"
+        @click="showImpact()"
       >
         {{ $t("managed.impact") }}
       </button>
@@ -634,33 +718,72 @@ watch(
       </button>
     </ModalDialog>
     <ModalDialog
-      v-if="impactValue"
+      v-if="impactOpen"
       :title="$t('managed.impact')"
       size="lg"
       :busy="busy"
-      @close="impactValue = undefined"
+      @close="closeImpact"
     >
-      <p v-if="!impactValue.consumers.length">
+      <input
+        v-model="impactQuery"
+        type="search"
+        :aria-label="$t('common.search')"
+        :placeholder="$t('common.search')"
+        :disabled="busy"
+      />
+      <ProblemNotice
+        v-if="impactProblem"
+        :problem="impactProblem"
+        @retry="showImpact()"
+      />
+      <ProblemNotice v-if="problem" :problem="problem" @retry="showImpact()" />
+      <p v-if="impactLoading" role="status">{{ $t("common.loading") }}</p>
+      <p v-if="impactValue">
+        {{ $t("impact.total", { count: impactValue.total }) }}
+      </p>
+      <p v-if="impactValue && !impactValue.consumers.length">
         {{ $t("managed.noConsumers") }}
       </p>
       <div class="configuration-editor__history">
         <label
-          v-for="consumer in impactValue.consumers"
+          v-for="consumer in impactValue?.consumers ?? []"
           :key="consumerKey(consumer)"
           class="configuration-editor__consumer"
           ><input
             v-model="selected"
             type="checkbox"
             :value="consumerKey(consumer)"
-            :disabled="busy || revision?.state !== 'PUBLISHED'"
+            :disabled="
+              busy ||
+              impactLoading ||
+              !!impactProblem ||
+              revision?.state !== 'PUBLISHED' ||
+              (!selected.includes(consumerKey(consumer)) &&
+                selected.length >= 100)
+            "
           /><span>{{ $t(`managed.consumers.${consumer.kind}`) }}</span
           ><code>{{ consumer.ref }}</code
           ><span>v{{ consumer.version }}</span></label
         >
       </div>
       <button
+        v-if="impactValue?.nextPageToken"
+        class="button"
+        :disabled="busy || impactLoading"
+        @click="showImpact(true)"
+      >
+        {{ $t("impact.more") }}
+      </button>
+      <button
         class="button button--primary"
-        :disabled="busy || !selected.length || revision?.state !== 'PUBLISHED'"
+        :disabled="
+          busy ||
+          impactLoading ||
+          !!impactProblem ||
+          !!problem ||
+          !selected.length ||
+          revision?.state !== 'PUBLISHED'
+        "
         @click="rebind"
       >
         {{ $t("managed.rebind") }}
