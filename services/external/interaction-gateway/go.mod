@@ -9,6 +9,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/credentialfs v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
+	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
@@ -98,6 +99,8 @@ replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcse
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
 replace github.com/codex-k8s/kodex/libs/go/i18n => ../../../libs/go/i18n
+
+replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
 
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 

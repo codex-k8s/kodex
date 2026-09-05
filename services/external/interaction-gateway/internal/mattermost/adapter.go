@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,11 +17,10 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
 	texti18n "github.com/codex-k8s/kodex/libs/go/i18n"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/gorilla/websocket"
 	"github.com/mattermost/mattermost/server/public/model"
 )
-
-const tokenFile = "token"
 
 var (
 	errConfiguration = errors.New("mattermost interaction configuration is invalid")
@@ -46,6 +44,8 @@ type Adapter struct {
 	allowedHosts map[string]struct{}
 	timeout      time.Duration
 	text         *texti18n.Localizer
+	definition   integrationpackage.Package
+	newTransport func(*url.URL) http.RoundTripper
 }
 
 type Message struct {
@@ -53,12 +53,23 @@ type Message struct {
 	PostRef     string
 	RootPostRef string
 	ChannelRef  string
+	TeamRef     string
 	UserDigest  string
 	Text        string
 	Decision    controlplanev1.OwnerGateDecision
+	GateRef     string
+	GateVersion int64
+	RunRef      string
 }
 
-type MessageHandler func(context.Context, Message) (string, error)
+type MessageHandler func(context.Context, Message) error
+
+type DeliveryResult struct {
+	PostRef    string
+	ThreadRef  string
+	TeamRef    string
+	ChannelRef string
+}
 
 func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 	store, err := credentialfs.New(config.CredentialDirectory)
@@ -66,7 +77,7 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		return nil, errConfiguration
 	}
 	proxy, err := url.Parse(config.ProxyURL)
-	if err != nil || proxy.Scheme != "http" || proxy.Host == "" || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" {
+	if err != nil || proxy.Scheme != "http" || proxy.Host != egressProxyHost || proxy.User != nil || proxy.Path != "" || proxy.RawQuery != "" || proxy.ForceQuery || proxy.Fragment != "" || proxy.Opaque != "" {
 		return nil, errConfiguration
 	}
 	hosts := map[string]struct{}{}
@@ -75,23 +86,43 @@ func New(config Config, text *texti18n.Localizer) (*Adapter, error) {
 		if host == "" {
 			continue
 		}
-		if net.ParseIP(host) != nil || strings.ContainsAny(host, "*/:@ ") {
+		if !validHostname(host) {
 			return nil, errConfiguration
 		}
 		hosts[host] = struct{}{}
 	}
-	return &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text}, nil
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return nil, errConfiguration
+	}
+	adapter := &Adapter{credentials: store, proxy: proxy, allowedHosts: hosts, timeout: config.Timeout, text: text, definition: definitions["mattermost"]}
+	adapter.newTransport = adapter.defaultTransport
+	return adapter, nil
 }
 
-func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (string, string, error) {
+func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.InteractionDeliveryClaim) (result DeliveryResult, resultErr error) {
+	dispatched := false
+	defer func() {
+		if resultErr != nil && !dispatched {
+			resultErr = &noEffectError{cause: resultErr}
+		}
+	}()
 	if claim == nil || claim.GetMessageKey() == "" {
-		return "", "", errConfiguration
+		return result, errConfiguration
+	}
+	gate, err := gateFromClaim(claim)
+	if err != nil {
+		return result, err
 	}
 	client, _, channel, closeClient, err := adapter.client(ctx, claim)
 	if err != nil {
-		return "", "", err
+		return result, err
 	}
 	defer closeClient()
+	root, err := deliveryRoot(ctx, client, channel, claim)
+	if err != nil {
+		return result, err
+	}
 	data := map[string]any{}
 	if claim.GetTemplateData() != nil {
 		data = claim.GetTemplateData().AsMap()
@@ -101,20 +132,24 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	}
 	message := adapter.text.Localize(claim.GetLocale(), claim.GetMessageKey(), data)
 	if message == claim.GetMessageKey() || strings.TrimSpace(message) == "" || len(message) > 16<<10 {
-		return "", "", errResponse
+		return result, errResponse
 	}
-	post, _, err := client.CreatePost(ctx, &model.Post{ChannelId: channel.Id, Message: message})
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	dispatched = true
+	postRef, threadRef, err := createPost(ctx, client, channel.Id, root, message, gate)
 	if err != nil {
-		return "", "", classify(err)
+		return result, err
 	}
-	if post == nil || post.Id == "" {
-		return "", "", errResponse
-	}
-	return post.Id, post.Id, nil
+	return DeliveryResult{PostRef: postRef, ThreadRef: threadRef, TeamRef: channel.TeamId, ChannelRef: channel.Id}, nil
 }
 
 func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.InteractionSource, handler MessageHandler) error {
 	if source == nil || handler == nil || !listens(source.GetEnabledCapabilities()) {
+		return errConfiguration
+	}
+	if source.GetConnectionVersion() < 1 || source.GetCredentialRevisionRef() != source.GetCredentialDescriptor().GetRef() || source.GetCredentialRevision() != source.GetCredentialDescriptor().GetRevision() {
 		return errConfiguration
 	}
 	client, token, channel, closeClient, err := adapter.client(ctx, source)
@@ -123,7 +158,7 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	}
 	defer closeClient()
 	me, _, err := client.GetMe(ctx, "")
-	if err != nil || me == nil || me.Id == "" {
+	if err != nil || me == nil || !model.IsValidId(me.Id) {
 		return classify(err)
 	}
 	base, err := adapter.baseURL(source.GetBaseUrl())
@@ -141,16 +176,20 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	if err != nil {
 		return errUnavailable
 	}
-	defer socket.Close()
-	go socket.Listen()
+	socket.Conn.SetReadLimit(maximumWebsocketBytes)
+	socket.Listen()
+	defer closeSocket(socket)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-socket.PingTimeoutChannel:
 			return errUnavailable
-		case <-socket.ResponseChannel:
+		case _, ok := <-socket.ResponseChannel:
 			// Канал обязательно дренируется по контракту официального клиента.
+			if !ok {
+				return errUnavailable
+			}
 		case event, ok := <-socket.EventChannel:
 			if !ok {
 				return errUnavailable
@@ -159,27 +198,32 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 			if !ok {
 				continue
 			}
-			messageKey, handleErr := handler(ctx, Message{
-				EventRef: post.Id, PostRef: post.Id, RootPostRef: post.RootId,
-				ChannelRef: post.ChannelId, UserDigest: digest(post.UserId),
-				Text: strings.TrimSpace(post.Message), Decision: ParseDecision(post.Message),
-			})
-			if handleErr != nil {
-				return handleErr
+			verified, _, verifyErr := client.GetPost(ctx, post.Id, "")
+			if verifyErr != nil {
+				return classify(verifyErr)
 			}
-			if messageKey == "" {
+			if !sameInboundPost(post, verified, channel.Id, me.Id) {
 				continue
 			}
-			response := adapter.text.Localize(source.GetLocale(), messageKey, nil)
-			if response == messageKey || strings.TrimSpace(response) == "" {
-				return errResponse
+			post = verified
+			gate, gateErr := readGateContext(ctx, client, post, channel.Id, me.Id)
+			if gateErr != nil {
+				return gateErr
 			}
-			root := post.RootId
-			if root == "" {
-				root = post.Id
+			decision := ParseDecision(post.Message)
+			if decision != controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED && gate == nil {
+				continue
 			}
-			if _, _, err := client.CreatePost(ctx, &model.Post{ChannelId: channel.Id, RootId: root, Message: response}); err != nil {
-				return classify(err)
+			message := Message{
+				EventRef: post.Id, PostRef: post.Id, RootPostRef: post.RootId,
+				ChannelRef: post.ChannelId, TeamRef: channel.TeamId, UserDigest: digest(post.UserId),
+				Text: strings.TrimSpace(post.Message), Decision: decision,
+			}
+			if gate != nil {
+				message.GateRef, message.GateVersion, message.RunRef = gate.ref, gate.version, gate.runRef
+			}
+			if err := handler(ctx, message); err != nil {
+				return err
 			}
 		}
 	}
@@ -190,16 +234,16 @@ func (adapter *Adapter) client(ctx context.Context, source source) (*model.Clien
 	if err != nil {
 		return nil, "", nil, func() {}, err
 	}
-	raw, err := adapter.credentials.Read(source.GetCredentialMaterializationRef(), tokenFile)
+	raw, err := adapter.readInvocationCredential(ctx, source.GetCredentialDescriptor())
 	if err != nil {
 		return nil, "", nil, func() {}, errCredential
 	}
 	defer clear(raw)
-	token := strings.TrimSpace(string(raw))
-	if token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\r\n") {
-		return nil, "", nil, func() {}, errCredential
-	}
-	transport := &http.Transport{
+	return adapter.authenticatedClient(ctx, source, base, string(raw))
+}
+
+func (adapter *Adapter) defaultTransport(base *url.URL) http.RoundTripper {
+	return &http.Transport{
 		Proxy:                 http.ProxyURL(adapter.proxy),
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS13, ServerName: base.Hostname()},
 		ForceAttemptHTTP2:     true,
@@ -208,40 +252,41 @@ func (adapter *Adapter) client(ctx context.Context, source source) (*model.Clien
 		TLSHandshakeTimeout:   adapter.timeout,
 		ResponseHeaderTimeout: adapter.timeout,
 	}
+}
+
+func (adapter *Adapter) authenticatedClient(ctx context.Context, source source, base *url.URL, token string) (*model.Client4, string, *model.Channel, func(), error) {
+	transport := adapter.newTransport(base)
 	client := model.NewAPIv4Client(strings.TrimRight(base.String(), "/"))
-	client.HTTPClient = &http.Client{Transport: transport, Timeout: adapter.timeout}
+	client.HTTPClient = scopedHTTPClient(base, transport, adapter.timeout)
 	client.SetToken(token)
 	closeClient := func() {
 		client.AuthToken = ""
-		transport.CloseIdleConnections()
+		if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
+			closer.CloseIdleConnections()
+		}
 	}
-	team, _, err := client.GetTeamByName(ctx, source.GetTeamName(), "")
-	if err != nil || team == nil || team.Id == "" {
+	channel, err := resolveChannel(ctx, client, source)
+	if err != nil {
 		closeClient()
-		return nil, "", nil, func() {}, classify(err)
-	}
-	channel, _, err := client.GetChannelByName(ctx, source.GetChannelName(), team.Id, "")
-	if err != nil || channel == nil || channel.Id == "" {
-		closeClient()
-		return nil, "", nil, func() {}, classify(err)
+		return nil, "", nil, func() {}, err
 	}
 	return client, token, channel, closeClient, nil
 }
 
 type source interface {
 	GetBaseUrl() string
-	GetCredentialMaterializationRef() string
+	GetCredentialDescriptor() *controlplanev1.IntegrationCredentialRevision
 	GetTeamName() string
 	GetChannelName() string
 }
 
 func (adapter *Adapter) baseURL(value string) (*url.URL, error) {
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.Port() != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "" || parsed.RawPath != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.Port() != "" {
 		return nil, errConfiguration
 	}
 	host := strings.ToLower(parsed.Hostname())
-	if _, ok := adapter.allowedHosts[host]; !ok {
+	if _, ok := adapter.allowedHosts[host]; !ok || !validHostname(host) {
 		return nil, errConfiguration
 	}
 	parsed.Host = host
@@ -258,7 +303,7 @@ func postedMessage(event *model.WebSocketEvent, channelID, botUserID string) (*m
 		return nil, false
 	}
 	var post model.Post
-	if json.Unmarshal([]byte(raw), &post) != nil || post.Id == "" || post.ChannelId != channelID || post.UserId == "" || post.UserId == botUserID || post.DeleteAt != 0 {
+	if json.Unmarshal([]byte(raw), &post) != nil || !validInboundPost(&post, channelID, botUserID) {
 		return nil, false
 	}
 	return &post, true
