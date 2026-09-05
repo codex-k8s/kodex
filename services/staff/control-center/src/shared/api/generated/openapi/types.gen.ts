@@ -945,6 +945,40 @@ export type RuntimeSecretDraft = {
 
 export type RuntimeSecretDraftPublishInput = {
     expectedSecretVersion: number;
+    impactPlanRef: OpaqueRef;
+    /**
+     * Пустой список публикует без замены потребителей.
+     */
+    selectedItemRefs: Array<OpaqueRef>;
+};
+
+export type RuntimeSecretDraftImpactPlan = {
+    ref: OpaqueRef;
+    draftRef: OpaqueRef;
+    draftVersion: number;
+    secretRef: OpaqueRef;
+    secretVersion: number;
+    sourceRevision: number;
+    digest: string;
+    total: number;
+    expiresAt: Timestamp;
+    state: 'PREPARED' | 'APPLIED' | 'EXPIRED' | 'CANCELLED';
+};
+
+export type RuntimeSecretDraftImpactItem = {
+    ref: OpaqueRef;
+    consumer: RuntimeSecretImpactConsumer;
+    outcome: 'PENDING' | 'APPLIED' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_SELECTED';
+    resultEnvironmentVersionRef?: OpaqueRef;
+    resultBindingRef?: OpaqueRef;
+    resultBindingVersion?: number;
+};
+
+export type RuntimeSecretDraftImpactPage = {
+    plan: RuntimeSecretDraftImpactPlan;
+    items: Array<RuntimeSecretDraftImpactItem>;
+    total: number;
+    nextPageToken: string;
 };
 
 export type RuntimeSecretDraftPublication = {
@@ -5845,6 +5879,69 @@ export type GetRuntimeSecretDraftResponses = {
 };
 
 export type GetRuntimeSecretDraftResponse = GetRuntimeSecretDraftResponses[keyof GetRuntimeSecretDraftResponses];
+
+export type PrepareRuntimeSecretDraftImpactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/impact-plans';
+};
+
+export type PrepareRuntimeSecretDraftImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PrepareRuntimeSecretDraftImpactError = PrepareRuntimeSecretDraftImpactErrors[keyof PrepareRuntimeSecretDraftImpactErrors];
+
+export type PrepareRuntimeSecretDraftImpactResponses = {
+    /**
+     * Owner план с exact Draft/Secret pins без изменения активного Secret
+     */
+    201: RuntimeSecretDraftImpactPlan;
+};
+
+export type PrepareRuntimeSecretDraftImpactResponse = PrepareRuntimeSecretDraftImpactResponses[keyof PrepareRuntimeSecretDraftImpactResponses];
+
+export type GetRuntimeSecretDraftImpactData = {
+    body?: never;
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secret-draft-impact-plans/{planRef}';
+};
+
+export type GetRuntimeSecretDraftImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretDraftImpactError = GetRuntimeSecretDraftImpactErrors[keyof GetRuntimeSecretDraftImpactErrors];
+
+export type GetRuntimeSecretDraftImpactResponses = {
+    /**
+     * Страница owner плана без credential descriptors
+     */
+    200: RuntimeSecretDraftImpactPage;
+};
+
+export type GetRuntimeSecretDraftImpactResponse = GetRuntimeSecretDraftImpactResponses[keyof GetRuntimeSecretDraftImpactResponses];
 
 export type ValidateRuntimeSecretDraftData = {
     body?: never;
