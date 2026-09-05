@@ -306,6 +306,14 @@ export type ManagedConfigurationDraftInput = {
     content: string;
 };
 
+export type ManagedConfigurationDraftSaveInput = {
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
+     */
+    content: string;
+};
+
 export type ManagedConfigurationCopyInput = {
     name: string;
 };
@@ -325,7 +333,7 @@ export type ManagedConfigurationRebindInput = {
 export type ManagedConfigurationRevision = {
     ref: OpaqueRef;
     revision: number;
-    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED';
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED' | 'DISCARDED';
     contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
     content: string;
     digest: string;
@@ -361,7 +369,7 @@ export type ManagedConfigurationSummary = {
     currentRevision?: {
         ref: OpaqueRef;
         revision: number;
-        state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED';
+        state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED' | 'DISCARDED';
         digest: string;
     };
     updatedAt: Timestamp;
@@ -8297,6 +8305,72 @@ export type CreatePromptTemplateDraftResponses = {
 
 export type CreatePromptTemplateDraftResponse = CreatePromptTemplateDraftResponses[keyof CreatePromptTemplateDraftResponses];
 
+export type SavePromptTemplateDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SavePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SavePromptTemplateDraftError = SavePromptTemplateDraftErrors[keyof SavePromptTemplateDraftErrors];
+
+export type SavePromptTemplateDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SavePromptTemplateDraftResponse = SavePromptTemplateDraftResponses[keyof SavePromptTemplateDraftResponses];
+
+export type DiscardPromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardPromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardPromptTemplateDraftError = DiscardPromptTemplateDraftErrors[keyof DiscardPromptTemplateDraftErrors];
+
+export type DiscardPromptTemplateDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardPromptTemplateDraftResponse = DiscardPromptTemplateDraftResponses[keyof DiscardPromptTemplateDraftResponses];
+
 export type ValidatePromptTemplateDraftData = {
     body?: never;
     headers: {
@@ -8425,6 +8499,72 @@ export type CreateRoleImageRevisionDraftResponses = {
 };
 
 export type CreateRoleImageRevisionDraftResponse = CreateRoleImageRevisionDraftResponses[keyof CreateRoleImageRevisionDraftResponses];
+
+export type SaveRoleImageRevisionDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRoleImageRevisionDraftError = SaveRoleImageRevisionDraftErrors[keyof SaveRoleImageRevisionDraftErrors];
+
+export type SaveRoleImageRevisionDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveRoleImageRevisionDraftResponse = SaveRoleImageRevisionDraftResponses[keyof SaveRoleImageRevisionDraftResponses];
+
+export type DiscardRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRoleImageRevisionDraftError = DiscardRoleImageRevisionDraftErrors[keyof DiscardRoleImageRevisionDraftErrors];
+
+export type DiscardRoleImageRevisionDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardRoleImageRevisionDraftResponse = DiscardRoleImageRevisionDraftResponses[keyof DiscardRoleImageRevisionDraftResponses];
 
 export type ValidateRoleImageRevisionDraftData = {
     body?: never;
@@ -8555,6 +8695,72 @@ export type CreateIntegrationDefinitionDraftResponses = {
 
 export type CreateIntegrationDefinitionDraftResponse = CreateIntegrationDefinitionDraftResponses[keyof CreateIntegrationDefinitionDraftResponses];
 
+export type SaveIntegrationDefinitionDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveIntegrationDefinitionDraftError = SaveIntegrationDefinitionDraftErrors[keyof SaveIntegrationDefinitionDraftErrors];
+
+export type SaveIntegrationDefinitionDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveIntegrationDefinitionDraftResponse = SaveIntegrationDefinitionDraftResponses[keyof SaveIntegrationDefinitionDraftResponses];
+
+export type DiscardIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardIntegrationDefinitionDraftError = DiscardIntegrationDefinitionDraftErrors[keyof DiscardIntegrationDefinitionDraftErrors];
+
+export type DiscardIntegrationDefinitionDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardIntegrationDefinitionDraftResponse = DiscardIntegrationDefinitionDraftResponses[keyof DiscardIntegrationDefinitionDraftResponses];
+
 export type ValidateIntegrationDefinitionDraftData = {
     body?: never;
     headers: {
@@ -8683,6 +8889,72 @@ export type CreateSystemSttConfigurationDraftResponses = {
 };
 
 export type CreateSystemSttConfigurationDraftResponse = CreateSystemSttConfigurationDraftResponses[keyof CreateSystemSttConfigurationDraftResponses];
+
+export type SaveSystemSttConfigurationDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveSystemSttConfigurationDraftError = SaveSystemSttConfigurationDraftErrors[keyof SaveSystemSttConfigurationDraftErrors];
+
+export type SaveSystemSttConfigurationDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveSystemSttConfigurationDraftResponse = SaveSystemSttConfigurationDraftResponses[keyof SaveSystemSttConfigurationDraftResponses];
+
+export type DiscardSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardSystemSttConfigurationDraftError = DiscardSystemSttConfigurationDraftErrors[keyof DiscardSystemSttConfigurationDraftErrors];
+
+export type DiscardSystemSttConfigurationDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardSystemSttConfigurationDraftResponse = DiscardSystemSttConfigurationDraftResponses[keyof DiscardSystemSttConfigurationDraftResponses];
 
 export type ValidateSystemSttConfigurationDraftData = {
     body?: never;
