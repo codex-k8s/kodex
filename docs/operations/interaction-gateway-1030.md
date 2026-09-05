@@ -4,7 +4,7 @@ title: Доставка Mattermost и привязка внешнего поль
 type: operational-contract
 status: approved
 owner: platform
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-05
 ---
 
@@ -148,6 +148,32 @@ workload-local границу `GUIDE-DOC-003`; доступность конкр
 UNKNOWN_OUTCOME и exact workload для connection tests. Зависимые HTTP/PWA
 управления identity и финальная общая приёмка остаются отдельными unit эпика.
 Live Mattermost и staging не запускались.
+
+## Совместная Сборка С Выдачей Ключей
+
+На `95373bb34` сохранён актуальный main `8026633a9` и подключён полный
+authority checkpoint #1059 (`0765f3dad`). Индивидуальный signer получает
+private key; gateway читает только application grant; CP получает отдельный
+public trust в optional-профиле. Issuer LOGIN, publisher Secret permissions
+и readback/restore/PostgreSQL пути материализуются установщиком.
+
+Дополнительные публичные проверки: `make test-interaction-gateway-render`
+сверяет оба профиля, socket UID/GID, write/read mounts grant, private key
+изоляцию и CP public trust; `make test-interaction-gateway-postgres` проверяет
+health routing, user binding/revoke, durable ACK, UNKNOWN и exact workload
+перед replay в одноразовой PostgreSQL. Общие проверки #1059 запускаются
+отдельно, потому что правильный mount сам по себе не доказывает доставку.
+
+Локальная Docker-сборка `95373bb34` прошла; образ запускает бинарь с
+`USER 10001:10001`. Сборка не означает успешный protected RPC, настройку
+реального Mattermost или deployment. `AllowedHosts` по умолчанию пуст:
+внешняя сеть требует отдельно настроенного exact host и egress policy.
+Ни wildcard host, ни обход проверки TLS в этом unit не добавляются.
+
+PR остаётся интеграционным до включения зависимых CP/authority коммитов
+в его base и общей проверки итогового SHA. Отдельные unit-review циклы
+пропущены по решению #1018; full-prototype acceptance не подменяется
+локальным provider fixture.
 
 Проверена официальная спецификация
 [Mattermost posts API](https://github.com/mattermost/mattermost-api-reference/blob/master/v4/source/posts.yaml)
