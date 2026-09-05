@@ -46,8 +46,12 @@ func TestTypedSTTDraftRejectsUnsupportedBeforeRPC(t *testing.T) {
 		{"stream", `"stream":false`, `"stream":true`},
 		{"temperature", `"temperature":0.2`, `"temperature":2`},
 		{"size", `"maximumAudioBytes":10485760`, `"maximumAudioBytes":26214401`},
-		{"duration", `"maximumAudioDurationMilliseconds":120000`, `"maximumAudioDurationMilliseconds":600001`},
+		{"duration", `"maximumAudioDurationMilliseconds":120000`, `"maximumAudioDurationMilliseconds":1800001`},
+		{"small-size", `"maximumAudioBytes":10485760`, `"maximumAudioBytes":1023`},
+		{"short-duration", `"maximumAudioDurationMilliseconds":120000`, `"maximumAudioDurationMilliseconds":999`},
 		{"timeout", `"providerTimeoutMilliseconds":15000`, `"providerTimeoutMilliseconds":0`},
+		{"short-timeout", `"providerTimeoutMilliseconds":15000`, `"providerTimeoutMilliseconds":999`},
+		{"long-timeout", `"providerTimeoutMilliseconds":15000`, `"providerTimeoutMilliseconds":60000`},
 		{"authority", `"name":"Dictation"`, `"name":"Dictation","projectRef":"prj_forged01"`},
 		{"credential", `"enabled":true`, `"enabled":true,"apiKey":"forbidden-fixture"`},
 	} {
@@ -85,11 +89,26 @@ func TestSystemSTTReadRejectsMalformedParameters(t *testing.T) {
 		func(v *controlplanev1.SystemSTTConfiguration) { v.Parameters.Stream = true },
 		func(v *controlplanev1.SystemSTTConfiguration) { v.MaximumAudioBytes = math.MaxUint64 },
 		func(v *controlplanev1.SystemSTTConfiguration) { v.ProviderTimeoutMilliseconds = 0 },
+		func(v *controlplanev1.SystemSTTConfiguration) { v.ProviderTimeoutMilliseconds = 60000 },
+		func(v *controlplanev1.SystemSTTConfiguration) { v.ProviderTimeoutMilliseconds = 999 },
+		func(v *controlplanev1.SystemSTTConfiguration) { v.MaximumAudioBytes = 1023 },
+		func(v *controlplanev1.SystemSTTConfiguration) { v.MaximumAudioDurationMilliseconds = 999 },
 	} {
 		v := &controlplanev1.SystemSTTConfiguration{ProviderAccountRef: "pacc_fixture01", Model: "gpt-transcribe", PermissionKey: "platform.stt.use", Parameters: &controlplanev1.SystemSTTParameters{}, MaximumAudioBytes: 10 << 20, MaximumAudioDurationMilliseconds: 120000, ProviderTimeoutMilliseconds: 15000}
 		mutate(v)
 		if _, ok := systemSTTSpecificationView(v); ok {
 			t.Fatal("invalid upstream STT accepted")
+		}
+	}
+}
+
+func TestSystemSTTReadAcceptsExecutablePolicyBoundaries(t *testing.T) {
+	for _, bounds := range [][3]uint64{{1024, 1000, 1000}, {25 << 20, 1800000, 15000}} {
+		value := &controlplanev1.SystemSTTConfiguration{ProviderAccountRef: "pacc_fixture01", Model: "gpt-transcribe", PermissionKey: "platform.stt.use",
+			Parameters: &controlplanev1.SystemSTTParameters{}, MaximumAudioBytes: bounds[0], MaximumAudioDurationMilliseconds: bounds[1], ProviderTimeoutMilliseconds: bounds[2]}
+		view, ok := systemSTTSpecificationView(value)
+		if !ok || view.MaximumAudioBytes != int64(bounds[0]) || view.MaximumAudioDurationMilliseconds != int64(bounds[1]) || view.ProviderTimeoutMilliseconds != int64(bounds[2]) {
+			t.Fatal("executable policy boundary was rejected or changed")
 		}
 	}
 }

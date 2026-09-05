@@ -12,8 +12,9 @@ import (
 
 func validSTTSpecification(value generated.SystemSTTSpecification) bool {
 	return opaqueHTTPReference.MatchString(value.ProviderAccountRef) && value.PermissionKey == "platform.stt.use" &&
-		value.MaximumAudioBytes > 0 && value.MaximumAudioBytes <= 25<<20 && value.MaximumAudioDurationMilliseconds > 0 && value.MaximumAudioDurationMilliseconds <= 600000 &&
-		value.ProviderTimeoutMilliseconds > 0 && value.ProviderTimeoutMilliseconds <= 120000 &&
+		value.MaximumAudioBytes >= modelprofile.MinimumAudioBytes && value.MaximumAudioBytes <= modelprofile.MaximumAudioBytes &&
+		value.MaximumAudioDurationMilliseconds >= modelprofile.MinimumAudioDuration.Milliseconds() && value.MaximumAudioDurationMilliseconds <= modelprofile.MaximumAudioDuration.Milliseconds() &&
+		value.ProviderTimeoutMilliseconds >= modelprofile.MinimumProviderTimeout.Milliseconds() && value.ProviderTimeoutMilliseconds <= modelprofile.MaximumProviderTimeout.Milliseconds() &&
 		modelprofile.Validate(value.Model, value.Language, modelprofile.Parameters{Languages: value.Parameters.Languages, Keywords: value.Parameters.Keywords, Prompt: value.Parameters.Prompt,
 			Temperature: value.Parameters.Temperature, ChunkingStrategy: string(value.Parameters.ChunkingStrategy), Stream: bool(value.Parameters.Stream)}) == nil
 }
@@ -59,7 +60,7 @@ func (server *Server) CreateTypedSystemSTTConfigurationDraft(w http.ResponseWrit
 
 func systemSTTSpecificationView(value *controlplanev1.SystemSTTConfiguration) (generated.SystemSTTSpecification, bool) {
 	p := value.GetParameters()
-	if p == nil || value.GetMaximumAudioBytes() > 25<<20 || value.GetMaximumAudioDurationMilliseconds() > 600000 || value.GetProviderTimeoutMilliseconds() > 120000 {
+	if p == nil || value.GetMaximumAudioBytes() > modelprofile.MaximumAudioBytes || value.GetMaximumAudioDurationMilliseconds() > uint64(modelprofile.MaximumAudioDuration.Milliseconds()) || value.GetProviderTimeoutMilliseconds() > uint64(modelprofile.MaximumProviderTimeout.Milliseconds()) {
 		return generated.SystemSTTSpecification{}, false
 	}
 	result := generated.SystemSTTSpecification{Enabled: value.GetEnabled(), ProviderAccountRef: value.GetProviderAccountRef(), Model: value.GetModel(), Language: value.GetLanguage(),

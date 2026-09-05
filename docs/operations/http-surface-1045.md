@@ -650,6 +650,20 @@ State mutation, OCC, idempotency receipt и событие отсутствую�
 Исправление общего owner-инварианта передано #1046/#1020; HTTP не скрывает его
 clamp-ом. Пока исправление не принято, этот сценарий не считается PASS.
 
+HTTP потребляет shared bounds из #1020 `e4064aeb2`: 1024..25MiB, длительность
+1s..30min и provider timeout 1s..15s. Typed input и readback проверяют те же
+границы; OpenAPI и SDK обновлены. Ошибочный receipt с пустым singular language
+исправлен: при `parameters.languages` либо auto-detect пустое значение сохраняется,
+обнаруженный язык не выдумывается. Дополнительные model/timeout multipart fields
+отклоняются до transcription commit и закрывают stream.
+
+Тест sttclient выполняет настоящий generated unary RPC к loopback fixture через
+production connection/interceptors, проверяет proof/issuer exact operation и
+request digest, отказ до server и недопустимость отсутствующего issuer.
+Policy60 из #1046 `4239005e9` подключена; прежний отказ незарегистрированной
+операции устраняется реальным producer registry. Local proof/issuer denial
+сохраняет канонический `Unauthenticated`, без вызова STT server.
+
 ## Текст PR Для Root
 
 Связь: #1045, #1021, #1018. Полная HTTP интеграция доступных CP Query/Command/

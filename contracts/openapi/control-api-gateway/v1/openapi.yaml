@@ -5066,9 +5066,9 @@ components:
         language: { type: string, maxLength: 2 }
         permissionKey: { type: string, enum: [platform.stt.use] }
         parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
-        maximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 26214400, default: 10485760 }
-        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 600000, default: 120000 }
-        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 120000, default: 15000 }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400, default: 10485760 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000, default: 120000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000, default: 15000 }
     SystemSTTConfigurationDraftInput:
       type: object
       additionalProperties: false
@@ -5095,9 +5095,9 @@ components:
         providerCredentialGeneration: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         enabled: { type: boolean }
         parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
-        maximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
-        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 600000 }
-        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 120000 }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000 }
     Project:
       type: object
       additionalProperties: false
@@ -5156,7 +5156,7 @@ components:
         authoritySourceRevision: { type: integer, format: int64, minimum: 1 }
         configRevision: { type: integer, format: int64, minimum: 1 }
         model: { type: string, minLength: 1, maxLength: 160 }
-        language: { type: string, minLength: 1, maxLength: 35 }
+        language: { type: string, maxLength: 2, pattern: '^([a-z]{2})?$', description: 'Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.' }
         completedStage: { type: string, enum: [PROVIDER_COMPLETED] }
     ProjectInput:
       type: object
