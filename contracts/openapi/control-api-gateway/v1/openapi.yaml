@@ -2482,7 +2482,7 @@ paths:
     get:
       tags: [Assistant]
       operationId: listAssistantConversations
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Долговечная история помощника
@@ -2491,7 +2491,9 @@ paths:
               schema:
                 type: object
                 required: [items]
-                properties: { items: { type: array, items: { $ref: '#/components/schemas/AssistantConversation' } } }
+                properties:
+                  items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AssistantConversation' } }
+                  nextPageToken: { type: string, maxLength: 512 }
         default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [Assistant]

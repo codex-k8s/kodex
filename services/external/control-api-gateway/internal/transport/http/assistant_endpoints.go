@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -17,10 +18,26 @@ func (server *Server) GetSystemAssistant(w http.ResponseWriter, r *http.Request)
 	writeMessage(w, http.StatusOK, response, "assistant", "")
 }
 func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.Request, p generated.ListAssistantConversationsParams) {
-	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(nil, nil)})
+	r, ok := catalogRequest(w, r, p.ProjectRef, nil, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
+	}
+	if response == nil || len(response.Conversations) > int(page(p.PageSize, p.PageToken).PageSize) ||
+		len(response.GetPage().GetNextPageToken()) > 512 || !utf8.ValidString(response.GetPage().GetNextPageToken()) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	for _, conversation := range response.Conversations {
+		if conversation == nil || !opaqueHTTPReference.MatchString(conversation.Ref) ||
+			p.ProjectRef != nil && conversation.GetProjectRef() != *p.ProjectRef {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 	}
 	writeMessage(w, http.StatusOK, response, "", "conversations")
 }

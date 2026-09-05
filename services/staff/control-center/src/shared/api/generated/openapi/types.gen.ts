@@ -7573,6 +7573,8 @@ export type ListAssistantConversationsData = {
     path?: never;
     query?: {
         projectRef?: OpaqueRef;
+        pageSize?: number;
+        pageToken?: string;
     };
     url: '/api/v1/assistant-conversations';
 };
@@ -7592,6 +7594,7 @@ export type ListAssistantConversationsResponses = {
      */
     200: {
         items: Array<AssistantConversation>;
+        nextPageToken?: string;
     };
 };
 
