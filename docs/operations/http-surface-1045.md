@@ -39,6 +39,22 @@ updated: 2026-09-05
 самостоятельно новые RPC, eligibility, authorizations или успешные состояния
 для закрытия этих строк.
 
+Поле `ProviderAccount.safe_status_reason` существующего CP read model теперь
+описано как optional `safeStatusReason` в SDK. HTTP сохраняет закрытый owner
+reason и отклоняет неизвестный текст вместо его выдачи пользователю. Это не
+вычисление account/model compatibility или effective permission в gateway.
+
+MVP-UI-39–42: verified actor → integration definitions/connections → CP registry
+и owner grants → HTTP/SDK selectors. Proto IntegrationRisk/ApprovalPolicy/
+ResourceKind/DefinitionOrigin преобразуются только как typed enum; неизвестное
+значение и противоречие legacy risk/typedRisk закрыто отклоняются. `typedRisk`
+не дублирует публичный `risk`. Флаги hasMinimum/hasMaximum превращаются в
+optional numeric bounds, включая явный 0. Safe canonical inputSchema из
+registry передаётся вместе с проверенным SHA256 и лимитом 256 KiB; HTTP не
+вычисляет из этой схемы authority и не исполняет arbitrary provider calls.
+Connection сохраняет публичные credential readiness/hint, а internal
+credentialRevision descriptor исключается согласно OpenAPI projection.
+
 ## Exact Secret pin при редактировании Environment
 
 MVP-UI-46/47: verified actor → create/publish Environment либо create/save draft
@@ -54,12 +70,20 @@ OCC/idempotency и события сохраняют существующий li
 отклоняется до RPC; повреждённый pin ответа — 502.
 Published `secretDescriptors[].revision` также описан в SDK и проверяется как
 положительный exact pin. Kubernetes namespace не входит в публичную projection.
+Все existing-draft read/mutation ответы связываются с exact requested draftRef;
+create дополнительно сохраняет projectRef и исходную пару Environment/version.
+Несовпадение не выдаётся как успешный receipt другого ресурса.
 
 ## D5: typed mailbox, schema 056547091
 
 Регистрация всех 12 публичных RPC и internal EMAIL readback подключена через
 policy59 `78d700683`. Это устраняет structural profile gap, но не доказывает
 исполнение owner, доставку конфигурации или READY.
+Schema `ae9d22d9` добавляет server action projection: View возвращает все девять
+typed nextActions, list — только connection-scoped CREATE_DRAFT даже при пустой
+странице. enabled эквивалентен reason=NONE. HTTP отклоняет missing/duplicate/
+unknown action и несовместимую причину; не выводит authority из managedBy либо
+состояния revision. Owner повторно проверяет действие при mutation.
 Последняя publication относится к connection и может отличаться от выбранной
 draft/historical revision. Только FAILED содержит закрытый failureCode:
 `EMAIL_MAILBOX_DELIVERY_EXPIRED`, `EMAIL_MAILBOX_CONNECTION_CHANGED` либо
@@ -350,7 +374,7 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 | 53 | Search min length/limit/cursor проверяются до RPC; debounce у PWA. |
 | 54 | Четыре search kinds, opaque refs/project match, malformed upstream 502. |
 | 55 | HTTP потребляет самостоятельный STT client; runtime/deploy принадлежат #1020. |
-| 56 | Typed STT parameters/limits draft/readback и raw managed lifecycle; provider probe у STT. |
+| 56 | Typed STT parameters/limits draft/readback и raw managed lifecycle; provider probe у STT. Adapter catalog уже есть в Proto, отдельный admin-safe HTTP consumer добавляется после согласования protected RPC. |
 | 57 | Org speech route, MIME aliases, bounded multipart, permission/session/CSRF. |
 | 58 | Speech API и TTL bootstrap; MediaRecorder/editor insertion у PWA. |
 | 59 | Protected authenticated STT availability, READY/fresh validity; exact TLS/egress у STT/root. |
@@ -603,6 +627,47 @@ Docker runtime повторно собран из того же Dockerfile с `V
 NOT RUN: real CP protected integration по незавершённым D1..D7, browser E2E,
 live provider, staging/cluster. Никаких новых acceptance-требований эта
 проверка не вводит; код CP, handwritten PWA и Dockerfile не изменялись.
+
+## MVP-UI-56: каталог adapter и административный bootstrap
+
+Локальная сверка main `8026633a9f92625df43163bf6dbef85df936289a` и
+интеграции `b1882ba4fa1f5ba728a50db21b7695b3c135b23c`: каталог не отсутствует
+у producer. `stt.proto` содержит `TranscriptionModelCatalog`, а OpenAI adapter
+возвращает `modelprofile.OpenAICatalog()` с version/observedAt. observedAt — дата
+проверки совместимости adapter, не свежесть account probe. Gateway bootstrap
+пока отбрасывает catalog и не вызывает STT при отсутствии CP eligibility;
+это делает каталог недостижимым до первой конфигурации.
+
+Согласованная цепочка: admin session → GET `/api/v1/system-stt/model-catalog` →
+unary issuer client → `SpeechToTextService.GetModelCatalog` → зарегистрированный
+STT adapter → typed OpenAPI/Go/TS SDK → административный selector PWA.
+CP выводит `system.configuration.manage` из organization rule; actor/org не
+берутся из payload. Exact operation `platform.stt.model-catalog.get`,
+`UNARY_PROTO_SHA256`; resource/version/attempt/idempotency metadata запрещены.
+State mutation, OCC, idempotency receipt и событие отсутствуют: авторитетный read
+принадлежит adapter. Каталог не выдаёт READY, credential eligibility либо право
+на диктовку. Model IDs и совместимость не копируются в HTTP/PWA.
+
+Отдельно подтверждён mismatch лимитов: CP `revision/validator.go` допускает
+`providerTimeoutMilliseconds=60000` (верхняя граница 120000), тогда как STT
+`transcription/service.go:validatePolicy` допускает максимум 15000. Такой
+документ может пройти CP validation/readiness, но быть отвергнут runtime.
+Исправление общего owner-инварианта передано #1046/#1020; HTTP не скрывает его
+clamp-ом. Пока исправление не принято, этот сценарий не считается PASS.
+
+HTTP потребляет shared bounds из #1020 `e4064aeb2`: 1024..25MiB, длительность
+1s..30min и provider timeout 1s..15s. Typed input и readback проверяют те же
+границы; OpenAPI и SDK обновлены. Ошибочный receipt с пустым singular language
+исправлен: при `parameters.languages` либо auto-detect пустое значение сохраняется,
+обнаруженный язык не выдумывается. Дополнительные model/timeout multipart fields
+отклоняются до transcription commit и закрывают stream.
+
+Тест sttclient выполняет настоящий generated unary RPC к loopback fixture через
+production connection/interceptors, проверяет proof/issuer exact operation и
+request digest, отказ до server и недопустимость отсутствующего issuer.
+Policy60 из #1046 `4239005e9` подключена; прежний отказ незарегистрированной
+операции устраняется реальным producer registry. Local proof/issuer denial
+сохраняет канонический `Unauthenticated`, без вызова STT server.
 
 ## Текст PR Для Root
 

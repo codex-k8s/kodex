@@ -927,6 +927,75 @@ func (e EmailEffectOutcome) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxActionAvailabilityAction.
+const (
+	EmailMailboxActionAvailabilityActionBIND        EmailMailboxActionAvailabilityAction = "BIND"
+	EmailMailboxActionAvailabilityActionCOPY        EmailMailboxActionAvailabilityAction = "COPY"
+	EmailMailboxActionAvailabilityActionCREATEDRAFT EmailMailboxActionAvailabilityAction = "CREATE_DRAFT"
+	EmailMailboxActionAvailabilityActionDETACH      EmailMailboxActionAvailabilityAction = "DETACH"
+	EmailMailboxActionAvailabilityActionDISCARD     EmailMailboxActionAvailabilityAction = "DISCARD"
+	EmailMailboxActionAvailabilityActionPUBLISH     EmailMailboxActionAvailabilityAction = "PUBLISH"
+	EmailMailboxActionAvailabilityActionSAVE        EmailMailboxActionAvailabilityAction = "SAVE"
+	EmailMailboxActionAvailabilityActionUNBIND      EmailMailboxActionAvailabilityAction = "UNBIND"
+	EmailMailboxActionAvailabilityActionVALIDATE    EmailMailboxActionAvailabilityAction = "VALIDATE"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxActionAvailabilityAction enum.
+func (e EmailMailboxActionAvailabilityAction) Valid() bool {
+	switch e {
+	case EmailMailboxActionAvailabilityActionBIND:
+		return true
+	case EmailMailboxActionAvailabilityActionCOPY:
+		return true
+	case EmailMailboxActionAvailabilityActionCREATEDRAFT:
+		return true
+	case EmailMailboxActionAvailabilityActionDETACH:
+		return true
+	case EmailMailboxActionAvailabilityActionDISCARD:
+		return true
+	case EmailMailboxActionAvailabilityActionPUBLISH:
+		return true
+	case EmailMailboxActionAvailabilityActionSAVE:
+		return true
+	case EmailMailboxActionAvailabilityActionUNBIND:
+		return true
+	case EmailMailboxActionAvailabilityActionVALIDATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxActionAvailabilityReason.
+const (
+	EmailMailboxActionAvailabilityReasonCONNECTIONDISABLED EmailMailboxActionAvailabilityReason = "CONNECTION_DISABLED"
+	EmailMailboxActionAvailabilityReasonDELIVERYPENDING    EmailMailboxActionAvailabilityReason = "DELIVERY_PENDING"
+	EmailMailboxActionAvailabilityReasonGITMANAGED         EmailMailboxActionAvailabilityReason = "GIT_MANAGED"
+	EmailMailboxActionAvailabilityReasonNOBINDING          EmailMailboxActionAvailabilityReason = "NO_BINDING"
+	EmailMailboxActionAvailabilityReasonNONE               EmailMailboxActionAvailabilityReason = "NONE"
+	EmailMailboxActionAvailabilityReasonSTATE              EmailMailboxActionAvailabilityReason = "STATE"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxActionAvailabilityReason enum.
+func (e EmailMailboxActionAvailabilityReason) Valid() bool {
+	switch e {
+	case EmailMailboxActionAvailabilityReasonCONNECTIONDISABLED:
+		return true
+	case EmailMailboxActionAvailabilityReasonDELIVERYPENDING:
+		return true
+	case EmailMailboxActionAvailabilityReasonGITMANAGED:
+		return true
+	case EmailMailboxActionAvailabilityReasonNOBINDING:
+		return true
+	case EmailMailboxActionAvailabilityReasonNONE:
+		return true
+	case EmailMailboxActionAvailabilityReasonSTATE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailMailboxApprovalPolicy.
 const (
 	EmailMailboxApprovalPolicyALLOW     EmailMailboxApprovalPolicy = "ALLOW"
@@ -2541,6 +2610,48 @@ func (e ProviderAccountDefinitionKey) Valid() bool {
 	}
 }
 
+// Defines values for ProviderAccountSafeStatusReason.
+const (
+	ProviderAccountSafeStatusReasonACCOUNTDISABLED                 ProviderAccountSafeStatusReason = "ACCOUNT_DISABLED"
+	ProviderAccountSafeStatusReasonACCOUNTREVOKED                  ProviderAccountSafeStatusReason = "ACCOUNT_REVOKED"
+	ProviderAccountSafeStatusReasonACCOUNTSTATEUNKNOWN             ProviderAccountSafeStatusReason = "ACCOUNT_STATE_UNKNOWN"
+	ProviderAccountSafeStatusReasonAUTHORIZED                      ProviderAccountSafeStatusReason = "AUTHORIZED"
+	ProviderAccountSafeStatusReasonCREDENTIALCONFIGURATIONREQUIRED ProviderAccountSafeStatusReason = "CREDENTIAL_CONFIGURATION_REQUIRED"
+	ProviderAccountSafeStatusReasonCREDENTIALMATERIALIZATIONFAILED ProviderAccountSafeStatusReason = "CREDENTIAL_MATERIALIZATION_FAILED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONEXPIRED      ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_EXPIRED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONFAILED       ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_FAILED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONPENDING      ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_PENDING"
+	ProviderAccountSafeStatusReasonREAUTHORIZATIONREQUIRED         ProviderAccountSafeStatusReason = "REAUTHORIZATION_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the ProviderAccountSafeStatusReason enum.
+func (e ProviderAccountSafeStatusReason) Valid() bool {
+	switch e {
+	case ProviderAccountSafeStatusReasonACCOUNTDISABLED:
+		return true
+	case ProviderAccountSafeStatusReasonACCOUNTREVOKED:
+		return true
+	case ProviderAccountSafeStatusReasonACCOUNTSTATEUNKNOWN:
+		return true
+	case ProviderAccountSafeStatusReasonAUTHORIZED:
+		return true
+	case ProviderAccountSafeStatusReasonCREDENTIALCONFIGURATIONREQUIRED:
+		return true
+	case ProviderAccountSafeStatusReasonCREDENTIALMATERIALIZATIONFAILED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONEXPIRED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONFAILED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONPENDING:
+		return true
+	case ProviderAccountSafeStatusReasonREAUTHORIZATIONREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProviderAccountState.
 const (
 	ProviderAccountStateAUTHORIZED              ProviderAccountState = "AUTHORIZED"
@@ -2828,19 +2939,19 @@ func (e RoleImageRecipeState) Valid() bool {
 
 // Defines values for RoleImageRecipeCommandAction.
 const (
-	ARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
-	REQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
-	RESTORE      RoleImageRecipeCommandAction = "RESTORE"
+	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
+	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageRecipeCommandAction enum.
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
-	case ARCHIVE:
+	case RoleImageRecipeCommandActionARCHIVE:
 		return true
-	case REQUESTBUILD:
+	case RoleImageRecipeCommandActionREQUESTBUILD:
 		return true
-	case RESTORE:
+	case RoleImageRecipeCommandActionRESTORE:
 		return true
 	default:
 		return false
@@ -3377,16 +3488,16 @@ func (e RuntimeEnvironmentSetState) Valid() bool {
 
 // Defines values for RuntimeKubernetesAccessKind.
 const (
-	NONE             RuntimeKubernetesAccessKind = "NONE"
-	READOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
+	RuntimeKubernetesAccessKindNONE             RuntimeKubernetesAccessKind = "NONE"
+	RuntimeKubernetesAccessKindREADOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeKubernetesAccessKind enum.
 func (e RuntimeKubernetesAccessKind) Valid() bool {
 	switch e {
-	case NONE:
+	case RuntimeKubernetesAccessKindNONE:
 		return true
-	case READOWNEXECUTION:
+	case RuntimeKubernetesAccessKindREADOWNEXECUTION:
 		return true
 	default:
 		return false
@@ -5303,22 +5414,22 @@ func (e ListOwnerGatesParamsState) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case ListArtifactsParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGED:
+	case PURGED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGEPENDING:
+	case PURGEPENDING:
 		return true
 	default:
 		return false
@@ -6213,6 +6324,19 @@ type EmailEffectReceiptView struct {
 	Receipt  EmailEffectReceipt           `json:"receipt"`
 }
 
+// EmailMailboxActionAvailability defines model for EmailMailboxActionAvailability.
+type EmailMailboxActionAvailability struct {
+	Action  EmailMailboxActionAvailabilityAction `json:"action"`
+	Enabled bool                                 `json:"enabled"`
+	Reason  EmailMailboxActionAvailabilityReason `json:"reason"`
+}
+
+// EmailMailboxActionAvailabilityAction defines model for EmailMailboxActionAvailability.Action.
+type EmailMailboxActionAvailabilityAction string
+
+// EmailMailboxActionAvailabilityReason defines model for EmailMailboxActionAvailability.Reason.
+type EmailMailboxActionAvailabilityReason string
+
 // EmailMailboxApprovalPolicy defines model for EmailMailboxApprovalPolicy.
 type EmailMailboxApprovalPolicy string
 
@@ -6227,21 +6351,23 @@ type EmailMailboxBindingInput struct {
 
 // EmailMailboxConfigurationPage defines model for EmailMailboxConfigurationPage.
 type EmailMailboxConfigurationPage struct {
-	Items         []EmailMailboxConfigurationView `json:"items"`
-	NextPageToken string                          `json:"nextPageToken"`
-	Total         int64                           `json:"total"`
+	Items         []EmailMailboxConfigurationView  `json:"items"`
+	NextActions   []EmailMailboxActionAvailability `json:"nextActions"`
+	NextPageToken string                           `json:"nextPageToken"`
+	Total         int64                            `json:"total"`
 }
 
 // EmailMailboxConfigurationView defines model for EmailMailboxConfigurationView.
 type EmailMailboxConfigurationView struct {
-	BoundRevisionRef  string                       `json:"boundRevisionRef"`
-	Configuration     ManagedConfiguration         `json:"configuration"`
-	ConnectionRef     OpaqueRef                    `json:"connectionRef"`
-	ConnectionVersion int64                        `json:"connectionVersion"`
-	Diagnostics       []EmailMailboxDiagnostic     `json:"diagnostics"`
-	MailboxRef        OpaqueRef                    `json:"mailboxRef"`
-	Publication       *EmailMailboxPublication     `json:"publication,omitempty"`
-	Revision          ManagedConfigurationRevision `json:"revision"`
+	BoundRevisionRef  string                           `json:"boundRevisionRef"`
+	Configuration     ManagedConfiguration             `json:"configuration"`
+	ConnectionRef     OpaqueRef                        `json:"connectionRef"`
+	ConnectionVersion int64                            `json:"connectionVersion"`
+	Diagnostics       []EmailMailboxDiagnostic         `json:"diagnostics"`
+	MailboxRef        OpaqueRef                        `json:"mailboxRef"`
+	NextActions       []EmailMailboxActionAvailability `json:"nextActions"`
+	Publication       *EmailMailboxPublication         `json:"publication,omitempty"`
+	Revision          ManagedConfigurationRevision     `json:"revision"`
 
 	// Specification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
 	Specification EmailMailboxSpecification `json:"specification"`
@@ -6514,15 +6640,17 @@ type InstructionVersionPage struct {
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
-	ApprovalPolicy   IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
-	ApprovalRequired bool                                `json:"approvalRequired"`
-	Description      string                              `json:"description"`
-	InputFields      []IntegrationConfigurationField     `json:"inputFields"`
-	Key              string                              `json:"key"`
-	Name             string                              `json:"name"`
-	Operation        string                              `json:"operation"`
-	ResourceKind     IntegrationCapabilityResourceKind   `json:"resourceKind"`
-	Risk             IntegrationCapabilityRisk           `json:"risk"`
+	ApprovalPolicy    IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
+	ApprovalRequired  bool                                `json:"approvalRequired"`
+	Description       string                              `json:"description"`
+	InputFields       []IntegrationConfigurationField     `json:"inputFields"`
+	InputSchema       *string                             `json:"inputSchema,omitempty"`
+	InputSchemaSha256 *string                             `json:"inputSchemaSha256,omitempty"`
+	Key               string                              `json:"key"`
+	Name              string                              `json:"name"`
+	Operation         string                              `json:"operation"`
+	ResourceKind      IntegrationCapabilityResourceKind   `json:"resourceKind"`
+	Risk              IntegrationCapabilityRisk           `json:"risk"`
 }
 
 // IntegrationCapabilityApprovalPolicy defines model for IntegrationCapability.ApprovalPolicy.
@@ -6640,16 +6768,18 @@ type IntegrationDefinitionOrigin string
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
-	AgentRef       *OpaqueRef                     `json:"agentRef,omitempty"`
-	ApprovalPolicy IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
-	CapabilityKey  string                         `json:"capabilityKey"`
-	Enabled        bool                           `json:"enabled"`
-	Ref            OpaqueRef                      `json:"ref"`
-	ResourceScope  IntegrationResourceScope       `json:"resourceScope"`
-	Risk           IntegrationGrantRisk           `json:"risk"`
-	TargetName     string                         `json:"targetName"`
-	Version        int64                          `json:"version"`
-	WorkflowRef    *OpaqueRef                     `json:"workflowRef,omitempty"`
+	AgentRef          *OpaqueRef                     `json:"agentRef,omitempty"`
+	ApprovalPolicy    IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
+	CapabilityKey     string                         `json:"capabilityKey"`
+	Enabled           bool                           `json:"enabled"`
+	InputSchema       *string                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256 *string                        `json:"inputSchemaSha256,omitempty"`
+	Ref               OpaqueRef                      `json:"ref"`
+	ResourceScope     IntegrationResourceScope       `json:"resourceScope"`
+	Risk              IntegrationGrantRisk           `json:"risk"`
+	TargetName        string                         `json:"targetName"`
+	Version           int64                          `json:"version"`
+	WorkflowRef       *OpaqueRef                     `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantApprovalPolicy defines model for IntegrationGrant.ApprovalPolicy.
@@ -7235,13 +7365,19 @@ type ProviderAccount struct {
 	NextActions           []NextAction                 `json:"nextActions"`
 	Ready                 bool                         `json:"ready"`
 	Ref                   OpaqueRef                    `json:"ref"`
-	State                 ProviderAccountState         `json:"state"`
-	UpdatedAt             Timestamp                    `json:"updatedAt"`
-	Version               int64                        `json:"version"`
+
+	// SafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+	SafeStatusReason *ProviderAccountSafeStatusReason `json:"safeStatusReason,omitempty"`
+	State            ProviderAccountState             `json:"state"`
+	UpdatedAt        Timestamp                        `json:"updatedAt"`
+	Version          int64                            `json:"version"`
 }
 
 // ProviderAccountDefinitionKey defines model for ProviderAccount.DefinitionKey.
 type ProviderAccountDefinitionKey string
+
+// ProviderAccountSafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+type ProviderAccountSafeStatusReason string
 
 // ProviderAccountState defines model for ProviderAccount.State.
 type ProviderAccountState string
@@ -8270,6 +8406,32 @@ type RuntimeVolumeInput struct {
 // RuntimeVolumeKind defines model for RuntimeVolumeKind.
 type RuntimeVolumeKind string
 
+// STTModelCatalog defines model for STTModelCatalog.
+type STTModelCatalog struct {
+	Models                                      []STTModelProfile `json:"models"`
+	ObservedAt                                  Timestamp         `json:"observedAt"`
+	RecommendedMaximumAudioBytes                int64             `json:"recommendedMaximumAudioBytes"`
+	RecommendedMaximumAudioDurationMilliseconds int64             `json:"recommendedMaximumAudioDurationMilliseconds"`
+	RecommendedModel                            string            `json:"recommendedModel"`
+	ResponseFormat                              string            `json:"responseFormat"`
+	Version                                     string            `json:"version"`
+}
+
+// STTModelProfile defines model for STTModelProfile.
+type STTModelProfile struct {
+	ChunkingStrategies  []string `json:"chunkingStrategies"`
+	FileStreamSupported bool     `json:"fileStreamSupported"`
+	Legacy              bool     `json:"legacy"`
+	MaximumKeywordBytes int64    `json:"maximumKeywordBytes"`
+	MaximumKeywords     int64    `json:"maximumKeywords"`
+	MaximumPromptBytes  int64    `json:"maximumPromptBytes"`
+	MaximumTemperature  float64  `json:"maximumTemperature"`
+	MinimumTemperature  float64  `json:"minimumTemperature"`
+	Model               string   `json:"model"`
+	ParameterNames      []string `json:"parameterNames"`
+	StreamEnabled       bool     `json:"streamEnabled"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	AutomationText     string                     `json:"automationText"`
@@ -8660,9 +8822,11 @@ type SpeechTranscriptionReceipt struct {
 	CompletedStage          SpeechTranscriptionReceiptCompletedStage `json:"completedStage"`
 	ConfigRevision          int64                                    `json:"configRevision"`
 	CorrelationId           openapi_types.UUID                       `json:"correlationId"`
-	Language                string                                   `json:"language"`
-	Model                   string                                   `json:"model"`
-	RequestId               openapi_types.UUID                       `json:"requestId"`
+
+	// Language Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.
+	Language  string             `json:"language"`
+	Model     string             `json:"model"`
+	RequestId openapi_types.UUID `json:"requestId"`
 }
 
 // SpeechTranscriptionReceiptCompletedStage defines model for SpeechTranscriptionReceipt.CompletedStage.
@@ -11983,6 +12147,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation)
 	ValidateSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params ValidateSystemSTTConfigurationDraftParams)
+
+	// (GET /api/v1/system-stt/model-catalog)
+	GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/vfs/nodes)
 	ListVFSNodes(w http.ResponseWriter, r *http.Request, params ListVFSNodesParams)
@@ -34410,6 +34577,26 @@ func (siw *ServerInterfaceWrapper) ValidateSystemSTTConfigurationDraft(w http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemSTTModelCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemSTTModelCatalog(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListVFSNodes operation middleware
 func (siw *ServerInterfaceWrapper) ListVFSNodes(w http.ResponseWriter, r *http.Request) {
 
@@ -35267,6 +35454,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves", wrapper.SaveSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateSystemSTTConfigurationDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-stt/model-catalog", wrapper.GetSystemSTTModelCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/nodes", wrapper.ListVFSNodes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/search", wrapper.SearchVFS)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/workflows", wrapper.ListOrganizationWorkflows)

@@ -253,7 +253,7 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
-		if errors.Is(err, errPublicSecretDescriptor) {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicIntegrationShape) {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -323,8 +323,18 @@ func messageMap(message proto.Message) (map[string]any, error) {
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
 var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
+var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if descriptor.FullName() == "controlplane.v1.ProviderAccount" {
+		if reason, exists := value["safeStatusReason"]; exists {
+			switch reason {
+			case "AUTHORIZED", "ACCOUNT_DISABLED", "ACCOUNT_REVOKED", "REAUTHORIZATION_REQUIRED", "DEVICE_AUTHORIZATION_PENDING", "CREDENTIAL_CONFIGURATION_REQUIRED", "ACCOUNT_STATE_UNKNOWN", "DEVICE_AUTHORIZATION_EXPIRED", "DEVICE_AUTHORIZATION_FAILED", "CREDENTIAL_MATERIALIZATION_FAILED":
+			default:
+				return errPublicProviderStatusReason
+			}
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.RuntimeSecretDescriptor" {
 		revision, ok := value["revision"].(string)
 		pin, err := strconv.ParseInt(revision, 10, 64)
@@ -367,7 +377,7 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		}
 		value[field.JSONName()] = normalized
 	}
-	return nil
+	return normalizeIntegrationShape(value, descriptor)
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
@@ -392,6 +402,20 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
+	}
+	if field.Kind() == protoreflect.BoolKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationCapability":
+			return false, field.JSONName() == "approvalRequired"
+		case "controlplane.v1.IntegrationConfigurationField":
+			return false, field.JSONName() == "required"
+		case "controlplane.v1.IntegrationGrant":
+			return false, field.JSONName() == "enabled"
+		case "controlplane.v1.IntegrationDefinition":
+			return false, field.JSONName() == "builtIn" || field.JSONName() == "available"
+		case "controlplane.v1.IntegrationConnection":
+			return false, field.JSONName() == "credentialsConfigured"
+		}
 	}
 	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "available" || field.JSONName() == "ready"
@@ -427,6 +451,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		return item, normalizeProtoJSONShape(item, field.Message())
 	}
 	switch field.Kind() {
+	case protoreflect.EnumKind:
+		return normalizeIntegrationEnum(value, field.Enum())
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
 		text, ok := value.(string)
 		if !ok {

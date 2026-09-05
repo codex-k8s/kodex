@@ -4000,6 +4000,16 @@ paths:
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt/model-catalog:
+    get:
+      tags: [Administration]
+      operationId: getSystemSTTModelCatalog
+      description: Защищённый каталог совместимости исполняемого adapter для system.configuration.manage. Доступен до первой конфигурации; не подтверждает credential, provider probe или право на диктовку.
+      responses:
+        '200':
+          description: Версия и дата проверки adapter catalog, без credential и readiness
+          content: { application/json: { schema: { $ref: '#/components/schemas/STTModelCatalog' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/system-stt-configuration:
     get:
       tags: [Administration]
@@ -4672,6 +4682,34 @@ components:
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         speechTranscription: { $ref: '#/components/schemas/SpeechTranscriptionAvailability' }
+    STTModelCatalog:
+      type: object
+      additionalProperties: false
+      required: [version, observedAt, models, recommendedModel, recommendedMaximumAudioBytes, recommendedMaximumAudioDurationMilliseconds, responseFormat]
+      properties:
+        version: { type: string, minLength: 1, maxLength: 160 }
+        observedAt: { $ref: '#/components/schemas/Timestamp' }
+        models: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/STTModelProfile' } }
+        recommendedModel: { type: string, minLength: 1, maxLength: 160 }
+        recommendedMaximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        recommendedMaximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        responseFormat: { type: string, minLength: 1, maxLength: 64 }
+    STTModelProfile:
+      type: object
+      additionalProperties: false
+      required: [model, legacy, parameterNames, chunkingStrategies, fileStreamSupported, streamEnabled, maximumPromptBytes, maximumKeywords, maximumKeywordBytes, minimumTemperature, maximumTemperature]
+      properties:
+        model: { type: string, minLength: 1, maxLength: 160 }
+        legacy: { type: boolean }
+        parameterNames: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 64 } }
+        chunkingStrategies: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, maxLength: 64 } }
+        fileStreamSupported: { type: boolean }
+        streamEnabled: { type: boolean }
+        maximumPromptBytes: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        maximumKeywords: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        maximumKeywordBytes: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        minimumTemperature: { type: number, format: double }
+        maximumTemperature: { type: number, format: double }
     SpeechTranscriptionAvailability:
       type: object
       additionalProperties: false
@@ -5028,9 +5066,9 @@ components:
         language: { type: string, maxLength: 2 }
         permissionKey: { type: string, enum: [platform.stt.use] }
         parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
-        maximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 26214400, default: 10485760 }
-        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 600000, default: 120000 }
-        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 120000, default: 15000 }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400, default: 10485760 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000, default: 120000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000, default: 15000 }
     SystemSTTConfigurationDraftInput:
       type: object
       additionalProperties: false
@@ -5057,9 +5095,9 @@ components:
         providerCredentialGeneration: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         enabled: { type: boolean }
         parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
-        maximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
-        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 600000 }
-        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 120000 }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000 }
     Project:
       type: object
       additionalProperties: false
@@ -5118,7 +5156,7 @@ components:
         authoritySourceRevision: { type: integer, format: int64, minimum: 1 }
         configRevision: { type: integer, format: int64, minimum: 1 }
         model: { type: string, minLength: 1, maxLength: 160 }
-        language: { type: string, minLength: 1, maxLength: 35 }
+        language: { type: string, maxLength: 2, pattern: '^([a-z]{2})?$', description: 'Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.' }
         completedStage: { type: string, enum: [PROVIDER_COMPLETED] }
     ProjectInput:
       type: object
@@ -7059,6 +7097,10 @@ components:
         definitionKey: { type: string, enum: [openai-codex] }
         name: { type: string, minLength: 1, maxLength: 160 }
         externalAccountMasked: { type: string, maxLength: 200 }
+        safeStatusReason:
+          type: string
+          enum: [AUTHORIZED, ACCOUNT_DISABLED, ACCOUNT_REVOKED, REAUTHORIZATION_REQUIRED, DEVICE_AUTHORIZATION_PENDING, CREDENTIAL_CONFIGURATION_REQUIRED, ACCOUNT_STATE_UNKNOWN, DEVICE_AUTHORIZATION_EXPIRED, DEVICE_AUTHORIZATION_FAILED, CREDENTIAL_MATERIALIZATION_FAILED]
+          description: Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
         state: { type: string, enum: [PENDING_AUTHORIZATION, AUTHORIZED, REAUTHORIZATION_REQUIRED, REVOKED, DISABLED] }
         enabled: { type: boolean }
         ready: { type: boolean }
@@ -7101,6 +7143,8 @@ components:
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConfigurationField:
       type: object
       additionalProperties: false
@@ -7261,10 +7305,18 @@ components:
           type: string
           enum: ['', EMAIL_MAILBOX_DELIVERY_EXPIRED, EMAIL_MAILBOX_CONNECTION_CHANGED, EMAIL_MAILBOX_DELIVERY_REJECTED]
           description: Непустой код допускается только для FAILED.
+    EmailMailboxActionAvailability:
+      type: object
+      additionalProperties: false
+      required: [action, enabled, reason]
+      properties:
+        action: { type: string, enum: [CREATE_DRAFT, SAVE, VALIDATE, PUBLISH, DISCARD, BIND, UNBIND, DETACH, COPY] }
+        enabled: { type: boolean }
+        reason: { type: string, enum: [NONE, STATE, GIT_MANAGED, DELIVERY_PENDING, NO_BINDING, CONNECTION_DISABLED] }
     EmailMailboxConfigurationView:
       type: object
       additionalProperties: false
-      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics]
+      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics, nextActions]
       properties:
         connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
         connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
@@ -7275,12 +7327,14 @@ components:
         publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
         boundRevisionRef: { type: string, maxLength: 96 }
         diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        nextActions: { type: array, minItems: 9, maxItems: 9, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
     EmailMailboxConfigurationPage:
       type: object
       additionalProperties: false
-      required: [items, total, nextPageToken]
+      required: [items, total, nextPageToken, nextActions]
       properties:
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxConfigurationView' } }
+        nextActions: { type: array, minItems: 1, maxItems: 1, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
         total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string, maxLength: 512 }
     EmailMailboxCredentialPage:
@@ -7353,6 +7407,8 @@ components:
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConnection:
       type: object
       additionalProperties: false

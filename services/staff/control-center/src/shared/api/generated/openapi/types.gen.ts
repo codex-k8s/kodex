@@ -298,6 +298,30 @@ export type BootstrapState = {
     speechTranscription: SpeechTranscriptionAvailability;
 };
 
+export type SttModelCatalog = {
+    version: string;
+    observedAt: Timestamp;
+    models: Array<SttModelProfile>;
+    recommendedModel: string;
+    recommendedMaximumAudioBytes: number;
+    recommendedMaximumAudioDurationMilliseconds: number;
+    responseFormat: string;
+};
+
+export type SttModelProfile = {
+    model: string;
+    legacy: boolean;
+    parameterNames: Array<string>;
+    chunkingStrategies: Array<string>;
+    fileStreamSupported: boolean;
+    streamEnabled: boolean;
+    maximumPromptBytes: number;
+    maximumKeywords: number;
+    maximumKeywordBytes: number;
+    minimumTemperature: number;
+    maximumTemperature: number;
+};
+
 export type SpeechTranscriptionAvailability = {
     available: boolean;
     reason: 'READY' | 'STT_NOT_CONFIGURED' | 'STT_DISABLED' | 'STT_PERMISSION_DENIED' | 'STT_PERMISSION_INVALID' | 'STT_PROVIDER_ACCOUNT_INELIGIBLE' | 'STT_PROVIDER_CREDENTIAL_UNSUPPORTED' | 'STT_PROVIDER_DISABLED' | 'STT_MODEL_UNSUPPORTED' | 'STT_CONFIGURATION_UNAVAILABLE' | 'STT_SERVICE_UNAVAILABLE' | 'STT_CREDENTIAL_UNAVAILABLE' | 'STT_EGRESS_UNAVAILABLE' | 'STT_PROVIDER_UNAVAILABLE';
@@ -665,6 +689,9 @@ export type SpeechTranscriptionReceipt = {
     authoritySourceRevision: number;
     configRevision: number;
     model: string;
+    /**
+     * Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.
+     */
     language: string;
     completedStage: 'PROVIDER_COMPLETED';
 };
@@ -2261,6 +2288,10 @@ export type ProviderAccount = {
     definitionKey: 'openai-codex';
     name: string;
     externalAccountMasked: string;
+    /**
+     * Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+     */
+    safeStatusReason?: 'AUTHORIZED' | 'ACCOUNT_DISABLED' | 'ACCOUNT_REVOKED' | 'REAUTHORIZATION_REQUIRED' | 'DEVICE_AUTHORIZATION_PENDING' | 'CREDENTIAL_CONFIGURATION_REQUIRED' | 'ACCOUNT_STATE_UNKNOWN' | 'DEVICE_AUTHORIZATION_EXPIRED' | 'DEVICE_AUTHORIZATION_FAILED' | 'CREDENTIAL_MATERIALIZATION_FAILED';
     state: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED';
     enabled: boolean;
     ready: boolean;
@@ -2295,6 +2326,8 @@ export type IntegrationCapability = {
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
     resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
     inputFields: Array<IntegrationConfigurationField>;
+    inputSchema?: string;
+    inputSchemaSha256?: string;
 };
 
 export type IntegrationConfigurationField = {
@@ -2443,6 +2476,12 @@ export type EmailMailboxPublication = {
     failureCode: '' | 'EMAIL_MAILBOX_DELIVERY_EXPIRED' | 'EMAIL_MAILBOX_CONNECTION_CHANGED' | 'EMAIL_MAILBOX_DELIVERY_REJECTED';
 };
 
+export type EmailMailboxActionAvailability = {
+    action: 'CREATE_DRAFT' | 'SAVE' | 'VALIDATE' | 'PUBLISH' | 'DISCARD' | 'BIND' | 'UNBIND' | 'DETACH' | 'COPY';
+    enabled: boolean;
+    reason: 'NONE' | 'STATE' | 'GIT_MANAGED' | 'DELIVERY_PENDING' | 'NO_BINDING' | 'CONNECTION_DISABLED';
+};
+
 export type EmailMailboxConfigurationView = {
     connectionRef: OpaqueRef;
     connectionVersion: number;
@@ -2453,10 +2492,24 @@ export type EmailMailboxConfigurationView = {
     publication?: EmailMailboxPublication;
     boundRevisionRef: string;
     diagnostics: Array<EmailMailboxDiagnostic>;
+    nextActions: [
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability,
+        EmailMailboxActionAvailability
+    ];
 };
 
 export type EmailMailboxConfigurationPage = {
     items: Array<EmailMailboxConfigurationView>;
+    nextActions: [
+        EmailMailboxActionAvailability
+    ];
     total: number;
     nextPageToken: string;
 };
@@ -2508,6 +2561,8 @@ export type IntegrationGrant = {
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
     resourceScope: IntegrationResourceScope;
+    inputSchema?: string;
+    inputSchemaSha256?: string;
 };
 
 export type IntegrationConnection = {
@@ -11084,6 +11139,31 @@ export type CreateTypedSystemSttConfigurationDraftResponses = {
 };
 
 export type CreateTypedSystemSttConfigurationDraftResponse = CreateTypedSystemSttConfigurationDraftResponses[keyof CreateTypedSystemSttConfigurationDraftResponses];
+
+export type GetSystemSttModelCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt/model-catalog';
+};
+
+export type GetSystemSttModelCatalogErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemSttModelCatalogError = GetSystemSttModelCatalogErrors[keyof GetSystemSttModelCatalogErrors];
+
+export type GetSystemSttModelCatalogResponses = {
+    /**
+     * Версия и дата проверки adapter catalog, без credential и readiness
+     */
+    200: SttModelCatalog;
+};
+
+export type GetSystemSttModelCatalogResponse = GetSystemSttModelCatalogResponses[keyof GetSystemSttModelCatalogResponses];
 
 export type GetSystemSttConfigurationData = {
     body?: never;
