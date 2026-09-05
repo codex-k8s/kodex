@@ -8406,6 +8406,32 @@ type RuntimeVolumeInput struct {
 // RuntimeVolumeKind defines model for RuntimeVolumeKind.
 type RuntimeVolumeKind string
 
+// STTModelCatalog defines model for STTModelCatalog.
+type STTModelCatalog struct {
+	Models                                      []STTModelProfile `json:"models"`
+	ObservedAt                                  Timestamp         `json:"observedAt"`
+	RecommendedMaximumAudioBytes                int64             `json:"recommendedMaximumAudioBytes"`
+	RecommendedMaximumAudioDurationMilliseconds int64             `json:"recommendedMaximumAudioDurationMilliseconds"`
+	RecommendedModel                            string            `json:"recommendedModel"`
+	ResponseFormat                              string            `json:"responseFormat"`
+	Version                                     string            `json:"version"`
+}
+
+// STTModelProfile defines model for STTModelProfile.
+type STTModelProfile struct {
+	ChunkingStrategies  []string `json:"chunkingStrategies"`
+	FileStreamSupported bool     `json:"fileStreamSupported"`
+	Legacy              bool     `json:"legacy"`
+	MaximumKeywordBytes int64    `json:"maximumKeywordBytes"`
+	MaximumKeywords     int64    `json:"maximumKeywords"`
+	MaximumPromptBytes  int64    `json:"maximumPromptBytes"`
+	MaximumTemperature  float64  `json:"maximumTemperature"`
+	MinimumTemperature  float64  `json:"minimumTemperature"`
+	Model               string   `json:"model"`
+	ParameterNames      []string `json:"parameterNames"`
+	StreamEnabled       bool     `json:"streamEnabled"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	AutomationText     string                     `json:"automationText"`
@@ -12119,6 +12145,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation)
 	ValidateSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params ValidateSystemSTTConfigurationDraftParams)
+
+	// (GET /api/v1/system-stt/model-catalog)
+	GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/vfs/nodes)
 	ListVFSNodes(w http.ResponseWriter, r *http.Request, params ListVFSNodesParams)
@@ -34546,6 +34575,26 @@ func (siw *ServerInterfaceWrapper) ValidateSystemSTTConfigurationDraft(w http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemSTTModelCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemSTTModelCatalog(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemSTTModelCatalog(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListVFSNodes operation middleware
 func (siw *ServerInterfaceWrapper) ListVFSNodes(w http.ResponseWriter, r *http.Request) {
 
@@ -35403,6 +35452,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves", wrapper.SaveSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateSystemSTTConfigurationDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-stt/model-catalog", wrapper.GetSystemSTTModelCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/nodes", wrapper.ListVFSNodes)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/vfs/search", wrapper.SearchVFS)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/workflows", wrapper.ListOrganizationWorkflows)

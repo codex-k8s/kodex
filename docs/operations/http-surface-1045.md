@@ -369,7 +369,7 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 | 53 | Search min length/limit/cursor проверяются до RPC; debounce у PWA. |
 | 54 | Четыре search kinds, opaque refs/project match, malformed upstream 502. |
 | 55 | HTTP потребляет самостоятельный STT client; runtime/deploy принадлежат #1020. |
-| 56 | Typed STT parameters/limits draft/readback и raw managed lifecycle; provider probe у STT. |
+| 56 | Typed STT parameters/limits draft/readback и raw managed lifecycle; provider probe у STT. Adapter catalog уже есть в Proto, отдельный admin-safe HTTP consumer добавляется после согласования protected RPC. |
 | 57 | Org speech route, MIME aliases, bounded multipart, permission/session/CSRF. |
 | 58 | Speech API и TTL bootstrap; MediaRecorder/editor insertion у PWA. |
 | 59 | Protected authenticated STT availability, READY/fresh validity; exact TLS/egress у STT/root. |
@@ -622,6 +622,33 @@ Docker runtime повторно собран из того же Dockerfile с `V
 NOT RUN: real CP protected integration по незавершённым D1..D7, browser E2E,
 live provider, staging/cluster. Никаких новых acceptance-требований эта
 проверка не вводит; код CP, handwritten PWA и Dockerfile не изменялись.
+
+## MVP-UI-56: каталог adapter и административный bootstrap
+
+Локальная сверка main `8026633a9f92625df43163bf6dbef85df936289a` и
+интеграции `b1882ba4fa1f5ba728a50db21b7695b3c135b23c`: каталог не отсутствует
+у producer. `stt.proto` содержит `TranscriptionModelCatalog`, а OpenAI adapter
+возвращает `modelprofile.OpenAICatalog()` с version/observedAt. observedAt — дата
+проверки совместимости adapter, не свежесть account probe. Gateway bootstrap
+пока отбрасывает catalog и не вызывает STT при отсутствии CP eligibility;
+это делает каталог недостижимым до первой конфигурации.
+
+Согласованная цепочка: admin session → GET `/api/v1/system-stt/model-catalog` →
+unary issuer client → `SpeechToTextService.GetModelCatalog` → зарегистрированный
+STT adapter → typed OpenAPI/Go/TS SDK → административный selector PWA.
+CP выводит `system.configuration.manage` из organization rule; actor/org не
+берутся из payload. Exact operation `platform.stt.model-catalog.get`,
+`UNARY_PROTO_SHA256`; resource/version/attempt/idempotency metadata запрещены.
+State mutation, OCC, idempotency receipt и событие отсутствуют: авторитетный read
+принадлежит adapter. Каталог не выдаёт READY, credential eligibility либо право
+на диктовку. Model IDs и совместимость не копируются в HTTP/PWA.
+
+Отдельно подтверждён mismatch лимитов: CP `revision/validator.go` допускает
+`providerTimeoutMilliseconds=60000` (верхняя граница 120000), тогда как STT
+`transcription/service.go:validatePolicy` допускает максимум 15000. Такой
+документ может пройти CP validation/readiness, но быть отвергнут runtime.
+Исправление общего owner-инварианта передано #1046/#1020; HTTP не скрывает его
+clamp-ом. Пока исправление не принято, этот сценарий не считается PASS.
 
 ## Текст PR Для Root
 
