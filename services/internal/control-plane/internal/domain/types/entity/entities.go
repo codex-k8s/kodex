@@ -255,6 +255,7 @@ type ManagedConfigurationSet struct {
 	Version                                                        int64
 	CurrentRevision                                                *ManagedConfigurationRevision
 	UpdatedAt                                                      time.Time
+	GitSource                                                      *ManagedConfigurationGitSource
 }
 
 type ManagedConfigurationConsumer struct {

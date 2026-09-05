@@ -12,6 +12,18 @@ import (
 type Kind string
 
 const (
+	ConfigureRoleImageGitSource             Kind = "CONFIGURE_ROLE_IMAGE_GIT_SOURCE"
+	ConfigureIntegrationDefinitionGitSource Kind = "CONFIGURE_INTEGRATION_DEFINITION_GIT_SOURCE"
+	RefreshRoleImageGitSource               Kind = "REFRESH_ROLE_IMAGE_GIT_SOURCE"
+	RefreshIntegrationDefinitionGitSource   Kind = "REFRESH_INTEGRATION_DEFINITION_GIT_SOURCE"
+)
+
+type ManagedConfigurationGitSourceInput struct {
+	ConfigurationRef, ConnectionRef, RepositoryRef, RefName, Path, ContentFormat string
+	ExpectedConnectionVersion                                                    int64
+}
+
+const (
 	CreateEmailMailboxDraft            Kind = "CREATE_EMAIL_MAILBOX_DRAFT"
 	SaveEmailMailboxDraft              Kind = "SAVE_EMAIL_MAILBOX_DRAFT"
 	ValidateEmailMailboxDraft          Kind = "VALIDATE_EMAIL_MAILBOX_DRAFT"
