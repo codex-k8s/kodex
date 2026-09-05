@@ -5366,9 +5366,36 @@ message EmailMailboxConfigurationView {
   EmailMailboxPublication publication = 7;
   string bound_revision_ref = 8;
   repeated EmailMailboxDiagnostic diagnostics = 9;
+  repeated EmailMailboxActionAvailability next_actions = 10;
+}
+enum EmailMailboxAction {
+  EMAIL_MAILBOX_ACTION_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_ACTION_CREATE_DRAFT = 1;
+  EMAIL_MAILBOX_ACTION_SAVE = 2;
+  EMAIL_MAILBOX_ACTION_VALIDATE = 3;
+  EMAIL_MAILBOX_ACTION_PUBLISH = 4;
+  EMAIL_MAILBOX_ACTION_DISCARD = 5;
+  EMAIL_MAILBOX_ACTION_BIND = 6;
+  EMAIL_MAILBOX_ACTION_UNBIND = 7;
+  EMAIL_MAILBOX_ACTION_DETACH = 8;
+  EMAIL_MAILBOX_ACTION_COPY = 9;
+}
+enum EmailMailboxActionReason {
+  EMAIL_MAILBOX_ACTION_REASON_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_ACTION_REASON_NONE = 1;
+  EMAIL_MAILBOX_ACTION_REASON_STATE = 2;
+  EMAIL_MAILBOX_ACTION_REASON_GIT_MANAGED = 3;
+  EMAIL_MAILBOX_ACTION_REASON_DELIVERY_PENDING = 4;
+  EMAIL_MAILBOX_ACTION_REASON_NO_BINDING = 5;
+  EMAIL_MAILBOX_ACTION_REASON_CONNECTION_DISABLED = 6;
+}
+message EmailMailboxActionAvailability {
+  EmailMailboxAction action = 1;
+  bool enabled = 2;
+  EmailMailboxActionReason reason = 3;
 }
 message ListEmailMailboxConfigurationsRequest { string connection_ref = 1; string query = 2; PageRequest page = 3; }
-message ListEmailMailboxConfigurationsResponse { repeated EmailMailboxConfigurationView items = 1; int64 total = 2; PageInfo page = 3; }
+message ListEmailMailboxConfigurationsResponse { repeated EmailMailboxConfigurationView items = 1; int64 total = 2; PageInfo page = 3; repeated EmailMailboxActionAvailability next_actions = 4; }
 message GetEmailMailboxConfigurationRequest { string connection_ref = 1; string configuration_ref = 2; string revision_ref = 3; }
 message GetEmailMailboxConfigurationResponse { EmailMailboxConfigurationView configuration = 1; }
 message ListEmailMailboxCredentialsRequest { string connection_ref = 1; EmailMailboxCredentialKind kind = 2; PageRequest page = 3; }

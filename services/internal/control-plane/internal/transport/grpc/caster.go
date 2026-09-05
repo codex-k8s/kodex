@@ -336,7 +336,17 @@ func integrationResourceKind(value string) controlplanev1.IntegrationResourceKin
 }
 
 func castIntegrationField(value entity.IntegrationConfigurationField) *controlplanev1.IntegrationConfigurationField {
-	return &controlplanev1.IntegrationConfigurationField{Key: value.Key, Label: value.Label, Help: value.Help, ValueType: value.ValueType, Required: value.Required, Placeholder: value.Placeholder}
+	result := &controlplanev1.IntegrationConfigurationField{Key: value.Key, Label: value.Label, Help: value.Help, ValueType: value.ValueType, Required: value.Required, Placeholder: value.Placeholder,
+		Format: value.Format, AllowedValues: append([]string(nil), value.AllowedValues...), MaximumLength: value.MaximumLength}
+	if value.Minimum != nil {
+		result.Minimum = *value.Minimum
+		result.HasMinimum = true
+	}
+	if value.Maximum != nil {
+		result.Maximum = *value.Maximum
+		result.HasMaximum = true
+	}
+	return result
 }
 
 func castIntegrationCredential(value entity.IntegrationCredentialRevision) *controlplanev1.IntegrationCredentialRevision {
@@ -524,7 +534,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
 		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
-		TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
+		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
 		ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
 	}
 	if value.TargetType == "AGENT" {

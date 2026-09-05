@@ -4,8 +4,8 @@ title: Границы сервисов и структура репозитор�
 type: architecture
 status: approved
 owner: architect
-version: 1.4.0
-updated: 2026-09-04
+version: 1.4.1
+updated: 2026-09-05
 ---
 
 # Границы сервисов и структура репозитория
@@ -152,6 +152,13 @@ effect. OpenAI доступен только через exact `egress-gateway`; 
 находятся в `stt.v1`, но их реализации принадлежат #1019 и #1024, а единый
 server-owned continuation proof — #1023. Без proof оба adapter закрыто
 отказывают до сетевого RPC; payload locators не являются authority.
+
+Возможности STT adapter принадлежат этому же сервису и читаются отдельным
+`GetModelCatalog` до первой конфигурации или credential. CP разрешает право
+организации на управление системой, gateway переносит exact unary authority,
+STT возвращает version/observedAt и typed model/parameter profiles. Это чтение
+не вызывает policy/credential/provider и не подтверждает пользовательскую
+доступность распознавания. PWA и gateway не ведут собственный каталог моделей.
 
 ## Контракты
 

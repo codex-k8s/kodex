@@ -12,7 +12,10 @@ func EmailBridgeOperations() map[string]string {
 }
 
 func STTGatewayOperations() map[string]string {
-	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
+	return map[string]string{
+		"platform.stt.transcribe":        "/stt.v1.SpeechToTextService/Transcribe",
+		"platform.stt.model-catalog.get": "/stt.v1.SpeechToTextService/GetModelCatalog",
+	}
 }
 
 func SecretDraftGatewayOperations() map[string]string {

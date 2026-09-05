@@ -10,10 +10,11 @@ import (
 const (
 	PermissionTranscribe                = "stt.transcribe"
 	TransportPermissionTranscribe       = "platform.stt.transcribe"
+	PermissionManageConfiguration       = "system.configuration.manage"
 	ConfigurationCapability             = "platform.stt.use"
 	DefaultModel                        = "gpt-transcribe"
 	DefaultLanguage                     = "ru"
-	MaximumAbsoluteBytes          int64 = 25 << 20
+	MaximumAbsoluteBytes          int64 = modelprofile.MaximumAudioBytes
 	MaximumConcurrentStreams            = 2
 	MaximumInflightBytes          int64 = MaximumAbsoluteBytes * MaximumConcurrentStreams
 	MaximumChunkBytes                   = 64 << 10

@@ -19,12 +19,12 @@ import (
 const (
 	credentialProjectionIncomplete = "transcription credential projection is incomplete"
 	policyProjectionIncomplete     = "transcription policy projection is incomplete"
-	minimumAudioBytes              = uint64(1024)
-	maximumAudioBytes              = uint64(value.MaximumAbsoluteBytes)
-	minimumAudioDurationMillis     = uint64(1000)
-	maximumAudioDurationMillis     = uint64(1800000)
-	minimumProviderTimeoutMillis   = uint64(1000)
-	maximumProviderTimeoutMillis   = uint64(15000)
+	minimumAudioBytes              = uint64(modelprofile.MinimumAudioBytes)
+	maximumAudioBytes              = uint64(modelprofile.MaximumAudioBytes)
+	minimumAudioDurationMillis     = uint64(modelprofile.MinimumAudioDuration / time.Millisecond)
+	maximumAudioDurationMillis     = uint64(modelprofile.MaximumAudioDuration / time.Millisecond)
+	minimumProviderTimeoutMillis   = uint64(modelprofile.MinimumProviderTimeout / time.Millisecond)
+	maximumProviderTimeoutMillis   = uint64(modelprofile.MaximumProviderTimeout / time.Millisecond)
 )
 
 type DelegatedBinder interface {
