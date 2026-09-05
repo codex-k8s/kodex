@@ -194,6 +194,7 @@ type RunnerInput struct {
 	ConfigOverlayDigest               string                    `json:"config_overlay_digest"`
 	ConfigOverlay                     string                    `json:"config_overlay"`
 	EffectiveReasoningEffort          string                    `json:"effective_reasoning_effort"`
+	ReasoningMode                     string                    `json:"reasoning_mode"`
 	RuntimeEnvironmentRef             string                    `json:"runtime_environment_ref"`
 	RuntimeEnvironmentVersion         int64                     `json:"runtime_environment_version"`
 	RuntimeEnvironmentDigest          string                    `json:"runtime_environment_digest"`
@@ -287,7 +288,7 @@ func (input RunnerInput) Validate() error {
 		return errors.New("runner STT configuration binding is invalid")
 	}
 	canonicalOverlay, overlayDigest, err := CanonicalConfigOverlay(input.ConfigOverlay)
-	if ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort) != nil {
+	if ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return errors.New("runner effective reasoning effort is invalid")
 	}
 	if err != nil || canonicalOverlay != input.ConfigOverlay || overlayDigest != input.ConfigOverlayDigest {
@@ -539,6 +540,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ConfigOverlayDigest         string
 		ConfigOverlay               string
 		EffectiveReasoningEffort    string
+		ReasoningMode               string
 		RuntimeEnvironmentRef       string
 		RuntimeEnvironmentVersion   int64
 		RuntimeEnvironmentDigest    string
@@ -574,6 +576,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ProviderPolicyRef: input.ProviderPolicyRef, ProviderPolicyVersion: input.ProviderPolicyVersion, ProviderPolicyDigest: input.ProviderPolicyDigest,
 		ConfigOverlayRef: input.ConfigOverlayRef, ConfigOverlayVersion: input.ConfigOverlayVersion, ConfigOverlayDigest: input.ConfigOverlayDigest, ConfigOverlay: input.ConfigOverlay,
 		EffectiveReasoningEffort: input.EffectiveReasoningEffort,
+		ReasoningMode:            input.ReasoningMode,
 		RuntimeEnvironmentRef:    input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,

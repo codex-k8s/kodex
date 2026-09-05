@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	ReasoningSupported       = "SUPPORTED"
+	ReasoningUnsupported     = "UNSUPPORTED"
 	OverlaySyntaxInvalid     = "CONFIG_OVERLAY_SYNTAX_INVALID"
 	OverlayKeyForbidden      = "CONFIG_OVERLAY_KEY_FORBIDDEN"
 	OverlayValueInvalid      = "CONFIG_OVERLAY_VALUE_INVALID"
@@ -22,9 +24,15 @@ const (
 
 var overlayEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-func ValidateEffectiveReasoningEffort(overlay, effective string) error {
+func ValidateEffectiveReasoningEffort(overlay, effective, mode string) error {
 	parsed, err := ParseConfigOverlay(overlay)
-	if err != nil || !overlayEffortPattern.MatchString(effective) || parsed.ModelReasoningEffort != "" && parsed.ModelReasoningEffort != effective {
+	if err != nil {
+		return errors.New("effective reasoning effort is invalid")
+	}
+	if mode == ReasoningUnsupported && effective == "" && parsed.ModelReasoningEffort == "" {
+		return nil
+	}
+	if mode != ReasoningSupported || !overlayEffortPattern.MatchString(effective) || parsed.ModelReasoningEffort != "" && parsed.ModelReasoningEffort != effective {
 		return errors.New("effective reasoning effort is invalid")
 	}
 	return nil

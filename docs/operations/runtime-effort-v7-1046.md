@@ -18,6 +18,13 @@ TOML override проверяется на совместимость; без ove
 `RuntimeRevisionSnapshot.effective_reasoning_effort`, затем в
 `RunnerInput.effective_reasoning_effort` и revision digest.
 
+Обязательный `reasoning_mode=SUPPORTED|UNSUPPORTED` также назначает CP из
+capabilities и включает в digest. SUPPORTED требует непустой effort;
+UNSUPPORTED требует пустой effort и отсутствие TOML override. В последнем
+случае runner не пишет параметр ни в TOML, ни в turn/start. Отсутствующий или
+неизвестный mode закрыто отклоняется; пустая строка сама по себе не доказывает
+отсутствие reasoning у модели.
+
 Существующая `contracts/runtime-controller/v6/agent-runner-input.schema.json`
 не изменяется. Fresh workload использует только `kodex.agent-runner-input.v7`.
 Runner отклоняет v6 и отсутствие/подмену effective effort до provider call;

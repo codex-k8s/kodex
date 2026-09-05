@@ -62,14 +62,20 @@ func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 }
 
 func TestEffectiveReasoningEffortRequiresOwnerValue(t *testing.T) {
+	if ValidateEffectiveReasoningEffort("", "", ReasoningUnsupported) != nil {
+		t.Fatal("non-reasoning model rejected")
+	}
+	if ValidateEffectiveReasoningEffort(`model_reasoning_effort = "high"`, "", ReasoningUnsupported) == nil || ValidateEffectiveReasoningEffort("", "medium", "") == nil {
+		t.Fatal("unsupported or missing mode accepted an effort")
+	}
 	for _, test := range []struct{ overlay, effective string }{
 		{"", ""}, {"", "bad effort!"}, {`model_reasoning_effort = "high"`, "medium"},
 	} {
-		if ValidateEffectiveReasoningEffort(test.overlay, test.effective) == nil {
+		if ValidateEffectiveReasoningEffort(test.overlay, test.effective, ReasoningSupported) == nil {
 			t.Fatal("invalid effective effort accepted")
 		}
 	}
-	if ValidateEffectiveReasoningEffort("", "custom-effort") != nil || ValidateEffectiveReasoningEffort(`model_reasoning_effort = "high"`, "high") != nil {
+	if ValidateEffectiveReasoningEffort("", "custom-effort", ReasoningSupported) != nil || ValidateEffectiveReasoningEffort(`model_reasoning_effort = "high"`, "high", ReasoningSupported) != nil {
 		t.Fatal("owner effort rejected")
 	}
 }
