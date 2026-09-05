@@ -334,11 +334,15 @@ func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev
 	if request.GetState() != controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED {
 		state = enumSuffix(request.GetState(), "OWNER_GATE_STATE_")
 	}
-	items, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, Page: page(request.GetPage())})
+	states := make([]string, 0, len(request.GetStates()))
+	for _, item := range request.GetStates() {
+		states = append(states, enumSuffix(item, "OWNER_GATE_STATE_"))
+	}
+	items, total, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, States: states, Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, Total: total}
 	for _, item := range items {
 		response.Gates = append(response.Gates, castGate(item))
 	}

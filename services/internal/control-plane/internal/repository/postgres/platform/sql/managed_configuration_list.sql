@@ -15,6 +15,13 @@ WITH visible AS MATERIALIZED (
       AND (@kind = '' OR configuration.kind = @kind)
       AND (@query = '' OR configuration.name ILIKE '%' || @query || '%')
       AND (configuration.project_id IS NULL OR project.lifecycle = 'ACTIVE')
+      AND (configuration.kind <> 'EMAIL_MAILBOX' OR EXISTS (
+          SELECT 1 FROM control_plane.email_mailbox_configuration_sets mailbox
+          JOIN control_plane.integration_connections connection ON connection.id=mailbox.connection_id
+              AND connection.organization_id=mailbox.organization_id AND connection.definition_key='email' AND connection.state<>'DELETED'
+          WHERE mailbox.configuration_set_id=configuration.id AND mailbox.organization_id=configuration.organization_id
+            AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'integration.manage',
+                'INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,@evaluated_at)))
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid,
           CASE WHEN configuration.project_id IS NULL THEN 'organization.view' ELSE 'project.view' END,
           CASE WHEN configuration.project_id IS NULL THEN 'ORGANIZATION' ELSE 'PROJECT' END,

@@ -145,4 +145,6 @@ func testEmailCredentials(t *testing.T, ctx context.Context, repository *Reposit
 	if _, err := service.ConfigureEmailMailboxCredential(ctx, reader, value.Mutation{IdempotencyKey: "email-denied-credential", ExpectedVersion: &version}, connection.Ref, "AUTH_SECRET", []byte("denied fixture")); err == nil || len(client.Actions()) != 0 {
 		t.Fatalf("credential materialized without permission: %v", err)
 	}
+	mailbox.ConnectionId = connection.Ref
+	testEmailMailboxOwner(t, ctx, repository, service, owner, reader, connection.Ref, *mailbox)
 }

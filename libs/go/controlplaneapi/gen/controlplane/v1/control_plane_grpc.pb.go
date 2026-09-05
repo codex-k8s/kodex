@@ -3237,6 +3237,10 @@ const (
 	PlatformCommandService_RebindSystemSTTConsumers_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindSystemSTTConsumers"
 	PlatformCommandService_DetachGitManagedConfiguration_FullMethodName            = "/controlplane.v1.PlatformCommandService/DetachGitManagedConfiguration"
 	PlatformCommandService_CopyGitManagedConfiguration_FullMethodName              = "/controlplane.v1.PlatformCommandService/CopyGitManagedConfiguration"
+	PlatformCommandService_ConfigureRoleImageGitSource_FullMethodName              = "/controlplane.v1.PlatformCommandService/ConfigureRoleImageGitSource"
+	PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName  = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationDefinitionGitSource"
+	PlatformCommandService_RefreshRoleImageGitSource_FullMethodName                = "/controlplane.v1.PlatformCommandService/RefreshRoleImageGitSource"
+	PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName    = "/controlplane.v1.PlatformCommandService/RefreshIntegrationDefinitionGitSource"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -3396,6 +3400,10 @@ type PlatformCommandServiceClient interface {
 	RebindSystemSTTConsumers(ctx context.Context, in *RebindSystemSTTConsumersRequest, opts ...grpc.CallOption) (*RebindSystemSTTConsumersResponse, error)
 	DetachGitManagedConfiguration(ctx context.Context, in *DetachGitManagedConfigurationRequest, opts ...grpc.CallOption) (*DetachGitManagedConfigurationResponse, error)
 	CopyGitManagedConfiguration(ctx context.Context, in *CopyGitManagedConfigurationRequest, opts ...grpc.CallOption) (*CopyGitManagedConfigurationResponse, error)
+	ConfigureRoleImageGitSource(ctx context.Context, in *ConfigureRoleImageGitSourceRequest, opts ...grpc.CallOption) (*ConfigureRoleImageGitSourceResponse, error)
+	ConfigureIntegrationDefinitionGitSource(ctx context.Context, in *ConfigureIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
+	RefreshRoleImageGitSource(ctx context.Context, in *RefreshRoleImageGitSourceRequest, opts ...grpc.CallOption) (*RefreshRoleImageGitSourceResponse, error)
+	RefreshIntegrationDefinitionGitSource(ctx context.Context, in *RefreshIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*RefreshIntegrationDefinitionGitSourceResponse, error)
 }
 
 type platformCommandServiceClient struct {
@@ -4904,6 +4912,46 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) ConfigureRoleImageGitSource(ctx context.Context, in *ConfigureRoleImageGitSourceRequest, opts ...grpc.CallOption) (*ConfigureRoleImageGitSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureRoleImageGitSourceResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureRoleImageGitSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ConfigureIntegrationDefinitionGitSource(ctx context.Context, in *ConfigureIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*ConfigureIntegrationDefinitionGitSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureIntegrationDefinitionGitSourceResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RefreshRoleImageGitSource(ctx context.Context, in *RefreshRoleImageGitSourceRequest, opts ...grpc.CallOption) (*RefreshRoleImageGitSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshRoleImageGitSourceResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RefreshRoleImageGitSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RefreshIntegrationDefinitionGitSource(ctx context.Context, in *RefreshIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*RefreshIntegrationDefinitionGitSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshIntegrationDefinitionGitSourceResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformCommandServiceServer is the server API for PlatformCommandService service.
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
@@ -5061,6 +5109,10 @@ type PlatformCommandServiceServer interface {
 	RebindSystemSTTConsumers(context.Context, *RebindSystemSTTConsumersRequest) (*RebindSystemSTTConsumersResponse, error)
 	DetachGitManagedConfiguration(context.Context, *DetachGitManagedConfigurationRequest) (*DetachGitManagedConfigurationResponse, error)
 	CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error)
+	ConfigureRoleImageGitSource(context.Context, *ConfigureRoleImageGitSourceRequest) (*ConfigureRoleImageGitSourceResponse, error)
+	ConfigureIntegrationDefinitionGitSource(context.Context, *ConfigureIntegrationDefinitionGitSourceRequest) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
+	RefreshRoleImageGitSource(context.Context, *RefreshRoleImageGitSourceRequest) (*RefreshRoleImageGitSourceResponse, error)
+	RefreshIntegrationDefinitionGitSource(context.Context, *RefreshIntegrationDefinitionGitSourceRequest) (*RefreshIntegrationDefinitionGitSourceResponse, error)
 	mustEmbedUnimplementedPlatformCommandServiceServer()
 }
 
@@ -5514,6 +5566,18 @@ func (UnimplementedPlatformCommandServiceServer) DetachGitManagedConfiguration(c
 }
 func (UnimplementedPlatformCommandServiceServer) CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CopyGitManagedConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureRoleImageGitSource(context.Context, *ConfigureRoleImageGitSourceRequest) (*ConfigureRoleImageGitSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureRoleImageGitSource not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureIntegrationDefinitionGitSource(context.Context, *ConfigureIntegrationDefinitionGitSourceRequest) (*ConfigureIntegrationDefinitionGitSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureIntegrationDefinitionGitSource not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RefreshRoleImageGitSource(context.Context, *RefreshRoleImageGitSourceRequest) (*RefreshRoleImageGitSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshRoleImageGitSource not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RefreshIntegrationDefinitionGitSource(context.Context, *RefreshIntegrationDefinitionGitSourceRequest) (*RefreshIntegrationDefinitionGitSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshIntegrationDefinitionGitSource not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
 }
@@ -8161,6 +8225,78 @@ func _PlatformCommandService_CopyGitManagedConfiguration_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_ConfigureRoleImageGitSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureRoleImageGitSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureRoleImageGitSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureRoleImageGitSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureRoleImageGitSource(ctx, req.(*ConfigureRoleImageGitSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ConfigureIntegrationDefinitionGitSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureIntegrationDefinitionGitSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureIntegrationDefinitionGitSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureIntegrationDefinitionGitSource(ctx, req.(*ConfigureIntegrationDefinitionGitSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RefreshRoleImageGitSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshRoleImageGitSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RefreshRoleImageGitSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RefreshRoleImageGitSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RefreshRoleImageGitSource(ctx, req.(*RefreshRoleImageGitSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RefreshIntegrationDefinitionGitSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshIntegrationDefinitionGitSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RefreshIntegrationDefinitionGitSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RefreshIntegrationDefinitionGitSource(ctx, req.(*RefreshIntegrationDefinitionGitSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -8744,6 +8880,22 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "CopyGitManagedConfiguration",
 			Handler:    _PlatformCommandService_CopyGitManagedConfiguration_Handler,
 		},
+		{
+			MethodName: "ConfigureRoleImageGitSource",
+			Handler:    _PlatformCommandService_ConfigureRoleImageGitSource_Handler,
+		},
+		{
+			MethodName: "ConfigureIntegrationDefinitionGitSource",
+			Handler:    _PlatformCommandService_ConfigureIntegrationDefinitionGitSource_Handler,
+		},
+		{
+			MethodName: "RefreshRoleImageGitSource",
+			Handler:    _PlatformCommandService_RefreshRoleImageGitSource_Handler,
+		},
+		{
+			MethodName: "RefreshIntegrationDefinitionGitSource",
+			Handler:    _PlatformCommandService_RefreshIntegrationDefinitionGitSource_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -8767,6 +8919,227 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	ManagedConfigurationSourceWorkService_ClaimManagedConfigurationSourceWork_FullMethodName    = "/controlplane.v1.ManagedConfigurationSourceWorkService/ClaimManagedConfigurationSourceWork"
+	ManagedConfigurationSourceWorkService_RenewManagedConfigurationSourceWork_FullMethodName    = "/controlplane.v1.ManagedConfigurationSourceWorkService/RenewManagedConfigurationSourceWork"
+	ManagedConfigurationSourceWorkService_CompleteManagedConfigurationSourceWork_FullMethodName = "/controlplane.v1.ManagedConfigurationSourceWorkService/CompleteManagedConfigurationSourceWork"
+	ManagedConfigurationSourceWorkService_FailManagedConfigurationSourceWork_FullMethodName     = "/controlplane.v1.ManagedConfigurationSourceWorkService/FailManagedConfigurationSourceWork"
+)
+
+// ManagedConfigurationSourceWorkServiceClient is the client API for ManagedConfigurationSourceWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Отдельный owner work для Git-конфигураций; не создаёт runtime Run/Turn/grant.
+type ManagedConfigurationSourceWorkServiceClient interface {
+	ClaimManagedConfigurationSourceWork(ctx context.Context, in *ClaimManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*ClaimManagedConfigurationSourceWorkResponse, error)
+	RenewManagedConfigurationSourceWork(ctx context.Context, in *RenewManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*RenewManagedConfigurationSourceWorkResponse, error)
+	CompleteManagedConfigurationSourceWork(ctx context.Context, in *CompleteManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*CompleteManagedConfigurationSourceWorkResponse, error)
+	FailManagedConfigurationSourceWork(ctx context.Context, in *FailManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*FailManagedConfigurationSourceWorkResponse, error)
+}
+
+type managedConfigurationSourceWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewManagedConfigurationSourceWorkServiceClient(cc grpc.ClientConnInterface) ManagedConfigurationSourceWorkServiceClient {
+	return &managedConfigurationSourceWorkServiceClient{cc}
+}
+
+func (c *managedConfigurationSourceWorkServiceClient) ClaimManagedConfigurationSourceWork(ctx context.Context, in *ClaimManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*ClaimManagedConfigurationSourceWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimManagedConfigurationSourceWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationSourceWorkService_ClaimManagedConfigurationSourceWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationSourceWorkServiceClient) RenewManagedConfigurationSourceWork(ctx context.Context, in *RenewManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*RenewManagedConfigurationSourceWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewManagedConfigurationSourceWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationSourceWorkService_RenewManagedConfigurationSourceWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationSourceWorkServiceClient) CompleteManagedConfigurationSourceWork(ctx context.Context, in *CompleteManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*CompleteManagedConfigurationSourceWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteManagedConfigurationSourceWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationSourceWorkService_CompleteManagedConfigurationSourceWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationSourceWorkServiceClient) FailManagedConfigurationSourceWork(ctx context.Context, in *FailManagedConfigurationSourceWorkRequest, opts ...grpc.CallOption) (*FailManagedConfigurationSourceWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailManagedConfigurationSourceWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationSourceWorkService_FailManagedConfigurationSourceWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ManagedConfigurationSourceWorkServiceServer is the server API for ManagedConfigurationSourceWorkService service.
+// All implementations must embed UnimplementedManagedConfigurationSourceWorkServiceServer
+// for forward compatibility.
+//
+// Отдельный owner work для Git-конфигураций; не создаёт runtime Run/Turn/grant.
+type ManagedConfigurationSourceWorkServiceServer interface {
+	ClaimManagedConfigurationSourceWork(context.Context, *ClaimManagedConfigurationSourceWorkRequest) (*ClaimManagedConfigurationSourceWorkResponse, error)
+	RenewManagedConfigurationSourceWork(context.Context, *RenewManagedConfigurationSourceWorkRequest) (*RenewManagedConfigurationSourceWorkResponse, error)
+	CompleteManagedConfigurationSourceWork(context.Context, *CompleteManagedConfigurationSourceWorkRequest) (*CompleteManagedConfigurationSourceWorkResponse, error)
+	FailManagedConfigurationSourceWork(context.Context, *FailManagedConfigurationSourceWorkRequest) (*FailManagedConfigurationSourceWorkResponse, error)
+	mustEmbedUnimplementedManagedConfigurationSourceWorkServiceServer()
+}
+
+// UnimplementedManagedConfigurationSourceWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedManagedConfigurationSourceWorkServiceServer struct{}
+
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) ClaimManagedConfigurationSourceWork(context.Context, *ClaimManagedConfigurationSourceWorkRequest) (*ClaimManagedConfigurationSourceWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimManagedConfigurationSourceWork not implemented")
+}
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) RenewManagedConfigurationSourceWork(context.Context, *RenewManagedConfigurationSourceWorkRequest) (*RenewManagedConfigurationSourceWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewManagedConfigurationSourceWork not implemented")
+}
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) CompleteManagedConfigurationSourceWork(context.Context, *CompleteManagedConfigurationSourceWorkRequest) (*CompleteManagedConfigurationSourceWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteManagedConfigurationSourceWork not implemented")
+}
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) FailManagedConfigurationSourceWork(context.Context, *FailManagedConfigurationSourceWorkRequest) (*FailManagedConfigurationSourceWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailManagedConfigurationSourceWork not implemented")
+}
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) mustEmbedUnimplementedManagedConfigurationSourceWorkServiceServer() {
+}
+func (UnimplementedManagedConfigurationSourceWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeManagedConfigurationSourceWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ManagedConfigurationSourceWorkServiceServer will
+// result in compilation errors.
+type UnsafeManagedConfigurationSourceWorkServiceServer interface {
+	mustEmbedUnimplementedManagedConfigurationSourceWorkServiceServer()
+}
+
+func RegisterManagedConfigurationSourceWorkServiceServer(s grpc.ServiceRegistrar, srv ManagedConfigurationSourceWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedManagedConfigurationSourceWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ManagedConfigurationSourceWorkService_ServiceDesc, srv)
+}
+
+func _ManagedConfigurationSourceWorkService_ClaimManagedConfigurationSourceWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimManagedConfigurationSourceWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).ClaimManagedConfigurationSourceWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationSourceWorkService_ClaimManagedConfigurationSourceWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).ClaimManagedConfigurationSourceWork(ctx, req.(*ClaimManagedConfigurationSourceWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationSourceWorkService_RenewManagedConfigurationSourceWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewManagedConfigurationSourceWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).RenewManagedConfigurationSourceWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationSourceWorkService_RenewManagedConfigurationSourceWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).RenewManagedConfigurationSourceWork(ctx, req.(*RenewManagedConfigurationSourceWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationSourceWorkService_CompleteManagedConfigurationSourceWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteManagedConfigurationSourceWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).CompleteManagedConfigurationSourceWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationSourceWorkService_CompleteManagedConfigurationSourceWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).CompleteManagedConfigurationSourceWork(ctx, req.(*CompleteManagedConfigurationSourceWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationSourceWorkService_FailManagedConfigurationSourceWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailManagedConfigurationSourceWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).FailManagedConfigurationSourceWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationSourceWorkService_FailManagedConfigurationSourceWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationSourceWorkServiceServer).FailManagedConfigurationSourceWork(ctx, req.(*FailManagedConfigurationSourceWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ManagedConfigurationSourceWorkService_ServiceDesc is the grpc.ServiceDesc for ManagedConfigurationSourceWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ManagedConfigurationSourceWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.ManagedConfigurationSourceWorkService",
+	HandlerType: (*ManagedConfigurationSourceWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ClaimManagedConfigurationSourceWork",
+			Handler:    _ManagedConfigurationSourceWorkService_ClaimManagedConfigurationSourceWork_Handler,
+		},
+		{
+			MethodName: "RenewManagedConfigurationSourceWork",
+			Handler:    _ManagedConfigurationSourceWorkService_RenewManagedConfigurationSourceWork_Handler,
+		},
+		{
+			MethodName: "CompleteManagedConfigurationSourceWork",
+			Handler:    _ManagedConfigurationSourceWorkService_CompleteManagedConfigurationSourceWork_Handler,
+		},
+		{
+			MethodName: "FailManagedConfigurationSourceWork",
+			Handler:    _ManagedConfigurationSourceWorkService_FailManagedConfigurationSourceWork_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 

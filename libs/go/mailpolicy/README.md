@@ -4,7 +4,7 @@ title: Общий контракт почтовых сетевых pins
 type: library-readme
 status: approved
 owner: backend
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -22,6 +22,10 @@ updated: 2026-09-05
 число destinations/addresses, свежесть и каждый адрес. Private/special/mixed
 наборы закрыто отклоняются целиком. `NormalizeHostname` и `ValidateAddresses`
 также используются общим egress DNS consumer, исключая разные правила pins.
+Выключенный mailbox остаётся в exact source digest, но не вызывает DNS lookup
+и не выдаёт destination/network pins. При отключении последнего mailbox
+получается пустой egress; другой активный mailbox с тем же endpoint сохраняет
+свой допуск. Полная typed source validation выполняется и для выключенных строк.
 
 `MailDocument.Validate/Digest` и `RenderFiles` создают immutable digest-named
 ConfigMap, exact NetworkPolicy и Deployment patch. Выход не содержит mailbox

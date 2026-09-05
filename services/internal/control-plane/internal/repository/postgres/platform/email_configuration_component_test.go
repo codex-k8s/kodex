@@ -127,8 +127,6 @@ func testEmailConfiguration(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatal(err)
 	}
 	restoredReader := *repository
-	restoredReader.emailConfigurationRevision = 0
-	restoredReader.emailConfigurationDigest = ""
 	restored, err := restoredReader.InitializeEmailConfiguration(ctx, seed)
 	if err != nil || restored.Revision != config.Revision || api.Digest(restored) != api.Digest(config) {
 		t.Fatalf("release seed replaced immutable owner document: %v", err)

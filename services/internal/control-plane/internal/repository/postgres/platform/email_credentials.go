@@ -26,6 +26,14 @@ var queryEmailCredentialAdvanceConnection string
 var queryEmailCredentialDigests string
 
 func (repository *Repository) EmailCredentialDigests(ctx context.Context, configuration api.Configuration) (map[string]string, error) {
+	return emailCredentialDigests(ctx, repository.pool, configuration)
+}
+
+type emailCredentialQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func emailCredentialDigests(ctx context.Context, querier emailCredentialQuerier, configuration api.Configuration) (map[string]string, error) {
 	type owner struct{ tenant, connection, kind string }
 	expected := map[string]owner{}
 	for _, mailbox := range configuration.Mailboxes {
@@ -54,7 +62,7 @@ func (repository *Repository) EmailCredentialDigests(ctx context.Context, config
 	if len(keys) == 0 {
 		return result, nil
 	}
-	rows, err := repository.pool.Query(ctx, queryEmailCredentialDigests, keys)
+	rows, err := querier.Query(ctx, queryEmailCredentialDigests, keys)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -76,7 +84,7 @@ func (repository *Repository) EmailCredentialDigests(ctx context.Context, config
 		return nil, errs.ErrUnavailable
 	}
 	if len(result) != len(expected) {
-		return nil, errs.ErrUnavailable
+		return nil, errs.ErrConflict
 	}
 	return result, nil
 }

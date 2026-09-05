@@ -4258,6 +4258,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
 		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
 	}
+	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
