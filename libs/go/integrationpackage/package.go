@@ -72,6 +72,7 @@ type Field struct {
 	Format        string   `yaml:"format,omitempty" json:"format,omitempty"`
 	Required      bool     `yaml:"required" json:"required"`
 	MaximumLength int      `yaml:"maximumLength,omitempty" json:"maximumLength,omitempty"`
+	AllowEmpty    bool     `yaml:"allowEmpty,omitempty" json:"allowEmpty,omitempty"`
 	Minimum       int64    `yaml:"minimum,omitempty" json:"minimum,omitempty"`
 	Maximum       int64    `yaml:"maximum,omitempty" json:"maximum,omitempty"`
 	AllowedValues []string `yaml:"allowedValues,omitempty" json:"allowedValues,omitempty"`
@@ -245,6 +246,9 @@ func (capability Capability) InputSchema() ([]byte, error) {
 		case "STRING":
 			property["type"] = "string"
 			property["minLength"] = 1
+			if field.AllowEmpty {
+				property["minLength"] = 0
+			}
 			property["maxLength"] = field.MaximumLength
 			if len(field.AllowedValues) != 0 {
 				property["enum"] = append([]string(nil), field.AllowedValues...)
@@ -389,7 +393,7 @@ func decodeFieldValue(field Field, raw json.RawMessage) (any, error) {
 }
 
 func validateStringValue(field Field, value string, allowPlainMultiline bool) error {
-	if value == "" || len(value) > field.MaximumLength || strings.ContainsRune(value, '\x00') ||
+	if value == "" && !(field.AllowEmpty && allowPlainMultiline) || len(value) > field.MaximumLength || strings.ContainsRune(value, '\x00') ||
 		strings.ContainsRune(value, '\r') || (!allowPlainMultiline || field.Format != "PLAIN") && strings.ContainsRune(value, '\n') {
 		return errors.New("string field is outside bounds")
 	}
@@ -445,6 +449,9 @@ func validate(result *Package) error {
 	}
 	configurationByKey := make(map[string]Field, len(result.Spec.ConfigurationFields))
 	for _, field := range result.Spec.ConfigurationFields {
+		if field.AllowEmpty {
+			return errors.New("integration configuration cannot allow empty values")
+		}
 		configurationByKey[field.Key] = field
 	}
 	destinationKeys := map[string]struct{}{}
@@ -527,6 +534,7 @@ func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
 		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
+			(field.AllowEmpty && (field.Type != "STRING" || field.Format != "PLAIN" || len(field.AllowedValues) > 0)) ||
 			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||

@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.2.0
-updated: 2026-08-29
+version: 2.3.0
+updated: 2026-09-05
 ---
 
 # integration-gateway
@@ -24,14 +24,14 @@ digest.
 Поставляются семь schema-versioned packages:
 
 - synthetic HTTP journal: read и идемпотентный write по exact effect key;
-- GitHub: repository metadata, list/read/create/update/comment issue только в exact
-  `owner/repository` Connection scope через `https://api.github.com`;
-- GitLab: metadata, repository file, issues, merge requests, branches, commit и
-  pipeline в exact `base_url/project_path` scope;
-- Jira: project, bounded issue search/read, create, comment, limited update и
-  issue link в exact `base_url/project_key` scope;
-- Confluence: space, bounded page search/read, draft create, OCC update и attachment upload в exact
-  `base_url/space_id` scope;
+- GitHub: 41 операция repository content, branches/commits, issues/comments,
+  PR/reviews/checks и Actions только в exact `owner/repository` scope;
+- GitLab: 37 операций project/repository, branches/commits, issues/notes,
+  MR/discussions, pipelines/jobs в exact `base_url/project_path` scope;
+- Jira: 22 операции project/users, JQL/issues, transitions/comments/links и
+  attachments в exact `base_url/project_key` scope;
+- Confluence: 16 операций space/pages/descendants, footer comments и attachments
+  в exact `base_url/space_id` scope;
 - электронная почта: health, status и отправка текстового письма через
   provider-neutral HTTPS bridge с provider-native idempotency;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
@@ -66,6 +66,66 @@ Synthetic и email пытаются сверить эффект только ч�
 `owner_decision_required=true`. Этот исход не является успехом или отсутствием
 эффекта. Контракт bridge находится в `contracts/openapi/email-bridge/v1`;
 его POP/SMTP реализация принадлежит #1037.
+
+Полный закрытый набор MVP-UI-42 находится в [OPERATION_MATRIX.md](OPERATION_MATRIX.md).
+`EFFECT_KEY` новых vendor-команд означает durable дедупликацию invocation у
+control-plane, а не вымышленную поддержку idempotency header провайдером.
+Файлы и ответы SDK/HTTP ограничены 64 KiB до декодирования; итоговая JSON/base64
+проекция также входит в этот бюджет. Большие результаты отклоняются без выдачи
+частичного файла. GitHub Contents API возвращает каталог без pagination;
+страницы остальных списков используют provider cursor. Jira transitions,
+links/attachments и exact Confluence space возвращают ограниченный полный набор.
+
+Jira users ограничены assignable users выбранного проекта, без email/address
+профиля пользователя. JQL не может выйти из project-условия; верхнеуровневый
+`ORDER BY` сохраняется. Attachments и links разрешаются через issue, а не через
+глобальный ID. Confluence comments/attachments разрешаются через страницу и
+точное пространство; reply сначала разрешает parent comment. Скачивание
+Confluence использует только проверенный same-origin download path. Ответы CDN
+с redirect закрыто отклоняются, новые внешние назначения не разрешаются скрыто.
+
+GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект не более
+25 строковых/числовых/boolean значений, без вложенных объектов и duplicate keys.
+Это параметры закреплённого workflow, а не произвольное тело HTTP API.
+Пустые file/body поля явно отмечены `allowEmpty`; MCP JSON Schema использует
+`minLength: 0` только для них. Идентификаторы и connection config остаются непустыми.
+
+## Обновление каталога
+
+Версии этого расширения: GitHub `2.2.0`, GitLab/Jira/Confluence `1.2.0`.
+Публикация новых packages не расширяет существующие grants автоматически.
+Старая pinned revision не переинтерпретируется: владелец публикует новую
+UI/Git-managed ревизию, явно выполняет rebind/test и выбирает новые capabilities.
+Git-owned конфигурация по-прежнему не перезаписывается через UI.
+
+Runtime deployment, exact egress, secret mounts, probes, RBAC и метрики
+наследуются от foundation и проверяются итоговым render. Расширение не добавляет
+сетевые назначения, CP RPC, миграции или отдельный worker. Mail и Mattermost
+packages этим изменением не меняются.
+
+## Проверка расширения
+
+Из каталога сервиса: `go test -race ./...` и `go vet ./...`.
+Из `libs/go/integrationpackage`: `go test -race ./...`.
+Из корня: `make check-integration-package-codegen test-integration-gateway-render
+test-integration-synthetic test-integration-gateway-postgres`.
+PG-цель включает подготовку provider capacity: одиночный regex `integration`
+не воспроизводит её fixture и не является поддерживаемой точкой входа.
+
+`TestEveryAdvertisedOperation` вызывает каждую из 121 executable capabilities
+текущего каталога, включая неизменённые email/Synthetic. Отдельные проверки
+покрывают scope до credential, version/risk/approval/input mismatch, потерю
+mutation response, 5xx/denial/malformed success, rate limit, pagination,
+empty files, escaping, JQL, parent scope и bounded bodies. Повторный разбор
+неизменяемого shipped fixture не выполняется для каждого отрицательного случая;
+каждый adapter/client/credential остаётся изолированным.
+
+Через Context7 проверены go-github, GitLab REST, Jira REST v3 и Confluence REST v2.
+При недостаточном фрагменте Context7 дополнительно прочитаны официальные
+[GitHub workflows](https://docs.github.com/en/rest/actions/workflows),
+[Jira attachments](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/),
+[Confluence comments](https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-comment/).
+Сигнатуры SDK сверены с закреплённым `go-github/v74`, версия зависимости не менялась.
 
 UI revision использует тот же `IntegrationPackage` JSON/YAML, что shipped
 catalog. Публикация и rebind допускают только exact зарегистрированный и ready
