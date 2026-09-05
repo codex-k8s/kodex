@@ -204,7 +204,7 @@ func TestIMAPUnknownAppendDoesNotRepeat(t *testing.T) {
 		t.Fatal("restarted receipt")
 	}
 	cmd.EffectKey = "another-key"
-	if _, err := restarted.Execute(t.Context(), "caller", "token", cmd); !errors.Is(err, errs.Conflict) {
+	if _, err := restarted.Execute(executionContext(t.Context()), "caller", "token", cmd); !errors.Is(err, errs.Conflict) {
 		t.Fatal("ambiguous source re-executed with another key")
 	}
 	if appends.Load() != 2 || sec.reads.Load() != reads {
@@ -355,13 +355,13 @@ func TestIMAPReadOperations(t *testing.T) {
 				}
 			}
 			reads := sec.reads.Load()
-			if _, err := s.Execute(t.Context(), "caller", "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Folder: "Private"}); !errors.Is(err, errs.Denied) {
+			if _, err := s.Execute(executionContext(t.Context()), "caller", "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Folder: "Private"}); !errors.Is(err, errs.Denied) {
 				t.Fatal("foreign folder accepted")
 			}
 			if sec.reads.Load() != reads {
 				t.Fatal("credentials before folder scope")
 			}
-			if _, err := s.Execute(t.Context(), "caller", "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Folder: "Archive", Cursor: first.NextCursor}); !errors.Is(err, errs.Conflict) {
+			if _, err := s.Execute(executionContext(t.Context()), "caller", "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Folder: "Archive", Cursor: first.NextCursor}); !errors.Is(err, errs.Conflict) {
 				t.Fatal("cross-folder cursor accepted")
 			}
 			if err := user.Delete("INBOX"); err != nil {
@@ -370,7 +370,7 @@ func TestIMAPReadOperations(t *testing.T) {
 			if err := user.Create("INBOX", nil); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.Execute(t.Context(), "caller", "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "3", UidValidity: first.UidValidity}); !errors.Is(err, errs.Conflict) {
+			if _, err := s.Execute(executionContext(t.Context()), "caller", "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "3", UidValidity: first.UidValidity}); !errors.Is(err, errs.Conflict) {
 				t.Fatal("stale UIDVALIDITY accepted")
 			}
 		})

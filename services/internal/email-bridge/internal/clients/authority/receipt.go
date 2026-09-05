@@ -26,13 +26,20 @@ func (c *Client) Report(ctx context.Context, input receipt.Report) (receipt.Owne
 	want := input.Receipt
 	binding := Binding(input.Binding)
 	outcome, ok := effectOutcome(want.Outcome)
-	if c.API == nil || binding == nil || binding.Lease.ExpiresAt.CheckValid() != nil || binding.GetInvocationRef() != want.Invocation || want.Invocation == "" || !binding.Lease.ExpiresAt.AsTime().After(time.Now()) || !validReceipt(want, false) || !ok || !receiptRefPattern.MatchString(input.IdempotencyKey) {
+	if c.API == nil || binding == nil || binding.Lease.ExpiresAt.CheckValid() != nil || binding.GetInvocationRef() != want.Invocation || want.Invocation == "" || !validReceipt(want, false) || !ok || !receiptRefPattern.MatchString(input.IdempotencyKey) {
+		return receipt.OwnerReceipt{}, errs.Invalid
+	}
+	expired := !binding.Lease.ExpiresAt.AsTime().After(time.Now())
+	if input.Replay != expired {
 		return receipt.OwnerReceipt{}, errs.Invalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, effectAuthorityTimeout)
 	defer cancel()
-	ctx, cancelLease := context.WithDeadline(ctx, binding.Lease.ExpiresAt.AsTime())
-	defer cancelLease()
+	if !input.Replay {
+		var cancelLease context.CancelFunc
+		ctx, cancelLease = context.WithDeadline(ctx, binding.Lease.ExpiresAt.AsTime())
+		defer cancelLease()
+	}
 	mutation := &cp.MutationContext{IdempotencyKey: input.IdempotencyKey}
 	response, err := c.API.ReportEmailEffectReceipt(ctx, &cp.ReportEmailEffectReceiptRequest{Mutation: mutation, Binding: binding, ExternalReceiptRef: want.ExternalRef, ExternalReceiptDigest: want.ExternalDigest, SemanticInputDigest: want.InputDigest, Outcome: outcome})
 	if err != nil {
