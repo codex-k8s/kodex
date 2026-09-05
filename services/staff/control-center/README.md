@@ -302,7 +302,7 @@ commit #1045 с генерацией из суммарного OpenAPI. Этот
 Receipt-bound email session `5c32fa683` принят как `e075e1247`.
 Собственная PWA-реализация ещё не является завершённым unit.
 
-Локальный checkpoint на базе `e075e1247`: `npm run typecheck`,
+Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).
 Повторный `npm run codegen` побайтово воспроизвёл весь
 `src/shared/api/generated`. Build сообщает о JS chunk больше 500 kB,
@@ -311,6 +311,34 @@ AsyncAPI parser рекомендует более новую версию спе
 дополнительный 900 и mobile 390. Полные detail lifecycle проверяются только
 на 1440/390; эти запуски не являются полной приёмкой 61 критериев,
 staging, CI или проверкой Safari.
+
+После checkpoint `npm run build` с typecheck прошёл повторно,
+`npm run test:unit` прошёл с 804 тестами в 167 файлах. После отдельной
+`npm run build:synthetic` полный Playwright synthetic прошёл: 10/10 тестов.
+Существующие detail-сценарии расширены на все пять обязательных desktop-ширин
+и mobile; дополнительный 900 проверяет сокращённый набор. Fixture выполняет
+`SESSION_READY` и `PLATFORM_READY`, проверяется состояние realtime `live`.
+Предыдущий запуск прерван при обнаружении отсутствующего `PLATFORM_READY`
+в fixture и не учитывается как полный PASS. Новый
+`e2e/fixtures/organization-catalog.ts` проверен на всех семи ширинах: server grouping,
+шесть строк, длинный текст, cursor reset после `AGENT_CHANGED`, project-scoped
+expand и серверный поиск. Отдельные unit `OrganizationCatalog.test.ts`
+проверяют отмену in-flight запроса, отказ membership reload и logout;
+`EmailEffectPanel.test.ts` проверяет timeout без autoretry и ручной decision
+readback. `i18n/index.test.ts` разбирает статические ключи Vue/TS штатными
+компиляторами; динамические server-owned ключи остаются отдельной проверкой.
+Browser-проверка общего picker на 1440/390 покрывает стрелки после фокуса
+на варианте, Enter/Space, пропуск disabled-варианта, отсутствие запроса
+заблокированного inline-списка и повторную загрузку после разблокировки.
+Context7 проверен для Vue compiler-sfc `parse/compileTemplate` и Pinia
+`$onAction/after/onError` с unsubscribe; API дополнительно сверены с локальными
+типами и browser-сценарием.
+
+Текущий `PlatformResourceKind` не содержит отдельных invalidation kinds для
+environment, secret, managed configuration, Skill и Memory. Пять каталогов в `OrganizationCatalog`
+перечитываются на существующих `PROJECT/MEMBERSHIP/PLATFORM_MEMBERSHIP` и полном
+resync; новые event kinds в PWA не выдумываются. Для адресного realtime этих
+видов нужен producer/AsyncAPI contract и рабочий gateway mapping.
 
 | Критерий                                       | Файл                                                                        | Тест и ручная приёмка                                                                                                                                                                                                                                                                |
 | ---------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -435,9 +463,10 @@ mobile: 390 px; дополнительно проверяется 900 px. Рез
 в `test-results/synthetic`. Запросы приложения перехвачены безопасными fixtures,
 MediaRecorder использует искусственное устройство Chromium. Это не live,
 не проверка OIDC-провайдера и не реальная транскрипция. Успех этого набора
-не означает приёмку всех MVP-UI-01..61: подробные lifecycle-сценарии сейчас
-проверяются на 1440/390, остальные размеры покрывают только сценарии,
-явно выполняемые в `synthetic.spec.ts`. Полная staging-матрица принадлежит #1031.
+не означает приёмку всех MVP-UI-01..61: подробные lifecycle-сценарии
+проверяются на пяти обязательных desktop-ширинах и 390, дополнительный 900
+покрывает сокращённый набор, явно выполняемый в `synthetic.spec.ts`.
+Voice/keyboard primitive проверяется на 1440/390. Полная staging-матрица принадлежит #1031.
 Service Worker в этом
 контуре заблокирован; его контракт проверяется отдельно. Fixture-страница voice
 не входит в production-сборку `npm run build`.

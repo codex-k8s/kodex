@@ -340,6 +340,9 @@ const ru = {
     providers: "Учётные записи моделей",
   },
   common: {
+    search: "Поиск",
+    refresh: "Обновить",
+    loadMore: "Загрузить ещё",
     invalidJsonAt: "Ошибка JSON: строка {line}, столбец {column}",
     clearSelection: "Очистить выбор",
     selectedCount: "Выбрано: {count}",
@@ -2822,6 +2825,9 @@ const en = {
   },
   common: {
     ...ru.common,
+    search: "Search",
+    refresh: "Refresh",
+    loadMore: "Load more",
     invalidJsonAt: "Invalid JSON at line {line}, column {column}",
     clearSelection: "Clear selection",
     selectedCount: "Selected: {count}",

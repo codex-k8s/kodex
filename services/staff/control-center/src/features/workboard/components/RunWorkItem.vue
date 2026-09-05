@@ -76,7 +76,7 @@ const sourceIcon = computed(() => {
           <dt>{{ $t("common.source") }}</dt>
           <dd
             :title="
-              $t('workboard.sourceHint', {
+              $t('common.sourceHint', {
                 source: $t(`runs.source.${run.source}`),
               })
             "

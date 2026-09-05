@@ -64,6 +64,47 @@ for (const width of [1440, 390]) {
       .getByRole("button", { name: "Очистить выбор", exact: true })
       .click();
     await expect(picker.getByTestId("selection")).toHaveText("[]");
+    await page
+      .getByRole("button", { name: "Показать список", exact: true })
+      .click();
+    const inline = page.getByTestId("inline-picker");
+    await expect(inline.getByTestId("inline-calls")).toHaveText("0");
+    await inline
+      .getByRole("checkbox", { name: "Заблокировать список", exact: true })
+      .uncheck();
+    const first = inline.getByRole("option", {
+      name: "Первое окружение Ревизия 1",
+      exact: true,
+    });
+    const second = inline.getByRole("option", {
+      name: "Второе окружение Ревизия 2",
+      exact: true,
+    });
+    await first.click();
+    await first.press("ArrowDown");
+    await expect(second).toBeFocused();
+    await second.press("Enter");
+    await expect(inline.getByTestId("inline-selection")).toHaveText(
+      '["first","second"]',
+    );
+    await second.press("ArrowDown");
+    await expect(first).toBeFocused();
+    await first.press("Space");
+    await expect(inline.getByTestId("inline-selection")).toHaveText(
+      '["second"]',
+    );
+    await inline
+      .getByRole("checkbox", { name: "Заблокировать список", exact: true })
+      .check();
+    await expect(first).toBeDisabled();
+    await inline
+      .getByRole("checkbox", { name: "Заблокировать список", exact: true })
+      .uncheck();
+    await expect(inline.getByTestId("inline-calls")).toHaveText("2");
+    await expect(first).toBeEnabled();
+    await page
+      .getByRole("button", { name: "Скрыть список", exact: true })
+      .click();
     const textarea = page.getByRole("textbox", {
       name: "Обычный текст",
       exact: true,

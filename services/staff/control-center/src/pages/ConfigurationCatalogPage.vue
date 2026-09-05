@@ -56,6 +56,6 @@ function changeProject(value: string): void {
       :kind="kind"
       :project-ref="projectRef || undefined"
     />
-    <p v-else role="alert">{{ $t("errors.notFound") }}</p>
+    <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
   </PageFrame>
 </template>

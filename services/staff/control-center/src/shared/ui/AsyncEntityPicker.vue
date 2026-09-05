@@ -136,7 +136,7 @@ const {
   cancel,
 } = useAsyncEntityCollection(loader, {
   debounceMs: props.debounceMs ?? 500,
-  immediate: inline,
+  immediate: inline && !props.disabled,
 });
 
 const copy = computed<AsyncEntityPickerLabels>(
@@ -343,6 +343,7 @@ function ensureIndexVisible(index: number): void {
   );
 }
 function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
+  if (props.disabled) return;
   if (
     !(event.target instanceof HTMLInputElement) &&
     !(
@@ -354,6 +355,13 @@ function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     moveActive(event.key === "ArrowDown" ? 1 : -1);
+    if (!(event.target instanceof HTMLInputElement)) {
+      void nextTick(() =>
+        document
+          .getElementById(activeDescendant.value ?? "")
+          ?.focus({ preventScroll: true }),
+      );
+    }
     return;
   }
   if (event.key !== "Enter" || activeIndex.value < 0) return;
@@ -396,6 +404,7 @@ watch(
   () => props.disabled,
   (disabled) => {
     if (disabled) close();
+    else if (inline) refresh();
   },
 );
 </script>
@@ -441,6 +450,7 @@ watch(
       role="listbox"
       :aria-multiselectable="multiple || undefined"
       @scroll.passive="handleScroll"
+      @keydown="handleListKeydown($event, false)"
     >
       <div
         v-if="phase === 'initial-loading'"
@@ -497,6 +507,7 @@ watch(
             :aria-selected="isSelected(entry.item)"
             :disabled="disabled || entry.item.disabled"
             @mouseenter="activeIndex = entry.index"
+            @focus="activeIndex = entry.index"
             @click="chooseInline(entry.item)"
           >
             <slot
@@ -685,6 +696,7 @@ watch(
               :disabled="disabled || item.disabled"
               :title="item.disabledReason"
               @mouseenter="activeIndex = index"
+              @focus="activeIndex = index"
               @click="chooseDropdown(item)"
             >
               <span

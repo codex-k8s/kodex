@@ -7,6 +7,7 @@ import { checkContextResources } from "./fixtures/context-resources";
 import { checkIntegrationPackage } from "./fixtures/integration-package";
 import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkRunsCatalog } from "./fixtures/runs-catalog";
+import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -235,6 +236,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         failures.push(`Asset: ${url.pathname} ${String(response.status())}`);
       await route.fulfill({ response });
     });
+    let invalidateAgents: (() => void) | undefined;
     await page.routeWebSocket("**/*", (socket) => {
       socket.onMessage((message) => {
         const input = JSON.parse(String(message)) as {
@@ -242,6 +244,18 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           requestRef: string;
         };
         if (input.type === "SESSION_RESUME") {
+          invalidateAgents = () =>
+            socket.send(
+              JSON.stringify({
+                type: "PLATFORM_INVALIDATED",
+                requestRef: input.requestRef,
+                streamKind: "PLATFORM",
+                streamRef: "PLATFORM",
+                cursor: 1,
+                eventName: "AGENT_CHANGED",
+                kind: "AGENT",
+              }),
+            );
           socket.send(
             JSON.stringify({
               type: "SESSION_READY",
@@ -253,11 +267,20 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           );
           socket.send(
             JSON.stringify({
+              type: "PLATFORM_READY",
+              requestRef: input.requestRef,
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: 0,
+            }),
+          );
+          socket.send(
+            JSON.stringify({
               type: "STREAM_HEARTBEAT",
               streamKind: "PLATFORM",
               streamRef: "PLATFORM",
               cursor: 0,
-              serverTime: "2026-09-04T11:00:00Z",
+              serverTime: new Date().toISOString(),
             }),
           );
         }
@@ -283,6 +306,10 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
     });
     await page.goto("/");
     await expect(page.locator("main h1")).toBeVisible();
+    await expect(page.locator("header .realtime-status")).toHaveAttribute(
+      "data-presentation-state",
+      "live",
+    );
     await expect(
       page.getByText(projects[0]?.name ?? "", { exact: true }).first(),
     ).toBeVisible();
@@ -958,7 +985,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         page.getByRole("textbox", { name: "Содержимое", exact: true }),
       ).toHaveText("");
     }
-    if (width === 1440 || width === 390) {
+    if (width !== 900) {
       const providers = await installProviderFixture(page);
       await page.goto("/administration/providers");
       await page
@@ -1069,7 +1096,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         fullPage: true,
       });
     }
-    if (width === 1440 || width === 390) {
+    if (width !== 900) {
       const project = projects[0];
       if (!project) throw new Error("Missing synthetic project");
       await checkSecretEditor(page, project.ref);
@@ -1135,6 +1162,27 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         fullPage: false,
       });
     });
+    await checkOrganizationCatalog(
+      page,
+      projects,
+      () => {
+        if (!invalidateAgents)
+          throw new Error("Missing synthetic platform stream");
+        invalidateAgents();
+      },
+      async () => {
+        await page.screenshot({
+          path: testInfo.outputPath(
+            `organization-catalog-${String(width)}.png`,
+          ),
+          fullPage: false,
+        });
+      },
+    );
+    await expect(page.locator("header .realtime-status")).toHaveAttribute(
+      "data-presentation-state",
+      "live",
+    );
     expect(failures).toEqual([]);
   });
 }

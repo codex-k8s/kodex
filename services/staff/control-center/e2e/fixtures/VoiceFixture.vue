@@ -4,7 +4,11 @@ import VoiceTextarea from "../../src/shared/ui/VoiceTextarea.vue";
 import CodeEditor from "../../src/shared/ui/CodeEditor.vue";
 import CodeDiff from "../../src/shared/ui/CodeDiff.vue";
 import AsyncEntityPicker from "../../src/shared/ui/AsyncEntityPicker.vue";
-import type { AsyncEntityOptionPage } from "../../src/shared/ui/async-entity-picker";
+import type {
+  AsyncEntityOptionPage,
+  AsyncEntityLoader,
+  AsyncEntityPickerItem,
+} from "../../src/shared/ui/async-entity-picker";
 import { voiceContextKey } from "../../src/shared/ui/voice-input";
 const available = ref(true);
 const disabled = ref(false);
@@ -15,6 +19,24 @@ const code = ref("Начало конец");
 const sensitive = ref("Тест");
 const calls = ref(0);
 const selected = ref<string | null | readonly string[]>([]);
+const inlineVisible = ref(false);
+const inlineDisabled = ref(true);
+const inlineSelected = ref<string | null | readonly string[]>([]);
+const inlineCalls = ref(0);
+const loadInline: AsyncEntityLoader<AsyncEntityPickerItem> = async (
+  request,
+) => {
+  inlineCalls.value++;
+  const page = await loadPicker(request.query);
+  return {
+    items: page.items.map((item) => ({
+      id: item.ref,
+      label: item.title,
+      description: item.description ?? item.disabledReason,
+      disabled: item.disabled,
+    })),
+  };
+};
 function loadPicker(query: string): Promise<AsyncEntityOptionPage> {
   return Promise.resolve({
     items: [
@@ -71,6 +93,34 @@ provide(voiceContextKey, {
         search-placeholder="Поиск окружений"
       />
       <output data-testid="selection">{{ JSON.stringify(selected) }}</output>
+    </section>
+    <button type="button" @click="inlineVisible = !inlineVisible">
+      {{ inlineVisible ? "Скрыть список" : "Показать список" }}
+    </button>
+    <section v-if="inlineVisible" data-testid="inline-picker">
+      <label
+        ><input v-model="inlineDisabled" type="checkbox" />Заблокировать
+        список</label
+      >
+      <AsyncEntityPicker
+        v-model="inlineSelected"
+        :load-items="loadInline"
+        :disabled="inlineDisabled"
+        multiple
+        :labels="{
+          label: 'Выбор окружений',
+          searchPlaceholder: 'Поиск окружений',
+          loading: 'Загрузка',
+          loadingMore: 'Загрузка',
+          empty: 'Пусто',
+          error: 'Ошибка',
+          retry: 'Повторить',
+        }"
+      />
+      <output data-testid="inline-selection">{{
+        JSON.stringify(inlineSelected)
+      }}</output>
+      <output data-testid="inline-calls">{{ inlineCalls }}</output>
     </section>
     <section data-testid="textarea">
       <VoiceTextarea v-model="text" aria-label="Обычный текст" rows="6" />

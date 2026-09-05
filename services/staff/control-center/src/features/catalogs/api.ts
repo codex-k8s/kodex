@@ -14,6 +14,18 @@ export type CatalogKind =
   | "automations"
   | "environments"
   | "secrets";
+export function catalogInvalidated(
+  kind: CatalogKind,
+  resource: string,
+): boolean {
+  if (["PROJECT", "MEMBERSHIP", "PLATFORM_MEMBERSHIP"].includes(resource))
+    return true;
+  return (
+    (kind === "agents" && ["AGENT", "INSTRUCTIONS"].includes(resource)) ||
+    (kind === "workflows" && resource === "WORKFLOW") ||
+    (kind === "automations" && resource === "SCHEDULE")
+  );
+}
 export interface CatalogEntry {
   ref: string;
   projectRef: string;

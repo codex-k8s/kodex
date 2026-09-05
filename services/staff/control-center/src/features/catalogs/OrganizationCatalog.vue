@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Expand, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -9,6 +10,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
 import {
   loadCatalog,
+  catalogInvalidated,
   loadCatalogProject,
   type CatalogEntry,
   type CatalogKind,
@@ -18,6 +20,7 @@ const props = defineProps<{
   projectRef?: string;
   expanded?: boolean;
 }>();
+const platform = usePlatformStore();
 const query = ref("");
 const items = ref<CatalogEntry[]>([]);
 const projects = ref<Record<string, Project>>({});
@@ -27,6 +30,7 @@ const problem = ref<AppProblem>();
 const expandedProject = ref<string>();
 let controller: AbortController | undefined;
 let generation = 0;
+let disposed = false;
 const cursors = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 const groups = computed(() => {
@@ -93,15 +97,23 @@ async function load(more = false): Promise<void> {
     if (current === generation) loading.value = false;
   }
 }
+function invalidate(): void {
+  controller?.abort();
+  generation += 1;
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  items.value = [];
+  projects.value = {};
+  pageToken.value = undefined;
+  cursors.clear();
+  problem.value = undefined;
+  loading.value = false;
+  expandedProject.value = undefined;
+}
 watch(
   () => [props.kind, props.projectRef, query.value],
   () => {
-    controller?.abort();
-    generation += 1;
-    if (timer) clearTimeout(timer);
-    items.value = [];
-    pageToken.value = undefined;
-    problem.value = undefined;
+    invalidate();
     loading.value = true;
     timer = setTimeout(() => {
       void load();
@@ -109,6 +121,28 @@ watch(
   },
   { immediate: true, flush: "sync" },
 );
+const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
+  if (name === "clearOwnerState") {
+    invalidate();
+    return;
+  }
+  if (
+    name !== "reloadPlatformState" &&
+    !(name === "reloadPlatformKind" && catalogInvalidated(props.kind, args[0]))
+  )
+    return;
+  invalidate();
+  loading.value = true;
+  const expected = generation;
+  after(() => {
+    if (!disposed && expected === generation) void load();
+  });
+  onError((error) => {
+    if (disposed || expected !== generation) return;
+    loading.value = false;
+    problem.value = asProblem(error);
+  });
+});
 function scroll(event: Event): void {
   if (
     event.currentTarget instanceof HTMLElement &&
@@ -118,6 +152,8 @@ function scroll(event: Event): void {
     void load(true);
 }
 onBeforeUnmount(() => {
+  disposed = true;
+  unsubscribe();
   controller?.abort();
   if (timer) clearTimeout(timer);
   generation += 1;
@@ -166,9 +202,11 @@ onBeforeUnmount(() => {
           :to="entry.path"
           class="organization-catalog__entry"
           ><div>
-            <h3>{{ entry.title }}</h3>
-            <p>{{ entry.description }}</p>
-            <small>{{ entry.meta.filter(Boolean).join(" · ") }}</small>
+            <h3 :title="entry.title">{{ entry.title }}</h3>
+            <p :title="entry.description">{{ entry.description }}</p>
+            <small :title="entry.meta.filter(Boolean).join(' · ')">{{
+              entry.meta.filter(Boolean).join(" · ")
+            }}</small>
           </div>
           <StatusBadge :state="entry.state" /><span
             >v{{ entry.version }}</span
@@ -241,6 +279,7 @@ onBeforeUnmount(() => {
 }
 .organization-catalog__entry h3 {
   font-size: 15px;
+  line-height: 20px;
   margin: 0;
 }
 .organization-catalog__entry h3,
@@ -255,6 +294,15 @@ onBeforeUnmount(() => {
 .organization-catalog__entry small {
   margin: 4px 0 0;
   color: var(--muted);
+  -webkit-line-clamp: 1;
+}
+.organization-catalog__entry p {
+  font-size: 14px;
+  line-height: 18px;
+}
+.organization-catalog__entry small {
+  font-size: 12px;
+  line-height: 16px;
 }
 .organization-catalog__entry h3,
 .organization-catalog__entry p,

@@ -35,7 +35,7 @@ function created(ref: string, projectRef: string): void {
 </script>
 <template>
   <PageFrame
-    :title="kind ? $t(`contextResources.${kind}`) : $t('errors.notFound')"
+    :title="kind ? $t(`contextResources.${kind}`) : $t('errors.NOT_FOUND')"
     ><ContextEditor
       v-if="kind"
       :key="route.fullPath"
