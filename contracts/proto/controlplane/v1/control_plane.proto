@@ -3684,6 +3684,8 @@ message RuntimeSecretDraftWork {
   int64 claim_generation = 11;
   google.protobuf.Timestamp lease_deadline = 12;
   google.protobuf.Timestamp expires_at = 13;
+  // Staging принадлежит namespace broker; namespace=5 — runtime publication.
+  string staged_namespace = 14;
 }
 
 message CheckRuntimeSecretDraftWorkReadinessRequest {}
