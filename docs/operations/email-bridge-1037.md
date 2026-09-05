@@ -422,3 +422,14 @@ atomic validation, удаление fence и отказ при поврежде�
 авторитетный путь разрешения такого случая относится к #1046. Эти тесты
 покрывают потерю ответа уже сохранённого наблюдения и не доказывают этот
 отдельный сценарий. Полный issuer → CP SQL → EMAIL и staging: NOT RUN.
+
+## Идентичность POP readback
+
+Ответы POP fetch, download и attachment list сохраняют точный UID из
+проверенного UIDL snapshot и разрешённую нормализованную папку команды.
+UIDVALIDITY остаётся нулевым: POP не предоставляет IMAP поколения папок.
+Consumer может требовать exact UID без исключения для пустого поля.
+`TestPOPReadIdentityHTTPS` проверяет generated HTTP client → mTLS handler →
+mail service → настоящий локальный POP fixture для implicit TLS и STARTTLS,
+двух UID, явной/default INBOX и всех трёх операций. Listing вложений не
+возвращает их содержимое. Это локальная проверка, не live mail или staging.
