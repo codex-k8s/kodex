@@ -29,7 +29,7 @@ func TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume(t *testing
 }
 
 func TestMissingContextCannotStartProviderProcess(t *testing.T) {
-	input := model.Input{Provider: "openai", Model: "gpt-6-astra"}
+	input := model.Input{Provider: "openai", Model: "gpt-6-astra", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "medium"}
 	if _, err := executeLocal(t.Context(), input, []byte("task"), ""); err != runtimecontract.ErrRuntimeContext {
 		t.Fatalf("missing context reached credential/process: %v", err)
 	}
