@@ -306,8 +306,8 @@ func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx p
 	if payload.GateRef != "" || payload.Decision != "" {
 		capabilityKey = "mattermost.gate_decisions"
 	}
-	if !interactionSourceCapability(definition, capabilityKey) {
-		return commandOutcome{}, errs.ErrForbidden
+	if err := validateInteractionSourceInput(definition, capabilityKey, payload.GateRef, payload.Decision); err != nil {
+		return commandOutcome{}, err
 	}
 	human, err := repository.resolveInteractionIdentity(ctx, tx, scope, payload)
 	if err != nil {
