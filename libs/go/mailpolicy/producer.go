@@ -28,6 +28,9 @@ func Produce(ctx context.Context, configuration api.Configuration, gatewayPolicy
 		ConfigurationDigest: api.Digest(configuration), GatewayPolicyDigest: gatewayPolicyDigest, Destinations: []MailDestination{}}
 	seen := map[string]MailDestination{}
 	for _, mailbox := range configuration.Mailboxes {
+		if !mailbox.Enabled {
+			continue
+		}
 		for _, endpoint := range []struct {
 			protocol string
 			value    *api.Endpoint
