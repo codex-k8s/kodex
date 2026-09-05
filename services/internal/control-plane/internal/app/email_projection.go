@@ -7,23 +7,29 @@ import (
 	"time"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/emailprojection"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 )
 
 type emailProjectionStore interface {
 	EmailConfiguration(context.Context) (api.Configuration, error)
+	EmailCredentialDigests(context.Context, api.Configuration) (map[string]string, error)
 }
 
 type emailProjectionPublisher interface {
-	Publish(context.Context, api.Configuration) (emailprojection.Receipt, error)
-	Check(context.Context, api.Configuration) (emailprojection.Receipt, error)
+	Publish(context.Context, api.Configuration, map[string]string) (emailprojection.Receipt, error)
+	Check(context.Context, api.Configuration, map[string]string) (emailprojection.Receipt, error)
 }
 
 type emailProjection struct {
 	store             emailProjectionStore
 	publisher         emailProjectionPublisher
 	interval, timeout time.Duration
+}
+
+func constructEmailCredentialMaterializer(config Config) (*credentialmaterializer.Kubernetes, error) {
+	return credentialmaterializer.InCluster(config.IntegrationCredentialNamespace, emailprojection.SecretName, config.KubernetesAPITimeout)
 }
 
 func initializeEmailProjection(ctx context.Context, repository *platformrepository.Repository, config Config) (*emailProjection, error) {
@@ -53,7 +59,11 @@ func (projection *emailProjection) reconcile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := projection.publisher.Publish(ctx, configuration); err != nil {
+	digests, err := projection.store.EmailCredentialDigests(ctx, configuration)
+	if err != nil {
+		return err
+	}
+	if _, err := projection.publisher.Publish(ctx, configuration, digests); err != nil {
 		return err
 	}
 	return projection.Check(ctx)
@@ -67,7 +77,11 @@ func (projection *emailProjection) Check(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = projection.publisher.Check(ctx, configuration)
+	digests, err := projection.store.EmailCredentialDigests(ctx, configuration)
+	if err != nil {
+		return err
+	}
+	_, err = projection.publisher.Check(ctx, configuration, digests)
 	return err
 }
 

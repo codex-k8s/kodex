@@ -19,6 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName        = "/controlplane.v1.PlatformQueryService/ListEmailMailboxConfigurations"
+	PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetEmailMailboxConfiguration"
+	PlatformQueryService_ListEmailMailboxCredentials_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListEmailMailboxCredentials"
+	PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName      = "/controlplane.v1.PlatformQueryService/GetEmailMailboxCredentialReceipt"
+	PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName      = "/controlplane.v1.PlatformQueryService/PreviewEmailMailboxConfiguration"
+	PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraftImpact"
+	PlatformQueryService_GetRuntimeSecretDraft_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft"
+	PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeRevisionDiff"
 	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
 	PlatformQueryService_ListSkillBundles_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
 	PlatformQueryService_GetSkillBundle_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetSkillBundle"
@@ -96,6 +104,14 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
+	ListEmailMailboxConfigurations(ctx context.Context, in *ListEmailMailboxConfigurationsRequest, opts ...grpc.CallOption) (*ListEmailMailboxConfigurationsResponse, error)
+	GetEmailMailboxConfiguration(ctx context.Context, in *GetEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*GetEmailMailboxConfigurationResponse, error)
+	ListEmailMailboxCredentials(ctx context.Context, in *ListEmailMailboxCredentialsRequest, opts ...grpc.CallOption) (*ListEmailMailboxCredentialsResponse, error)
+	GetEmailMailboxCredentialReceipt(ctx context.Context, in *GetEmailMailboxCredentialReceiptRequest, opts ...grpc.CallOption) (*GetEmailMailboxCredentialReceiptResponse, error)
+	PreviewEmailMailboxConfiguration(ctx context.Context, in *PreviewEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*PreviewEmailMailboxConfigurationResponse, error)
+	GetRuntimeSecretDraftImpact(ctx context.Context, in *GetRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftImpactResponse, error)
+	GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error)
+	GetRuntimeRevisionDiff(ctx context.Context, in *GetRuntimeRevisionDiffRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error)
 	GetSkillBundle(ctx context.Context, in *GetSkillBundleRequest, opts ...grpc.CallOption) (*GetSkillBundleResponse, error)
@@ -177,6 +193,86 @@ type platformQueryServiceClient struct {
 
 func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
 	return &platformQueryServiceClient{cc}
+}
+
+func (c *platformQueryServiceClient) ListEmailMailboxConfigurations(ctx context.Context, in *ListEmailMailboxConfigurationsRequest, opts ...grpc.CallOption) (*ListEmailMailboxConfigurationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEmailMailboxConfigurationsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetEmailMailboxConfiguration(ctx context.Context, in *GetEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*GetEmailMailboxConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmailMailboxConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListEmailMailboxCredentials(ctx context.Context, in *ListEmailMailboxCredentialsRequest, opts ...grpc.CallOption) (*ListEmailMailboxCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEmailMailboxCredentialsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListEmailMailboxCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetEmailMailboxCredentialReceipt(ctx context.Context, in *GetEmailMailboxCredentialReceiptRequest, opts ...grpc.CallOption) (*GetEmailMailboxCredentialReceiptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmailMailboxCredentialReceiptResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) PreviewEmailMailboxConfiguration(ctx context.Context, in *PreviewEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*PreviewEmailMailboxConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreviewEmailMailboxConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecretDraftImpact(ctx context.Context, in *GetRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretDraftImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetRuntimeRevisionDiff(ctx context.Context, in *GetRuntimeRevisionDiffRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionDiffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeRevisionDiffResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformQueryServiceClient) GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error) {
@@ -893,6 +989,14 @@ func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Conte
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
+	ListEmailMailboxConfigurations(context.Context, *ListEmailMailboxConfigurationsRequest) (*ListEmailMailboxConfigurationsResponse, error)
+	GetEmailMailboxConfiguration(context.Context, *GetEmailMailboxConfigurationRequest) (*GetEmailMailboxConfigurationResponse, error)
+	ListEmailMailboxCredentials(context.Context, *ListEmailMailboxCredentialsRequest) (*ListEmailMailboxCredentialsResponse, error)
+	GetEmailMailboxCredentialReceipt(context.Context, *GetEmailMailboxCredentialReceiptRequest) (*GetEmailMailboxCredentialReceiptResponse, error)
+	PreviewEmailMailboxConfiguration(context.Context, *PreviewEmailMailboxConfigurationRequest) (*PreviewEmailMailboxConfigurationResponse, error)
+	GetRuntimeSecretDraftImpact(context.Context, *GetRuntimeSecretDraftImpactRequest) (*GetRuntimeSecretDraftImpactResponse, error)
+	GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error)
+	GetRuntimeRevisionDiff(context.Context, *GetRuntimeRevisionDiffRequest) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error)
 	GetSkillBundle(context.Context, *GetSkillBundleRequest) (*GetSkillBundleResponse, error)
@@ -976,6 +1080,30 @@ type PlatformQueryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformQueryServiceServer struct{}
 
+func (UnimplementedPlatformQueryServiceServer) ListEmailMailboxConfigurations(context.Context, *ListEmailMailboxConfigurationsRequest) (*ListEmailMailboxConfigurationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEmailMailboxConfigurations not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetEmailMailboxConfiguration(context.Context, *GetEmailMailboxConfigurationRequest) (*GetEmailMailboxConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmailMailboxConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListEmailMailboxCredentials(context.Context, *ListEmailMailboxCredentialsRequest) (*ListEmailMailboxCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEmailMailboxCredentials not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetEmailMailboxCredentialReceipt(context.Context, *GetEmailMailboxCredentialReceiptRequest) (*GetEmailMailboxCredentialReceiptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmailMailboxCredentialReceipt not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) PreviewEmailMailboxConfiguration(context.Context, *PreviewEmailMailboxConfigurationRequest) (*PreviewEmailMailboxConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreviewEmailMailboxConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretDraftImpact(context.Context, *GetRuntimeSecretDraftImpactRequest) (*GetRuntimeSecretDraftImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretDraftImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeRevisionDiff(context.Context, *GetRuntimeRevisionDiffRequest) (*GetRuntimeRevisionDiffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeRevisionDiff not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEmailEffectReceipt not implemented")
 }
@@ -1208,6 +1336,150 @@ func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQue
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
+}
+
+func _PlatformQueryService_ListEmailMailboxConfigurations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEmailMailboxConfigurationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListEmailMailboxConfigurations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListEmailMailboxConfigurations(ctx, req.(*ListEmailMailboxConfigurationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetEmailMailboxConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmailMailboxConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetEmailMailboxConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetEmailMailboxConfiguration(ctx, req.(*GetEmailMailboxConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListEmailMailboxCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEmailMailboxCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListEmailMailboxCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListEmailMailboxCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListEmailMailboxCredentials(ctx, req.(*ListEmailMailboxCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetEmailMailboxCredentialReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmailMailboxCredentialReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetEmailMailboxCredentialReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetEmailMailboxCredentialReceipt(ctx, req.(*GetEmailMailboxCredentialReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_PreviewEmailMailboxConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewEmailMailboxConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).PreviewEmailMailboxConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).PreviewEmailMailboxConfiguration(ctx, req.(*PreviewEmailMailboxConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeSecretDraftImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretDraftImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraftImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraftImpact(ctx, req.(*GetRuntimeSecretDraftImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraft(ctx, req.(*GetRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetRuntimeRevisionDiff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeRevisionDiffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeRevisionDiff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeRevisionDiff(ctx, req.(*GetRuntimeRevisionDiffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformQueryService_GetEmailEffectReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2496,6 +2768,38 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ListEmailMailboxConfigurations",
+			Handler:    _PlatformQueryService_ListEmailMailboxConfigurations_Handler,
+		},
+		{
+			MethodName: "GetEmailMailboxConfiguration",
+			Handler:    _PlatformQueryService_GetEmailMailboxConfiguration_Handler,
+		},
+		{
+			MethodName: "ListEmailMailboxCredentials",
+			Handler:    _PlatformQueryService_ListEmailMailboxCredentials_Handler,
+		},
+		{
+			MethodName: "GetEmailMailboxCredentialReceipt",
+			Handler:    _PlatformQueryService_GetEmailMailboxCredentialReceipt_Handler,
+		},
+		{
+			MethodName: "PreviewEmailMailboxConfiguration",
+			Handler:    _PlatformQueryService_PreviewEmailMailboxConfiguration_Handler,
+		},
+		{
+			MethodName: "GetRuntimeSecretDraftImpact",
+			Handler:    _PlatformQueryService_GetRuntimeSecretDraftImpact_Handler,
+		},
+		{
+			MethodName: "GetRuntimeSecretDraft",
+			Handler:    _PlatformQueryService_GetRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "GetRuntimeRevisionDiff",
+			Handler:    _PlatformQueryService_GetRuntimeRevisionDiff_Handler,
+		},
+		{
 			MethodName: "GetEmailEffectReceipt",
 			Handler:    _PlatformQueryService_GetEmailEffectReceipt_Handler,
 		},
@@ -2785,6 +3089,18 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PlatformCommandService_CreateEmailMailboxDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateEmailMailboxDraft"
+	PlatformCommandService_SaveEmailMailboxDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/SaveEmailMailboxDraft"
+	PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/ValidateEmailMailboxDraft"
+	PlatformCommandService_PublishEmailMailboxDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/PublishEmailMailboxDraft"
+	PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/DiscardEmailMailboxDraft"
+	PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName            = "/controlplane.v1.PlatformCommandService/BindEmailMailboxConfiguration"
+	PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName          = "/controlplane.v1.PlatformCommandService/UnbindEmailMailboxConfiguration"
+	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
+	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
+	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
+	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
+	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
 	PlatformCommandService_SavePromptTemplateDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/SavePromptTemplateDraft"
 	PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/DiscardPromptTemplateDraft"
 	PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRoleImageRevisionDraft"
@@ -2794,6 +3110,7 @@ const (
 	PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/SaveSystemSTTConfigurationDraft"
 	PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/DiscardSystemSTTConfigurationDraft"
 	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
+	PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName          = "/controlplane.v1.PlatformCommandService/ConfigureEmailMailboxCredential"
 	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
 	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
 	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
@@ -2926,6 +3243,18 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	CreateEmailMailboxDraft(ctx context.Context, in *CreateEmailMailboxDraftRequest, opts ...grpc.CallOption) (*CreateEmailMailboxDraftResponse, error)
+	SaveEmailMailboxDraft(ctx context.Context, in *SaveEmailMailboxDraftRequest, opts ...grpc.CallOption) (*SaveEmailMailboxDraftResponse, error)
+	ValidateEmailMailboxDraft(ctx context.Context, in *ValidateEmailMailboxDraftRequest, opts ...grpc.CallOption) (*ValidateEmailMailboxDraftResponse, error)
+	PublishEmailMailboxDraft(ctx context.Context, in *PublishEmailMailboxDraftRequest, opts ...grpc.CallOption) (*PublishEmailMailboxDraftResponse, error)
+	DiscardEmailMailboxDraft(ctx context.Context, in *DiscardEmailMailboxDraftRequest, opts ...grpc.CallOption) (*DiscardEmailMailboxDraftResponse, error)
+	BindEmailMailboxConfiguration(ctx context.Context, in *BindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*BindEmailMailboxConfigurationResponse, error)
+	UnbindEmailMailboxConfiguration(ctx context.Context, in *UnbindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*UnbindEmailMailboxConfigurationResponse, error)
+	PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error)
+	PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error)
+	PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error)
+	PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error)
 	SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error)
 	DiscardPromptTemplateDraft(ctx context.Context, in *DiscardPromptTemplateDraftRequest, opts ...grpc.CallOption) (*DiscardPromptTemplateDraftResponse, error)
 	SaveRoleImageRevisionDraft(ctx context.Context, in *SaveRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*SaveRoleImageRevisionDraftResponse, error)
@@ -2935,6 +3264,7 @@ type PlatformCommandServiceClient interface {
 	SaveSystemSTTConfigurationDraft(ctx context.Context, in *SaveSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*SaveSystemSTTConfigurationDraftResponse, error)
 	DiscardSystemSTTConfigurationDraft(ctx context.Context, in *DiscardSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error)
+	ConfigureEmailMailboxCredential(ctx context.Context, in *ConfigureEmailMailboxCredentialRequest, opts ...grpc.CallOption) (*ConfigureEmailMailboxCredentialResponse, error)
 	CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(ctx context.Context, in *ValidateSkillBundleDraftRequest, opts ...grpc.CallOption) (*ValidateSkillBundleDraftResponse, error)
@@ -3076,6 +3406,126 @@ func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformComman
 	return &platformCommandServiceClient{cc}
 }
 
+func (c *platformCommandServiceClient) CreateEmailMailboxDraft(ctx context.Context, in *CreateEmailMailboxDraftRequest, opts ...grpc.CallOption) (*CreateEmailMailboxDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateEmailMailboxDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CreateEmailMailboxDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveEmailMailboxDraft(ctx context.Context, in *SaveEmailMailboxDraftRequest, opts ...grpc.CallOption) (*SaveEmailMailboxDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveEmailMailboxDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveEmailMailboxDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ValidateEmailMailboxDraft(ctx context.Context, in *ValidateEmailMailboxDraftRequest, opts ...grpc.CallOption) (*ValidateEmailMailboxDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateEmailMailboxDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PublishEmailMailboxDraft(ctx context.Context, in *PublishEmailMailboxDraftRequest, opts ...grpc.CallOption) (*PublishEmailMailboxDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishEmailMailboxDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PublishEmailMailboxDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardEmailMailboxDraft(ctx context.Context, in *DiscardEmailMailboxDraftRequest, opts ...grpc.CallOption) (*DiscardEmailMailboxDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardEmailMailboxDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) BindEmailMailboxConfiguration(ctx context.Context, in *BindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*BindEmailMailboxConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindEmailMailboxConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) UnbindEmailMailboxConfiguration(ctx context.Context, in *UnbindEmailMailboxConfigurationRequest, opts ...grpc.CallOption) (*UnbindEmailMailboxConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnbindEmailMailboxConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRuntimeSecretDraftImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareSaveRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareValidateRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreparePublishRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareDiscardRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SavePromptTemplateDraftResponse)
@@ -3160,6 +3610,16 @@ func (c *platformCommandServiceClient) ReconcileEmailEffect(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReconcileEmailEffectResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_ReconcileEmailEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ConfigureEmailMailboxCredential(ctx context.Context, in *ConfigureEmailMailboxCredentialRequest, opts ...grpc.CallOption) (*ConfigureEmailMailboxCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureEmailMailboxCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4448,6 +4908,18 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	CreateEmailMailboxDraft(context.Context, *CreateEmailMailboxDraftRequest) (*CreateEmailMailboxDraftResponse, error)
+	SaveEmailMailboxDraft(context.Context, *SaveEmailMailboxDraftRequest) (*SaveEmailMailboxDraftResponse, error)
+	ValidateEmailMailboxDraft(context.Context, *ValidateEmailMailboxDraftRequest) (*ValidateEmailMailboxDraftResponse, error)
+	PublishEmailMailboxDraft(context.Context, *PublishEmailMailboxDraftRequest) (*PublishEmailMailboxDraftResponse, error)
+	DiscardEmailMailboxDraft(context.Context, *DiscardEmailMailboxDraftRequest) (*DiscardEmailMailboxDraftResponse, error)
+	BindEmailMailboxConfiguration(context.Context, *BindEmailMailboxConfigurationRequest) (*BindEmailMailboxConfigurationResponse, error)
+	UnbindEmailMailboxConfiguration(context.Context, *UnbindEmailMailboxConfigurationRequest) (*UnbindEmailMailboxConfigurationResponse, error)
+	PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error)
+	PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error)
+	PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error)
+	PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error)
 	SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error)
 	DiscardPromptTemplateDraft(context.Context, *DiscardPromptTemplateDraftRequest) (*DiscardPromptTemplateDraftResponse, error)
 	SaveRoleImageRevisionDraft(context.Context, *SaveRoleImageRevisionDraftRequest) (*SaveRoleImageRevisionDraftResponse, error)
@@ -4457,6 +4929,7 @@ type PlatformCommandServiceServer interface {
 	SaveSystemSTTConfigurationDraft(context.Context, *SaveSystemSTTConfigurationDraftRequest) (*SaveSystemSTTConfigurationDraftResponse, error)
 	DiscardSystemSTTConfigurationDraft(context.Context, *DiscardSystemSTTConfigurationDraftRequest) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error)
+	ConfigureEmailMailboxCredential(context.Context, *ConfigureEmailMailboxCredentialRequest) (*ConfigureEmailMailboxCredentialResponse, error)
 	CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(context.Context, *ValidateSkillBundleDraftRequest) (*ValidateSkillBundleDraftResponse, error)
@@ -4598,6 +5071,42 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) CreateEmailMailboxDraft(context.Context, *CreateEmailMailboxDraftRequest) (*CreateEmailMailboxDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateEmailMailboxDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveEmailMailboxDraft(context.Context, *SaveEmailMailboxDraftRequest) (*SaveEmailMailboxDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveEmailMailboxDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ValidateEmailMailboxDraft(context.Context, *ValidateEmailMailboxDraftRequest) (*ValidateEmailMailboxDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateEmailMailboxDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PublishEmailMailboxDraft(context.Context, *PublishEmailMailboxDraftRequest) (*PublishEmailMailboxDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishEmailMailboxDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardEmailMailboxDraft(context.Context, *DiscardEmailMailboxDraftRequest) (*DiscardEmailMailboxDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardEmailMailboxDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) BindEmailMailboxConfiguration(context.Context, *BindEmailMailboxConfigurationRequest) (*BindEmailMailboxConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindEmailMailboxConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) UnbindEmailMailboxConfiguration(context.Context, *UnbindEmailMailboxConfigurationRequest) (*UnbindEmailMailboxConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnbindEmailMailboxConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRuntimeSecretDraftImpact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareSaveRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareValidateRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreparePublishRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareDiscardRuntimeSecretDraft not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SavePromptTemplateDraft not implemented")
 }
@@ -4624,6 +5133,9 @@ func (UnimplementedPlatformCommandServiceServer) DiscardSystemSTTConfigurationDr
 }
 func (UnimplementedPlatformCommandServiceServer) ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcileEmailEffect not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureEmailMailboxCredential(context.Context, *ConfigureEmailMailboxCredentialRequest) (*ConfigureEmailMailboxCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureEmailMailboxCredential not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSkillBundleDraft not implemented")
@@ -5025,6 +5537,222 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
 }
 
+func _PlatformCommandService_CreateEmailMailboxDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateEmailMailboxDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CreateEmailMailboxDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CreateEmailMailboxDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CreateEmailMailboxDraft(ctx, req.(*CreateEmailMailboxDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveEmailMailboxDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveEmailMailboxDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveEmailMailboxDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveEmailMailboxDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveEmailMailboxDraft(ctx, req.(*SaveEmailMailboxDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ValidateEmailMailboxDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateEmailMailboxDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ValidateEmailMailboxDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ValidateEmailMailboxDraft(ctx, req.(*ValidateEmailMailboxDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PublishEmailMailboxDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishEmailMailboxDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PublishEmailMailboxDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PublishEmailMailboxDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PublishEmailMailboxDraft(ctx, req.(*PublishEmailMailboxDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardEmailMailboxDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardEmailMailboxDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardEmailMailboxDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardEmailMailboxDraft(ctx, req.(*DiscardEmailMailboxDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_BindEmailMailboxConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindEmailMailboxConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).BindEmailMailboxConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).BindEmailMailboxConfiguration(ctx, req.(*BindEmailMailboxConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_UnbindEmailMailboxConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnbindEmailMailboxConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).UnbindEmailMailboxConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).UnbindEmailMailboxConfiguration(ctx, req.(*UnbindEmailMailboxConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareRuntimeSecretDraftImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRuntimeSecretDraftImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRuntimeSecretDraftImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRuntimeSecretDraftImpact(ctx, req.(*PrepareRuntimeSecretDraftImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareSaveRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, req.(*PrepareSaveRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareValidateRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareValidateRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareValidateRuntimeSecretDraft(ctx, req.(*PrepareValidateRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PreparePublishRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreparePublishRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PreparePublishRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PreparePublishRuntimeSecretDraft(ctx, req.(*PreparePublishRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareDiscardRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareDiscardRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareDiscardRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareDiscardRuntimeSecretDraft(ctx, req.(*PrepareDiscardRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_SavePromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SavePromptTemplateDraftRequest)
 	if err := dec(in); err != nil {
@@ -5183,6 +5911,24 @@ func _PlatformCommandService_ReconcileEmailEffect_Handler(srv interface{}, ctx c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, req.(*ReconcileEmailEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ConfigureEmailMailboxCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureEmailMailboxCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureEmailMailboxCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureEmailMailboxCredential(ctx, req.(*ConfigureEmailMailboxCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7423,6 +8169,54 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "CreateEmailMailboxDraft",
+			Handler:    _PlatformCommandService_CreateEmailMailboxDraft_Handler,
+		},
+		{
+			MethodName: "SaveEmailMailboxDraft",
+			Handler:    _PlatformCommandService_SaveEmailMailboxDraft_Handler,
+		},
+		{
+			MethodName: "ValidateEmailMailboxDraft",
+			Handler:    _PlatformCommandService_ValidateEmailMailboxDraft_Handler,
+		},
+		{
+			MethodName: "PublishEmailMailboxDraft",
+			Handler:    _PlatformCommandService_PublishEmailMailboxDraft_Handler,
+		},
+		{
+			MethodName: "DiscardEmailMailboxDraft",
+			Handler:    _PlatformCommandService_DiscardEmailMailboxDraft_Handler,
+		},
+		{
+			MethodName: "BindEmailMailboxConfiguration",
+			Handler:    _PlatformCommandService_BindEmailMailboxConfiguration_Handler,
+		},
+		{
+			MethodName: "UnbindEmailMailboxConfiguration",
+			Handler:    _PlatformCommandService_UnbindEmailMailboxConfiguration_Handler,
+		},
+		{
+			MethodName: "PrepareRuntimeSecretDraftImpact",
+			Handler:    _PlatformCommandService_PrepareRuntimeSecretDraftImpact_Handler,
+		},
+		{
+			MethodName: "PrepareSaveRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PrepareValidateRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PreparePublishRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PreparePublishRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PrepareDiscardRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareDiscardRuntimeSecretDraft_Handler,
+		},
+		{
 			MethodName: "SavePromptTemplateDraft",
 			Handler:    _PlatformCommandService_SavePromptTemplateDraft_Handler,
 		},
@@ -7457,6 +8251,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReconcileEmailEffect",
 			Handler:    _PlatformCommandService_ReconcileEmailEffect_Handler,
+		},
+		{
+			MethodName: "ConfigureEmailMailboxCredential",
+			Handler:    _PlatformCommandService_ConfigureEmailMailboxCredential_Handler,
 		},
 		{
 			MethodName: "CreateSkillBundleDraft",
@@ -7973,6 +8771,345 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName     = "/controlplane.v1.RuntimeSecretDraftWorkService/CheckRuntimeSecretDraftWorkReadiness"
+	RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName       = "/controlplane.v1.RuntimeSecretDraftWorkService/ConsumeRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName      = "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName          = "/controlplane.v1.RuntimeSecretDraftWorkService/FailRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName       = "/controlplane.v1.RuntimeSecretDraftWorkService/ListRuntimeSecretDraftRecoveryWork"
+	RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName = "/controlplane.v1.RuntimeSecretDraftWorkService/RecoverRuntimeSecretDraftMaterialization"
+	RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName        = "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftCleanup"
+)
+
+// RuntimeSecretDraftWorkServiceClient is the client API for RuntimeSecretDraftWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+type RuntimeSecretDraftWorkServiceClient interface {
+	CheckRuntimeSecretDraftWorkReadiness(ctx context.Context, in *CheckRuntimeSecretDraftWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretDraftWorkReadinessResponse, error)
+	ConsumeRuntimeSecretDraftOperation(ctx context.Context, in *ConsumeRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretDraftOperationResponse, error)
+	CompleteRuntimeSecretDraftOperation(ctx context.Context, in *CompleteRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftOperationResponse, error)
+	FailRuntimeSecretDraftOperation(ctx context.Context, in *FailRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretDraftOperationResponse, error)
+	ListRuntimeSecretDraftRecoveryWork(ctx context.Context, in *ListRuntimeSecretDraftRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretDraftRecoveryWorkResponse, error)
+	RecoverRuntimeSecretDraftMaterialization(ctx context.Context, in *RecoverRuntimeSecretDraftMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretDraftMaterializationResponse, error)
+	CompleteRuntimeSecretDraftCleanup(ctx context.Context, in *CompleteRuntimeSecretDraftCleanupRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftCleanupResponse, error)
+}
+
+type runtimeSecretDraftWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRuntimeSecretDraftWorkServiceClient(cc grpc.ClientConnInterface) RuntimeSecretDraftWorkServiceClient {
+	return &runtimeSecretDraftWorkServiceClient{cc}
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CheckRuntimeSecretDraftWorkReadiness(ctx context.Context, in *CheckRuntimeSecretDraftWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretDraftWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRuntimeSecretDraftWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) ConsumeRuntimeSecretDraftOperation(ctx context.Context, in *ConsumeRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CompleteRuntimeSecretDraftOperation(ctx context.Context, in *CompleteRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) FailRuntimeSecretDraftOperation(ctx context.Context, in *FailRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, in *ListRuntimeSecretDraftRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeSecretDraftRecoveryWorkResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) RecoverRuntimeSecretDraftMaterialization(ctx context.Context, in *RecoverRuntimeSecretDraftMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretDraftMaterializationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecoverRuntimeSecretDraftMaterializationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CompleteRuntimeSecretDraftCleanup(ctx context.Context, in *CompleteRuntimeSecretDraftCleanupRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftCleanupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeSecretDraftCleanupResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RuntimeSecretDraftWorkServiceServer is the server API for RuntimeSecretDraftWorkService service.
+// All implementations must embed UnimplementedRuntimeSecretDraftWorkServiceServer
+// for forward compatibility.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+type RuntimeSecretDraftWorkServiceServer interface {
+	CheckRuntimeSecretDraftWorkReadiness(context.Context, *CheckRuntimeSecretDraftWorkReadinessRequest) (*CheckRuntimeSecretDraftWorkReadinessResponse, error)
+	ConsumeRuntimeSecretDraftOperation(context.Context, *ConsumeRuntimeSecretDraftOperationRequest) (*ConsumeRuntimeSecretDraftOperationResponse, error)
+	CompleteRuntimeSecretDraftOperation(context.Context, *CompleteRuntimeSecretDraftOperationRequest) (*CompleteRuntimeSecretDraftOperationResponse, error)
+	FailRuntimeSecretDraftOperation(context.Context, *FailRuntimeSecretDraftOperationRequest) (*FailRuntimeSecretDraftOperationResponse, error)
+	ListRuntimeSecretDraftRecoveryWork(context.Context, *ListRuntimeSecretDraftRecoveryWorkRequest) (*ListRuntimeSecretDraftRecoveryWorkResponse, error)
+	RecoverRuntimeSecretDraftMaterialization(context.Context, *RecoverRuntimeSecretDraftMaterializationRequest) (*RecoverRuntimeSecretDraftMaterializationResponse, error)
+	CompleteRuntimeSecretDraftCleanup(context.Context, *CompleteRuntimeSecretDraftCleanupRequest) (*CompleteRuntimeSecretDraftCleanupResponse, error)
+	mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer()
+}
+
+// UnimplementedRuntimeSecretDraftWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRuntimeSecretDraftWorkServiceServer struct{}
+
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CheckRuntimeSecretDraftWorkReadiness(context.Context, *CheckRuntimeSecretDraftWorkReadinessRequest) (*CheckRuntimeSecretDraftWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeSecretDraftWorkReadiness not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) ConsumeRuntimeSecretDraftOperation(context.Context, *ConsumeRuntimeSecretDraftOperationRequest) (*ConsumeRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CompleteRuntimeSecretDraftOperation(context.Context, *CompleteRuntimeSecretDraftOperationRequest) (*CompleteRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) FailRuntimeSecretDraftOperation(context.Context, *FailRuntimeSecretDraftOperationRequest) (*FailRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) ListRuntimeSecretDraftRecoveryWork(context.Context, *ListRuntimeSecretDraftRecoveryWorkRequest) (*ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecretDraftRecoveryWork not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) RecoverRuntimeSecretDraftMaterialization(context.Context, *RecoverRuntimeSecretDraftMaterializationRequest) (*RecoverRuntimeSecretDraftMaterializationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecoverRuntimeSecretDraftMaterialization not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CompleteRuntimeSecretDraftCleanup(context.Context, *CompleteRuntimeSecretDraftCleanupRequest) (*CompleteRuntimeSecretDraftCleanupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeSecretDraftCleanup not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer() {
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRuntimeSecretDraftWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RuntimeSecretDraftWorkServiceServer will
+// result in compilation errors.
+type UnsafeRuntimeSecretDraftWorkServiceServer interface {
+	mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer()
+}
+
+func RegisterRuntimeSecretDraftWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeSecretDraftWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedRuntimeSecretDraftWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RuntimeSecretDraftWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRuntimeSecretDraftWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CheckRuntimeSecretDraftWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CheckRuntimeSecretDraftWorkReadiness(ctx, req.(*CheckRuntimeSecretDraftWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ConsumeRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ConsumeRuntimeSecretDraftOperation(ctx, req.(*ConsumeRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftOperation(ctx, req.(*CompleteRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).FailRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).FailRuntimeSecretDraftOperation(ctx, req.(*FailRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeSecretDraftRecoveryWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ListRuntimeSecretDraftRecoveryWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ListRuntimeSecretDraftRecoveryWork(ctx, req.(*ListRuntimeSecretDraftRecoveryWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverRuntimeSecretDraftMaterializationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).RecoverRuntimeSecretDraftMaterialization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).RecoverRuntimeSecretDraftMaterialization(ctx, req.(*RecoverRuntimeSecretDraftMaterializationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeSecretDraftCleanupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftCleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftCleanup(ctx, req.(*CompleteRuntimeSecretDraftCleanupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RuntimeSecretDraftWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeSecretDraftWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RuntimeSecretDraftWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.RuntimeSecretDraftWorkService",
+	HandlerType: (*RuntimeSecretDraftWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CheckRuntimeSecretDraftWorkReadiness",
+			Handler:    _RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_Handler,
+		},
+		{
+			MethodName: "ConsumeRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "FailRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "ListRuntimeSecretDraftRecoveryWork",
+			Handler:    _RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_Handler,
+		},
+		{
+			MethodName: "RecoverRuntimeSecretDraftMaterialization",
+			Handler:    _RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeSecretDraftCleanup",
+			Handler:    _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
 	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
 	RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName   = "/controlplane.v1.RuntimeSecretWorkService/CheckCredentialProjectionWorkReadiness"
 	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName            = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
@@ -7988,9 +9125,6 @@ const (
 // RuntimeSecretWorkServiceClient is the client API for RuntimeSecretWorkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
-// grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceClient interface {
 	CheckRuntimeSecretWorkReadiness(ctx context.Context, in *CheckRuntimeSecretWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretWorkReadinessResponse, error)
 	CheckCredentialProjectionWorkReadiness(ctx context.Context, in *CheckCredentialProjectionWorkReadinessRequest, opts ...grpc.CallOption) (*CheckCredentialProjectionWorkReadinessResponse, error)
@@ -8115,9 +9249,6 @@ func (c *runtimeSecretWorkServiceClient) ResolveTranscriptionCredentialProjectio
 // RuntimeSecretWorkServiceServer is the server API for RuntimeSecretWorkService service.
 // All implementations must embed UnimplementedRuntimeSecretWorkServiceServer
 // for forward compatibility.
-//
-// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
-// grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceServer interface {
 	CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error)
 	CheckCredentialProjectionWorkReadiness(context.Context, *CheckCredentialProjectionWorkReadinessRequest) (*CheckCredentialProjectionWorkReadinessResponse, error)

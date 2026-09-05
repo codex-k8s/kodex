@@ -1,4 +1,4 @@
--- name: EmailReceiptGet :one
+-- name: email_receipt_get :one
 SELECT e.id::text,e.ref,e.version,i.ref,e.external_receipt_ref,e.external_receipt_digest,
        e.semantic_input_digest,e.effect_key,e.outcome,e.mailbox_ref,e.configuration_revision,
        c.ref,p.ref,e.created_at,e.updated_at,r.ref,p.id::text,i.state

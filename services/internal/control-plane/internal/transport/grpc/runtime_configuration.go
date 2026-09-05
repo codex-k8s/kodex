@@ -88,7 +88,11 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 	if err != nil {
 		return nil, err
 	}
-	items, total, next, err := server.service.ListTemplateVariables(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())}
+	if request.GetAgentRef() != "" || request.GetRuntimeRevisionRef() != "" {
+		filter.TemplateContext = &query.TemplateVariableContext{AgentRef: request.GetAgentRef(), RuntimeRevisionRef: request.GetRuntimeRevisionRef()}
+	}
+	items, total, next, err := server.service.ListTemplateVariables(ctx, p, filter)
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -96,7 +100,8 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 	for _, item := range items {
 		variable := &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type,
 			Description: item.Description, Example: item.Example, Source: item.Source, Collection: item.Collection,
-			ItemValueType: item.ItemType, RangeExample: item.RangeExample}
+			ItemValueType: item.ItemType, RangeExample: item.RangeExample, Available: item.Available,
+			Reason: controlplanev1.TemplateVariableAvailabilityReason(controlplanev1.TemplateVariableAvailabilityReason_value["TEMPLATE_VARIABLE_AVAILABILITY_REASON_"+item.Reason])}
 		for _, field := range item.ItemFields {
 			variable.ItemFields = append(variable.ItemFields, &controlplanev1.TemplateVariableField{Name: field.Name, ValueType: field.Type, Description: field.Description})
 		}

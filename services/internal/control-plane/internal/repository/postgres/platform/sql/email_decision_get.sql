@@ -1,4 +1,4 @@
--- name: EmailDecisionGet :one
+-- name: email_decision_get :one
 SELECT d.ref,e.ref,d.receipt_version,d.receipt_digest,i.ref,d.outcome,d.grant_ref,s.ref,d.created_at,d.expires_at
 FROM control_plane.email_reconciliation_decisions d
 JOIN control_plane.email_effect_receipts e ON e.id=d.receipt_id AND e.organization_id=d.organization_id

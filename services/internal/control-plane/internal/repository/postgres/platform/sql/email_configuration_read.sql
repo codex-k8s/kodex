@@ -1,3 +1,4 @@
+-- name: email_configuration_read :many
 SELECT m.safe_projection
 FROM control_plane.email_mailbox_projections m
 JOIN control_plane.email_configuration_watermark w ON w.singleton

@@ -272,6 +272,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.Ref, "")
+	case command.EmailCredentialInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.ConnectionRef, "")
 	case command.IntegrationGrantInput:
 		if payload.AgentRef != "" {
 			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
