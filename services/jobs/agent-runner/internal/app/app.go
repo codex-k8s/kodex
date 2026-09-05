@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/contextfiles"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
@@ -62,18 +63,28 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
+		snapshot, err := input.RequiredContextSnapshot(time.Now())
+		if err != nil {
+			return err
+		}
 		if err := materializeWorkspace(input); err != nil {
 			return err
 		}
 		if input.Mode == runtimecontract.RunnerModeWarm {
-			return materializeInputArtifacts(lifecycleContext, input, nil)
+			if err := materializeInputArtifacts(lifecycleContext, input, nil); err != nil {
+				return err
+			}
+			return contextfiles.Materialize(lifecycleContext, input, snapshot, nil)
 		}
 		client, err := callback.New(input)
 		if err != nil {
 			return err
 		}
 		defer client.Close()
-		return materializeInputArtifacts(lifecycleContext, input, client)
+		if err := materializeInputArtifacts(lifecycleContext, input, client); err != nil {
+			return err
+		}
+		return contextfiles.Materialize(lifecycleContext, input, snapshot, client)
 	}
 	if os.Geteuid() != 10001 {
 		return errors.New("agent-runner runtime UID is invalid")
@@ -117,6 +128,13 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) })
 		return resultErr
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return err
+	}
+	if err := contextfiles.Verify(input, snapshot); err != nil {
+		return err
+	}
 	state.ready.Store(true)
 	for {
 		turn, available, nextErr := client.NextWarm(lifecycleContext, input)
@@ -143,6 +161,12 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return errors.New("runtime turn input is invalid")
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil || contextfiles.Verify(input, snapshot) != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	if err := materializeWorkspace(input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
@@ -298,6 +322,8 @@ func safeFailureCode(code string) string {
 
 func runtimeExecutionFailureCode(err error) string {
 	switch {
+	case errors.Is(err, runtimecontract.ErrRuntimeContext), errors.Is(err, contextfiles.ErrContextFiles):
+		return "RUNTIME_INPUT_INVALID"
 	case errors.Is(err, codex.ErrProviderAuthentication):
 		return "PROVIDER_AUTH_REJECTED"
 	case errors.Is(err, codex.ErrAuthorityRequestUnsupported):
