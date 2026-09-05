@@ -80,6 +80,21 @@ audit и idempotency receipt и закрывать связанные claims п�
 
 ## Оставшаяся реализация
 
+Domain policy в `internal/domain/service/emailpolicy` фиксирует boundary для
+подключаемого owner path: `integration.manage` на exact connection и `run.view`
+на связанный owner run; свежая интерактивная аутентификация не старше пяти минут
+с проверенными ACR/AMR. Отказ freshness — `FRESH_AUTHENTICATION_REQUIRED`.
+Browser elevation purpose не является полем CP request; secret reveal purpose
+не переиспользуется. Gateway связывает свою elevation/session с exact receipt,
+а CP повторно проверяет owner state, права и доверенный principal.
+
+Note ограничен 2000 Unicode code points, UTF-8, без NUL. Digest — ровно 64
+lowercase hex без `sha256:`. External receipt ref соответствует генерируемому
+bridge ID: ровно 32 lowercase hex. Outcome reconciliation допускает только
+EFFECT_CONFIRMED и NO_EFFECT_CONFIRMED, не UNKNOWN_OUTCOME или RETRY.
+Domain policy Go/race tests: PASS локально. Подключение этих правил к SQL/RPC
+handler ещё не завершено, рабочий protected path не объявляется PASS.
+
 - Owner mailbox configuration с immutable revision и credential generation.
 - Авторизация по текущему claim/grant/gate и проверенному semantic command.
 - Durable receipts, owner reconciliation и повторная проверка grant.
