@@ -4911,6 +4911,36 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListOwnerGatesParamsState.
+const (
+	ListOwnerGatesParamsStateAPPROVED         ListOwnerGatesParamsState = "APPROVED"
+	ListOwnerGatesParamsStateCANCELLED        ListOwnerGatesParamsState = "CANCELLED"
+	ListOwnerGatesParamsStateCHANGESREQUESTED ListOwnerGatesParamsState = "CHANGES_REQUESTED"
+	ListOwnerGatesParamsStateEXPIRED          ListOwnerGatesParamsState = "EXPIRED"
+	ListOwnerGatesParamsStateOPEN             ListOwnerGatesParamsState = "OPEN"
+	ListOwnerGatesParamsStateREJECTED         ListOwnerGatesParamsState = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ListOwnerGatesParamsState enum.
+func (e ListOwnerGatesParamsState) Valid() bool {
+	switch e {
+	case ListOwnerGatesParamsStateAPPROVED:
+		return true
+	case ListOwnerGatesParamsStateCANCELLED:
+		return true
+	case ListOwnerGatesParamsStateCHANGESREQUESTED:
+		return true
+	case ListOwnerGatesParamsStateEXPIRED:
+		return true
+	case ListOwnerGatesParamsStateOPEN:
+		return true
+	case ListOwnerGatesParamsStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
 	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
@@ -5019,6 +5049,39 @@ const (
 func (e ListProviderAccountsParamsDefinitionKey) Valid() bool {
 	switch e {
 	case ListProviderAccountsParamsDefinitionKeyOpenaiCodex:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRunsParamsStates.
+const (
+	ListRunsParamsStatesCANCELLED    ListRunsParamsStates = "CANCELLED"
+	ListRunsParamsStatesCANCELLING   ListRunsParamsStates = "CANCELLING"
+	ListRunsParamsStatesFAILED       ListRunsParamsStates = "FAILED"
+	ListRunsParamsStatesQUEUED       ListRunsParamsStates = "QUEUED"
+	ListRunsParamsStatesRUNNING      ListRunsParamsStates = "RUNNING"
+	ListRunsParamsStatesSUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
+	ListRunsParamsStatesWAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
+)
+
+// Valid indicates whether the value is a known member of the ListRunsParamsStates enum.
+func (e ListRunsParamsStates) Valid() bool {
+	switch e {
+	case ListRunsParamsStatesCANCELLED:
+		return true
+	case ListRunsParamsStatesCANCELLING:
+		return true
+	case ListRunsParamsStatesFAILED:
+		return true
+	case ListRunsParamsStatesQUEUED:
+		return true
+	case ListRunsParamsStatesRUNNING:
+		return true
+	case ListRunsParamsStatesSUCCEEDED:
+		return true
+	case ListRunsParamsStatesWAITINGHUMAN:
 		return true
 	default:
 		return false
@@ -9128,10 +9191,14 @@ type GetOverviewParams struct {
 
 // ListOwnerGatesParams defines parameters for ListOwnerGates.
 type ListOwnerGatesParams struct {
-	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef *ProjectRefQuery           `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	PageSize   *PageSize                  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken                 `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	State      *ListOwnerGatesParamsState `form:"state,omitempty" json:"state,omitempty"`
 }
+
+// ListOwnerGatesParamsState defines parameters for ListOwnerGates.
+type ListOwnerGatesParamsState string
 
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
@@ -9580,11 +9647,15 @@ type ValidateRoleImageRevisionDraftParams struct {
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
-	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef *ProjectRefQuery        `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query                  `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	States     *[]ListRunsParamsStates `form:"states,omitempty" json:"states,omitempty"`
 }
+
+// ListRunsParamsStates defines parameters for ListRuns.
+type ListRunsParamsStates string
 
 // CreateRunParams defines parameters for CreateRun.
 type CreateRunParams struct {
@@ -20123,6 +20194,19 @@ func (siw *ServerInterfaceWrapper) ListOwnerGates(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOwnerGates(w, r, params)
 	}))
@@ -26158,6 +26242,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "states" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "states", r.URL.Query(), &params.States, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "states"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "states", Err: err})
 		}
 		return
 	}

@@ -6129,6 +6129,7 @@ export type ListRunsData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
+        states?: Array<'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'>;
     };
     url: '/api/v1/runs';
 };
@@ -6338,6 +6339,7 @@ export type ListOwnerGatesData = {
         projectRef?: OpaqueRef;
         pageSize?: number;
         pageToken?: string;
+        state?: 'OPEN' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED' | 'EXPIRED';
     };
     url: '/api/v1/owner-gates';
 };

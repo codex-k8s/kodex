@@ -179,7 +179,32 @@ func (server *Server) GetWorkflow(w http.ResponseWriter, r *http.Request, ref ge
 	writeMessage(w, http.StatusOK, response, "workflow", "")
 }
 func (server *Server) ListRuns(w http.ResponseWriter, r *http.Request, p generated.ListRunsParams) {
-	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchText(stringValue(p.Query), 0, 200) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	states := []controlplanev1.RunState{}
+	if p.States != nil {
+		if len(*p.States) == 0 || len(*p.States) > 7 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		seen := map[controlplanev1.RunState]bool{}
+		for _, state := range *p.States {
+			value, known := controlplanev1.RunState_value["RUN_STATE_"+string(state)]
+			if !state.Valid() || !known || value == 0 || seen[controlplanev1.RunState(value)] {
+				writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+				return
+			}
+			seen[controlplanev1.RunState(value)] = true
+			states = append(states, controlplanev1.RunState(value))
+		}
+	}
+	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), States: states})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -230,7 +255,20 @@ func (server *Server) ListRunEvents(w http.ResponseWriter, r *http.Request, ref 
 	_ = jsonEncoder(w).Encode(value)
 }
 func (server *Server) ListOwnerGates(w http.ResponseWriter, r *http.Request, p generated.ListOwnerGatesParams) {
-	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken)})
+	r, ok := catalogRequest(w, r, p.ProjectRef, nil, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	state := controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED
+	if p.State != nil {
+		value, known := controlplanev1.OwnerGateState_value["OWNER_GATE_STATE_"+string(*p.State)]
+		if !p.State.Valid() || !known || value == 0 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		state = controlplanev1.OwnerGateState(value)
+	}
+	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), State: state})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

@@ -12,6 +12,14 @@ updated: 2026-09-05
 
 ## Дополнение D2/D3, CP 9ad5b58d1
 
+Home/Kanban: session → `GET runs?states=RUNNING&states=QUEUED` и
+`GET owner-gates?state=OPEN` → существующие CP ListRuns.states и
+ListOwnerGates.state → owner eligibility и SQL filter до LIMIT → typed page.
+State filter не даёт полномочий и не фильтруется после страницы в gateway;
+чтение не меняет lifecycle и не создаёт event. Неизвестные/повторные states
+отклоняются до RPC. Query/total OwnerGate требуют отдельного producer
+дополнения #1046; HTTP их не выдумывает.
+
 Карта до изменения: проверенная browser session/organization → GET
 `model-capabilities` → generated Query.ListModelCapabilities → CP eligible
 accounts/model catalog → server filtering/pagination → PWA model selector.
