@@ -71,7 +71,8 @@ decoder. Shutdown 30 секунд, Kubernetes grace 35 секунд.
 `ResolveTranscriptionPolicyResponse.parameters`; upload их не принимает.
 Каталог адаптера включает `gpt-transcribe`, `gpt-4o-transcribe`,
 `gpt-4o-mini-transcribe`, документированный snapshot
-`gpt-4o-mini-transcribe-2025-12-15`, а `whisper-1` помечает legacy.
+`gpt-4o-mini-transcribe-2025-12-15`, а также пока доступный snapshot
+`gpt-4o-mini-transcribe-2025-03-20`; последний и `whisper-1` помечены legacy.
 Произвольные snapshots, diarization и realtime модели закрыто отклоняются.
 
 `modelprofile.Validate` проверяет конечный temperature 0..1, language hints,
@@ -195,6 +196,10 @@ Live Job не входит в active profiles и требует отдельно
 - Повторно проверены через OpenAI Docs и Context7
   `/websites/developers_openai_api_reference`: file transcription,
   model-specific `language/languages`, keywords и response formats.
+- [GPT-4o Mini Transcribe snapshots](https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe)
+  и [объявленная депрекация старого snapshot](https://developers.openai.com/api/docs/deprecations#2026-07-20-legacy-audio-realtime-and-transcription-models):
+  `2025-03-20` остаётся отдельным exact ID и помечен legacy. Доступ конкретного
+  credential всё равно проверяется реальным model GET.
 - Context7 `/websites/ffmpeg_documentation`: protocol whitelist, decode/error options.
 - Context7 `/microsoft/playwright`: Chromium/Firefox/WebKit launch/close.
 - Для CONNECT callback Context7 не нашёл релевантный net/http; проверены

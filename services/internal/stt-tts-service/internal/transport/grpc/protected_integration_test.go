@@ -72,7 +72,7 @@ type integrationIssuer struct {
 	boundary *integrationBoundary
 }
 
-func (issuer integrationIssuer) IssueContinuationAuthorizationContext(ctx context.Context, request *av1.IssueContinuationAuthorizationContextRequest, options ...googlegrpc.CallOption) (*av1.IssueAuthorizationContextResponse, error) {
+func (issuer integrationIssuer) IssueContinuationAuthorizationContext(ctx context.Context, request *av1.IssueContinuationAuthorizationContextRequest, options ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	return issuer.boundary.IssueContinuationAuthorizationContext(ctx, request, options...)
 }
 
@@ -105,7 +105,7 @@ func (fake *integrationBoundary) VerifyAuthorizationContext(_ context.Context, r
 	return &av1.VerifyAuthorizationContextResponse{Context: verified}, nil
 }
 
-func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context.Context, request *av1.IssueContinuationAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.IssueAuthorizationContextResponse, error) {
+func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context.Context, request *av1.IssueContinuationAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	if fake.deny.Load() || request.GetParentAuthorizationContextCompactJws() != "test-parent" || len(request.GetRequestDigestSha256()) != 64 || request.GetRequestId() == "" || request.GetCorrelationId() == "" {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
 	}
@@ -116,7 +116,7 @@ func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context
 	fake.mu.Lock()
 	fake.children[token] = request.GetRequestDigestSha256()
 	fake.mu.Unlock()
-	return &av1.IssueAuthorizationContextResponse{CompactJws: token}, nil
+	return &av1.IssueContinuationAuthorizationContextResponse{CompactJws: token}, nil
 }
 
 func (fake *integrationBoundary) verifyChild(ctx context.Context, request any, _ *googlegrpc.UnaryServerInfo, handler googlegrpc.UnaryHandler) (any, error) {
@@ -298,7 +298,7 @@ func TestProtectedFakeIntegration(t *testing.T) {
 		t.Fatalf("protected success failed: %v", err)
 	}
 	response, err = call(true, nil)
-	if err != nil || !response.GetAvailability().GetReady() || response.GetAvailability().GetValidUntil() == nil || len(response.GetAvailability().GetCatalog().GetModels()) != 5 || response.GetText() != "" || fake.posts.Load() != 1 || fake.probes.Load() != 1 {
+	if err != nil || !response.GetAvailability().GetReady() || response.GetAvailability().GetValidUntil() == nil || !proto.Equal(response.GetAvailability().GetCatalog(), sttapi.ModelCatalog(provider.Catalog())) || response.GetText() != "" || fake.posts.Load() != 1 || fake.probes.Load() != 1 {
 		t.Fatalf("availability failed: %v", err)
 	}
 	for _, tc := range []struct {
