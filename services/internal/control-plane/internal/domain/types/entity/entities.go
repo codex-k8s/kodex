@@ -200,6 +200,12 @@ type ModelCapability struct {
 	Available                                         bool
 }
 
+type ModelCatalog struct {
+	Models                          []ModelCapability
+	Total                           int64
+	NextPageToken, Revision, Digest string
+}
+
 type RuntimeWorkspacePathRule struct {
 	Path   string `json:"path"`
 	Access string `json:"access"`

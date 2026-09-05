@@ -458,9 +458,14 @@ func organizationTargetForPreview(ref string) entity.AccessScope {
 	return entity.AccessScope{Kind: "ORGANIZATION", ResourceKind: "ORGANIZATION", ResourceRef: ref}
 }
 func (service *Service) ListModelCapabilities(ctx context.Context, p value.Principal, definitionKey, accountRef string, filter query.Filter) ([]entity.ModelCapability, int64, string, error) {
+	result, err := service.ListModelCatalog(ctx, p, definitionKey, accountRef, filter)
+	return result.Models, result.Total, result.NextPageToken, err
+}
+
+func (service *Service) ListModelCatalog(ctx context.Context, p value.Principal, definitionKey, accountRef string, filter query.Filter) (entity.ModelCatalog, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
 	return service.repository.ListModelCapabilities(ctx, p, strings.TrimSpace(definitionKey), strings.TrimSpace(accountRef), filter)

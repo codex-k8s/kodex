@@ -271,7 +271,7 @@ type Repository interface {
 	ResolveTranscriptionCredentialProjection(context.Context, value.Principal, TranscriptionCredentialProjectionInput) (TranscriptionCredentialProjection, error)
 	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, int64, string, error)
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
-	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
+	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) (entity.ModelCatalog, error)
 	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
 	ListManagedConfigurations(context.Context, value.Principal, query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error)
 	GetManagedConfigurationImpact(context.Context, value.Principal, string, string, query.Filter) (entity.ManagedConfigurationImpact, error)
