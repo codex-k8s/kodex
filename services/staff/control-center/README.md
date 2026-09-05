@@ -414,16 +414,40 @@ safe descriptor и новую connection version после authoritative refres
 сохраняет исходные If-Match и Idempotency-Key. Значение и digest не сохраняются
 в browser storage/Pinia/логах; digest попытки существует только в памяти формы.
 
-Остаток для нового manager:
+Продолжение PWA после передачи:
+
+- D2 страницы каталога моделей связаны с авторитетными catalogRevision и
+  catalogDigest; последующие страницы передают оба expected-поля и закрыто
+  отклоняют смену snapshot. Runs получает ACTIVE/TERMINAL через server states,
+  сбрасывает cursor при смене фильтра и не принимает поздний ответ старого scope.
+- D4 Run details показывает безопасный исторический RuntimeRevision diff:
+  текущая материализованная ревизия и выбранная сервером предыдущая ревизия
+  той же Session. Это не preview будущего continuation. Первая ревизия и
+  отсутствие изменений имеют отдельные состояния; смена Run/version отменяет
+  прежнее чтение. Ошибка boundary не превращается в пустой успешный diff.
+- Runtime editor сохраняет независимые несохранённые правки модели и overlay
+  при сохранении другой части. Во время команды редактор и voice блокируются;
+  route leave предупреждает о правках. При смене агента/unmount отменяется
+  чтение, поздний mutation response не перезаписывает новый контекст.
+- Browser fixture runtime-detail проверяет read-only во время сохранения,
+  сохранность overlay после ответа и historical diff на 1440/390 px. Fixtures
+  не доказывают producer authority или runtime materialization.
+
+Для продолжения проверены Context7 Vue watcher cleanup, Pinia reset setup
+state, Playwright route mocking/viewports и CodeMirror dynamic configuration
+через Compartment. Версии библиотек не менялись.
+
+Остаток полного unit:
 
 - D3 не заменяет effective user∩agent capability projection. Каталог готовности
-  не доказывает runtime materialization; D4 exact target/diff остаётся зависимостью.
+  не доказывает runtime materialization; D4 exact target preview остаётся зависимостью.
 - D5 credential сохранён отдельно от mailbox publication: D5-config отсутствует.
   После закрытия/перезагрузки формы теряется контекст неопределённой попытки;
   durable recovery/read path требует отдельного согласованного решения, без
   сохранения credential или имитации authoritative receipt.
-- D2: version/digest model catalog и persisted reasoning effort; D4: exact
-  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview и RuntimeRevision diff;
+- D2: model-specific validation опубликованного reasoning effort и catalog pin
+  на mutation; сохранение TOML через overlay уже доступно. D4: exact
+  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview;
   D6: server-side staged SecretDraft lifecycle.
 - Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
   Home server states, Mattermost selector eligibility, RoleImage ownership/build,

@@ -3,6 +3,28 @@ import { createI18n } from "vue-i18n";
 import { currentLocale } from "@/shared/locale";
 
 const ru = {
+  runtimeDiff: {
+    title: "Изменения ревизии выполнения",
+    help: "Сравнение уже материализованной ревизии с предыдущей ревизией этой сессии.",
+    previous: "Предыдущая ревизия",
+    current: "Текущая ревизия",
+    first: "Первая ревизия сессии",
+    noChanges: "Изменённых компонентов нет",
+    absent: "Компонент отсутствует",
+    components: {
+      PROVIDER: "Провайдер",
+      MODEL: "Модель",
+      RUNTIME_PROFILE: "Профиль выполнения",
+      RUNTIME_CONFIGURATION: "Конфигурация выполнения",
+      PROVIDER_POLICY: "Политика провайдера",
+      CONFIG_OVERLAY: "Дополнительная конфигурация",
+      ENVIRONMENT: "Окружение",
+      ENVIRONMENT_BINDING: "Привязка окружения",
+      INSTRUCTION: "Инструкции",
+      INTEGRATION_GRANTS: "Разрешения интеграций",
+      IMAGE: "Образ",
+    },
+  },
   emailEffect: {
     authenticate: "Подтвердить через OIDC",
     attemptMismatch: "Исход и примечание не совпадают с предыдущей попыткой.",
@@ -2519,6 +2541,28 @@ const ru = {
 
 const en = {
   ...ru,
+  runtimeDiff: {
+    title: "Runtime revision changes",
+    help: "Compare the materialized revision with its predecessor in the same session.",
+    previous: "Previous revision",
+    current: "Current revision",
+    first: "First session revision",
+    noChanges: "No changed components",
+    absent: "Component absent",
+    components: {
+      PROVIDER: "Provider",
+      MODEL: "Model",
+      RUNTIME_PROFILE: "Runtime profile",
+      RUNTIME_CONFIGURATION: "Runtime configuration",
+      PROVIDER_POLICY: "Provider policy",
+      CONFIG_OVERLAY: "Configuration overlay",
+      ENVIRONMENT: "Environment",
+      ENVIRONMENT_BINDING: "Environment binding",
+      INSTRUCTION: "Instructions",
+      INTEGRATION_GRANTS: "Integration grants",
+      IMAGE: "Image",
+    },
+  },
   emailEffect: {
     authenticate: "Confirm with OIDC",
     attemptMismatch: "The outcome and note differ from the previous attempt.",
