@@ -114,7 +114,7 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	specification := entity.RoleImageRecipeInput{
 		BaseImageReference: repository.roleImages.DefaultImageReference[:separator],
 		BaseImageDigest:    repository.roleImages.DefaultImageDigest,
-		SourceRef:          "platform-owned:default-role-image",
+		SourceRef:          platformOwnedRoleImageSource,
 		SourceRevision:     repository.roleImages.DefaultImageDigest,
 		SourceSHA256:       contentSHA256,
 		ContextRef:         repository.roleImages.DefaultImageReference,

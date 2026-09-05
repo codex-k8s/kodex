@@ -50,6 +50,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, configuration); err != nil {
+		return commandOutcome{}, err
+	}
 	if (action != "CREATE" || payload.ConfigurationRef != "") &&
 		(input.Mutation.ExpectedVersion == nil || configuration.Version != *input.Mutation.ExpectedVersion) {
 		return commandOutcome{}, errs.ErrVersionMismatch
@@ -149,6 +152,16 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, lockErr
 		}
 		_, diagnostics, validationErr := revisionservice.Validate(kind, locked.ContentFormat, locked.Content)
+		if kind == revisionservice.KindRoleImage {
+			validationErr = repository.validateSourceRoleImage(configuration, locked.ContentFormat, locked.Content)
+			if errors.Is(validationErr, errs.ErrUnavailable) {
+				return commandOutcome{}, validationErr
+			}
+			diagnostics = nil
+			if validationErr != nil {
+				diagnostics = []revisionservice.Diagnostic{{Code: "ROLE_IMAGE_CONFIGURATION_INVALID", Message: "Role image configuration is incompatible with the active catalog"}}
+			}
+		}
 		if kind == revisionservice.KindEmailMailbox {
 			diagnostics, validationErr = repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision)
 			if validationErr != nil && !errors.Is(validationErr, errs.ErrInvalid) {
@@ -191,6 +204,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if kind == revisionservice.KindIntegrationDefinition {
 			if _, err := revisionservice.IntegrationPackage(locked.ContentFormat, locked.Content); err != nil {
 				return commandOutcome{}, errs.ErrInvalid
+			}
+		}
+		if kind == revisionservice.KindRoleImage {
+			if err := repository.publishSourceRoleImage(ctx, tx, current, configuration, locked.ManagedConfigurationRevision); err != nil {
+				return commandOutcome{}, err
 			}
 		}
 		item, setVersion, updatedAt, publishErr := scanPublishedManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationPublishRevision, pgx.StrictNamedArgs{

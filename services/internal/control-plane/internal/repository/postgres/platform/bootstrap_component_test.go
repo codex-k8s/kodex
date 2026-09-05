@@ -666,11 +666,15 @@ WHERE environment.organization_id = $1::uuid
 LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRef); err != nil {
 		t.Fatalf("read runtime environment consumer fixture: %v", err)
 	}
+	roleCatalog, _ := promotionComponentCatalog(t)
+	repository.ConfigureRoleImageCatalog(roleCatalog.Resolve)
+	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
+	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-role-image", command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
 		command.PublishRoleImageRevision, command.RebindRoleImage,
 		command.ManagedConfigurationInput{ProjectRef: environmentProjectRef, Name: "Runtime role image",
-			ContentFormat: "JSON", Content: `{"name":"Runtime role image","baseImage":"registry.invalid/base@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":["ca-certificates"]}`},
+			ContentFormat: "JSON", Content: roleContent},
 		entity.ManagedConfigurationConsumer{Kind: "RUNTIME_ENVIRONMENT", Ref: environmentRef})
 	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
@@ -1596,13 +1600,24 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	if err != nil {
 		t.Fatalf("resolve role image principal: %v", err)
 	}
-	recipes, _, err := repository.List(ctx, roleImagePrincipal, roleimagerepo.Filter{
+	recipes, _, total, err := repository.List(ctx, roleImagePrincipal, roleimagerepo.Filter{
 		ProjectRef: createdProject.Project.Ref,
 		Page:       query.Page{Size: 20},
 	})
-	if err != nil || len(recipes) != 1 || recipes[0].ActiveImageArtifactRef == "" ||
+	if err != nil || total != 1 || len(recipes) != 1 || recipes[0].ActiveImageArtifactRef == "" ||
 		recipes[0].PromotedImageReference != repository.roleImages.DefaultImageReference {
 		t.Fatalf("bootstrap role image is not active and promoted: recipes=%#v err=%v", recipes, err)
+	}
+	if recipes[0].ManagedLineage == nil || recipes[0].ManagedLineage.ManagedBy != "SHIPPED" || recipes[0].ManagedLineage.SourceRevision != repository.roleImages.DefaultImageDigest || !sameStrings(recipes[0].NextActions, []string{"OPEN"}) {
+		t.Fatal("system base did not expose exact readonly shipped provenance")
+	}
+	for _, action := range []string{"UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD"} {
+		version := int64(recipes[0].Version)
+		_, err := repository.Manage(ctx, roleimagerepo.ManageInput{Principal: roleImagePrincipal, Action: action, RecipeRef: recipes[0].Ref, ProjectRef: recipes[0].ProjectRef, Name: recipes[0].Name, Recipe: recipes[0].Input,
+			Mutation: roleImageTestMutation("bootstrap-shipped-deny-"+action, action, &version)})
+		if !errors.Is(err, domainerrs.ErrConflict) {
+			t.Fatalf("shipped recipe mutation %s was accepted: %v", action, err)
+		}
 	}
 	current, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
 	if err != nil {
