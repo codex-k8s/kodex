@@ -26,6 +26,7 @@ updated: 2026-09-05
 | Полный Service DNS | `egress-gateway.kodex-system.svc.cluster.local` |
 | CONNECT port | `8080/TCP`, имя `connect`; bodyless `CONNECT` и compatibility `GET /readyz` |
 | STT CONNECT port | `8081/TCP`, имя `stt-connect`; только профиль `openai-stt` и workload `stt-tts-service` |
+| Mail CONNECT port | `8082/TCP`, имя `mail-connect`; только `email-mail/email-bridge/email.transport`, отдельная immutable проекция |
 | Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
@@ -37,7 +38,7 @@ updated: 2026-09-05
 Consumer задаёт
 `HTTPS_PROXY=http://egress-gateway.kodex-system.svc.cluster.local:8080`.
 STT использует только порт `8081`; CNI не допускает этот workload к `8080`.
-Оба listener делят один глобальный connection budget и закрываются до общего
+Все три listener делят один глобальный connection budget и закрываются до общего
 bounded join. CONNECT проверяет readiness до ответа и до внешнего dial.
 Заголовки `X-Kodex-Egress-Revision`, `X-Kodex-Egress-Digest`,
 `X-Kodex-Egress-Profile`, а для STT также `X-Kodex-Egress-Workload` и
@@ -56,6 +57,14 @@ Pod labels в точном namespace и на точном порту.
 нулевое значение не является заявлением о существующем образе.
 
 ## Machine policy
+
+Почтовые endpoints не добавляются в общий список HTTPS. Отдельный
+[runbook](../../../docs/operations/egress-mail-1029.md) задаёт closed
+SMTP/POP3/IMAP transport pairs, producer из typed mailbox configuration,
+точные runtime/CNI IP pins и обязательную проверку TLS в EMAIL.
+`tools/render-egress-mail.sh` создаёт согласованный render без Kubernetes API.
+Пустой bootstrap source оставляет mail readiness `503` и не открывает ни одного
+внешнего mail destination. Проверка: `tools/verify-egress-mail.sh`.
 
 Файл policy монтируется из отдельного immutable content-addressed `ConfigMap`.
 Kustomize hash входит в имя объекта и автоматически переключает точную ссылку

@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/gateway"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
@@ -133,8 +134,31 @@ func runActive(
 		}
 		current.connects = append(current.connects, server)
 	}
-	if err := current.connects[1].ShareConnectionLimit(current.connects[0]); err != nil {
+	mailResolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
+		business.DNSObserver(outcome, string(reason))
+	})
+	if err != nil {
 		return err
+	}
+	mailActive, mailErr := mailpolicy.LoadMailFile(config.MailPolicyFile, config.MailExpectedDigest, activePolicy)
+	mailReadiness := mailpolicy.NewReadiness(mailActive, mailResolver)
+	if err := internalobservability.RegisterMailReadiness(metrics.Register, mailReadiness.Ready); err != nil {
+		return err
+	}
+	var mailServer *gateway.Server
+	if mailErr != nil {
+		mailServer, err = gateway.NewReadinessOnly(runContext, config.MailConnectAddress, mailReadiness, business)
+	} else {
+		mailServer, err = gateway.New(runContext, config.MailConnectAddress, mailActive, mailResolver, &gateway.NetDialer{}, mailReadiness, business)
+	}
+	if err != nil {
+		return err
+	}
+	current.connects = append(current.connects, mailServer)
+	for _, server := range current.connects[1:] {
+		if err := server.ShareConnectionLimit(current.connects[0]); err != nil {
+			return err
+		}
 	}
 	connectResult := make(chan error, len(current.connects))
 	for _, server := range current.connects {
@@ -143,7 +167,7 @@ func runActive(
 		}
 		go func() { connectResult <- server.Serve() }()
 	}
-	current.workers = serviceruntime.StartWorkers(runContext, refresh(activePolicy, resolver, current.state))
+	current.workers = serviceruntime.StartWorkers(runContext, refresh(activePolicy, resolver, current.state), mailReadiness.Run(startupInterval))
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(runContext) }()
 	current.state.setProcess(processReady)
@@ -191,15 +215,17 @@ func runTechnicalOnly(
 	}
 	technicalResult := make(chan error, 1)
 	go func() { technicalResult <- technical.Serve() }()
-	for _, address := range []string{config.ConnectAddress, config.STTConnectAddress} {
+	for _, address := range []string{config.ConnectAddress, config.STTConnectAddress, config.MailConnectAddress} {
 		compatibility, err := gateway.NewReadinessOnly(runContext, address, currentState, business)
 		if err != nil {
 			return err
 		}
 		current.connects = append(current.connects, compatibility)
 	}
-	if err := current.connects[1].ShareConnectionLimit(current.connects[0]); err != nil {
-		return err
+	for _, server := range current.connects[1:] {
+		if err := server.ShareConnectionLimit(current.connects[0]); err != nil {
+			return err
+		}
 	}
 	compatibilityResult := make(chan error, len(current.connects))
 	for _, server := range current.connects {

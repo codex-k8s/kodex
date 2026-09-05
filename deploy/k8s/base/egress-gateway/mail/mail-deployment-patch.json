@@ -1,0 +1,44 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "egress-gateway"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "kodex.dev/mail-configuration-digest": "020a47e29b1059a44323a60625cf50343843e63b066d1ff6f5626d283156797c"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "EGRESS_GATEWAY_MAIL_POLICY_DIGEST",
+                "value": "c6762097fc4eb495637172a385f21d080513d27c204deaf94c21888957a88edc"
+              }
+            ],
+            "name": "egress-gateway"
+          }
+        ],
+        "volumes": [
+          {
+            "configMap": {
+              "defaultMode": 292,
+              "items": [
+                {
+                  "key": "mail-policy.json",
+                  "path": "mail-policy.json"
+                }
+              ],
+              "name": "egress-gateway-mail-c6762097fc4eb495637172a3"
+            },
+            "name": "mail-policy"
+          }
+        ]
+      }
+    }
+  }
+}

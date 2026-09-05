@@ -153,7 +153,7 @@ func parseAuthority(value string) (Target, error) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	port, err := strconv.Atoi(portValue)
-	if err != nil || port != 443 || portValue != "443" {
+	if err != nil || strconv.Itoa(port) != portValue || (port != 443 && port != 465 && port != 587 && port != 995 && port != 110 && port != 993 && port != 143) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	hostname, err := policy.NormalizeHostname(host)
@@ -168,7 +168,7 @@ func parseReadinessAuthority(value string) (Target, error) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	host, portValue, err := net.SplitHostPort(value)
-	if err != nil || (portValue != "8080" && portValue != "8081") {
+	if err != nil || (portValue != "8080" && portValue != "8081" && portValue != "8082") {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	hostname, err := policy.NormalizeHostname(host)
