@@ -1132,7 +1132,7 @@ paths:
       tags: [Agents]
       operationId: getRuntimeSecretImpact
       description: Влияние точной secret revision; secret.rotate и eligibility окружений проверяет CP. ETag содержит secret version. Значения секрета не возвращаются.
-      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Точные старые revisions и доступные consumers
@@ -1222,7 +1222,7 @@ paths:
       tags: [Agents]
       operationId: getRuntimeEnvironmentImpact
       description: Влияние целевой версии; CP фильтрует consumers по полномочиям. ETag содержит версию environment.
-      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentRef' }, { $ref: '#/components/parameters/RuntimeEnvironmentVersionRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentRef' }, { $ref: '#/components/parameters/RuntimeEnvironmentVersionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Авторитетный результат control-plane

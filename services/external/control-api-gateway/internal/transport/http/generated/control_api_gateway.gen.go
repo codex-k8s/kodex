@@ -9526,6 +9526,7 @@ type RebindRuntimeEnvironmentParams struct {
 
 // GetRuntimeEnvironmentImpactParams defines parameters for GetRuntimeEnvironmentImpact.
 type GetRuntimeEnvironmentImpactParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
@@ -9560,6 +9561,7 @@ type RebindRuntimeSecretParams struct {
 
 // GetRuntimeSecretImpactParams defines parameters for GetRuntimeSecretImpact.
 type GetRuntimeSecretImpactParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
@@ -27249,6 +27251,19 @@ func (siw *ServerInterfaceWrapper) GetRuntimeEnvironmentImpact(w http.ResponseWr
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetRuntimeEnvironmentImpactParams
 
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -27732,6 +27747,19 @@ func (siw *ServerInterfaceWrapper) GetRuntimeSecretImpact(w http.ResponseWriter,
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetRuntimeSecretImpactParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "pageSize" -------------
 

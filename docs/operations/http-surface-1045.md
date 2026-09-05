@@ -105,7 +105,59 @@ CSRF/idempotency/If-Match правила существующих специал
 | D4 | RuntimeRevisionSnapshot относится к worker execution; публичный previous/current typed diff перед continuation отсутствует. | Нельзя выдавать worker snapshot либо вычислять безопасный diff из неподтверждённых UI данных. |
 | D5 | Публичный typed EMAIL safe mailbox configuration отсутствует; worker Resolve/Report/Projection не UI API. | HTTP receipt/reconcile готов, но UI/YAML EMAIL configuration требует согласованного producer. |
 | D6 | RuntimeSecret публично имеет PrepareCreate/Rotate/Reveal/Revoke, но не отдельные save/validate/publish/discard staged encrypted draft commands. | Не заявляется staged Secret acceptance по immediate create/rotate. |
-| D7 | GetManagedConfigurationImpactRequest содержит только configuration_ref/revision_ref; environment/secret impact имеют page, но не query. | Selective rebind сохранён; серверный поиск и пагинация managed impact требуют расширения CP. |
+| D7 | GetManagedConfigurationImpactRequest содержит только configuration_ref/revision_ref; environment/secret impact query реализованы в CP 98a71da1e и подключены к HTTP/SDK. | Осталась только managed impact query/page; environment/secret filtering до SQL LIMIT потреблено без локальной фильтрации. |
+
+### Повторная Сверка CP 98a71da1e
+
+Потреблён exact `98a71da1e7da9d0ceee2470a6c16e7351eea2e53` cherry-pick
+`192c56459`: исходный Proto, generated API и принадлежащая CP реализация
+перенесены без ручных правок. Это доступный независимый checkpoint D7, не merge
+всей ветки CP. Public Proto теперь совпадает с этим CP HEAD. Новая policy
+revision не нужна; существующие exact operations и права сохранены.
+
+HTTP `getRuntimeEnvironmentImpact`/`getRuntimeSecretImpact` принимают query,
+сохраняют pageSize/pageToken/ETag/total, отклоняют более 200 Unicode-символов,
+NUL и malformed UTF-8 до RPC. CP выполняет trim, literal case-insensitive
+search до LIMIT и связывает cursor с нормализованным запросом. Другая строка
+поиска со старым cursor даёт 400, не пустую успешную страницу.
+
+Фактически просмотрены public Proto и следующие реализации в CP WT:
+`email_authorization.go`, `email_receipts.go` транспорта, mailbox projection
+handoff и diff `fed22b1f6`/`b20884535`. Итог по прежним зависимостям:
+
+- D1: public assistant request всё ещё только page/project_ref; нет query,
+  archive RPC и archived state. HTTP pagination уже сохранена.
+- D2: ModelCapability/ListModelCapabilitiesResponse по-прежнему без catalog
+  revision/digest; текущие model/effort/account поля HTTP передаёт полностью.
+- D3: TemplateVariable и ListTemplateVariablesRequest не получили target
+  context/available/reason. Обычный project/query/page каталог сохранён.
+- D4: `b20884535` корректно очищает codexSessionID при смене context digest
+  в worker snapshot. Это не публичный previous/current diff для UI; D4 открыт.
+- D5: CP handlers ResolveEmailAuthorization/Report/ResolveReconciliation и
+  Get/Reconcile receipts реализованы. Их отсутствие больше не blocker.
+  `fed22b1f6` задаёт authoritative mailbox policy и EMAIL minimum NONE;
+  HTTP schema уже допускает NONE и HUMAN_EACH_EFFECT, не назначает gate сама.
+  Startup import `CONTROL_PLANE_EMAIL_CONFIGURATION_FILE` не является UI RPC.
+  Остались typed mailbox commands, write-only credential lifecycle и dynamic
+  projection delivery/readback. HTTP worker endpoints не создавались.
+- D6: отдельных staged Secret draft/save/validate/publish/discard RPC всё ещё
+  нет; existing PrepareCreate/Rotate/Reveal/Revoke не подменяют этот lifecycle.
+- D7: environment/secret query закрыты в HTTP. Managed impact query/page остаются.
+
+`fed22b1f6` и `b20884535` отдельно не переносились: это CP/worker/shared catalog
+реализация, не новая HTTP dependency. Root сохраняет их при общей интеграции.
+Старые абзацы producer handoff о незавершённых EMAIL handlers не используются
+как актуальное доказательство. Никакой CP или handwritten PWA файл вручную
+не изменялся; full неизменившиеся gateway/PG/Docker suites не повторялись.
+
+Локальные проверки этого изменения: targeted HTTP race
+`TestImpactSearch|TestSecretImpact|TestSecretRebind|TestIdentityEnvironment|TestPublicRPCSurface`
+с outer timeout 180s и Go timeout 120s — PASS; focused HTTP vet, строгая
+OpenAPI validation kin-openapi 0.135.0, Go/TS generation и strict generated SDK
+typecheck — PASS. Новая fixture проверяет exact RPC, query/cursor/ETag,
+200 Unicode-символов, literal `%_`, NUL/malformed UTF-8/oversize отказ до RPC,
+400 для stale-filter cursor и безопасные 403/404/503. Это HTTP fake boundary,
+не повтор CP PostgreSQL либо live проверки.
 
 ## Проверки И Передача
 
