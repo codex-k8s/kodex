@@ -2236,6 +2236,20 @@ export type IntegrationResourceScope = {
     digest: string;
 };
 
+export type EmailMailboxCredentialKind = 'CA_CERTIFICATE' | 'USERNAME' | 'AUTH_SECRET';
+
+export type EmailMailboxCredentialInput = {
+    kind: EmailMailboxCredentialKind;
+};
+
+export type EmailMailboxCredential = {
+    name: string;
+    generation: number;
+    kind: EmailMailboxCredentialKind;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+};
+
 export type IntegrationCredentialInput = {
     value: string;
 };
@@ -2468,6 +2482,14 @@ export type AdministrationState = {
     optionalAdapters: Array<IntegrationDefinition>;
     incidents: Array<Incident>;
     observedAt: Timestamp;
+};
+
+export type EmailMailboxCredentialInputWritable = {
+    kind: EmailMailboxCredentialKind;
+    /**
+     * UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
+     */
+    value: string;
 };
 
 export type SkillBundleRef = OpaqueRef;
@@ -7402,6 +7424,38 @@ export type UpdateIntegrationConnectionResponses = {
 };
 
 export type UpdateIntegrationConnectionResponse = UpdateIntegrationConnectionResponses[keyof UpdateIntegrationConnectionResponses];
+
+export type ConfigureEmailMailboxCredentialData = {
+    body: EmailMailboxCredentialInputWritable;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/credential';
+};
+
+export type ConfigureEmailMailboxCredentialErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureEmailMailboxCredentialError = ConfigureEmailMailboxCredentialErrors[keyof ConfigureEmailMailboxCredentialErrors];
+
+export type ConfigureEmailMailboxCredentialResponses = {
+    /**
+     * Immutable credential материализован без публикации mailbox configuration
+     */
+    200: EmailMailboxCredential;
+};
+
+export type ConfigureEmailMailboxCredentialResponse = ConfigureEmailMailboxCredentialResponses[keyof ConfigureEmailMailboxCredentialResponses];
 
 export type ConfigureIntegrationConnectionCredentialData = {
     body: IntegrationCredentialInput;
