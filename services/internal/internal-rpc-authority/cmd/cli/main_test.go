@@ -165,6 +165,7 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 		"ira_control_plane_resolver_g1",
 		"ira_integration_gateway_issuer_g1",
 		"ira_interaction_gateway_issuer_g1",
+		"ira_email_bridge_issuer_g1",
 		"ira_runtime_controller_issuer_g1",
 	} {
 		if !strings.Contains(text, required) {
@@ -221,6 +222,7 @@ func TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals(t *testing.T) {
 		"ira_control_plane_resolver_g1",
 		"ira_integration_gateway_issuer_g1",
 		"ira_interaction_gateway_issuer_g1",
+		"ira_email_bridge_issuer_g1",
 		"ira_runtime_controller_issuer_g1",
 	} {
 		if !strings.Contains(grant, principal) {

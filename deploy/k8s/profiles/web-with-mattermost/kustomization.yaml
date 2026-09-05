@@ -26,6 +26,15 @@ patches:
       group: networking.k8s.io
       version: v1
       kind: NetworkPolicy
+      name: platform-postgresql-exact-clients
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
       name: control-plane-exact-runtime-paths
     patch: |-
       - op: add
@@ -76,7 +85,16 @@ patches:
     patch: |-
       - op: add
         path: /rules/0/resourceNames/-
-        value: internal-rpc-authority-interaction-gateway-issuer-delivery
+        value: internal-rpc-authority-interaction-gateway-issuer-readback-credential
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-readback-possession
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-restore-credential
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-restore-ack
       - op: add
         path: /rules/0/resourceNames/-
         value: internal-rpc-authority-interaction-gateway-issuer-key
