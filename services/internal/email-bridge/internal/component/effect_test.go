@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
@@ -16,11 +17,22 @@ type effectFixture struct {
 }
 
 func (f effectFixture) Report(ctx context.Context, r port.Report) (port.OwnerReceipt, error) {
+	result := r.Receipt
 	if f.report != nil {
-		return f.report(ctx, r)
+		var err error
+		result, err = f.report(ctx, r)
+		if err != nil {
+			return result, err
+		}
 	}
-	r.Receipt.Ref, r.Receipt.Version = "receipt_fixture01", 1
-	return r.Receipt, nil
+	result.Ref, result.Version = "receipt_"+r.Receipt.ExternalRef, 1
+	if result.Outcome != port.Unknown {
+		result.Version = 2
+	}
+	if result.Invocation == "" {
+		result.Invocation = "inv_fixture01"
+	}
+	return result, nil
 }
 func (effectFixture) Reconcile(context.Context, port.OwnerReceipt, string) (port.Decision, error) {
 	return port.Decision{}, errs.Denied
@@ -28,6 +40,32 @@ func (effectFixture) Reconcile(context.Context, port.OwnerReceipt, string) (port
 
 func TestDurableUnknownBeforeCPAndProvider(t *testing.T) {
 	testDurableUnknown(t, nil)
+}
+
+type failingLedger struct{ port.ReconciliationRepository }
+
+func (failingLedger) Remember(context.Context, port.Scope, port.Record, port.OwnerReceipt, time.Time) error {
+	return errs.Unavailable
+}
+
+func TestOwnerBindingMustPersistBeforeProvider(t *testing.T) {
+	f := newFixture(t, "implicit")
+	s, sec, _ := service(t, f, "implicit", nil)
+	s.Ledger = failingLedger{}
+	if _, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture", send(api.OperationSend, "journal-failure")); !errors.Is(err, errs.Unavailable) || sec.reads.Load() != 0 {
+		t.Fatal("provider started without durable CP identity")
+	}
+}
+
+func TestEmptyMailboxConfigurationFailsClosed(t *testing.T) {
+	f := newFixture(t, "implicit")
+	s, sec, _ := service(t, f, "implicit", nil)
+	s.Config.Mailboxes = nil
+	for _, op := range []api.Operation{api.OperationHealth, api.OperationSend} {
+		if _, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture", send(op, "not-configured")); !errors.Is(err, errs.NotFound) || sec.reads.Load() != 0 {
+			t.Fatal("unconfigured mailbox reached provider")
+		}
+	}
 }
 
 func TestPostgresDurableUnknownBeforeCPAndProvider(t *testing.T) {

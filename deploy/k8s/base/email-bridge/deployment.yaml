@@ -38,7 +38,7 @@
         "containers": [
           {
             "name": "email-bridge",
-            "image": "email-bridge:release",
+            "image": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/email-bridge@sha256:0000000000000000000000000000000000000000000000000000000000000000",
             "ports": [
               {
                 "name": "https",

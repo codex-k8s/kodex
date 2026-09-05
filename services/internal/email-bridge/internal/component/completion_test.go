@@ -63,7 +63,7 @@ func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 		}
 		store := &memory{rows: map[string]port.Record{}}
 		provider := &cancellingProvider{cancel: func() {}}
-		service := &mail.Service{CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
+		service := &mail.Service{Ledger: store, CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
 		_, err := service.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", send(api.OperationSend, "missing-cleanup"))
 		if !errors.Is(err, errs.Unavailable) || provider.calls != 0 || len(store.rows) != 0 {
 			t.Fatal("mutation started without a completion lifecycle")
@@ -87,7 +87,7 @@ func testReceiptCompletion(t *testing.T, durable port.Repository) {
 			}
 			store := &completionStore{Repository: base, t: t, fail: scenario == "store-failure"}
 			provider := &cancellingProvider{cancel: cancel}
-			service := &mail.Service{CompletionBase: t.Context(), Config: receiptConfiguration(), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
+			service := &mail.Service{Ledger: base.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: receiptConfiguration(), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
 			command := send(api.OperationSend, "completion-key")
 			want := "accepted"
 			if scenario == "imap-partial" {

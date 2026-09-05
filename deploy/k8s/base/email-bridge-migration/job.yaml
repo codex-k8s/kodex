@@ -36,7 +36,7 @@
         "containers": [
           {
             "name": "migration",
-            "image": "email-bridge-migration:release",
+            "image": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/email-bridge-migration@sha256:0000000000000000000000000000000000000000000000000000000000000000",
             "env": [
               {
                 "name": "EMAIL_BRIDGE_MIGRATION_DSN_FILE",

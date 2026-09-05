@@ -16,6 +16,7 @@ resources:
   - ../../overlays/production/automation-scheduler
   - ../../overlays/production/secret-broker
   - ../../overlays/production/stt-tts-service
+  - ../../overlays/production/email-bridge
   - ../../overlays/production/artifact-retention
   - ../../overlays/production/control-api-gateway
   - ../../overlays/production/staff-control-center

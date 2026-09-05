@@ -46,18 +46,21 @@ func (c *Client) Report(ctx context.Context, input receipt.Report) (receipt.Owne
 }
 
 func (c *Client) Reconcile(ctx context.Context, want receipt.OwnerReceipt, decisionRef string) (receipt.Decision, error) {
-	if c.API == nil || !validReceipt(want, true) || want.Outcome != receipt.Unknown || !receiptRefPattern.MatchString(decisionRef) {
+	if c.API == nil || !validReceipt(want, true) || want.Outcome != receipt.Unknown || (decisionRef != "" && !receiptRefPattern.MatchString(decisionRef)) {
 		return receipt.Decision{}, errs.Invalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, effectAuthorityTimeout)
 	defer cancel()
 	response, err := c.API.ResolveEmailReconciliation(ctx, &cp.ResolveEmailReconciliationRequest{ReceiptRef: want.Ref, DecisionRef: decisionRef, ExternalReceiptRef: want.ExternalRef, ExternalReceiptDigest: want.ExternalDigest})
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return receipt.Decision{}, errs.NotFound
+		}
 		return receipt.Decision{}, effectError(err)
 	}
 	got, ok := ownerReceipt(response.GetReceipt())
 	d := response.GetDecision()
-	if !ok || !sameReceipt(got, want) || got.Ref != want.Ref || got.Version != want.Version || got.Outcome != receipt.Unknown || d == nil || d.Ref != decisionRef || d.Version < 1 || d.ReceiptRef != got.Ref || d.ReceiptVersion != got.Version || d.ReceiptDigest != got.ExternalDigest || d.InvocationRef != got.Invocation || d.ActorRef == "" || d.GrantRef == "" || d.ExpiresAt == nil || d.ExpiresAt.CheckValid() != nil || !d.ExpiresAt.AsTime().After(time.Now()) || d.CreatedAt == nil || d.CreatedAt.CheckValid() != nil || d.CreatedAt.AsTime().After(time.Now()) || !d.ExpiresAt.AsTime().After(d.CreatedAt.AsTime()) {
+	if !ok || !sameReceipt(got, want) || got.Ref != want.Ref || got.Version != want.Version || got.Outcome != receipt.Unknown || d == nil || !receiptRefPattern.MatchString(d.Ref) || (decisionRef != "" && d.Ref != decisionRef) || d.Version < 1 || d.ReceiptRef != got.Ref || d.ReceiptVersion != got.Version || d.ReceiptDigest != got.ExternalDigest || d.InvocationRef != got.Invocation || d.ActorRef == "" || d.GrantRef == "" || d.ExpiresAt == nil || d.ExpiresAt.CheckValid() != nil || !d.ExpiresAt.AsTime().After(time.Now()) || d.CreatedAt == nil || d.CreatedAt.CheckValid() != nil || d.CreatedAt.AsTime().After(time.Now()) || !d.ExpiresAt.AsTime().After(d.CreatedAt.AsTime()) {
 		return receipt.Decision{}, errs.Unavailable
 	}
 	if d.Outcome != cp.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED && d.Outcome != cp.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED {

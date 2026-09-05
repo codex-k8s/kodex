@@ -15,7 +15,7 @@ updated: 2026-09-05
 После review и отдельного допуска применяются кодовые ресурсы
 `deploy/k8s/overlays/staging/email-bridge`. Release renderer подставляет разные
 неизменяемые digests runtime и migration images. Bootstrap PostgreSQL выполняется
-до migration 20260904000700; runtime schema migrations сам не запускает.
+до migrations 20260904000700 и 20260905000100; runtime schema migrations сам не запускает.
 
 Необходимые Secrets выпускаются владельцем secret delivery, не runtime SA:
 
@@ -39,7 +39,8 @@ watermark, письма не сохраняются. PVC включается в
 ## Проверка готовности
 
 Local /readyz отражает только PostgreSQL role/schema, configuration watermark,
-наличие включённой mailbox и локальный issuer. Это не доказательство CP SQL,
+локальный issuer. Пустая bootstrap mailbox configuration не требует SMTP.
+Это не доказательство CP SQL,
 worker trust, mail credentials или доступности внешнего транспорта.
 Protected HEALTH требует исходный owner connection-test claim с lease fence,
 online typed CP authorization и SMTP AUTH/NOOP, IMAP authentication/SELECT;
@@ -47,8 +48,8 @@ POP AUTH/UIDL проверяется отдельно при наличии comp
 Typed health возвращает
 `protocol_readiness.smtp/imap/pop3`: ready, not_ready или not_configured.
 Отказ optional POP не выключает исправный основной SMTP+IMAP профиль.
-Самовыданный health-token отсутствует. Пустая конфигурация закрывает local
-readiness; недоступный owner, credential или egress закрывает protected HEALTH.
+Самовыданный health-token отсутствует. Неподключённая mailbox, недоступный owner,
+credential или egress закрывают protected HEALTH.
 Остальные вызовы всегда проверяются по собственной mailbox policy.
 
 Владелец проверяет три policy: read allow/send gate, все gate, все allow.
@@ -76,10 +77,15 @@ Draft update возвращает новый UID и content digest. Thread pagin
 4. Новое намерение возможно только после явного решения владельца с новым grant
    и effect. Не менять receipt через SQL; старый unknown остаётся историей.
 
-Неизвестное IMAP-изменение блокирует другие keys для того же source. До финального
-handoff #1046 должен согласовать typed owner decision/reconciliation, связанный
-с исходной receipt, её digest, outcome и новым owner grant. Статусный GET и новый
-effect key сами по себе не снимают эту блокировку. Отсутствующий authority RPC
+Неизвестное IMAP-изменение блокирует другие keys для того же source. Consumer
+выбирает bounded batch из `email_bridge.owner_receipts` после окончания исходного
+lease плюс 3 секунды completion. Пустой DecisionRef запрашивает текущее server-owned
+решение CP, затем exact DecisionRef повторно авторизуется перед local commit.
+NOT_FOUND сохраняет блокировку; expired/revoked/mismatch закрыто отклоняются.
+Одна транзакция сохраняет decision actor/grant/version/outcome и снимает source
+lock, не меняя UNKNOWN receipt и provider metadata. Повтор решения идемпотентен;
+поздний protocol completion после reconciliation запрещён.
+Статусный GET и новый effect key сами по себе не снимают блокировку. Отсутствующий authority RPC
 или неутверждённый сетевой маршрут запрещают объявлять unit готовым к deploy.
 
 ## Ротация и остановка
