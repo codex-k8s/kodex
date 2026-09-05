@@ -107,6 +107,11 @@ func managedConfigurationMetadataView(value *controlplanev1.ManagedConfiguration
 		ManagedBy: generated.ManagedConfigurationManagedBy(strings.TrimPrefix(value.GetManagedBy().String(), "MANAGED_CONFIGURATION_OWNER_")),
 		Source:    value.GetSource(), SourceRevision: value.GetSourceRevision(), UpdatedAt: value.GetUpdatedAt().AsTime(),
 	}
+	var err error
+	result.GitSource, err = managedGitSourceView(value)
+	if err != nil {
+		return generated.ManagedConfiguration{}, err
+	}
 	return result, nil
 }
 

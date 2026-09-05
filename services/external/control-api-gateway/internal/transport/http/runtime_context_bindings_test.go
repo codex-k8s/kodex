@@ -19,6 +19,7 @@ func runtimeContextFixture() *controlplanev1.AgentRuntimeConfigurationView {
 	memory := proto.Clone(skill).(*controlplanev1.AgentContextBinding)
 	memory.Ref, memory.ResourceRef, memory.RevisionRef = "bind_memory01", "mem_fixture01", "memv_fixture01"
 	return &controlplanev1.AgentRuntimeConfigurationView{
+		OverlaySchema: runtimeOverlayFixture(),
 		Configuration: &controlplanev1.AgentRuntimeConfiguration{AgentRef: "agt_fixture01"}, AgentVersion: 9,
 		SkillBindings: []*controlplanev1.AgentContextBinding{skill}, MemoryBindings: []*controlplanev1.AgentContextBinding{memory},
 	}
@@ -30,7 +31,7 @@ func TestRuntimeContextBindingsEveryResponse(t *testing.T) {
 		status               int
 	}{
 		{"GET", "/runtime-configuration", "", 200},
-		{"PUT", "/runtime-configuration", `{"runtimeProfileRef":"rtp_fixture01","model":"fixture","providerPolicyMode":"FIXED","providerAccounts":[]}`, 200},
+		{"PUT", "/runtime-configuration", runtimePublishFixture, 200},
 		{"POST", "/config-overlay-drafts", `{"content":""}`, 201},
 		{"POST", "/config-overlay-drafts/validation", "", 200},
 		{"POST", "/config-overlay-drafts/publication", "", 200},

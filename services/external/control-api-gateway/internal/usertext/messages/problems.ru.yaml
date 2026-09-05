@@ -750,3 +750,23 @@ SKILL_BUNDLE_CHANGED:
   other: Набор навыков изменён
 SYSTEM_ROLE_STT_PERMISSION:
   other: Системное разрешение на голосовой ввод
+ASSISTANT_CONVERSATION_ARCHIVED:
+  other: Диалог с ассистентом архивирован
+EMAIL_EFFECT_RECONCILED:
+  other: Результат почтовой операции сверён
+EMAIL_EFFECT_REPORTED:
+  other: Результат почтовой операции записан
+EMAIL_MAILBOX_CREDENTIAL_CREATED:
+  other: Учётные данные почтового ящика созданы
+EMAIL_MAILBOX_GIT_PUBLICATION_PENDING:
+  other: Конфигурация почтового ящика из Git ожидает доставки
+EMAIL_MAILBOX_GIT_SOURCE_RECORDED:
+  other: Источник Git почтового ящика записан
+EMAIL_MAILBOX_PUBLICATION_FAILED:
+  other: Не удалось доставить конфигурацию почтового ящика
+EMAIL_MAILBOX_PUBLICATION_PENDING:
+  other: Конфигурация почтового ящика ожидает доставки
+EMAIL_MAILBOX_PUBLICATION_READY:
+  other: Доставка конфигурации почтового ящика подтверждена
+RUNTIME_SECRET_DRAFT_CHANGED:
+  other: Черновик секрета изменён

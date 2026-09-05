@@ -364,23 +364,29 @@ func (server *Server) CopyGitManagedConfiguration(w http.ResponseWriter, r *http
 }
 
 func (server *Server) ListManagedConfigurationHistory(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, p generated.ListManagedConfigurationHistoryParams) {
+	if !opaqueHTTPReference.MatchString(ref) || !validHTTPPage(p.PageSize, p.PageToken) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	result, err := server.control.Query.ListManagedConfigurationHistory(r.Context(), &controlplanev1.ListManagedConfigurationHistoryRequest{ConfigurationRef: ref, Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	configuration, err := managedConfigurationView(result.GetConfiguration())
-	if err != nil || result.GetTotal() < 0 || result.GetTotal() > maximumSafeJSONInteger || len(result.GetRevisions()) > 50 {
+	if err != nil || configuration.Ref != ref || result.GetTotal() < int64(len(result.GetRevisions())) || result.GetTotal() > maximumSafeJSONInteger || len(result.GetRevisions()) > 50 || len(result.GetPage().GetNextPageToken()) > 512 || !utf8.ValidString(result.GetPage().GetNextPageToken()) {
 		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
 		return
 	}
 	output := generated.ManagedConfigurationHistory{Configuration: configuration, Total: result.GetTotal(), Items: make([]generated.ManagedConfigurationRevision, 0, len(result.GetRevisions()))}
+	seen := map[string]bool{}
 	for _, revision := range result.GetRevisions() {
 		item, err := managedRevisionView(revision)
-		if err != nil {
+		if err != nil || seen[item.Ref] {
 			writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
 			return
 		}
+		seen[item.Ref] = true
 		output.Items = append(output.Items, item)
 	}
 	output.NextPageToken = optionalManagedString(result.GetPage().GetNextPageToken())

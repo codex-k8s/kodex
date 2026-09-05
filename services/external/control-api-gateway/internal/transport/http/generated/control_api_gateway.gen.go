@@ -882,6 +882,87 @@ func (e BootstrapStatePlatformRole) Valid() bool {
 	}
 }
 
+// Defines values for ConfigOverlayDiagnosticCode.
+const (
+	CONFIGOVERLAYEFFORTUNSUPPORTED ConfigOverlayDiagnosticCode = "CONFIG_OVERLAY_EFFORT_UNSUPPORTED"
+	CONFIGOVERLAYKEYFORBIDDEN      ConfigOverlayDiagnosticCode = "CONFIG_OVERLAY_KEY_FORBIDDEN"
+	CONFIGOVERLAYSYNTAXINVALID     ConfigOverlayDiagnosticCode = "CONFIG_OVERLAY_SYNTAX_INVALID"
+	CONFIGOVERLAYVALUEINVALID      ConfigOverlayDiagnosticCode = "CONFIG_OVERLAY_VALUE_INVALID"
+)
+
+// Valid indicates whether the value is a known member of the ConfigOverlayDiagnosticCode enum.
+func (e ConfigOverlayDiagnosticCode) Valid() bool {
+	switch e {
+	case CONFIGOVERLAYEFFORTUNSUPPORTED:
+		return true
+	case CONFIGOVERLAYKEYFORBIDDEN:
+		return true
+	case CONFIGOVERLAYSYNTAXINVALID:
+		return true
+	case CONFIGOVERLAYVALUEINVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigOverlayFieldKey.
+const (
+	AllowLoginShell      ConfigOverlayFieldKey = "allow_login_shell"
+	HistoryPersistence   ConfigOverlayFieldKey = "history.persistence"
+	ModelReasoningEffort ConfigOverlayFieldKey = "model_reasoning_effort"
+	Personality          ConfigOverlayFieldKey = "personality"
+)
+
+// Valid indicates whether the value is a known member of the ConfigOverlayFieldKey enum.
+func (e ConfigOverlayFieldKey) Valid() bool {
+	switch e {
+	case AllowLoginShell:
+		return true
+	case HistoryPersistence:
+		return true
+	case ModelReasoningEffort:
+		return true
+	case Personality:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigOverlayFieldValueType.
+const (
+	Boolean ConfigOverlayFieldValueType = "boolean"
+	String  ConfigOverlayFieldValueType = "string"
+)
+
+// Valid indicates whether the value is a known member of the ConfigOverlayFieldValueType enum.
+func (e ConfigOverlayFieldValueType) Valid() bool {
+	switch e {
+	case Boolean:
+		return true
+	case String:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConfigOverlaySchemaMaximumBytes.
+const (
+	N65536 ConfigOverlaySchemaMaximumBytes = 65536
+)
+
+// Valid indicates whether the value is a known member of the ConfigOverlaySchemaMaximumBytes enum.
+func (e ConfigOverlaySchemaMaximumBytes) Valid() bool {
+	switch e {
+	case N65536:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextResourceState.
 const (
 	ContextResourceStateACTIVE   ContextResourceState = "ACTIVE"
@@ -1623,6 +1704,24 @@ func (e IntegrationDefinitionOrigin) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationDefinitionGitSourceInputContentFormat.
+const (
+	IntegrationDefinitionGitSourceInputContentFormatJSON IntegrationDefinitionGitSourceInputContentFormat = "JSON"
+	IntegrationDefinitionGitSourceInputContentFormatYAML IntegrationDefinitionGitSourceInputContentFormat = "YAML"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionGitSourceInputContentFormat enum.
+func (e IntegrationDefinitionGitSourceInputContentFormat) Valid() bool {
+	switch e {
+	case IntegrationDefinitionGitSourceInputContentFormatJSON:
+		return true
+	case IntegrationDefinitionGitSourceInputContentFormatYAML:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationGrantApprovalPolicy.
 const (
 	IntegrationGrantApprovalPolicyHUMANEACHEFFECT IntegrationGrantApprovalPolicy = "HUMAN_EACH_EFFECT"
@@ -1833,6 +1932,84 @@ func (e ManagedConfigurationDraftSaveInputContentFormat) Valid() bool {
 	case ManagedConfigurationDraftSaveInputContentFormatTOML:
 		return true
 	case ManagedConfigurationDraftSaveInputContentFormatYAML:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationGitSourceFailureCode.
+const (
+	ACCESSDENIED       ManagedConfigurationGitSourceFailureCode = "ACCESS_DENIED"
+	CONTENTINVALID     ManagedConfigurationGitSourceFailureCode = "CONTENT_INVALID"
+	CREDENTIALREJECTED ManagedConfigurationGitSourceFailureCode = "CREDENTIAL_REJECTED"
+	DIVERGED           ManagedConfigurationGitSourceFailureCode = "DIVERGED"
+	NOTFOUND           ManagedConfigurationGitSourceFailureCode = "NOT_FOUND"
+	RESPONSEINVALID    ManagedConfigurationGitSourceFailureCode = "RESPONSE_INVALID"
+	UNAVAILABLE        ManagedConfigurationGitSourceFailureCode = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationGitSourceFailureCode enum.
+func (e ManagedConfigurationGitSourceFailureCode) Valid() bool {
+	switch e {
+	case ACCESSDENIED:
+		return true
+	case CONTENTINVALID:
+		return true
+	case CREDENTIALREJECTED:
+		return true
+	case DIVERGED:
+		return true
+	case NOTFOUND:
+		return true
+	case RESPONSEINVALID:
+		return true
+	case UNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationGitSourceProviderKey.
+const (
+	Github ManagedConfigurationGitSourceProviderKey = "github"
+	Gitlab ManagedConfigurationGitSourceProviderKey = "gitlab"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationGitSourceProviderKey enum.
+func (e ManagedConfigurationGitSourceProviderKey) Valid() bool {
+	switch e {
+	case Github:
+		return true
+	case Gitlab:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationGitSourceState.
+const (
+	ManagedConfigurationGitSourceStateCLAIMED     ManagedConfigurationGitSourceState = "CLAIMED"
+	ManagedConfigurationGitSourceStateDETACHED    ManagedConfigurationGitSourceState = "DETACHED"
+	ManagedConfigurationGitSourceStateQUEUED      ManagedConfigurationGitSourceState = "QUEUED"
+	ManagedConfigurationGitSourceStateREADY       ManagedConfigurationGitSourceState = "READY"
+	ManagedConfigurationGitSourceStateSYNCBLOCKED ManagedConfigurationGitSourceState = "SYNC_BLOCKED"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationGitSourceState enum.
+func (e ManagedConfigurationGitSourceState) Valid() bool {
+	switch e {
+	case ManagedConfigurationGitSourceStateCLAIMED:
+		return true
+	case ManagedConfigurationGitSourceStateDETACHED:
+		return true
+	case ManagedConfigurationGitSourceStateQUEUED:
+		return true
+	case ManagedConfigurationGitSourceStateREADY:
+		return true
+	case ManagedConfigurationGitSourceStateSYNCBLOCKED:
 		return true
 	default:
 		return false
@@ -2790,6 +2967,72 @@ func (e ProviderDefinitionKey) Valid() bool {
 	}
 }
 
+// Defines values for ProviderModelCatalogStatusFailure.
+const (
+	ProviderModelCatalogStatusFailureAUTHORIZATIONREJECTED ProviderModelCatalogStatusFailure = "AUTHORIZATION_REJECTED"
+	ProviderModelCatalogStatusFailureNONE                  ProviderModelCatalogStatusFailure = "NONE"
+	ProviderModelCatalogStatusFailureUNAVAILABLE           ProviderModelCatalogStatusFailure = "UNAVAILABLE"
+	ProviderModelCatalogStatusFailureUNVERIFIEDSOURCE      ProviderModelCatalogStatusFailure = "UNVERIFIED_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the ProviderModelCatalogStatusFailure enum.
+func (e ProviderModelCatalogStatusFailure) Valid() bool {
+	switch e {
+	case ProviderModelCatalogStatusFailureAUTHORIZATIONREJECTED:
+		return true
+	case ProviderModelCatalogStatusFailureNONE:
+		return true
+	case ProviderModelCatalogStatusFailureUNAVAILABLE:
+		return true
+	case ProviderModelCatalogStatusFailureUNVERIFIEDSOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderModelCatalogStatusSource.
+const (
+	REMOTEAPI   ProviderModelCatalogStatusSource = "REMOTE_API"
+	REMOTECODEX ProviderModelCatalogStatusSource = "REMOTE_CODEX"
+)
+
+// Valid indicates whether the value is a known member of the ProviderModelCatalogStatusSource enum.
+func (e ProviderModelCatalogStatusSource) Valid() bool {
+	switch e {
+	case REMOTEAPI:
+		return true
+	case REMOTECODEX:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderModelCatalogStatusState.
+const (
+	ProviderModelCatalogStatusStateEXPIRED ProviderModelCatalogStatusState = "EXPIRED"
+	ProviderModelCatalogStatusStateFAILED  ProviderModelCatalogStatusState = "FAILED"
+	ProviderModelCatalogStatusStatePENDING ProviderModelCatalogStatusState = "PENDING"
+	ProviderModelCatalogStatusStateREADY   ProviderModelCatalogStatusState = "READY"
+)
+
+// Valid indicates whether the value is a known member of the ProviderModelCatalogStatusState enum.
+func (e ProviderModelCatalogStatusState) Valid() bool {
+	switch e {
+	case ProviderModelCatalogStatusStateEXPIRED:
+		return true
+	case ProviderModelCatalogStatusStateFAILED:
+		return true
+	case ProviderModelCatalogStatusStatePENDING:
+		return true
+	case ProviderModelCatalogStatusStateREADY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleEnvironmentPlatformArchitecture.
 const (
 	Amd64 RoleEnvironmentPlatformArchitecture = "amd64"
@@ -2889,6 +3132,24 @@ func (e RoleImageBuildStage) Valid() bool {
 	case RoleImageBuildStageSTAGINGPUSH:
 		return true
 	case RoleImageBuildStageTRUSTEDRUNTIMEFINALIZATION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageGitSourceInputContentFormat.
+const (
+	RoleImageGitSourceInputContentFormatJSON RoleImageGitSourceInputContentFormat = "JSON"
+	RoleImageGitSourceInputContentFormatYAML RoleImageGitSourceInputContentFormat = "YAML"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageGitSourceInputContentFormat enum.
+func (e RoleImageGitSourceInputContentFormat) Valid() bool {
+	switch e {
+	case RoleImageGitSourceInputContentFormatJSON:
+		return true
+	case RoleImageGitSourceInputContentFormatYAML:
 		return true
 	default:
 		return false
@@ -3488,16 +3749,16 @@ func (e RuntimeEnvironmentSetState) Valid() bool {
 
 // Defines values for RuntimeKubernetesAccessKind.
 const (
-	RuntimeKubernetesAccessKindNONE             RuntimeKubernetesAccessKind = "NONE"
-	RuntimeKubernetesAccessKindREADOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
+	NONE             RuntimeKubernetesAccessKind = "NONE"
+	READOWNEXECUTION RuntimeKubernetesAccessKind = "READ_OWN_EXECUTION"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeKubernetesAccessKind enum.
 func (e RuntimeKubernetesAccessKind) Valid() bool {
 	switch e {
-	case RuntimeKubernetesAccessKindNONE:
+	case NONE:
 		return true
-	case RuntimeKubernetesAccessKindREADOWNEXECUTION:
+	case READOWNEXECUTION:
 		return true
 	default:
 		return false
@@ -5891,7 +6152,7 @@ type AgentRuntimeConfiguration struct {
 // AgentRuntimeConfigurationInput defines model for AgentRuntimeConfigurationInput.
 type AgentRuntimeConfigurationInput struct {
 	Model              string                                           `json:"model"`
-	ProviderAccounts   []ProviderAccountCandidate                       `json:"providerAccounts"`
+	ProviderAccounts   []ProviderAccountCandidateInput                  `json:"providerAccounts"`
 	ProviderPolicyMode AgentRuntimeConfigurationInputProviderPolicyMode `json:"providerPolicyMode"`
 	RuntimeProfileRef  OpaqueRef                                        `json:"runtimeProfileRef"`
 }
@@ -5913,6 +6174,7 @@ type AgentRuntimeConfigurationView struct {
 	Environment         RuntimeEnvironmentSet          `json:"environment"`
 	EnvironmentBinding  AgentRuntimeEnvironmentBinding `json:"environmentBinding"`
 	MemoryBindings      []AgentContextBinding          `json:"memoryBindings"`
+	OverlaySchema       ConfigOverlaySchema            `json:"overlaySchema"`
 	PublishedOverlay    ConfigOverlayVersion           `json:"publishedOverlay"`
 	SafeEffectiveConfig string                         `json:"safeEffectiveConfig"`
 	SkillBindings       []AgentContextBinding          `json:"skillBindings"`
@@ -6266,27 +6528,70 @@ type BootstrapState struct {
 // BootstrapStatePlatformRole defines model for BootstrapState.PlatformRole.
 type BootstrapStatePlatformRole string
 
+// ConfigOverlayDiagnostic defines model for ConfigOverlayDiagnostic.
+type ConfigOverlayDiagnostic struct {
+	Code    ConfigOverlayDiagnosticCode `json:"code"`
+	Column  int                         `json:"column"`
+	Key     string                      `json:"key"`
+	Line    int                         `json:"line"`
+	Message string                      `json:"message"`
+}
+
+// ConfigOverlayDiagnosticCode defines model for ConfigOverlayDiagnostic.Code.
+type ConfigOverlayDiagnosticCode string
+
 // ConfigOverlayDraftInput defines model for ConfigOverlayDraftInput.
 type ConfigOverlayDraftInput struct {
 	Content string `json:"content"`
 }
+
+// ConfigOverlayField defines model for ConfigOverlayField.
+type ConfigOverlayField struct {
+	AllowedValues []string                    `json:"allowedValues"`
+	Completion    string                      `json:"completion"`
+	DefaultValue  string                      `json:"defaultValue"`
+	Description   string                      `json:"description"`
+	Hover         string                      `json:"hover"`
+	Key           ConfigOverlayFieldKey       `json:"key"`
+	ValueType     ConfigOverlayFieldValueType `json:"valueType"`
+}
+
+// ConfigOverlayFieldKey defines model for ConfigOverlayField.Key.
+type ConfigOverlayFieldKey string
+
+// ConfigOverlayFieldValueType defines model for ConfigOverlayField.ValueType.
+type ConfigOverlayFieldValueType string
 
 // ConfigOverlayRollbackInput defines model for ConfigOverlayRollbackInput.
 type ConfigOverlayRollbackInput struct {
 	PublishedOverlayRef OpaqueRef `json:"publishedOverlayRef"`
 }
 
+// ConfigOverlaySchema defines model for ConfigOverlaySchema.
+type ConfigOverlaySchema struct {
+	Digest       string                          `json:"digest"`
+	Fields       []ConfigOverlayField            `json:"fields"`
+	MaximumBytes ConfigOverlaySchemaMaximumBytes `json:"maximumBytes"`
+	Revision     string                          `json:"revision"`
+}
+
+// ConfigOverlaySchemaMaximumBytes defines model for ConfigOverlaySchema.MaximumBytes.
+type ConfigOverlaySchemaMaximumBytes int
+
 // ConfigOverlayVersion defines model for ConfigOverlayVersion.
 type ConfigOverlayVersion struct {
-	Content            string     `json:"content"`
-	CreatedAt          Timestamp  `json:"createdAt"`
-	Digest             string     `json:"digest"`
-	PublishedAt        *Timestamp `json:"publishedAt,omitempty"`
-	Ref                OpaqueRef  `json:"ref"`
-	Revision           int64      `json:"revision"`
-	State              string     `json:"state"`
-	ValidationMessages []string   `json:"validationMessages"`
-	Version            int64      `json:"version"`
+	Content            string                     `json:"content"`
+	CreatedAt          Timestamp                  `json:"createdAt"`
+	Diagnostics        *[]ConfigOverlayDiagnostic `json:"diagnostics,omitempty"`
+	Digest             string                     `json:"digest"`
+	PublishedAt        *Timestamp                 `json:"publishedAt,omitempty"`
+	Ref                OpaqueRef                  `json:"ref"`
+	Revision           int64                      `json:"revision"`
+	SchemaDigest       *string                    `json:"schemaDigest,omitempty"`
+	SchemaRevision     *string                    `json:"schemaRevision,omitempty"`
+	State              string                     `json:"state"`
+	ValidationMessages []string                   `json:"validationMessages"`
+	Version            int64                      `json:"version"`
 }
 
 // ContextProvenance defines model for ContextProvenance.
@@ -6796,6 +7101,25 @@ type IntegrationDefinitionExecutionRoute string
 // IntegrationDefinitionOrigin defines model for IntegrationDefinition.Origin.
 type IntegrationDefinitionOrigin string
 
+// IntegrationDefinitionGitSourceInput defines model for IntegrationDefinitionGitSourceInput.
+type IntegrationDefinitionGitSourceInput struct {
+	ConnectionRef             OpaqueRef                                        `json:"connectionRef"`
+	ContentFormat             IntegrationDefinitionGitSourceInputContentFormat `json:"contentFormat"`
+	ExpectedConnectionVersion int64                                            `json:"expectedConnectionVersion"`
+
+	// Path Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.
+	Path string `json:"path"`
+
+	// RefName Git ref без управляющих символов; максимум 256 UTF-8 bytes.
+	RefName string `json:"refName"`
+
+	// RepositoryRef Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.
+	RepositoryRef string `json:"repositoryRef"`
+}
+
+// IntegrationDefinitionGitSourceInputContentFormat defines model for IntegrationDefinitionGitSourceInput.ContentFormat.
+type IntegrationDefinitionGitSourceInputContentFormat string
+
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
 	AgentRef          *OpaqueRef                     `json:"agentRef,omitempty"`
@@ -6893,15 +7217,18 @@ type KodexMemoryRecord struct {
 // ManagedConfiguration defines model for ManagedConfiguration.
 type ManagedConfiguration struct {
 	CurrentRevision *ManagedConfigurationRevision `json:"currentRevision,omitempty"`
-	Kind            ManagedConfigurationKind      `json:"kind"`
-	ManagedBy       ManagedConfigurationManagedBy `json:"managedBy"`
-	Name            string                        `json:"name"`
-	ProjectRef      *OpaqueRef                    `json:"projectRef,omitempty"`
-	Ref             OpaqueRef                     `json:"ref"`
-	Source          string                        `json:"source"`
-	SourceRevision  string                        `json:"sourceRevision"`
-	UpdatedAt       Timestamp                     `json:"updatedAt"`
-	Version         int64                         `json:"version"`
+
+	// GitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+	GitSource      *ManagedConfigurationGitSource `json:"gitSource,omitempty"`
+	Kind           ManagedConfigurationKind       `json:"kind"`
+	ManagedBy      ManagedConfigurationManagedBy  `json:"managedBy"`
+	Name           string                         `json:"name"`
+	ProjectRef     *OpaqueRef                     `json:"projectRef,omitempty"`
+	Ref            OpaqueRef                      `json:"ref"`
+	Source         string                         `json:"source"`
+	SourceRevision string                         `json:"sourceRevision"`
+	UpdatedAt      Timestamp                      `json:"updatedAt"`
+	Version        int64                          `json:"version"`
 }
 
 // ManagedConfigurationKind defines model for ManagedConfiguration.Kind.
@@ -6952,6 +7279,33 @@ type ManagedConfigurationDraftSaveInput struct {
 
 // ManagedConfigurationDraftSaveInputContentFormat defines model for ManagedConfigurationDraftSaveInput.ContentFormat.
 type ManagedConfigurationDraftSaveInputContentFormat string
+
+// ManagedConfigurationGitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+type ManagedConfigurationGitSource struct {
+	AcceptedCommitSha     *string                                   `json:"acceptedCommitSha,omitempty"`
+	AcceptedContentSha256 *string                                   `json:"acceptedContentSha256,omitempty"`
+	AcceptedRevisionRef   *OpaqueRef                                `json:"acceptedRevisionRef,omitempty"`
+	ConnectionRef         OpaqueRef                                 `json:"connectionRef"`
+	FailureCode           *ManagedConfigurationGitSourceFailureCode `json:"failureCode,omitempty"`
+	Generation            int64                                     `json:"generation"`
+	Path                  string                                    `json:"path"`
+	ProviderKey           ManagedConfigurationGitSourceProviderKey  `json:"providerKey"`
+	Ref                   OpaqueRef                                 `json:"ref"`
+	RefName               string                                    `json:"refName"`
+	RepositoryRef         string                                    `json:"repositoryRef"`
+	State                 ManagedConfigurationGitSourceState        `json:"state"`
+	SyncedAt              *Timestamp                                `json:"syncedAt,omitempty"`
+	Version               int64                                     `json:"version"`
+}
+
+// ManagedConfigurationGitSourceFailureCode defines model for ManagedConfigurationGitSource.FailureCode.
+type ManagedConfigurationGitSourceFailureCode string
+
+// ManagedConfigurationGitSourceProviderKey defines model for ManagedConfigurationGitSource.ProviderKey.
+type ManagedConfigurationGitSourceProviderKey string
+
+// ManagedConfigurationGitSourceState defines model for ManagedConfigurationGitSource.State.
+type ManagedConfigurationGitSourceState string
 
 // ManagedConfigurationHistory defines model for ManagedConfigurationHistory.
 type ManagedConfigurationHistory struct {
@@ -7019,6 +7373,9 @@ type ManagedConfigurationSummary struct {
 		Revision int64                                           `json:"revision"`
 		State    ManagedConfigurationSummaryCurrentRevisionState `json:"state"`
 	} `json:"currentRevision,omitempty"`
+
+	// GitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+	GitSource      *ManagedConfigurationGitSource       `json:"gitSource,omitempty"`
 	Kind           ManagedConfigurationSummaryKind      `json:"kind"`
 	ManagedBy      ManagedConfigurationSummaryManagedBy `json:"managedBy"`
 	Name           string                               `json:"name"`
@@ -7114,11 +7471,12 @@ type ModelCapability struct {
 
 // ModelCapabilityPage defines model for ModelCapabilityPage.
 type ModelCapabilityPage struct {
-	CatalogDigest   string            `json:"catalogDigest"`
-	CatalogRevision string            `json:"catalogRevision"`
-	Items           []ModelCapability `json:"items"`
-	NextPageToken   string            `json:"nextPageToken"`
-	Total           int64             `json:"total"`
+	CatalogDigest   string                      `json:"catalogDigest"`
+	CatalogRevision string                      `json:"catalogRevision"`
+	CatalogStatus   *ProviderModelCatalogStatus `json:"catalogStatus,omitempty"`
+	Items           []ModelCapability           `json:"items"`
+	NextPageToken   string                      `json:"nextPageToken"`
+	Total           int64                       `json:"total"`
 }
 
 // NextAction defines model for NextAction.
@@ -7414,8 +7772,21 @@ type ProviderAccountState string
 
 // ProviderAccountCandidate defines model for ProviderAccountCandidate.
 type ProviderAccountCandidate struct {
-	AccountRef OpaqueRef `json:"accountRef"`
-	Weight     int       `json:"weight"`
+	AccountRef             OpaqueRef `json:"accountRef"`
+	CatalogDigest          *string   `json:"catalogDigest,omitempty"`
+	CatalogRevision        *string   `json:"catalogRevision,omitempty"`
+	DefaultReasoningEffort string    `json:"defaultReasoningEffort"`
+	ProviderDefinitionKey  *string   `json:"providerDefinitionKey,omitempty"`
+	Weight                 int       `json:"weight"`
+}
+
+// ProviderAccountCandidateInput defines model for ProviderAccountCandidateInput.
+type ProviderAccountCandidateInput struct {
+	AccountRef            OpaqueRef `json:"accountRef"`
+	CatalogDigest         string    `json:"catalogDigest"`
+	CatalogRevision       string    `json:"catalogRevision"`
+	ProviderDefinitionKey string    `json:"providerDefinitionKey"`
+	Weight                int       `json:"weight"`
 }
 
 // ProviderAccountCreateInput defines model for ProviderAccountCreateInput.
@@ -7494,6 +7865,24 @@ type ProviderDefinitionPage struct {
 	Items         []ProviderDefinition `json:"items"`
 	NextPageToken string               `json:"nextPageToken"`
 }
+
+// ProviderModelCatalogStatus defines model for ProviderModelCatalogStatus.
+type ProviderModelCatalogStatus struct {
+	ExpiresAt  *Timestamp                         `json:"expiresAt,omitempty"`
+	Failure    *ProviderModelCatalogStatusFailure `json:"failure,omitempty"`
+	ObservedAt *Timestamp                         `json:"observedAt,omitempty"`
+	Source     *ProviderModelCatalogStatusSource  `json:"source,omitempty"`
+	State      ProviderModelCatalogStatusState    `json:"state"`
+}
+
+// ProviderModelCatalogStatusFailure defines model for ProviderModelCatalogStatus.Failure.
+type ProviderModelCatalogStatusFailure string
+
+// ProviderModelCatalogStatusSource defines model for ProviderModelCatalogStatus.Source.
+type ProviderModelCatalogStatusSource string
+
+// ProviderModelCatalogStatusState defines model for ProviderModelCatalogStatus.State.
+type ProviderModelCatalogStatusState string
 
 // PublicRuntimeRevisionIdentity defines model for PublicRuntimeRevisionIdentity.
 type PublicRuntimeRevisionIdentity struct {
@@ -7595,6 +7984,25 @@ type RoleImageBuild struct {
 
 // RoleImageBuildStage defines model for RoleImageBuild.Stage.
 type RoleImageBuildStage string
+
+// RoleImageGitSourceInput defines model for RoleImageGitSourceInput.
+type RoleImageGitSourceInput struct {
+	ConnectionRef             OpaqueRef                            `json:"connectionRef"`
+	ContentFormat             RoleImageGitSourceInputContentFormat `json:"contentFormat"`
+	ExpectedConnectionVersion int64                                `json:"expectedConnectionVersion"`
+
+	// Path Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.
+	Path string `json:"path"`
+
+	// RefName Git ref без управляющих символов; максимум 256 UTF-8 bytes.
+	RefName string `json:"refName"`
+
+	// RepositoryRef Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.
+	RepositoryRef string `json:"repositoryRef"`
+}
+
+// RoleImageGitSourceInputContentFormat defines model for RoleImageGitSourceInput.ContentFormat.
+type RoleImageGitSourceInputContentFormat string
 
 // RoleImagePromotionInput defines model for RoleImagePromotionInput.
 type RoleImagePromotionInput struct {
@@ -9957,6 +10365,20 @@ type CreateIntegrationDefinitionDraftParams struct {
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
 }
 
+// ConfigureIntegrationDefinitionGitSourceParams defines parameters for ConfigureIntegrationDefinitionGitSource.
+type ConfigureIntegrationDefinitionGitSourceParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// RefreshIntegrationDefinitionGitSourceParams defines parameters for RefreshIntegrationDefinitionGitSource.
+type RefreshIntegrationDefinitionGitSourceParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // RebindIntegrationDefinitionConsumersParams defines parameters for RebindIntegrationDefinitionConsumers.
 type RebindIntegrationDefinitionConsumersParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -10549,6 +10971,20 @@ type CreateRoleImageRevisionDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+}
+
+// ConfigureRoleImageGitSourceParams defines parameters for ConfigureRoleImageGitSource.
+type ConfigureRoleImageGitSourceParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// RefreshRoleImageGitSourceParams defines parameters for RefreshRoleImageGitSource.
+type RefreshRoleImageGitSourceParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // RebindRoleImageConsumersParams defines parameters for RebindRoleImageConsumers.
@@ -11212,6 +11648,9 @@ type BindInteractionIdentityJSONRequestBody = InteractionIdentityBindInput
 // CreateIntegrationDefinitionDraftJSONRequestBody defines body for CreateIntegrationDefinitionDraft for application/json ContentType.
 type CreateIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
+// ConfigureIntegrationDefinitionGitSourceJSONRequestBody defines body for ConfigureIntegrationDefinitionGitSource for application/json ContentType.
+type ConfigureIntegrationDefinitionGitSourceJSONRequestBody = IntegrationDefinitionGitSourceInput
+
 // RebindIntegrationDefinitionConsumersJSONRequestBody defines body for RebindIntegrationDefinitionConsumers for application/json ContentType.
 type RebindIntegrationDefinitionConsumersJSONRequestBody = ManagedConfigurationRebindInput
 
@@ -11310,6 +11749,9 @@ type SetProviderAccountEnabledJSONRequestBody = EnabledInput
 
 // CreateRoleImageRevisionDraftJSONRequestBody defines body for CreateRoleImageRevisionDraft for application/json ContentType.
 type CreateRoleImageRevisionDraftJSONRequestBody = ManagedConfigurationDraftInput
+
+// ConfigureRoleImageGitSourceJSONRequestBody defines body for ConfigureRoleImageGitSource for application/json ContentType.
+type ConfigureRoleImageGitSourceJSONRequestBody = RoleImageGitSourceInput
 
 // RebindRoleImageConsumersJSONRequestBody defines body for RebindRoleImageConsumers for application/json ContentType.
 type RebindRoleImageConsumersJSONRequestBody = ManagedConfigurationRebindInput
@@ -11689,6 +12131,12 @@ type ServerInterface interface {
 	// (POST /api/v1/integration-definition-configurations/drafts)
 	CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, params CreateIntegrationDefinitionDraftParams)
 
+	// (POST /api/v1/integration-definition-configurations/{configurationRef}/git-source)
+	ConfigureIntegrationDefinitionGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ConfigureIntegrationDefinitionGitSourceParams)
+
+	// (POST /api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh)
+	RefreshIntegrationDefinitionGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params RefreshIntegrationDefinitionGitSourceParams)
+
 	// (POST /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings)
 	RebindIntegrationDefinitionConsumers(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params RebindIntegrationDefinitionConsumersParams)
 
@@ -11949,6 +12397,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/role-image-configurations/drafts)
 	CreateRoleImageRevisionDraft(w http.ResponseWriter, r *http.Request, params CreateRoleImageRevisionDraftParams)
+
+	// (POST /api/v1/role-image-configurations/{configurationRef}/git-source)
+	ConfigureRoleImageGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ConfigureRoleImageGitSourceParams)
+
+	// (POST /api/v1/role-image-configurations/{configurationRef}/git-source/refresh)
+	RefreshRoleImageGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params RefreshRoleImageGitSourceParams)
 
 	// (POST /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings)
 	RebindRoleImageConsumers(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params RebindRoleImageConsumersParams)
@@ -20227,6 +20681,218 @@ func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.Respo
 	handler.ServeHTTP(w, r)
 }
 
+// ConfigureIntegrationDefinitionGitSource operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureIntegrationDefinitionGitSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureIntegrationDefinitionGitSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureIntegrationDefinitionGitSource(w, r, configurationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshIntegrationDefinitionGitSource operation middleware
+func (siw *ServerInterfaceWrapper) RefreshIntegrationDefinitionGitSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RefreshIntegrationDefinitionGitSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshIntegrationDefinitionGitSource(w, r, configurationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RebindIntegrationDefinitionConsumers operation middleware
 func (siw *ServerInterfaceWrapper) RebindIntegrationDefinitionConsumers(w http.ResponseWriter, r *http.Request) {
 
@@ -27889,6 +28555,218 @@ func (siw *ServerInterfaceWrapper) CreateRoleImageRevisionDraft(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// ConfigureRoleImageGitSource operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureRoleImageGitSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureRoleImageGitSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureRoleImageGitSource(w, r, configurationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshRoleImageGitSource operation middleware
+func (siw *ServerInterfaceWrapper) RefreshRoleImageGitSource(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RefreshRoleImageGitSourceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshRoleImageGitSource(w, r, configurationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RebindRoleImageConsumers operation middleware
 func (siw *ServerInterfaceWrapper) RebindRoleImageConsumers(w http.ResponseWriter, r *http.Request) {
 
@@ -35353,6 +36231,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source", wrapper.ConfigureIntegrationDefinitionGitSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshIntegrationDefinitionGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings", wrapper.RebindIntegrationDefinitionConsumers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/discard", wrapper.DiscardIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishIntegrationDefinitionDraft)
@@ -35440,6 +36320,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-definitions", wrapper.ListProviderDefinitions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/role-environments", wrapper.ListRoleEnvironments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/drafts", wrapper.CreateRoleImageRevisionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/git-source", wrapper.ConfigureRoleImageGitSource)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshRoleImageGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings", wrapper.RebindRoleImageConsumers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/discard", wrapper.DiscardRoleImageRevisionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishRoleImageRevisionDraft)
