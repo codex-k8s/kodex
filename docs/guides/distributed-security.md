@@ -581,6 +581,18 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
+  Он не получает direct outbound: producer из того же version-pinned typed
+  mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.
+  Runtime policy и CNI `/32`/`/128` pins создаются вместе; destination-less
+  mail egress запрещён. Закрытый набор: SMTP `465/implicit`, `587/starttls`,
+  POP3 `995/implicit`, `110/starttls`, IMAP `993/implicit`, `143/starttls`.
+  Implicit TLS сохраняет проверку ClientHello до dial. Для STARTTLS greeting
+  предшествует TLS, поэтому gateway после exact policy/DNS проверки создаёт
+  opaque tunnel без TLS termination или разбора почтовых команд. Обязательные
+  TLS upgrade, exact hostname/CA и запрет credentials до TLS принадлежат
+  email-bridge. Изменение DNS вне pins закрывает доступ до новой согласованной
+  проекции; фильтрация небезопасной части ответа и fallback запрещены.
 - Отдельный сетевой профиль связывает immutable workload/operation/destination
   с принадлежащим серверу listener и точными CNI selectors; caller header не
   назначает профиль. Readiness и CONNECT возвращают фактически обслуживаемые

@@ -74,6 +74,9 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":   strings.Repeat("a", 64),
 		"EGRESS_GATEWAY_CONNECT_LISTEN":           ":8080",
 		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":       ":8081",
+		"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN":      ":8082",
+		"EGRESS_GATEWAY_MAIL_POLICY_FILE":         "/var/run/config/kodex/egress-gateway-mail/policy.json",
+		"EGRESS_GATEWAY_MAIL_POLICY_DIGEST":       strings.Repeat("b", 64),
 		"EGRESS_GATEWAY_TECHNICAL_LISTEN":         ":9090",
 		"EGRESS_GATEWAY_RESOLV_CONF":              "/etc/resolv.conf",
 	}
@@ -107,7 +110,8 @@ func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T)
 	go func() {
 		done <- runTechnicalOnly(lifecycle, context.Background(), Config{
 			TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0",
-			STTConnectAddress: "127.0.0.1:0",
+			STTConnectAddress:  "127.0.0.1:0",
+			MailConnectAddress: "127.0.0.1:0",
 		}, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 	}()
 	select {
