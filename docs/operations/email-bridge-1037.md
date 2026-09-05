@@ -452,3 +452,39 @@ NetworkPolicy согласованы; общие `8080`, STT `8081` и чужи�
 до запуска. `TestMailEgressDestination` проверяет эту границу, render-проверка
 сверяет точные namespace/pod/port и runtime endpoint. Эти проверки не доказывают
 готовность listener или mailbox projection: их producer принадлежит #1029/#1046.
+
+## Жизненный цикл обновления конфигурации
+
+Источник: #1037/#1046. CP принимает immutable документ в owner PostgreSQL,
+проверяет exact credential keys и атомарно обновляет заранее созданный Secret.
+Bridge не получает Kubernetes API или права записи. Весь Secret монтируется
+read-only без subPath; документ и credentials читаются из одного поколения
+Kubernetes AtomicWriter. Новая попытка использует одну неизменяемую пару
+configuration/credentials. Документ не является authority: перед каждой
+операцией CP по-прежнему проверяет original execution binding и grants.
+
+| Переход | Условие и эффект | Событие и read path |
+| --- | --- | --- |
+| Startup | Строгий bounded документ и credentials; durable SQL watermark до открытия рабочих запросов | События нет; локальная readiness |
+| Новая revision | Один bounded monitor принимает только forward-only SQL revision/digest и атомарно заменяет обслуживаемый snapshot | События нет; новый HTTP запрос использует новую пару |
+| Тот же документ | Exact revision/digest допустим; credential keys читаются из того же поколения mount | События нет; SQL watermark и snapshot |
+| Disable/remove | Новый документ исключает доступную mailbox; новые запросы отклоняются, уже взятые immutable requests остаются ограничены lease и CP authority | События нет; CP authorization и typed HTTP error |
+| Invalid/missing/rollback | Новые запросы закрыто отклоняются, readiness false; прежний durable watermark не удаляется | События нет; следующая bounded попытка перечитывает mount |
+| Cancel/shutdown | Monitor отменяется и завершается до закрытия PostgreSQL; новые запросы закрываются | События нет; shutdown lifecycle |
+
+Значения credentials находятся только в закрытом bounded snapshot и не
+сериализуются, не логируются и не выдаются transport. Reload не создаёт
+invocation, не повторяет provider effect и не изменяет receipt recovery.
+
+Потреблён producer `af74fc7dc` через интеграцию `53f767134`. Локально выполнены:
+EMAIL full race/vet/build; `make test-email-bridge` с отдельной PostgreSQL
+(27.010 с), включая `TestMailboxProjectionReloadHTTPS`; staging и оба полных
+EMAIL/projection render-профиля. Общий `make test-web-only-release` теперь
+PASS: ранее отсутствовавший producer Secret присутствует. Это не доказывает
+live delivery или CNI enforcement. UI/credential write lifecycle D5, защищённая
+цепочка с реальным CP и staging ещё не проверены.
+
+Через Context7 `/kubernetes/website` проверены
+[обновляемые Secret volumes](https://kubernetes.io/docs/concepts/storage/volumes/#secret)
+и AtomicWriter с переключением `..data`. В работающем кластере доставка имеет
+задержку kubelet; consumer monitor перечитывает mount каждые 15 секунд.

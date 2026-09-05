@@ -17,6 +17,7 @@ const CallerSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/integration-gatewa
 type Observer interface{ Record(api.Operation, string) }
 type Handler struct {
 	Service *mail.Service
+	Current func() *mail.Service
 	Metrics Observer
 }
 
@@ -42,12 +43,20 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r = r.WithContext(api.WithExecutionBinding(r.Context(), binding))
-	cmd, legacy, e := casters.Command(r, h.Service.Config)
+	service := h.Service
+	if h.Current != nil {
+		service = h.Current()
+	}
+	if service == nil {
+		writeError(w, errs.Unavailable)
+		return
+	}
+	cmd, legacy, e := casters.Command(r, service.Config)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
-	result, e := h.Service.Execute(r.Context(), CallerSPIFFE, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), cmd)
+	result, e := service.Execute(r.Context(), CallerSPIFFE, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), cmd)
 	outcome := "success"
 	if e != nil {
 		outcome = "error"

@@ -18,7 +18,6 @@ type Config struct {
 	ReconciliationBatch           int    `env:"EMAIL_BRIDGE_RECONCILIATION_BATCH"`
 	Listen                        string `env:"EMAIL_BRIDGE_LISTEN"`
 	Technical                     string `env:"EMAIL_BRIDGE_TECHNICAL_LISTEN"`
-	ConfigurationFile             string `env:"EMAIL_BRIDGE_CONFIGURATION_FILE,required,notEmpty"`
 	SecretsRoot                   string `env:"EMAIL_BRIDGE_SECRETS_ROOT,required,notEmpty"`
 	DSNFile                       string `env:"EMAIL_BRIDGE_DSN_FILE,required,notEmpty"`
 	CertificateFile               string `env:"EMAIL_BRIDGE_CERTIFICATE_FILE,required,notEmpty"`
@@ -44,7 +43,7 @@ func loadConfig() (Config, error) {
 	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != mailEgressAddress {
 		return c, errors.New("invalid email bridge destinations")
 	}
-	for _, p := range []string{c.ConfigurationFile, c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
+	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
 			return c, errors.New("invalid email bridge file path")
 		}

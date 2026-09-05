@@ -40,6 +40,10 @@ for container in pod['containers'] + pod['initContainers']:
 assert pod['securityContext']['fsGroup'] == 29000
 issuer = next(x for x in pod['containers'] if x['name'] == 'internal-rpc-authority-issuer')
 issuer_volumes = {x['name']: x for x in pod['volumes']}
+assert 'configuration' not in issuer_volumes
+assert issuer_volumes['mail']['secret'] == {'secretName': 'email-bridge-mailbox-projection', 'defaultMode': 288}
+mail_mount = next(x for x in c['volumeMounts'] if x['name'] == 'mail')
+assert mail_mount == {'name': 'mail', 'mountPath': '/var/run/email/mail', 'readOnly': True}
 assert issuer_volumes['internal-rpc-authority-postgresql']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-issuer-postgresql'
 assert issuer_volumes['internal-rpc-authority-workload-tls']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-workload-tls'
 certificate = get('Certificate', 'internal-rpc-authority-email-bridge-workload')['spec']
@@ -66,6 +70,8 @@ assert destinations['opentelemetry-collector'] == ('observability', 4317)
 root = pathlib.Path(sys.argv[3])
 descriptor = yaml.safe_load((root / 'contracts/email-bridge/v1/deployable.yaml').read_text())
 runtime = get('ConfigMap', 'email-bridge-runtime')['data']
+assert runtime['EMAIL_BRIDGE_SECRETS_ROOT'] == mail_mount['mountPath']
+assert 'EMAIL_BRIDGE_CONFIGURATION_FILE' not in runtime
 authority = descriptor['authority']
 assert authority['transport'] == 'grpc'
 assert authority['endpoint'] == runtime['EMAIL_BRIDGE_AUTHORITY_TARGET']

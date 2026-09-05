@@ -16,9 +16,13 @@ import (
 )
 
 // Тот же mapping используется gateway и producer для immutable input digest.
-func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service) func(string, string, map[string]any) api.Result {
+func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service, current ...func() *mail.Service) func(string, string, map[string]any) api.Result {
 	t.Helper()
-	server := httptest.NewUnstartedServer(httptransport.Handler{Service: s})
+	handler := httptransport.Handler{Service: s}
+	if len(current) == 1 {
+		handler.Current = current[0]
+	}
+	server := httptest.NewUnstartedServer(handler)
 	ca := x509.NewCertPool()
 	ca.AppendCertsFromPEM(f.ca)
 	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
