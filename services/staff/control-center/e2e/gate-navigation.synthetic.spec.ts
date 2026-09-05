@@ -121,6 +121,14 @@ for (const width of [390, 2900]) {
       });
     });
     await page.goto("/e2e/fixtures/gate-navigation.html");
+    const pendingTab = page.getByRole("button", {
+      name: "Решения, ожидающие ответа",
+    });
+    await expect(pendingTab).toHaveText("Ожидают");
+    await expect(pendingTab).toHaveAttribute(
+      "title",
+      "Решения, ожидающие ответа",
+    );
     await expect(page.locator(".decision-detail h2")).toHaveText(
       "Адресованное решение",
     );

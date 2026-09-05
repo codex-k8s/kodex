@@ -134,6 +134,8 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
     context,
     page,
   }, testInfo) => {
+    // Общий сценарий последовательно проверяет более двадцати экранов; отдельные ожидания сохраняют прежние лимиты.
+    test.setTimeout(75_000);
     const failures: string[] = [];
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1080 });

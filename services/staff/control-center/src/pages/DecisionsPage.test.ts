@@ -156,7 +156,8 @@ describe("DecisionsPage", () => {
           decisions: {
             title: "Решения",
             subtitle: "Вопросы, ожидающие ответа",
-            pending: "Ожидают ответа",
+            pending: "Ожидают",
+            pendingAccessible: "Решения, ожидающие ответа",
             history: "История",
             projectFilter: "Проект",
             allProjects: "Все Проекты",

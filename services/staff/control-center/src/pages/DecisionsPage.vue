@@ -435,6 +435,8 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'PENDING'"
+            :aria-label="$t('decisions.pendingAccessible')"
+            :title="$t('decisions.pendingAccessible')"
             :disabled="addressedGateLoading"
             @click="view = 'PENDING'"
           >
@@ -943,6 +945,7 @@ onMounted(() => {
 }
 .decision-view-switch .button {
   min-width: 112px;
+  white-space: nowrap;
   border-radius: 0;
 }
 .decision-view-switch .button:first-child {
