@@ -85,6 +85,7 @@ type ProofPrincipalInput struct {
 	OwnerClaim              bool
 	CallerWorkload          string
 	Operation               string
+	RequestDigestSHA256     string
 	ProjectRef              string
 }
 
