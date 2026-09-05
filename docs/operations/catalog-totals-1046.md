@@ -55,4 +55,9 @@ literal query, actor/filter cursor, три страницы файлов дву�
 Env638/Interaction637. Авторский targeted PostgreSQL — PASS (2.015 s).
 На объединённом дереве repository/transport race, полный control-plane
 vet/build, SQL boundary, Proto lint/build/replay, policy63 и authority ABI
-render — PASS. Полный Bootstrap после этого переноса пока NOT RUN.
+render — PASS. Первый полный Bootstrap после переноса — FAIL (20.023 s):
+общий прежний 20 s context исчерпан после успешных Home/Environment/managed
+сценариев. Остальные ошибки были следствием отменённого общего context.
+Бюджет расширенной последовательной тестовой матрицы увеличен до 60 s;
+production deadline и локальные ограничения отдельных сценариев не меняются.
+Повтор полного Bootstrap после изменения бюджета пока NOT RUN.

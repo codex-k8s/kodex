@@ -115,7 +115,8 @@ func TestBootstrapComponent(t *testing.T) {
 	if dsn == "" {
 		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	// Общая расширенная матрица выполняется последовательно; runtime deadlines не меняются.
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
