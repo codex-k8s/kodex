@@ -553,14 +553,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			targetKind = promptservice.TargetSessionContinuation
 			continuation = string(rawSessionContext)
 		}
+		initiatorCapabilityScope := scope
+		initiatorCapabilityScope.actorRef = candidate.initiatorRef
+		userCapabilities, permittedIntegrationGrants, err := repository.agentCapabilityAuthority(ctx, tx, initiatorCapabilityScope, projectRef, agentRef, capabilities)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		integrationGrants = permittedIntegrationGrants
 		connectionCapabilities := make([]string, 0, len(integrationGrants))
 		for _, grant := range integrationGrants {
 			if capability := grant["capabilityKey"]; capability != "" {
 				connectionCapabilities = append(connectionCapabilities, capability)
 			}
 		}
-		userCapabilities := promptUserCapabilities(candidate.userPlatformRole, candidate.userProjectPermissions,
-			capabilities, connectionCapabilities)
 		var workflowCapabilities []string
 		if candidate.workflowRef != "" {
 			workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
@@ -900,43 +905,6 @@ func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credenti
 }
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
-
-func promptUserCapabilities(platformRole string, projectPermissions, agentCapabilities, connectionCapabilities []string) []string {
-	eligible := promptservice.Union(agentCapabilities, connectionCapabilities)
-	if platformRole == "OWNER" || platformRole == "ADMINISTRATOR" {
-		return eligible
-	}
-	permissions := make(map[string]struct{}, len(projectPermissions))
-	for _, permission := range projectPermissions {
-		permissions[permission] = struct{}{}
-	}
-	connection := make(map[string]struct{}, len(connectionCapabilities))
-	for _, capability := range connectionCapabilities {
-		connection[capability] = struct{}{}
-	}
-	required := map[string]string{
-		"platform.project.manage":    "MANAGE",
-		"platform.agent.manage":      "MANAGE_AGENTS",
-		"platform.run.launch":        "LAUNCH_RUNS",
-		"platform.run.delegate":      "MANAGE_AGENTS",
-		"platform.gate.resolve":      "RESOLVE_GATES",
-		"platform.artifact.manage":   "MANAGE_ARTIFACTS",
-		"platform.schedule.manage":   "MANAGE_SCHEDULES",
-		"platform.integration.grant": "MANAGE_INTEGRATIONS",
-		"platform.stt.use":           "VIEW",
-	}
-	result := make([]string, 0, len(eligible))
-	for _, capability := range eligible {
-		permission := required[capability]
-		if _, ok := connection[capability]; ok {
-			permission = "MANAGE_INTEGRATIONS"
-		}
-		if _, ok := permissions[permission]; permission != "" && ok {
-			result = append(result, capability)
-		}
-	}
-	return result
-}
 
 func callableIntegrationGrants(grants []map[string]string) []map[string]string {
 	result := make([]map[string]string, 0, len(grants))
