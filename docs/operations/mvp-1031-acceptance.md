@@ -4,7 +4,7 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.4.0
+version: 1.5.0
 updated: 2026-09-05
 ---
 
@@ -82,18 +82,18 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 
 ## Текущий состав интеграции
 
-На `3c35bf5fae6eb2b51e840da64ee5d6ad5f961f74` включены следующие
+На `7f2f667b278aad5f11c2f03413d37f3dd92598dd` включены следующие
 проверяемые зависимости. Это промежуточная интеграция полного scope,
 а не завершённый `main` или допуск стенда.
 
 | Unit | Включённый exact SHA | Граница checkpoint |
 | --- | --- | --- |
-| Control-plane #1046 | `626ffe141c1ce7190e1da686dbb3aa9020d6f5a5` | Сохранены D1–D7; actual SourceWork, catalog/Session affinity v7, Home totals, Env638 metadata, Mattermost637 approval и owner input; policy63/history registration. Исполняемый overlay history и RoleImage UI bridge ещё потребляются. |
+| Control-plane #1046 | `b9402939a3ccdcef384d44cc2c04dfa5554f73b5` + `12f9eb26a4b4a3f329f49226c3a8cfc888c533c8` | Сохранены D1–D7, SourceWork, catalog/Session affinity v7, Home totals, Env638, Mattermost637; immutable overlay history/publish, RoleImage UI→build и managed lineage; effective capabilities и свежая authority до receipt, policy64. Selective rebind/writeback и prompt continuation ещё завершаются. |
 | Secret Broker #1068, PR #1069 | `af227acc60d9ca1bd0207429c6d8088fb9496af7` | Encrypted staged lifecycle и protected account model observer, fresh remote provenance, bounded actual Codex process и отказ refresh под read authority. |
 | EMAIL #1037, PR #1062 | `f977638e10509d83ce1f27c8b386fa9bd7472842` | Managed exact pins и protected callback до публикации нового serving snapshot. |
 | Egress #1029, PR #1065 | `5d8b177054dcf094830e32dceb7f9290d633920b` | Общие mail policy/DNS, admission и отзыв сетевых pins выключенного mailbox без потери общих активных endpoints. |
-| HTTP/SDK #1045, PR #1066 | `635527b705887a2137c90e467492eb6f12b5e1c6` | Четыре Git source commands и D2 per-account pins/status/TOML schema; Home/globalArtifacts, Env metadata и overlay history ещё завершаются. |
-| PWA #1022, PR #1067 | `ff7bf06d0dca9209dfb9e7d3b8e2445091d37c47` | Git source lifecycle/history/poll и новые Mattermost server i18n keys; typed D2 consumer находится в работе, текущий общий build FAIL. |
+| HTTP/SDK #1045, PR #1066 | `0fd625f0af80e4dbfb9d7a844b8c891acabec614` | D2 pins/status/TOML, Home/globalArtifacts total, Env metadata, overlay history и typed effective capabilities. RoleImage query/lineage и новые Session/prompt/writeback consumers ещё завершаются. |
+| PWA #1022, PR #1067 | `9bb1197ff712f158bd674f9c1760d4bf79b1a458` | D2/TOML, Git source lifecycle, immutable overlay history/rollback, Home/Env metadata, исправлен async picker на390. Capability и новая Session eligibility ещё потребляются; общий build восстановлен. |
 | STT #1020, PR #1070 | `6c23e653263643912e3e984802448b561a652615` | Administrative adapter catalog до configuration/credentials, policy 60, согласованные limits и актуальная STT model profile revision. |
 | Runtime-controller #1025, PR #1063 | `21425ddbbc2196849c5378f8227bd18e13f2f8fb` | Exact v7 mode/effort/context, Pod/callback, schema/admission/render contract revision 2. |
 | Agent-runner #1026, PR #1058 | `257c2f2c98e001d2422a3c8df20a95389a9b3850` | Server reasoning mode/effort во всех turns, UNSUPPORTED без параметра, сохранён bounded workspace/context lifecycle. |
@@ -104,15 +104,19 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 и исправление #1056. Исходные Proto/OpenAPI/policy объединены по семантике,
 generated Go/SDK/PWA validator получены повторной генерацией.
 
-На code SHA `303f75b535cde2fd451d4d4ea22841becbaa488b` локально **PASS**:
-Proto/policy/ABI/package clean replay, оба EMAIL projection render и web-only
-release. Go/TS SDK повторно получен из объединённого OpenAPI. Последующий
-`3c35bf5` добавляет только SourceWork evidence. Общий PWA build — **FAIL**:
-fixtures/consumer ещё не удовлетворяют новым input pins, output default и
-обязательному overlaySchema. Исправление находится в PWA unit, старый PASS
-`af1e9ece6` не переносится на новое дерево. Логи:
-`303-integration-contract-render.log`, `integration-ff7-openapi.log`,
-`integration-catalog-source-pwa-build.log` в приватном evidence-каталоге.
+На code SHA `7f2f667b278aad5f11c2f03413d37f3dd92598dd` локально **PASS**:
+Proto lint/build/clean replay, policy64 codegen, authority ABI render, оба EMAIL
+projection render, web-only release и полный PWA build/typecheck. Go/TS SDK и
+Proto повторно получены из объединённых источников, clean readback подтверждён.
+Безопасные логи: `integration-7f2-contracts.log`,
+`integration-7f2-pwa-build.log` в приватном evidence-каталоге. Предупреждение
+о JS chunk более500kB сохраняется. Полный baseline этим запуском не выполнен.
+
+Исторический code `303f75b535cde2fd451d4d4ea22841becbaa488b` имел **FAIL**
+PWA build: fixtures/consumer не удовлетворяли D2 input pins, output default и
+overlaySchema. Новый запуск7f2 после PWA9bb подтверждает устранение этого FAIL;
+старые логи `303-integration-contract-render.log`, `integration-ff7-openapi.log`
+и `integration-catalog-source-pwa-build.log` сохранены.
 
 При merge сохранены managed EMAIL callback, exact configuration/policy pins и
 проверки CONNECT до provider bytes; старая prerequisite history их не откатила.
@@ -142,7 +146,9 @@ merge, deploy и сквозная матрица остаются **NOT RUN**.
 матрицы выполненными. Следующая интеграция обязана включить актуальные HTTP/PWA
 и остальные незавершённые функции 01–61 и CFG-01/02/03: model catalog/TOML UI,
 immutable overlay history/publish, exact prompt preview, effective capabilities, VFS,
-полный CFG execution, remaining impact plans и protocol-specific EMAIL readiness.
+полный CFG execution, remaining impact plans и живая protocol-specific EMAIL
+readiness. Последняя уже имеет локальный Provider.Probe; её staging proof ещё
+NOT RUN. Все прежние и новые unit proofs оцениваются на своих exact SHA.
 
 ## Локальная подготовка EMAIL
 
