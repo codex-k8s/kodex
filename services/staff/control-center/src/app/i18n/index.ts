@@ -77,6 +77,31 @@ const ru = {
       PURGED: "Удалённые",
     },
   },
+  templateAvailability: {
+    AVAILABLE: "Доступна",
+    PROJECT_CONTEXT_REQUIRED: "Требуется контекст проекта",
+    AGENT_CONTEXT_REQUIRED: "Требуется контекст агента",
+    RUNTIME_CONTEXT_REQUIRED: "Требуется ревизия выполнения",
+    NOT_MATERIALIZED: "Не материализована",
+  },
+  mailboxCredential: {
+    title: "Учётные данные почты",
+    kind: "Тип",
+    kinds: {
+      CA_CERTIFICATE: "Сертификат CA",
+      USERNAME: "Имя пользователя",
+      AUTH_SECRET: "Секрет аутентификации",
+    },
+    value: "Новое значение",
+    retry: "Повторить ту же попытку",
+    unavailable: "Изменение учётных данных недоступно",
+    mismatch: "Введите точное значение предыдущей попытки",
+    pending:
+      "Результат не подтверждён. Повтор возможен только с прежним значением; после закрытия формы контекст попытки будет потерян.",
+    name: "Имя",
+    generation: "Поколение",
+    saved: "Сохранено, конфигурация почты не опубликована",
+  },
   impact: {
     environmentTitle: "Перепривязка окружения",
     secretTitle: "Перепривязка секрета",
@@ -2733,6 +2758,31 @@ const en = {
       maximumAudioDurationMilliseconds: "Maximum duration, ms",
       providerTimeoutMilliseconds: "Provider timeout, ms",
     },
+  },
+  templateAvailability: {
+    AVAILABLE: "Available",
+    PROJECT_CONTEXT_REQUIRED: "Project context required",
+    AGENT_CONTEXT_REQUIRED: "Agent context required",
+    RUNTIME_CONTEXT_REQUIRED: "Runtime revision required",
+    NOT_MATERIALIZED: "Not materialized",
+  },
+  mailboxCredential: {
+    title: "Mailbox credentials",
+    kind: "Kind",
+    kinds: {
+      CA_CERTIFICATE: "CA certificate",
+      USERNAME: "Username",
+      AUTH_SECRET: "Authentication secret",
+    },
+    value: "New value",
+    retry: "Retry the same attempt",
+    unavailable: "Credential changes unavailable",
+    mismatch: "Enter the exact value of the previous attempt",
+    pending:
+      "Result unconfirmed. Retry requires the previous value; closing this form loses the attempt context.",
+    name: "Name",
+    generation: "Generation",
+    saved: "Saved, mailbox configuration not published",
   },
   impact: {
     environmentTitle: "Rebind environment",

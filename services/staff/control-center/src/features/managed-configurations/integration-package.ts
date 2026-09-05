@@ -4,7 +4,7 @@ import validate from "@/shared/api/generated/integration-package/validate";
 export interface PackageFieldSchema {
   $ref?: string;
   type?: string;
-  const?: string;
+  const?: string | boolean | number | null;
   enum?: string[];
   properties?: Record<string, PackageFieldSchema>;
   required?: string[];

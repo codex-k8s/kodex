@@ -43,6 +43,8 @@ const props = defineProps<{
   busy: boolean;
   dirty: boolean;
   projectRef: string;
+  agentRef?: string;
+  runtimeRevisionRef?: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -65,7 +67,10 @@ const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
 const loadVariables = computed(() =>
-  createTemplateVariableLoader(props.projectRef),
+  createTemplateVariableLoader(props.projectRef, {
+    agentRef: props.agentRef,
+    runtimeRevisionRef: props.runtimeRevisionRef,
+  }),
 );
 const materializedContent = computed(
   () =>
@@ -80,6 +85,7 @@ const materializedStale = computed(
 );
 
 function insertVariable(item: TemplateVariablePickerItem): void {
+  if (!props.canEdit || props.busy || item.disabled) return;
   editor.value?.insertAtCursor(templateVariableInsertion(item.variable));
 }
 
@@ -121,20 +127,24 @@ const completeVariables: CodeEditorCompletionProvider = async (
   query,
   signal,
 ): Promise<CodeEditorCompletionItem[]> => {
-  const page = await loadVariables.value({ cursor: undefined, query, signal });
-  return page.items.map((item) => ({
-    label: item.variable.name,
-    apply: templateVariableInsertion(item.variable),
-    detail: [
-      item.scope,
-      item.variable.valueType,
-      item.variable.description,
-      item.variable.example,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-    type: "variable",
-  }));
+  const loader = loadVariables.value;
+  const page = await loader({ cursor: undefined, query, signal });
+  if (signal.aborted || loader !== loadVariables.value) return [];
+  return page.items
+    .filter((item) => !item.disabled)
+    .map((item) => ({
+      label: item.variable.name,
+      apply: templateVariableInsertion(item.variable),
+      detail: [
+        item.scope,
+        item.variable.valueType,
+        item.variable.description,
+        item.variable.example,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      type: "variable",
+    }));
 };
 
 function invalidatePreview(): void {
@@ -144,9 +154,18 @@ function invalidatePreview(): void {
   materializedPreview.value = undefined;
   materializedProblem.value = undefined;
 }
-watch(() => [props.modelValue, props.projectRef], invalidatePreview, {
-  flush: "sync",
-});
+watch(
+  () => [
+    props.modelValue,
+    props.projectRef,
+    props.agentRef,
+    props.runtimeRevisionRef,
+  ],
+  invalidatePreview,
+  {
+    flush: "sync",
+  },
+);
 onBeforeUnmount(invalidatePreview);
 </script>
 
@@ -324,6 +343,8 @@ onBeforeUnmount(invalidatePreview);
         </div>
         <p>{{ copy.instructions.variablesHelp }}</p>
         <TemplateVariableCatalog
+          :agent-ref="agentRef"
+          :runtime-revision-ref="runtimeRevisionRef"
           :project-ref="projectRef"
           :disabled="!canEdit || busy || mode !== 'edit'"
           @select="insertVariable"
