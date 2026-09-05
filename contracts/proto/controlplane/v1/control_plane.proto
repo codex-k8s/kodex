@@ -2570,6 +2570,37 @@ message RuntimeRevisionSnapshot {
   string system_stt_configuration_digest = 66;
   string system_stt_configuration_revision_ref = 67;
   string organization_ref = 68;
+  repeated RuntimeSkillBundleSnapshot skill_bundles = 69;
+  repeated RuntimeMemoryRecordSnapshot memory_records = 70;
+}
+
+message RuntimeSkillBundleSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string scan_engine = 7;
+  string scan_digest = 8;
+  google.protobuf.Timestamp scanned_at = 9;
+  repeated SkillBundleFile files = 10;
+  ContextProvenance provenance = 11;
+  string name = 12;
+  string description = 13;
+}
+
+message RuntimeMemoryRecordSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string title = 7;
+  string summary = 8;
+  google.protobuf.Timestamp retention_until = 9;
+  ContextProvenance provenance = 10;
 }
 
 enum RuntimeWorkspaceAccess {
