@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 51,
+  "policy_revision": 52,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -42,6 +42,47 @@
           "platform.runtime.schedules.fail",
           "platform.runtime.schedules.materialize",
           "platform.runtime.schedules.renew"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
+        "producer_id": "control-plane.email-bridge",
+        "caller_workload_id": "email-bridge",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "PLATFORM_WORKER_GRANT",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/email-bridge",
+        "application_credential_audience": "urn:kodex:platform-worker:email-bridge",
+        "application_credential_trust_bundle_id": "email-bridge-platform-worker-grants-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:email-bridge",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.email.authorization.resolve",
+          "platform.email.effect-receipts.report",
+          "platform.email.reconciliation.resolve"
         ],
         "server_resolved_fields": [
           "actor",
@@ -306,6 +347,7 @@
           "platform.command.config-overlays.publish",
           "platform.command.config-overlays.rollback",
           "platform.command.config-overlays.validate",
+          "platform.command.email-effects.reconcile",
           "platform.command.instructions.create-draft",
           "platform.command.instructions.publish",
           "platform.command.instructions.rollback",
@@ -416,6 +458,7 @@
           "platform.query.audit.list",
           "platform.query.bootstrap.get",
           "platform.query.capabilities.list",
+          "platform.query.email-effect-receipts.get",
           "platform.query.event-cursor.get",
           "platform.query.integration-connections.get",
           "platform.query.integration-connections.list",
@@ -2761,6 +2804,42 @@
         "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.command.config-overlays.validate",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.email-effects.reconcile",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.email-effects.reconcile",
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",
@@ -6418,6 +6497,111 @@
         }
       },
       {
+        "operation_id": "platform.email.authorization.resolve",
+        "caller_workload_id": "email-bridge",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.email.authorization.resolve",
+        "authority_proof_producer_id": "control-plane.email-bridge",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.email.effect-receipts.report",
+        "caller_workload_id": "email-bridge",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.email.effect-receipts.report",
+        "authority_proof_producer_id": "control-plane.email-bridge",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.email.reconciliation.resolve",
+        "caller_workload_id": "email-bridge",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.email.reconciliation.resolve",
+        "authority_proof_producer_id": "control-plane.email-bridge",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.interactions.connection-tests.claim",
         "caller_workload_id": "interaction-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
@@ -7370,6 +7554,42 @@
         "request_profile": {
           "mode": "UNARY_PROTO_SHA256",
           "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.query.email-effect-receipts.get",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.email-effect-receipts.get",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
           "version": "FORBIDDEN",
           "attempt": "FORBIDDEN",
           "idempotency": "FORBIDDEN"
