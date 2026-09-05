@@ -209,6 +209,10 @@ func (server *Server) ListRuns(w http.ResponseWriter, r *http.Request, p generat
 		writeRPCProblem(w, err)
 		return
 	}
+	if response == nil || !validCountedCatalogPage(response.GetTotal(), len(response.GetRuns()), response.GetPage()) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeMessage(w, http.StatusOK, response, "", "runs")
 }
 func (server *Server) GetRun(w http.ResponseWriter, r *http.Request, ref generated.RunRef) {
@@ -306,7 +310,7 @@ func (server *Server) GetOwnerGate(w http.ResponseWriter, r *http.Request, ref g
 	writeMessage(w, http.StatusOK, response, "gate", "")
 }
 func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListArtifactsParams) {
-	r, ok := withProjectReference(w, r, ref)
+	r, ok := catalogRequest(w, r, &ref, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
@@ -326,10 +330,18 @@ func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref 
 		writeRPCProblem(w, err)
 		return
 	}
+	if response == nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeMessage(w, http.StatusOK, response, "", "artifacts")
 }
 
 func (server *Server) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, p generated.ListOrganizationArtifactsParams) {
+	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
 	lifecycleState, lifecycleStateOK := artifactLifecycleFilter(p.LifecycleState)
 	artifactType, artifactTypeOK := artifactTypeFilter(p.Type)
 	scanState, scanStateOK := artifactScanStateFilter(p.ScanState)
@@ -344,6 +356,10 @@ func (server *Server) ListOrganizationArtifacts(w http.ResponseWriter, r *http.R
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response == nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "artifacts")

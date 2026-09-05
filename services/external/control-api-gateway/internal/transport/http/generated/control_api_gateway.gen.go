@@ -6263,6 +6263,7 @@ type ArtifactImpactRunState string
 type ArtifactPage struct {
 	Items         []Artifact `json:"items"`
 	NextPageToken *string    `json:"nextPageToken,omitempty"`
+	Total         int64      `json:"total"`
 }
 
 // ArtifactPurgeReceipt defines model for ArtifactPurgeReceipt.
@@ -6530,11 +6531,15 @@ type BootstrapStatePlatformRole string
 
 // ConfigOverlayDiagnostic defines model for ConfigOverlayDiagnostic.
 type ConfigOverlayDiagnostic struct {
-	Code    ConfigOverlayDiagnosticCode `json:"code"`
-	Column  int                         `json:"column"`
-	Key     string                      `json:"key"`
-	Line    int                         `json:"line"`
-	Message string                      `json:"message"`
+	Code ConfigOverlayDiagnosticCode `json:"code"`
+
+	// Column Позиция UTF-8 byte с 1 внутри строки; 0 означает неприменимо
+	Column int    `json:"column"`
+	Key    string `json:"key"`
+
+	// Line Номер строки с 1; 0 означает неприменимо
+	Line    int    `json:"line"`
+	Message string `json:"message"`
 }
 
 // ConfigOverlayDiagnosticCode defines model for ConfigOverlayDiagnostic.Code.
@@ -6561,6 +6566,13 @@ type ConfigOverlayFieldKey string
 
 // ConfigOverlayFieldValueType defines model for ConfigOverlayField.ValueType.
 type ConfigOverlayFieldValueType string
+
+// ConfigOverlayRevisionPage defines model for ConfigOverlayRevisionPage.
+type ConfigOverlayRevisionPage struct {
+	Items         []ConfigOverlayVersion `json:"items"`
+	NextPageToken *string                `json:"nextPageToken,omitempty"`
+	Total         int64                  `json:"total"`
+}
 
 // ConfigOverlayRollbackInput defines model for ConfigOverlayRollbackInput.
 type ConfigOverlayRollbackInput struct {
@@ -8316,6 +8328,7 @@ type RunNodeType string
 type RunPage struct {
 	Items         []Run   `json:"items"`
 	NextPageToken *string `json:"nextPageToken,omitempty"`
+	Total         int64   `json:"total"`
 }
 
 // RunTarget defines model for RunTarget.
@@ -8370,12 +8383,18 @@ type RuntimeEnvironmentConsumer struct {
 
 // RuntimeEnvironmentDraft defines model for RuntimeEnvironmentDraft.
 type RuntimeEnvironmentDraft struct {
+	// BaseRevision Immutable published revision при создании draft; пара отсутствует для нового окружения или неизвестной legacy базы
+	BaseRevision               *int64     `json:"baseRevision,omitempty"`
+	BaseVersionRef             *OpaqueRef `json:"baseVersionRef,omitempty"`
 	Diagnostics                []string   `json:"diagnostics"`
 	EnvironmentRef             *OpaqueRef `json:"environmentRef,omitempty"`
 	ExpectedEnvironmentVersion int64      `json:"expectedEnvironmentVersion"`
 	ProjectRef                 OpaqueRef  `json:"projectRef"`
 	PublishedEnvironmentRef    *OpaqueRef `json:"publishedEnvironmentRef,omitempty"`
 	Ref                        OpaqueRef  `json:"ref"`
+
+	// SavedAt Время последнего create/save; может отсутствовать в историческом idempotency receipt, для восстановления нужен GET draft
+	SavedAt *time.Time `json:"savedAt,omitempty"`
 
 	// Specification Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
 	Specification    RuntimeEnvironmentDraftSpecification `json:"specification"`
@@ -9909,6 +9928,13 @@ type RollbackConfigOverlayParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListConfigOverlayRevisionsParams defines parameters for ListConfigOverlayRevisions.
+type ListConfigOverlayRevisionsParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // CommandAgentInstructionsParams defines parameters for CommandAgentInstructions.
@@ -11947,6 +11973,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/agents/{agentRef}/config-overlay-rollbacks)
 	RollbackConfigOverlay(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params RollbackConfigOverlayParams)
+
+	// (GET /api/v1/agents/{agentRef}/config-overlay/revisions)
+	ListConfigOverlayRevisions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params ListConfigOverlayRevisionsParams)
+
+	// (GET /api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef})
+	GetConfigOverlayRevision(w http.ResponseWriter, r *http.Request, agentRef AgentRef, revisionRef OpaqueRef)
 
 	// (POST /api/v1/agents/{agentRef}/instruction-commands)
 	CommandAgentInstructions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CommandAgentInstructionsParams)
@@ -15114,6 +15146,121 @@ func (siw *ServerInterfaceWrapper) RollbackConfigOverlay(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RollbackConfigOverlay(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListConfigOverlayRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListConfigOverlayRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListConfigOverlayRevisionsParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListConfigOverlayRevisions(w, r, agentRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConfigOverlayRevision operation middleware
+func (siw *ServerInterfaceWrapper) GetConfigOverlayRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConfigOverlayRevision(w, r, agentRef, revisionRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -36170,6 +36317,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay-drafts/publication", wrapper.PublishConfigOverlayDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay-drafts/validation", wrapper.ValidateConfigOverlayDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay-rollbacks", wrapper.RollbackConfigOverlay)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay/revisions", wrapper.ListConfigOverlayRevisions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef}", wrapper.GetConfigOverlayRevision)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-commands", wrapper.CommandAgentInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-drafts", wrapper.CreateInstructionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-versions", wrapper.ListAgentInstructionVersions)

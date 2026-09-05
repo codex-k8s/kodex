@@ -973,6 +973,12 @@ export type AgentRuntimeConfigurationInput = {
     providerAccounts: Array<ProviderAccountCandidateInput>;
 };
 
+export type ConfigOverlayRevisionPage = {
+    items: Array<ConfigOverlayVersion>;
+    total: number;
+    nextPageToken?: string;
+};
+
 export type ConfigOverlayVersion = {
     ref: OpaqueRef;
     version: number;
@@ -991,7 +997,13 @@ export type ConfigOverlayVersion = {
 export type ConfigOverlayDiagnostic = {
     code: 'CONFIG_OVERLAY_SYNTAX_INVALID' | 'CONFIG_OVERLAY_KEY_FORBIDDEN' | 'CONFIG_OVERLAY_VALUE_INVALID' | 'CONFIG_OVERLAY_EFFORT_UNSUPPORTED';
     key: string;
+    /**
+     * Номер строки с 1; 0 означает неприменимо
+     */
     line: number;
+    /**
+     * Позиция UTF-8 byte с 1 внутри строки; 0 означает неприменимо
+     */
     column: number;
     message: string;
 };
@@ -1447,6 +1459,15 @@ export type RuntimeEnvironmentDraft = {
     projectRef: OpaqueRef;
     environmentRef?: OpaqueRef;
     expectedEnvironmentVersion: number;
+    baseVersionRef?: OpaqueRef;
+    /**
+     * Immutable published revision при создании draft; пара отсутствует для нового окружения или неизвестной legacy базы
+     */
+    baseRevision?: number;
+    /**
+     * Время последнего create/save; может отсутствовать в историческом idempotency receipt, для восстановления нужен GET draft
+     */
+    savedAt?: string;
     state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'DISCARDED';
     specification: RuntimeEnvironmentDraftSpecification;
     validationDigest?: string;
@@ -2078,6 +2099,7 @@ export type TurnInput = {
 
 export type RunPage = {
     items: Array<Run>;
+    total: number;
     nextPageToken?: string;
 };
 
@@ -2173,6 +2195,7 @@ export type ArtifactBindingInput = {
 
 export type ArtifactPage = {
     items: Array<Artifact>;
+    total: number;
     nextPageToken?: string;
 };
 
@@ -4408,6 +4431,65 @@ export type ListAgentRuntimeConfigurationVersionsResponses = {
 };
 
 export type ListAgentRuntimeConfigurationVersionsResponse = ListAgentRuntimeConfigurationVersionsResponses[keyof ListAgentRuntimeConfigurationVersionsResponses];
+
+export type ListConfigOverlayRevisionsData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents/{agentRef}/config-overlay/revisions';
+};
+
+export type ListConfigOverlayRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListConfigOverlayRevisionsError = ListConfigOverlayRevisionsErrors[keyof ListConfigOverlayRevisionsErrors];
+
+export type ListConfigOverlayRevisionsResponses = {
+    /**
+     * Доступная история опубликованных overlay, максимум 20 записей на странице
+     */
+    200: ConfigOverlayRevisionPage;
+};
+
+export type ListConfigOverlayRevisionsResponse = ListConfigOverlayRevisionsResponses[keyof ListConfigOverlayRevisionsResponses];
+
+export type GetConfigOverlayRevisionData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef}';
+};
+
+export type GetConfigOverlayRevisionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetConfigOverlayRevisionError = GetConfigOverlayRevisionErrors[keyof GetConfigOverlayRevisionErrors];
+
+export type GetConfigOverlayRevisionResponses = {
+    /**
+     * Точная опубликованная ревизия и ограниченный TOML preview
+     */
+    200: ConfigOverlayVersion;
+};
+
+export type GetConfigOverlayRevisionResponse = GetConfigOverlayRevisionResponses[keyof GetConfigOverlayRevisionResponses];
 
 export type CreateConfigOverlayDraftData = {
     body: ConfigOverlayDraftInput;
@@ -7797,7 +7879,7 @@ export type ListOrganizationArtifactsError = ListOrganizationArtifactsErrors[key
 
 export type ListOrganizationArtifactsResponses = {
     /**
-     * Файлы организационного помощника текущего владельца
+     * Общий каталог всех доступных файлов проектов и личной области без обхода проектов клиентом
      */
     200: ArtifactPage;
 };

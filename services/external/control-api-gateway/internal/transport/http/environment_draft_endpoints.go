@@ -164,6 +164,13 @@ func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *control
 		return
 	}
 	spec := input.GetSpecification()
+	if input.GetBaseRevision() < 0 || input.GetBaseRevision() > maximumSafeJSONInteger ||
+		(input.GetBaseVersionRef() == "") != (input.GetBaseRevision() == 0) ||
+		input.GetBaseVersionRef() != "" && (!opaqueHTTPReference.MatchString(input.GetBaseVersionRef()) || input.GetEnvironmentRef() == "") ||
+		input.GetSavedAt() != nil && input.GetSavedAt().CheckValid() != nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	if len(spec.GetValues()) > 128 || len(spec.GetSecretBindings()) > 128 || len(spec.GetTools()) > 128 {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
@@ -204,6 +211,15 @@ func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *control
 	result.Specification.Policy = policy
 	if value := input.GetEnvironmentRef(); value != "" {
 		result.EnvironmentRef = &value
+	}
+	if value := input.GetBaseVersionRef(); value != "" {
+		result.BaseVersionRef = &value
+		revision := input.GetBaseRevision()
+		result.BaseRevision = &revision
+	}
+	if value := input.GetSavedAt(); value != nil {
+		savedAt := value.AsTime()
+		result.SavedAt = &savedAt
 	}
 	if value := input.GetValidationDigest(); value != "" {
 		result.ValidationDigest = &value

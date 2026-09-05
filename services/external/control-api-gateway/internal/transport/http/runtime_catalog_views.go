@@ -101,6 +101,24 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 		return errRuntimeCatalogView
 	}
 	switch item := message.Interface().(type) {
+	case *cp.ListArtifactsResponse:
+		if !validCountedCatalogPage(item.GetTotal(), len(item.GetArtifacts()), item.GetPage()) {
+			return errRuntimeCatalogView
+		}
+		for _, artifact := range item.GetArtifacts() {
+			if artifact == nil {
+				return errRuntimeCatalogView
+			}
+		}
+	case *cp.ListRunsResponse:
+		if !validCountedCatalogPage(item.GetTotal(), len(item.GetRuns()), item.GetPage()) {
+			return errRuntimeCatalogView
+		}
+		for _, run := range item.GetRuns() {
+			if run == nil {
+				return errRuntimeCatalogView
+			}
+		}
 	case *cp.AgentRuntimeConfigurationView:
 		if !validOverlaySchema(item.OverlaySchema) {
 			return errRuntimeCatalogView

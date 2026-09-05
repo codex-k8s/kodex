@@ -770,3 +770,11 @@ EMAIL_MAILBOX_PUBLICATION_READY:
   other: Доставка конфигурации почтового ящика подтверждена
 RUNTIME_SECRET_DRAFT_CHANGED:
   other: Черновик секрета изменён
+INTERACTION_AUTHORITY_CHANGED:
+  other: Полномочия взаимодействия изменились
+INTERACTION_DELIVERY_APPROVAL_REQUIRED:
+  other: Для доставки результата требуется подтверждение
+INTERACTION_DELIVERY_GATE_PROMPT:
+  other: Подтвердите отправку результата во внешний канал
+INTERACTION_DELIVERY_GATE_TITLE:
+  other: Отправка результата во внешний канал
