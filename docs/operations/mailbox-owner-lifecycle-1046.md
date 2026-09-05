@@ -25,6 +25,16 @@ source, generation, secret values, wildcard destination или readiness.
 
 # Матрица сценариев
 
+`ListEmailMailboxConfigurations.next_actions` разрешает создание первого
+черновика только после проверки `integration.manage` точного connection.
+`View.next_actions` выводится из того же owner rule и включает закрытые
+CREATE_DRAFT/SAVE/VALIDATE/PUBLISH/DISCARD/BIND/UNBIND/DETACH/COPY.
+Для enabled-действия причина NONE; закрытый отказ объясняется STATE,
+GIT_MANAGED, DELIVERY_PENDING, NO_BINDING либо CONNECTION_DISABLED.
+Редактирование неполного UI draft не означает разрешения публикации.
+Git-owned документ меняется через DETACH/COPY; PENDING delivery блокирует
+новую BIND/UNBIND. Эта проекция не заменяет повторную проверку команды.
+
 | Команда и состояние | Authority и OCC | Результат/ошибка и потребитель |
 | --- | --- | --- |
 | Create DRAFT | integration.manage exact existing EMAIL connection, idempotency | server configuration/mailbox refs и UI lineage; incomplete typed spec допустима; source/owner поля запрещены |
