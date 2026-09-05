@@ -124,7 +124,7 @@ describe("EMAIL write-only credential", () => {
     );
     expect(retry).toEqual(attempt);
     await expect(
-      prepareMailboxCredential(connection, "AUTH_SECRET", "changed", attempt),
+      prepareMailboxCredential(connection, "USERNAME", "changed", attempt),
     ).rejects.toBeInstanceOf(MailboxCredentialMismatch);
     await saveMailboxCredential(
       retry,

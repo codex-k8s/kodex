@@ -47,7 +47,7 @@ func mailboxPublicationView(v *cp.EmailMailboxPublication) (*generated.EmailMail
 	if !state.Valid() {
 		return nil, false
 	}
-	result := &generated.EmailMailboxPublication{Ref: v.GetRef(), Revision: v.GetRevision(), Digest: v.GetDigest(), State: state, ConfigurationRevisionRef: v.GetConfigurationRevisionRef(), CreatedAt: v.GetCreatedAt().AsTime(), FailureCode: v.GetFailureCode()}
+	result := &generated.EmailMailboxPublication{Ref: v.GetRef(), Revision: v.GetRevision(), Digest: v.GetDigest(), State: state, ConfigurationRevisionRef: v.GetConfigurationRevisionRef(), CreatedAt: v.GetCreatedAt().AsTime(), FailureCode: generated.EmailMailboxPublicationFailureCode(v.GetFailureCode())}
 	if v.GetReadyAt() != nil {
 		if v.GetReadyAt().CheckValid() != nil || v.GetReadyAt().AsTime().Before(result.CreatedAt) {
 			return nil, false
@@ -55,13 +55,17 @@ func mailboxPublicationView(v *cp.EmailMailboxPublication) (*generated.EmailMail
 		ready := v.GetReadyAt().AsTime()
 		result.ReadyAt = &ready
 	}
-	if state == "READY" && (result.ReadyAt == nil || result.FailureCode != "") || state == "PENDING" && result.ReadyAt != nil || len(result.FailureCode) > 64 {
+	if state == "READY" && result.ReadyAt == nil || state == "PENDING" && result.ReadyAt != nil {
 		return nil, false
 	}
-	for _, r := range result.FailureCode {
-		if r != '_' && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+	if state == "FAILED" {
+		switch result.FailureCode {
+		case "EMAIL_MAILBOX_DELIVERY_EXPIRED", "EMAIL_MAILBOX_CONNECTION_CHANGED", "EMAIL_MAILBOX_DELIVERY_REJECTED":
+		default:
 			return nil, false
 		}
+	} else if result.FailureCode != "" {
+		return nil, false
 	}
 	return result, true
 }

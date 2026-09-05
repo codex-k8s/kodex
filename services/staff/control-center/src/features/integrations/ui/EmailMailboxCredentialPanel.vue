@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { KeyRound, Save } from "@lucide/vue";
 import type {
   EmailMailboxCredential,
@@ -13,9 +13,15 @@ import {
   mailboxCredentialLimits,
   prepareMailboxCredential,
   saveMailboxCredential,
+  recoverMailboxCredential,
   validMailboxCredential,
   type MailboxCredentialAttempt,
 } from "../email-credentials";
+import {
+  pendingMailboxCredential,
+  rememberMailboxCredential,
+  forgetMailboxCredential,
+} from "../email-credential-recovery";
 
 const props = defineProps<{ connection: IntegrationConnection }>();
 const emit = defineEmits<{ saved: []; busy: [value: boolean] }>();
@@ -53,11 +59,27 @@ function clear(): void {
   busy.value = false;
   emit("busy", false);
 }
-watch(() => props.connection.ref, clear);
+function restore(): void {
+  clear();
+  try {
+    const attempt = pendingMailboxCredential(
+      props.connection.ref,
+      window.sessionStorage,
+    );
+    if (attempt) {
+      pending.value = attempt;
+      kind.value = attempt.kind;
+    }
+  } catch (error) {
+    problem.value = asProblem(error);
+  }
+}
+watch(() => props.connection.ref, restore);
+onMounted(restore);
 watch(
   allowed,
   (enabled) => {
-    if (!enabled) clear();
+    if (!enabled) restore();
   },
   { flush: "sync" },
 );
@@ -88,9 +110,11 @@ async function save(): Promise<void> {
       previousAttempt,
     );
     if (current !== generation || active.signal.aborted) return;
+    rememberMailboxCredential(attempt, window.sessionStorage);
     pending.value = attempt;
     const result = await saveMailboxCredential(attempt, secret, active.signal);
     if (current !== generation) return;
+    forgetMailboxCredential(attempt, window.sessionStorage);
     receipt.value = result;
     pending.value = undefined;
     emit("saved");
@@ -106,12 +130,51 @@ async function save(): Promise<void> {
           retryable: false,
           correlationId: failure.correlationId,
         });
-        if (!previousAttempt && [400, 413, 422].includes(failure.status))
+        if (!previousAttempt && [400, 413, 422].includes(failure.status)) {
+          if (pending.value)
+            forgetMailboxCredential(pending.value, window.sessionStorage);
           pending.value = undefined;
+        }
       }
     }
   } finally {
     secret = "";
+    if (current === generation) {
+      busy.value = false;
+      emit("busy", false);
+    }
+  }
+}
+
+async function recover(): Promise<void> {
+  if (busy.value || !pending.value) return;
+  const attempt = pending.value;
+  const current = ++generation;
+  controller?.abort();
+  const active = new AbortController();
+  controller = active;
+  busy.value = true;
+  emit("busy", true);
+  problem.value = undefined;
+  try {
+    const result = await recoverMailboxCredential(attempt, active.signal);
+    if (current !== generation) return;
+    forgetMailboxCredential(attempt, window.sessionStorage);
+    receipt.value = result;
+    pending.value = undefined;
+    value.value = "";
+    emit("saved");
+  } catch (error) {
+    if (current === generation && !active.signal.aborted) {
+      const failure = asProblem(error);
+      problem.value = new AppProblem({
+        status: failure.status,
+        code: failure.code,
+        kind: failure.kind,
+        retryable: false,
+      });
+    }
+  } finally {
     if (current === generation) {
       busy.value = false;
       emit("busy", false);
@@ -176,6 +239,9 @@ async function save(): Promise<void> {
     <p v-if="mismatch" role="alert">{{ $t("mailboxCredential.mismatch") }}</p>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <p v-if="pending" role="status">{{ $t("mailboxCredential.pending") }}</p>
+    <button v-if="pending" class="button" :disabled="busy" @click="recover">
+      {{ $t("mailboxCredential.recover") }}
+    </button>
     <dl v-if="receipt" class="mailbox-credential__receipt" aria-live="polite">
       <dt>{{ $t("mailboxCredential.name") }}</dt>
       <dd>

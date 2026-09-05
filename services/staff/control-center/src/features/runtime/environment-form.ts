@@ -243,6 +243,7 @@ export function normalizeRuntimeEnvironmentInput(
     secretBindings: input.secretBindings.map((item) => ({
       name: item.name.trim(),
       secretRef: item.secretRef,
+      ...(item.revision !== undefined ? { revision: item.revision } : {}),
     })),
     policy: {
       resources: { ...input.policy.resources },
@@ -418,6 +419,14 @@ function validateSecret(
       field: `secretBindings.${String(index)}.secretRef`,
       message: "runtime.errors.secretBindingRequired",
     });
+  if (
+    item.revision !== undefined &&
+    (!Number.isSafeInteger(item.revision) || item.revision < 0)
+  )
+    problems.push({
+      field: `secretBindings.${String(index)}.revision`,
+      message: "runtime.errors.secretRevision",
+    });
 }
 
 function isReservedVariableName(name: string): boolean {
@@ -437,7 +446,11 @@ export function emptySecretBinding(): RuntimeSecretBinding {
 export function editableSecretBindings(
   descriptors: readonly RuntimeSecretDescriptor[],
 ): RuntimeSecretBinding[] {
-  return descriptors.map(({ name, secretRef }) => ({ name, secretRef }));
+  return descriptors.map(({ name, secretRef, revision }) => {
+    if (!Number.isSafeInteger(revision) || revision < 1)
+      throw new Error("Published secret revision is invalid");
+    return { name, secretRef, revision };
+  });
 }
 
 export function hasEffectivePolicyDigests(

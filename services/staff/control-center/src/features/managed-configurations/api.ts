@@ -91,6 +91,18 @@ const operations = {
   },
 } as const;
 
+function operationsFor(kind: ConfigurationKind) {
+  switch (kind) {
+    case "PROMPT_TEMPLATE":
+    case "ROLE_IMAGE":
+    case "INTEGRATION_DEFINITION":
+    case "SYSTEM_STT":
+      return operations[kind];
+    default:
+      throw new Error("Configuration kind requires specialized commands");
+  }
+}
+
 export async function history(
   configurationRef: string,
   signal: AbortSignal,
@@ -138,7 +150,7 @@ export async function createDraft(
   return (
     await mutate(
       (headers) =>
-        operations[kind].create({
+        operationsFor(kind).create({
           body,
           headers: { ...headers },
           signal: requestSignal(),
@@ -170,8 +182,8 @@ export async function changeDraft(
       signal: requestSignal(),
     };
     return body
-      ? operations[configuration.kind].save({ ...options, body })
-      : operations[configuration.kind].discard(options);
+      ? operationsFor(configuration.kind).save({ ...options, body })
+      : operationsFor(configuration.kind).discard(options);
   }, configuration.version);
   const next = result.data;
   if (
@@ -201,7 +213,7 @@ export async function transition(
   return (
     await mutate(
       (headers) =>
-        operations[configuration.kind][action]({
+        operationsFor(configuration.kind)[action]({
           path: {
             configurationRef: configuration.ref,
             revisionRef: revision.ref,
@@ -221,7 +233,7 @@ export async function rebind(
   return (
     await mutate(
       (headers) =>
-        operations[configuration.kind].rebind({
+        operationsFor(configuration.kind).rebind({
           path: {
             configurationRef: configuration.ref,
             revisionRef: revision.ref,

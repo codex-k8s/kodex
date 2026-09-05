@@ -430,8 +430,12 @@ function selectedSecret(
   };
 }
 
-function selectSecret(option: AsyncEntityOption): void {
+function selectSecret(
+  binding: RuntimeSecretBinding,
+  option: AsyncEntityOption,
+): void {
   selectedSecrets[option.ref] = option;
+  binding.revision = 0;
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
@@ -1440,7 +1444,7 @@ onBeforeUnmount(() => {
                       :labels="secretPickerLabels"
                       :placeholder="$t('runtime.chooseRuntimeSecret')"
                       :search-placeholder="$t('runtime.searchRuntimeSecret')"
-                      @select="selectSecret"
+                      @select="selectSecret(item, $event)"
                     />
                   </div>
                 </div>

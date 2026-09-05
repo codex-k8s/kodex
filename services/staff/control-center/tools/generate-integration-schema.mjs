@@ -15,7 +15,15 @@ const output = new URL(
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
 const ajv = new Ajv2020({
   allErrors: true,
+  strictTypes: true,
   strictRequired: false,
+  logger: {
+    log: console.log,
+    error: console.error,
+    warn: (...messages) => {
+      throw new Error(`Schema compiler warning: ${messages.join(" ")}`);
+    },
+  },
   code: { source: true, esm: true },
 });
 const validate = ajv.compile(schema);
@@ -30,6 +38,9 @@ const result = await build({
   format: "esm",
   write: false,
 });
+if (result.warnings.length > 0) {
+  throw new Error("Generated schema bundle contains compiler warnings");
+}
 await mkdir(output, { recursive: true });
 await writeFile(
   new URL("validate.js", output),
