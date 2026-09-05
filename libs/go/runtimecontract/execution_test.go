@@ -7,6 +7,24 @@ import (
 	"testing"
 )
 
+func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
+	input := validRunnerInputFixture()
+	refreshRunnerInputBindings(&input)
+	for name, mutate := range map[string]func(*RunnerInput){
+		"old ABI":         func(input *RunnerInput) { input.Schema = RunnerInputSchemaV6 },
+		"missing effort":  func(input *RunnerInput) { input.EffectiveReasoningEffort = "" },
+		"tampered effort": func(input *RunnerInput) { input.EffectiveReasoningEffort = "high" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := input
+			mutate(&changed)
+			if changed.Validate() == nil {
+				t.Fatal("invalid runtime input accepted")
+			}
+		})
+	}
+}
+
 func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.Capabilities = []string{ArtifactCapability}
@@ -310,7 +328,7 @@ func validRunnerInputFixture() RunnerInput {
 	policy := DefaultRuntimeEnvironmentPolicy()
 	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := RunnerInput{
-		Schema: RunnerInputSchemaV6, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV7, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		OrganizationRef: "org_abcdefgh",
 		RunRef:          "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		ProjectRef: "prj_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
@@ -330,8 +348,9 @@ func validRunnerInputFixture() RunnerInput {
 		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
 		ConfigOverlayRef: "cov_abcdefgh", ConfigOverlayVersion: 1,
-		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
+		EffectiveReasoningEffort: "medium",
+		ConfigOverlayDigest:      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		RuntimeEnvironmentRef:    "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,
 		EnvironmentPolicy:        policy, WorkspacePolicy: RuntimeWorkspacePolicyV1(),
 		EnvironmentBindingRef: "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
