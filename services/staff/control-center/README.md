@@ -467,18 +467,72 @@ state, Playwright route mocking/viewports и CodeMirror dynamic configuration
 
 - D3 не заменяет effective user∩agent capability projection. Каталог готовности
   не доказывает runtime materialization; D4 exact target preview остаётся зависимостью.
-- D5 credential сохранён отдельно от mailbox publication: D5-config отсутствует.
-  После закрытия/перезагрузки формы теряется контекст неопределённой попытки;
-  durable recovery/read path требует отдельного согласованного решения, без
-  сохранения credential или имитации authoritative receipt.
+- D5 credential имеет безопасный GET receipt и восстановление исходного key
+  после закрытия/reload. Mailbox UI подключает typed fields/YAML, server preview,
+  draft/validate/publish и отдельный bind с delivery readback. Реальная
+  consumer delivery/READY и protocol-specific SMTP/IMAP/POP3 readiness ещё
+  не подтверждены; latest publication READY не заменяет protocol readiness.
 - D2: model-specific validation опубликованного reasoning effort и catalog pin
   на mutation; сохранение TOML через overlay уже доступно. D4: exact
   AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview. D6 UI lifecycle подключён выше;
   его реальная сквозная приёмка проводится после общего integration gate.
 - Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
-  Home server states, Mattermost selector eligibility, RoleImage ownership/build,
+  Home owner-gate query/total, Mattermost selector eligibility, RoleImage ownership/build,
   UI/GIT IntegrationPackage execution. Полная MVP-UI-01..61 и staging-приёмка
   остаются незавершёнными; новые блоки в рамках этой передачи не реализовывались.
+
+### Текущий UI mailbox lifecycle и остаток требований
+
+`EmailMailboxConfigurationPanel.vue` и `email-mailbox-editor.ts` используют
+только server `View.nextActions` / `List.nextActions`, включая создание при
+пустом каталоге. Перед новой командой сверяются configuration и connection
+версии; изменение не вызывает скрытого перебазирования пользовательского ввода.
+Неизвестный результат повторяется с прежними input/key/OCC. Закрытие или
+переход при незавершённой попытке требуют явного отказа от локального контекста.
+Plaintext credential не входит в эти конфигурационные команды.
+
+Форма и YAML синхронизируются только через server preview: semantic-invalid
+incomplete draft может возвращать specification и diagnostics, syntax failure
+не переключает редактор на восстановленную модель. Публикация immutable
+revision не означает применение к connection. Первый bind разрешается
+authoritative action без требования прежней READY; PENDING читается ограниченно
+с последующим ручным refresh. Историческая revision, boundRevisionRef и revision
+последней delivery отображаются независимо.
+
+`email-mailbox-editor.test.ts` проверяет authority denial, изменение owner pin,
+exact retry после потери ACK, syntax failure и поздний ACK после закрытия.
+`mailbox.synthetic.spec.ts` воспроизводит create с потерей ACK → exact retry →
+validate → publish → first bind → PENDING/READY readback → reload на 390/2900.
+Это локальные безопасные fixtures; runtime mailbox и owner/consumer готовность
+ими не доказываются. DETACH/COPY используют существующие специализированные
+managed commands и последующий GET mailbox по owner configurationRef без
+revisionRef: сервер выбирает новый UI draft. Опубликованный currentRevision
+не подставляется вместо нового draft. COPY получает отдельный mailboxRef и
+не наследует boundRevisionRef; owner подтвердил этот mapping локальными PG
+проверками, общий путь всё ещё требует интеграционной проверки.
+
+Следующий список относится ко всему исходному scope 01–61 и CFG, а не к наличию
+компонентов или числу synthetic-тестов:
+
+| Требования     | Существующий consumer/API                                                                   | Незавершённая producer/сквозная часть                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 17–19          | ProviderModelSelector, AgentRuntimePanel; `/model-capabilities`, config-overlay publication | Exact catalog pin на mutation и model-specific effort validation. Read pagination pins уже подключены; safeStatusReason показан как серверная причина.                |
+| 21             | Runtime editor; config-overlay draft/validation/publication                                 | Versioned allowed-field TOML schema, completion/hover и безопасные diagnostics.                                                                                       |
+| 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                         |
+| 31, 40         | Workflow capability/grant selectors; `/platform-capabilities`                               | Effective user∩agent projection. availableWithoutIntegration/readiness не являются пользовательскими полномочиями.                                                    |
+| 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner. |
+| 04–06, 38      | HomePage, platform store; `/runs`, `/owner-gates`                                           | Owner-gate query/total и общая полная сводка. Server run states и realtime invalidation уже подключены.                                                               |
+| CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state, managed ref/revision/source association, исполняемый UI/GIT package/build путь.                                                                   |
+| Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                              |
+| 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference. Точный Secret revision уже сохраняется при edit/reauth.                                                                    |
+| 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                          |
+| 56             | Speech settings/voice; speech bootstrap и transcriptions                                    | STT producer catalog существует в #1053; сквозная HTTP/SDK eligibility/model/parameter projection проверяется владельцами STT/HTTP.                                   |
+
+Остальные строки исходной матрицы выше требуют общей интеграционной и ручной
+приёмки; локальный unit/browser PASS не превращает их в выполненные business
+acceptance criteria. D6 staged rotation, conflict/forbidden outcomes и живой
+путь CP→broker→runtime проверяются в полном сценарном наборе отдельно от
+показанного synthetic create.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).
@@ -707,7 +761,7 @@ Service Worker в этом
 (`/websites/codemirror_net`), MediaRecorder (`/mdn/content`), oidc-client-ts
 (`/authts/oidc-client-ts`), js-yaml (`/nodeca/js-yaml`) и Vite (`/vitejs/vite/v8.0.10`).
 
-## Промежуточная совместимость D5 и точных Secret revision, 2026-09-05
+## Checkpoint 6931d7d52: совместимость D5 и точных Secret revision
 
 Новый HTTP SDK включает типизированный mailbox lifecycle, безопасную квитанцию
 credential и точную опубликованную `RuntimeSecretDescriptor.revision`.

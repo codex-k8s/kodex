@@ -23,7 +23,10 @@ import {
   forgetMailboxCredential,
 } from "../email-credential-recovery";
 
-const props = defineProps<{ connection: IntegrationConnection }>();
+const props = defineProps<{
+  connection: IntegrationConnection;
+  disabled?: boolean;
+}>();
 const emit = defineEmits<{ saved: []; busy: [value: boolean] }>();
 const kind = ref<EmailMailboxCredentialKind>("AUTH_SECRET");
 const value = ref("");
@@ -43,6 +46,7 @@ const canSave = computed(
   () =>
     allowed.value &&
     !busy.value &&
+    !props.disabled &&
     validMailboxCredential(kind.value, value.value) &&
     (!receipt.value ||
       props.connection.version >= receipt.value.connectionVersion),
@@ -147,7 +151,7 @@ async function save(): Promise<void> {
 }
 
 async function recover(): Promise<void> {
-  if (busy.value || !pending.value) return;
+  if (busy.value || props.disabled || !pending.value) return;
   const attempt = pending.value;
   const current = ++generation;
   controller?.abort();
@@ -197,7 +201,7 @@ async function recover(): Promise<void> {
     >
       <label class="field">
         <span>{{ $t("mailboxCredential.kind") }}</span>
-        <select v-model="kind" :disabled="busy || !!pending">
+        <select v-model="kind" :disabled="busy || disabled || !!pending">
           <option
             v-for="(_, entry) in mailboxCredentialLimits"
             :key="entry"
@@ -212,7 +216,7 @@ async function recover(): Promise<void> {
         <textarea
           v-if="kind === 'CA_CERTIFICATE'"
           v-model="value"
-          :disabled="busy"
+          :disabled="busy || disabled"
           rows="6"
           autocomplete="off"
           autocapitalize="off"
@@ -223,7 +227,7 @@ async function recover(): Promise<void> {
           v-else
           v-model="value"
           type="password"
-          :disabled="busy"
+          :disabled="busy || disabled"
           autocomplete="new-password"
           autocapitalize="off"
           :spellcheck="false"
@@ -239,7 +243,12 @@ async function recover(): Promise<void> {
     <p v-if="mismatch" role="alert">{{ $t("mailboxCredential.mismatch") }}</p>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <p v-if="pending" role="status">{{ $t("mailboxCredential.pending") }}</p>
-    <button v-if="pending" class="button" :disabled="busy" @click="recover">
+    <button
+      v-if="pending"
+      class="button"
+      :disabled="busy || disabled"
+      @click="recover"
+    >
       {{ $t("mailboxCredential.recover") }}
     </button>
     <dl v-if="receipt" class="mailbox-credential__receipt" aria-live="polite">

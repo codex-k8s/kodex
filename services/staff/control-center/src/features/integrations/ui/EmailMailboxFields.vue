@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import type {
   EmailMailboxSpecification,
   EmailMailboxEndpoint,
@@ -74,8 +75,8 @@ function set<K extends keyof EmailMailboxSpecification>(
 function text(event: Event): string {
   return (event.target as HTMLInputElement).value;
 }
-function strings(event: Event): string[] {
-  return text(event)
+function strings(value: string): string[] {
+  return value
     .split("\n")
     .map((value) => value.trim())
     .filter(Boolean);
@@ -149,7 +150,7 @@ function policy(
     item.policy = (text(event) || undefined) as
       | EmailMailboxApprovalPolicy
       | undefined;
-  else item.folders = strings(event);
+  else item.folders = strings(text(event));
   set("policies", policies);
 }
 </script>
@@ -191,12 +192,13 @@ function policy(
       /></label>
       <label v-for="field in listFields" :key="field" class="field"
         ><span>{{ $t(`mailbox.fields.${field}`) }}</span
-        ><textarea
-          :value="value[field]?.join('\n') ?? ''"
+        ><VoiceTextarea
+          :model-value="value[field]?.join('\n') ?? ''"
+          :disabled="disabled"
           rows="3"
           autocomplete="off"
           spellcheck="false"
-          @input="set(field, strings($event))"
+          @update:model-value="set(field, strings($event))"
         /><small>{{ $t("mailbox.linesHelp") }}</small></label
       >
     </div>
@@ -337,7 +339,7 @@ function policy(
               :key="operation"
               :value="operation"
             >
-              {{ operation }}
+              {{ $t(`mailbox.operations.${operation}`) }}
             </option>
           </select></label
         >
@@ -355,10 +357,20 @@ function policy(
         >
         <label class="field"
           ><span>{{ $t("mailbox.fields.allowedFolders") }}</span
-          ><textarea
-            :value="item.folders?.join('\n') ?? ''"
+          ><VoiceTextarea
+            :model-value="item.folders?.join('\n') ?? ''"
+            :disabled="disabled"
             rows="2"
-            @input="policy(index, 'folders', $event)"
+            @update:model-value="
+              set(
+                'policies',
+                value.policies?.map((entry, position) =>
+                  position === index
+                    ? { ...entry, folders: strings($event) }
+                    : entry,
+                ),
+              )
+            "
           />
         </label>
         <button

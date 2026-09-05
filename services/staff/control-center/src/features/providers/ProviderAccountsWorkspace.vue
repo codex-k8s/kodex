@@ -463,6 +463,9 @@ onBeforeUnmount(() => {
             <div class="provider-account-card__state">
               <StatusBadge :state="account.state" />
               <StatusBadge v-if="!account.ready" state="UNAVAILABLE" />
+              <span v-if="account.safeStatusReason">{{
+                $t(`providers.reasons.${account.safeStatusReason}`)
+              }}</span>
               <span>{{
                 account.externalAccountMasked ||
                 $t("providers.externalAccountPending")
