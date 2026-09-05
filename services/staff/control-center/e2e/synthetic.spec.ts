@@ -11,6 +11,7 @@ import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import { checkFileSelection } from "./fixtures/file-selection";
 import { checkAssistantHistory } from "./fixtures/assistant-history";
 import { checkHomeResults } from "./fixtures/home-results";
+import { checkResumableSessions } from "./fixtures/resumable-sessions";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -139,6 +140,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
     // Общий сценарий последовательно проверяет более двадцати экранов; отдельные ожидания сохраняют прежние лимиты.
     test.setTimeout(75_000);
     const failures: string[] = [];
+    let snapshotConflictDiagnostics = 0;
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1080 });
     page.on("pageerror", (error) => failures.push(error.message));
@@ -148,6 +150,18 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         message.text() === "Service Worker registration blocked by Playwright"
       )
         return;
+      // Единственный ожидаемый HTTP отказ проверяет recovery точного synthetic Session cursor.
+      if (
+        message.type() === "error" &&
+        message.text() ===
+          "Failed to load resource: the server responded with a status of 412 (Precondition Failed)" &&
+        message.location().url.includes("/api/v1/runs?") &&
+        message.location().url.includes("resumableSessionsOnly=true") &&
+        message.location().url.includes("pageToken=session-snapshot")
+      ) {
+        snapshotConflictDiagnostics++;
+        return;
+      }
       if (message.type() === "error" || message.type() === "warning")
         failures.push(message.text());
     });
@@ -1258,6 +1272,16 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           fullPage: false,
         });
       });
+    if (width === 2900 || width === 390)
+      await checkResumableSessions(page, catalogProject.ref, async () => {
+        await page.screenshot({
+          path: testInfo.outputPath(`resumable-sessions-${String(width)}.png`),
+          fullPage: false,
+        });
+      });
+    expect(snapshotConflictDiagnostics).toBe(
+      width === 390 || width === 2900 ? 1 : 0,
+    );
     expect(failures).toEqual([]);
   });
 }

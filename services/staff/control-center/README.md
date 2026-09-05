@@ -521,8 +521,8 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 | 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                                                          |
 | 31, 40         | AgentAccessPanel/Workflow editor; `/agents/{agentRef}/effective-capabilities`               | Typed requested/effective/grantable/reason и exact connection rows подключены. Черновик не получает fake published identity. Aggregate target/attachment guards и runtime acceptance ещё не завершены. |
 | 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner.                                  |
-| 04–06          | HomePage; `/runs`, `/owner-gates`, global/project artifacts                                 | Run/global Artifact totals и expanded server catalogs подключены. Distinct resumable Session catalog с ADD_TURN eligibility ещё требует owner query; runtime приёмка NOT RUN.                          |
-| CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state, managed ref/revision/source association, исполняемый UI/GIT package/build путь.                                                                                                    |
+| 04–06          | HomePage/NewRun; `/runs`, `/owner-gates`, global/project artifacts                          | Distinct resumable Session catalog подключён по owner f9af/HTTP b093: server query/total/cursor и парный target filter. Реальная runtime приёмка NOT RUN.                                              |
+| CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state/total, managed ref/revision/source association и build pin подключены по HTTP022869. Полный write-back и сквозная приёмка UI/GIT package/build остаются в работе.                   |
 | Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                                                               |
 | 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference подключены по HTTP6e3; неизвестная legacy база не выводится из current set. Реальная приёмка NOT RUN.                                                        |
 | 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                                                           |
@@ -938,6 +938,30 @@ NOT RUN либо незавершённым исходным scope; CFG не о�
 Три закрытых `i18n:INTERACTION_DELIVERY_*` сообщения и `INTERACTION_AUTHORITY_CHANGED`
 переводятся в generic result и решениях. Произвольный owner content не
 интерпретируется как ключ перевода.
+
+## Каталог продолжений Session и происхождение RoleImage
+
+Home и NewRun используют `listRuns(resumableSessionsOnly=true)`. CP возвращает одну
+последнюю допустимую Run на Session и distinct total. Home использует серверные
+query/project/cursor и ограниченную шестью строками область с расширением; NewRun
+передаёт выбранные targetType/targetRef парой. Рекурсивный browser обход Run,
+дедупликация Session и отбор target удалены. Повреждённая страница отклоняется
+целиком, без изменения total. Ответ 412 при догрузке сбрасывает старые строки и
+начинает первую страницу; ошибка первой страницы не запускает бесконечный retry.
+AddSessionTurn сохраняет независимую owner authority/OCC/runtime проверку.
+
+RoleImage каталог передаёт query/state/page владельцу и показывает server total.
+Карточка и редактор сохраняют managedLineage UI/GIT/SHIPPED, точные configuration
+ref/revision/source pins; build показывает configurationRevisionRef. Ссылка ведёт
+в существующий managed editor, а отсутствие lineage не назначает UI ownership.
+Readonly полей определяется серверным UPDATE; исходный Dockerfile не становится
+доступным для записи из-за наличия клиентского черновика.
+
+Producer Session `f9af1bc528` и HTTP `b0939429d` проверены отдельно. Synthetic
+проверяет distinct total, bounded list, stale cursor recovery, парный target
+NewRun и server RoleImage search/state/count. Его ожидаемый HTTP412 учитывается
+отдельно по точному fixture cursor; остальные console warnings/errors остаются
+ошибками. Real protected browser→HTTP→CP и полный Git write-back — NOT RUN.
 
 ## Авторитетные полномочия сотрудника и этапа
 

@@ -61,6 +61,7 @@ function scroll(event: Event) {
   color: inherit;
   text-align: left;
   font-weight: 600;
+  justify-content: flex-start;
 }
 .home-result-row small {
   overflow: hidden;

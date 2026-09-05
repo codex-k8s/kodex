@@ -15,6 +15,7 @@ import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
+import RoleImageLineage from "./RoleImageLineage.vue";
 import {
   buildIsActive,
   buildRevisionIdentity,
@@ -351,6 +352,11 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
+      <RoleImageLineage
+        v-if="recipe"
+        class="panel"
+        :lineage="recipe.managedLineage"
+      />
       <section v-if="recipe" class="image-lifecycle" aria-live="polite">
         <article class="panel lifecycle-step">
           <Hammer :size="18" aria-hidden="true" />
@@ -425,7 +431,11 @@ onBeforeUnmount(() => {
             <div class="recipe-fields">
               <label class="field">
                 <span>{{ t("common.name") }}</span>
-                <input v-model="name" maxlength="120" />
+                <input
+                  v-model="name"
+                  maxlength="120"
+                  :readonly="!!recipe && !recipe.nextActions.includes('UPDATE')"
+                />
               </label>
               <label class="field">
                 <span>{{ t("roleImages.role") }}</span>
@@ -452,7 +462,10 @@ onBeforeUnmount(() => {
                 <span>{{ t("roleImages.environment") }}</span>
                 <select
                   :value="environmentKey"
-                  :disabled="!store.environments.length"
+                  :disabled="
+                    !store.environments.length ||
+                    (!!recipe && !recipe.nextActions.includes('UPDATE'))
+                  "
                   @change="
                     selectEnvironment(
                       ($event.currentTarget as HTMLSelectElement).value,
@@ -596,6 +609,10 @@ onBeforeUnmount(() => {
                       })
                     }}
                   </summary>
+                  <p v-if="build.configurationRevisionRef">
+                    {{ t("roleImages.configuration") }}:
+                    {{ build.configurationRevisionRef }}
+                  </p>
                   <CodeEditor
                     v-if="openedBuildSources.has(build.ref)"
                     :model-value="build.dockerfile"

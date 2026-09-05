@@ -31,6 +31,14 @@ export async function checkHomeResults(
       return;
     }
     expect(params.get("pageSize")).toBe("30");
+    if (params.get("resumableSessionsOnly") === "true") {
+      expect(params.getAll("states")).toEqual([]);
+      const item = syntheticCatalogRun(100, projectRef);
+      item.state = "SUCCEEDED";
+      item.nextActions = ["OPEN", "ADD_TURN"];
+      await route.fulfill({ json: { items: [item], total: 1 } });
+      return;
+    }
     if (params.getAll("states").join(",") === "FAILED") {
       await route.fulfill({ json: { items: [], total: 0 } });
       return;

@@ -30,9 +30,14 @@ describe("role image catalog store", () => {
   });
   it("не откатывает ревизию повтором объекта на следующей странице", async () => {
     api.loadRoleImagePage
-      .mockResolvedValueOnce({ items: [recipe], nextPageToken: "next" })
+      .mockResolvedValueOnce({
+        items: [recipe],
+        total: 43,
+        nextPageToken: "next",
+      })
       .mockResolvedValueOnce({
         items: [{ ...recipe, version: 2 }],
+        total: 43,
         nextPageToken: "",
       });
     const store = useRoleImagesStore();
@@ -42,12 +47,17 @@ describe("role image catalog store", () => {
   });
   it("отклоняет чужой project и повтор курсора до изменения каталога", async () => {
     api.loadRoleImagePage
-      .mockResolvedValueOnce({ items: [recipe], nextPageToken: "next" })
+      .mockResolvedValueOnce({
+        items: [recipe],
+        total: 43,
+        nextPageToken: "next",
+      })
       .mockResolvedValueOnce({
         items: [{ ...recipe, projectRef: "other" }],
+        total: 43,
         nextPageToken: "",
       })
-      .mockResolvedValueOnce({ items: [], nextPageToken: "next" });
+      .mockResolvedValueOnce({ items: [], total: 43, nextPageToken: "next" });
     const store = useRoleImagesStore();
     await store.loadCatalog(recipe.projectRef);
     await store.loadCatalog(recipe.projectRef, false);
@@ -68,8 +78,31 @@ describe("role image catalog store", () => {
     const signal = api.loadRoleImagePage.mock.calls[0]?.[2] as AbortSignal;
     store.dispose();
     expect(signal.aborted).toBe(true);
-    resolve({ items: [recipe], nextPageToken: "" });
+    resolve({ items: [recipe], total: 1, nextPageToken: "" });
     await pending;
     expect(store.catalog(recipe.projectRef)).toEqual([]);
+  });
+  it("передаёт query/state на каждую страницу и сохраняет owner total", async () => {
+    api.loadRoleImagePage
+      .mockResolvedValueOnce({
+        items: [recipe],
+        total: 43,
+        nextPageToken: "next",
+      })
+      .mockResolvedValueOnce({ items: [], total: 43 });
+    const store = useRoleImagesStore();
+    await store.loadCatalog(recipe.projectRef, true, {
+      query: "Среда",
+      state: "ACTIVE",
+    });
+    expect(store.projectTotal[recipe.projectRef]).toBe(43);
+    await store.loadCatalog(recipe.projectRef, false);
+    expect(api.loadRoleImagePage).toHaveBeenLastCalledWith(
+      recipe.projectRef,
+      "next",
+      expect.any(AbortSignal),
+      { query: "Среда", state: "ACTIVE" },
+    );
+    expect(store.projectTotal[recipe.projectRef]).toBe(43);
   });
 });

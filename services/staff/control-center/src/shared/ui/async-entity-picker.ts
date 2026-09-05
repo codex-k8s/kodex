@@ -8,6 +8,7 @@ import {
   type MaybeRefOrGetter,
   type Ref,
 } from "vue";
+import { AppProblem } from "@/shared/api/problem";
 
 export interface AsyncEntityPickerItem {
   id: string;
@@ -188,6 +189,14 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
         isAbortError(loadError)
       )
         return;
+      if (
+        append &&
+        loadError instanceof AppProblem &&
+        loadError.status === 412
+      ) {
+        schedule(0);
+        return;
+      }
       error.value = loadError;
       hasLoaded.value = true;
     } finally {

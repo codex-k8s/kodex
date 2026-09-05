@@ -1645,6 +1645,9 @@ export const commandWorkflow = <ThrowOnError extends boolean = false>(options: O
     }
 });
 
+/**
+ * Обычный каталог Run либо один последний доступный Run на каждую возобновляемую Session. В resumable режиме total считает Session, states запрещён; owner проверяет текущие ADD_TURN authority и runtime. Изменение снимка курсора возвращает 412, после которого требуется первая страница.
+ */
 export const listRuns = <ThrowOnError extends boolean = false>(options?: Options<ListRunsData, ThrowOnError>): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> => (options?.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
     security: [{
             in: 'cookie',

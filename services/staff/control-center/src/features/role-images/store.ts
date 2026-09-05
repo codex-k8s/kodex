@@ -42,6 +42,11 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   const dependencies = reactive<Record<string, RuntimeEnvironmentSet[]>>({});
   const projectRecipeRefs = reactive<Record<string, string[]>>({});
   const projectNextPageToken = reactive<Record<string, string | undefined>>({});
+  const projectTotal = reactive<Record<string, number | undefined>>({});
+  const catalogFilters = new Map<
+    string,
+    { query?: string; state?: "ACTIVE" | "ARCHIVED" }
+  >();
   const roleDefinitions = ref<RoleDefinitionOption[]>([]);
   const environments = ref<RoleEnvironment[]>([]);
   const loadingCatalog = ref(false);
@@ -68,7 +73,11 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       .filter((value): value is RoleImageRecipe => Boolean(value));
   }
 
-  async function loadCatalog(projectRef: string, reset = true): Promise<void> {
+  async function loadCatalog(
+    projectRef: string,
+    reset = true,
+    filter?: { query?: string; state?: "ACTIVE" | "ARCHIVED" },
+  ): Promise<void> {
     if (
       !reset &&
       (!projectNextPageToken[projectRef] ||
@@ -81,6 +90,13 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     catalogController = controller;
     const cursor = reset ? undefined : projectNextPageToken[projectRef];
     const current = ++catalogGeneration;
+    if (filter) catalogFilters.set(projectRef, filter);
+    const activeFilter = catalogFilters.get(projectRef) ?? {};
+    if (reset) {
+      projectRecipeRefs[projectRef] = [];
+      projectNextPageToken[projectRef] = undefined;
+      projectTotal[projectRef] = undefined;
+    }
     if (reset) loadingCatalog.value = true;
     else loadingMore.value = true;
     problem.value = undefined;
@@ -89,17 +105,26 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         projectRef,
         cursor,
         controller.signal,
+        activeFilter,
       );
       if (current !== catalogGeneration) return;
       if (
         !Array.isArray(page.items) ||
-        page.items.some((recipe) => recipe.projectRef !== projectRef) ||
+        !Number.isSafeInteger(page.total) ||
+        page.total < page.items.length ||
+        page.items.some(
+          (recipe) =>
+            recipe.projectRef !== projectRef ||
+            (activeFilter.state && recipe.state !== activeFilter.state),
+        ) ||
         (page.nextPageToken && page.nextPageToken === cursor)
       )
         throw new Error("Invalid role image catalog scope or cursor");
       const refs = reset ? [] : [...(projectRecipeRefs[projectRef] ?? [])];
       const seen = new Set(refs);
       for (const recipe of page.items) {
+        if (seen.has(recipe.ref))
+          throw new Error("Repeated role image catalog item");
         const previous = recipes[recipe.ref];
         if (!previous || previous.version <= recipe.version)
           recipes[recipe.ref] = recipe;
@@ -110,6 +135,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       }
       projectRecipeRefs[projectRef] = refs;
       projectNextPageToken[projectRef] = page.nextPageToken;
+      projectTotal[projectRef] = page.total;
     } catch (error) {
       if (current === catalogGeneration) problem.value = asProblem(error);
     } finally {
@@ -315,6 +341,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     promotionReceipts,
     dependencies,
     projectNextPageToken,
+    projectTotal,
     roleDefinitions,
     environments,
     environmentByKey,

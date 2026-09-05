@@ -8,6 +8,7 @@ import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
 import { runFilterStates } from "@/features/workboard/run-catalog";
 import type { RunFilter } from "@/features/workboard/model";
+import { loadSessionCatalog } from "@/features/workboard/session-catalog";
 export interface HomeResultItem {
   ref: string;
   title: string;
@@ -15,9 +16,10 @@ export interface HomeResultItem {
   state: string;
   to?: string;
   artifact?: Artifact;
+  sessionRef?: string;
 }
 export interface HomeResultScope {
-  kind: "RUN" | "ARTIFACT";
+  kind: "RUN" | "ARTIFACT" | "SESSION";
   projectRef: string;
   query: string;
   runFilter: RunFilter | "FAILED";
@@ -31,7 +33,19 @@ export async function loadHomeResultPage(
   let items: HomeResultItem[];
   let total: number;
   let nextPageToken: string | undefined;
-  if (scope.kind === "RUN") {
+  if (scope.kind === "SESSION") {
+    const page = await loadSessionCatalog(scope, pageToken, signal);
+    items = page.items.map((item) => ({
+      ref: item.ref,
+      sessionRef: item.sessionRef,
+      title: item.title,
+      description: item.resultSummary || item.target.displayName,
+      state: item.state,
+      to: `/runs/${encodeURIComponent(item.ref)}`,
+    }));
+    total = page.total;
+    nextPageToken = page.nextPageToken;
+  } else if (scope.kind === "RUN") {
     const states: Run["state"][] | undefined =
       scope.runFilter === "FAILED"
         ? ["FAILED"]

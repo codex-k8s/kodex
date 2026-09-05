@@ -1745,13 +1745,13 @@ func (e IntegrationDefinitionExecutionRoute) Valid() bool {
 
 // Defines values for IntegrationDefinitionOrigin.
 const (
-	SHIPPED IntegrationDefinitionOrigin = "SHIPPED"
+	IntegrationDefinitionOriginSHIPPED IntegrationDefinitionOrigin = "SHIPPED"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationDefinitionOrigin enum.
 func (e IntegrationDefinitionOrigin) Valid() bool {
 	switch e {
-	case SHIPPED:
+	case IntegrationDefinitionOriginSHIPPED:
 		return true
 	default:
 		return false
@@ -3204,6 +3204,45 @@ func (e RoleImageGitSourceInputContentFormat) Valid() bool {
 	case RoleImageGitSourceInputContentFormatJSON:
 		return true
 	case RoleImageGitSourceInputContentFormatYAML:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageManagedLineageManagedBy.
+const (
+	RoleImageManagedLineageManagedByGIT     RoleImageManagedLineageManagedBy = "GIT"
+	RoleImageManagedLineageManagedBySHIPPED RoleImageManagedLineageManagedBy = "SHIPPED"
+	RoleImageManagedLineageManagedByUI      RoleImageManagedLineageManagedBy = "UI"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageManagedLineageManagedBy enum.
+func (e RoleImageManagedLineageManagedBy) Valid() bool {
+	switch e {
+	case RoleImageManagedLineageManagedByGIT:
+		return true
+	case RoleImageManagedLineageManagedBySHIPPED:
+		return true
+	case RoleImageManagedLineageManagedByUI:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageManagedLineageOrigin.
+const (
+	BASELINE RoleImageManagedLineageOrigin = "BASELINE"
+	MANAGED  RoleImageManagedLineageOrigin = "MANAGED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageManagedLineageOrigin enum.
+func (e RoleImageManagedLineageOrigin) Valid() bool {
+	switch e {
+	case BASELINE:
+		return true
+	case MANAGED:
 		return true
 	default:
 		return false
@@ -5237,46 +5276,46 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 
 // Defines values for VFSNodeKind.
 const (
-	AGENT       VFSNodeKind = "AGENT"
-	AUTOMATION  VFSNodeKind = "AUTOMATION"
-	AVATAR      VFSNodeKind = "AVATAR"
-	DIRECTORY   VFSNodeKind = "DIRECTORY"
-	ENVIRONMENT VFSNodeKind = "ENVIRONMENT"
-	INPUT       VFSNodeKind = "INPUT"
-	MEMORY      VFSNodeKind = "MEMORY"
-	PROJECT     VFSNodeKind = "PROJECT"
-	RESULT      VFSNodeKind = "RESULT"
-	RUN         VFSNodeKind = "RUN"
-	SKILL       VFSNodeKind = "SKILL"
-	WORKFLOW    VFSNodeKind = "WORKFLOW"
+	VFSNodeKindAGENT       VFSNodeKind = "AGENT"
+	VFSNodeKindAUTOMATION  VFSNodeKind = "AUTOMATION"
+	VFSNodeKindAVATAR      VFSNodeKind = "AVATAR"
+	VFSNodeKindDIRECTORY   VFSNodeKind = "DIRECTORY"
+	VFSNodeKindENVIRONMENT VFSNodeKind = "ENVIRONMENT"
+	VFSNodeKindINPUT       VFSNodeKind = "INPUT"
+	VFSNodeKindMEMORY      VFSNodeKind = "MEMORY"
+	VFSNodeKindPROJECT     VFSNodeKind = "PROJECT"
+	VFSNodeKindRESULT      VFSNodeKind = "RESULT"
+	VFSNodeKindRUN         VFSNodeKind = "RUN"
+	VFSNodeKindSKILL       VFSNodeKind = "SKILL"
+	VFSNodeKindWORKFLOW    VFSNodeKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeKind enum.
 func (e VFSNodeKind) Valid() bool {
 	switch e {
-	case AGENT:
+	case VFSNodeKindAGENT:
 		return true
-	case AUTOMATION:
+	case VFSNodeKindAUTOMATION:
 		return true
-	case AVATAR:
+	case VFSNodeKindAVATAR:
 		return true
-	case DIRECTORY:
+	case VFSNodeKindDIRECTORY:
 		return true
-	case ENVIRONMENT:
+	case VFSNodeKindENVIRONMENT:
 		return true
-	case INPUT:
+	case VFSNodeKindINPUT:
 		return true
-	case MEMORY:
+	case VFSNodeKindMEMORY:
 		return true
-	case PROJECT:
+	case VFSNodeKindPROJECT:
 		return true
-	case RESULT:
+	case VFSNodeKindRESULT:
 		return true
-	case RUN:
+	case VFSNodeKindRUN:
 		return true
-	case SKILL:
+	case VFSNodeKindSKILL:
 		return true
-	case WORKFLOW:
+	case VFSNodeKindWORKFLOW:
 		return true
 	default:
 		return false
@@ -5759,22 +5798,22 @@ func (e ListOwnerGatesParamsStates) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case ListArtifactsParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case ListArtifactsParamsLifecycleStateDELETED:
 		return true
-	case PURGED:
+	case ListArtifactsParamsLifecycleStatePURGED:
 		return true
-	case PURGEPENDING:
+	case ListArtifactsParamsLifecycleStatePURGEPENDING:
 		return true
 	default:
 		return false
@@ -5856,6 +5895,24 @@ func (e ListArtifactsParamsSourceKind) Valid() bool {
 	}
 }
 
+// Defines values for ListRoleImageRecipesParamsState.
+const (
+	ListRoleImageRecipesParamsStateACTIVE   ListRoleImageRecipesParamsState = "ACTIVE"
+	ListRoleImageRecipesParamsStateARCHIVED ListRoleImageRecipesParamsState = "ARCHIVED"
+)
+
+// Valid indicates whether the value is a known member of the ListRoleImageRecipesParamsState enum.
+func (e ListRoleImageRecipesParamsState) Valid() bool {
+	switch e {
+	case ListRoleImageRecipesParamsStateACTIVE:
+		return true
+	case ListRoleImageRecipesParamsStateARCHIVED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProviderAccountsParamsDefinitionKey.
 const (
 	ListProviderAccountsParamsDefinitionKeyOpenaiCodex ListProviderAccountsParamsDefinitionKey = "openai-codex"
@@ -5865,6 +5922,24 @@ const (
 func (e ListProviderAccountsParamsDefinitionKey) Valid() bool {
 	switch e {
 	case ListProviderAccountsParamsDefinitionKeyOpenaiCodex:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRunsParamsTargetType.
+const (
+	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
+	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
+func (e ListRunsParamsTargetType) Valid() bool {
+	switch e {
+	case ListRunsParamsTargetTypeAGENT:
+		return true
+	case ListRunsParamsTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
@@ -8076,19 +8151,20 @@ type RoleImageArtifactTool struct {
 
 // RoleImageBuild defines model for RoleImageBuild.
 type RoleImageBuild struct {
-	Attempt           int                 `json:"attempt"`
-	CreatedAt         Timestamp           `json:"createdAt"`
-	DiagnosticCode    *string             `json:"diagnosticCode,omitempty"`
-	DiagnosticSummary *string             `json:"diagnosticSummary,omitempty"`
-	Dockerfile        string              `json:"dockerfile"`
-	ProgressPercent   int                 `json:"progressPercent"`
-	RecipeGeneration  int64               `json:"recipeGeneration"`
-	RecipeRef         OpaqueRef           `json:"recipeRef"`
-	Ref               OpaqueRef           `json:"ref"`
-	SafeErrorCode     *string             `json:"safeErrorCode,omitempty"`
-	Stage             RoleImageBuildStage `json:"stage"`
-	UpdatedAt         Timestamp           `json:"updatedAt"`
-	Version           int64               `json:"version"`
+	Attempt                  int                 `json:"attempt"`
+	ConfigurationRevisionRef *OpaqueRef          `json:"configurationRevisionRef,omitempty"`
+	CreatedAt                Timestamp           `json:"createdAt"`
+	DiagnosticCode           *string             `json:"diagnosticCode,omitempty"`
+	DiagnosticSummary        *string             `json:"diagnosticSummary,omitempty"`
+	Dockerfile               string              `json:"dockerfile"`
+	ProgressPercent          int                 `json:"progressPercent"`
+	RecipeGeneration         int64               `json:"recipeGeneration"`
+	RecipeRef                OpaqueRef           `json:"recipeRef"`
+	Ref                      OpaqueRef           `json:"ref"`
+	SafeErrorCode            *string             `json:"safeErrorCode,omitempty"`
+	Stage                    RoleImageBuildStage `json:"stage"`
+	UpdatedAt                Timestamp           `json:"updatedAt"`
+	Version                  int64               `json:"version"`
 }
 
 // RoleImageBuildStage defines model for RoleImageBuild.Stage.
@@ -8112,6 +8188,23 @@ type RoleImageGitSourceInput struct {
 
 // RoleImageGitSourceInputContentFormat defines model for RoleImageGitSourceInput.ContentFormat.
 type RoleImageGitSourceInputContentFormat string
+
+// RoleImageManagedLineage Авторитетное происхождение рецепта; у SHIPPED baseline может отсутствовать managed revision. Отсутствие lineage не назначает UI право изменения.
+type RoleImageManagedLineage struct {
+	ConfigurationRef *OpaqueRef                       `json:"configurationRef,omitempty"`
+	ManagedBy        RoleImageManagedLineageManagedBy `json:"managedBy"`
+	Origin           RoleImageManagedLineageOrigin    `json:"origin"`
+	Revision         *int64                           `json:"revision,omitempty"`
+	RevisionRef      *OpaqueRef                       `json:"revisionRef,omitempty"`
+	SourceRef        string                           `json:"sourceRef"`
+	SourceRevision   string                           `json:"sourceRevision"`
+}
+
+// RoleImageManagedLineageManagedBy defines model for RoleImageManagedLineage.ManagedBy.
+type RoleImageManagedLineageManagedBy string
+
+// RoleImageManagedLineageOrigin defines model for RoleImageManagedLineage.Origin.
+type RoleImageManagedLineageOrigin string
 
 // RoleImagePromotionInput defines model for RoleImagePromotionInput.
 type RoleImagePromotionInput struct {
@@ -8140,6 +8233,9 @@ type RoleImageRecipe struct {
 	CreatedAt              Timestamp                `json:"createdAt"`
 	Environment            RoleEnvironmentSelection `json:"environment"`
 	Generation             int64                    `json:"generation"`
+
+	// ManagedLineage Авторитетное происхождение рецепта; у SHIPPED baseline может отсутствовать managed revision. Отсутствие lineage не назначает UI право изменения.
+	ManagedLineage         *RoleImageManagedLineage `json:"managedLineage,omitempty"`
 	Name                   string                   `json:"name"`
 	NextActions            []NextAction             `json:"nextActions"`
 	ProjectRef             OpaqueRef                `json:"projectRef"`
@@ -8189,6 +8285,7 @@ type RoleImageRecipeDetail struct {
 type RoleImageRecipePage struct {
 	Items         []RoleImageRecipe `json:"items"`
 	NextPageToken *string           `json:"nextPageToken,omitempty"`
+	Total         int64             `json:"total"`
 }
 
 // RoleImageRecipeRevision defines model for RoleImageRecipeRevision.
@@ -10826,9 +10923,16 @@ type CreateMemoryRecordParams struct {
 // ListRoleImageRecipesParams defines parameters for ListRoleImageRecipes.
 type ListRoleImageRecipesParams struct {
 	RoleDefinitionRef *RoleDefinitionRefQuery `form:"roleDefinitionRef,omitempty" json:"roleDefinitionRef,omitempty"`
-	PageSize          *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken         *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+
+	// Query Поиск владельца по имени рецепта; не более 128 UTF-8 bytes.
+	Query     *string                          `form:"query,omitempty" json:"query,omitempty"`
+	State     *ListRoleImageRecipesParamsState `form:"state,omitempty" json:"state,omitempty"`
+	PageSize  *PageSize                        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken                       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
+
+// ListRoleImageRecipesParamsState defines parameters for ListRoleImageRecipes.
+type ListRoleImageRecipesParamsState string
 
 // CreateRoleImageRecipeParams defines parameters for CreateRoleImageRecipe.
 type CreateRoleImageRecipeParams struct {
@@ -11156,12 +11260,22 @@ type ValidateRoleImageRevisionDraftParams struct {
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
-	ProjectRef *ProjectRefQuery        `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query                  `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	States     *[]ListRunsParamsStates `form:"states,omitempty" json:"states,omitempty"`
+	ProjectRef            *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query                 *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize              *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken             *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ResumableSessionsOnly *bool            `form:"resumableSessionsOnly,omitempty" json:"resumableSessionsOnly,omitempty"`
+
+	// TargetType Только вместе с targetRef в resumable режиме; без пары каталог охватывает все доступные targets.
+	TargetType *ListRunsParamsTargetType `form:"targetType,omitempty" json:"targetType,omitempty"`
+
+	// TargetRef Точный target, разрешаемый владельцем до поиска, distinct count и pagination.
+	TargetRef *string                 `form:"targetRef,omitempty" json:"targetRef,omitempty"`
+	States    *[]ListRunsParamsStates `form:"states,omitempty" json:"states,omitempty"`
 }
+
+// ListRunsParamsTargetType defines parameters for ListRuns.
+type ListRunsParamsTargetType string
 
 // ListRunsParamsStates defines parameters for ListRuns.
 type ListRunsParamsStates string
@@ -25172,6 +25286,32 @@ func (siw *ServerInterfaceWrapper) ListRoleImageRecipes(w http.ResponseWriter, r
 		return
 	}
 
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -29761,6 +29901,45 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resumableSessionsOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resumableSessionsOnly", r.URL.Query(), &params.ResumableSessionsOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resumableSessionsOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resumableSessionsOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "targetType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "targetType", r.URL.Query(), &params.TargetType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "targetRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "targetRef", r.URL.Query(), &params.TargetRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetRef", Err: err})
 		}
 		return
 	}

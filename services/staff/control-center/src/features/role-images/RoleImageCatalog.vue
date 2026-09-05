@@ -7,6 +7,7 @@ import { useRoleImagesStore } from "@/features/role-images/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import RoleImageLineage from "./RoleImageLineage.vue";
 
 const props = defineProps<{ projectRef: string }>();
 const { t } = useI18n();
@@ -14,28 +15,17 @@ const store = useRoleImagesStore();
 const query = ref("");
 const expanded = ref(false);
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
-const items = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase();
-  return store.catalog(props.projectRef).filter((recipe) => {
-    if (state.value !== "ALL" && recipe.state !== state.value) return false;
-    const role = store.roleDefinitionByRef.get(recipe.roleDefinitionRef);
-    const environment = store.environmentByKey.get(
-      recipe.environment.environmentKey,
-    );
-    return (
-      !needle ||
-      [
-        recipe.name,
-        role?.label ?? "",
-        environment ? t(environment.nameMessageKey) : "",
-      ].some((value) => value.toLocaleLowerCase().includes(needle))
-    );
+const items = computed(() => store.catalog(props.projectRef));
+function loadFiltered() {
+  return store.loadCatalog(props.projectRef, true, {
+    ...(query.value.trim() ? { query: query.value.trim() } : {}),
+    ...(state.value === "ALL" ? {} : { state: state.value }),
   });
-});
+}
 
 async function load(): Promise<void> {
   await Promise.all([
-    store.loadCatalog(props.projectRef),
+    loadFiltered(),
     store.loadSupportingCatalogs(props.projectRef),
   ]);
 }
@@ -53,6 +43,7 @@ watch(
   () => props.projectRef,
   () => void load(),
 );
+watch([query, state], () => void loadFiltered());
 onMounted(() => void load());
 onBeforeUnmount(() => store.dispose());
 </script>
@@ -73,6 +64,7 @@ onBeforeUnmount(() => store.dispose());
         <input
           v-model="query"
           type="search"
+          maxlength="128"
           :placeholder="t('roleImages.search')"
         />
       </label>
@@ -84,10 +76,11 @@ onBeforeUnmount(() => store.dispose());
           <option value="ARCHIVED">{{ t("roleImages.archived") }}</option>
         </select>
       </label>
-      <span class="catalog-count">
-        {{
-          t("roleImages.loaded", { count: store.catalog(projectRef).length })
-        }}
+      <span
+        v-if="store.projectTotal[projectRef] !== undefined"
+        class="catalog-count"
+      >
+        {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
       </span>
       <button
         v-if="!expanded"
@@ -108,9 +101,6 @@ onBeforeUnmount(() => store.dispose());
       </RouterLink>
     </header>
 
-    <p class="catalog-limit" role="note">
-      {{ t("roleImages.searchLimitation") }}
-    </p>
     <ProblemNotice
       v-if="store.problem"
       :problem="store.problem"
@@ -182,6 +172,7 @@ onBeforeUnmount(() => store.dispose());
               </dd>
             </div>
           </dl>
+          <RoleImageLineage :lineage="recipe.managedLineage" />
           <footer>
             <span>
               {{
@@ -269,7 +260,7 @@ onBeforeUnmount(() => store.dispose());
 .role-image-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  grid-auto-rows: 268px;
+  grid-auto-rows: minmax(340px, auto);
   gap: 12px;
 }
 .image-card {
@@ -370,7 +361,7 @@ onBeforeUnmount(() => store.dispose());
 @media (max-width: 520px) {
   .role-image-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: 368px;
+    grid-auto-rows: minmax(440px, auto);
   }
   .image-card dl {
     grid-template-columns: 1fr;

@@ -13,7 +13,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 import HomeResultRows from "./HomeResultRows.vue";
 const props = defineProps<{
-  kind: "RUN" | "ARTIFACT";
+  kind: "RUN" | "ARTIFACT" | "SESSION";
   fixedFilter?: "FAILED";
 }>();
 const emit = defineEmits<{ total: [value: number | undefined] }>();
@@ -33,9 +33,13 @@ const artifactProblem = ref<AppProblem>();
 const title = computed(() =>
   props.fixedFilter
     ? "home.failedRuns"
-    : props.kind === "RUN"
-      ? "workboard.runningNow"
-      : "workboard.recentResults",
+    : props.kind === "SESSION"
+      ? "common.continue"
+      : props.kind === "RUN"
+        ? runFilter.value === "ACTIVE"
+          ? "workboard.runningNow"
+          : "runs.title"
+        : "workboard.recentResults",
 );
 let controller: AbortController | undefined;
 let generation = 0;
@@ -74,7 +78,8 @@ async function load(more = false) {
     const next = more ? [...items.value, ...page.items] : page.items;
     if (
       (page.nextPageToken && seen.has(page.nextPageToken)) ||
-      new Set(next.map((item) => item.ref)).size !== next.length
+      new Set(next.map((item) => item.sessionRef ?? item.ref)).size !==
+        next.length
     )
       throw new Error("Repeated Home result cursor or item");
     items.value = next;
@@ -83,6 +88,15 @@ async function load(more = false) {
     cursor.value = page.nextPageToken;
     if (cursor.value) seen.add(cursor.value);
   } catch (error) {
+    if (
+      current === generation &&
+      !active.signal.aborted &&
+      more &&
+      asProblem(error).status === 412
+    ) {
+      await load();
+      return;
+    }
     if (current === generation && !active.signal.aborted)
       problem.value = asProblem(error);
   } finally {
@@ -164,8 +178,14 @@ async function download() {
 }
 watch([query, projectRef, runFilter], refresh);
 watch(
+  () => platform.loading.runs,
+  (loading, previous) => {
+    if (props.kind !== "ARTIFACT" && previous && !loading) refresh();
+  },
+);
+watch(
   () =>
-    props.kind === "RUN"
+    props.kind !== "ARTIFACT"
       ? platform.runList
           .map((item) => `${item.ref}:${String(item.version)}`)
           .join("|")

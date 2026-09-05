@@ -1338,9 +1338,10 @@ const ru = {
     editorSubtitle:
       "Dockerfile, сборка, promotion и доказательства supply chain",
     backToCatalog: "К каталогу образов",
-    search: "Найти образ в загруженной части каталога",
-    searchLimitation:
-      "Текущий API не принимает поисковый запрос: фильтр применяется только к уже загруженным страницам.",
+    search: "Найти образ по имени",
+    total: "Всего: {count}",
+    lineage: "Источник",
+    configuration: "Конфигурация",
     loaded: "Загружено: {count}",
     loadMore: "Загрузить ещё",
     archived: "Архивные",
@@ -3534,9 +3535,10 @@ const en = {
     editorTitle: "Image configuration",
     editorSubtitle: "Dockerfile, build, promotion and supply-chain evidence",
     backToCatalog: "Back to image catalog",
-    search: "Search the loaded catalog",
-    searchLimitation:
-      "The current API has no search parameter. Filtering applies only to loaded pages.",
+    search: "Search images by name",
+    total: "Total: {count}",
+    lineage: "Source",
+    configuration: "Configuration",
     loaded: "Loaded: {count}",
     loadMore: "Load more",
     archived: "Archived",

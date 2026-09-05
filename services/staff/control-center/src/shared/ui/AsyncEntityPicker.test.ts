@@ -4,6 +4,7 @@ import { createI18n } from "vue-i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import { AppProblem } from "@/shared/api/problem";
 import {
   createCursorIntersectionHandler,
   nearScrollEnd,
@@ -33,6 +34,40 @@ afterEach(() => {
 });
 
 describe("useAsyncEntityCollection", () => {
+  it("сбрасывает stale snapshot при догрузке и не зацикливает отказ первой страницы", async () => {
+    vi.useFakeTimers();
+    const conflict = new AppProblem({
+      status: 412,
+      code: "VERSION_OR_STATE_CONFLICT",
+      kind: "conflict",
+      retryable: true,
+    });
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ id: "old", label: "Старый" }],
+        nextCursor: "snapshot",
+      })
+      .mockRejectedValueOnce(conflict)
+      .mockRejectedValueOnce(conflict);
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection(loader, { debounceMs: 0 }),
+    );
+    if (!collection) throw new Error("Missing collection scope");
+    await vi.runAllTimersAsync();
+    await collection.loadMore();
+    await vi.runAllTimersAsync();
+    expect(loader).toHaveBeenCalledTimes(3);
+    expect(
+      loader.mock.calls.map(
+        (call) => (call[0] as AsyncEntityLoadRequest).cursor,
+      ),
+    ).toEqual([undefined, "snapshot", undefined]);
+    expect(collection.items.value).toEqual([]);
+    expect(collection.phase.value).toBe("error");
+    scope.stop();
+  });
   it("отменяет незавершённый запрос и допускает новое открытие", async () => {
     vi.useFakeTimers();
     const first = deferred<AsyncEntityPage<TestItem>>();

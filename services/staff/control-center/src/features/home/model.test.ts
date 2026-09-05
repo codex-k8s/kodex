@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   homeFailedRuns,
   homeOpenGates,
-  homeResumableSessions,
   prioritizeHomeProjects,
 } from "@/features/home/model";
 import type {
@@ -133,27 +132,5 @@ describe("home attention model", () => {
     ]);
 
     expect(result.map((item) => item.ref)).toEqual(["timeout", "failed"]);
-  });
-
-  it("оставляет одну последнюю продолжимую работу на сессию и не дублирует ошибки", () => {
-    const result = homeResumableSessions([
-      run("old", "SUCCEEDED", {
-        sessionRef: "session_shared",
-        nextActions: ["ADD_TURN"],
-        finishedAt: "2026-08-29T09:00:00Z",
-      }),
-      run("latest", "SUCCEEDED", {
-        sessionRef: "session_shared",
-        nextActions: ["ADD_TURN"],
-        finishedAt: "2026-08-29T12:00:00Z",
-      }),
-      run("failed", "FAILED", {
-        nextActions: ["ADD_TURN"],
-        finishedAt: "2026-08-29T13:00:00Z",
-      }),
-      run("not-allowed", "SUCCEEDED"),
-    ]);
-
-    expect(result.map((item) => item.ref)).toEqual(["latest"]);
   });
 });

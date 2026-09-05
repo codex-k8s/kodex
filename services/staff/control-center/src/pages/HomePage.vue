@@ -17,12 +17,7 @@ import { openAssistantWorkspace } from "@/features/assistant/events";
 import HomeAttentionCenter from "@/features/home/components/HomeAttentionCenter.vue";
 import HomeGateCatalog from "@/features/home/components/HomeGateCatalog.vue";
 import HomeProjectsList from "@/features/home/components/HomeProjectsList.vue";
-import HomeSessionList from "@/features/home/components/HomeSessionList.vue";
-import {
-  homeFailedRuns,
-  homeOpenGates,
-  homeResumableSessions,
-} from "@/features/home/model";
+import { homeFailedRuns, homeOpenGates } from "@/features/home/model";
 import { usePlatformStore } from "@/features/platform/store";
 import HomeResultCatalog from "@/features/home/components/HomeResultCatalog.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
@@ -57,15 +52,13 @@ let projectTimer: ReturnType<typeof setTimeout> | undefined;
 const runsReady = ref(platform.runList.length > 0);
 
 const runCatalogTotal = ref<number>();
+const sessionCatalogTotal = ref<number>();
 const artifactCatalogTotal = ref<number>();
 const failedCatalogTotal = ref<number>();
 const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const openGates = computed(() => homeOpenGates(pendingGates.value));
 const failedRuns = computed(() =>
   homeFailedRuns(platform.runList, platform.runList.length),
-);
-const resumableSessions = computed(() =>
-  homeResumableSessions(platform.runList, platform.runList.length),
 );
 const currentUserName = computed(
   () => platform.bootstrap?.currentUser.displayName,
@@ -82,12 +75,7 @@ const refreshing = computed(
     (platform.loading.runs && runsReady.value),
 );
 const showRuns = computed(() => runCatalogTotal.value !== 0);
-const showSessions = computed(
-  () =>
-    resumableSessions.value.length > 0 ||
-    !runsReady.value ||
-    !!platform.problems.runs,
-);
+const showSessions = computed(() => sessionCatalogTotal.value !== 0);
 const showResults = computed(() => artifactCatalogTotal.value !== 0);
 const singleBlock = computed(
   () => !showRuns.value && !showSessions.value && !showResults.value,
@@ -343,26 +331,12 @@ onBeforeUnmount(() => {
           @total="runCatalogTotal = $event"
         />
 
-        <WorkboardSection
-          v-if="showSessions"
+        <HomeResultCatalog
+          v-show="showSessions"
+          kind="SESSION"
           class="home-session-section"
-          :title="$t('common.continue')"
-          :loading="platform.loading.runs"
-          :refreshing="refreshing"
-          :ready="runsReady"
-          :problem="platform.problems.runs"
-          :empty="resumableSessions.length === 0"
-          :empty-text="$t('runs.newRun.session.empty')"
-          @retry="refreshRuns"
-        >
-          <template #action>
-            <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
-          </template>
-          <HomeSessionList
-            :runs="resumableSessions"
-            :projects="visibleProjects"
-          />
-        </WorkboardSection>
+          @total="sessionCatalogTotal = $event"
+        />
       </div>
 
       <aside class="home-dashboard__aside">

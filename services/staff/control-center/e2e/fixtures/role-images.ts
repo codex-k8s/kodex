@@ -15,6 +15,15 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
     state: "ACTIVE",
     environment: { environmentKey: "standard", dockerfile: "FROM scratch" },
     generation: 1,
+    managedLineage: {
+      managedBy: "GIT",
+      origin: "MANAGED",
+      configurationRef: `configuration_synthetic_${String(index)}`,
+      revisionRef: `config_revision_${String(index)}`,
+      revision: 3,
+      sourceRef: "git://synthetic/role-image.yaml",
+      sourceRevision: "a".repeat(40),
+    },
     promotedImageReady: false,
     nextActions: ["OPEN"],
     createdAt: "2026-09-05T00:00:00Z",
@@ -22,7 +31,23 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
   }));
   await page.route(
     `**/api/v1/projects/${projectRef}/role-image-recipes*`,
-    (route) => route.fulfill({ json: { items: recipes, nextPageToken: "" } }),
+    (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const query = params.get("query");
+      const items =
+        params.get("state") === "ARCHIVED"
+          ? []
+          : query
+            ? [recipes[0]]
+            : recipes;
+      return route.fulfill({
+        json: {
+          items,
+          total: query ? 1 : params.get("state") === "ARCHIVED" ? 0 : 43,
+          nextPageToken: "",
+        },
+      });
+    },
   );
   await page.route("**/api/v1/role-environments*", (route) =>
     route.fulfill({ json: { items: [] } }),
@@ -31,6 +56,25 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
     route.fulfill({ json: { items: [], nextPageToken: "" } }),
   );
   await page.goto(`/projects/${projectRef}/role-images`);
+  await expect(page.locator(".image-card")).toHaveCount(8);
+  await expect(page.locator(".catalog-count")).toHaveText("Всего: 43");
+  await expect(
+    page
+      .locator(".image-card")
+      .first()
+      .getByText("Источник: GIT", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("searchbox", { name: "Найти образ по имени", exact: true })
+    .fill("Образ 1");
+  await expect(page.locator(".image-card")).toHaveCount(1);
+  await expect(page.locator(".catalog-count")).toHaveText("Всего: 1");
+  await page
+    .getByRole("searchbox", { name: "Найти образ по имени", exact: true })
+    .fill("");
+  await page.getByRole("combobox").selectOption("ARCHIVED");
+  await expect(page.locator(".catalog-count")).toHaveText("Всего: 0");
+  await page.getByRole("combobox").selectOption("ALL");
   await expect(page.locator(".image-card")).toHaveCount(8);
   const cards = await page.locator(".image-card").evaluateAll((elements) =>
     elements.map((element) => {
@@ -73,6 +117,7 @@ export async function checkRoleImageHistory(
     version: 1,
     recipeRef: recipe.ref,
     recipeGeneration: 1,
+    configurationRevisionRef: recipe.managedLineage?.revisionRef,
     dockerfile: "FROM scratch\nLABEL fixture=synthetic",
     attempt: index + 1,
     stage: "COMPLETED",

@@ -74,11 +74,22 @@ describe("role image API adapter", () => {
     api.listRoleImageRecipes.mockReturnValueOnce(
       response({ items: [recipe], nextPageToken: "page_2" }),
     );
-    const page = await loadRoleImagePage("project_1", "page_1");
+    const page = await loadRoleImagePage(
+      "project_1",
+      "page_1",
+      new AbortController().signal,
+      { query: "Среда", state: "ACTIVE", roleDefinitionRef: "role_1" },
+    );
     expect(api.listRoleImageRecipes).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { projectRef: "project_1" },
-        query: { pageSize: 40, pageToken: "page_1" },
+        query: {
+          pageSize: 40,
+          pageToken: "page_1",
+          query: "Среда",
+          state: "ACTIVE",
+          roleDefinitionRef: "role_1",
+        },
       }),
     );
     expect(page.nextPageToken).toBe("page_2");

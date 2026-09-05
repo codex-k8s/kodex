@@ -19,12 +19,6 @@ export interface SessionPickerItem extends AsyncEntityPickerItem {
   run: Run;
 }
 
-const terminalRunStates = new Set<Run["state"]>([
-  "SUCCEEDED",
-  "FAILED",
-  "CANCELLED",
-]);
-
 const extensionKinds: Record<string, FileVisualKind> = {
   csv: "spreadsheet",
   doc: "document",
@@ -105,22 +99,6 @@ export function toArtifactPickerItem(artifact: Artifact): ArtifactPickerItem {
   };
 }
 
-export function isResumableRun(
-  run: Run,
-  scope: {
-    projectRef: string;
-    targetRef: string;
-    targetType: NewRunTargetType;
-  },
-): boolean {
-  return (
-    run.projectRef === scope.projectRef &&
-    run.target.type === scope.targetType &&
-    run.target.ref === scope.targetRef &&
-    terminalRunStates.has(run.state)
-  );
-}
-
 export function toSessionPickerItem(run: Run): SessionPickerItem {
   return {
     description: run.resultSummary,
@@ -128,19 +106,4 @@ export function toSessionPickerItem(run: Run): SessionPickerItem {
     label: run.title,
     run,
   };
-}
-
-export function uniqueResumableRuns(
-  runs: readonly Run[],
-  scope: Parameters<typeof isResumableRun>[1],
-  seenSessionRefs: Set<string> = new Set(),
-): Run[] {
-  const result: Run[] = [];
-  for (const run of runs) {
-    if (!isResumableRun(run, scope) || seenSessionRefs.has(run.sessionRef))
-      continue;
-    seenSessionRefs.add(run.sessionRef);
-    result.push(run);
-  }
-  return result;
 }
