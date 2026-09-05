@@ -5412,6 +5412,36 @@ func (e ListOwnerGatesParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListOwnerGatesParamsStates.
+const (
+	ListOwnerGatesParamsStatesAPPROVED         ListOwnerGatesParamsStates = "APPROVED"
+	ListOwnerGatesParamsStatesCANCELLED        ListOwnerGatesParamsStates = "CANCELLED"
+	ListOwnerGatesParamsStatesCHANGESREQUESTED ListOwnerGatesParamsStates = "CHANGES_REQUESTED"
+	ListOwnerGatesParamsStatesEXPIRED          ListOwnerGatesParamsStates = "EXPIRED"
+	ListOwnerGatesParamsStatesOPEN             ListOwnerGatesParamsStates = "OPEN"
+	ListOwnerGatesParamsStatesREJECTED         ListOwnerGatesParamsStates = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ListOwnerGatesParamsStates enum.
+func (e ListOwnerGatesParamsStates) Valid() bool {
+	switch e {
+	case ListOwnerGatesParamsStatesAPPROVED:
+		return true
+	case ListOwnerGatesParamsStatesCANCELLED:
+		return true
+	case ListOwnerGatesParamsStatesCHANGESREQUESTED:
+		return true
+	case ListOwnerGatesParamsStatesEXPIRED:
+		return true
+	case ListOwnerGatesParamsStatesOPEN:
+		return true
+	case ListOwnerGatesParamsStatesREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
 	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
@@ -5528,31 +5558,31 @@ func (e ListProviderAccountsParamsDefinitionKey) Valid() bool {
 
 // Defines values for ListRunsParamsStates.
 const (
-	ListRunsParamsStatesCANCELLED    ListRunsParamsStates = "CANCELLED"
-	ListRunsParamsStatesCANCELLING   ListRunsParamsStates = "CANCELLING"
-	ListRunsParamsStatesFAILED       ListRunsParamsStates = "FAILED"
-	ListRunsParamsStatesQUEUED       ListRunsParamsStates = "QUEUED"
-	ListRunsParamsStatesRUNNING      ListRunsParamsStates = "RUNNING"
-	ListRunsParamsStatesSUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
-	ListRunsParamsStatesWAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
+	CANCELLED    ListRunsParamsStates = "CANCELLED"
+	CANCELLING   ListRunsParamsStates = "CANCELLING"
+	FAILED       ListRunsParamsStates = "FAILED"
+	QUEUED       ListRunsParamsStates = "QUEUED"
+	RUNNING      ListRunsParamsStates = "RUNNING"
+	SUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
+	WAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsStates enum.
 func (e ListRunsParamsStates) Valid() bool {
 	switch e {
-	case ListRunsParamsStatesCANCELLED:
+	case CANCELLED:
 		return true
-	case ListRunsParamsStatesCANCELLING:
+	case CANCELLING:
 		return true
-	case ListRunsParamsStatesFAILED:
+	case FAILED:
 		return true
-	case ListRunsParamsStatesQUEUED:
+	case QUEUED:
 		return true
-	case ListRunsParamsStatesRUNNING:
+	case RUNNING:
 		return true
-	case ListRunsParamsStatesSUCCEEDED:
+	case SUCCEEDED:
 		return true
-	case ListRunsParamsStatesWAITINGHUMAN:
+	case WAITINGHUMAN:
 		return true
 	default:
 		return false
@@ -10087,14 +10117,23 @@ type GetOverviewParams struct {
 
 // ListOwnerGatesParams defines parameters for ListOwnerGates.
 type ListOwnerGatesParams struct {
-	ProjectRef *ProjectRefQuery           `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	PageSize   *PageSize                  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken                 `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	State      *ListOwnerGatesParamsState `form:"state,omitempty" json:"state,omitempty"`
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+
+	// State Одно состояние; не передаётся совместно со states.
+	State *ListOwnerGatesParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// States Явный набор состояний, включая terminal history; не передаётся совместно со state.
+	States *[]ListOwnerGatesParamsStates `form:"states,omitempty" json:"states,omitempty"`
 }
 
 // ListOwnerGatesParamsState defines parameters for ListOwnerGates.
 type ListOwnerGatesParamsState string
+
+// ListOwnerGatesParamsStates defines parameters for ListOwnerGates.
+type ListOwnerGatesParamsStates string
 
 // ResolveOwnerGateParams defines parameters for ResolveOwnerGate.
 type ResolveOwnerGateParams struct {
@@ -22305,6 +22344,19 @@ func (siw *ServerInterfaceWrapper) ListOwnerGates(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -22340,6 +22392,19 @@ func (siw *ServerInterfaceWrapper) ListOwnerGates(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "states" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "states", r.URL.Query(), &params.States, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "states"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "states", Err: err})
 		}
 		return
 	}

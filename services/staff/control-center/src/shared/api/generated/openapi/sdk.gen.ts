@@ -1704,6 +1704,9 @@ export const addSessionTurn = <ThrowOnError extends boolean = false>(options: Op
     }
 });
 
+/**
+ * Доступные actor решения в серверном порядке createdAt/ref DESC. query ищет literal substring в title, prompt и contextSummary без учёта регистра. state и states взаимоисключающие; без них выдаются все доступные состояния. CP считает total до pagination в том же snapshot, что и страницу. Cursor связан с actor, организацией, project, query и нормализованными states; смена scope требует первой страницы. Чтение не создаёт событие и не меняет lifecycle Gate.
+ */
 export const listOwnerGates = <ThrowOnError extends boolean = false>(options?: Options<ListOwnerGatesData, ThrowOnError>): RequestResult<ListOwnerGatesResponses, ListOwnerGatesErrors, ThrowOnError> => (options?.client ?? client).get<ListOwnerGatesResponses, ListOwnerGatesErrors, ThrowOnError>({
     security: [{
             in: 'cookie',

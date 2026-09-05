@@ -7296,9 +7296,17 @@ export type ListOwnerGatesData = {
     path?: never;
     query?: {
         projectRef?: OpaqueRef;
+        query?: string;
         pageSize?: number;
         pageToken?: string;
+        /**
+         * Одно состояние; не передаётся совместно со states.
+         */
         state?: 'OPEN' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED' | 'EXPIRED';
+        /**
+         * Явный набор состояний, включая terminal history; не передаётся совместно со state.
+         */
+        states?: Array<'OPEN' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED' | 'EXPIRED'>;
     };
     url: '/api/v1/owner-gates';
 };
@@ -7319,6 +7327,10 @@ export type ListOwnerGatesResponses = {
     200: {
         items: Array<OwnerGate>;
         nextPageToken: string;
+        /**
+         * Полное server-owned количество доступных решений после query/state/project фильтров, до pagination.
+         */
+        total: number;
     };
 };
 

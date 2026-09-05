@@ -255,8 +255,12 @@ func (server *Server) ListRunEvents(w http.ResponseWriter, r *http.Request, ref 
 	_ = jsonEncoder(w).Encode(value)
 }
 func (server *Server) ListOwnerGates(w http.ResponseWriter, r *http.Request, p generated.ListOwnerGatesParams) {
-	r, ok := catalogRequest(w, r, p.ProjectRef, nil, p.PageSize, p.PageToken)
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
 	if !ok {
+		return
+	}
+	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && p.States != nil {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	state := controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED
@@ -268,12 +272,30 @@ func (server *Server) ListOwnerGates(w http.ResponseWriter, r *http.Request, p g
 		}
 		state = controlplanev1.OwnerGateState(value)
 	}
-	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), State: state})
+	states := []controlplanev1.OwnerGateState{}
+	if p.States != nil {
+		if len(*p.States) == 0 || len(*p.States) > 6 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		seen := map[controlplanev1.OwnerGateState]bool{}
+		for _, selected := range *p.States {
+			value, known := controlplanev1.OwnerGateState_value["OWNER_GATE_STATE_"+string(selected)]
+			if !selected.Valid() || !known || value == 0 || seen[controlplanev1.OwnerGateState(value)] {
+				writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+				return
+			}
+			seen[controlplanev1.OwnerGateState(value)] = true
+			states = append(states, controlplanev1.OwnerGateState(value))
+		}
+	}
+	paging := page(p.PageSize, p.PageToken)
+	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: paging, State: state, States: states, Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "gates")
+	writeOwnerGatePage(w, response, stringValue(p.ProjectRef), state, states, int(paging.PageSize))
 }
 func (server *Server) GetOwnerGate(w http.ResponseWriter, r *http.Request, ref generated.GateRef) {
 	response, err := server.control.Query.GetOwnerGate(r.Context(), &controlplanev1.GetOwnerGateRequest{GateRef: ref})

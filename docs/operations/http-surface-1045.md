@@ -4,7 +4,7 @@ title: Полнота HTTP поверхности MVP и зависимости 
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -20,7 +20,7 @@ updated: 2026-09-05
 | Требования | Существующая HTTP/SDK поверхность | Оставшаяся граница |
 | --- | --- | --- |
 | CFG, RoleImage и IntegrationDefinition | Managed list/get/revisions/impact, специализированные create/save/validate/publish/discard/rebind, Git import/copy/detach/write-back, recipe build/promotion | Полная build/package execution и доставка exact published revision принадлежат producer; общий prepublication plan ещё отсутствует |
-| 02–06, 10, 12–13 | Projects query/page, Runs states/page и Owner Gates state/page | Home и project projection должны давать server total/aggregates; Owner Gates query/total ожидает CP |
+| 02–06, 10, 12–13 | Projects query/page, Runs states/page и Owner Gates query/state/states/page/total | Runs и global recent-results требуют server total/aggregates; готовый Owner Gates producer принят из CP898/858/724 |
 | 05, 19–23, 39–40 | Общие query/page для каталогов, provider accounts/readiness и integration definitions/connections/grants | Selector eligibility для конкретной operation/recipient не заменяется локальной фильтрацией; effective authority projection ожидает CP |
 | 09 | Assistant conversations query/page/title/archive, context и plan lifecycle | Геометрия и browser lifecycle — PWA; server context остаётся authority |
 | 11 | Same-origin session refresh и одноразовые realtime tickets | Длительная multi-tab/reconnect проверка принадлежит PWA/integrated baseline |
@@ -54,6 +54,28 @@ registry передаётся вместе с проверенным SHA256 и �
 вычисляет из этой схемы authority и не исполняет arbitrary provider calls.
 Connection сохраняет публичные credential readiness/hint, а internal
 credentialRevision descriptor исключается согласно OpenAPI projection.
+
+## Home/Decisions: query, states и total
+
+MVP-UI-05: проверенная web session → GET `/api/v1/owner-gates` → HTTP query/state
+mapper → существующий `PlatformQueryService.ListOwnerGates` → CP owner eligibility
+и repeatable-read PostgreSQL snapshot → PWA Home/Decisions. Project/query — только
+фильтры; actor/organization/role приходят из проверенного boundary/proof.
+Query до 200 символов, state и states взаимно исключаются; states содержит до
+шести уникальных известных значений. HISTORY передаёт явный terminal набор.
+Сервер применяет actor/project/state/query до total и cursor pagination, сохраняет
+порядок createdAt/ref DESC. Cursor непрозрачен для HTTP и связан владельцем с
+actor/organization и нормализованными фильтрами. Несовпадение → безопасный 400;
+hidden/forbidden/outage сохраняют 404/403/503. HTTP не объединяет страницы и
+не считает total по загруженным строкам. Пустая страница сохраняет числовой total
+и пустой nextPageToken; повреждённый count/ref/state/project/cursor → 502.
+
+Query не изменяет Gate ни в OPEN, ни в APPROVED/REJECTED/CHANGES_REQUESTED/
+CANCELLED/EXPIRED. OCC/idempotency неприменимы; новых событий, consumers фоновой
+доставки, портов и deploy resources нет. Readback принадлежит существующему
+owner RPC с прежним authority profile. Проверка HTTP fixture не заменяет реальную
+session/proof/CP browser интеграцию и не завершает весь MVP-UI-05: Runs/global
+Artifacts totals и полная Home projection остаются отдельной producer работой.
 
 ## Exact Secret pin при редактировании Environment
 
