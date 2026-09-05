@@ -11,12 +11,13 @@ updated: 2026-09-05
 # Граница проверки
 
 Источники: #1045/#1021, #1018, утверждённая матрица #1031
-`docs/operations/mvp-1031-acceptance.md`. HTTP основан на `5c32fa683`, Proto
-сверен с CP `10266a2ef` и `aff6a0a42`: различий нет. CP SQL/handlers не
-переносились и не редактировались. PWA handwritten остаётся у Newton.
+`docs/operations/mvp-1031-acceptance.md`. Текущий Proto совпадает с CP
+`a241b73e19be249a1119c578ce61cf19efb0d1ae`; policy54 и generated client
+потреблены из этого exact checkpoint. D7 перенесён commit `88f4331ff` целиком.
+CP SQL/handlers вручную не редактировались. PWA handwritten остаётся у Newton.
 
 В таблице указана HTTP поддержка, а не PASS пользовательского сценария.
-Проверка generated RPC surface охватывает 71 Query, 135 Command и 11 Assistant
+Проверка generated RPC surface охватывает 71 Query, 135 Command и 12 Assistant
 методов. Для всех есть authority profile и HTTP consumer; event cursor
 используется только WebSocket resume. Runtime/credential/email worker методы
 не публикуются в browser API. Наличие consumer не доказывает CP SQL/runtime.
@@ -28,6 +29,19 @@ CSRF/idempotency/If-Match правила существующих специал
 
 ## Все 61 требования
 
+### Карта D1/D7, CP a241b73e1
+
+| Сценарий | Actor/authority → HTTP → CP | State/OCC/readback |
+| --- | --- | --- |
+| История D1 | Проверенная browser session → GET assistant-conversations query/state/page → ListAssistantConversations | CP creator + organization/project eligibility до LIMIT; cursor связан с фильтрами; ACTIVE по умолчанию |
+| Архив D1 | Session + CSRF → POST assistant-conversations/{ref}/archive → ArchiveAssistantConversation, policy54 | Owner до If-Match/idempotency; ACTIVE/CLOSED → ARCHIVED без busy run; CP атомарно сохраняет receipt/audit/SYSTEM_ASSISTANT_CHANGED и отклоняет pending plans |
+| Impact D7 | Проверенная session → GET managed-configurations/{ref}/revisions/{revisionRef}/impact query/page → GetManagedConfigurationImpact | CP eligibility/search до SQL LIMIT; точный revision/digest, total/cursor; чтение без события и без изменения bindings |
+
+Producer D7 переносится exact commit `88f4331ff`; D1 потребляет exact
+Proto/generated client/policy54 из `a241b73e1`, без ручного изменения CP
+SQL/handlers. Исполняемый CP `a241b73e1` обязателен при общей интеграции:
+локальный HTTP fake RPC test не объявляется проверкой CP SQL или deployment.
+
 | MVP-UI | HTTP / контрактная поддержка и граница |
 | --- | --- |
 | 01 | `usertext` catalogs и safe Problem mapping; локализация layout у PWA. |
@@ -38,7 +52,7 @@ CSRF/idempotency/If-Match правила существующих специал
 | 06 | CreateAgent/CreateWorkflow и org/project upload; quick actions у PWA. |
 | 07 | Публичные статические PWA assets не становятся исключением auth для API; ingress у root. |
 | 08 | Environment readiness/agents endpoints, exact CP mapping. |
-| 09 | Assistant create/title/turn/context и история с pageSize/pageToken; поиск/archive требуют CP D1. |
+| 09 | Assistant create/title/turn/context, история query/state/pageSize/pageToken и archive с OCC/idempotency; HTTP D1 подключён к CP a241b73e1. |
 | 10 | Project view/overview, серверные aggregates без N+1 у browser. |
 | 11 | Session refresh, одноразовый websocket ticket, durable revocation и resume cursor. |
 | 12 | Project list/search/cursor; размещение selector у PWA. |
@@ -76,7 +90,7 @@ CSRF/idempotency/If-Match правила существующих специал
 | 44 | Environment list/detail, без browser selection side effect в HTTP. |
 | 45 | Environment/secret и managed draft commands; расположение tabs у PWA. |
 | 46 | Восемь managed Save/Discard и environment drafts; отдельный staged Secret lifecycle требует D6. |
-| 47 | Managed/environment/secret impact и selective rebind; недостающие query/page требуют D7. |
+| 47 | Managed/environment/secret impact query/page/total и selective rebind; HTTP D7 подключён к CP 88f4331ff. |
 | 48 | Environment readiness/agents, безопасные ошибки hidden/unavailable. |
 | 49 | Runtime secret STRING/BASE64/JSON inputs, write-only payload и no-store. |
 | 50 | Secret typed list/create/rotate/readback и безопасный Problem; materialization у CP/secret broker. |
@@ -99,15 +113,63 @@ CSRF/idempotency/If-Match правила существующих специал
 
 | ID | Недостающий producer контракт | Последствие |
 | --- | --- | --- |
-| D1 | ListAssistantConversationsRequest имеет только page/project_ref; нет query, archive command и archived state. | HTTP может передать cursor, но не реализовать server search/archive MVP-UI-09. |
+| D1 | Закрыт в HTTP/SDK: exact contracts a241b73e1, query/state и ArchiveAssistantConversation. | При общей интеграции нужен исполняемый CP a241b73e1 с SQL/handlers, а не только перенесённые contracts. |
 | D2 | ModelCapability/ListModelCapabilitiesResponse не содержат catalog revision/digest. | Account/effort selection доступен; version-bound catalog readback нельзя выдумать. |
 | D3 | TemplateVariable содержит описание/type/source, но не available/disabled reason; ListTemplateVariablesRequest не задаёт agent/runtime context. | Невозможно показать authoritative disabled reason по target, не подменяя CP policy. |
 | D4 | RuntimeRevisionSnapshot относится к worker execution; публичный previous/current typed diff перед continuation отсутствует. | Нельзя выдавать worker snapshot либо вычислять безопасный diff из неподтверждённых UI данных. |
 | D5 | Публичный typed EMAIL safe mailbox configuration отсутствует; worker Resolve/Report/Projection не UI API. | HTTP receipt/reconcile готов, но UI/YAML EMAIL configuration требует согласованного producer. |
 | D6 | RuntimeSecret публично имеет PrepareCreate/Rotate/Reveal/Revoke, но не отдельные save/validate/publish/discard staged encrypted draft commands. | Не заявляется staged Secret acceptance по immediate create/rotate. |
-| D7 | GetManagedConfigurationImpactRequest содержит только configuration_ref/revision_ref; environment/secret impact query реализованы в CP 98a71da1e и подключены к HTTP/SDK. | Осталась только managed impact query/page; environment/secret filtering до SQL LIMIT потреблено без локальной фильтрации. |
+| D7 | Закрыт в HTTP/SDK: managed query/page/total/cursor из 88f4331ff; environment/secret query из 98a71da1e. | CP выполняет filtering до SQL LIMIT; HTTP не фильтрует локально и сохраняет pinned digest/cursor. |
 
-### Повторная Сверка CP 98a71da1e
+### Передача Newton/Root D1 И D7
+
+Новый SDK `archiveAssistantConversation`: POST
+`/api/v1/assistant-conversations/{conversationRef}/archive`, без body,
+обязательные `If-Match`, `Idempotency-Key`, `X-CSRF-Token`. Возвращает
+`AssistantConversation.state=ARCHIVED` и ETag. OCC → 412, busy → 409,
+чужой owner → 404, недоступный CP → 503. Нет автоматического retry.
+`listAssistantConversations` принимает query/state ACTIVE|CLOSED|ARCHIVED
+(по умолчанию ACTIVE) вместе с прежними projectRef/pageSize/pageToken.
+Смена query/state требует нового cursor, иначе CP возвращает 400.
+
+`getManagedConfigurationImpact` принимает query/pageSize/pageToken, возвращает
+прежние consumers/digest/refs плюс total/nextPageToken. Клиент не должен считать
+первую страницу полным набором consumers. Выборочный rebind остаётся отдельной
+командой с exact binding versions и digest; новая query не выполняет rebind.
+
+На чистом CP WT a241b73e1 фактически повторно сверены все D1–D7. D2 остаётся
+без catalog revision/digest; D3 без target agent/runtime context и
+available/disabled reason; D4 без публичного previous/current runtime diff;
+D5 без UI mailbox commands, write-only credential lifecycle и dynamic
+projection readback; D6 без staged encrypted Secret save/validate/publish/
+discard. Worker EMAIL APIs и immediate PrepareCreate/Rotate их не заменяют.
+
+Попытка cherry-pick D1 целиком остановилась на отсутствующих CP EMAIL
+command/permissions dependencies и была отменена. CP owner-файлы не разрешались
+вручную: D1 contracts/profile/generated скопированы без изменений из exact
+checkpoint. Root должен интегрировать CP implementation a241b73e1; локальный
+HTTP fake RPC suite не является проверкой CP runtime. D7 перенесён без конфликтов
+как `8a49981d1`. Policy54 принадлежит Bohr, не назначалась HTTP самостоятельно.
+Инструмента прямой межагентной отправки нет; этот файл является handoff root/Newton.
+
+Локально PASS: targeted race HTTP/security boundary (`TestAssistant`,
+`TestManagedImpact`, `TestManagedConfiguration`, `TestImpactSearch`,
+`TestPublicRPCSurface`, session/CSRF и enum normalization), focused vet,
+gateway build, strict OpenAPI validation (`kin-openapi` 0.135.0), strict
+generated SDK typecheck, воспроизводимый Go/TS codegen, Proto replay и
+authority policy codegen. Buf remote rate limit обработан существующим
+fallback на exact local plugins, итог replay PASS.
+
+Промежуточные FAIL новых fixtures: missing ACTIVE у старого history response
+и неверные ожидаемые HTTP codes для Aborted/FailedPrecondition. Fixtures
+исправлены под фактический producer enum и существующий Problem mapping:
+Aborted→412, FailedPrecondition→409. Runtime authority/error boundary не ослаблялась.
+NOT RUN: live CP assistant RPC и SQL/deployment этого checkpoint, browser UI,
+общий baseline/Docker повторно не запускались. Проверенный ранее full gateway
+и Docker контур остаётся в историческом отчёте d1a80b560, не переобозначается
+как новый запуск. Full #1045 acceptance удерживается открытыми D2–D6.
+
+### Историческая Сверка CP 98a71da1e
 
 Потреблён exact `98a71da1e7da9d0ceee2470a6c16e7351eea2e53` cherry-pick
 `192c56459`: исходный Proto, generated API и принадлежащая CP реализация

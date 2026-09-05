@@ -540,6 +540,27 @@ func (e AssistantConversationTitleSource) Valid() bool {
 	}
 }
 
+// Defines values for AssistantConversationState.
+const (
+	AssistantConversationStateACTIVE   AssistantConversationState = "ACTIVE"
+	AssistantConversationStateARCHIVED AssistantConversationState = "ARCHIVED"
+	AssistantConversationStateCLOSED   AssistantConversationState = "CLOSED"
+)
+
+// Valid indicates whether the value is a known member of the AssistantConversationState enum.
+func (e AssistantConversationState) Valid() bool {
+	switch e {
+	case AssistantConversationStateACTIVE:
+		return true
+	case AssistantConversationStateARCHIVED:
+		return true
+	case AssistantConversationStateCLOSED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssistantPlanState.
 const (
 	AssistantPlanStateAPPLIED  AssistantPlanState = "APPLIED"
@@ -4820,22 +4841,22 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case ListArtifactsParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case ListArtifactsParamsLifecycleStateDELETED:
 		return true
-	case PURGED:
+	case ListArtifactsParamsLifecycleStatePURGED:
 		return true
-	case PURGEPENDING:
+	case ListArtifactsParamsLifecycleStatePURGEPENDING:
 		return true
 	default:
 		return false
@@ -5373,6 +5394,7 @@ type AssistantConversation struct {
 	Context       AssistantContextDescriptor       `json:"context"`
 	ProjectRef    *OpaqueRef                       `json:"projectRef,omitempty"`
 	Ref           OpaqueRef                        `json:"ref"`
+	State         AssistantConversationState       `json:"state"`
 	Title         string                           `json:"title"`
 	TitleRevision int64                            `json:"titleRevision"`
 	TitleSource   AssistantConversationTitleSource `json:"titleSource"`
@@ -5383,6 +5405,9 @@ type AssistantConversation struct {
 
 // AssistantConversationTitleSource defines model for AssistantConversation.TitleSource.
 type AssistantConversationTitleSource string
+
+// AssistantConversationState defines model for AssistantConversationState.
+type AssistantConversationState string
 
 // AssistantPlan defines model for AssistantPlan.
 type AssistantPlan struct {
@@ -6097,7 +6122,9 @@ type ManagedConfigurationImpact struct {
 	ConfigurationRef  OpaqueRef                      `json:"configurationRef"`
 	Consumers         []ManagedConfigurationConsumer `json:"consumers"`
 	Digest            string                         `json:"digest"`
+	NextPageToken     *string                        `json:"nextPageToken,omitempty"`
 	TargetRevisionRef OpaqueRef                      `json:"targetRevisionRef"`
+	Total             int64                          `json:"total"`
 }
 
 // ManagedConfigurationPage defines model for ManagedConfigurationPage.
@@ -8613,9 +8640,11 @@ type RestoreArtifactParams struct {
 
 // ListAssistantConversationsParams defines parameters for ListAssistantConversations.
 type ListAssistantConversationsParams struct {
-	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	State      *AssistantConversationState `form:"state,omitempty" json:"state,omitempty"`
 }
 
 // CreateAssistantConversationJSONBody defines parameters for CreateAssistantConversation.
@@ -8626,6 +8655,13 @@ type CreateAssistantConversationJSONBody struct {
 
 // CreateAssistantConversationParams defines parameters for CreateAssistantConversation.
 type CreateAssistantConversationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ArchiveAssistantConversationParams defines parameters for ArchiveAssistantConversation.
+type ArchiveAssistantConversationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
@@ -8897,6 +8933,13 @@ type DetachGitManagedConfigurationParams struct {
 
 // ListManagedConfigurationHistoryParams defines parameters for ListManagedConfigurationHistory.
 type ListManagedConfigurationHistoryParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// GetManagedConfigurationImpactParams defines parameters for GetManagedConfigurationImpact.
+type GetManagedConfigurationImpactParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
@@ -10323,6 +10366,9 @@ type ServerInterface interface {
 	// (POST /api/v1/assistant-conversations)
 	CreateAssistantConversation(w http.ResponseWriter, r *http.Request, params CreateAssistantConversationParams)
 
+	// (POST /api/v1/assistant-conversations/{conversationRef}/archive)
+	ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params ArchiveAssistantConversationParams)
+
 	// (PUT /api/v1/assistant-conversations/{conversationRef}/title)
 	UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params UpdateAssistantConversationTitleParams)
 
@@ -10435,7 +10481,7 @@ type ServerInterface interface {
 	ListManagedConfigurationHistory(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ListManagedConfigurationHistoryParams)
 
 	// (GET /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact)
-	GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef)
+	GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, revisionRef ConfigurationRevisionRef, params GetManagedConfigurationImpactParams)
 
 	// (GET /api/v1/memory-records)
 	ListMemoryRecords(w http.ResponseWriter, r *http.Request, params ListMemoryRecordsParams)
@@ -15226,6 +15272,19 @@ func (siw *ServerInterfaceWrapper) ListAssistantConversations(w http.ResponseWri
 		return
 	}
 
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -15248,6 +15307,19 @@ func (siw *ServerInterfaceWrapper) ListAssistantConversations(w http.ResponseWri
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
 		}
 		return
 	}
@@ -15328,6 +15400,112 @@ func (siw *ServerInterfaceWrapper) CreateAssistantConversation(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAssistantConversation(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveAssistantConversationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveAssistantConversation(w, r, conversationRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18753,8 +18931,50 @@ func (siw *ServerInterfaceWrapper) GetManagedConfigurationImpact(w http.Response
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedConfigurationImpactParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetManagedConfigurationImpact(w, r, configurationRef, revisionRef)
+		siw.Handler.GetManagedConfigurationImpact(w, r, configurationRef, revisionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -31696,6 +31916,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/restore", wrapper.RestoreArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/archive", wrapper.ArchiveAssistantConversation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/title", wrapper.UpdateAssistantConversationTitle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/turns", wrapper.AddAssistantTurn)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/application", wrapper.ApplyAssistantPlan)

@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -386,18 +387,23 @@ func (server *Server) ListManagedConfigurationHistory(w http.ResponseWriter, r *
 	writeJSON(w, http.StatusOK, output)
 }
 
-func (server *Server) GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef) {
-	result, err := server.control.Query.GetManagedConfigurationImpact(r.Context(), &controlplanev1.GetManagedConfigurationImpactRequest{ConfigurationRef: ref, RevisionRef: revisionRef})
+func (server *Server) GetManagedConfigurationImpact(w http.ResponseWriter, r *http.Request, ref generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.GetManagedConfigurationImpactParams) {
+	if !opaqueHTTPReference.MatchString(ref) || !opaqueHTTPReference.MatchString(revisionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	result, err := server.control.Query.GetManagedConfigurationImpact(r.Context(), &controlplanev1.GetManagedConfigurationImpactRequest{ConfigurationRef: ref, RevisionRef: revisionRef, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	impact := result.GetImpact()
-	if impact == nil || impact.GetConfigurationRef() != ref || impact.GetTargetRevisionRef() != revisionRef || !validManagedDigest(impact.GetDigest()) || len(impact.GetConsumers()) > 1000 {
+	if impact == nil || impact.GetConfigurationRef() != ref || impact.GetTargetRevisionRef() != revisionRef || !validManagedDigest(impact.GetDigest()) || len(impact.GetConsumers()) > int(page(p.PageSize, p.PageToken).PageSize) ||
+		impact.GetTotal() < int64(len(impact.GetConsumers())) || impact.GetTotal() > maximumSafeJSONInteger || len(impact.GetPage().GetNextPageToken()) > 512 || !utf8.ValidString(impact.GetPage().GetNextPageToken()) {
 		writeLocalProblem(w, http.StatusBadGateway, "INTERNAL", false)
 		return
 	}
-	output := generated.ManagedConfigurationImpact{ConfigurationRef: ref, TargetRevisionRef: revisionRef, Digest: impact.GetDigest(), Consumers: make([]generated.ManagedConfigurationConsumer, 0, len(impact.GetConsumers()))}
+	output := generated.ManagedConfigurationImpact{ConfigurationRef: ref, TargetRevisionRef: revisionRef, Digest: impact.GetDigest(), Total: impact.GetTotal(), NextPageToken: optionalManagedString(impact.GetPage().GetNextPageToken()), Consumers: make([]generated.ManagedConfigurationConsumer, 0, len(impact.GetConsumers()))}
 	for _, consumer := range impact.GetConsumers() {
 		item, err := managedConsumerView(consumer)
 		if err != nil {
