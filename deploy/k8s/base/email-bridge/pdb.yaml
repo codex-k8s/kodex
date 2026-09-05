@@ -1,0 +1,19 @@
+{
+  "apiVersion": "policy/v1",
+  "kind": "PodDisruptionBudget",
+  "metadata": {
+    "name": "email-bridge",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge"
+    }
+  },
+  "spec": {
+    "minAvailable": 1,
+    "selector": {
+      "matchLabels": {
+        "app.kubernetes.io/name": "email-bridge"
+      }
+    }
+  }
+}

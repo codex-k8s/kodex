@@ -84,48 +84,56 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 }
 
 type modelCapabilityCursor struct {
+	CatalogRevision       string `json:"r"`
+	CatalogDigest         string `json:"d"`
 	Version               int    `json:"v"`
 	Filter                string `json:"f"`
 	ProviderDefinitionKey string `json:"p"`
 	Model                 string `json:"m"`
 }
 
-func (repository *Repository) ListModelCapabilities(ctx context.Context, principal value.Principal, definitionKey, accountRef string, filter query.Filter) ([]entity.ModelCapability, int64, string, error) {
+func (repository *Repository) ListModelCapabilities(ctx context.Context, principal value.Principal, definitionKey, accountRef string, filter query.Filter) (entity.ModelCatalog, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
 	})
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if definitionKey != "" && !validStableKey(definitionKey) || accountRef != "" && (!strings.HasPrefix(accountRef, "pacc_") || len(accountRef) > 96) || len([]rune(filter.Query)) > 200 {
-		return nil, 0, "", errs.ErrInvalid
+		return entity.ModelCatalog{}, errs.ErrInvalid
 	}
-	cursor, err := decodeModelCapabilityCursor(filter.Page.Token, definitionKey, accountRef, filter.Query)
+	cursor, err := decodeModelCapabilityCursor(filter.Page.Token, definitionKey, accountRef, modelCatalogActorFilter(current, filter.Query))
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
 	rows, err := tx.Query(ctx, queryMVPListModelCapabilities, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "provider_definition_key": definitionKey,
 		"provider_account_ref": accountRef,
 	})
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return entity.ModelCatalog{}, errs.ErrUnavailable
 	}
 	defer rows.Close()
 	result := make([]entity.ModelCapability, 0)
+	sources := make([]string, 0)
 	foundAccount := accountRef == ""
 	for rows.Next() {
 		var key string
 		var enabled bool
 		var raw []byte
 		var eligibleAccounts, matchedAccounts, accountBlockers []string
-		if err := rows.Scan(&key, &enabled, &raw, &eligibleAccounts, &matchedAccounts, &accountBlockers); err != nil {
-			return nil, 0, "", errs.ErrUnavailable
+		var source string
+		if err := rows.Scan(&key, &enabled, &raw, &eligibleAccounts, &matchedAccounts, &accountBlockers, &source); err != nil {
+			return entity.ModelCatalog{}, errs.ErrUnavailable
+		}
+		sources = append(sources, source)
+		if len(sources) > 128 || len(matchedAccounts) > 4096 || len(source) > 1048576 {
+			return entity.ModelCatalog{}, errs.ErrUnavailable
 		}
 		var capabilities map[string]any
 		if json.Unmarshal(raw, &capabilities) != nil {
-			return nil, 0, "", errs.ErrUnavailable
+			return entity.ModelCatalog{}, errs.ErrUnavailable
 		}
 		if len(matchedAccounts) != 0 {
 			foundAccount = true
@@ -150,10 +158,21 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 		}
 	}
 	if rows.Err() != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return entity.ModelCatalog{}, errs.ErrUnavailable
 	}
 	if !foundAccount {
-		return nil, 0, "", errs.ErrNotFound
+		return entity.ModelCatalog{}, errs.ErrNotFound
+	}
+	digest, err := modelcatalog.Digest(result, sources...)
+	if err != nil {
+		return entity.ModelCatalog{}, errs.ErrUnavailable
+	}
+	revision := "mcat_" + digest
+	if (filter.ExpectedCatalogRevision != "" || filter.ExpectedCatalogDigest != "") && (filter.ExpectedCatalogRevision != revision || filter.ExpectedCatalogDigest != digest) {
+		return entity.ModelCatalog{}, errs.ErrInvalid
+	}
+	if cursor.Model != "" && (cursor.CatalogDigest != digest || cursor.CatalogRevision != revision) {
+		return entity.ModelCatalog{}, errs.ErrInvalid
 	}
 	needle := strings.ToLower(strings.TrimSpace(filter.Query))
 	filtered := make([]entity.ModelCapability, 0, len(result))
@@ -172,7 +191,7 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 			}
 		}
 		if start == 0 {
-			return nil, 0, "", errs.ErrInvalid
+			return entity.ModelCatalog{}, errs.ErrInvalid
 		}
 	}
 	limit := int(boundedPage(filter.Page))
@@ -181,15 +200,15 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 	next := ""
 	if end < len(filtered) {
 		last := items[len(items)-1]
-		next = encodeModelCapabilityCursor(last.ProviderDefinitionKey, last.ID, definitionKey, accountRef, filter.Query)
+		next = encodeModelCapabilityCursor(last.ProviderDefinitionKey, last.ID, definitionKey, accountRef, modelCatalogActorFilter(current, filter.Query), revision, digest)
 		if next == filter.Page.Token {
-			return nil, 0, "", errs.ErrConflict
+			return entity.ModelCatalog{}, errs.ErrConflict
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, 0, "", errs.ErrConflict
+		return entity.ModelCatalog{}, errs.ErrConflict
 	}
-	return items, total, next, nil
+	return entity.ModelCatalog{Models: items, Total: total, NextPageToken: next, Revision: revision, Digest: digest}, nil
 }
 
 func modelCapabilityFilterDigest(definitionKey, accountRef, queryValue string) string {
@@ -197,8 +216,8 @@ func modelCapabilityFilterDigest(definitionKey, accountRef, queryValue string) s
 	return base64.RawURLEncoding.EncodeToString(sum[:12])
 }
 
-func encodeModelCapabilityCursor(definitionKey, model, filterDefinitionKey, accountRef, queryValue string) string {
-	raw, _ := json.Marshal(modelCapabilityCursor{Version: 1,
+func encodeModelCapabilityCursor(definitionKey, model, filterDefinitionKey, accountRef, queryValue, revision, digest string) string {
+	raw, _ := json.Marshal(modelCapabilityCursor{Version: 2, CatalogRevision: revision, CatalogDigest: digest,
 		Filter: modelCapabilityFilterDigest(filterDefinitionKey, accountRef, queryValue), ProviderDefinitionKey: definitionKey, Model: model})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
@@ -208,15 +227,19 @@ func decodeModelCapabilityCursor(token, definitionKey, accountRef, queryValue st
 		return modelCapabilityCursor{}, nil
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) > 1024 {
+	if err != nil || len(token) > 512 || len(raw) > 512 {
 		return modelCapabilityCursor{}, errs.ErrInvalid
 	}
 	var cursor modelCapabilityCursor
-	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Filter != modelCapabilityFilterDigest(definitionKey, accountRef, queryValue) ||
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 2 || cursor.Filter != modelCapabilityFilterDigest(definitionKey, accountRef, queryValue) ||
 		cursor.ProviderDefinitionKey == "" || cursor.Model == "" {
 		return modelCapabilityCursor{}, errs.ErrInvalid
 	}
 	return cursor, nil
+}
+
+func modelCatalogActorFilter(current scope, queryValue string) string {
+	return strings.Join([]string{current.organizationID, current.actorID, current.authorityProjectID, strings.TrimSpace(queryValue)}, "\x00")
 }
 
 func providerReportedModels(capabilities map[string]any) []string {

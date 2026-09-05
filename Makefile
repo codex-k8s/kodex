@@ -55,6 +55,10 @@ test-authority-policy-codegen:
 test-internal-rpc-authority-abi-render:
 	@./scripts/tests/internal-rpc-authority-abi-render-test.sh
 
+.PHONY: test-worker-authority-projections
+test-worker-authority-projections:
+	@./scripts/tests/worker-authority-projections-test.sh
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
@@ -147,7 +151,24 @@ gen-integration-packages: check-go-toolchain
 		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
 	@gofmt -w libs/go/integrationpackage/shipped_gen.go
 
-.PHONY: gen-email-bridge check-email-bridge-codegen
+.PHONY: gen-email-bridge check-email-bridge-codegen test-email-bridge test-email-bridge-unit test-email-bridge-render test-email-bridge-install
+test-email-bridge-unit: check-go-toolchain
+	@cd libs/go/emailbridgeapi && go test -race -timeout 60s ./...
+	@cd services/internal/email-bridge && go test -race -timeout 90s ./...
+	@cd services/external/integration-gateway && go test -race -timeout 60s ./internal/integration -run 'TestEmail|Test(EveryAdvertisedOperation|EveryMutationPreservesUnknownOutcome|ScopeDeniedBeforeCredentialRead|ReadOperationsHandleRateLimits)/email'
+
+test-email-bridge:
+	@bash scripts/tests/email-bridge-test.sh
+
+test-email-bridge-render:
+	@bash scripts/tests/email-bridge-render-test.sh
+
+.PHONY: test-email-projection-render
+test-email-projection-render:
+	@bash scripts/tests/email-projection-render-test.sh
+
+test-email-bridge-install:
+	@timeout 420 bash scripts/tests/email-bridge-install-test.sh
 .PHONY: test-integration-gateway-render
 .PHONY: test-integration-gateway-postgres
 test-integration-gateway-postgres:
@@ -157,12 +178,11 @@ test-integration-gateway-render:
 	@bash scripts/tests/integration-gateway-render-test.sh
 
 gen-email-bridge: check-openapi-toolchain
-	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o libs/go/emailbridgeapi/api.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	node tools/codegen/email-bridge-schema.mjs
 
 check-email-bridge-codegen: check-openapi-toolchain
-	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
-		oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o "$$tmp" contracts/openapi/email-bridge/v1/openapi.yaml; \
-		cmp services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go "$$tmp"
+	@bash scripts/tests/email-bridge-codegen-test.sh
 
 check-integration-package-codegen: check-go-toolchain
 	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \

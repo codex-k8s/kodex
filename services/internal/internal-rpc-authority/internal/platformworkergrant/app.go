@@ -32,6 +32,8 @@ var supportedWorkloads = map[string]struct{}{
 	"image-admission":      {},
 	"image-promotion":      {},
 	"integration-gateway":  {},
+	"interaction-gateway":  {},
+	"email-bridge":         {},
 	"role-image-builder":   {},
 	"runtime-controller":   {},
 	"session-archive":      {},
@@ -135,13 +137,14 @@ func loadKey(path string) (internalrpcauth.ES256Key, error) {
 }
 
 func rotate(configuration config, key internalrpcauth.ES256Key, now func() time.Time) error {
+	credentialGeneration, err := internalrpcauth.KeyGeneration(key.KeyID)
+	if _, ok := supportedWorkloads[configuration.WorkloadID]; !ok || err != nil ||
+		key.KeyID != fmt.Sprintf("%s-platform-worker-g%d", configuration.WorkloadID, credentialGeneration) {
+		return errors.New("platform worker grant signing key binding is invalid")
+	}
 	issuedAt := now().UTC().Truncate(time.Second)
 	if issuedAt.Unix() <= 0 {
 		return errors.New("platform worker grant issue time is invalid")
-	}
-	credentialGeneration, err := internalrpcauth.KeyGeneration(key.KeyID)
-	if err != nil {
-		return errors.New("platform worker grant credential generation is invalid")
 	}
 	workloadSPIFFE := "spiffe://kodex.local/ns/kodex-system/sa/" + configuration.WorkloadID
 	value := claims{
@@ -212,7 +215,11 @@ func readBack(configuration config, key internalrpcauth.ES256Key, now time.Time)
 	var value claims
 	credentialGeneration, generationErr := internalrpcauth.KeyGeneration(key.KeyID)
 	if internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &value) != nil ||
-		generationErr != nil || value.WorkloadID != configuration.WorkloadID || value.Revision != uint64(now.Unix()) ||
+		generationErr != nil || value.Version != 1 || value.WorkloadID != configuration.WorkloadID || value.Revision != uint64(now.Unix()) ||
+		value.Issuer != "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/"+configuration.WorkloadID ||
+		value.Audience != "urn:kodex:platform-worker:"+configuration.WorkloadID ||
+		value.CallerSPIFFEID != "spiffe://kodex.local/ns/kodex-system/sa/"+configuration.WorkloadID ||
+		value.Subject != "kodex-system-subject" || value.OrganizationID != "kodex-installation" || value.ProjectID != "" || value.TenantOwner ||
 		value.CredentialGeneration != credentialGeneration || uuid.Validate(value.JTI) != nil ||
 		value.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion ||
 		internalrpcauth.ValidateTimes(now, time.Unix(value.IssuedAt, 0), time.Unix(value.NotBefore, 0), time.Unix(value.ExpiresAt, 0), grantTTL, 5*time.Second) != nil {

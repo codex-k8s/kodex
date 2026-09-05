@@ -4,7 +4,7 @@ title: Диагностика stt-tts-service
 type: runbook
 status: approved
 owner: sre
-version: 1.4.0
+version: 1.5.0
 updated: 2026-09-05
 ---
 
@@ -29,6 +29,15 @@ HTTPS egress. Ответ не содержит ключа, текста или r
 `valid_until`. Model metadata GET не заменяет live transcription acceptance.
 
 ## Проверка инцидента
+
+Для первоначальной административной настройки отдельный `GetModelCatalog`
+возвращает только совместимость adapter по signed RPC permission
+`system.configuration.manage`, полученной после проверки `organization.manage`
+в CP. CP не требует существующей STT configuration
+или credential. Этот unary RPC не обращается к OpenAI и не сообщает READY.
+Отказ здесь проверяется по admin authority/issuer/verifier и adapter catalog,
+а отказ микрофона — по пользовательскому protected path выше. Domain,
+projection и owner policy используют общий максимум provider timeout 15 секунд.
 
 1. Отделить local readiness от пользовательской availability; не показывать
    микрофон по одному readyz.

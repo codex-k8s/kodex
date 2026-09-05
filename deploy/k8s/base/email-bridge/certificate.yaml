@@ -1,0 +1,35 @@
+{
+  "apiVersion": "cert-manager.io/v1",
+  "kind": "Certificate",
+  "metadata": {
+    "name": "email-bridge",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge"
+    }
+  },
+  "spec": {
+    "secretName": "email-bridge-tls",
+    "duration": "720h",
+    "renewBefore": "120h",
+    "privateKey": {
+      "algorithm": "ECDSA",
+      "size": 256,
+      "rotationPolicy": "Always"
+    },
+    "dnsNames": [
+      "email-bridge.kodex-system.svc.cluster.local"
+    ],
+    "uris": [
+      "spiffe://kodex.local/ns/kodex-system/sa/email-bridge"
+    ],
+    "usages": [
+      "server auth",
+      "client auth"
+    ],
+    "issuerRef": {
+      "name": "kodex-installation-ca",
+      "kind": "Issuer"
+    }
+  }
+}

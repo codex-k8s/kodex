@@ -1,0 +1,23 @@
+{
+  "apiVersion": "kustomize.config.k8s.io/v1beta1",
+  "kind": "Kustomization",
+  "namespace": "kodex-system",
+  "resources": [
+    "deployment.yaml",
+    "serviceaccount.yaml",
+    "service.yaml",
+    "runtime.yaml",
+    "configuration.yaml",
+    "certificate.yaml",
+    "authority-certificate.yaml",
+    "pdb.yaml",
+    "monitor.yaml",
+    "alerts.yaml",
+    "dashboard.yaml",
+    "networkpolicy.yaml",
+    "consumer-networkpolicy.yaml",
+    "issuer-networkpolicy.yaml",
+    "authority-networkpolicy.yaml"
+  ],
+  "components": ["../../components/internal-rpc-authority-email-bridge-issuer"]
+}

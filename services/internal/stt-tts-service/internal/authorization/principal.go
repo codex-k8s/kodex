@@ -15,28 +15,43 @@ import (
 )
 
 const (
-	expectedAudience         = "urn:kodex:internal-rpc:stt-tts-service"
-	expectedWorkloadID       = "stt-tts-service"
-	expectedCaller           = "control-api-gateway"
-	transcribeOperation      = "platform.stt.transcribe"
-	maximumAuthorityRevision = uint64(1<<53 - 1)
+	expectedAudience          = "urn:kodex:internal-rpc:stt-tts-service"
+	expectedWorkloadID        = "stt-tts-service"
+	expectedCaller            = "control-api-gateway"
+	transcribeOperation       = "platform.stt.transcribe"
+	modelCatalogOperation     = "platform.stt.model-catalog.get"
+	emptyCatalogRequestSHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	maximumAuthorityRevision  = uint64(1<<53 - 1)
 )
 
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
+	operation, permission, binding, domainPermission := transcribeOperation, value.TransportPermissionTranscribe, internalrpcauth.RequestBindingStream, value.PermissionTranscribe
+	switch fullMethod {
+	case sttv1.SpeechToTextService_Transcribe_FullMethodName:
+	case sttv1.SpeechToTextService_GetModelCatalog_FullMethodName:
+		operation, permission, binding, domainPermission = modelCatalogOperation, value.PermissionManageConfiguration, internalrpcauth.RequestBindingUnary, value.PermissionManageConfiguration
+	default:
+		return value.Principal{}, errors.New("verified STT method is invalid")
+	}
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
-	if !ok || fullMethod != sttv1.SpeechToTextService_Transcribe_FullMethodName ||
+	if !ok ||
 		verified.GetContractVersion() != 1 || verified.GetAudience() != expectedAudience ||
 		verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion ||
-		verified.GetRequestBindingMode() != internalrpcauth.RequestBindingStream ||
+		verified.GetRequestBindingMode() != binding ||
 		verified.GetTargetWorkloadId() != expectedWorkloadID || verified.GetCallerWorkloadId() != expectedCaller ||
-		verified.GetFullMethod() != fullMethod || verified.GetOperationId() != transcribeOperation ||
-		verified.GetPermission() != value.TransportPermissionTranscribe || verified.GetAuthority() == nil ||
+		verified.GetFullMethod() != fullMethod || verified.GetOperationId() != operation ||
+		verified.GetPermission() != permission || verified.GetAuthority() == nil ||
 		verified.GetExpiresAt() == nil || !verified.GetExpiresAt().IsValid() ||
 		verified.GetSourceRevision() == 0 || verified.GetSourceRevision() > maximumAuthorityRevision ||
 		!validSHA256(verified.GetSourceDigestSha256()) || uuid.Validate(verified.GetJti()) != nil {
 		return value.Principal{}, errors.New("verified STT authorization context is invalid")
 	}
 	authority := verified.GetAuthority()
+	if fullMethod == sttv1.SpeechToTextService_GetModelCatalog_FullMethodName &&
+		(authority.GetProject() != nil || verified.GetContinuation() != nil ||
+			verified.GetRequestDigestSha256() != emptyCatalogRequestSHA256) {
+		return value.Principal{}, errors.New("verified STT catalog authority is invalid")
+	}
 	actor, err := identity(authority.GetActor())
 	if err != nil {
 		return value.Principal{}, errors.New("verified STT actor is invalid")
@@ -55,7 +70,7 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	return value.Principal{
 		ActorID: actor.id, TenantID: tenant.id, ProjectID: project.id,
 		Actor: actor.provenance, Tenant: tenant.provenance, Project: project.provenance,
-		RequestID: verified.GetJti(), Permission: value.PermissionTranscribe,
+		RequestID: verified.GetJti(), Permission: domainPermission,
 		AuthorityRevision: verified.GetSourceRevision(), AuthorityDigestSHA256: verified.GetSourceDigestSha256(),
 		ExpiresAt: verified.GetExpiresAt().AsTime().UTC(),
 	}, nil
