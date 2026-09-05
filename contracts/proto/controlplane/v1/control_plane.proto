@@ -91,6 +91,8 @@ service PlatformQueryService {
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
   rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
+  rpc GetManagedConfigurationGitWriteBack(GetManagedConfigurationGitWriteBackRequest) returns (GetManagedConfigurationGitWriteBackResponse);
+  rpc ListManagedConfigurationGitWriteBacks(ListManagedConfigurationGitWriteBacksRequest) returns (ListManagedConfigurationGitWriteBacksResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
   rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
   rpc GetRuntimeEnvironmentImpact(GetRuntimeEnvironmentImpactRequest) returns (GetRuntimeEnvironmentImpactResponse);
@@ -256,6 +258,20 @@ service PlatformCommandService {
   rpc ConfigureIntegrationDefinitionGitSource(ConfigureIntegrationDefinitionGitSourceRequest) returns (ConfigureIntegrationDefinitionGitSourceResponse);
   rpc RefreshRoleImageGitSource(RefreshRoleImageGitSourceRequest) returns (RefreshRoleImageGitSourceResponse);
   rpc RefreshIntegrationDefinitionGitSource(RefreshIntegrationDefinitionGitSourceRequest) returns (RefreshIntegrationDefinitionGitSourceResponse);
+  rpc PrepareRoleImageGitWriteBack(PrepareRoleImageGitWriteBackRequest) returns (PrepareRoleImageGitWriteBackResponse);
+  rpc PrepareIntegrationDefinitionGitWriteBack(PrepareIntegrationDefinitionGitWriteBackRequest) returns (PrepareIntegrationDefinitionGitWriteBackResponse);
+  rpc ApproveManagedConfigurationGitWriteBack(ApproveManagedConfigurationGitWriteBackRequest) returns (ApproveManagedConfigurationGitWriteBackResponse);
+  rpc RejectManagedConfigurationGitWriteBack(RejectManagedConfigurationGitWriteBackRequest) returns (RejectManagedConfigurationGitWriteBackResponse);
+  rpc CancelManagedConfigurationGitWriteBack(CancelManagedConfigurationGitWriteBackRequest) returns (CancelManagedConfigurationGitWriteBackResponse);
+}
+
+// Только integration-gateway; proposal branch и PR имеют отдельные effect receipts.
+service ManagedConfigurationGitWriteBackWorkService {
+  rpc ClaimManagedConfigurationGitWriteBackWork(ClaimManagedConfigurationGitWriteBackWorkRequest) returns (ClaimManagedConfigurationGitWriteBackWorkResponse);
+  rpc RenewManagedConfigurationGitWriteBackWork(RenewManagedConfigurationGitWriteBackWorkRequest) returns (RenewManagedConfigurationGitWriteBackWorkResponse);
+  rpc BeginManagedConfigurationGitWriteBackEffect(BeginManagedConfigurationGitWriteBackEffectRequest) returns (BeginManagedConfigurationGitWriteBackEffectResponse);
+  rpc CompleteManagedConfigurationGitWriteBackEffect(CompleteManagedConfigurationGitWriteBackEffectRequest) returns (CompleteManagedConfigurationGitWriteBackEffectResponse);
+  rpc FailManagedConfigurationGitWriteBackWork(FailManagedConfigurationGitWriteBackWorkRequest) returns (FailManagedConfigurationGitWriteBackWorkResponse);
 }
 
 // Отдельный owner work для Git-конфигураций; не создаёт runtime Run/Turn/grant.
@@ -6346,3 +6362,206 @@ message FailManagedConfigurationSourceWorkRequest {
   ManagedConfigurationSourceFailure failure_code = 2;
 }
 message FailManagedConfigurationSourceWorkResponse { ManagedConfigurationGitSource source = 1; }
+
+enum ManagedConfigurationGitWriteBackState {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_WAITING_APPROVAL = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_QUEUED = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_CLAIMED = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_EFFECT_STARTED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_SUCCEEDED = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_REJECTED = 6;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_CANCELLED = 7;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_EXPIRED = 8;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_FAILED = 9;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_UNKNOWN_OUTCOME = 10;
+}
+enum ManagedConfigurationGitWriteBackEffect {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_BRANCH = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_PULL_REQUEST = 2;
+}
+enum ManagedConfigurationGitWriteBackFailure {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_UNAVAILABLE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CREDENTIAL_REJECTED = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_ACCESS_DENIED = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_SOURCE_CHANGED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CONTENT_INVALID = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_RESPONSE_INVALID = 6;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_AUTHORITY_CHANGED = 7;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_DEADLINE_EXCEEDED = 8;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_BRANCH_CONFLICT = 9;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_OUTCOME_UNCONFIRMED = 10;
+}
+enum ManagedConfigurationGitWriteBackAction {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_APPROVE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REJECT = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_CANCEL = 3;
+}
+enum ManagedConfigurationGitWriteBackActionReason {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_NONE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_FORBIDDEN = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_STATE = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_SOURCE_CHANGED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_EXPIRED = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_OUTCOME_UNKNOWN = 6;
+}
+message ManagedConfigurationGitWriteBackActionAvailability {
+  ManagedConfigurationGitWriteBackAction action = 1;
+  bool enabled = 2;
+  ManagedConfigurationGitWriteBackActionReason reason = 3;
+}
+// Публичный summary не содержит content, credential descriptor или private package.
+message ManagedConfigurationGitWriteBack {
+  string ref = 1;
+  int64 version = 2;
+  string configuration_ref = 3;
+  ManagedConfigurationKind kind = 4;
+  int64 configuration_version = 5;
+  string source_ref = 6;
+  int64 source_version = 7;
+  string connection_ref = 8;
+  int64 connection_version = 9;
+  string repository_ref = 10;
+  string source_ref_name = 11;
+  string path = 12;
+  string base_commit_sha = 13;
+  string base_content_sha256 = 14;
+  string proposed_content_sha256 = 15;
+  string content_format = 16;
+  string proposal_branch = 17;
+  string approval_digest = 18;
+  ManagedConfigurationGitWriteBackState state = 19;
+  ManagedConfigurationGitWriteBackFailure failure_code = 20;
+  string candidate_commit_sha = 21;
+  string pull_request_ref = 22;
+  string pull_request_url = 23;
+  google.protobuf.Timestamp created_at = 24;
+  google.protobuf.Timestamp expires_at = 25;
+  google.protobuf.Timestamp approved_at = 26;
+  google.protobuf.Timestamp completed_at = 27;
+  repeated ManagedConfigurationGitWriteBackActionAvailability next_actions = 28;
+  google.protobuf.Timestamp branch_confirmed_at = 29;
+  google.protobuf.Timestamp pull_request_confirmed_at = 30;
+}
+message PrepareRoleImageGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  int64 expected_source_version = 3;
+  string content = 4;
+}
+message PrepareRoleImageGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message PrepareIntegrationDefinitionGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  int64 expected_source_version = 3;
+  string content = 4;
+}
+message PrepareIntegrationDefinitionGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message ApproveManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+  string approval_digest = 3;
+}
+message ApproveManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message RejectManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+  string approval_digest = 3;
+}
+message RejectManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message CancelManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+}
+message CancelManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message GetManagedConfigurationGitWriteBackRequest { string proposal_ref = 1; }
+// Полный plan требует того же отдельного source-read права, что и исходный editor.
+message GetManagedConfigurationGitWriteBackResponse {
+  ManagedConfigurationGitWriteBack proposal = 1;
+  string base_content = 2;
+  string proposed_content = 3;
+}
+message ListManagedConfigurationGitWriteBacksRequest {
+  string configuration_ref = 1;
+  PageRequest page = 2;
+}
+message ListManagedConfigurationGitWriteBacksResponse {
+  repeated ManagedConfigurationGitWriteBack proposals = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message ManagedConfigurationGitWriteBackLease {
+  string proposal_ref = 1;
+  int64 attempt = 2;
+  int64 claim_generation = 3;
+  string claimant = 4;
+  string fence = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+enum ManagedConfigurationGitWriteBackWorkMode {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_EXECUTE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_RECOVER_READ_ONLY = 2;
+}
+// Commit identity и marker назначает owner; токен никогда не входит в URL/argv.
+message ManagedConfigurationGitWriteBackWork {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBack proposal = 2;
+  ManagedConfigurationGitWriteBackWorkMode mode = 3;
+  ManagedConfigurationGitWriteBackEffect effect = 4;
+  string definition_key = 5;
+  string definition_version = 6;
+  string definition_digest = 7;
+  bytes definition_package = 8;
+  google.protobuf.Struct public_configuration = 9;
+  IntegrationCredentialRevision credential_revision = 10;
+  bytes proposed_content = 11;
+  string effect_marker = 12;
+  string commit_message = 13;
+  string commit_author_name = 14;
+  string commit_author_email = 15;
+  google.protobuf.Timestamp commit_time = 16;
+  string candidate_tree_sha = 17;
+  string candidate_blob_sha = 18;
+  google.protobuf.Timestamp effect_started_at = 19;
+  google.protobuf.Timestamp deadline = 20;
+}
+message ClaimManagedConfigurationGitWriteBackWorkRequest {
+  string claimant = 1;
+  int32 limit = 2;
+}
+message ClaimManagedConfigurationGitWriteBackWorkResponse { repeated ManagedConfigurationGitWriteBackWork work = 1; }
+message RenewManagedConfigurationGitWriteBackWorkRequest { ManagedConfigurationGitWriteBackLease lease = 1; }
+message RenewManagedConfigurationGitWriteBackWorkResponse { ManagedConfigurationGitWriteBackLease lease = 1; }
+message BeginManagedConfigurationGitWriteBackEffectRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackEffect effect = 2;
+  string candidate_commit_sha = 3;
+  string candidate_tree_sha = 4;
+  string candidate_blob_sha = 5;
+  string parent_commit_sha = 6;
+  string content_sha256 = 7;
+}
+// Повтор Begin возвращает already_started=true и не разрешает повторный effect.
+message BeginManagedConfigurationGitWriteBackEffectResponse {
+  ManagedConfigurationGitWriteBack proposal = 1;
+  bool already_started = 2;
+}
+message CompleteManagedConfigurationGitWriteBackEffectRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackEffect effect = 2;
+  string candidate_commit_sha = 3;
+  string content_sha256 = 4;
+  string pull_request_ref = 5;
+  string pull_request_url = 6;
+}
+message CompleteManagedConfigurationGitWriteBackEffectResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message FailManagedConfigurationGitWriteBackWorkRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackFailure failure_code = 2;
+}
+message FailManagedConfigurationGitWriteBackWorkResponse { ManagedConfigurationGitWriteBack proposal = 1; }
