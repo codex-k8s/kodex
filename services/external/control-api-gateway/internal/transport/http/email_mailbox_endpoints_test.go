@@ -29,7 +29,16 @@ func mailboxViewFixture() *cp.EmailMailboxConfigurationView {
 	revision.ContentFormat = "JSON"
 	revision.Content = "{}"
 	configuration.Ref = "mcfg_fixture01"
-	return &cp.EmailMailboxConfigurationView{ConnectionRef: "conn_fixture01", ConnectionVersion: 9, MailboxRef: "mbx_fixture01", Configuration: configuration, Revision: revision, Specification: &cp.EmailMailboxSpecification{}}
+	return &cp.EmailMailboxConfigurationView{ConnectionRef: "conn_fixture01", ConnectionVersion: 9, MailboxRef: "mbx_fixture01", Configuration: configuration, Revision: revision, Specification: &cp.EmailMailboxSpecification{}, NextActions: mailboxActionsFixture()}
+}
+
+func mailboxActionsFixture() []*cp.EmailMailboxActionAvailability {
+	result := make([]*cp.EmailMailboxActionAvailability, 0, 9)
+	for action := cp.EmailMailboxAction_EMAIL_MAILBOX_ACTION_CREATE_DRAFT; action <= cp.EmailMailboxAction_EMAIL_MAILBOX_ACTION_COPY; action++ {
+		result = append(result, &cp.EmailMailboxActionAvailability{Action: action, Reason: cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_STATE})
+	}
+	result[0].Enabled, result[0].Reason = true, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NONE
+	return result
 }
 func mailboxPublicationFixture() *cp.EmailMailboxPublication {
 	return &cp.EmailMailboxPublication{Ref: "mpub_fixture01", Revision: 2, Digest: strings.Repeat("b", 64), State: cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_PENDING, ConfigurationRevisionRef: "mrev_fixture01", CreatedAt: timestamppb.New(time.Now().Add(-time.Minute))}
@@ -37,13 +46,14 @@ func mailboxPublicationFixture() *cp.EmailMailboxPublication {
 
 type mailboxRecorder struct {
 	grpc.ClientConnInterface
-	method      string
-	request     proto.Message
-	failure     error
-	mutate      func(*cp.EmailMailboxConfigurationView)
-	publication *cp.EmailMailboxPublication
-	preview     *cp.PreviewEmailMailboxConfigurationResponse
-	credentials []*cp.EmailMailboxCredential
+	method         string
+	request        proto.Message
+	failure        error
+	mutate         func(*cp.EmailMailboxConfigurationView)
+	publication    *cp.EmailMailboxPublication
+	preview        *cp.PreviewEmailMailboxConfigurationResponse
+	credentials    []*cp.EmailMailboxCredential
+	configurations *cp.ListEmailMailboxConfigurationsResponse
 }
 
 func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -65,7 +75,12 @@ func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, resp
 	credential := &cp.EmailMailboxCredential{Name: "cred_fixture01", Generation: 9, Kind: cp.EmailMailboxCredentialKind_EMAIL_MAILBOX_CREDENTIAL_KIND_AUTH_SECRET, ConnectionRef: "conn_fixture01", ConnectionVersion: 9}
 	switch out := response.(type) {
 	case *cp.ListEmailMailboxConfigurationsResponse:
+		if c.configurations != nil {
+			proto.Merge(out, c.configurations)
+			return nil
+		}
 		out.Items = []*cp.EmailMailboxConfigurationView{view}
+		out.NextActions = mailboxActionsFixture()[:1]
 		out.Total = 2
 		out.Page = &cp.PageInfo{NextPageToken: "fixture-page"}
 	case *cp.ListEmailMailboxCredentialsResponse:
@@ -142,6 +157,64 @@ func TestMailboxPublicationClosedFailureCodesAndIndependentHistory(t *testing.T)
 	result, ok := mailboxConfigurationView(view)
 	if !ok || result.Revision.Ref != "mrev_fixture01" || result.Publication.ConfigurationRevisionRef != "mrev_published01" {
 		t.Fatal("selected draft replaced connection publication history")
+	}
+}
+
+func TestMailboxActionsPreserveOwnerAvailabilityAndEmptyListCreate(t *testing.T) {
+	for _, reason := range []cp.EmailMailboxActionReason{cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NONE, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_STATE, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_GIT_MANAGED, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_DELIVERY_PENDING, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NO_BINDING, cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_CONNECTION_DISABLED} {
+		actions := mailboxActionsFixture()
+		actions[0].Reason, actions[0].Enabled = reason, reason == cp.EmailMailboxActionReason_EMAIL_MAILBOX_ACTION_REASON_NONE
+		views, ok := mailboxActionViews(actions, false)
+		if !ok || len(views) != 9 || views[0].Enabled != actions[0].Enabled || string(views[0].Reason) != strings.TrimPrefix(reason.String(), "EMAIL_MAILBOX_ACTION_REASON_") {
+			t.Fatal("owner availability changed")
+		}
+		c := &mailboxRecorder{configurations: &cp.ListEmailMailboxConfigurationsResponse{NextActions: actions[:1]}}
+		w := httptest.NewRecorder()
+		mailboxHandler(c).ServeHTTP(w, managedTestRequest("GET", mailboxConnectionPath+"/configurations?query=empty", ""))
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"nextActions":[{"action":"CREATE_DRAFT"`) || !strings.Contains(w.Body.String(), `"items":[]`) {
+			t.Fatal("empty list lost connection create availability")
+		}
+	}
+}
+
+func TestMailboxActionsRejectMissingUnknownAndContradictoryProjection(t *testing.T) {
+	for _, mutate := range []func([]*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability{
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability { return nil },
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability { return a[:8] },
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[1] = a[0]
+			return a
+		},
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[0] = nil
+			return a
+		},
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[0].Action = cp.EmailMailboxAction(999)
+			return a
+		},
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[0].Reason = cp.EmailMailboxActionReason(999)
+			return a
+		},
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[0].Enabled = false
+			return a
+		},
+		func(a []*cp.EmailMailboxActionAvailability) []*cp.EmailMailboxActionAvailability {
+			a[1].Enabled = true
+			return a
+		},
+	} {
+		c := &mailboxRecorder{mutate: func(v *cp.EmailMailboxConfigurationView) { v.NextActions = mutate(v.NextActions) }}
+		w := httptest.NewRecorder()
+		mailboxHandler(c).ServeHTTP(w, managedTestRequest("GET", mailboxConnectionPath+"/configuration", ""))
+		if w.Code != 502 {
+			t.Fatal("invalid action projection returned")
+		}
+	}
+	if _, ok := mailboxActionViews(mailboxActionsFixture()[1:2], true); ok {
+		t.Fatal("non-create list action accepted")
 	}
 }
 

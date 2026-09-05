@@ -7267,10 +7267,18 @@ components:
           type: string
           enum: ['', EMAIL_MAILBOX_DELIVERY_EXPIRED, EMAIL_MAILBOX_CONNECTION_CHANGED, EMAIL_MAILBOX_DELIVERY_REJECTED]
           description: Непустой код допускается только для FAILED.
+    EmailMailboxActionAvailability:
+      type: object
+      additionalProperties: false
+      required: [action, enabled, reason]
+      properties:
+        action: { type: string, enum: [CREATE_DRAFT, SAVE, VALIDATE, PUBLISH, DISCARD, BIND, UNBIND, DETACH, COPY] }
+        enabled: { type: boolean }
+        reason: { type: string, enum: [NONE, STATE, GIT_MANAGED, DELIVERY_PENDING, NO_BINDING, CONNECTION_DISABLED] }
     EmailMailboxConfigurationView:
       type: object
       additionalProperties: false
-      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics]
+      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics, nextActions]
       properties:
         connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
         connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
@@ -7281,12 +7289,14 @@ components:
         publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
         boundRevisionRef: { type: string, maxLength: 96 }
         diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        nextActions: { type: array, minItems: 9, maxItems: 9, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
     EmailMailboxConfigurationPage:
       type: object
       additionalProperties: false
-      required: [items, total, nextPageToken]
+      required: [items, total, nextPageToken, nextActions]
       properties:
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxConfigurationView' } }
+        nextActions: { type: array, minItems: 1, maxItems: 1, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
         total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string, maxLength: 512 }
     EmailMailboxCredentialPage:

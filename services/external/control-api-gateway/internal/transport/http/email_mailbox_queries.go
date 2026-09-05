@@ -22,7 +22,12 @@ func (s *Server) ListEmailMailboxConfigurations(w http.ResponseWriter, r *http.R
 		invalidSecretDraft(w)
 		return
 	}
-	result := generated.EmailMailboxConfigurationPage{Items: []generated.EmailMailboxConfigurationView{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
+	actions, ok := mailboxActionViews(response.GetNextActions(), true)
+	if !ok {
+		invalidSecretDraft(w)
+		return
+	}
+	result := generated.EmailMailboxConfigurationPage{Items: []generated.EmailMailboxConfigurationView{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken(), NextActions: actions}
 	seen := map[string]bool{}
 	for _, v := range response.GetItems() {
 		item, ok := mailboxConfigurationView(v)
