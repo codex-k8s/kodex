@@ -418,12 +418,15 @@ SELECT n.id::text,
              AND integration_grant.target_kind = 'AGENT'
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
+             AND integration_grant.definition_version=connection.definition_version
+             AND integration_grant.definition_digest=connection.definition_digest
              AND definition.enabled
              AND (definition.adapter_owner,definition.execution_route) IN
                  (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
              AND definition.adapter_readiness = 'READY'
              AND capability.value->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
              AND connection.enabled
+             AND connection.lifecycle_state='ACTIVE'
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
