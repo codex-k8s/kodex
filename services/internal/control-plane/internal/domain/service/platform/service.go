@@ -1241,7 +1241,10 @@ func knownCommand(kind command.Kind) bool {
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
 		command.PublishSystemSTTDraft, command.RebindSystemSTT,
-		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration:
+		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration,
+		command.CreateEmailMailboxDraft, command.SaveEmailMailboxDraft, command.ValidateEmailMailboxDraft,
+		command.PublishEmailMailboxDraft, command.DiscardEmailMailboxDraft,
+		command.BindEmailMailboxConfiguration, command.UnbindEmailMailboxConfiguration:
 		return true
 	default:
 		return false

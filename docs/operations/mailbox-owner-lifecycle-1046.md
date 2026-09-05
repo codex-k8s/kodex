@@ -4,7 +4,7 @@ title: Полный owner lifecycle типизированной конфигу�
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -79,3 +79,48 @@ report одного pod при незавершённом rollout остальн
 credential mismatch, Git copy/detach, interrupted apply/restart, stale reports,
 partial replica rollout, terminal connection и immutable key retention.
 До исполнения соответствующие checks имеют статус NOT RUN.
+
+# Реализованный owner checkpoint
+
+Специализированные typed RPC подключены к CP domain/repository owner; неполные
+черновики сохраняют canonical JSON, YAML/JSON parser закрыто отклоняет неизвестные
+и повторяющиеся поля, narrowing и integer overflow. Credential receipt read не
+возвращает digest, locator, UID/resourceVersion или значение credential.
+
+Миграции `625`–`627` сохраняют mapping configuration→connection, immutable
+publication snapshot, fenced claim, source receipts Git и точные binding effects.
+CP worker использует общий DNS resolver из `eaf23ce2` и mailpolicy producer из
+`5d8b1770`. Disabled mailbox не создаёт DNS queries или разрешённых destinations.
+CP проверяет фактический admission, базовый gateway digest, путь read-only mount,
+Secret/policy pins и rollout обоих Deployment. Callback принимается после apply,
+до READY; CP readiness не создаёт цикл ожидания с EMAIL callback.
+
+Git import читает configured файл при startup и в каждом bounded reconcile.
+Глобальный runtime revision назначает CP отдельно от revision/digest источника.
+Повтор source идемпотентен, старый revision или новый content того же revision
+отклоняется. Неизвестный/ошибочный новый source не отменяет recovery ранее
+одобренной publication. Несколько connection фиксируются одной publication и
+атомарным набором binding effects. Удаление mailbox из Git снимает binding после
+полного readback. Detach/copy сохраняют parent revision; Git не перезаписывает
+detached set или connection с UI-owned binding.
+
+Истечение publication или изменение connection переводит прежнее намерение в
+FAILED/SUPERSEDED и атомарно создаёт компенсацию с большим server revision.
+Компенсация использует accepted snapshot и удаляет потерявшие полномочия
+connections; прежний Secret revision не переиздаётся. Внутренний RECOVERY не
+маскирует публичный FAILED/SUPERSEDED результат пользовательского намерения.
+READY, recovery и Git import имеют audit; binding effects и platform events
+фиксируются одной owner transaction.
+
+Проверяемые сценарии: full owner CRUD/OCC/replay/credentials, Git import/replay/
+delete/detach, callback до apply, READY до callback, competing claim, revoked и
+expired publication; Kubernetes admission rejection до mutation, partial replicas,
+неверный CIDR и rollback; app partial-effect ordering, Git reload и cancel/join.
+Это локальный producer checkpoint. Сквозной HTTP/PWA→реальные EMAIL/egress,
+развёртывание и provider health не объявляются проверенными этими fixtures.
+
+Полный Issue #1046 остаётся открытым: runtime catalog/TOML contribution,
+effective actor∩agent capabilities, VFS eligibility, Home gate query/total,
+RoleImage/IntegrationDefinition CFG и остальные исходные producer gaps требуют
+отдельного завершения в том же unit PR. READY доставки не означает SMTP/IMAP/POP
+provider readiness и не заменяет общий baseline/triple review #1031.

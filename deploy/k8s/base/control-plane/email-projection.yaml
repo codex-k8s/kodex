@@ -19,6 +19,18 @@ rules:
     resources: ["secrets"]
     resourceNames: ["email-bridge-mailbox-projection"]
     verbs: ["get", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["email-bridge", "egress-gateway"]
+    verbs: ["get", "update"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    resourceNames: ["egress-gateway-mail-destinations"]
+    verbs: ["get", "update"]
+  # CREATE ограничен обязательной ValidatingAdmissionPolicy до первой записи.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -28,6 +40,29 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: control-plane-email-projection-writer
+subjects:
+  - kind: ServiceAccount
+    name: control-plane
+    namespace: kodex-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: control-plane-mail-publication-admission-reader
+rules:
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    resourceNames: ["egress-mail-configmap-publication"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: control-plane-mail-publication-admission-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: control-plane-mail-publication-admission-reader
 subjects:
   - kind: ServiceAccount
     name: control-plane

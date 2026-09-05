@@ -2,6 +2,7 @@ package emailpolicy
 
 import (
 	"encoding/json"
+	"math"
 	"slices"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
@@ -11,6 +12,9 @@ import (
 
 const MaxMailboxSpecificationBytes = 256 << 10
 
+// Публичный JSON readback сохраняет целочисленные значения без округления.
+const maxMailboxPublicInteger int64 = 1<<53 - 1
+
 // MailboxBinding передаётся только после разрешения существующего owner в CP.
 type MailboxBinding struct {
 	Ref, OrganizationRef, ConnectionRef string
@@ -19,6 +23,27 @@ type MailboxBinding struct {
 
 // BoundSpecification допускает неполный черновик, но ограничивает размер до записи.
 func BoundSpecification(spec entity.EmailMailboxSpecification) error {
+	for _, endpoint := range []*api.Endpoint{&spec.SMTP, spec.IMAP, spec.POP} {
+		if endpoint != nil && (endpoint.Port < 0 || endpoint.Port > math.MaxInt32) {
+			return errs.ErrInvalid
+		}
+		if endpoint != nil {
+			for _, descriptor := range []api.Descriptor{endpoint.Ca, endpoint.Username, endpoint.Secret} {
+				if descriptor.Generation < 0 || descriptor.Generation > maxMailboxPublicInteger {
+					return errs.ErrInvalid
+				}
+			}
+		}
+	}
+	for _, limit := range []int{spec.Limits.MaxAttachments, spec.Limits.MaxRecipients, spec.Limits.PageSize, spec.Limits.ScanMessages, spec.Limits.TimeoutSeconds} {
+		if limit < 0 || limit > math.MaxInt32 {
+			return errs.ErrInvalid
+		}
+	}
+	if spec.Limits.AttachmentBytes < 0 || spec.Limits.MessageBytes < 0 ||
+		int64(spec.Limits.AttachmentBytes) > maxMailboxPublicInteger || int64(spec.Limits.MessageBytes) > maxMailboxPublicInteger {
+		return errs.ErrInvalid
+	}
 	if len(spec.AllowedFolders) > 100 || len(spec.Recipients) > 1000 || len(spec.Policies) > len(api.Operations()) {
 		return errs.ErrInvalid
 	}

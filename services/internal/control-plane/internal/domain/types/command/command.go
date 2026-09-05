@@ -12,6 +12,13 @@ import (
 type Kind string
 
 const (
+	CreateEmailMailboxDraft            Kind = "CREATE_EMAIL_MAILBOX_DRAFT"
+	SaveEmailMailboxDraft              Kind = "SAVE_EMAIL_MAILBOX_DRAFT"
+	ValidateEmailMailboxDraft          Kind = "VALIDATE_EMAIL_MAILBOX_DRAFT"
+	PublishEmailMailboxDraft           Kind = "PUBLISH_EMAIL_MAILBOX_DRAFT"
+	DiscardEmailMailboxDraft           Kind = "DISCARD_EMAIL_MAILBOX_DRAFT"
+	BindEmailMailboxConfiguration      Kind = "BIND_EMAIL_MAILBOX_CONFIGURATION"
+	UnbindEmailMailboxConfiguration    Kind = "UNBIND_EMAIL_MAILBOX_CONFIGURATION"
 	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
 	ReportEmailEffect                  Kind = "REPORT_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
@@ -438,7 +445,16 @@ type ManagedConfigurationInput struct {
 	Consumers                                                                                   []entity.ManagedConfigurationConsumer
 }
 
+type EmailMailboxInput struct {
+	ConnectionRef             string
+	ExpectedConnectionVersion int64
+	Managed                   ManagedConfigurationInput
+}
+
 type Result struct {
+	EmailMailbox            *entity.EmailMailboxConfigurationView
+	EmailPublication        *entity.EmailMailboxPublication
+	EmailConnectionVersion  int64
 	EmailReceipt            *entity.EmailEffectReceipt
 	EmailDecision           *entity.EmailReconciliationDecision
 	SkillBundle             *entity.SkillBundle
