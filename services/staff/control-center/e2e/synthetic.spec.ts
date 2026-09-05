@@ -8,6 +8,7 @@ import { checkIntegrationPackage } from "./fixtures/integration-package";
 import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkRunsCatalog } from "./fixtures/runs-catalog";
 import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
+import { checkFileSelection } from "./fixtures/file-selection";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -1183,6 +1184,13 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       "data-presentation-state",
       "live",
     );
+    if (width === 1440 || width === 390)
+      await checkFileSelection(page, catalogProject.ref, async () => {
+        await page.screenshot({
+          path: testInfo.outputPath(`file-selection-${String(width)}.png`),
+          fullPage: true,
+        });
+      });
     expect(failures).toEqual([]);
   });
 }

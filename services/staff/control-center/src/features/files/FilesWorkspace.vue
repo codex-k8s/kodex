@@ -1416,10 +1416,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1558,10 +1559,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1920,6 +1922,8 @@ onBeforeUnmount(() => {
 .files-workspace {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   min-height: 640px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2437,8 +2441,7 @@ onBeforeUnmount(() => {
     width: auto;
     max-width: calc(50vw - 20px);
   }
-  .files-workspace__count,
-  .files-workspace__view-toggle {
+  .files-workspace__count {
     display: none;
   }
   .files-workspace__toolbar .button {

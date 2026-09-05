@@ -330,6 +330,13 @@ readback. `i18n/index.test.ts` разбирает статические клю�
 Browser-проверка общего picker на 1440/390 покрывает стрелки после фокуса
 на варианте, Enter/Space, пропуск disabled-варианта, отсутствие запроса
 заблокированного inline-списка и повторную загрузку после разблокировки.
+`e2e/fixtures/file-selection.ts` дополнительно прошёл на 1440/390:
+checkbox использует объявленное `nextActions` до загрузки impact, перед
+подтверждением проверяется exact impact, запрет блокирует команду.
+Переключение списка/сетки сохраняет выбор и доступно на mobile без overflow.
+Предыдущие mobile-запуски выявили скрытый переключатель и intrinsic-ширину
+grid (FAIL); после исправления повторный запуск обоих размеров PASS.
+Файловые model/API/layout unit: 23 PASS; synthetic build с typecheck PASS.
 Context7 проверен для Vue compiler-sfc `parse/compileTemplate` и Pinia
 `$onAction/after/onError` с unsubscribe; API дополнительно сверены с локальными
 типами и browser-сценарием.
