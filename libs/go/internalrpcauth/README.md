@@ -14,6 +14,16 @@ SHA-256 сертификата и допускает обработчик тол
 authority proof остаются связкой конкретного сервиса и не входят в общую
 библиотеку.
 
+Для server-stream RPC с единственным initial request сервис передаёт exact
+method в optional requestBoundMethods обоих stream interceptors. Закрытый
+machine profile такого RPC использует UNARY_PROTO_SHA256: digest относится
+к единственному initial Proto, а ответ может состоять из bounded chunks.
+Client не открывает stream до SendMsg/proof issuance. Server не публикует
+проверенный context и не отдаёт bytes до декодирования и verification initial
+request. Остальные методы сохраняют STREAM_SESSION; caller metadata не
+выбирают режим. EOF/error закрывает child context; владелец вызова обязан
+передать bounded context и отменить его при прекращении чтения.
+
 Сгенерированные файлы не редактируются вручную. Гарантии транспортного
 контракта, UDS, политики, ротации и семантики отказов задает `CONTRACT-MC-004`
 (`contracts/authorization/README.md`).

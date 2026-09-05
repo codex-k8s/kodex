@@ -4,8 +4,8 @@ title: Служебная авторизация EMAIL и Mattermost
 type: operations
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-09-05
+version: 1.1.0
+updated: 2026-09-06
 ---
 
 # Границы
@@ -74,3 +74,42 @@ SQL остаётся частью единственного fresh-install basel
 существующей живой установки. Результаты локальных запусков привязываются
 к точному SHA в PR по #1059; защищённый consumer → CP и live provider до
 общей интеграции имеют статус `NOT RUN`.
+
+# Нормализация общего authority unit
+
+Источник дополнения — интеграционный commit
+`4e327e510bc6ffca5850d31d64663e5fee57e868`, producer #1046 и runtime
+consumers #1025/#1026. Этот же PR получает принадлежащие authority Proto,
+generated client/server signature и общий request-bound stream adapter.
+Реализация CP/controller/runner остаётся в соответствующих unit.
+
+`IssueContinuationAuthorizationContextResponse` выделен в собственный Proto
+тип, сохраняя прежние wire field numbers1–8 и типы. Сервер и generated клиент
+используют один новый signature. Это изменение source API требует согласованной
+сборки; оно не меняет tenant/actor inheritance либо выданные полномочия.
+
+| Переход stream | Проверка | Результат |
+| --- | --- | --- |
+| Открытие client handle | Exact зарегистрированный server-stream method; один initial request | Сетевой stream ещё не открывается. |
+| Первый SendMsg | Детерминированный request digest, operation proof и issuer context | Только после успешного выпуска открывается stream и отправляется запрос. |
+| Первый server RecvMsg | mTLS peer, обязательный bearer context и digest фактически декодированного Proto | Verified context публикуется до вызова owner, при несовпадении запрос отклонён. |
+| Повторный initial request | Закрытая single-request форма | FailedPrecondition; второй owner effect не создаётся. |
+| Отказ/EOF/cancel | Caller deadline и cancel/join | Child context закрывается; partial owner результат не считается подтверждённым. |
+
+Новых business events нет; авторитетный read/receipt принадлежит конкретному
+CP RPC. Shared adapter не выдаёт прикладные полномочия сам. Проверки issuance
+до открытия stream, proof denial и проверки actual initial message находятся
+в `libs/go/internalrpcauth/authorityclient/request_bound_stream_test.go`.
+Proto lint/build и canonical generation/readback проверяются вместе с полными
+race/vet/build обоих authority Go modules. Результаты привязываются к итоговому
+SHA в PR; интеграционный baseline и live consumers остаются отдельными.
+
+На production tree дополнения локально **PASS**: `make lint-proto build-proto`,
+`make gen-proto check-proto-codegen`, полные race/vet/build shared authority и
+сервиса, diff check. Восемь source/generated файлов побайтово совпадают с
+исходным integrated4e327; generated получены канонической генерацией.
+Приватные безопасные логи: `authority-normalize-proto.log`,
+`authority-normalize-codegen.log`, `authority-normalize-go.log`.
+PostgreSQL/install/render для этого нового SHA — **NOT RUN**: их предыдущий
+PASS на0765 относится к прежнему checkpoint. Общий baseline/review/live также
+**NOT RUN**.

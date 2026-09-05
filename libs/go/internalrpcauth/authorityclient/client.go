@@ -137,8 +137,8 @@ type OperationResolver interface {
 
 type requestDigestKey struct{}
 
-// RequestDigest возвращает digest фактического unary protobuf request,
-// вычисленный interceptor до обращения к proof resolver.
+// RequestDigest возвращает digest фактического unary либо единственного
+// initial server-stream request, вычисленный до обращения к proof resolver.
 func RequestDigest(ctx context.Context) (string, bool) {
 	value, ok := ctx.Value(requestDigestKey{}).(string)
 	return value, ok && value != ""
@@ -367,6 +367,7 @@ func IssuerStreamClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
 	operations OperationResolver,
 	proofs ProofProvider,
+	requestBoundMethods ...string,
 ) grpc.StreamClientInterceptor {
 	return func(
 		ctx context.Context,
@@ -376,6 +377,9 @@ func IssuerStreamClientInterceptor(
 		streamer grpc.Streamer,
 		options ...grpc.CallOption,
 	) (grpc.ClientStream, error) {
+		if requestBoundStreamMethod(method, requestBoundMethods) {
+			return newRequestBoundClientStream(ctx, description, connection, method, streamer, options, issuer, operations, proofs)
+		}
 		operationID, ok := operations.OperationID(method)
 		if !ok {
 			return nil, status.Error(codes.PermissionDenied, "internal RPC operation is not registered")
@@ -458,6 +462,7 @@ func VerifierUnaryServerInterceptor(
 // границу к streaming RPC и передаёт проверенный context серверному stream.
 func VerifierStreamServerInterceptor(
 	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
+	requestBoundMethods ...string,
 ) grpc.StreamServerInterceptor {
 	return func(
 		service any,
@@ -477,6 +482,13 @@ func VerifierStreamServerInterceptor(
 		values := incoming.Get(AuthorizationMetadata)
 		if len(values) != 1 || values[0] == "" {
 			return status.Error(codes.Unauthenticated, "authorization context required")
+		}
+		if requestBoundStreamMethod(info.FullMethod, requestBoundMethods) {
+			if info.IsClientStream || !info.IsServerStream {
+				return status.Error(codes.Internal, "request-bound server stream descriptor is invalid")
+			}
+			return handler(service, &requestBoundServerStream{ServerStream: stream, ctx: ctx,
+				verifier: verifier, transport: transport, compact: values[0], method: info.FullMethod})
 		}
 		verified, err := verifier.VerifyAuthorizationContext(
 			ctx,
