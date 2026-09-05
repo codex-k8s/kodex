@@ -88,6 +88,14 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc SavePromptTemplateDraft(SavePromptTemplateDraftRequest) returns (SavePromptTemplateDraftResponse);
+  rpc DiscardPromptTemplateDraft(DiscardPromptTemplateDraftRequest) returns (DiscardPromptTemplateDraftResponse);
+  rpc SaveRoleImageRevisionDraft(SaveRoleImageRevisionDraftRequest) returns (SaveRoleImageRevisionDraftResponse);
+  rpc DiscardRoleImageRevisionDraft(DiscardRoleImageRevisionDraftRequest) returns (DiscardRoleImageRevisionDraftResponse);
+  rpc SaveIntegrationDefinitionDraft(SaveIntegrationDefinitionDraftRequest) returns (SaveIntegrationDefinitionDraftResponse);
+  rpc DiscardIntegrationDefinitionDraft(DiscardIntegrationDefinitionDraftRequest) returns (DiscardIntegrationDefinitionDraftResponse);
+  rpc SaveSystemSTTConfigurationDraft(SaveSystemSTTConfigurationDraftRequest) returns (SaveSystemSTTConfigurationDraftResponse);
+  rpc DiscardSystemSTTConfigurationDraft(DiscardSystemSTTConfigurationDraftRequest) returns (DiscardSystemSTTConfigurationDraftResponse);
   rpc ReconcileEmailEffect(ReconcileEmailEffectRequest) returns (ReconcileEmailEffectResponse);
   rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
   rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
@@ -2570,6 +2578,125 @@ message RuntimeRevisionSnapshot {
   string system_stt_configuration_digest = 66;
   string system_stt_configuration_revision_ref = 67;
   string organization_ref = 68;
+  repeated RuntimeSkillBundleSnapshot skill_bundles = 69;
+  repeated RuntimeMemoryRecordSnapshot memory_records = 70;
+}
+
+message SavePromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SavePromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardPromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardPromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message RuntimeSkillBundleSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string scan_engine = 7;
+  string scan_digest = 8;
+  google.protobuf.Timestamp scanned_at = 9;
+  repeated SkillBundleFile files = 10;
+  ContextProvenance provenance = 11;
+  string name = 12;
+  string description = 13;
+}
+
+message RuntimeMemoryRecordSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string title = 7;
+  string summary = 8;
+  google.protobuf.Timestamp retention_until = 9;
+  ContextProvenance provenance = 10;
 }
 
 enum RuntimeWorkspaceAccess {
@@ -3738,6 +3865,7 @@ message GetRuntimeEnvironmentImpactRequest {
   string environment_ref = 1;
   string version_ref = 2;
   PageRequest page = 3;
+  string query = 4;
 }
 message GetRuntimeEnvironmentImpactResponse {
   string environment_ref = 1;
@@ -3812,6 +3940,7 @@ message GetRuntimeSecretImpactRequest {
   string secret_ref = 1;
   int64 revision = 2;
   PageRequest page = 3;
+  string query = 4;
 }
 message GetRuntimeSecretImpactResponse {
   string secret_ref = 1;
@@ -4418,6 +4547,7 @@ enum ManagedConfigurationState {
   MANAGED_CONFIGURATION_STATE_INVALID = 3;
   MANAGED_CONFIGURATION_STATE_PUBLISHED = 4;
   MANAGED_CONFIGURATION_STATE_SUPERSEDED = 5;
+  MANAGED_CONFIGURATION_STATE_DISCARDED = 6;
 }
 enum ManagedConfigurationOwner {
   MANAGED_CONFIGURATION_OWNER_UNSPECIFIED = 0;
@@ -4460,6 +4590,8 @@ message ManagedConfigurationImpact {
   string target_revision_ref = 2;
   repeated ManagedConfigurationConsumer consumers = 3;
   string digest = 4;
+  int64 total = 5;
+  PageInfo page = 6;
 }
 message ManagedConfigurationBindingSnapshot {
   string binding_ref = 1;
@@ -4678,6 +4810,8 @@ message ListManagedConfigurationHistoryResponse {
 message GetManagedConfigurationImpactRequest {
   string configuration_ref = 1;
   string revision_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
 }
 message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
 

@@ -2785,6 +2785,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PlatformCommandService_SavePromptTemplateDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/SavePromptTemplateDraft"
+	PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/DiscardPromptTemplateDraft"
+	PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRoleImageRevisionDraft"
+	PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/DiscardRoleImageRevisionDraft"
+	PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/SaveIntegrationDefinitionDraft"
+	PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/DiscardIntegrationDefinitionDraft"
+	PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/SaveSystemSTTConfigurationDraft"
+	PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/DiscardSystemSTTConfigurationDraft"
 	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
 	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
 	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
@@ -2918,6 +2926,14 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error)
+	DiscardPromptTemplateDraft(ctx context.Context, in *DiscardPromptTemplateDraftRequest, opts ...grpc.CallOption) (*DiscardPromptTemplateDraftResponse, error)
+	SaveRoleImageRevisionDraft(ctx context.Context, in *SaveRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*SaveRoleImageRevisionDraftResponse, error)
+	DiscardRoleImageRevisionDraft(ctx context.Context, in *DiscardRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*DiscardRoleImageRevisionDraftResponse, error)
+	SaveIntegrationDefinitionDraft(ctx context.Context, in *SaveIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*SaveIntegrationDefinitionDraftResponse, error)
+	DiscardIntegrationDefinitionDraft(ctx context.Context, in *DiscardIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*DiscardIntegrationDefinitionDraftResponse, error)
+	SaveSystemSTTConfigurationDraft(ctx context.Context, in *SaveSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*SaveSystemSTTConfigurationDraftResponse, error)
+	DiscardSystemSTTConfigurationDraft(ctx context.Context, in *DiscardSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error)
 	CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error)
@@ -3058,6 +3074,86 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SavePromptTemplateDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SavePromptTemplateDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardPromptTemplateDraft(ctx context.Context, in *DiscardPromptTemplateDraftRequest, opts ...grpc.CallOption) (*DiscardPromptTemplateDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardPromptTemplateDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveRoleImageRevisionDraft(ctx context.Context, in *SaveRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*SaveRoleImageRevisionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveRoleImageRevisionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardRoleImageRevisionDraft(ctx context.Context, in *DiscardRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*DiscardRoleImageRevisionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardRoleImageRevisionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveIntegrationDefinitionDraft(ctx context.Context, in *SaveIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*SaveIntegrationDefinitionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveIntegrationDefinitionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardIntegrationDefinitionDraft(ctx context.Context, in *DiscardIntegrationDefinitionDraftRequest, opts ...grpc.CallOption) (*DiscardIntegrationDefinitionDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardIntegrationDefinitionDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) SaveSystemSTTConfigurationDraft(ctx context.Context, in *SaveSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*SaveSystemSTTConfigurationDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveSystemSTTConfigurationDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) DiscardSystemSTTConfigurationDraft(ctx context.Context, in *DiscardSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*DiscardSystemSTTConfigurationDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardSystemSTTConfigurationDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error) {
@@ -4352,6 +4448,14 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error)
+	DiscardPromptTemplateDraft(context.Context, *DiscardPromptTemplateDraftRequest) (*DiscardPromptTemplateDraftResponse, error)
+	SaveRoleImageRevisionDraft(context.Context, *SaveRoleImageRevisionDraftRequest) (*SaveRoleImageRevisionDraftResponse, error)
+	DiscardRoleImageRevisionDraft(context.Context, *DiscardRoleImageRevisionDraftRequest) (*DiscardRoleImageRevisionDraftResponse, error)
+	SaveIntegrationDefinitionDraft(context.Context, *SaveIntegrationDefinitionDraftRequest) (*SaveIntegrationDefinitionDraftResponse, error)
+	DiscardIntegrationDefinitionDraft(context.Context, *DiscardIntegrationDefinitionDraftRequest) (*DiscardIntegrationDefinitionDraftResponse, error)
+	SaveSystemSTTConfigurationDraft(context.Context, *SaveSystemSTTConfigurationDraftRequest) (*SaveSystemSTTConfigurationDraftResponse, error)
+	DiscardSystemSTTConfigurationDraft(context.Context, *DiscardSystemSTTConfigurationDraftRequest) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error)
 	CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error)
@@ -4494,6 +4598,30 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SavePromptTemplateDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardPromptTemplateDraft(context.Context, *DiscardPromptTemplateDraftRequest) (*DiscardPromptTemplateDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardPromptTemplateDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveRoleImageRevisionDraft(context.Context, *SaveRoleImageRevisionDraftRequest) (*SaveRoleImageRevisionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRoleImageRevisionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardRoleImageRevisionDraft(context.Context, *DiscardRoleImageRevisionDraftRequest) (*DiscardRoleImageRevisionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardRoleImageRevisionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveIntegrationDefinitionDraft(context.Context, *SaveIntegrationDefinitionDraftRequest) (*SaveIntegrationDefinitionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveIntegrationDefinitionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardIntegrationDefinitionDraft(context.Context, *DiscardIntegrationDefinitionDraftRequest) (*DiscardIntegrationDefinitionDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardIntegrationDefinitionDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) SaveSystemSTTConfigurationDraft(context.Context, *SaveSystemSTTConfigurationDraftRequest) (*SaveSystemSTTConfigurationDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSystemSTTConfigurationDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DiscardSystemSTTConfigurationDraft(context.Context, *DiscardSystemSTTConfigurationDraftRequest) (*DiscardSystemSTTConfigurationDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardSystemSTTConfigurationDraft not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcileEmailEffect not implemented")
 }
@@ -4895,6 +5023,150 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_SavePromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SavePromptTemplateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SavePromptTemplateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SavePromptTemplateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SavePromptTemplateDraft(ctx, req.(*SavePromptTemplateDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardPromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardPromptTemplateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardPromptTemplateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardPromptTemplateDraft(ctx, req.(*DiscardPromptTemplateDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveRoleImageRevisionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRoleImageRevisionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveRoleImageRevisionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveRoleImageRevisionDraft(ctx, req.(*SaveRoleImageRevisionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardRoleImageRevisionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardRoleImageRevisionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardRoleImageRevisionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardRoleImageRevisionDraft(ctx, req.(*DiscardRoleImageRevisionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveIntegrationDefinitionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveIntegrationDefinitionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveIntegrationDefinitionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveIntegrationDefinitionDraft(ctx, req.(*SaveIntegrationDefinitionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardIntegrationDefinitionDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardIntegrationDefinitionDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardIntegrationDefinitionDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardIntegrationDefinitionDraft(ctx, req.(*DiscardIntegrationDefinitionDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_SaveSystemSTTConfigurationDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSystemSTTConfigurationDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).SaveSystemSTTConfigurationDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).SaveSystemSTTConfigurationDraft(ctx, req.(*SaveSystemSTTConfigurationDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_DiscardSystemSTTConfigurationDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardSystemSTTConfigurationDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).DiscardSystemSTTConfigurationDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).DiscardSystemSTTConfigurationDraft(ctx, req.(*DiscardSystemSTTConfigurationDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_ReconcileEmailEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -7150,6 +7422,38 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.PlatformCommandService",
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SavePromptTemplateDraft",
+			Handler:    _PlatformCommandService_SavePromptTemplateDraft_Handler,
+		},
+		{
+			MethodName: "DiscardPromptTemplateDraft",
+			Handler:    _PlatformCommandService_DiscardPromptTemplateDraft_Handler,
+		},
+		{
+			MethodName: "SaveRoleImageRevisionDraft",
+			Handler:    _PlatformCommandService_SaveRoleImageRevisionDraft_Handler,
+		},
+		{
+			MethodName: "DiscardRoleImageRevisionDraft",
+			Handler:    _PlatformCommandService_DiscardRoleImageRevisionDraft_Handler,
+		},
+		{
+			MethodName: "SaveIntegrationDefinitionDraft",
+			Handler:    _PlatformCommandService_SaveIntegrationDefinitionDraft_Handler,
+		},
+		{
+			MethodName: "DiscardIntegrationDefinitionDraft",
+			Handler:    _PlatformCommandService_DiscardIntegrationDefinitionDraft_Handler,
+		},
+		{
+			MethodName: "SaveSystemSTTConfigurationDraft",
+			Handler:    _PlatformCommandService_SaveSystemSTTConfigurationDraft_Handler,
+		},
+		{
+			MethodName: "DiscardSystemSTTConfigurationDraft",
+			Handler:    _PlatformCommandService_DiscardSystemSTTConfigurationDraft_Handler,
+		},
 		{
 			MethodName: "ReconcileEmailEffect",
 			Handler:    _PlatformCommandService_ReconcileEmailEffect_Handler,

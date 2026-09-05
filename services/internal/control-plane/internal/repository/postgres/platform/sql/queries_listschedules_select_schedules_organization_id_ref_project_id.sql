@@ -76,20 +76,16 @@ LEFT JOIN control_plane.sessions continue_session
  AND continue_session.organization_id = schedule.organization_id
  AND continue_session.project_id = schedule.project_id
 WHERE schedule.organization_id = @organization_id::uuid
-  AND project.ref = @project_ref
+  AND (@project_ref = '' OR project.ref = @project_ref)
   AND schedule.lifecycle_state <> 'DELETED'
-  AND (@role IN ('OWNER', 'ADMINISTRATOR') OR EXISTS(
-      SELECT 1
-      FROM control_plane.memberships membership
-      WHERE membership.project_id = schedule.project_id
-        AND membership.subject_id = @actor_id::uuid
-        AND membership.active
-        AND 'VIEW' = ANY(membership.permissions)
-  ))
   AND (@search_query = '' OR lower(concat_ws(
       ' ', schedule.name, schedule.target_ref, COALESCE(agent.name, ''), COALESCE(workflow.name, '')
   )) LIKE '%' || lower(@search_query) || '%')
-  AND (@cursor_time::timestamptz IS NULL OR
-       (schedule.updated_at, schedule.ref) < (@cursor_time::timestamptz, @cursor_ref))
-ORDER BY schedule.updated_at DESC, schedule.ref DESC
+  AND (@cursor_ref = '' OR schedule.ref > @cursor_ref)
+  AND (@authority_project = '' OR schedule.project_id = NULLIF(@authority_project,'')::uuid)
+  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=schedule.organization_id AND target.kind='SCHEDULE' AND target.id=schedule.id
+        AND control_plane.catalog_resource_visible(schedule.organization_id, @actor_id::uuid, 'schedule.view', target.kind,
+            target.id, target.project_id, target.owner_id, target.related_ids, statement_timestamp()))
+ORDER BY schedule.ref
 LIMIT @page_size

@@ -180,6 +180,21 @@ func TestBootstrapComponent(t *testing.T) {
 			t.Fatalf("authority proof changed platform cursor: platform=%d->%d proof=%d->%d revision=%d", platformBefore, platformAfter, proofBefore, proofAfter, revision)
 		}
 	})
+	t.Run("memory records owner lifecycle", func(t *testing.T) {
+		testMemoryRecords(t, ctx, repository)
+	})
+	t.Run("email receipt reconciliation is fresh exact and non retrying", func(t *testing.T) {
+		testEmailReceiptReconciliation(t, ctx, repository, pool)
+	})
+	t.Run("email worker watermark rejects rollback", func(t *testing.T) {
+		testEmailWorkerWatermark(t, ctx, repository)
+	})
+	t.Run("email configuration is immutable and revokes old readers", func(t *testing.T) {
+		testEmailConfiguration(t, ctx, repository)
+	})
+	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
+		testSkillBundleDraft(t, ctx, repository)
+	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
 	})
@@ -228,8 +243,8 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("integration read and Human Gate decisions preserve effect cardinality", func(t *testing.T) {
 		testIntegrationEffectLifecycle(t, ctx, repository, pool)
 	})
-	t.Run("optional interaction failure is a separate live incident", func(t *testing.T) {
-		testOptionalInteractionIncident(t, ctx, repository, pool)
+	t.Run("interaction health checks are isolated from generic worker", func(t *testing.T) {
+		testInteractionHealthRouting(t, ctx, repository, pool)
 	})
 	t.Run("enterprise access restricts exact agent and project", func(t *testing.T) {
 		testEnterpriseAccessRestriction(t, ctx, repository)
@@ -246,8 +261,17 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime environment lifecycle returns a complete terminal snapshot", func(t *testing.T) {
 		testRuntimeEnvironmentLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("runtime environment draft publication is validated and version pinned", func(t *testing.T) {
+		testEnvironmentDraft(t, ctx, repository, pool)
+	})
+	t.Run("catalog SQL eligibility matches authoritative evaluator", func(t *testing.T) {
+		testCatalogSQLParity(t, ctx, repository, pool)
+	})
 	t.Run("managed configuration lifecycle is immutable and selectively rebound", func(t *testing.T) {
 		testManagedConfigurationLifecycle(t, ctx, repository, pool)
+	})
+	t.Run("managed draft save and discard preserve immutable history", func(t *testing.T) {
+		testManagedDraftLifecycle(t, ctx, repository)
 	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
@@ -282,6 +306,10 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("provider credential cleanup is durable fenced and exact", func(t *testing.T) {
 		testProviderCredentialCleanupLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("interaction identity is owner bound scoped and revocable", func(t *testing.T) { testInteractionIdentity(t, ctx, repository, pool) })
+	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
+	t.Run("secret revision impact selected rebind and retention", func(t *testing.T) { testSecretImpact(t, ctx, repository, pool) })
+	t.Run("STT system roles advance immutably", func(t *testing.T) { testSTTRoleMigration(t, ctx, pool) })
 }
 
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
@@ -334,7 +362,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish managed prompt: result=%#v err=%v", published, err)
 	}
-	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
 	if err != nil || impact.Digest == "" || len(impact.Consumers) != 0 {
 		t.Fatalf("preview managed prompt impact: impact=%#v err=%v", impact, err)
 	}
@@ -409,7 +437,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || effective.Ref != created.ManagedRevision.Ref || effective.Content != payload.Content {
 		t.Fatalf("publish changed consumer before selective rebind: prompt=%#v err=%v", effective, err)
 	}
-	correctedImpact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, correctedDraft.ManagedRevision.Ref)
+	correctedImpact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, correctedDraft.ManagedRevision.Ref, query.Filter{})
 	if err != nil || len(correctedImpact.Consumers) != 1 || correctedImpact.Consumers[0].RevisionRef != created.ManagedRevision.Ref {
 		t.Fatalf("corrected managed prompt impact: impact=%#v err=%v", correctedImpact, err)
 	}
@@ -497,6 +525,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		t.Fatalf("continue managed prompt history: history=%#v total=%d next=%q err=%v", remainingHistory, remainingTotal, remainingNext, err)
 	}
 	testManagedPromptHistoryRedaction(t, ctx, repository, service, owner, projectResult.Project.Ref, created.ManagedConfiguration.Ref)
+	testManagedGitOwnership(t, ctx, service, pool, owner, *correctedRebound.ManagedConfiguration, effective.Ref)
 	var sttProviderAccountRef string
 	if err := pool.QueryRow(ctx, `
 		SELECT account.ref
@@ -508,7 +537,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	`, ownerScope.organizationID).Scan(&sttProviderAccountRef); err != nil {
 		t.Fatalf("select eligible system STT provider account: %v", err)
 	}
-	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"providerAccountRef":%q,"model":"gpt-6-astra","language":"ru","permissionKey":"platform.stt.use"}}`, sttProviderAccountRef)
+	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"enabled":true,"providerAccountRef":%q,"model":"gpt-transcribe","language":"ru","permissionKey":"platform.stt.use","parameters":{"keywords":["Kodex"],"prompt":"Names","temperature":0.2,"chunkingStrategy":"auto"}}}`, sttProviderAccountRef)
 	sttCreated, err := service.Execute(ctx, command.Command{Kind: command.CreateSystemSTTDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-system-stt-create"},
 		Payload:  command.ManagedConfigurationInput{Name: "System STT", ContentFormat: "JSON", Content: sttContent}})
@@ -529,7 +558,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || sttPublished.ManagedRevision == nil || sttPublished.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish system STT draft: result=%#v err=%v", sttPublished, err)
 	}
-	sttImpact, err := service.GetManagedConfigurationImpact(ctx, owner, sttCreated.ManagedConfiguration.Ref, sttCreated.ManagedRevision.Ref)
+	sttImpact, err := service.GetManagedConfigurationImpact(ctx, owner, sttCreated.ManagedConfiguration.Ref, sttCreated.ManagedRevision.Ref, query.Filter{})
 	if err != nil || sttImpact.Digest == "" {
 		t.Fatalf("preview system STT impact: impact=%#v err=%v", sttImpact, err)
 	}
@@ -556,6 +585,11 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 		sttConfiguration.ProviderAccountRef != sttProviderAccountRef || sttConfiguration.ProviderCredentialGeneration == 0 {
 		t.Fatalf("read system STT configuration: configuration=%#v err=%v", sttConfiguration, err)
 	}
+	if !sttConfiguration.Enabled || sttConfiguration.MaximumAudioBytes != 10<<20 || sttConfiguration.MaximumAudioDurationMilliseconds != 120000 ||
+		len(sttConfiguration.Parameters.Keywords) != 1 || sttConfiguration.Parameters.Keywords[0] != "Kodex" || sttConfiguration.Parameters.Prompt != "Names" ||
+		sttConfiguration.Parameters.Temperature != 0.2 || sttConfiguration.Parameters.ChunkingStrategy != "auto" {
+		t.Fatal("immutable STT parameters or recommended limits were lost")
+	}
 	var sttProjectID string
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM control_plane.projects WHERE ref = $1`, projectResult.Project.Ref).Scan(&sttProjectID); err != nil {
 		t.Fatalf("read system STT project identity: %v", err)
@@ -578,6 +612,11 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if err != nil || credentialProjection.ProviderCredential.AccountRef != sttProviderAccountRef ||
 		uint64(credentialProjection.ProviderCredential.CredentialRevision) != sttConfiguration.ProviderCredentialGeneration {
 		t.Fatalf("resolve exact system STT credential: projection=%#v err=%v", credentialProjection, err)
+	}
+	organizationProjection := projectionInput
+	organizationProjection.Authority.ProjectID = ""
+	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, organizationProjection); err != nil {
+		t.Fatalf("resolve organization scoped STT credential: %v", err)
 	}
 	changedConfig := projectionInput
 	changedConfig.ConfigDigestSHA256 = strings.Repeat("f", 64)
@@ -689,7 +728,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		Mutation: value.Mutation{IdempotencyKey: "managed-git-copy", ExpectedVersion: &gitVersion},
 		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", Name: "Copied Git prompt"}})
 	if err != nil || copied.ManagedConfiguration == nil || copied.ManagedConfiguration.ManagedBy != "UI" || copied.ManagedRevision == nil ||
-		copied.ManagedRevision.State != "DRAFT" || copied.ManagedRevision.ParentRevisionRef != "" {
+		copied.ManagedRevision.State != "DRAFT" || copied.ManagedRevision.ParentRevisionRef != "mrev_gitprompt01" {
 		t.Fatalf("copy Git-owned configuration: result=%#v err=%v", copied, err)
 	}
 	detached, err := service.Execute(ctx, command.Command{Kind: command.DetachGitManagedConfiguration, Principal: owner,
@@ -699,11 +738,25 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		t.Fatalf("detach Git-owned configuration: result=%#v err=%v", detached, err)
 	}
 	detachedVersion := detached.ManagedConfiguration.Version
+	detachedValidated, err := service.Execute(ctx, command.Command{Kind: command.ValidatePromptTemplateDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-detached-validate", ExpectedVersion: &detachedVersion},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", RevisionRef: detached.ManagedRevision.Ref}})
+	if err != nil || detachedValidated.ManagedRevision == nil || detachedValidated.ManagedRevision.State != "VALID" {
+		t.Fatalf("validate detached configuration: %v", err)
+	}
+	detachedVersion = detachedValidated.ManagedConfiguration.Version
+	detachedPublished, err := service.Execute(ctx, command.Command{Kind: command.PublishPromptTemplateDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "managed-detached-publish", ExpectedVersion: &detachedVersion},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", RevisionRef: detached.ManagedRevision.Ref}})
+	if err != nil || detachedPublished.ManagedRevision == nil || detachedPublished.ManagedRevision.State != "PUBLISHED" {
+		t.Fatalf("publish detached configuration: %v", err)
+	}
+	detachedVersion = detachedPublished.ManagedConfiguration.Version
 	detachedDraft, err := service.Execute(ctx, command.Command{Kind: command.CreatePromptTemplateDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-detached-draft", ExpectedVersion: &detachedVersion},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: "mcfg_gitprompt01", Name: "Git prompt",
 			ContentFormat: "TEXT", Content: "Detached prompt for {{ .project.ref }}."}})
-	if err != nil || detachedDraft.ManagedRevision == nil || detachedDraft.ManagedRevision.State != "DRAFT" || detachedDraft.ManagedRevision.ParentRevisionRef != "mrev_gitprompt01" {
+	if err != nil || detachedDraft.ManagedRevision == nil || detachedDraft.ManagedRevision.State != "DRAFT" || detachedDraft.ManagedRevision.ParentRevisionRef != detached.ManagedRevision.Ref {
 		t.Fatalf("edit detached configuration: result=%#v err=%v", detachedDraft, err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.managed_configuration_revisions SET content = 'mutated' WHERE ref = $1`, created.ManagedRevision.Ref); err == nil {
@@ -712,6 +765,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	if _, err := pool.Exec(ctx, `DELETE FROM control_plane.managed_configuration_revisions WHERE ref = $1`, created.ManagedRevision.Ref); err == nil {
 		t.Fatal("published managed prompt was deletable")
 	}
+	testManagedImpactPagination(t, ctx, service, owner, projectResult.Project.Ref, correctedRebound)
 }
 
 func testManagedPromptHistoryRedaction(
@@ -754,6 +808,37 @@ func testManagedPromptHistoryRedaction(
 		t.Fatalf("bind prompt history reader: binding=%#v err=%v", binding.AccessBinding, err)
 	}
 	reader := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
+	filter := query.Filter{Category: "PROMPT_TEMPLATE", Page: query.Page{Size: 1}}
+	seenConfigurations := map[string]bool{}
+	var catalogTotal int64
+	for {
+		items, count, next, err := service.ListManagedConfigurations(ctx, reader, filter)
+		if err != nil || count < 1 {
+			t.Fatalf("managed catalog read: total=%d err=%v", count, err)
+		}
+		catalogTotal = count
+		for _, item := range items {
+			if item.ProjectRef != projectRef || seenConfigurations[item.Ref] || item.CurrentRevision != nil && item.CurrentRevision.Content != "" {
+				t.Fatal("managed catalog leaked content, another project, or repeated a row")
+			}
+			seenConfigurations[item.Ref] = true
+		}
+		if next == "" {
+			break
+		}
+		if next == filter.Page.Token {
+			t.Fatal("managed catalog cursor did not advance")
+		}
+		changed := filter
+		changed.ProjectRef, changed.Page.Token = projectRef, next
+		if _, _, _, err := service.ListManagedConfigurations(ctx, reader, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("managed cursor accepted another filter: %v", err)
+		}
+		filter.Page.Token = next
+	}
+	if int64(len(seenConfigurations)) != catalogTotal || !seenConfigurations[configurationRef] {
+		t.Fatal("managed catalog total or visibility mismatch")
+	}
 	_, history, total, _, err := service.ListManagedConfigurationHistory(ctx, reader, configurationRef, query.Page{Size: 20})
 	if err != nil || total < 1 || len(history) < 1 {
 		t.Fatalf("read redacted prompt history: history=%#v total=%d err=%v", history, total, err)
@@ -806,7 +891,7 @@ func testIntegrationDefinitionRebindAuthority(
 		t.Fatalf("bind definition scope manager: binding=%#v err=%v", binding.AccessBinding, err)
 	}
 	manager := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
-	impact, err := service.GetManagedConfigurationImpact(ctx, owner, definition.ManagedConfiguration.Ref, definition.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, definition.ManagedConfiguration.Ref, definition.ManagedRevision.Ref, query.Filter{})
 	if err != nil {
 		t.Fatalf("read definition impact for authority test: %v", err)
 	}
@@ -854,7 +939,7 @@ func publishAndRebindManagedConfiguration(
 	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish %s draft: result=%#v err=%v", key, published, err)
 	}
-	impact, err := service.GetManagedConfigurationImpact(ctx, principal, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, principal, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
 	if err != nil || impact.Digest == "" {
 		t.Fatalf("read %s impact: impact=%#v err=%v", key, impact, err)
 	}
@@ -1543,7 +1628,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	}
 	lease := claimed.RuntimeItems[0]
 	workspacePolicy, ok := lease["workspacePolicy"].(entity.RuntimeWorkspacePolicy)
-	if !ok || workspacePolicy.Root != "/workspace" || workspacePolicy.Digest == "" || len(workspacePolicy.Rules) != 3 {
+	if !ok || !reflect.DeepEqual(workspacePolicy, runtimeWorkspacePolicy()) {
 		t.Fatalf("claim does not carry a bounded workspace policy: %#v", lease["workspacePolicy"])
 	}
 	promptSnapshot, ok := lease["promptSnapshot"].(entity.PromptMaterializationSnapshot)
@@ -2143,6 +2228,44 @@ func testEnterpriseAccessRestriction(t *testing.T, ctx context.Context, reposito
 	if err != nil {
 		t.Fatalf("resolve restricted application principal: %v", err)
 	}
+	for _, projectRef := range []string{"", projectA.Ref, projectB.Ref} {
+		items, next, err := service.ListAgents(ctx, candidate, query.Filter{ProjectRef: projectRef, Query: "Enterprise", Page: query.Page{Size: 1}})
+		expected := 1
+		if projectRef == projectB.Ref {
+			expected = 0
+		}
+		if err != nil || len(items) != expected || next != "" || expected == 1 && items[0].Ref != agentA.Ref {
+			t.Fatalf("exact-grant catalog eligibility: project=%q items=%d next=%q err=%v", projectRef, len(items), next, err)
+		}
+	}
+	page := query.Filter{Query: "Enterprise", Page: query.Page{Size: 1}}
+	seen := map[string]bool{}
+	for {
+		items, next, err := service.ListAgents(ctx, owner, page)
+		if err != nil || len(items) != 1 || seen[items[0].Ref] {
+			t.Fatalf("global keyset page: items=%d err=%v", len(items), err)
+		}
+		seen[items[0].Ref] = true
+		if next == "" {
+			break
+		}
+		changed := page
+		changed.Page.Token, changed.ProjectRef = next, projectA.Ref
+		if _, _, err := service.ListAgents(ctx, owner, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("cross-filter cursor accepted: %v", err)
+		}
+		changed.ProjectRef = ""
+		if _, _, err := service.ListAgents(ctx, candidate, changed); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("cross-actor cursor accepted: %v", err)
+		}
+		if next == page.Page.Token {
+			t.Fatal("cursor did not advance")
+		}
+		page.Page.Token = next
+	}
+	if len(seen) != 3 {
+		t.Fatalf("global catalog lost rows: %d", len(seen))
+	}
 	var membershipRelationKind string
 	if err := repository.pool.QueryRow(ctx, `
 		SELECT relation.relkind::text
@@ -2371,9 +2494,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 	}
 }
 
-func testOptionalInteractionIncident(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testInteractionHealthRouting(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
-	_ = pool
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create",
@@ -2394,7 +2516,7 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 		}
 	}
 	if mattermost == nil || mattermost.AdapterOwner != "interaction-gateway" ||
-		mattermost.ExecutionRoute != "INTERACTION" || mattermost.AdapterReadiness != "NOT_READY" {
+		mattermost.ExecutionRoute != "INTERACTION" || mattermost.AdapterReadiness != "READY" || len(mattermost.Capabilities) != 18 {
 		t.Fatalf("Mattermost routing metadata is invalid: %#v", mattermost)
 	}
 	connection, err := service.Execute(ctx, command.Command{
@@ -2403,8 +2525,51 @@ func testOptionalInteractionIncident(t *testing.T, ctx context.Context, reposito
 			"base_url": "https://mattermost.example.test", "team_name": "customer-success", "channel_name": "ai-results",
 		}},
 	})
-	if err == nil || connection.Connection != nil {
-		t.Fatalf("generic Mattermost connection crossed owner route: connection=%#v err=%v", connection.Connection, err)
+	if err != nil || connection.Connection == nil || connection.Connection.State != "NOT_CONNECTED" {
+		t.Fatalf("create Mattermost connection: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `WITH revision AS (
+INSERT INTO control_plane.integration_credential_revisions
+(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+SELECT 'mattermost_test_credential',organization_id,id,1,'kodex-system/kodex-integration-credentials#test-token',gen_random_uuid(),'1',repeat('d',64),created_by
+FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id,masked_credentials_state='CONFIGURED'
+FROM revision WHERE connection.id=revision.connection_id`, connection.Connection.Ref); err != nil {
+		t.Fatalf("seed Mattermost credential revision: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-connection-test", ExpectedVersion: &connection.Connection.Version},
+		Payload:  command.ConnectionInput{Ref: connection.Connection.Ref}}); err != nil {
+		t.Fatalf("start Mattermost health check: %v", err)
+	}
+	worker := func(workload, operation string) value.Principal {
+		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
+	}
+	generic := worker("integration-gateway", "platform.runtime.integration-tests.claim")
+	claims, err := service.ClaimIntegrationConnectionTests(ctx, generic, "generic-mattermost-test", 32)
+	if err != nil {
+		t.Fatalf("generic health claim boundary: %v", err)
+	}
+	for _, claim := range claims {
+		if stringMap(claim, "connectionRef") == connection.Connection.Ref {
+			t.Fatal("generic worker claimed interaction health check")
+		}
+	}
+	interaction := worker("interaction-gateway", "platform.interactions.connection-tests.claim")
+	claims, err = service.ClaimIntegrationConnectionTests(ctx, interaction, "interaction-mattermost-test", 32)
+	if err != nil || len(claims) != 1 || stringMap(claims[0], "connectionRef") != connection.Connection.Ref {
+		t.Fatalf("interaction health claim: count=%d err=%v", len(claims), err)
+	}
+	claim := claims[0]
+	completion := command.Command{Kind: command.CompleteConnectionTest, Principal: generic,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-health-completion"},
+		Payload:  command.IntegrationConnectionTestInput{TestRef: stringMap(claim, "testRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64), Success: true}}
+	if _, err := service.Execute(ctx, completion); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("generic worker completed interaction health check: %v", err)
+	}
+	completion.Principal = interaction
+	if result, err := service.Execute(ctx, completion); err != nil || result.Connection == nil || result.Connection.State != "CONNECTED" {
+		t.Fatalf("interaction health completion: %v", err)
 	}
 }
 
@@ -2754,11 +2919,25 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	if err != nil || stringMap(readResolved, "state") != "READY" || stringMap(readResolved, "gateRef") != "" {
 		t.Fatalf("resolve read invocation without gate: result=%#v err=%v", readResolved, err)
 	}
+	interactionWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.invocations.claim",
+	}, "interaction-gateway")
+	if claims, err := service.ClaimIntegrationInvocations(ctx, interactionWorker, "interaction-isolation", 1); err != nil || len(claims) != 0 {
+		t.Fatalf("interaction workload claimed managed invocation: %d %v", len(claims), err)
+	}
 	readClaims, err := service.ClaimIntegrationInvocations(ctx, gateway, "integration-gateway-component", 1)
 	if err != nil || len(readClaims) != 1 || stringMap(readClaims[0], "capabilityKey") != "synthetic.journal.read" {
 		t.Fatalf("claim read invocation without gate: claims=%#v err=%v", readClaims, err)
 	}
 	readClaim := readClaims[0]
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: interactionWorker,
+		Mutation: value.Mutation{IdempotencyKey: "interaction-wrong-workload-complete"},
+		Payload: command.IntegrationInvocationInput{InvocationRef: stringMap(readClaim, "invocationRef"), LeaseRef: stringMap(readClaim, "leaseRef"),
+			Fence: stringMap(readClaim, "fence"), Generation: readClaim["generation"].(int64)},
+	}); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("interaction workload completed managed claim with disclosed fence: %v", err)
+	}
 	readSummary := `{"journal":"effect-main","effect_key":"` + stringMap(readClaim, "effectKey") + `","sequence":0,"value":"","count":0}`
 	readResponseDigest := sha256.Sum256([]byte(readSummary))
 	if completedRead, err := service.Execute(ctx, command.Command{
@@ -2813,6 +2992,16 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	}
 	if err := pool.QueryRow(ctx, bootstrapComponentEffectReceiptCountQuery, rejectedEffectKey).Scan(&rejectedReceiptCount); err != nil || rejectedReceiptCount != 0 {
 		t.Fatalf("rejected effect receipt count=%d err=%v", rejectedReceiptCount, err)
+	}
+	currentRejectedRun, err := service.GetRun(ctx, owner, rejectedRun.Run.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-rejected-phase-cleanup", ExpectedVersion: &currentRejectedRun.Version},
+		Payload:  command.RunCommandInput{RunRef: currentRejectedRun.Ref, Reason: "Rejected effect fixture phase completed"},
+	}); err != nil {
+		t.Fatalf("close rejected phase before provider reuse: %v", err)
 	}
 
 	launched, err := service.Execute(ctx, command.Command{
@@ -3076,7 +3265,7 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	candidate := value.Principal{
 		ActorID: candidateAuthority.ActorID, AuthorityTenant: candidateAuthority.OrganizationID,
 		Permission: candidateInput.Operation, CorrelationRef: "membership-candidate-component",
-		CallerWorkload: "control-api-gateway", ProjectRef: projectRef, CredentialRevision: 1,
+		CallerWorkload: "control-api-gateway", ProjectRef: candidateAuthority.ProjectID, CredentialRevision: 1,
 	}
 	memberships, _, err := service.ListMemberships(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
 	if err != nil || len(memberships) != 2 {
@@ -5142,13 +5331,17 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	firstPage, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
-	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != quarantined.Ref || nextPageToken == "" {
+	firstRef, secondRef := quarantined.Ref, uploaded.Ref
+	if firstRef > secondRef {
+		firstRef, secondRef = secondRef, firstRef
+	}
+	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
 	}
 	secondPage, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1, Token: nextPageToken},
 	})
-	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != uploaded.Ref || finalPageToken != "" {
+	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
 		t.Fatalf("second artifact cursor page is unstable: artifacts=%#v next=%q err=%v", secondPage, finalPageToken, err)
 	}
 	if _, _, err := service.ListArtifacts(ctx, owner, query.Filter{

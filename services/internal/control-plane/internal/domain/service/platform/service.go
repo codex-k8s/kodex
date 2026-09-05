@@ -460,6 +460,23 @@ func (service *Service) ListModelCapabilities(ctx context.Context, p value.Princ
 	filter.Query = strings.TrimSpace(filter.Query)
 	return service.repository.ListModelCapabilities(ctx, p, strings.TrimSpace(definitionKey), strings.TrimSpace(accountRef), filter)
 }
+func (service *Service) ListManagedConfigurations(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if len(filter.Query) > 200 {
+		return nil, 0, "", errs.ErrInvalid
+	}
+	switch filter.Category {
+	case "", "PROMPT_TEMPLATE", "ROLE_IMAGE", "INTEGRATION_DEFINITION", "SYSTEM_STT":
+	default:
+		return nil, 0, "", errs.ErrInvalid
+	}
+	return service.repository.ListManagedConfigurations(ctx, p, filter)
+}
+
 func (service *Service) ListManagedConfigurationHistory(ctx context.Context, p value.Principal, ref string, page query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -470,7 +487,7 @@ func (service *Service) ListManagedConfigurationHistory(ctx context.Context, p v
 	}
 	return service.repository.ListManagedConfigurationHistory(ctx, p, strings.TrimSpace(ref), page)
 }
-func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p value.Principal, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p value.Principal, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
@@ -478,7 +495,7 @@ func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p val
 	if strings.TrimSpace(ref) == "" || strings.TrimSpace(revisionRef) == "" {
 		return entity.ManagedConfigurationImpact{}, errs.ErrInvalid
 	}
-	return service.repository.GetManagedConfigurationImpact(ctx, p, strings.TrimSpace(ref), strings.TrimSpace(revisionRef))
+	return service.repository.GetManagedConfigurationImpact(ctx, p, strings.TrimSpace(ref), strings.TrimSpace(revisionRef), filter)
 }
 func (service *Service) GetEffectiveManagedConfiguration(ctx context.Context, p value.Principal, kind, consumerKind, consumerRef string) (entity.ManagedConfigurationBindingSnapshot, error) {
 	p, err := service.principal(ctx, p)
@@ -1134,6 +1151,19 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 
 func knownCommand(kind command.Kind) bool {
 	switch kind {
+	case command.ReconcileEmailEffect, command.ReportEmailEffect:
+		return true
+	case command.BindAgentMemoryRecord, command.UnbindAgentMemoryRecord, command.BindAgentSkillBundle, command.UnbindAgentSkillBundle:
+		return true
+	case command.CreateSkillBundleDraft, command.SaveSkillBundleDraft, command.ValidateSkillBundleDraft:
+		return true
+	case command.ReviewSkillBundleDraft, command.PublishSkillBundleDraft, command.DiscardSkillBundleDraft, command.ArchiveSkillBundle, command.RestoreSkillBundle, command.PurgeSkillBundle:
+		return true
+	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
+		return true
+	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
+		return true
 	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
@@ -1175,6 +1205,14 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateAccessBinding, command.ChangeAccessBinding, command.RevokeAccessBinding,
 		command.CreatePromptTemplateDraft, command.ValidatePromptTemplateDraft,
 		command.PublishPromptTemplateDraft, command.RebindPromptTemplate,
+		command.SavePromptTemplateDraft,
+		command.DiscardPromptTemplateDraft,
+		command.SaveRoleImageRevisionDraft,
+		command.DiscardRoleImageRevisionDraft,
+		command.SaveIntegrationDefinitionDraft,
+		command.DiscardIntegrationDefinitionDraft,
+		command.SaveSystemSTTConfigurationDraft,
+		command.DiscardSystemSTTConfigurationDraft,
 		command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
 		command.PublishRoleImageRevision, command.RebindRoleImage,
 		command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,

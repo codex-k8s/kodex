@@ -12,9 +12,11 @@ updated: 2026-09-05
 
 Источник: Issues #1037/#1046, MVP-UI-42. Этот checkpoint передаёт исходные
 Proto, generated Go и operation policy для параллельной реализации consumer.
-SQL/domain handlers, выдача worker credential и deploy trust для нового
-producer ещё не реализованы. Наличие RPC в generated не означает доступный
-рабочий путь: до подключения handler сервер возвращает Unimplemented.
+Owner read, ReconcileEmailEffect и ResolveEmailReconciliation подключены к
+SQL/domain handlers. ResolveEmailAuthorization, ReportEmailEffectReceipt,
+выдача worker credential и deploy trust ещё не завершены. Наличие остальных
+RPC в generated не означает доступный рабочий путь: до подключения handler
+сервер возвращает Unimplemented.
 
 ## Исполняемая авторизация
 
@@ -80,11 +82,215 @@ audit и idempotency receipt и закрывать связанные claims п�
 
 ## Оставшаяся реализация
 
-- Owner mailbox configuration с immutable revision и credential generation.
-- Авторизация по текущему claim/grant/gate и проверенному semantic command.
-- Durable receipts, owner reconciliation и повторная проверка grant.
-- Worker credential issuance, trust registration и deploy key delivery.
-- PostgreSQL positive/negative matrix и consumer gRPC проверки: NOT RUN.
+Domain policy в `internal/domain/service/emailpolicy` фиксирует boundary для
+подключаемого owner path: `integration.manage` на exact connection и `run.view`
+на связанный owner run; свежая интерактивная аутентификация не старше пяти минут
+с проверенными ACR/AMR. Отказ freshness — `FRESH_AUTHENTICATION_REQUIRED`.
+Browser elevation purpose не является полем CP request; secret reveal purpose
+не переиспользуется. Gateway связывает свою elevation/session с exact receipt,
+а CP повторно проверяет owner state, права и доверенный principal.
+
+Note ограничен 2000 Unicode code points, UTF-8, без NUL. Digest — ровно 64
+lowercase hex без `sha256:`. External receipt ref соответствует генерируемому
+bridge ID: ровно 32 lowercase hex. Outcome reconciliation допускает только
+EFFECT_CONFIRMED и NO_EFFECT_CONFIRMED, не UNKNOWN_OUTCOME или RETRY.
+EffectKey остаётся opaque UTF-8 строкой длиной 1..128 bytes без NUL, без
+ограничения на hex или prefix. CP сейчас назначает `eff_` и 32 hex из digest
+намерения, но это не меняет общий bridge-контракт.
+
+`ExternalReceiptDigest` соответствует immutable identity
+`kodex.email.receipt.v1` из bridge, а не semantic command digest. Он не меняется
+при подтверждении outcome. CP сохраняет исходный UNKNOWN и последующие
+observations; запрещены изменение identity и замена terminal outcome.
+
+## Реализованный owner path
+
+Миграция `20260904000615` добавляет email receipts, append-only observations и
+immutable reconciliation decisions. Create начинается с UNKNOWN; подтверждение
+добавляет observation с новой версией, сохраняя прежний факт. Decision не меняет
+receipt, invocation, run, claims и не создаёт retry либо нового SMTP effect.
+Новый domain event отсутствует: авторитетны GetEmailEffectReceipt и защищённый
+ResolveEmailReconciliation. Command transaction сохраняет decision, audit и
+idempotency receipt атомарно.
+
+Reconcile проверяет integration.manage на exact connection и run.view до OCC
+и idempotency replay; freshness повторяется и при replay. Project выводится
+из invocation/run; несовпадающий project в проверенном transport отклоняется.
+Решение допускается только для UNKNOWN invocation и exact receipt version/digest.
+Другой outcome уже принятого решения запрещён; повторная свежая авторизация
+того же outcome может создать новое решение и grant не более чем на две минуты.
+Resolve принимает только email-bridge и последнее решение, сверяет exact refs,
+digest, version, expiry и актуальные права actor. Предыдущий grant после нового
+решения, revoked actor permission и несовпадающая source identity отклоняются.
+
+Для ограниченного bridge reconciler `DecisionRef` может быть пустым: owner
+выбирает последнее действующее решение по exact receipt/ref/digest. Нет решения
+либо последнее истекло — NOT_FOUND без grant. Непустой DecisionRef остаётся
+строгим: нельзя получить другое решение вместо запрошенного. Это read, не consume
+и не отправка письма; bridge атомарно сохраняет своё решение/аудит и снимает
+локальную блокировку без автоматического retry, исходный UNKNOWN сохраняется.
+
+Canonical commitment принят из bridge checkpoint
+`c07e66b20762c843995c94c68b5486ab3cf1116f`; golden
+`6dfdb1521d14b99bec6fac759edeb2a11ce30120cbeb1489ab7baa0d5150e41e`.
+CP не пересчитывает его из ограниченного HTTP safe view.
+
+`CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` подключает отдельный email-bridge public
+worker key к WorkerGrantTrustFiles. Путь по умолчанию пуст: без activation
+credential не принимается; непустой путь должен быть абсолютным и нормализованным.
+Состав остальных worker keys сохраняется. Issuer, application credential и
+доставка ключа принадлежат root; эта регистрация не доказывает их readiness.
+
+Локальные проверки:
+- Go/race domain emailpolicy, platform service и gRPC transport: PASS.
+- Disposable PostgreSQL `^TestBootstrapComponent$/email_receipt`: PASS;
+  собственные project/agent/run/receipt fixtures, freshness/OCC/digest/replay,
+  run-only denial, permission intersection, revoke перед replay/resolve,
+  exact worker/decision/source, отсутствие retry и immutable observations.
+- Source authorization/report через реальный protected bridge RPC: NOT RUN.
+
+## Доверенная mailbox configuration
+
+CP принимает `CONTROL_PLANE_EMAIL_CONFIGURATION_FILE` до запуска gRPC/workers.
+Это тот же строгий документ `email-bridge/v1`, который получает bridge, до
+24 MiB, не отдельный пользовательский RPC. `DecodeConfiguration` использует
+общие schema и validator `libs/go/emailbridgeapi`. Документ не содержит secret
+values; в PostgreSQL попадает только mailbox authority projection, без endpoint,
+username/secret/CA descriptors. Digest полного исходного mailbox сохраняет
+commitment на эти descriptors, не раскрывая их в проекции.
+
+Tenant/connection проверяются по существующему CP owner state: exact refs,
+`definition_key=email`, `public_configuration.mailbox_id/from_address`.
+Отсутствующая или несовпадающая connection закрывает весь приём атомарно.
+Binding `credential_generation` независим от поколений endpoint descriptors.
+
+Миграция `20260904000618` хранит installation document watermark, immutable
+mailbox revisions и tombstones. Та же revision допускает только exact digest;
+mailbox content/descriptor change требует новой mailbox revision. Поколение
+binding не понижается. Удалённая mailbox возвращается только с новой revision.
+Новая document revision блокирует старый CP instance read даже при неизменённой
+mailbox revision. Изменение/отключение connection также закрывает чтение.
+Событий нет: authority read идёт в PostgreSQL при каждом разрешении операции.
+
+Deployment-последовательность: создать owner connection, доставить один exact
+документ CP и bridge, перезапустить consumers, проверить protected path.
+Без файла CP не активирует mailbox authorization из оставшегося DB snapshot.
+Mount/delivery этого документа ещё требуется согласовать с root; startup import
+не заменяет delivery и не доказывает работу почтового сервера.
+
+Локальные проверки `email_configuration` disposable PG и Go/race emailpolicy/app:
+PASS. Проверены exact replay, document/mailbox rollback, descriptor commitment,
+binding generation rollback, удаление/возврат, unknown connection, атомарный
+отказ с сохранением прежнего состояния и запрет старого instance read.
+
+## Исполняемые Authorization И Report
+
+`ResolveEmailAuthorization` и `ReportEmailEffectReceipt` реализованы через
+transport/caster/domain/repository. Proto и policy52/53 shapes не меняются.
+Миграция `20260904000619` хранит immutable authorization на exact
+organization/source ref/lease ref/fence digest/generation. Fence value в
+сохранённые query/decision projections не попадает. Source выбирается из
+действующего owner invocation либо connection test, принадлежащего только
+`integration-gateway`; вызывающий workload может быть только `email-bridge`.
+
+Для invocation CP повторно проверяет active node/agent, user `integration.manage`,
+project/agent view, точный agent grant/version в последнем RuntimeRevision,
+shipped definition version/digest, connection/resource scope, lease и mailbox
+revision. Semantic digest вычисляется общим `emailbridgeapi.CommandForIntegration`,
+не принимается на доверии. Scopes сужаются до конкретной операции, folder,
+destination и recipients неизменяемой команды. Только EMAIL использует
+авторитетную mailbox policy вместо общего package minimum: ALLOW исполняется
+без запроса, HUMAN_GATE требует owner gate для READ и WRITE, DENY закрывает
+операцию. Shipped EMAIL 1.4.0 объявляет minimum NONE; это не заменяет проверку
+mailbox policy и пересечения actor, agent grant, connection и exact action.
+Остальные интеграции сохраняют HUMAN_EACH_EFFECT для изменяющих операций.
+Mailbox source digest входит в invocation intent digest.
+
+Connection test допускает только health, с actor исходного Test command,
+без фиктивного agent/project. Ответ связывается с exact binding и TTL не более
+двух минут и срока lease. Старый grant ref после revoke/re-enable не оживляет
+старый runtime: snapshot содержит `grantVersion`.
+
+Report допускает только 12 mutation operations. Первая запись обязательно
+UNKNOWN_OUTCOME и требует действующей source authorization. Receipt identity,
+external commitment и authorization ref неизменяемы. UNKNOWN → confirmed
+сохраняет исходную observation и увеличивает version; противоположный terminal
+запрещён. Receipt, observation, audit и idempotency result фиксируются одной
+owner-транзакцией. Нового domain event нет: Get/Resolve являются owner read path.
+
+### Потеря Report Response
+
+Повторить `ReportEmailEffectReceipt` с прежними Binding, ExternalReceiptRef,
+ExternalReceiptDigest, SemanticInputDigest, Outcome и Idempotency-Key.
+CP возвращает тот же owner ref и сохранённый command result. После expiry/revoke
+допускается exact replay уже сохранённой observation. После expiry прежней lease
+также допускается поздняя запись наблюдения по ранее выданной immutable
+authorization: exact organization/source/lease/fence/generation/semantic digest.
+Первый receipt может быть только UNKNOWN; terminal Report требует прежний UNKNOWN
+receipt и не может противоречить owner decision. Свежий verified EMAIL worker
+credential обязателен. Ни authorization, ни grant не продлеваются.
+Пустой receipt_ref в `ResolveEmailReconciliation` не вводится.
+
+Поздний Report атомарно закрывает истёкший RUNNING invocation в UNKNOWN_OUTCOME,
+очищает исполняемую lease и сохраняет receipt/audit/idempotency. Уже FAILED или
+CANCELLED источник не открывается заново: receipt-bound fresh Reconcile/Resolve
+доступен и для этих terminal states (миграция 00621), исключительно для local
+audit/unlock. Claim не выдаёт эти invocations повторно. Новый terminal receipt
+без исходного UNKNOWN запрещён, как и создание UNKNOWN для SUCCEEDED источника.
+Нового события нет: авторитетные Get/Resolve остаются read path.
+
+Consumer recovery должен устойчиво сохранить исходный binding и idempotency key
+до Report, убрать local expiry precheck только для этого read-like replay и не
+продолжать отправку после истечения lease. Он не может восстановить source
+lineage по произвольному external ref/digest. Consumer checkpoint root: `07cd3ee69`.
+
+Локальный PG `email_configuration|email_receipt` проверяет real authorization
+перед expiry, отсутствие первого Report в CP до expiry, поздний UNKNOWN,
+owner NO_EFFECT_CONFIRMED и Resolve, потерю terminal Report, exact replay,
+FAILED/CANCELLED reconciliation и отсутствие новых claims. Protected issuer→CP→bridge
+для этого recovery: NOT RUN.
+
+Локально PASS: 21-operation semantic/scope/Human Gate matrix (12 mutations),
+Go/race domain/service/repository/gRPC, disposable PG email receipt/watermark/
+configuration + integration read regression. PG проходит реальные owner
+Create/credential/Test/claim, health authorization, agent grant/run/gate,
+send authorization, UNKNOWN Report, replay, confirmed observation, revoke и
+re-enable denial. Реальный issuer→CP protected SQL→SMTP: NOT RUN.
+
+Корректировка mailbox approval (миграция 00620): локально PASS
+`TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate` с матрицей
+ALLOW/HUMAN_GATE/DENY для 21 операции; registry/race проверяет закрытое исключение
+только для 12 EMAIL mutations и запрещает NONE для остальных shipped mutations.
+Targeted PG `email_configuration|integration_read` подтверждает SEND без gate
+при ALLOW, READ с gate при HUMAN_GATE, Report/replay/revoke и неизменённый
+synthetic Human Gate. Targeted integration-gateway EMAIL/catalog race: PASS.
+
+## Оставшийся Producer
+
+- Доставка доверенной mailbox configuration в CP и bridge.
+- Typed UI/YAML mailbox commands и отдельный write-only credential lifecycle.
+- Dynamic Secret `email-bridge-mailbox-projection`: owner delivery/version/readback;
+  нынешние фиксированные `ca-1/username-1/password-1` не являются полным producer.
+- Protected issuer/bridge сквозная проверка и recovery consumer: NOT RUN.
 
 Policy revision 52 сохраняет scheduler/interaction/STT operations и добавляет
 только отдельный email-bridge producer с тремя закрытыми operations.
+
+## Watermark служебного grant
+
+Миграция `20260904000617` добавляет `email-bridge` в закрытый CP registry,
+сохраняя все прежние workloads. `AcceptWorkerGrant` принимает только повышение
+credential generation, повышение revision внутри поколения либо exact replay
+с теми же issued/expires timestamps. Единственный SQL `RETURNING` относится
+к строке под конфликтной блокировкой: fallback на старый statement snapshot
+не используется. Watermark сохраняется в PostgreSQL после замены pod.
+
+Disposable PostgreSQL `^TestBootstrapComponent$/email_worker`: PASS, включая
+конкурентный запрос старого поколения, заведомо заблокированный новой записью,
+rollback revision, старое поколение с большей revision и несовпадение envelope.
+Go/race `TestWorkerGrantHighWatermark`: PASS.
+
+Для профиля с EMAIL требуется env `CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` с
+путём `/var/run/config/kodex/control-plane/application-grants/email-bridge.platform-worker.public.jwk`.
+Отсутствие env не включает EMAIL trust автоматически. Ключи и issuer поставляет
+зависимость #1059; данная проверка SQL не доказывает protected issuer readback.
