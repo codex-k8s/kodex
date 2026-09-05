@@ -3417,6 +3417,11 @@ message InteractionSource {
   string credential_revision_ref = 9;
   int64 credential_revision = 10;
   IntegrationCredentialRevision credential_descriptor = 11;
+  string definition_key = 12;
+  string definition_version = 13;
+  string definition_digest = 14;
+  // Private snapshot владельца для проверки системной подписки.
+  bytes definition_package = 15;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3443,6 +3448,15 @@ message InteractionDeliveryClaim {
   string external_root_post_ref = 17;
   string acceptance_receipt_ref = 18;
   IntegrationCredentialRevision credential_descriptor = 19;
+  string definition_key = 20;
+  string definition_version = 21;
+  string definition_digest = 22;
+  // Private snapshot владельца; не входит в public read model.
+  bytes definition_package = 23;
+  int64 connection_version = 24;
+  string approval_gate_ref = 25;
+  int64 approval_gate_version = 26;
+  string source_capability_key = 27;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;

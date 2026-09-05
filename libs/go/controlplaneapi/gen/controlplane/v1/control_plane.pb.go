@@ -31129,8 +31129,13 @@ type InteractionSource struct {
 	CredentialRevisionRef        string                         `protobuf:"bytes,9,opt,name=credential_revision_ref,json=credentialRevisionRef,proto3" json:"credential_revision_ref,omitempty"`
 	CredentialRevision           int64                          `protobuf:"varint,10,opt,name=credential_revision,json=credentialRevision,proto3" json:"credential_revision,omitempty"`
 	CredentialDescriptor         *IntegrationCredentialRevision `protobuf:"bytes,11,opt,name=credential_descriptor,json=credentialDescriptor,proto3" json:"credential_descriptor,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	DefinitionKey                string                         `protobuf:"bytes,12,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	DefinitionVersion            string                         `protobuf:"bytes,13,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	DefinitionDigest             string                         `protobuf:"bytes,14,opt,name=definition_digest,json=definitionDigest,proto3" json:"definition_digest,omitempty"`
+	// Private snapshot владельца для проверки системной подписки.
+	DefinitionPackage []byte `protobuf:"bytes,15,opt,name=definition_package,json=definitionPackage,proto3" json:"definition_package,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *InteractionSource) Reset() {
@@ -31240,6 +31245,34 @@ func (x *InteractionSource) GetCredentialDescriptor() *IntegrationCredentialRevi
 	return nil
 }
 
+func (x *InteractionSource) GetDefinitionKey() string {
+	if x != nil {
+		return x.DefinitionKey
+	}
+	return ""
+}
+
+func (x *InteractionSource) GetDefinitionVersion() string {
+	if x != nil {
+		return x.DefinitionVersion
+	}
+	return ""
+}
+
+func (x *InteractionSource) GetDefinitionDigest() string {
+	if x != nil {
+		return x.DefinitionDigest
+	}
+	return ""
+}
+
+func (x *InteractionSource) GetDefinitionPackage() []byte {
+	if x != nil {
+		return x.DefinitionPackage
+	}
+	return nil
+}
+
 type ListInteractionSourcesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -31341,8 +31374,17 @@ type InteractionDeliveryClaim struct {
 	ExternalRootPostRef          string                         `protobuf:"bytes,17,opt,name=external_root_post_ref,json=externalRootPostRef,proto3" json:"external_root_post_ref,omitempty"`
 	AcceptanceReceiptRef         string                         `protobuf:"bytes,18,opt,name=acceptance_receipt_ref,json=acceptanceReceiptRef,proto3" json:"acceptance_receipt_ref,omitempty"`
 	CredentialDescriptor         *IntegrationCredentialRevision `protobuf:"bytes,19,opt,name=credential_descriptor,json=credentialDescriptor,proto3" json:"credential_descriptor,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	DefinitionKey                string                         `protobuf:"bytes,20,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	DefinitionVersion            string                         `protobuf:"bytes,21,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	DefinitionDigest             string                         `protobuf:"bytes,22,opt,name=definition_digest,json=definitionDigest,proto3" json:"definition_digest,omitempty"`
+	// Private snapshot владельца; не входит в public read model.
+	DefinitionPackage   []byte `protobuf:"bytes,23,opt,name=definition_package,json=definitionPackage,proto3" json:"definition_package,omitempty"`
+	ConnectionVersion   int64  `protobuf:"varint,24,opt,name=connection_version,json=connectionVersion,proto3" json:"connection_version,omitempty"`
+	ApprovalGateRef     string `protobuf:"bytes,25,opt,name=approval_gate_ref,json=approvalGateRef,proto3" json:"approval_gate_ref,omitempty"`
+	ApprovalGateVersion int64  `protobuf:"varint,26,opt,name=approval_gate_version,json=approvalGateVersion,proto3" json:"approval_gate_version,omitempty"`
+	SourceCapabilityKey string `protobuf:"bytes,27,opt,name=source_capability_key,json=sourceCapabilityKey,proto3" json:"source_capability_key,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *InteractionDeliveryClaim) Reset() {
@@ -31506,6 +31548,62 @@ func (x *InteractionDeliveryClaim) GetCredentialDescriptor() *IntegrationCredent
 		return x.CredentialDescriptor
 	}
 	return nil
+}
+
+func (x *InteractionDeliveryClaim) GetDefinitionKey() string {
+	if x != nil {
+		return x.DefinitionKey
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetDefinitionVersion() string {
+	if x != nil {
+		return x.DefinitionVersion
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetDefinitionDigest() string {
+	if x != nil {
+		return x.DefinitionDigest
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetDefinitionPackage() []byte {
+	if x != nil {
+		return x.DefinitionPackage
+	}
+	return nil
+}
+
+func (x *InteractionDeliveryClaim) GetConnectionVersion() int64 {
+	if x != nil {
+		return x.ConnectionVersion
+	}
+	return 0
+}
+
+func (x *InteractionDeliveryClaim) GetApprovalGateRef() string {
+	if x != nil {
+		return x.ApprovalGateRef
+	}
+	return ""
+}
+
+func (x *InteractionDeliveryClaim) GetApprovalGateVersion() int64 {
+	if x != nil {
+		return x.ApprovalGateVersion
+	}
+	return 0
+}
+
+func (x *InteractionDeliveryClaim) GetSourceCapabilityKey() string {
+	if x != nil {
+		return x.SourceCapabilityKey
+	}
+	return ""
 }
 
 type ClaimInteractionDeliveriesRequest struct {
@@ -62442,7 +62540,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" \x01(\bR\x0eunknownOutcome\"\x80\x01\n" +
 	"%CompleteIntegrationInvocationResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
-	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xa3\x04\n" +
+	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xd5\x05\n" +
 	"\x11InteractionSource\x12%\n" +
 	"\x0econnection_ref\x18\x01 \x01(\tR\rconnectionRef\x12D\n" +
 	"\x1ecredential_materialization_ref\x18\x02 \x01(\tR\x1ccredentialMaterializationRef\x12\x19\n" +
@@ -62455,10 +62553,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17credential_revision_ref\x18\t \x01(\tR\x15credentialRevisionRef\x12/\n" +
 	"\x13credential_revision\x18\n" +
 	" \x01(\x03R\x12credentialRevision\x12c\n" +
-	"\x15credential_descriptor\x18\v \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x14credentialDescriptor\"\x1f\n" +
+	"\x15credential_descriptor\x18\v \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x14credentialDescriptor\x12%\n" +
+	"\x0edefinition_key\x18\f \x01(\tR\rdefinitionKey\x12-\n" +
+	"\x12definition_version\x18\r \x01(\tR\x11definitionVersion\x12+\n" +
+	"\x11definition_digest\x18\x0e \x01(\tR\x10definitionDigest\x12-\n" +
+	"\x12definition_package\x18\x0f \x01(\fR\x11definitionPackage\"\x1f\n" +
 	"\x1dListInteractionSourcesRequest\"^\n" +
 	"\x1eListInteractionSourcesResponse\x12<\n" +
-	"\asources\x18\x01 \x03(\v2\".controlplane.v1.InteractionSourceR\asources\"\xda\x06\n" +
+	"\asources\x18\x01 \x03(\v2\".controlplane.v1.InteractionSourceR\asources\"\xcf\t\n" +
 	"\x18InteractionDeliveryClaim\x12!\n" +
 	"\fdelivery_ref\x18\x01 \x01(\tR\vdeliveryRef\x12%\n" +
 	"\x0econnection_ref\x18\x02 \x01(\tR\rconnectionRef\x12D\n" +
@@ -62480,7 +62582,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x14external_channel_ref\x18\x10 \x01(\tR\x12externalChannelRef\x123\n" +
 	"\x16external_root_post_ref\x18\x11 \x01(\tR\x13externalRootPostRef\x124\n" +
 	"\x16acceptance_receipt_ref\x18\x12 \x01(\tR\x14acceptanceReceiptRef\x12c\n" +
-	"\x15credential_descriptor\x18\x13 \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x14credentialDescriptor\"f\n" +
+	"\x15credential_descriptor\x18\x13 \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x14credentialDescriptor\x12%\n" +
+	"\x0edefinition_key\x18\x14 \x01(\tR\rdefinitionKey\x12-\n" +
+	"\x12definition_version\x18\x15 \x01(\tR\x11definitionVersion\x12+\n" +
+	"\x11definition_digest\x18\x16 \x01(\tR\x10definitionDigest\x12-\n" +
+	"\x12definition_package\x18\x17 \x01(\fR\x11definitionPackage\x12-\n" +
+	"\x12connection_version\x18\x18 \x01(\x03R\x11connectionVersion\x12*\n" +
+	"\x11approval_gate_ref\x18\x19 \x01(\tR\x0fapprovalGateRef\x122\n" +
+	"\x15approval_gate_version\x18\x1a \x01(\x03R\x13approvalGateVersion\x122\n" +
+	"\x15source_capability_key\x18\x1b \x01(\tR\x13sourceCapabilityKey\"f\n" +
 	"!ClaimInteractionDeliveriesRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"g\n" +

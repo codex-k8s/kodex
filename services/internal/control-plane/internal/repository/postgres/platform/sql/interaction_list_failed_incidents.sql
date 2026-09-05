@@ -4,7 +4,7 @@ SELECT
     project.ref,
     run.ref,
     delivery.state,
-    delivery.attempt,
+    delivery.attempt,delivery.execution_max_attempts,
     delivery.created_at
 FROM control_plane.interaction_deliveries delivery
 JOIN control_plane.projects project ON project.id = delivery.project_id

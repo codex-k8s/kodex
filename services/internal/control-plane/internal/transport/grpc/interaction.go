@@ -26,6 +26,7 @@ func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplan
 			return nil, transportError(errs.ErrUnavailable)
 		}
 		response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
+			DefinitionKey: itemString(item, "definitionKey"), DefinitionVersion: itemString(item, "definitionVersion"), DefinitionDigest: itemString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
 			CredentialDescriptor: castIntegrationCredential(credential),
 			ConnectionRef:        itemString(item, "connectionRef"), CredentialMaterializationRef: itemString(item, "credentialRef"),
 			BaseUrl: itemString(item, "baseURL"), TeamName: itemString(item, "teamName"),
@@ -54,6 +55,9 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 			return nil, transportError(errs.ErrUnavailable)
 		}
 		response.Claims = append(response.Claims, &controlplanev1.InteractionDeliveryClaim{
+			DefinitionKey: itemString(item, "definitionKey"), DefinitionVersion: itemString(item, "definitionVersion"), DefinitionDigest: itemString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
+			ConnectionVersion: mapInt64(item, "connectionVersion"), ApprovalGateRef: itemString(item, "approvalGateRef"), ApprovalGateVersion: mapInt64(item, "approvalGateVersion"),
+			SourceCapabilityKey:  itemString(item, "sourceCapabilityKey"),
 			CredentialDescriptor: castIntegrationCredential(credential),
 			DeliveryRef:          itemString(item, "deliveryRef"), ConnectionRef: itemString(item, "connectionRef"),
 			CredentialMaterializationRef: itemString(item, "credentialRef"), BaseUrl: itemString(item, "baseURL"),
@@ -112,6 +116,11 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 func itemString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
 	return value
+}
+
+func interactionPackageBytes(values map[string]any) []byte {
+	value, _ := values["definitionPackage"].([]byte)
+	return append([]byte(nil), value...)
 }
 
 func itemStrings(values map[string]any, key string) []string {
