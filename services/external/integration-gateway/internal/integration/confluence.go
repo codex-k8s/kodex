@@ -115,7 +115,7 @@ func (adapter *Adapter) executeConfluence(ctx context.Context, request Request, 
 	case "confluence.page.update":
 		return adapter.updateConfluencePage(ctx, request, capability, configuration, canonicalInput)
 	default:
-		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return adapter.executeConfluenceCatalog(ctx, request, capability, configuration, canonicalInput)
 	}
 }
 
@@ -144,7 +144,7 @@ func (adapter *Adapter) createConfluencePage(ctx context.Context, request Reques
 		return Result{}, err
 	}
 	var provider confluencePage
-	if decodeProviderJSON(body, &provider) != nil {
+	if decodeProviderJSON(body, &provider) != nil || provider.SpaceID != configuration["space_id"] {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return confluencePageResult(request, provider, false)

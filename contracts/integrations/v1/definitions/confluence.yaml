@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: confluence
-  version: 1.1.0
+  version: 1.2.0
   origin: SHIPPED
 spec:
   name: Confluence
@@ -119,3 +119,167 @@ spec:
         - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 255}
         - {key: media_type, type: STRING, format: IDENTIFIER, required: true, maximumLength: 127}
       execution: {idempotency: EFFECT_KEY, timeoutSeconds: 45, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: confluence.space.list
+      name: Получить разрешённое пространство
+      description: Получить разрешённое пространство в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.space.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields: []
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.page.descendant.list
+      name: Получить потомков страницы
+      description: Получить потомков страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.descendant.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.page.comment.list
+      name: Получить комментарии страницы
+      description: Получить комментарии страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.comment.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"parent_comment_id","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.page.comment.read
+      name: Прочитать комментарий страницы
+      description: Прочитать комментарий страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.comment.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"parent_comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.page.comment.create
+      name: Создать комментарий страницы
+      description: Создать комментарий страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.comment.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"parent_comment_id","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"parent_comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: confluence.page.comment.update
+      name: Обновить комментарий страницы
+      description: Обновить комментарий страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.comment.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"expected_version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"parent_comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256,"allowEmpty":true}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: confluence.page.comment.delete
+      name: Удалить комментарий страницы
+      description: Удалить комментарий страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.page.comment.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"expected_version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: confluence.attachment.list
+      name: Получить вложения страницы
+      description: Получить вложения страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.attachment.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.attachment.read
+      name: Прочитать вложение страницы
+      description: Прочитать вложение страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.attachment.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"attachment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"media_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"version","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536,"allowEmpty":true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: confluence.attachment.delete
+      name: Удалить вложение страницы
+      description: Удалить вложение страницы в одном разрешённом пространстве с ограниченным результатом и receipt.
+      operation: confluence.attachment.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: CONFLUENCE_SPACE, connectionFields: [base_url, space_id]}
+      inputFields:
+        - {"key":"page_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"attachment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}

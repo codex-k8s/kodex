@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: gitlab
-  version: 1.1.0
+  version: 1.2.0
   origin: SHIPPED
 spec:
   name: GitLab
@@ -230,3 +230,398 @@ spec:
         - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
         - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
       execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: gitlab.branch.list
+      name: Получить ветки
+      description: Получить ветки в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.branch.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.branch.read
+      name: Прочитать ветку
+      description: Прочитать ветку в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.branch.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"protected","type":"BOOLEAN","required":true}
+        - {"key":"default","type":"BOOLEAN","required":true}
+        - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.branch.delete
+      name: Удалить ветку
+      description: Удалить ветку в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.branch.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.commit.list
+      name: Получить коммиты
+      description: Получить коммиты в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.commit.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.commit.read
+      name: Прочитать коммит
+      description: Прочитать коммит в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.commit.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"short_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256, allowEmpty: true}
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 32768, allowEmpty: true}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.commit.diff
+      name: Прочитать изменения коммита
+      description: Прочитать изменения коммита в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.commit.diff
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.repository.tree.list
+      name: Получить дерево репозитория
+      description: Получить дерево репозитория в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.repository.tree.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.note.list
+      name: Получить заметки issue
+      description: Получить заметки issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.issue.note.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.note.read
+      name: Прочитать заметку issue
+      description: Прочитать заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.issue.note.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"system","type":"BOOLEAN","required":true}
+        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.note.create
+      name: Создать заметку issue
+      description: Создать заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.issue.note.create
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"system","type":"BOOLEAN","required":true}
+        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.note.update
+      name: Обновить заметку issue
+      description: Обновить заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.issue.note.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"system","type":"BOOLEAN","required":true}
+        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.issue.note.delete
+      name: Удалить заметку issue
+      description: Удалить заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.issue.note.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.list
+      name: Получить merge requests
+      description: Получить merge requests в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.merge_request.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["opened","closed","locked","merged","all"]}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.update
+      name: Обновить merge request
+      description: Обновить merge request в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.merge_request.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"description","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["close","reopen"]}
+        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+      outputFields:
+        - {"key":"iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"description","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"source_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.merge
+      name: Слить merge request
+      description: Слить merge request в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.merge_request.merge
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"squash","type":"BOOLEAN","required":false}
+      outputFields:
+        - {"key":"iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"description","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"source_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.discussion.list
+      name: Получить обсуждения merge request
+      description: Получить обсуждения merge request в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.merge_request.discussion.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.pipeline.list
+      name: Получить pipelines
+      description: Получить pipelines в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.pipeline.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":32,"allowedValues":["created","waiting_for_resource","preparing","pending","running","success","failed","canceled","skipped","manual","scheduled"]}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.pipeline.cancel
+      name: Отменить pipeline
+      description: Отменить pipeline в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.pipeline.cancel
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.job.list
+      name: Получить jobs
+      description: Получить jobs в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.job.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"pipeline_id","type":"INTEGER","required":false,"minimum":1,"maximum":2147483647}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.job.read
+      name: Прочитать job
+      description: Прочитать job в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.job.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.job.retry
+      name: Повторно запустить job
+      description: Повторно запустить job в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.job.retry
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.job.cancel
+      name: Отменить job
+      description: Отменить job в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.job.cancel
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
+        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: gitlab.job.trace.read
+      name: Прочитать журнал job
+      description: Прочитать журнал job в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: gitlab.job.trace.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+      outputFields:
+        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {"key":"trace","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536,"allowEmpty":true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: gitlab.merge_request.diff.list
+      name: Прочитать изменения файлов merge request
+      description: Возвращает страницу типизированных изменений файлов без произвольных download URL.
+      operation: gitlab.merge_request.diff.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      inputFields:
+        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      outputFields:
+        - {key: items, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
