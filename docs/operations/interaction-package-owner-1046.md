@@ -4,7 +4,7 @@ title: Управляемый пакет системных подписок и 
 type: operational-contract
 status: approved
 owner: platform
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -17,6 +17,12 @@ delivery intent и решений принадлежит control-plane (#1046). 
 worker snapshot. Actor для команды решения приходит из проверенного transport,
 внешний Mattermost actor разрешается через server-owned identity и текущие
 права на конкретный gate.
+
+`AcceptInteractionMessage` повторно проверяет actual input schema выбранной
+source capability до identity, receipt и перехода. Сужение allowed decisions
+в UI/Git revision обязательно и для прямого worker RPC. Неизвестное решение,
+отсутствующий gate ref и исключённый вариант не используют права прежнего
+поставленного пакета. Input обычной inbound subscription остаётся пустым.
 
 | Сценарий | Владелец и authority | Snapshot и переход | Результат/consumer |
 | --- | --- | --- | --- |
@@ -55,3 +61,9 @@ incident, а не обещание очередного автоматическ
 transaction, чтение ошибки cursor и обработка Commit/Rollback. Проверки
 SQL boundary, Proto/policy codegen и race/vet/build выполняются отдельно от
 browser и живого Mattermost. Последние остаются NOT RUN до общего gate.
+
+Дополнение source input проверено локально: scoped race — PASS (1.607s), полный
+CP vet/build — PASS; disposable PostgreSQL identity/ACK/approval/revoke и exact
+connection-test workload — PASS (0.846s). Контракты и SQL этим дополнением не
+изменяются. Тест с managed APPROVE-only revision отклоняет REJECT,
+REQUEST_CHANGES, неизвестное решение и отсутствующий gate ref.
