@@ -9,6 +9,7 @@
     "runtime.yaml",
     "configuration.yaml",
     "certificate.yaml",
+    "authority-certificate.yaml",
     "pdb.yaml",
     "monitor.yaml",
     "alerts.yaml",

@@ -151,7 +151,7 @@ gen-integration-packages: check-go-toolchain
 		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
 	@gofmt -w libs/go/integrationpackage/shipped_gen.go
 
-.PHONY: gen-email-bridge check-email-bridge-codegen test-email-bridge test-email-bridge-unit test-email-bridge-render
+.PHONY: gen-email-bridge check-email-bridge-codegen test-email-bridge test-email-bridge-unit test-email-bridge-render test-email-bridge-install
 test-email-bridge-unit: check-go-toolchain
 	@cd libs/go/emailbridgeapi && go test -race -timeout 60s ./...
 	@cd services/internal/email-bridge && go test -race -timeout 90s ./...
@@ -162,6 +162,9 @@ test-email-bridge:
 
 test-email-bridge-render:
 	@bash scripts/tests/email-bridge-render-test.sh
+
+test-email-bridge-install:
+	@timeout 420 bash scripts/tests/email-bridge-install-test.sh
 .PHONY: test-integration-gateway-render
 .PHONY: test-integration-gateway-postgres
 test-integration-gateway-postgres:

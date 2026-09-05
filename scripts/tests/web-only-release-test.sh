@@ -232,11 +232,12 @@ yq -N -r '
     select(.operation_id == "platform.stt.credential.project" and
       .caller_workload_id == "stt-tts-service" and
       .target_workload_id == "secret-broker" and
-      .project_required == true and
+      .project_required == false and
       .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
 ' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  email-bridge-migration; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done

@@ -4,7 +4,7 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-05
 ---
 
@@ -350,3 +350,38 @@ CP checkpoint пока не переносился выборочно без п�
 Нужен согласованный полный checkpoint этих handlers/projection и deployment env
 `CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` с public key path из #1059. Этот env
 и CP domain остаются ownership Bohr/root, EMAIL не включает их обходным путём.
+
+## Установка собственной БД
+
+Installer создаёт три независимых credentials почтовой БД и проекции
+`email-bridge-postgresql-bootstrap`, `email-bridge-runtime-database`,
+`email-bridge-migration-database`. Они не входят в credentials основной
+PostgreSQL и не получают права authority. DSN закрепляют database/role/hostname
+и `verify-full` с installation CA. Отдельный Certificate материализует ранее
+отсутствовавший `internal-rpc-authority-email-bridge-workload-tls` с точным SPIFFE.
+
+Порядок установки: Secret projections → Certificate Ready → PostgreSQL TCP
+readiness после bootstrap → migration Complete → workloads → Job readback.
+TCP probe исключает временный Unix-only сервер инициализации. Повторная установка
+использует прежний набор material; генерация поверх существующего каталога
+запрещена. Замена паролей существующей БД этим bootstrap не реализуется.
+
+Публичная проверка `make test-email-bridge-install` ограничена 420 секундами.
+Она создаёт полный installation material и disposable PostgreSQL из точного
+image manifest в изолированной Docker network, применяет исходный bootstrap
+и собранный migration binary. Локально PASS: TLS с `0440` root-owned ключом,
+`up/status/up`, runtime SELECT, отказ в DDL/SET ROLE/чтении migration history/
+DELETE и отказ при plaintext, неверных hostname/password/CA. Временные
+credentials удаляются; значения не печатаются. Production/стенд не затрагиваются.
+
+Локально PASS также `test-install-contract` и `test-email-bridge-render` для
+обоих полных профилей. Исправлен устаревший STT assertion без изменения policy.
+`test-web-only-release` пока FAIL: отсутствует producer
+`email-bridge-mailbox-projection`; его доставка относится к #1046. Без неё
+полный EMAIL runtime не объявляется готовым. Сквозной issuer → CP → EMAIL и
+реальная почта остаются NOT RUN до полного producer checkpoint и staging #1031.
+
+Через Context7 проверена документация PostgreSQL 18:
+[TLS](https://www.postgresql.org/docs/18/ssl-tcp.html),
+[проверка hostname](https://www.postgresql.org/docs/18/libpq-ssl.html),
+[service file](https://www.postgresql.org/docs/18/libpq-pgservice.html).
