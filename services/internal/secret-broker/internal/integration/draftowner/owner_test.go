@@ -226,6 +226,11 @@ func TestOwnerRejectsMalformedOwnerResponses(t *testing.T) {
 	if _, err := o.Complete(context.Background(), w, &e, nil); !errors.Is(err, secretdrafts.ErrInvalid) || s.request != nil {
 		t.Fatal("descriptor without UID reached owner")
 	}
+	e.UID = "uid"
+	e.ResourceVersion = "\n123"
+	if _, err := o.Complete(context.Background(), w, &e, nil); !errors.Is(err, secretdrafts.ErrInvalid) || s.request != nil {
+		t.Fatal("malformed resource version reached owner")
+	}
 	s.draft = draftResult(s, cp.RuntimeSecretDraftState_RUNTIME_SECRET_DRAFT_STATE_DRAFT)
 	s.draft.SecretRef = "foreign"
 	if _, err := o.Complete(context.Background(), w, nil, nil); !errors.Is(err, secretdrafts.ErrConflict) {

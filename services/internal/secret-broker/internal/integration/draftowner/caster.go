@@ -173,11 +173,22 @@ func castEncrypted(v *cp.RuntimeSecretDraftEncryptedDescriptor) value.DraftEncry
 	return value.DraftEncryptedDescriptor{Namespace: v.GetNamespace(), Name: v.GetSecretName(), DataKey: v.GetSecretKey(), UID: v.GetSecretUid(), ResourceVersion: v.GetSecretResourceVersion(), CiphertextSHA256: v.GetCiphertextSha256(), EncryptionKey: value.DraftEncryptionKey{ID: v.GetEncryptionKeyId(), Generation: v.GetEncryptionKeyGeneration()}}
 }
 func validEncrypted(w value.DraftWork, e value.DraftEncryptedDescriptor) bool {
-	return e.Namespace == w.StagedNamespace && e.Name == w.StagedName && e.DataKey == "ciphertext" && boundedText(e.UID, 128, false) && boundedText(e.ResourceVersion, 128, false) && digest(e.CiphertextSHA256) && digest(e.EncryptionKey.ID) && e.EncryptionKey.Generation > 0
+	return e.Namespace == w.StagedNamespace && e.Name == w.StagedName && e.DataKey == "ciphertext" && identityToken(e.UID) && identityToken(e.ResourceVersion) && digest(e.CiphertextSHA256) && digest(e.EncryptionKey.ID) && e.EncryptionKey.Generation > 0
 }
 func validMaterialized(w value.DraftWork, m value.DraftMaterialization) bool {
 	name, err := runtimesecret.VersionedKubernetesName(w.Draft.SecretRef, w.TargetRevision)
-	return err == nil && w.Kind == value.DraftPublish && w.ClaimGeneration > 0 && m.Namespace == w.RuntimeNamespace && m.Name == name && m.DataKey == "value" && m.Revision == w.TargetRevision && m.ContentSHA256 == w.Binding.ContentSHA256 && boundedText(m.UID, 128, false) && boundedText(m.ResourceVersion, 128, false)
+	return err == nil && w.Kind == value.DraftPublish && w.ClaimGeneration > 0 && m.Namespace == w.RuntimeNamespace && m.Name == name && m.DataKey == "value" && m.Revision == w.TargetRevision && m.ContentSHA256 == w.Binding.ContentSHA256 && identityToken(m.UID) && identityToken(m.ResourceVersion)
+}
+func identityToken(s string) bool {
+	if len(s) == 0 || len(s) > 128 {
+		return false
+	}
+	for _, c := range s {
+		if c < 0x21 || c > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 func timestamp(v *timestamppb.Timestamp) time.Time {
 	if v == nil || v.CheckValid() != nil {
