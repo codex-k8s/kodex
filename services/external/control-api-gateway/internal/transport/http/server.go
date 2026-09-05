@@ -253,7 +253,7 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
-		if errors.Is(err, errPublicSecretDescriptor) {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -323,8 +323,18 @@ func messageMap(message proto.Message) (map[string]any, error) {
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
 var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
+var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if descriptor.FullName() == "controlplane.v1.ProviderAccount" {
+		if reason, exists := value["safeStatusReason"]; exists {
+			switch reason {
+			case "AUTHORIZED", "ACCOUNT_DISABLED", "ACCOUNT_REVOKED", "REAUTHORIZATION_REQUIRED", "DEVICE_AUTHORIZATION_PENDING", "CREDENTIAL_CONFIGURATION_REQUIRED", "ACCOUNT_STATE_UNKNOWN", "DEVICE_AUTHORIZATION_EXPIRED", "DEVICE_AUTHORIZATION_FAILED", "CREDENTIAL_MATERIALIZATION_FAILED":
+			default:
+				return errPublicProviderStatusReason
+			}
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.RuntimeSecretDescriptor" {
 		revision, ok := value["revision"].(string)
 		pin, err := strconv.ParseInt(revision, 10, 64)

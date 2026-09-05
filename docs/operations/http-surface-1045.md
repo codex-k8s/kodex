@@ -39,6 +39,11 @@ updated: 2026-09-05
 самостоятельно новые RPC, eligibility, authorizations или успешные состояния
 для закрытия этих строк.
 
+Поле `ProviderAccount.safe_status_reason` существующего CP read model теперь
+описано как optional `safeStatusReason` в SDK. HTTP сохраняет закрытый owner
+reason и отклоняет неизвестный текст вместо его выдачи пользователю. Это не
+вычисление account/model compatibility или effective permission в gateway.
+
 ## Exact Secret pin при редактировании Environment
 
 MVP-UI-46/47: verified actor → create/publish Environment либо create/save draft
