@@ -2622,6 +2622,12 @@ message GetRuntimeRevisionDiffResponse {
   repeated RuntimeRevisionDiffChange changes = 3;
 }
 
+enum RuntimeReasoningMode {
+  RUNTIME_REASONING_MODE_UNSPECIFIED = 0;
+  RUNTIME_REASONING_MODE_SUPPORTED = 1;
+  RUNTIME_REASONING_MODE_UNSUPPORTED = 2;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -2699,6 +2705,7 @@ message RuntimeRevisionSnapshot {
   repeated RuntimeMemoryRecordSnapshot memory_records = 70;
   // Server-owned effective effort из exact catalog default либо TOML override.
   string effective_reasoning_effort = 71;
+  RuntimeReasoningMode reasoning_mode = 72;
 }
 
 message SavePromptTemplateDraftRequest {

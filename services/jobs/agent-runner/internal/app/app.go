@@ -394,8 +394,7 @@ func buildPrompt(input model.Input) ([]byte, error) {
 }
 
 func appendContinuationRevision(builder *strings.Builder, input model.Input) error {
-	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	if err != nil {
+	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return errors.New("continuation configuration is invalid")
 	}
 	toolNames := make([]string, 0, len(input.EnvironmentTools))
@@ -417,7 +416,8 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 	builder.WriteString("\n<runtime-revision-delta>\n")
 	builder.WriteString("revision=" + input.RuntimeRevisionRef + ":" + strconv.FormatInt(input.RuntimeRevisionVersion, 10) + ":" + input.RuntimeRevisionDigest + "\n")
 	builder.WriteString("attempt=" + strconv.FormatInt(int64(input.Attempt), 10) + "\n")
-	builder.WriteString("model=" + input.Model + "\nreasoning=" + overlay.ModelReasoningEffort + "\n")
+	builder.WriteString("model=" + input.Model + "\nreasoning=" + input.EffectiveReasoningEffort + "\n")
+	builder.WriteString("reasoning-mode=" + input.ReasoningMode + "\n")
 	builder.WriteString("image=" + input.ImageReference + ":" + input.ImageManifestDigest + "\n")
 	builder.WriteString("tools=" + strings.Join(toolNames, ",") + "\n")
 	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + ":" + strings.Join(grants, ",") + "\n")

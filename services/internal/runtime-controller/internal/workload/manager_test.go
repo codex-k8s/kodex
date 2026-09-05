@@ -1190,9 +1190,11 @@ func TestEnsureTurnRejectsExistingPodFromAnotherRevision(t *testing.T) {
 func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 	t.Parallel()
 	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
-		"missing digest": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RevisionDigest = "" },
-		"revision":       func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.Ref = "rrev_ijklmnop" },
-		"image":          func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RoleImageRecipeGeneration++ },
+		"missing digest":           func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RevisionDigest = "" },
+		"missing effective effort": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.EffectiveReasoningEffort = "" },
+		"changed effective effort": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.EffectiveReasoningEffort = "high" },
+		"revision":                 func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.Ref = "rrev_ijklmnop" },
+		"image":                    func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RoleImageRecipeGeneration++ },
 		"environment": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
 			revision.EnvironmentTools[0].UsageHint = "changed"
 		},
@@ -1588,6 +1590,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 			ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
 			ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
+			ReasoningMode: controlplanev1.RuntimeReasoningMode_RUNTIME_REASONING_MODE_SUPPORTED, EffectiveReasoningEffort: "medium",
 			ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 			RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

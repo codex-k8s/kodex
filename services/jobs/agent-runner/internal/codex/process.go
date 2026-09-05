@@ -164,7 +164,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 
 func turnStartParams(input model.Input, threadID string, prompt []byte) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	if err != nil {
+	if err != nil || runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return nil, ErrRuntimeProfile
 	}
 	snapshot, err := input.RequiredContextSnapshot(time.Now())
@@ -178,8 +178,8 @@ func turnStartParams(input model.Input, threadID string, prompt []byte) (map[str
 	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
 		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
-	if overlay.ModelReasoningEffort != "" {
-		params["effort"] = overlay.ModelReasoningEffort
+	if input.ReasoningMode == runtimecontract.ReasoningSupported {
+		params["effort"] = input.EffectiveReasoningEffort
 	}
 	if overlay.Personality != "" {
 		params["personality"] = overlay.Personality

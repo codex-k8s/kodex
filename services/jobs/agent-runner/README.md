@@ -19,7 +19,7 @@ updated: 2026-09-04
 
 Runner:
 
-- читает и строго валидирует immutable `kodex.agent-runner-input.v6`;
+- читает и строго валидирует immutable `kodex.agent-runner-input.v7`;
 - подтверждает exact organization/project/run/node/session/turn/attempt/fence,
   полный execution binding и MCP binding через execution-scoped callback;
 - применяет готовые server-materialized instructions без повторного rendering;
@@ -213,5 +213,5 @@ Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal 
 (`effort`, `personality`). Источник:
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
-Schema: `contracts/runtime-controller/v6/agent-runner-input.schema.json`.
+Schema: `contracts/runtime-controller/v7/agent-runner-input.schema.json`.
 Supply chain: `docs/domains/images-supply-chain.md`.

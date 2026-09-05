@@ -21,18 +21,6 @@ import (
 
 var ErrRuntimeProfile = errors.New("Codex runtime profile is invalid")
 
-var runtimeModelEfforts = map[string][]string{
-	"gpt-6-astra":         {"", "low", "medium", "high", "xhigh", "max"},
-	"gpt-5.6-sol":         {"", "none", "low", "medium", "high", "xhigh", "max"},
-	"gpt-5.6-terra":       {"", "none", "low", "medium", "high", "xhigh", "max"},
-	"gpt-5.6-luna":        {"", "none", "low", "medium", "high", "xhigh", "max"},
-	"gpt-5.5":             {"", "low", "medium", "high", "xhigh"},
-	"gpt-5.4":             {"", "none", "low", "medium", "high", "xhigh"},
-	"gpt-5.4-mini":        {"", "none", "low", "medium", "high", "xhigh"},
-	"gpt-5.3-codex":       {"", "low", "medium", "high", "xhigh"},
-	"gpt-5.3-codex-spark": {"", "low", "medium", "high", "xhigh"},
-}
-
 func ValidateRuntimeProfile(input model.Input) error {
 	if input.Validate() != nil {
 		return ErrRuntimeProfile
@@ -41,9 +29,7 @@ func ValidateRuntimeProfile(input model.Input) error {
 }
 
 func validateRuntimeSelection(input model.Input) error {
-	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	efforts, knownModel := runtimeModelEfforts[input.Model]
-	if err != nil || input.Provider != "openai" || !knownModel || !slices.Contains(efforts, overlay.ModelReasoningEffort) {
+	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil || input.Provider != "openai" || input.Model == "" || len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model {
 		return ErrRuntimeProfile
 	}
 	for _, tool := range input.EnvironmentTools {
@@ -117,6 +103,9 @@ type mcpServerConfig struct {
 }
 
 func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
+	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
+		return ErrRuntimeProfile
+	}
 	if filepath.Clean(input.CodexHome) != input.CodexHome ||
 		!strings.HasPrefix(input.CodexHome, input.WorkspaceRoot+string(os.PathSeparator)) {
 		return errors.New("CODEX_HOME path is invalid")
@@ -166,7 +155,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		includeOnly = append(includeOnly, name)
 	}
 	slices.Sort(includeOnly)
-	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort,
+	config := runtimeConfig{Model: input.Model, ModelReasoningEffort: input.EffectiveReasoningEffort,
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
