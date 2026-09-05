@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.10
+version: 1.4.11
 updated: 2026-09-05
 ---
 
@@ -572,6 +572,10 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- DNS snapshot не живёт дольше минимального авторитетного TTL всей A/AAAA/CNAME
+  цепочки. Нижний cache TTL не продлевает этот срок: короткий snapshot не
+  кэшируется. Отмена или истечение TTL во время resolution закрывает выдачу;
+  producer и consumer используют один resolver и проверку публичных адресов.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.

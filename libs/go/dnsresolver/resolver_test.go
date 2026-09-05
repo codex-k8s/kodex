@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/miekg/dns"
 )
 
@@ -41,7 +40,7 @@ func TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots(t *testing.T) {
 
 func TestResolverUsesTTLCacheAndRejectsRebinding(t *testing.T) {
 	now := time.Unix(1_000, 0)
-	exchange := &sequenceExchanger{a: []string{"93.184.216.34", "10.0.0.1"}, ttl: 1}
+	exchange := &sequenceExchanger{a: []string{"93.184.216.34", "10.0.0.1"}, ttl: 5}
 	resolver := newTestResolver(t, exchange)
 	resolver.now = func() time.Time { return now }
 	first, err := resolver.Resolve(context.Background(), "api.openai.com")
@@ -51,7 +50,7 @@ func TestResolverUsesTTLCacheAndRejectsRebinding(t *testing.T) {
 	if _, err := resolver.Resolve(context.Background(), "api.openai.com"); err != nil || exchange.aCalls != 1 {
 		t.Fatalf("cache was not used: %v", err)
 	}
-	now = now.Add(2 * time.Second)
+	now = now.Add(6 * time.Second)
 	_, err = resolver.Resolve(context.Background(), "api.openai.com")
 	var resolutionErr *Error
 	if !errors.As(err, &resolutionErr) || resolutionErr.Reason != ReasonSpecial || exchange.aCalls != 2 || resolver.Healthy() {
@@ -69,6 +68,73 @@ func TestResolverDoesNotCacheZeroTTLAnswer(t *testing.T) {
 	}
 	if exchange.aCalls != 2 {
 		t.Fatalf("zero TTL answer was unexpectedly cached: calls=%d", exchange.aCalls)
+	}
+}
+
+func TestResolverDoesNotExtendShortTTLOrShareCachedAddresses(t *testing.T) {
+	now := time.Unix(1_000, 0)
+	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 1}
+	resolver := newTestResolver(t, exchange)
+	resolver.now = func() time.Time { return now }
+	for attempt := 0; attempt < 2; attempt++ {
+		snapshot, err := resolver.Resolve(t.Context(), "api.openai.com")
+		if err != nil || !snapshot.ExpiresAt.Equal(now.Add(time.Second)) || len(resolver.cache) != 0 || exchange.aCalls != attempt+1 {
+			t.Fatal("short authoritative TTL was extended or cached")
+		}
+	}
+	exchange.ttl = 10
+	snapshot, err := resolver.Resolve(t.Context(), "api.openai.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Addresses[0] = netip.MustParseAddr("8.8.8.8")
+	readback, err := resolver.Resolve(t.Context(), "api.openai.com")
+	if err != nil || readback.Addresses[0].String() != "93.184.216.34" || exchange.aCalls != 3 {
+		t.Fatal("returned snapshot modified the authoritative cache")
+	}
+}
+
+func TestResolverRejectsCancelledCacheAndExpiredResolution(t *testing.T) {
+	now := time.Unix(1_000, 0)
+	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 5}
+	resolver := newTestResolver(t, exchange)
+	resolver.now = func() time.Time { return now }
+	if _, err := resolver.Resolve(t.Context(), "api.openai.com"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := resolver.Resolve(ctx, "api.openai.com"); err == nil || resolver.Healthy() || exchange.aCalls != 1 {
+		t.Fatal("cancelled context received a cached snapshot")
+	}
+	resolver = newTestResolver(t, exchange)
+	clockCalls := 0
+	resolver.now = func() time.Time {
+		clockCalls++
+		return now.Add(time.Duration(clockCalls-1) * 6 * time.Second)
+	}
+	if _, err := resolver.Resolve(t.Context(), "api.openai.com"); err == nil || resolver.Healthy() || len(resolver.cache) != 0 {
+		t.Fatal("expired resolution entered cache or readiness")
+	}
+}
+
+func TestResolverConstructorRequiresCompleteBoundedConfiguration(t *testing.T) {
+	valid := Config{MinimumTTLSeconds: 5, MaximumTTLSeconds: 30, MaximumCacheEntries: 8, MaximumQueries: 8, MaximumCNAMEDepth: 4, MaximumRecords: 16, MaximumMessageBytes: 4096, QueryTimeoutMilliseconds: 500}
+	for _, change := range []func(*Config){
+		func(c *Config) { *c = Config{} },
+		func(c *Config) { c.QueryTimeoutMilliseconds = 100_000 },
+		func(c *Config) { c.MaximumQueries = 1_000 },
+		func(c *Config) { c.MaximumRecords = 1_000_000 },
+		func(c *Config) { c.MaximumMessageBytes = 1 << 30 },
+		func(c *Config) { c.MaximumCacheEntries = 1_000_000 },
+		func(c *Config) { c.MaximumTTLSeconds = 86_400 },
+		func(c *Config) { c.MaximumCNAMEDepth = 1_000 },
+	} {
+		config := valid
+		change(&config)
+		if _, err := New(config, []netip.AddrPort{netip.MustParseAddrPort("127.0.0.53:53")}, nil, nil); !errors.Is(err, ErrInvalidConfig) {
+			t.Fatal("unbounded resolver configuration accepted")
+		}
 	}
 }
 
@@ -104,8 +170,8 @@ func TestResolverRejectsAnswerRecordOverflow(t *testing.T) {
 
 func newTestResolver(t *testing.T, exchanger Exchanger) *Resolver {
 	t.Helper()
-	config := policy.DNSConfig{
-		MinimumTTLSeconds: 1, MaximumTTLSeconds: 30, MaximumCacheEntries: 8,
+	config := Config{
+		MinimumTTLSeconds: 5, MaximumTTLSeconds: 30, MaximumCacheEntries: 8,
 		MaximumQueries: 8, MaximumCNAMEDepth: 4, MaximumRecords: 16,
 		MaximumMessageBytes: 4096, QueryTimeoutMilliseconds: 500,
 	}

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )

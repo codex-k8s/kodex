@@ -122,6 +122,7 @@ updated: 2026-07-28
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
 | `GO-LIB-MAIL-POLICY-001` | `libs/go/mailpolicy/README.md` |
+| `GO-LIB-DNS-RESOLVER-001` | `libs/go/dnsresolver/README.md` |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |
 | `SVC-MC-017`       | `services/jobs/agent-runner/README.md`                      |
 | `JOB-MC-003`       | `services/jobs/backup-controller/README.md`                 |

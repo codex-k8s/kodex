@@ -10,10 +10,10 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/gateway"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"

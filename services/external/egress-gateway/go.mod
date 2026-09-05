@@ -12,13 +12,13 @@ replace github.com/codex-k8s/kodex/libs/go/grpcserver => ../../../libs/go/grpcse
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
+	github.com/codex-k8s/kodex/libs/go/dnsresolver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/jsonschema-go v0.3.0
-	github.com/miekg/dns v1.1.72
 	github.com/prometheus/client_golang v1.23.2
 )
 
@@ -27,6 +27,8 @@ replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/secure
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/emailbridgeapi
 
 replace github.com/codex-k8s/kodex/libs/go/mailpolicy => ../../../libs/go/mailpolicy
+
+replace github.com/codex-k8s/kodex/libs/go/dnsresolver => ../../../libs/go/dnsresolver
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
@@ -40,6 +42,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+	github.com/miekg/dns v1.1.72 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect

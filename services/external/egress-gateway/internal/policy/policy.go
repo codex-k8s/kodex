@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
@@ -58,16 +59,7 @@ type Profile struct {
 }
 
 // DNSConfig ограничивает server-owned resolver и cache.
-type DNSConfig struct {
-	MinimumTTLSeconds        int `json:"minimumTTLSeconds"`
-	MaximumTTLSeconds        int `json:"maximumTTLSeconds"`
-	MaximumCacheEntries      int `json:"maximumCacheEntries"`
-	MaximumQueries           int `json:"maximumQueries"`
-	MaximumCNAMEDepth        int `json:"maximumCnameDepth"`
-	MaximumRecords           int `json:"maximumRecords"`
-	MaximumMessageBytes      int `json:"maximumMessageBytes"`
-	QueryTimeoutMilliseconds int `json:"queryTimeoutMilliseconds"`
-}
+type DNSConfig = dnsresolver.Config
 
 // Limits ограничивает CONNECT, ClientHello, dial, tunnel и shutdown.
 type Limits struct {
@@ -240,15 +232,7 @@ func validate(document *Document) error {
 	if !validRevision(document.Metadata.Revision) {
 		return errors.New("policy revision is invalid")
 	}
-	dns := document.Spec.DNS
-	if dns.MinimumTTLSeconds < 5 || dns.MinimumTTLSeconds > 300 ||
-		dns.MaximumTTLSeconds < dns.MinimumTTLSeconds || dns.MaximumTTLSeconds > 3600 ||
-		dns.MaximumCacheEntries < 4 || dns.MaximumCacheEntries > 256 ||
-		dns.MaximumQueries < 2 || dns.MaximumQueries > 32 ||
-		dns.MaximumCNAMEDepth < 1 || dns.MaximumCNAMEDepth > 16 ||
-		dns.MaximumRecords < 4 || dns.MaximumRecords > 256 ||
-		dns.MaximumMessageBytes < 512 || dns.MaximumMessageBytes > 64<<10 ||
-		dns.QueryTimeoutMilliseconds < 100 || dns.QueryTimeoutMilliseconds > 10_000 {
+	if document.Spec.DNS.Validate() != nil {
 		return errors.New("policy DNS bounds are invalid")
 	}
 	limits := document.Spec.Limits
