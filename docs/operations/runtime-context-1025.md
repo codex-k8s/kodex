@@ -81,8 +81,10 @@ resume. Controller не меняет CodexSessionID после проверки 
 
 Shared workspace policy включает `/workspace/context=READ_ONLY`. Producer и
 consumer пересобираются с одной версией shared policy: её digest изменился,
-старый snapshot с четырьмя правилами не принимается. Завершённый WT #1026 не меняется;
-узкие изменения runner находятся в интеграционном WT #1025.
+старый snapshot с четырьмя правилами не принимается. Узкие изменения runner
+сначала проверены в интеграционном WT #1025, затем перенесены root в полный
+runner PR #1058. Это зависимость controller, не отдельная альтернативная
+реализация проверки workspace.
 CP `8125c13db`, включённый в `98a71da1e`, отображает shared V1 в entity вместе
 с canonical digest. Прежнее расхождение четырёх и пяти правил устранено.
 Для этой проверки runner/controller commits перенесены поверх точного CP
