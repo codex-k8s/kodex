@@ -202,6 +202,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"workspacePolicy":             workspacePolicy,
 	}
+	contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, "", "", assistant.Ref)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	snapshot["contextSnapshot"] = contextSnapshot
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict

@@ -404,7 +404,12 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 		"exact.item ->> 'digest' = content.digest",
 		"WITH ORDINALITY AS exact(item, ordinal)",
 		"(exact_snapshot.item ->> 'version')::bigint",
-		"ORDER BY exact.ordinal",
+		"ORDER BY candidates.priority,candidates.ordinal",
+		"{contextSnapshot,skills}",
+		"binding.ref=skill.item->>'binding_ref'",
+		"to_jsonb(binding.version)=skill.item->'binding_version' AND binding.enabled",
+		"file.item->'artifact_revision'=to_jsonb(artifact.revision)",
+		"control_plane.skill_revision_visible",
 	} {
 		if !strings.Contains(queryRuntimeReadexecutionartifactSelectArtifactContent, fragment) {
 			t.Fatalf("runtime artifact read lacks %q", fragment)

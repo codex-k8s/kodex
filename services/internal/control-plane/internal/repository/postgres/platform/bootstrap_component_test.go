@@ -2986,6 +2986,16 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	if err := pool.QueryRow(ctx, bootstrapComponentEffectReceiptCountQuery, rejectedEffectKey).Scan(&rejectedReceiptCount); err != nil || rejectedReceiptCount != 0 {
 		t.Fatalf("rejected effect receipt count=%d err=%v", rejectedReceiptCount, err)
 	}
+	currentRejectedRun, err := service.GetRun(ctx, owner, rejectedRun.Run.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "integration-rejected-phase-cleanup", ExpectedVersion: &currentRejectedRun.Version},
+		Payload:  command.RunCommandInput{RunRef: currentRejectedRun.Ref, Reason: "Rejected effect fixture phase completed"},
+	}); err != nil {
+		t.Fatalf("close rejected phase before provider reuse: %v", err)
+	}
 
 	launched, err := service.Execute(ctx, command.Command{
 		Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "integration-effect-approved-run"},

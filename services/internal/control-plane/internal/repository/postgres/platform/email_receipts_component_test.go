@@ -217,4 +217,13 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.email_effect_observations o JOIN control_plane.email_effect_receipts e ON e.id=o.receipt_id WHERE e.ref='emrc_email_fixture' AND ((o.version=1 AND o.outcome='UNKNOWN_OUTCOME') OR (o.version=2 AND o.outcome='EFFECT_CONFIRMED'))`).Scan(&observations); err != nil || observations != 2 {
 		t.Fatalf("email source observation history: count=%d err=%v", observations, err)
 	}
+	currentRun, err := service.GetRun(ctx, owner, run.Run.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "email-fixture-cleanup", ExpectedVersion: &currentRun.Version},
+		Payload:  command.RunCommandInput{RunRef: currentRun.Ref, Reason: "Email receipt fixture completed"}}); err != nil {
+		t.Fatalf("email fixture cleanup: %v", err)
+	}
 }

@@ -20,9 +20,9 @@ runtime materialization нельзя считать PASS по codegen или Pos
 ## Передача runtime consumer
 
 Внутренний `RuntimeRevisionSnapshot` получает `skill_bundles=69` и
-`memory_records=70`. Это отдельный Proto checkpoint: пока CP claim не
-наполняет новые поля. Shared `libs/go/runtimecontract` и agent-runner меняет
-Beauvoir, controller mapping принадлежит root; CP SQL/pins остаются в #1046.
+`memory_records=70`. CP claim наполняет поля из exact owner bindings.
+Shared ABI `23774ee12` принят без ручного изменения; runner и controller
+materialization принадлежат Beauvoir, CP SQL/pins остаются в #1046.
 
 `RuntimeSkillBundleSnapshot`: binding_ref/version, bundle_ref, revision_ref,
 revision, digest, scan_engine/digest/scanned_at, files, provenance, name,
@@ -36,14 +36,29 @@ project, agent, root/run/attempt назначаются из owner execution lin
 Оба вида входят в immutable RuntimeRevision digest, не environment_tools,
 knowledgeArtifactRefs или пользовательский filesystem path.
 
-File bytes должен выдавать существующий fenced ReadExecutionArtifact после
-проверки exact Skill pin. Materializer назначает read-only mount paths и
+File bytes выдаёт существующий fenced ReadExecutionArtifact после
+проверки exact Skill pin и текущего binding version/enabled, lifecycle и прав
+root actor. После unbind/rebind старый snapshot не получает файл снова.
+Materializer назначает read-only mount paths и
 проверяет content digest. Дополнительный произвольный download URL или
 object-store authority контрактом не вводится.
 
-Текущий owner budget всего safe_snapshot равен 256 KiB; отдельная Memory
-summary допускает 64 KiB. Общий budget materialization согласуется со shared
-ABI; превышение нельзя скрывать truncation или молчаливым пропуском binding.
+Миграция 00616 согласует budget safe_snapshot с shared ABI: 2 MiB; отдельная
+Memory summary допускает 64 KiB. Не более 32 Skills/64 Memories в execution;
+SQL получает максимум limit+1 после eligibility и отклоняет переполнение.
+File 32 MiB, bundle 64 MiB, materialized context 512 MiB. Fenced file response
+ограничен 32 MiB, protected client receive envelope 33 MiB; request и proof
+resolver limits не увеличены. Превышение нельзя скрывать truncation или
+молчаливым пропуском доступного binding.
+
+В safe_snapshot сохраняется typed `contextSnapshot` со schema
+`kodex.runtime-context.v1`; `skills: []` и `memories: []` явные даже для global
+assistant. Его digest входит в RuntimeRevision и shared warm compatibility.
+Сортировка bindings по ref стабильна, immutable summary/provenance и file pins
+передаются без подмены latest. Active execution pins удерживают artifact даже
+после удаления bundle из каталога; owner artifact impact использует тот же
+reference count. Этот checkpoint не закрывает немедленный cancel уже запущенного
+процесса при отзыве context, физический Memory GC или scanner deploy.
 
 ## Общие правила
 
@@ -131,7 +146,8 @@ terminal purge и отсутствие summary в replay после purge. Migra
 Skill lifecycle/list/history: локальный targeted PostgreSQL PASS с явно тестовым
 scanner port; production Unix-socket client проверен Go/race protocol fixtures.
 Bind/unbind/rebind и readback проверены в обоих targeted PostgreSQL scenarios.
-Runtime materialization ещё не реализована.
+CP claim/pins и fenced Skill download проверены в disposable PG; полный
+controller/runner materialization требует интегрированного дерева.
 VFS tree/search уже читает реальные SkillBundle и MemoryRecord, не knowledge
 artifacts или selected tool names. Узлы содержат owner resource ref и digest
 текущей revision (для Skill открытая draft имеет приоритет, как в каталоге).
@@ -145,8 +161,8 @@ archive/restore/purge и отрицательные project-only reader сцен
 `context-binding:{binding_ref}` содержит resource ref и exact bound revision
 digest, а не digest более новой revision из каталога. Unbind убирает пустой
 раздел; скрытый агент не раскрывает раздел даже через global search.
-Runtime pins, физический retention GC и VFS отдельных Skill file узлов
-остаются незавершёнными; эта проекция не материализует runtime content.
+Физический retention GC и VFS отдельных Skill file узлов остаются
+незавершёнными; VFS проекция не материализует runtime content.
 STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.
 
@@ -238,8 +254,9 @@ GetAgentRuntimeConfiguration возвращает их вместе с точн�
 - Readback содержит разрешённые включённые bindings. Expired Memory остаётся
   metadata-ссылкой для unbind, но не разрешает выдачу summary/runtime snapshot.
 - Archive/purge context отключает bindings без автоматического восстановления.
-  RuntimeRevision pins/materialization и автоматический retention GC остаются
-  отдельными незавершёнными частями того же #1046, не скрываются за binding PASS.
+  CP RuntimeRevision pins реализованы; полный materialization, немедленное
+  закрытие активного процесса при отзыве и автоматический retention GC остаются
+  незавершёнными частями того же #1046, не скрываются за binding PASS.
 
 Проверка:
 `bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$/(memory_records|skill_bundle)'`.
@@ -247,3 +264,10 @@ GetAgentRuntimeConfiguration возвращает их вместе с точн�
 unbind и повторный bind с монотонной версией. Proto lint/codegen и Go
 transport/domain: локальный PASS. Существующий полный PostgreSQL suite на этом
 промежуточном checkpoint не повторялся.
+
+Дополнительные targeted проверки CP runtime: Go/race transport/repository/domain
+и controlplaneclient PASS; PG `memory_records|skill_bundle|email_receipt` PASS
+с реальным claim, typed snapshot и fenced Skill file read, отказом после
+unbind/rebind. PG `direct_run|integration_read` PASS. Integration fixture явно
+закрывает rejected phase после проверки живого root graph, прежде чем занимать
+provider capacity следующим run; production capacity invariant не изменён.

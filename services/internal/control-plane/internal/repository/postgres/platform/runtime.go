@@ -684,13 +684,18 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
 		}
+		contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot["contextSnapshot"] = contextSnapshot
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		snapshot["revisionDigest"] = revisionDigestHex
 		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil || len(rawSnapshot) > 256<<10 {
+		if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var runtimeRevisionID string
@@ -1030,6 +1035,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
 	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if raw, ok := values["contextSnapshot"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var snapshot runtimecontract.RuntimeContextSnapshot
+		if json.Unmarshal(encoded, &snapshot) != nil {
+			return "", errs.ErrConflict
+		}
+		input.ContextSnapshot = &snapshot
+	}
 	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
 		context := &runtimecontract.RunnerAssistantContext{
 			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),
