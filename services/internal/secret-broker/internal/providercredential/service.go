@@ -32,6 +32,7 @@ type Store interface {
 	GetProviderAuthorizationAttempt(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
 	CompleteProviderAuthorizationAttempt(context.Context, kubernetesstore.ProviderAuthorizationAttempt) (kubernetesstore.ProviderAuthorizationAttempt, error)
 	CreateProviderCredential(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, error)
+	ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error)
 	DiscardProviderAuthorizationAttempt(context.Context, string, string, string, string, string) error
 	DiscardProviderCredential(context.Context, string, string, kubernetesstore.ProviderCredentialDescriptor) error
 	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (string, error)

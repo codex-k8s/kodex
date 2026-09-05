@@ -134,6 +134,6 @@ save без активного Secret, validate, publish exact runtime bytes, о
 save/discard и отказ/восстановление readiness. Он не подменяет защищённый live
 CP/Kubernetes path. Отдельно проверяются Proto/codegen и authority policy/render.
 
-Exact SHA и результаты каждого запуска фиксируются в PR #1068 после commit.
+Exact SHA и результаты каждого запуска фиксируются в PR #1069 после commit.
 Live CP→broker, Kubernetes, browser, staging и production — NOT RUN.
 Общий baseline, gate и приёмка принадлежат #1031.
