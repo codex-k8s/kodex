@@ -841,6 +841,29 @@ describe("platform store", () => {
     expect(selectedProjectRef()).toBeUndefined();
   });
 
+  it("не принимает старый owner ACK после сброса и нового запроса с тем же ключом", async () => {
+    let resolveOld!: (value: ReturnType<typeof response>) => void;
+    listProjectsMock.mockReturnValueOnce(
+      new Promise<ReturnType<typeof response>>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const store = usePlatformStore();
+    const oldRequest = store.loadProjects();
+    store.clearOwnerState();
+    listProjectsMock.mockResolvedValueOnce(
+      response([project("project_new_owner")]),
+    );
+    await store.loadProjects();
+    resolveOld(response([project("project_old_owner")]));
+    await oldRequest;
+    expect(store.projectList.map((item) => item.ref)).toEqual([
+      "project_new_owner",
+    ]);
+    expect(store.problems.projects).toBeUndefined();
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
+  });
+
   it("сохраняет авторитетную готовность core независимо от списка подключений", async () => {
     const definition = integrationDefinition();
     const connection = integrationConnection(3, true);

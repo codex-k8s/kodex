@@ -596,6 +596,7 @@ watch(
       :name="name"
       :format="format"
       :disabled="busy || gitOwned"
+      :initialize-stt="kind === 'SYSTEM_STT' && !configurationRef"
     />
     <CodeEditor
       v-else
@@ -604,7 +605,6 @@ watch(
       :language="language"
       :readonly="gitOwned"
       :disabled="busy"
-      :sensitive="kind === 'SYSTEM_STT'"
     />
     <ul
       v-if="localDiagnostics.length"

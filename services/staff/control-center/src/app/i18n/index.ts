@@ -356,6 +356,21 @@ const ru = {
     },
     diff: "Изменения",
     sttEnabled: "Распознавание речи включено",
+    sttCatalog: {
+      recommended: "Рекомендованная модель",
+      recommendations:
+        "Рекомендации: {model}, {bytes} байт, {milliseconds} мс. Они не заменяют предельные значения и не перезаписывают сохранённый документ.",
+      keywordBounds: "До {count} ключевых слов, до {bytes} байт UTF-8 каждое.",
+      legacy: "Прежнее поколение",
+      metadata:
+        "Каталог {version}; дата проверки адаптера: {observedAt}. Это не проверка доступности провайдера.",
+      failed: "Каталог моделей недоступен. Сохранённые значения не изменены.",
+      unconfirmed:
+        "Сохранённая модель пока не подтверждена каталогом. Выберите модель из доступного каталога; итоговую конфигурацию проверяет сервер.",
+      parameterUnconfirmed:
+        "Параметр не подтверждён текущим профилем. Сохранённое значение доступно для исправления; сервер выполняет окончательную проверку.",
+      promptBytes: "Ограничение профиля: {count} байт UTF-8.",
+    },
     sttParameters: {
       languages: "Языки (коды, по одному на строку)",
       keywords: "Ключевые слова (по одному на строку)",
@@ -1105,6 +1120,11 @@ const ru = {
     decodedSize: "Размер данных: {size} байт",
     draft: {
       title: "Черновик секрета",
+      version: "Версия черновика",
+      publishedRevision: "Опубликованная ревизия",
+      publishedHelp:
+        "Ревизия опубликована. Результат применения показан отдельно для каждого потребителя.",
+      planResultTotal: "Всего в плане: {total}",
       searchConsumers: "Поиск потребителей",
       publishOnly: "Опубликовать без замены",
       clearSelection: "Снять весь выбор",
@@ -1761,7 +1781,8 @@ const ru = {
     allProjects: "Все Проекты",
     pendingCount: "Ожидают ответа: {count}",
     historyCount: "В истории: {count}",
-    pending: "Ожидают ответа",
+    pending: "Ожидают",
+    pendingAccessible: "Решения, ожидающие ответа",
     history: "История",
     historyEmpty: "История решений пуста",
     historyEmptyText: "В выбранном Проекте ещё нет завершённых решений.",
@@ -1797,6 +1818,37 @@ const ru = {
     openRun: "Открыть запуск",
     openNode: "Открыть точный узел запуска",
     outcome: "Принятое решение",
+    changesConsequence:
+      "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.",
+    rejectConsequence:
+      "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.",
+    cancelConsequence:
+      "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.",
+    changesComment: "Что нужно изменить",
+    rejectComment: "Причина отклонения",
+    cancelComment: "Причина отмены",
+    approveComment: "Комментарий к одобрению",
+    changesPlaceholder:
+      "Перечислите проверяемые изменения, необходимые для повторного решения",
+    rejectPlaceholder: "Укажите причину, которая будет записана в аудит",
+    changesRequired: "Опишите необходимые изменения.",
+    rejectionRequired: "Укажите причину отклонения.",
+    attachmentsPending:
+      "Дождитесь загрузки вложений или исправьте ошибку файла.",
+    applied: "{decision}: решение «{title}» применено.",
+    consequenceSummary: "Последствия: {summary}",
+    dueAt: "срок {date}",
+    runInitiator: "Инициатор Run",
+    notProvided: "не представлен",
+    resolutionAttachments: "Вложения к решению",
+    requestAttachments: "Вложения к запросу",
+    auditTitle: "Аудит",
+    auditEmpty: "События аудита для этого решения не найдены.",
+    allowedOptions: "Разрешённые варианты и последствия",
+    commentRequired: "Комментарий обязателен",
+    applying: "Применяем решение…",
+    versionNotice:
+      "Решение применится с версией {version} и будет записано в аудит.",
   },
   access: {
     title: "Участники и доступ",
@@ -2838,6 +2890,21 @@ const en = {
   managed: {
     diff: "Changes",
     sttEnabled: "Speech transcription enabled",
+    sttCatalog: {
+      recommended: "Recommended model",
+      recommendations:
+        "Recommendations: {model}, {bytes} bytes, {milliseconds} ms. They do not replace limits or overwrite a saved document.",
+      keywordBounds: "Up to {count} keywords, up to {bytes} UTF-8 bytes each.",
+      legacy: "Legacy model",
+      metadata:
+        "Catalog {version}; adapter verification date: {observedAt}. This is not a provider availability check.",
+      failed: "Model catalog unavailable. Saved values are unchanged.",
+      unconfirmed:
+        "The saved model is not confirmed by the catalog yet. Select a catalog model; the server validates the final configuration.",
+      parameterUnconfirmed:
+        "The current profile does not confirm this parameter. Saved values remain editable; the server performs final validation.",
+      promptBytes: "Profile limit: {count} UTF-8 bytes.",
+    },
     form: "Form",
     editMode: "Editor mode",
     invalidDocument: "Fix the source document syntax before editing the form.",
@@ -3876,6 +3943,11 @@ const en = {
     title: "Project secrets",
     draft: {
       title: "Secret draft",
+      version: "Draft version",
+      publishedRevision: "Published revision",
+      publishedHelp:
+        "The revision is published. Each consumer has its own application outcome.",
+      planResultTotal: "Plan total: {total}",
       searchConsumers: "Search consumers",
       publishOnly: "Publish without replacements",
       clearSelection: "Clear selection",
@@ -4469,7 +4541,8 @@ const en = {
     allProjects: "All Projects",
     pendingCount: "Awaiting answer: {count}",
     historyCount: "In history: {count}",
-    pending: "Awaiting answer",
+    pending: "Pending",
+    pendingAccessible: "Decisions awaiting your answer",
     history: "History",
     historyEmpty: "Decision history is empty",
     historyEmptyText: "The selected Project has no completed decisions yet.",
@@ -4505,6 +4578,37 @@ const en = {
     openRun: "Open run",
     openNode: "Open the exact run node",
     outcome: "Recorded decision",
+    changesConsequence:
+      "Gate will change to CHANGES_REQUESTED. The current projection does not provide the next Run transition.",
+    rejectConsequence:
+      "Gate will change to REJECTED. The current projection does not specify whether the Run closes or continues.",
+    cancelConsequence:
+      "Gate will change to CANCELLED. The current projection does not provide the subsequent Run lifecycle.",
+    changesComment: "Required changes",
+    rejectComment: "Reason for rejection",
+    cancelComment: "Reason for cancellation",
+    approveComment: "Approval comment",
+    changesPlaceholder:
+      "List verifiable changes required before another decision",
+    rejectPlaceholder: "Enter the reason to record in the audit trail",
+    changesRequired: "Describe the required changes.",
+    rejectionRequired: "Enter a reason for rejection.",
+    attachmentsPending:
+      "Wait for attachments to upload or resolve the file error.",
+    applied: "{decision}: decision “{title}” was applied.",
+    consequenceSummary: "Consequences: {summary}",
+    dueAt: "due {date}",
+    runInitiator: "Run initiator",
+    notProvided: "not provided",
+    resolutionAttachments: "Decision attachments",
+    requestAttachments: "Request attachments",
+    auditTitle: "Audit",
+    auditEmpty: "No audit events were found for this decision.",
+    allowedOptions: "Allowed options and consequences",
+    commentRequired: "Comment required",
+    applying: "Applying decision…",
+    versionNotice:
+      "The decision will use version {version} and be recorded in the audit trail.",
   },
   access: {
     ...ru.access,

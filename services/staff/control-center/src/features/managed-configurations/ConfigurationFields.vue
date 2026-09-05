@@ -1,5 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import {
+  computed,
+  onMounted,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
+import { useI18n } from "vue-i18n";
+import type { SttModelCatalog } from "@/shared/api/generated/openapi/types.gen";
+import {
+  readSttCatalog,
+  sttFormLimits,
+  sttParameterSupported,
+  sttChunkingStrategies,
+} from "./stt-model-catalog";
 import IntegrationPackageField from "./IntegrationPackageField.vue";
 import { emptyPackageField, packageSchema } from "./integration-package";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
@@ -20,8 +35,124 @@ const props = defineProps<{
   name: string;
   format: "JSON" | "YAML";
   disabled?: boolean;
+  initializeStt?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
+const { t } = useI18n();
+const catalog = shallowRef<SttModelCatalog>();
+const catalogFailed = ref(false);
+const catalogScope = new AbortController();
+let catalogGeneration = 0;
+let initializedStt = false;
+onScopeDispose(() => catalogScope.abort());
+const modelProfile = computed(() =>
+  catalog.value?.models.find((item) => item.model === text(stt.value.model)),
+);
+const selectedModel = computed<AsyncEntityOption | undefined>(() =>
+  text(stt.value.model)
+    ? {
+        ref: text(stt.value.model),
+        title: text(stt.value.model),
+      }
+    : undefined,
+);
+const chunkingStrategies = computed(() =>
+  sttChunkingStrategies(modelProfile.value),
+);
+function supported(key: string): boolean {
+  return sttParameterSupported(modelProfile.value, key);
+}
+async function loadModels(
+  query: string,
+  _cursor: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  const generation = ++catalogGeneration;
+  const combined = AbortSignal.any([signal, catalogScope.signal]);
+  try {
+    const result = await readSttCatalog(combined);
+    if (!combined.aborted && generation === catalogGeneration) {
+      catalog.value = result;
+      catalogFailed.value = false;
+      const initialize =
+        props.initializeStt && !initializedStt && !props.modelValue.trim();
+      initializedStt = true;
+      if (initialize) {
+        const recommended = result.models.find(
+          (item) => item.model === result.recommendedModel,
+        );
+        write({
+          stt: {
+            enabled: false,
+            model: result.recommendedModel,
+            language: sttParameterSupported(recommended, "language")
+              ? "ru"
+              : "",
+            permissionKey: "platform.stt.use",
+            parameters: {
+              languages: sttParameterSupported(recommended, "languages")
+                ? ["ru", "en"]
+                : [],
+              keywords: [],
+              prompt: "",
+              temperature: 0,
+              chunkingStrategy: "",
+              stream: false,
+            },
+            maximumAudioBytes: result.recommendedMaximumAudioBytes,
+            maximumAudioDurationMilliseconds:
+              result.recommendedMaximumAudioDurationMilliseconds,
+          },
+        });
+      }
+    }
+    return {
+      items: result.models
+        .filter((item) =>
+          item.model.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+        )
+        .map((item) => ({
+          ref: item.model,
+          title: item.model,
+          meta: [
+            item.model === result.recommendedModel
+              ? t("managed.sttCatalog.recommended")
+              : "",
+            item.legacy ? t("managed.sttCatalog.legacy") : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
+    };
+  } catch (error) {
+    if (!combined.aborted && generation === catalogGeneration)
+      catalogFailed.value = true;
+    throw error;
+  }
+}
+async function refreshCatalog(): Promise<void> {
+  try {
+    await loadModels("", undefined, catalogScope.signal);
+  } catch {
+    /* Ошибка чтения показана отдельно от сохраненного документа. */
+  }
+}
+onMounted(() => {
+  if (props.kind === "SYSTEM_STT") void refreshCatalog();
+});
+watch(
+  () => props.kind,
+  (kind) => {
+    if (kind === "SYSTEM_STT") void refreshCatalog();
+  },
+);
+function selectModel(option: AsyncEntityOption): void {
+  if (!catalog.value?.models.some((item) => item.model === option.ref)) return;
+  write({
+    ...parsed.value.value,
+    stt: { ...stt.value, model: option.ref, permissionKey: "platform.stt.use" },
+  });
+}
 const parsed = computed(() => {
   try {
     return {
@@ -65,21 +196,19 @@ function updateSttParameter(key: string, value: unknown): void {
   });
 }
 function updateSttNumber(key: string, event: Event, parameter = false): void {
-  if (
-    !(event.target instanceof HTMLInputElement) ||
-    !Number.isFinite(event.target.valueAsNumber)
-  )
-    return;
-  if (parameter) updateSttParameter(key, event.target.valueAsNumber);
-  else
-    write({
-      ...parsed.value.value,
-      stt: {
-        ...stt.value,
-        permissionKey: "platform.stt.use",
-        [key]: event.target.valueAsNumber,
-      },
-    });
+  if (!(event.target instanceof HTMLInputElement)) return;
+  const fields = { ...(parameter ? sttParameters.value : stt.value) };
+  if (event.target.value === "") Reflect.deleteProperty(fields, key);
+  else if (Number.isFinite(event.target.valueAsNumber))
+    fields[key] = event.target.valueAsNumber;
+  else return;
+  write({
+    ...parsed.value.value,
+    stt: {
+      ...(parameter ? { ...stt.value, parameters: fields } : fields),
+      permissionKey: "platform.stt.use",
+    },
+  });
 }
 const selectedAccount = ref<AsyncEntityOption>();
 watch(
@@ -240,16 +369,63 @@ function update(key: string, event: Event, group?: "stt"): void {
           :model-value="text(stt.providerAccountRef)"
           :selected="selectedAccount"
           :load-page="loadAccounts"
+          :clearable="false"
           :disabled="disabled"
           :placeholder="$t('providers.selectorLabel')"
           @select="selectAccount"
       /></label>
-      <label v-for="key in ['model', 'language']" :key="key"
-        >{{ $t(`managed.fields.${key}`)
-        }}<input :value="text(stt[key])" @input="update(key, $event, 'stt')"
+      <label
+        >{{ $t("managed.fields.model")
+        }}<AsyncEntityPicker
+          :model-value="text(stt.model)"
+          :selected="selectedModel"
+          :load-page="loadModels"
+          :clearable="false"
+          :disabled="disabled"
+          :placeholder="$t('managed.fields.model')"
+          @select="selectModel"
+      /></label>
+      <p v-if="catalog">
+        {{
+          $t("managed.sttCatalog.metadata", {
+            version: catalog.version,
+            observedAt: catalog.observedAt,
+          })
+        }}
+      </p>
+      <p v-if="catalog">
+        {{
+          $t("managed.sttCatalog.recommendations", {
+            model: catalog.recommendedModel,
+            bytes: catalog.recommendedMaximumAudioBytes,
+            milliseconds: catalog.recommendedMaximumAudioDurationMilliseconds,
+          })
+        }}
+      </p>
+      <p v-if="catalogFailed" role="alert">
+        {{ $t("managed.sttCatalog.failed") }}
+        <button type="button" @click="refreshCatalog">
+          {{ $t("common.retry") }}
+        </button>
+      </p>
+      <p v-if="!modelProfile">{{ $t("managed.sttCatalog.unconfirmed") }}</p>
+      <label
+        >{{ $t("managed.fields.language")
+        }}<input
+          :value="text(stt.language)"
+          @input="update('language', $event, 'stt')"
       /></label>
       <label v-for="key in ['languages', 'keywords']" :key="key">
         {{ $t(`managed.sttParameters.${key}`) }}
+        <small v-if="!supported(key)">{{
+          $t("managed.sttCatalog.parameterUnconfirmed")
+        }}</small>
+        <small v-else-if="key === 'keywords' && modelProfile">{{
+          $t("managed.sttCatalog.keywordBounds", {
+            count: modelProfile.maximumKeywords,
+            bytes: modelProfile.maximumKeywordBytes,
+          })
+        }}</small>
         <VoiceTextarea
           :model-value="sttList(key)"
           :disabled="disabled"
@@ -261,6 +437,11 @@ function update(key: string, event: Event, group?: "stt"): void {
       </label>
       <label
         >{{ $t("managed.sttParameters.prompt") }}
+        <small v-if="modelProfile">{{
+          $t("managed.sttCatalog.promptBytes", {
+            count: modelProfile.maximumPromptBytes,
+          })
+        }}</small>
         <VoiceTextarea
           :model-value="text(sttParameters.prompt)"
           :disabled="disabled"
@@ -272,10 +453,10 @@ function update(key: string, event: Event, group?: "stt"): void {
         >{{ $t("managed.sttParameters.temperature") }}
         <input
           type="number"
-          min="0"
-          max="1"
+          :min="Math.max(0, modelProfile?.minimumTemperature ?? 0)"
+          :max="Math.min(1, modelProfile?.maximumTemperature ?? 1)"
           step="0.05"
-          :value="sttParameters.temperature ?? 0"
+          :value="sttParameters.temperature"
           @input="updateSttNumber('temperature', $event, true)"
         />
       </label>
@@ -290,8 +471,25 @@ function update(key: string, event: Event, group?: "stt"): void {
             )
           "
         >
-          <option value="">{{ $t("managed.sttParameters.default") }}</option>
-          <option value="auto">auto</option>
+          <option
+            v-if="
+              !chunkingStrategies.includes(text(sttParameters.chunkingStrategy))
+            "
+            :value="text(sttParameters.chunkingStrategy)"
+            disabled
+          >
+            {{
+              text(sttParameters.chunkingStrategy) ||
+              $t("managed.sttParameters.default")
+            }}
+          </option>
+          <option
+            v-for="strategy in chunkingStrategies"
+            :key="strategy"
+            :value="strategy"
+          >
+            {{ strategy || $t("managed.sttParameters.default") }}
+          </option>
         </select>
       </label>
       <label class="configuration-fields__toggle"
@@ -301,18 +499,11 @@ function update(key: string, event: Event, group?: "stt"): void {
           disabled
         /><span>{{ $t("managed.sttParameters.stream") }}</span></label
       >
-      <label
-        v-for="limit in [
-          { key: 'maximumAudioBytes', max: 26214400 },
-          { key: 'maximumAudioDurationMilliseconds', max: 600000 },
-          { key: 'providerTimeoutMilliseconds', max: 120000 },
-        ]"
-        :key="limit.key"
-      >
+      <label v-for="limit in sttFormLimits" :key="limit.key">
         {{ $t(`managed.sttParameters.${limit.key}`) }}
         <input
           type="number"
-          min="1"
+          :min="limit.min"
           :max="limit.max"
           step="1"
           :value="stt[limit.key]"
@@ -335,6 +526,10 @@ function update(key: string, event: Event, group?: "stt"): void {
   display: grid;
   min-width: 0;
   gap: 6px;
+}
+.configuration-fields p,
+.configuration-fields small {
+  overflow-wrap: anywhere;
 }
 .configuration-fields .configuration-fields__toggle {
   display: flex;

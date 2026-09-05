@@ -12,7 +12,11 @@ import {
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  gateSelection,
+  readAddressedGate,
+} from "@/features/workboard/gate-navigation";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -64,6 +68,57 @@ const busyRef = ref("");
 const problem = ref<AppProblem>();
 const successMessage = ref("");
 let pageMounted = false;
+let routingProject = false;
+const addressedGateLoading = ref(false);
+const addressedGateProblem = ref<AppProblem>();
+let addressedGateController: AbortController | undefined;
+
+async function loadAddressedGate(): Promise<void> {
+  addressedGateController?.abort();
+  if (!preferredGateRef) return;
+  const reference = preferredGateRef;
+  const controller = new AbortController();
+  addressedGateController = controller;
+  addressedGateLoading.value = true;
+  addressedGateProblem.value = undefined;
+  try {
+    const gate = await readAddressedGate(
+      reference,
+      projectFilter.value || undefined,
+      controller.signal,
+    );
+    if (
+      controller.signal.aborted ||
+      !pageMounted ||
+      reference !== preferredGateRef
+    )
+      return;
+    const current = platform.gates[gate.ref];
+    if (current && current.version > gate.version)
+      throw new Error("Owner gate readback is outdated");
+    view.value = gate.state === "OPEN" ? "PENDING" : "HISTORY";
+    platform.gates[gate.ref] = gate;
+    selectedRef.value = gate.ref;
+    preferredGateRef = "";
+  } catch (error) {
+    if (!controller.signal.aborted && pageMounted) {
+      addressedGateProblem.value = asProblem(error);
+      selectedRef.value = "";
+      if ([403, 404].includes(addressedGateProblem.value.status))
+        Reflect.deleteProperty(platform.gates, reference);
+    }
+  } finally {
+    if (addressedGateController === controller)
+      addressedGateLoading.value = false;
+  }
+}
+function selectGate(reference: string): void {
+  addressedGateController?.abort();
+  addressedGateLoading.value = false;
+  addressedGateProblem.value = undefined;
+  preferredGateRef = "";
+  selectedRef.value = reference;
+}
 
 const inbox = computed(() =>
   decisionInbox(
@@ -121,19 +176,54 @@ const projectsWithGates = computed(() => {
 watch(
   visibleItems,
   (items) => {
-    if (items.some((item) => item.gate.ref === selectedRef.value)) return;
-    const preferred = items.find((item) => item.gate.ref === preferredGateRef);
-    selectedRef.value = preferred?.gate.ref ?? items[0]?.gate.ref ?? "";
-    if (items.length) preferredGateRef = "";
+    selectedRef.value = gateSelection(
+      items.map((item) => item.gate.ref),
+      selectedRef.value,
+      preferredGateRef,
+    );
   },
   { immediate: true },
 );
 
-watch(projectFilter, (value) => {
-  if (!pageMounted) return;
-  preferredGateRef = "";
-  selectedRef.value = "";
-  void platform.loadGates(value || undefined);
+watch(
+  projectFilter,
+  (value) => {
+    if (!pageMounted || routingProject) return;
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    preferredGateRef = "";
+    selectedRef.value = "";
+    void platform.loadGates(value || undefined);
+  },
+  { flush: "sync" },
+);
+watch(
+  () => [route.query.gateRef, route.query.projectRef],
+  ([gateRef, projectRef]) => {
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    const project = typeof projectRef === "string" ? projectRef : "";
+    const changedProject = project !== projectFilter.value;
+    routingProject = true;
+    projectFilter.value = project;
+    routingProject = false;
+    preferredGateRef = typeof gateRef === "string" ? gateRef : "";
+    selectedRef.value = "";
+    if (!pageMounted) return;
+    if (changedProject)
+      void platform.loadGates(project || undefined).then(() => {
+        if (pageMounted) return loadAddressedGate();
+      });
+    else if (preferredGateRef) void loadAddressedGate();
+    else selectedRef.value = visibleItems.value[0]?.gate.ref ?? "";
+  },
+);
+onBeforeUnmount(() => {
+  pageMounted = false;
+  addressedGateController?.abort();
+  attachmentLoadGeneration += 1;
 });
 
 function formatDate(value?: string): string {
@@ -203,11 +293,9 @@ function decisionConsequence(
     return (
       gate.consequencesSummary.trim() || t("decisions.consequencesUnavailable")
     );
-  if (decision === "REQUEST_CHANGES")
-    return "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.";
-  if (decision === "REJECT")
-    return "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.";
-  return "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesConsequence");
+  if (decision === "REJECT") return t("decisions.rejectConsequence");
+  return t("decisions.cancelConsequence");
 }
 
 function requiresDecisionComment(decision?: DecisionAction): boolean {
@@ -215,17 +303,15 @@ function requiresDecisionComment(decision?: DecisionAction): boolean {
 }
 
 function decisionCommentLabel(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES") return "Что нужно изменить";
-  if (decision === "REJECT") return "Причина отклонения";
-  if (decision === "CANCEL") return "Причина отмены";
-  return "Комментарий к одобрению";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesComment");
+  if (decision === "REJECT") return t("decisions.rejectComment");
+  if (decision === "CANCEL") return t("decisions.cancelComment");
+  return t("decisions.approveComment");
 }
 
 function decisionCommentPlaceholder(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES")
-    return "Перечислите проверяемые изменения, необходимые для повторного решения";
-  if (decision === "REJECT")
-    return "Укажите причину, которая будет записана в аудит";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesPlaceholder");
+  if (decision === "REJECT") return t("decisions.rejectPlaceholder");
   return t("decisions.commentPlaceholder");
 }
 
@@ -251,13 +337,12 @@ async function decide(gate: OwnerGate): Promise<void> {
   if (requiresDecisionComment(decision) && !comment) {
     validationMessages.value[gate.ref] =
       decision === "REQUEST_CHANGES"
-        ? "Опишите необходимые изменения."
-        : "Укажите причину отклонения.";
+        ? t("decisions.changesRequired")
+        : t("decisions.rejectionRequired");
     return;
   }
   if (!attachmentsReady(gate.ref)) {
-    validationMessages.value[gate.ref] =
-      "Дождитесь загрузки вложений или исправьте ошибку файла.";
+    validationMessages.value[gate.ref] = t("decisions.attachmentsPending");
     return;
   }
   busyRef.value = gate.ref;
@@ -272,7 +357,10 @@ async function decide(gate: OwnerGate): Promise<void> {
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     selectedAttachmentComposer.value?.clear();
-    successMessage.value = `${decisionLabel(decision)}: решение «${gate.title}» применено.`;
+    successMessage.value = t("decisions.applied", {
+      decision: decisionLabel(decision),
+      title: gate.title,
+    });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(decisionDrafts.value, gate.ref);
     Reflect.deleteProperty(validationMessages.value, gate.ref);
@@ -324,7 +412,12 @@ onMounted(() => {
     platform.loadGates(projectFilter.value || undefined),
     platform.loadProjects(),
     platform.loadRuns(),
-  ]).then(() => loadGateAudit(selected.value?.gate));
+  ]).then(async () => {
+    if (!pageMounted) return;
+    await loadAddressedGate();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.
+    if (pageMounted) await loadGateAudit(selected.value?.gate);
+  });
 });
 </script>
 
@@ -340,6 +433,9 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'PENDING'"
+            :aria-label="$t('decisions.pendingAccessible')"
+            :title="$t('decisions.pendingAccessible')"
+            :disabled="addressedGateLoading"
             @click="view = 'PENDING'"
           >
             {{ $t("decisions.pending") }}
@@ -348,6 +444,7 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'HISTORY'"
+            :disabled="addressedGateLoading"
             @click="view = 'HISTORY'"
           >
             {{ $t("decisions.history") }}
@@ -380,6 +477,12 @@ onMounted(() => {
     </div>
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
+    <ProblemNotice
+      v-if="addressedGateProblem"
+      :problem="addressedGateProblem"
+      compact
+      @retry="loadAddressedGate"
+    />
     <div v-if="successMessage" class="decision-success" role="status">
       <CheckCircle2 :size="18" aria-hidden="true" />
       <span>{{ successMessage }}</span>
@@ -436,7 +539,7 @@ onMounted(() => {
                 }"
                 type="button"
                 role="listitem"
-                @click="selectedRef = item.gate.ref"
+                @click="selectGate(item.gate.ref)"
               >
                 <span class="decision-row__icon">
                   <ShieldQuestion :size="18" aria-hidden="true" />
@@ -452,13 +555,22 @@ onMounted(() => {
                     v-if="item.hasConsequences"
                     class="decision-row__impact"
                   >
-                    Последствия: {{ item.gate.consequencesSummary }}
+                    {{
+                      $t("decisions.consequenceSummary", {
+                        summary: item.gate.consequencesSummary,
+                      })
+                    }}
                   </small>
                   <small>
                     {{ item.gate.requestedBy.displayName }} ·
                     {{ formatDate(item.gate.openedAt) }}
                     <template v-if="item.gate.expiresAt">
-                      · срок {{ formatDate(item.gate.expiresAt) }}
+                      ·
+                      {{
+                        $t("decisions.dueAt", {
+                          date: formatDate(item.gate.expiresAt),
+                        })
+                      }}
                     </template>
                   </small>
                   <small class="decision-row__route">
@@ -540,9 +652,16 @@ onMounted(() => {
               <dd>{{ selected.gate.requestedBy.displayName }}</dd>
             </div>
             <div>
-              <dt><UserRound :size="15" aria-hidden="true" />Инициатор Run</dt>
+              <dt>
+                <UserRound :size="15" aria-hidden="true" />{{
+                  $t("decisions.runInitiator")
+                }}
+              </dt>
               <dd>
-                {{ selected.run?.initiator.displayName ?? "не представлен" }}
+                {{
+                  selected.run?.initiator.displayName ??
+                  $t("decisions.notProvided")
+                }}
               </dd>
             </div>
             <div>
@@ -580,8 +699,8 @@ onMounted(() => {
               <dt>
                 <FileStack :size="15" aria-hidden="true" />{{
                   view === "HISTORY"
-                    ? "Вложения к решению"
-                    : "Вложения к запросу"
+                    ? $t("decisions.resolutionAttachments")
+                    : $t("decisions.requestAttachments")
                 }}
               </dt>
               <dd>
@@ -661,9 +780,12 @@ onMounted(() => {
           >
             <header>
               <h3 id="decision-audit-title">
-                <History :size="16" aria-hidden="true" /> Аудит
+                <History :size="16" aria-hidden="true" />
+                {{ $t("decisions.auditTitle") }}
               </h3>
-              <span v-if="platform.loading.audit">Загружаем…</span>
+              <span v-if="platform.loading.audit">{{
+                $t("common.loading")
+              }}</span>
               <span v-else>{{ selectedAuditEvents.length }}</span>
             </header>
             <ProblemNotice
@@ -682,7 +804,7 @@ onMounted(() => {
               </li>
             </ol>
             <p v-else-if="!platform.loading.audit" class="audit-unavailable">
-              События аудита для этого решения не найдены.
+              {{ $t("decisions.auditEmpty") }}
             </p>
           </section>
 
@@ -707,7 +829,7 @@ onMounted(() => {
               class="decision-options"
               :disabled="busyRef === selected.gate.ref"
             >
-              <legend>Разрешённые варианты и последствия</legend>
+              <legend>{{ $t("decisions.allowedOptions") }}</legend>
               <label
                 v-for="decision in selected.gate.allowedDecisions"
                 :key="decision"
@@ -731,7 +853,7 @@ onMounted(() => {
                     decisionConsequence(selected.gate, decision)
                   }}</span>
                   <small v-if="requiresDecisionComment(decision)">
-                    Комментарий обязателен
+                    {{ $t("decisions.commentRequired") }}
                   </small>
                 </span>
                 <StatusBadge :state="decisionOutcomeState(decision)" />
@@ -741,7 +863,7 @@ onMounted(() => {
               <span>
                 {{ decisionCommentLabel(selectedDecision) }}
                 <strong v-if="requiresDecisionComment(selectedDecision)">
-                  обязательно
+                  {{ $t("common.required") }}
                 </strong>
               </span>
               <VoiceTextarea
@@ -790,17 +912,24 @@ onMounted(() => {
                 />
                 {{
                   busyRef === selected.gate.ref
-                    ? "Применяем решение…"
+                    ? $t("decisions.applying")
                     : decisionLabel(selectedDecision)
                 }}
               </button>
               <span>
-                Решение применится с версией {{ selected.gate.version }} и будет
-                записано в аудит.
+                {{
+                  $t("decisions.versionNotice", {
+                    version: selected.gate.version,
+                  })
+                }}
               </span>
             </div>
           </template>
-          <div v-else class="decision-unavailable" role="status">
+          <div
+            v-else-if="view === 'PENDING'"
+            class="decision-unavailable"
+            role="status"
+          >
             <strong>{{ $t("decisions.actionsUnavailable") }}</strong>
             <p>{{ $t("decisions.actionsUnavailableText") }}</p>
           </div>
@@ -836,6 +965,7 @@ onMounted(() => {
 }
 .decision-view-switch .button {
   min-width: 112px;
+  white-space: nowrap;
   border-radius: 0;
 }
 .decision-view-switch .button:first-child {

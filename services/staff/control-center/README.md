@@ -526,13 +526,37 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 | Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                              |
 | 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference. Точный Secret revision уже сохраняется при edit/reauth.                                                                    |
 | 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                          |
-| 56             | Speech settings/voice; speech bootstrap и transcriptions                                    | STT producer catalog существует в #1053; сквозная HTTP/SDK eligibility/model/parameter projection проверяется владельцами STT/HTTP.                                   |
+| 56             | ConfigurationFields; `/system-stt/model-catalog`, speech bootstrap и transcriptions         | Каталог подключён к выбору модели и параметрам. Реальная bootstrap authority/adapter readiness проверяется владельцами STT/HTTP; каталог не означает READY.           |
 
 Остальные строки исходной матрицы выше требуют общей интеграционной и ручной
 приёмки; локальный unit/browser PASS не превращает их в выполненные business
-acceptance criteria. D6 staged rotation, conflict/forbidden outcomes и живой
-путь CP→broker→runtime проверяются в полном сценарном наборе отдельно от
-показанного synthetic create.
+acceptance criteria. `rotation.synthetic.spec.ts` отдельно проверяет staged
+rotation на 390/2900: lost save ACK → exact retry с исходными Secret OCC/key/value →
+validate/impact → lost publish ACK → reload с авторитетными PUBLISHED/APPLIED
+readbacks. APPLIED, CONFLICT и FORBIDDEN остаются отдельными результатами
+потребителей; повторная публикация для такого recovery не отправляется.
+Живой путь CP→broker→runtime по этим fixtures не считается проверенным.
+
+Прямая ссылка на решение читает существующий `GET /owner-gates/{gateRef}`:
+отсутствие Gate на первой странице не выбирает другое решение. Смена query
+внутри страницы перечитывает адресованный Gate; terminal открывает историю,
+а скрытый ресурс оставляет отдельную ошибку без подстановки соседней строки.
+`gate-navigation.synthetic.spec.ts` проверяет эти переходы на 390/2900.
+Вкладка показывает короткое «Ожидают» с полным доступным именем и tooltip
+по MVP-UI-38; счётчик расположен отдельно от переключателя.
+Подписи последствий, причин ответа, вложений, аудита и применения решения
+используют общий ru/en-каталог. Browser-сценарий меняет локаль на английскую
+без remount; авторитетные пользовательские тексты Gate не переводятся клиентом.
+Агрегированный synthetic Home проверяет более двадцати экранов за один запуск
+и имеет отдельный бюджет 75 секунд. Общий бюджет остальных сценариев остаётся
+45 секунд; лимиты ожиданий элементов и сетевых запросов не увеличены.
+
+Общий API lifetime инвалидируется при очистке owner state. Запоздалые данные,
+401 и автоматические retry прежней сессии не применяются к следующему входу;
+сброс локального query generation не открывает эту границу повторно.
+Регрессии проверяют старый ACK после нового запроса с тем же ключом, поздний
+401, mutation receipt и смену контекста между попытками чтения и записи.
+Отмена браузерного ожидания не означает отмену уже принятой сервером команды.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).
@@ -788,6 +812,32 @@ reload результат восстанавливается авторитет�
 предупреждениях Ajv/esbuild до записи generated validator. Проверка на отдельной
 временной схеме без object type подтверждает этот отказ; исправленный исходный
 контракт проходит генерацию.
+
+## Каталог STT в форме
+
+`ConfigurationFields` читает типизированный `/system-stt/model-catalog` до
+создания первой конфигурации. Общий AsyncEntityPicker ищет в полном ограниченном
+каталоге; версия и дата относятся к проверке адаптера, а не к живому provider probe.
+Идентификаторы моделей не зашиты в форму. Сохранённая отсутствующая модель и
+параметры не теряются при чтении, ошибке каталога или выборе другой модели.
+Не подтверждённые профилем значения остаются видимыми для исправления и
+окончательной серверной проверки. `chunking_strategy` явно связывается с DTO
+`chunkingStrategy`; будущие значения не расширяют текущую OpenAPI enum.
+
+Именованные границы формы взяты из принятого OpenAPI: размер 1024..26214400 байт,
+длительность 1000..1800000 мс, timeout 1000..15000 мс. Рекомендации каталога
+показаны отдельно и не подменяют эти границы. Профиль задаёт ограничения prompt,
+keywords и temperature; текущий публичный API по-прежнему не допускает stream=true.
+Динамическая проекция общей policy min/max отсутствует в текущем каталоге.
+Только новый пустой профиль один раз получает recommended model и совместимые
+начальные language hints/параметры из текущего каталога; существующий документ
+не перезаписывается. Timeout требует явного ввода в серверных границах.
+Очистка числового поля удаляет значение из неполного черновика, не оставляет
+скрытый прежний номер и не подставляет temperature=0. Обычный STT JSON/YAML
+редактор содержит credential reference и допускает общий voice input;
+credential value редакторы остаются sensitive и не получают микрофон.
+`stt-catalog.synthetic.spec.ts` проверяет сохранение значений, поиск, ошибку
+каталога и геометрию на 390/2900; реальный STT/provider/runtime остаётся NOT RUN.
 
 ## Deploy ownership
 
