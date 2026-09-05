@@ -984,6 +984,37 @@ const ru = {
   },
   runtimeSecrets: {
     decodedSize: "Размер данных: {size} байт",
+    draft: {
+      title: "Черновик секрета",
+      publishOnly: "Опубликовать без замены",
+      clearSelection: "Снять весь выбор",
+      unsavedValue:
+        "Введённое значение не сохранено и будет удалено при выходе. Выйти?",
+      restorePlan: "Восстановить план влияния",
+      state: "Состояние",
+      resume: "Открыть сохранённый черновик",
+      impactTitle: "Влияние публикации",
+      impactHelp:
+        "Выберите потребителей для замены версии. Пустой выбор публикует Secret без изменения окружений и привязок агентов.",
+      prepare: "Подготовить план влияния",
+      planTotal: "Всего в плане: {total}. Выбрано: {selected}",
+      visibleTotal: "Доступно по текущему запросу: {total}",
+      environmentOnly: "Окружение без привязки агента",
+      publish: "Опубликовать и применить выбранное",
+      save: "Сохранить черновик",
+      retry: "Повторить исходный запрос",
+      help: "Сохранение создаёт черновик. Действующая версия изменится только после проверки и публикации.",
+      unknown:
+        "Запрос не подтверждён. Повтор использует исходные данные и ключ запроса. Изменение ввода отключено до подтверждения.",
+      abandon:
+        "Результат запроса ещё не подтверждён. При выходе введённое значение будет удалено и повтор этой попытки станет недоступен. Выйти?",
+      reference: "Ссылка на черновик",
+      expires: "Срок действия",
+      savedHelp:
+        "Значение сохранено и удалено из формы. Проверка и отмена выполняются по текущей версии черновика.",
+      validate: "Проверить черновик",
+      discard: "Отменить черновик",
+    },
     title: "Секреты Проекта",
     subtitle:
       "Безопасные значения для окружений: версии, ротация и контролируемая выдача",
@@ -3592,6 +3623,37 @@ const en = {
   },
   runtimeSecrets: {
     title: "Project secrets",
+    draft: {
+      title: "Secret draft",
+      publishOnly: "Publish without replacements",
+      clearSelection: "Clear selection",
+      unsavedValue:
+        "The entered value has not been saved and will be cleared when leaving. Leave?",
+      restorePlan: "Restore impact plan",
+      state: "State",
+      resume: "Open saved draft",
+      impactTitle: "Publication impact",
+      impactHelp:
+        "Select consumers to replace their revision. An empty selection publishes the Secret without changing environments or agent bindings.",
+      prepare: "Prepare impact plan",
+      planTotal: "Plan total: {total}. Selected: {selected}",
+      visibleTotal: "Currently available for this query: {total}",
+      environmentOnly: "Environment without an agent binding",
+      publish: "Publish and apply selection",
+      save: "Save draft",
+      retry: "Retry original request",
+      help: "Saving creates a draft. The active revision changes only after validation and publication.",
+      unknown:
+        "The request is unconfirmed. Retry keeps the original input and request key. Editing is disabled until confirmation.",
+      abandon:
+        "The request is still unconfirmed. Leaving clears the entered value and prevents retrying this attempt. Leave?",
+      reference: "Draft reference",
+      expires: "Expires at",
+      savedHelp:
+        "The value has been saved and cleared from the form. Validation and discard use the current draft version.",
+      validate: "Validate draft",
+      discard: "Discard draft",
+    },
     decodedSize: "Data size: {size} bytes",
     subtitle:
       "Protected environment values with revisions, rotation, and controlled reveal",

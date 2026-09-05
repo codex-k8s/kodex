@@ -432,6 +432,32 @@ safe descriptor и новую connection version после authoritative refres
 - Browser fixture runtime-detail проверяет read-only во время сохранения,
   сохранность overlay после ответа и historical diff на 1440/390 px. Fixtures
   не доказывают producer authority или runtime materialization.
+- D6 использует staged SecretDraft HTTP/SDK `3ad562f0f` и prepublication impact
+  `bcdfa2063`: save/create → authoritative GetDraft → validate → prepare impact
+  → explicit selection → publish → APPLIED outcomes. Ввод существует только
+  в открытой форме до подтверждённого save; неизвестная попытка повторяется с
+  прежними input/key/OCC. Закрытие неопределённой попытки требует явного
+  подтверждения потери возможности повторить ввод. Новая metadata-команда
+  читает свежую owner version, retry сохраняет исходный snapshot.
+- План показывает immutable total отдельно от текущей доступной выдачи,
+  поддерживает server search/cursor и environment-only строки. Пустой выбор
+  имеет отдельное действие публикации без замены. По умолчанию отмечены все
+  доступные строки: UI догружает серверные страницы в пределах 1000 элементов
+  и общего 15-секундного бюджета до разблокировки публикации. Пустой выбор
+  явно публикует без замены потребителей. После публикации APPLIED читается с
+  первой страницы, поскольку прежний cursor принадлежит PREPARED. Ошибки
+  CONFLICT/FORBIDDEN остаются результатами отдельных строк. Ссылки draftRef и
+  planRef в URL позволяют восстановить только безопасные метаданные; после
+  reload опубликованный Secret перечитывается авторитетно, без значения.
+
+Матрица D6: `draft-api.test.ts` проверяет scope, safe metadata, OCC и exact
+retry; `RuntimeSecretDraftDialog.test.ts` — lost ACK, блокировку повторного
+submit и свежий GetDraft; `draft-impact.test.ts` — plan/page totals, pins,
+cursor, explicit empty selection и частичные результаты;
+`RuntimeSecretDraftImpact.test.ts` — повтор публикации и смену owner pins.
+`e2e/fixtures/secrets.ts` проходит JSON save/validate/plan/select/publish,
+результат environment-only замены и reload по сохранённым ссылкам. Это
+synthetic-профиль; реальный путь CP/broker/runtime/staging остаётся NOT RUN.
 
 Для продолжения проверены Context7 Vue watcher cleanup, Pinia reset setup
 state, Playwright route mocking/viewports и CodeMirror dynamic configuration
@@ -447,8 +473,8 @@ state, Playwright route mocking/viewports и CodeMirror dynamic configuration
   сохранения credential или имитации authoritative receipt.
 - D2: model-specific validation опубликованного reasoning effort и catalog pin
   на mutation; сохранение TOML через overlay уже доступно. D4: exact
-  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview;
-  D6: server-side staged SecretDraft lifecycle.
+  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview. D6 UI lifecycle подключён выше;
+  его реальная сквозная приёмка проводится после общего integration gate.
 - Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
   Home server states, Mattermost selector eligibility, RoleImage ownership/build,
   UI/GIT IntegrationPackage execution. Полная MVP-UI-01..61 и staging-приёмка

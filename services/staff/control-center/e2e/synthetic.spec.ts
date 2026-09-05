@@ -1115,7 +1115,11 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
     if (width !== 900) {
       const project = projects[0];
       if (!project) throw new Error("Missing synthetic project");
-      await checkSecretEditor(page, project.ref);
+      await checkSecretEditor(
+        page,
+        project.ref,
+        testInfo.outputPath(`secret-draft-${String(width)}.png`),
+      );
       await page.screenshot({
         path: testInfo.outputPath(`secrets-${String(width)}.png`),
         fullPage: true,
