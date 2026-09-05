@@ -167,6 +167,17 @@ policy не менялись. Проверены Context7 `/getkin/kin-openapi` 
 `Validate`) и фактический source `cmd/validate` закреплённой версии 0.135.0,
 совпадающей с dependency установленного oapi-codegen 2.7.1.
 
+Итоговый проверенный code SHA:
+`83609eeb0e85e73cb70f93679ea4da0e06b9428f`. После исправления на нём повторены
+все перечисленные проверки: полный gateway race с внешним `timeout 300s` и
+внутренним `-timeout=180s`, full vet/build, строгая OpenAPI validation,
+Go/TS codegen с чистым readback и strict SDK typecheck — PASS.
+Docker runtime повторно собран из того же Dockerfile с `VERSION`, равным
+этому exact SHA: PASS; local image
+`kodex-control-api-gateway:1045-83609eeb0`, digest
+`sha256:ac22fd678349281cf8db9f0c8dcacac58ef1365b7d0e0c66b5f6ad827771212c`.
+Последующая запись этого evidence меняет только документацию, не проверенный код.
+
 NOT RUN: real CP protected integration по незавершённым D1..D7, browser E2E,
 live provider, staging/cluster. Никаких новых acceptance-требований эта
 проверка не вводит; код CP, handwritten PWA и Dockerfile не изменялись.
