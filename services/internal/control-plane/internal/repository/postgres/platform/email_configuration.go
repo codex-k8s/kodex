@@ -69,8 +69,6 @@ func (repository *Repository) ConfigureEmail(ctx context.Context, raw []byte) er
 	if err := tx.Commit(ctx); err != nil {
 		return errs.ErrUnavailable
 	}
-	repository.emailConfigurationRevision = projection.Revision
-	repository.emailConfigurationDigest = projection.Digest
 	return nil
 }
 
@@ -102,12 +100,24 @@ func (repository *Repository) InitializeEmailConfiguration(ctx context.Context, 
 	if input.Revision == 1 && input.ManagedBy == "git" && input.Source == "release-bootstrap" && len(input.Mailboxes) == 0 {
 		stored, err := repository.EmailConfiguration(ctx)
 		if err == nil {
-			repository.emailConfigurationRevision, repository.emailConfigurationDigest = stored.Revision, api.Digest(stored)
 			return stored, nil
 		}
 		if !errors.Is(err, errs.ErrNotFound) {
 			return api.Configuration{}, err
 		}
+	} else {
+		if _, err := repository.EmailConfiguration(ctx); errors.Is(err, errs.ErrNotFound) {
+			seed, _ := json.Marshal(api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "release-bootstrap", Mailboxes: []api.Mailbox{}})
+			if err := repository.ConfigureEmail(ctx, seed); err != nil {
+				return api.Configuration{}, err
+			}
+		} else if err != nil {
+			return api.Configuration{}, err
+		}
+		if err := repository.importGitMailboxes(ctx, input); err != nil && !errors.Is(err, errs.ErrMailboxPublicationPending) {
+			return api.Configuration{}, err
+		}
+		return repository.EmailConfiguration(ctx)
 	}
 	if err := repository.ConfigureEmail(ctx, raw); err != nil {
 		return api.Configuration{}, err
@@ -115,13 +125,14 @@ func (repository *Repository) InitializeEmailConfiguration(ctx context.Context, 
 	return repository.EmailConfiguration(ctx)
 }
 
+// ReconcileConfiguredEmail повторяет deployment-owned import после прежней delivery.
+func (repository *Repository) ReconcileConfiguredEmail(ctx context.Context, configuration api.Configuration) error {
+	return repository.importGitMailboxes(ctx, configuration)
+}
+
 func (repository *Repository) readEmailMailbox(ctx context.Context, tx pgx.Tx, current scope, ref string, revision int64) (emailpolicy.MailboxProjection, error) {
-	if repository.emailConfigurationRevision == 0 {
-		return emailpolicy.MailboxProjection{}, errs.ErrForbidden
-	}
 	var raw []byte
-	if err := tx.QueryRow(ctx, queryEmailConfigurationRead, current.organizationID, ref, revision,
-		repository.emailConfigurationRevision, repository.emailConfigurationDigest).Scan(&raw); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, queryEmailConfigurationRead, current.organizationID, ref, revision).Scan(&raw); errors.Is(err, pgx.ErrNoRows) {
 		return emailpolicy.MailboxProjection{}, errs.ErrForbidden
 	} else if err != nil {
 		return emailpolicy.MailboxProjection{}, errs.ErrUnavailable

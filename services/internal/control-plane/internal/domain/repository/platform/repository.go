@@ -85,6 +85,7 @@ type ProofPrincipalInput struct {
 	OwnerClaim              bool
 	CallerWorkload          string
 	Operation               string
+	RequestDigestSHA256     string
 	ProjectRef              string
 }
 
@@ -215,6 +216,12 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxConfigurationView, error)
+	ListEmailMailboxConfigurations(context.Context, value.Principal, string, string, query.Page) (entity.EmailMailboxPage, error)
+	ListEmailMailboxCredentials(context.Context, value.Principal, string, string, query.Page) ([]entity.EmailMailboxCredential, int64, string, error)
+	GetEmailMailboxCredentialReceipt(context.Context, value.Principal, string, string) (entity.EmailMailboxCredential, error)
+	PreviewEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxPreview, error)
+	ReportEmailConfigurationReadback(context.Context, value.Principal, int64, string) error
 	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
 	PrepareRuntimeSecretDraftImpact(context.Context, value.Principal, string, value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error)
 	GetRuntimeSecretDraftImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeSecretDraftImpactPage, error)
@@ -295,7 +302,7 @@ type Repository interface {
 	GetRun(context.Context, value.Principal, string) (entity.Run, error)
 	GetRunGraph(context.Context, value.Principal, string) (entity.Run, entity.RunGraph, error)
 	ListRunEvents(context.Context, value.Principal, query.Filter) ([]entity.RunEvent, int64, bool, error)
-	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, string, error)
+	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, int64, string, error)
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
 	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)

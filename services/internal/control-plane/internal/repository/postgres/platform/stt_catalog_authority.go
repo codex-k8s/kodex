@@ -11,6 +11,9 @@ import (
 const sttModelCatalogOperation = "platform.stt.model-catalog.get"
 
 func (repository *Repository) ResolveProofAuthority(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+	if input.Operation == platformrepo.ProviderModelCatalogOperation {
+		return repository.ResolveProviderModelCatalogProof(ctx, input)
+	}
 	if input.Operation == sttModelCatalogOperation && (input.CallerWorkload != "control-api-gateway" || input.ProjectRef != "") {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}

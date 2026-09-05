@@ -635,10 +635,10 @@ func (service *Service) ListRunEvents(ctx context.Context, p value.Principal, fi
 	}
 	return service.repository.ListRunEvents(ctx, p, filter)
 }
-func (service *Service) ListOwnerGates(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.OwnerGate, string, error) {
+func (service *Service) ListOwnerGates(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.OwnerGate, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	return service.repository.ListOwnerGates(ctx, p, filter)
 }
@@ -1241,7 +1241,10 @@ func knownCommand(kind command.Kind) bool {
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
 		command.PublishSystemSTTDraft, command.RebindSystemSTT,
-		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration:
+		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration,
+		command.CreateEmailMailboxDraft, command.SaveEmailMailboxDraft, command.ValidateEmailMailboxDraft,
+		command.PublishEmailMailboxDraft, command.DiscardEmailMailboxDraft,
+		command.BindEmailMailboxConfiguration, command.UnbindEmailMailboxConfiguration:
 		return true
 	default:
 		return false

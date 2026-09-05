@@ -46,8 +46,6 @@ type Repository struct {
 	integrationDefinitions        map[string]integrationpackage.Package
 	runtimeSecretNamespace        string
 	runtimeSecretStagingNamespace string
-	emailConfigurationRevision    int64
-	emailConfigurationDigest      string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
