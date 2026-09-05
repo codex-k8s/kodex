@@ -4,7 +4,7 @@ title: stt-tts-service
 type: service
 status: approved
 owner: developer
-version: 1.4.0
+version: 1.5.0
 updated: 2026-09-05
 ---
 
@@ -24,6 +24,7 @@ render не является разрешением на deploy или свид�
 | Audio → FFmpeg | MIME allowlist, actual decode, byte/sample/deadline limits | длительность по PCM, не STREAMINFO/container duration |
 | STT → secret-broker | exact continuation, config/account/generation/expiry | краткоживущий key, очищаемый после запроса |
 | STT → OpenAI | один HTTPS POST через exact egress-gateway, TLS 1.3, без redirect/retry | bounded transcript и безопасный receipt |
+| Admin → gateway → STT catalog | organization permission `system.configuration.manage`, exact unary digest, mTLS/verifier | возможности adapter до первой configuration, без credential или provider вызова |
 
 Project необязателен только когда отсутствует в проверенном authority.
 Переданный project обязан иметь полную provenance; пустой locator не разрешает
@@ -82,9 +83,45 @@ decoder. Shutdown 30 секунд, Kubernetes grace 35 секунд.
 MVP57, хотя каталог отдельно сообщает file-stream способность провайдера.
 Singular `language` для gpt-transcribe не отправляется. Ответ допускает
 `text`, `usage`, `languages`; unknown/trailing JSON закрыто отклоняется.
-Каталог возвращается адаптером в `availability.catalog`, содержит version,
+Каталог возвращается адаптером в `GetModelCatalog` и `availability.catalog`, содержит version,
 дату проверки официальной документации observed_at и server limits параметров.
 Это реестр совместимости, а не live account/model availability.
+
+### Административный каталог до первой настройки
+
+MVP-UI-56: `GET /api/v1/system-stt/model-catalog` в #1045 использует generated
+`SpeechToTextService.GetModelCatalog`. Пустой request не принимает actor,
+organization, project, model, credential или configuration. CP #1046 разрешает
+организацию и существующее право `organization.manage` из проверенной web session; issuer
+выдаёт operation `platform.stt.model-catalog.get` с permission
+`system.configuration.manage`, exact target/actor/organization и
+`UNARY_PROTO_SHA256`. Project/resource/version/attempt/idempotency metadata
+для этого чтения запрещены. STT проверяет конкретные method/operation/
+permission/binding и provenance, запрещает project/continuation и непустой
+payload. Метрики используют фиксированный bucket `model_catalog`.
+RPC permission `system.configuration.manage` не является новой ACL-записью:
+её выдача требует указанного авторитетного права организации в CP.
+
+Domain читает только зарегистрированный adapter catalog: policy/credential
+projection, decoder, egress/model probe и audio POST не вызываются. Ответ
+содержит существующий typed каталог с version/observedAt; boolean READY,
+account/credential/configuration и user availability в нём отсутствуют.
+Ни выключенная конфигурация, ни её отсутствие не блокируют первоначальную
+административную форму. Это не обход проверки разрешений или локального
+startup barrier сервиса. Срок чтения ограничен min(5 секунд, caller deadline,
+authority expiry); отменённый/истёкший запрос не возвращает каталог.
+
+| Переход чтения | Результат и авторитетный read path |
+| --- | --- |
+| Успех до первой configuration/credential | Текущий каталог adapter в одном RPC response; состояние, receipt и domain event не создаются. |
+| Нет/отозвано право, speech-only permission, неверные tenant provenance или binding | Отказ verifier/domain до adapter read; микрофон не становится доступным. |
+| Cancel/deadline/expiry | Ограниченный отказ без внешнего effect и без сохранённого результата. |
+| Повтор | Новое чтение с новым проверенным authority; прежний proof не продлевается и не заменяет replay protection. |
+| Недоступный adapter catalog | Закрытая ошибка без fallback на browser enum или config READY. |
+
+Общий `modelprofile.MaximumProviderTimeout` задаёт предел 15 секунд для
+валидации owner policy и выполнения STT. Успешная публикация configuration
+сама по себе не подтверждает provider readiness.
 
 ## Readiness и доступность микрофона
 
@@ -155,6 +192,9 @@ Live Job не входит в active profiles и требует отдельно
 - [OpenAI File transcription](https://developers.openai.com/api/docs/guides/speech-to-text):
   languages вместо language и JSON languages response.
 - [OpenAI Audio API](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+- Повторно проверены через OpenAI Docs и Context7
+  `/websites/developers_openai_api_reference`: file transcription,
+  model-specific `language/languages`, keywords и response formats.
 - Context7 `/websites/ffmpeg_documentation`: protocol whitelist, decode/error options.
 - Context7 `/microsoft/playwright`: Chromium/Firefox/WebKit launch/close.
 - Для CONNECT callback Context7 не нашёл релевантный net/http; проверены

@@ -40,6 +40,10 @@ type readinessService struct{}
 
 func (readinessService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
 
+func (readinessService) GetModelCatalog(context.Context, value.Principal) (modelprofile.Catalog, error) {
+	return modelprofile.OpenAICatalog(), nil
+}
+
 func (readinessService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
 	return transcriptionservice.Availability{}, errors.New("unavailable")
 }
