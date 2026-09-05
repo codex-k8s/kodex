@@ -12,6 +12,9 @@ import (
 
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
+	case command.ConfigureRoleImageGitSource, command.ConfigureIntegrationDefinitionGitSource, command.RefreshRoleImageGitSource, command.RefreshIntegrationDefinitionGitSource:
+		_, err := repository.configurationSourceAuthority(ctx, tx, current, input)
+		return err
 	case command.ReportEmailEffect:
 		_, _, _, err := repository.authorizeEmailReport(ctx, tx, current, input)
 		return err

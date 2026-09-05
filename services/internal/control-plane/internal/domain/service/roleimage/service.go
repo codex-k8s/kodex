@@ -56,6 +56,15 @@ func New(repo repository.Repository, catalog *Catalog) (*Service, error) {
 	return &Service{repository: repo, catalog: catalog}, nil
 }
 
+// ValidateManagedRecipe использует те же metadata/specification invariants для
+// UI/GIT managed owner и специализированного recipe API.
+func ValidateManagedRecipe(projectRef, roleRef, name string, input entity.RoleImageRecipeInput) error {
+	if !validRef(projectRef, "prj") || !validRef(roleRef, "role") || !validDisplayName(name) || validateRecipe(input) != nil {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
 func (service *Service) ListEnvironments(ctx context.Context, principal value.Principal) ([]Environment, error) {
 	principal, err := service.resolvePrincipal(ctx, principal)
 	if err != nil {

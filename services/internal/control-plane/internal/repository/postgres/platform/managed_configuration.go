@@ -302,6 +302,20 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		configuration.ManagedBy, configuration.Source, configuration.SourceRevision = "UI", "control-center", ""
+		if configuration.GitSource != nil {
+			source, err := readConfigurationSource(ctx, tx, current.organizationID, configuration.Ref)
+			if err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryConfigurationSourceCancelWork, configuration.id); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			result, err := repository.sourceState(ctx, tx, current, source, entity.ConfigurationSourceDetached, "")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			configuration.GitSource = &result
+		}
 	}
 	return managedOutcome(configuration, revision), nil
 }
@@ -324,6 +338,9 @@ func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, 
 		}
 		if kind != "" && item.Kind != kind {
 			return managedSet{}, errs.ErrNotFound
+		}
+		if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &item); err != nil {
+			return managedSet{}, err
 		}
 		if item.currentRevisionID != "" {
 			revision, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationCurrentRevision, current.organizationID, item.id, item.currentRevisionID))
@@ -544,6 +561,9 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	}
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.view", "organization.view"); err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrNotFound
+	}
+	if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &set); err != nil {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", err
 	}
 	includeContent := true
 	if set.Kind == revisionservice.KindPromptTemplate {
