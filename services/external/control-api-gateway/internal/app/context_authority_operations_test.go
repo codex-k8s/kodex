@@ -13,6 +13,14 @@ func TestContextHTTPMethodsHaveExactAuthorityProfile(t *testing.T) {
 		reverse[method] = op
 	}
 	methods := []string{
+		controlplanev1.PlatformCommandService_SavePromptTemplateDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName,
+		controlplanev1.PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName,
 		controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
 		controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
 		controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,

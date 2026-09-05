@@ -2922,6 +2922,33 @@ paths:
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: savePromptTemplateDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardPromptTemplateDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation:
     post:
       tags: [Administration]
@@ -2969,6 +2996,33 @@ paths:
       responses:
         '201':
           description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveRoleImageRevisionDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardRoleImageRevisionDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
@@ -3022,6 +3076,33 @@ paths:
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveIntegrationDefinitionDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardIntegrationDefinitionDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation:
     post:
       tags: [Administration]
@@ -3069,6 +3150,33 @@ paths:
       responses:
         '201':
           description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveSystemSTTConfigurationDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardSystemSTTConfigurationDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
@@ -4168,6 +4276,17 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
         content: { type: string, minLength: 1, maxLength: 262144 }
+    ManagedConfigurationDraftSaveInput:
+      type: object
+      additionalProperties: false
+      required: [contentFormat, content]
+      properties:
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content:
+          type: string
+          maxLength: 262144
+          description: Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
+          x-go-type: '*string'
     ManagedConfigurationCopyInput:
       type: object
       additionalProperties: false
@@ -4197,7 +4316,7 @@ components:
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED] }
+        state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED, DISCARDED] }
         contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
         content: { type: string, maxLength: 262144 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -4241,7 +4360,7 @@ components:
           properties:
             ref: { $ref: '#/components/schemas/OpaqueRef' }
             revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-            state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED] }
+            state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED, DISCARDED] }
             digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
     ManagedConfigurationPage:

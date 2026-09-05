@@ -77,6 +77,40 @@ Producer: `b3375dfa64e6f404df83ce7b05904a5143e2e6e3`.
 - Runtime-каталог gateway содержит новые CP message IDs для identity,
   неизвестного delivery outcome, reconciliation и обоих selected rebind.
 
+## Сохранение и отмена managed drafts
+
+Producer: `75af5aba7`, policy 53, migration 00614. Для каждого из четырёх
+configuration paths HTTP предоставляет специализированные команды:
+
+| Configuration path | SDK Save / Discard | CP RPC |
+| --- | --- | --- |
+| `prompt-template-configurations` | `savePromptTemplateDraft` / `discardPromptTemplateDraft` | `SavePromptTemplateDraft` / `DiscardPromptTemplateDraft` |
+| `role-image-configurations` | `saveRoleImageRevisionDraft` / `discardRoleImageRevisionDraft` | `SaveRoleImageRevisionDraft` / `DiscardRoleImageRevisionDraft` |
+| `integration-definition-configurations` | `saveIntegrationDefinitionDraft` / `discardIntegrationDefinitionDraft` | `SaveIntegrationDefinitionDraft` / `DiscardIntegrationDefinitionDraft` |
+| `system-stt-configurations` | `saveSystemSTTConfigurationDraft` / `discardSystemSTTConfigurationDraft` | `SaveSystemSTTConfigurationDraft` / `DiscardSystemSTTConfigurationDraft` |
+
+Все пути: POST `/api/v1/{configuration path}/{configurationRef}/revisions/{revisionRef}/saves|discard`.
+Actor/tenant выводятся из проверенной session и signed RPC context; CP требует
+`project.manage` либо `organization.manage`, разрешает set внутри owner
+boundary до OCC и запрещает запись в Git-owned configuration. Idempotency,
+CSRF и `If-Match` с **configuration.version** обязательны.
+
+Save body содержит только `contentFormat` и `content`. Для prompt разрешён
+TEXT; для остальных kinds JSON/YAML/TOML. Неполный и пустой текст допустим,
+но отсутствие content, null, NUL и превышение 256 KiB UTF-8 отклоняются.
+HTTP не пытается валидировать синтаксис вместо отдельной серверной команды.
+Owner обрезает внешний whitespace, создаёт новый immutable DRAFT с
+parent=старый revisionRef, прежний черновик переводит в DISCARDED. Клиент
+выбирает **новый** revision.ref и новый ETag после сохранения.
+
+Discard терминально отменяет только выбранный черновик и сохраняет content;
+опубликованная ревизия не меняется. Ответы 200 содержат configuration/revision,
+ETag = configuration.version. Gateway проверяет kind/owner, увеличение версии,
+lineage, digest и соответствие возвращённого текста серверной нормализации.
+DISCARDED поддерживается в revision и history, неизвестные states закрыто
+отклоняются. Audit/idempotency принадлежат одной CP transaction; новых events
+нет, read path — `ListManagedConfigurationHistory`.
+
 ## Проверки HTTP
 
 Из `services/external/control-api-gateway`:

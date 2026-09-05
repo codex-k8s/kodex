@@ -65,7 +65,8 @@ func managedConfigurationSummaryView(value *controlplanev1.ManagedConfigurationS
 			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_VALID,
 			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_INVALID,
 			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_PUBLISHED,
-			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_SUPERSEDED:
+			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_SUPERSEDED,
+			controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED:
 		default:
 			return generated.ManagedConfigurationSummary{}, errManagedConfigurationShape
 		}

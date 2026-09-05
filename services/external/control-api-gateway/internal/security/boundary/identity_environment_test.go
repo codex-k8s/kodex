@@ -15,6 +15,14 @@ import (
 
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
+		{"POST", "/api/v1/prompt-template-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
+		{"POST", "/api/v1/prompt-template-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
+		{"POST", "/api/v1/role-image-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
+		{"POST", "/api/v1/role-image-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
+		{"POST", "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
+		{"POST", "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
+		{"POST", "/api/v1/system-stt-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
+		{"POST", "/api/v1/system-stt-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
 		{"GET", "/api/v1/integration-invocations/inv_fixture01/email-effect-receipt"},
 		{"POST", "/api/v1/email-effect-receipts/erc_fixture01/reconciliation"},
 		{"GET", "/api/v1/integration-connections/conn_fixture01/interaction-identities"},

@@ -37,9 +37,10 @@ func managedFixture() (*controlplanev1.ManagedConfigurationSet, *controlplanev1.
 
 type managedRPCRecorder struct {
 	grpc.ClientConnInterface
-	method  string
-	request proto.Message
-	failure error
+	method        string
+	request       proto.Message
+	failure       error
+	revisionState controlplanev1.ManagedConfigurationState
 }
 
 func (client *managedRPCRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -48,6 +49,9 @@ func (client *managedRPCRecorder) Invoke(_ context.Context, method string, reque
 		return client.failure
 	}
 	configuration, revision := managedFixture()
+	if client.revisionState != 0 {
+		revision.State = client.revisionState
+	}
 	var output proto.Message
 	switch {
 	case strings.HasSuffix(method, "/DetachGitManagedConfiguration"):
