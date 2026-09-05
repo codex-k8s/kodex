@@ -253,6 +253,10 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
+		if errors.Is(err, errPublicSecretDescriptor) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		writeLocalProblem(writer, http.StatusInternalServerError, "INTERNAL", false)
 		return
 	}
@@ -318,7 +322,17 @@ func messageMap(message proto.Message) (map[string]any, error) {
 
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
+var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
+
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if descriptor.FullName() == "controlplane.v1.RuntimeSecretDescriptor" {
+		revision, ok := value["revision"].(string)
+		pin, err := strconv.ParseInt(revision, 10, 64)
+		if !ok || err != nil || !validManagedVersion(pin) {
+			return errPublicSecretDescriptor
+		}
+		delete(value, "namespace")
+	}
 	fields := descriptor.Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)

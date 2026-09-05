@@ -8052,6 +8052,7 @@ type RuntimeSecretCreateInput struct {
 type RuntimeSecretDescriptor struct {
 	ContentSha256         string    `json:"contentSha256"`
 	Name                  string    `json:"name"`
+	Revision              int64     `json:"revision"`
 	SecretKey             string    `json:"secretKey"`
 	SecretName            string    `json:"secretName"`
 	SecretRef             OpaqueRef `json:"secretRef"`

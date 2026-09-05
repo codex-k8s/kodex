@@ -33,7 +33,7 @@ updated: 2026-09-05
 | 43–45 | Schedule specification/preview/revisions и prompt preview, Environment read/readiness/agents | Cron materialization/continuation и eligibility принадлежат scheduler/CP; inspector — PWA |
 | 46–50 | Environment draft lifecycle; Secret encrypted draft и immutable prepublication impact plan/per-item outcomes; exact Secret pin в Environment | Prepublication plan для Environment/Prompt/Instructions/RoleImage ещё нужен в CP. Postpublication impact/rebind не закрывает это требование |
 | 51–52 | Provider delete/revoke/verify/reauthorize/device challenge и typed provider errors | Durable cleanup, blockers и real provider path требуют producer integration |
-| 14, 55–60 | Typed STT settings/catalog/availability и bounded multipart transcription через protected client | Реальный provider smoke и итоговая readiness требуют разрешённого контура; локальные fixtures не заменяют его |
+| 14–15, 55–60 | Typed STT settings/catalog/availability и bounded multipart transcription через protected client; инструкции и variables read | Размер редактора — PWA. Реальный provider smoke и итоговая readiness требуют разрешённого контура; локальные fixtures не заменяют его |
 
 Недостающие CP контракты переданы владельцу #1046. Gateway не добавляет
 самостоятельно новые RPC, eligibility, authorizations или успешные состояния
@@ -52,8 +52,14 @@ OCC/idempotency и события сохраняют существующий li
 потребители получают exact descriptors из published RuntimeEnvironment, а
 активный attempt продолжает прежнюю RuntimeRevision. Недопустимое число
 отклоняется до RPC; повреждённый pin ответа — 502.
+Published `secretDescriptors[].revision` также описан в SDK и проверяется как
+положительный exact pin. Kubernetes namespace не входит в публичную projection.
 
 ## D5: typed mailbox, schema 056547091
+
+Регистрация всех 12 публичных RPC и internal EMAIL readback подключена через
+policy59 `78d700683`. Это устраняет structural profile gap, но не доказывает
+исполнение owner, доставку конфигурации или READY.
 
 Источники: #1045/#1046/#1018, MVP-UI-41, CFG и
 `mailbox-owner-lifecycle-1046.md`. HTTP потребляет специализированные CP RPC,

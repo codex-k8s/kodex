@@ -1019,6 +1019,7 @@ export type RuntimeSecretDescriptor = {
     secretUid: string;
     secretResourceVersion: string;
     contentSha256: string;
+    revision: number;
 };
 
 export type RuntimeSecretBinding = {
