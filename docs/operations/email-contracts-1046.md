@@ -223,14 +223,32 @@ owner-транзакцией. Нового domain event нет: Get/Resolve яв
 Повторить `ReportEmailEffectReceipt` с прежними Binding, ExternalReceiptRef,
 ExternalReceiptDigest, SemanticInputDigest, Outcome и Idempotency-Key.
 CP возвращает тот же owner ref и сохранённый command result. После expiry/revoke
-допускается только exact replay уже сохранённой observation, не первая запись
-и не новый provider effect. Свежий verified EMAIL worker credential обязателен.
+допускается exact replay уже сохранённой observation. После expiry прежней lease
+также допускается поздняя запись наблюдения по ранее выданной immutable
+authorization: exact organization/source/lease/fence/generation/semantic digest.
+Первый receipt может быть только UNKNOWN; terminal Report требует прежний UNKNOWN
+receipt и не может противоречить owner decision. Свежий verified EMAIL worker
+credential обязателен. Ни authorization, ни grant не продлеваются.
 Пустой receipt_ref в `ResolveEmailReconciliation` не вводится.
+
+Поздний Report атомарно закрывает истёкший RUNNING invocation в UNKNOWN_OUTCOME,
+очищает исполняемую lease и сохраняет receipt/audit/idempotency. Уже FAILED или
+CANCELLED источник не открывается заново: receipt-bound fresh Reconcile/Resolve
+доступен и для этих terminal states (миграция 00621), исключительно для local
+audit/unlock. Claim не выдаёт эти invocations повторно. Новый terminal receipt
+без исходного UNKNOWN запрещён, как и создание UNKNOWN для SUCCEEDED источника.
+Нового события нет: авторитетные Get/Resolve остаются read path.
 
 Consumer recovery должен устойчиво сохранить исходный binding и idempotency key
 до Report, убрать local expiry precheck только для этого read-like replay и не
 продолжать отправку после истечения lease. Он не может восстановить source
-lineage по произвольному external ref/digest. Эта consumer доработка передана root.
+lineage по произвольному external ref/digest. Consumer checkpoint root: `07cd3ee69`.
+
+Локальный PG `email_configuration|email_receipt` проверяет real authorization
+перед expiry, отсутствие первого Report в CP до expiry, поздний UNKNOWN,
+owner NO_EFFECT_CONFIRMED и Resolve, потерю terminal Report, exact replay,
+FAILED/CANCELLED reconciliation и отсутствие новых claims. Protected issuer→CP→bridge
+для этого recovery: NOT RUN.
 
 Локально PASS: 21-operation semantic/scope/Human Gate matrix (12 mutations),
 Go/race domain/service/repository/gRPC, disposable PG email receipt/watermark/

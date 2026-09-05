@@ -24,6 +24,10 @@ var (
 	queryEmailReceiptUpdate string
 	//go:embed sql/email_receipt_authorization_ref.sql
 	queryEmailReceiptAuthorizationRef string
+	//go:embed sql/email_report_recovery_source.sql
+	queryEmailReportRecoverySource string
+	//go:embed sql/email_report_expire_source.sql
+	queryEmailReportExpireSource string
 )
 
 func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.Tx, current scope, input command.Command) (string, entity.EmailAuthorization, emailReceiptOwner, error) {
@@ -74,7 +78,21 @@ func (repository *Repository) authorizeEmailReport(ctx context.Context, tx pgx.T
 			return ref, decision, owner, nil
 		}
 	}
-	if !decision.ExpiresAt.After(time.Now()) || !payload.Binding.ExpiresAt.After(time.Now()) {
+	if !payload.Binding.ExpiresAt.After(time.Now()) {
+		// Просроченный source допускает только запись факта по прежней authorization.
+		var state string
+		if err := tx.QueryRow(ctx, queryEmailReportRecoverySource, current.organizationID, ref).Scan(&state); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", decision, owner, errs.ErrForbidden
+			}
+			return "", decision, owner, errs.ErrUnavailable
+		}
+		if owner.id == "" && state == "SUCCEEDED" {
+			return "", decision, owner, errs.ErrConflict
+		}
+		return ref, decision, owner, nil
+	}
+	if !decision.ExpiresAt.After(time.Now()) {
 		return "", decision, owner, errs.ErrForbidden
 	}
 	authorizedQuery.Binding.Fence = payload.Binding.Fence
@@ -100,6 +118,20 @@ func (repository *Repository) reportEmailEffect(ctx context.Context, tx pgx.Tx, 
 	payload := input.Payload.(command.EmailEffectReportInput)
 	if err := emailpolicy.ValidateReceiptTransition(owner.receipt.Outcome, payload.Outcome); err != nil {
 		return commandOutcome{}, err
+	}
+	if !payload.Binding.ExpiresAt.After(time.Now()) {
+		if _, err := tx.Exec(ctx, queryEmailReportExpireSource, current.organizationID, ref); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+	}
+	if owner.id != "" && owner.receipt.Outcome != payload.Outcome {
+		decision, err := readEmailDecision(ctx, tx, current, owner.receipt.Ref, "")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if decision != nil && decision.Outcome != payload.Outcome {
+			return commandOutcome{}, errs.ErrConflict
+		}
 	}
 	if owner.id == "" {
 		receiptRef, err := newRef("emrc")
