@@ -201,7 +201,12 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		processed++
 	}
 	sources, err := processConfigurationSourceWork(ctx, control.ConfigurationSources, adapter, metrics, config)
-	return processed + sources, err
+	processed += sources
+	if err != nil {
+		return processed, err
+	}
+	writebacks, err := processConfigurationWriteBackWork(ctx, control.ConfigurationWriteBacks, adapter, metrics, config)
+	return processed + writebacks, err
 }
 
 func completeTest(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationConnectionTestClaim, result string, operationErr error) error {

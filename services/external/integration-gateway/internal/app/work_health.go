@@ -26,5 +26,5 @@ func (health *workCycleHealth) ready(now time.Time, budget time.Duration) bool {
 }
 
 func integrationCycleBudget(config Config) time.Duration {
-	return 2*config.OperationTimeout + min(config.OperationTimeout, maximumConfigurationSourceOperation) + 6*config.RequestTimeout
+	return 2*config.OperationTimeout + min(config.OperationTimeout, maximumConfigurationSourceOperation) + min(config.OperationTimeout, maximumConfigurationWriteBackOperation) + 12*config.RequestTimeout
 }

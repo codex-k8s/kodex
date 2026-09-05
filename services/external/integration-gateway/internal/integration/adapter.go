@@ -79,6 +79,7 @@ func IsUnknownOutcome(err error) bool {
 }
 
 type Adapter struct {
+	proxyURL           string
 	credentials        *credentialfs.Store
 	definitions        map[string]integrationpackage.Package
 	githubHTTPClient   *http.Client
@@ -91,6 +92,9 @@ type Adapter struct {
 }
 
 func New(config Config) (*Adapter, error) {
+	if err := checkWriteBackRuntime(); err != nil {
+		return nil, err
+	}
 	proxy, err := url.Parse(config.ProxyURL)
 	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" ||
 		proxy.Path != "" || proxy.RawQuery != "" || proxy.User != nil {
@@ -125,6 +129,7 @@ func New(config Config) (*Adapter, error) {
 		return nil, err
 	}
 	return &Adapter{
+		proxyURL:        config.ProxyURL,
 		emailHTTPClient: emailClient,
 		credentials:     credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
@@ -306,6 +311,14 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	definition, err := integrationpackage.Parse(request.DefinitionPackage)
 	if err != nil || integrationpackage.ValidateExecutableRevision(definition, shipped) != nil || definition.Metadata.Key != request.DefinitionKey || definition.Metadata.Version != request.DefinitionVersion || definition.Digest != request.DefinitionDigest {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	for _, destination := range shipped.Spec.NetworkDestinations {
+		if destination.Key == "github_git" {
+			continue
+		}
+		if !definition.HasNetworkDestination(destination) {
+			return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		}
 	}
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}

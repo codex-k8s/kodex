@@ -60,3 +60,15 @@ func (m *Metrics) ConfigurationSource(success bool) {
 	}
 	m.operations.WithLabelValues("configuration_source", outcome).Inc()
 }
+
+func (m *Metrics) ConfigurationWriteBack(branch, success bool) {
+	operation := "configuration_writeback_pr"
+	if branch {
+		operation = "configuration_writeback_branch"
+	}
+	outcome := "success"
+	if !success {
+		outcome = "unknown"
+	}
+	m.operations.WithLabelValues(operation, outcome).Inc()
+}
