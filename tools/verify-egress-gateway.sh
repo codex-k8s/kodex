@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repository_root="$(git rev-parse --show-toplevel)"
+env -u GOFLAGS GOENV=off GOWORK=off go -C "$repository_root/libs/go/dnsresolver" test -race -timeout 90s ./...
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_directory"' EXIT
 

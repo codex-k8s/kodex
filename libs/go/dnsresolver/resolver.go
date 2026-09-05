@@ -14,7 +14,6 @@ import (
 	"time"
 
 	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/miekg/dns"
 )
 
@@ -52,7 +51,7 @@ type Observer func(outcome string, reason Reason)
 
 // Resolver владеет A/AAAA resolution и bounded cache.
 type Resolver struct {
-	config    policy.DNSConfig
+	config    Config
 	servers   []netip.AddrPort
 	exchanger Exchanger
 	now       func() time.Time
@@ -63,7 +62,10 @@ type Resolver struct {
 }
 
 // New создаёт resolver только из literal DNS server addresses.
-func New(config policy.DNSConfig, servers []netip.AddrPort, exchanger Exchanger, observe Observer) (*Resolver, error) {
+func New(config Config, servers []netip.AddrPort, exchanger Exchanger, observe Observer) (*Resolver, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 	if len(servers) == 0 || len(servers) > 3 {
 		return nil, errors.New("DNS server configuration is invalid")
 	}
@@ -132,7 +134,10 @@ func (resolver *Resolver) Healthy() bool { return resolver != nil && resolver.he
 
 // Resolve возвращает только полный validated snapshot; stale fallback отсутствует.
 func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapshot, error) {
-	hostname, err := policy.NormalizeHostname(hostname)
+	if ctx.Err() != nil {
+		return resolver.reject(ReasonTimeout)
+	}
+	hostname, err := shared.NormalizeHostname(hostname)
 	if err != nil {
 		return resolver.reject(ReasonMalformed)
 	}
@@ -180,16 +185,19 @@ func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapsho
 	}
 	minimumTTL := time.Duration(resolver.config.MinimumTTLSeconds) * time.Second
 	maximumTTL := time.Duration(resolver.config.MaximumTTLSeconds) * time.Second
-	if ttl < minimumTTL {
-		ttl = minimumTTL
-	}
 	if ttl > maximumTTL {
 		ttl = maximumTTL
 	}
 	snapshot := Snapshot{Addresses: append([]netip.Addr(nil), addresses...), ExpiresAt: now.Add(ttl)}
-	resolver.cacheMu.Lock()
-	resolver.store(hostname, snapshot)
-	resolver.cacheMu.Unlock()
+	if ctx.Err() != nil || !resolver.now().Before(snapshot.ExpiresAt) {
+		return resolver.reject(ReasonTimeout)
+	}
+	// Нижний предел относится к кэшу, но не продлевает TTL авторитетного DNS.
+	if ttl >= minimumTTL {
+		resolver.cacheMu.Lock()
+		resolver.store(hostname, snapshot)
+		resolver.cacheMu.Unlock()
+	}
 	resolver.healthy.Store(true)
 	resolver.observe("validated", ReasonNone)
 	return snapshot, nil
@@ -359,6 +367,7 @@ func (resolver *Resolver) reject(reason Reason) (Snapshot, error) {
 }
 
 func (resolver *Resolver) store(hostname string, snapshot Snapshot) {
+	snapshot.Addresses = append([]netip.Addr(nil), snapshot.Addresses...)
 	if len(resolver.cache) >= resolver.config.MaximumCacheEntries {
 		oldestName := ""
 		var oldestExpiry time.Time
@@ -382,7 +391,7 @@ func (exchanger networkExchanger) Exchange(ctx context.Context, request *dns.Msg
 
 func normalizeDNSName(value string) (string, error) {
 	value = strings.TrimSuffix(value, ".")
-	hostname, err := policy.NormalizeHostname(value)
+	hostname, err := shared.NormalizeHostname(value)
 	if err != nil {
 		return "", &Error{Reason: ReasonMalformed}
 	}

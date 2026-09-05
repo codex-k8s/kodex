@@ -15,6 +15,7 @@ COPY libs/go/serviceruntime/go.mod libs/go/serviceruntime/go.mod
 COPY libs/go/securefile/go.mod libs/go/securefile/go.mod
 COPY libs/go/emailbridgeapi/go.mod libs/go/emailbridgeapi/go.mod
 COPY libs/go/mailpolicy/go.mod libs/go/mailpolicy/go.mod
+COPY libs/go/dnsresolver/go.mod libs/go/dnsresolver/go.mod
 COPY services/external/egress-gateway/go.mod services/external/egress-gateway/go.sum services/external/egress-gateway/
 
 WORKDIR /workspace/services/external/egress-gateway
@@ -28,6 +29,7 @@ COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
 COPY libs/go/mailpolicy/ libs/go/mailpolicy/
+COPY libs/go/dnsresolver/ libs/go/dnsresolver/
 COPY services/external/egress-gateway/ services/external/egress-gateway/
 
 WORKDIR /workspace/services/external/egress-gateway

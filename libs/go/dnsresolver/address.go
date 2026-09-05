@@ -2,8 +2,9 @@ package dnsresolver
 
 import (
 	"errors"
-	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 	"net/netip"
+
+	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
 // ValidateAddresses сохраняет закрытые reason metrics общего resolver,

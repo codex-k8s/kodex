@@ -4,7 +4,7 @@ title: Почтовый CONNECT профиль
 type: runbook
 status: approved
 owner: security
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-05
 ---
 
@@ -30,7 +30,11 @@ token; он не завершает TLS и не повторяет прикла�
 IP literal в CONNECT, wildcard hostname, иные порты/режимы, private/mixed DNS,
 новый IP вне pins, malformed/duplicate JSON и неверный digest закрыто
 отклоняются. Gateway не фильтрует часть DNS-ответа до разрешённого subset.
-Общая DNS-реализация сохраняет CNAME/TTL/bounds и повторную public IP проверку.
+Общая DNS-реализация `libs/go/dnsresolver` используется также CP publisher:
+она сохраняет CNAME/TTL/bounds и повторную public IP проверку. `New` сам
+проверяет bounds, поэтому CP не зависит от загрузчика egress machine policy.
+Нижний cache TTL не продлевает DNS freshness; short TTL не кэшируется, отменённый
+или истёкший snapshot не выдаётся. Caller не меняет cache через возвращённый slice.
 Все listeners разделяют общий лимит соединений и bounded cancel/join.
 Метрика `kodex_egress_gateway_mail_ready` читает ту же TTL-aware readiness,
 без hostname, mailbox ID, IP или source digest в labels. Общие counters

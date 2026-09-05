@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 )
 
 func TestMailTunnelPreservesEndToEndTLSVerification(t *testing.T) {
