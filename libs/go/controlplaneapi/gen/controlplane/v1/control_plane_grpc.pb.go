@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraftImpact"
 	PlatformQueryService_GetRuntimeSecretDraft_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft"
 	PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeRevisionDiff"
 	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
@@ -98,6 +99,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
+	GetRuntimeSecretDraftImpact(ctx context.Context, in *GetRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftImpactResponse, error)
 	GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error)
 	GetRuntimeRevisionDiff(ctx context.Context, in *GetRuntimeRevisionDiffRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error)
@@ -181,6 +183,16 @@ type platformQueryServiceClient struct {
 
 func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
 	return &platformQueryServiceClient{cc}
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecretDraftImpact(ctx context.Context, in *GetRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretDraftImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformQueryServiceClient) GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error) {
@@ -917,6 +929,7 @@ func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Conte
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
+	GetRuntimeSecretDraftImpact(context.Context, *GetRuntimeSecretDraftImpactRequest) (*GetRuntimeSecretDraftImpactResponse, error)
 	GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error)
 	GetRuntimeRevisionDiff(context.Context, *GetRuntimeRevisionDiffRequest) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error)
@@ -1002,6 +1015,9 @@ type PlatformQueryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformQueryServiceServer struct{}
 
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretDraftImpact(context.Context, *GetRuntimeSecretDraftImpactRequest) (*GetRuntimeSecretDraftImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretDraftImpact not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretDraft not implemented")
 }
@@ -1240,6 +1256,24 @@ func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQue
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
+}
+
+func _PlatformQueryService_GetRuntimeSecretDraftImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretDraftImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraftImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraftImpact(ctx, req.(*GetRuntimeSecretDraftImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformQueryService_GetRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2564,6 +2598,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetRuntimeSecretDraftImpact",
+			Handler:    _PlatformQueryService_GetRuntimeSecretDraftImpact_Handler,
+		},
+		{
 			MethodName: "GetRuntimeSecretDraft",
 			Handler:    _PlatformQueryService_GetRuntimeSecretDraft_Handler,
 		},
@@ -2861,6 +2899,7 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
 	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
 	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
 	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
@@ -3007,6 +3046,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error)
@@ -3160,6 +3200,16 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) PrepareRuntimeSecretDraftImpact(ctx context.Context, in *PrepareRuntimeSecretDraftImpactRequest, opts ...grpc.CallOption) (*PrepareRuntimeSecretDraftImpactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRuntimeSecretDraftImpactResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error) {
@@ -4584,6 +4634,7 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error)
 	PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error)
 	PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error)
 	PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error)
@@ -4739,6 +4790,9 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) PrepareRuntimeSecretDraftImpact(context.Context, *PrepareRuntimeSecretDraftImpactRequest) (*PrepareRuntimeSecretDraftImpactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRuntimeSecretDraftImpact not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PrepareSaveRuntimeSecretDraft not implemented")
 }
@@ -5179,6 +5233,24 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_PrepareRuntimeSecretDraftImpact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRuntimeSecretDraftImpactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRuntimeSecretDraftImpact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRuntimeSecretDraftImpact(ctx, req.(*PrepareRuntimeSecretDraftImpactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -7668,6 +7740,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.PlatformCommandService",
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PrepareRuntimeSecretDraftImpact",
+			Handler:    _PlatformCommandService_PrepareRuntimeSecretDraftImpact_Handler,
+		},
 		{
 			MethodName: "PrepareSaveRuntimeSecretDraft",
 			Handler:    _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler,

@@ -12,6 +12,7 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc GetRuntimeSecretDraftImpact(GetRuntimeSecretDraftImpactRequest) returns (GetRuntimeSecretDraftImpactResponse);
   rpc GetRuntimeSecretDraft(GetRuntimeSecretDraftRequest) returns (GetRuntimeSecretDraftResponse);
   rpc GetRuntimeRevisionDiff(GetRuntimeRevisionDiffRequest) returns (GetRuntimeRevisionDiffResponse);
   rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
@@ -90,6 +91,7 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc PrepareRuntimeSecretDraftImpact(PrepareRuntimeSecretDraftImpactRequest) returns (PrepareRuntimeSecretDraftImpactResponse);
   rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
   rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
   rpc PreparePublishRuntimeSecretDraft(PreparePublishRuntimeSecretDraftRequest) returns (PreparePublishRuntimeSecretDraftResponse);
@@ -3652,6 +3654,8 @@ message PreparePublishRuntimeSecretDraftRequest {
   MutationContext mutation = 1;
   string draft_ref = 2;
   int64 expected_secret_version = 3;
+  string impact_plan_ref = 4;
+  repeated string selected_item_refs = 5;
 }
 message PreparePublishRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
 message PrepareDiscardRuntimeSecretDraftRequest {
@@ -4183,6 +4187,58 @@ message ConfigOverlayVersion {
 message RuntimeEnvironmentValue {
   string name = 1;
   string value = 2;
+}
+
+enum RuntimeSecretDraftImpactState {
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_PREPARED = 1;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_APPLIED = 2;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_EXPIRED = 3;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_CANCELLED = 4;
+}
+enum RuntimeSecretDraftImpactOutcome {
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_PENDING = 1;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_APPLIED = 2;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_CONFLICT = 3;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_FORBIDDEN = 4;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_NOT_SELECTED = 5;
+}
+message RuntimeSecretDraftImpactPlan {
+  string ref = 1;
+  string draft_ref = 2;
+  int64 draft_version = 3;
+  string secret_ref = 4;
+  int64 secret_version = 5;
+  int64 source_revision = 6;
+  string digest = 7;
+  int64 total = 8;
+  google.protobuf.Timestamp expires_at = 9;
+  RuntimeSecretDraftImpactState state = 10;
+}
+message RuntimeSecretDraftImpactItem {
+  string ref = 1;
+  RuntimeSecretImpactConsumer consumer = 2;
+  RuntimeSecretDraftImpactOutcome outcome = 3;
+  string result_environment_version_ref = 4;
+  string result_binding_ref = 5;
+  int64 result_binding_version = 6;
+}
+message PrepareRuntimeSecretDraftImpactRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareRuntimeSecretDraftImpactResponse { RuntimeSecretDraftImpactPlan plan = 1; }
+message GetRuntimeSecretDraftImpactRequest {
+  string plan_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message GetRuntimeSecretDraftImpactResponse {
+  RuntimeSecretDraftImpactPlan plan = 1;
+  repeated RuntimeSecretDraftImpactItem items = 2;
+  int64 total = 3;
+  PageInfo page = 4;
 }
 
 message RuntimeSecretImpactConsumer {
