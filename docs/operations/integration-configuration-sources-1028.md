@@ -4,7 +4,7 @@ title: Исполнение UI/Git IntegrationDefinition и чтение Git sou
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -17,6 +17,13 @@ OCC, idempotency, grants, claim/fence и publication. Integration-gateway
 Содержимое Git файла, package bytes и credential descriptor не выдаются
 публичным DTO или логам. Git write-back является отдельным обязательным
 сценарием CFG; этот read-only consumer сам его не реализует.
+
+Checkpoint `67ba4ed561aaea253097af596f0cab2e86b90577` включает исполняемый
+owner SourceWork из control-plane `65cd95f1fc94b37f05d9bf3273879889b74b03dd`,
+политику 63 и последующий owner input/test-budget `626ffe141c1ce7190e1da686dbb3aa9020d6f5a5`.
+Claim/complete больше не являются отсутствующей producer-зависимостью.
+GitHub/GitLab остаются единственными source readers; JSON/YAML принимаются
+владельцем, который связывает RoleImage revision с очередью build.
 
 ## Сквозная карта и переходы
 
@@ -104,3 +111,13 @@ response, exact digest, foreign repository, expired claim, lost ACK и cleanup.
 Результат каждого запуска привязывается к exact SHA в PR #1064. Наличие этой
 матрицы не означает PASS: до запуска owner/consumer/profile checks, полного
 baseline и live provider acceptance соответствующие строки имеют NOT RUN.
+
+На объединённых source/contracts полный gateway race (31.278s), vet/build,
+Proto/policy/ABI/package replay и web-only render — PASS. На точном `67ba4ed`
+canonical PostgreSQL target — PASS (3.028s), оба integration render — PASS.
+Target включает catalog owner probe и version-bound catalog: без этой setup
+зависимости первоначальный запуск дал FAIL (1.836s), поскольку pinned models
+не были созданы. Повтор exact запуска сначала дал инфраструктурный FAIL Docker
+из-за занятого случайного host port; следующий запуск прошёл без изменения кода.
+Полный baseline, Docker build нового worker, live source/provider и write-back
+остаются NOT RUN.
