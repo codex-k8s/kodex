@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { Eye, EyeOff, KeyRound, RotateCw } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import { jsonSyntaxIssue } from "@/shared/ui/json-diagnostic";
 
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -26,17 +30,30 @@ const emit = defineEmits<{
 }>();
 
 const name = ref("");
+const { t } = useI18n();
 const description = ref("");
 const valueType = ref<RuntimeSecretValueType>("STRING");
 const value = ref("");
 const showValue = ref(false);
 const submitted = ref(false);
+let revealTimer: ReturnType<typeof setTimeout> | undefined;
 const rotating = computed(() => Boolean(props.secret));
 const validation = computed(() =>
   validateSecretValue(valueType.value, value.value),
 );
+const jsonIssue = computed(() =>
+  valueType.value === "JSON" && value.value
+    ? jsonSyntaxIssue(value.value)
+    : undefined,
+);
+const decodedSize = computed(() =>
+  valueType.value === "BINARY" && !validation.value
+    ? atob(value.value).length
+    : undefined,
+);
 
 function clearPlaintext(): void {
+  if (revealTimer) clearTimeout(revealTimer);
   value.value = "";
   showValue.value = false;
 }
@@ -48,6 +65,7 @@ function close(): void {
 }
 
 function submit(): void {
+  if (props.busy) return;
   submitted.value = true;
   if (validation.value || (!rotating.value && !name.value.trim())) return;
   if (rotating.value) {
@@ -61,6 +79,27 @@ function submit(): void {
     value: value.value,
   });
 }
+
+function changeType(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+  if (value.value && !window.confirm(t("runtimeSecrets.confirmClear"))) {
+    target.value = valueType.value;
+    return;
+  }
+  clearPlaintext();
+  valueType.value = target.value as RuntimeSecretValueType;
+}
+function formatJSON(): void {
+  if (props.busy || validation.value) return;
+  value.value = JSON.stringify(JSON.parse(value.value), null, 2);
+}
+watch(showValue, (visible) => {
+  if (revealTimer) clearTimeout(revealTimer);
+  if (visible)
+    revealTimer = setTimeout(() => {
+      showValue.value = false;
+    }, 30_000);
+});
 
 watch(
   () => props.secret,
@@ -112,12 +151,22 @@ onBeforeUnmount(clearPlaintext);
 
       <label v-if="!rotating" class="field">
         <span>{{ $t("common.description") }}</span>
-        <textarea v-model="description" maxlength="1000" rows="3" />
+        <VoiceTextarea
+          v-model="description"
+          :disabled="busy"
+          maxlength="1000"
+          rows="3"
+        />
       </label>
 
       <label v-if="!rotating" class="field">
         <span>{{ $t("runtimeSecrets.valueType") }}</span>
-        <select v-model="valueType">
+        <select
+          :value="valueType"
+          :aria-label="$t('runtimeSecrets.valueType')"
+          :disabled="busy"
+          @change="changeType"
+        >
           <option value="STRING">
             {{ $t("runtimeSecrets.types.STRING") }}
           </option>
@@ -131,9 +180,21 @@ onBeforeUnmount(clearPlaintext);
       <div class="field">
         <span>{{ $t("runtimeSecrets.value") }}</span>
         <div class="secret-form__value">
-          <input
+          <CodeEditor
+            v-if="valueType === 'JSON' && showValue"
             v-model="value"
-            :type="showValue ? 'text' : 'password'"
+            language="json"
+            :label="$t('runtimeSecrets.value')"
+            :disabled="busy"
+            sensitive
+          />
+          <textarea
+            v-else
+            v-model="value"
+            :class="{ 'secret-form__masked': !showValue }"
+            :aria-label="$t('runtimeSecrets.value')"
+            :disabled="busy"
+            rows="8"
             maxlength="699052"
             autocomplete="new-password"
             autocapitalize="off"
@@ -148,16 +209,32 @@ onBeforeUnmount(clearPlaintext);
                 ? $t('runtimeSecrets.hideEnteredValue')
                 : $t('runtimeSecrets.showEnteredValue')
             "
+            :disabled="busy"
             @click="showValue = !showValue"
           >
             <EyeOff v-if="showValue" :size="18" aria-hidden="true" />
             <Eye v-else :size="18" aria-hidden="true" />
           </button>
         </div>
+        <button
+          v-if="valueType === 'JSON' && showValue"
+          class="button"
+          type="button"
+          :disabled="busy || Boolean(validation)"
+          @click="formatJSON"
+        >
+          {{ $t("runtimeSecrets.formatJSON") }}
+        </button>
         <small class="field-hint">{{ $t("runtimeSecrets.valueHelp") }}</small>
         <small v-if="submitted && validation" class="field-error">
           {{ $t(`runtimeSecrets.errors.${validation}`) }}
         </small>
+        <small v-if="submitted && jsonIssue" class="field-error">{{
+          $t("common.invalidJsonAt", jsonIssue)
+        }}</small>
+        <small v-if="decodedSize !== undefined">{{
+          $t("runtimeSecrets.decodedSize", { size: decodedSize })
+        }}</small>
       </div>
     </div>
     <template #actions>
@@ -203,9 +280,18 @@ onBeforeUnmount(clearPlaintext);
   grid-template-columns: minmax(0, 1fr) 42px;
   gap: 8px;
 }
-.secret-form__value input {
+.secret-form__value textarea {
   min-width: 0;
   font-family: var(--font-mono);
+}
+.secret-form__masked {
+  -webkit-text-security: disc;
+}
+@supports not (-webkit-text-security: disc) {
+  .secret-form__masked {
+    color: transparent;
+    caret-color: var(--text);
+  }
 }
 .field-hint {
   color: var(--text-secondary);

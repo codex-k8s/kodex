@@ -1,4 +1,5 @@
 dist
+dist-synthetic
 node_modules
 src/shared/api/generated
 package-lock.json

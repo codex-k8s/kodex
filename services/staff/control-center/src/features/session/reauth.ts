@@ -29,10 +29,98 @@ export interface RuntimeEnvironmentPolicyIntent extends ReauthIntentBase {
   readonly kind: "runtime-environment-policy";
   readonly operation: RuntimeEnvironmentPolicyOperation;
 }
+export interface EmailReconciliationIntent extends Omit<
+  ReauthIntentBase,
+  "projectRef"
+> {
+  readonly kind: "email-reconciliation";
+  readonly receiptRef: string;
+  readonly receiptVersion: number;
+  readonly receiptDigest: string;
+  readonly connectionRef: string;
+  readonly invocationRef: string;
+}
+export function emailReconciliationPath(
+  connectionRef: string,
+  invocationRef: string,
+): string {
+  return `/integrations?${new URLSearchParams({ connectionRef, invocationRef }).toString()}`;
+}
+export function createEmailReconciliationIntent(
+  input: Pick<
+    EmailReconciliationIntent,
+    | "receiptRef"
+    | "receiptVersion"
+    | "receiptDigest"
+    | "connectionRef"
+    | "invocationRef"
+  >,
+  now = Date.now(),
+): EmailReconciliationIntent {
+  return parseEmailReconciliationIntent(
+    {
+      ...input,
+      kind: "email-reconciliation",
+      version: 1,
+      challengeRef: crypto.randomUUID(),
+      issuedAt: now,
+      returnPath: emailReconciliationPath(
+        input.connectionRef,
+        input.invocationRef,
+      ),
+    },
+    now,
+  );
+}
+export function parseEmailReconciliationIntent(
+  value: unknown,
+  now = Date.now(),
+): EmailReconciliationIntent {
+  const keys = [
+    "kind",
+    "version",
+    "challengeRef",
+    "issuedAt",
+    "returnPath",
+    "receiptRef",
+    "receiptVersion",
+    "receiptDigest",
+    "connectionRef",
+    "invocationRef",
+  ];
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, keys) ||
+    value.kind !== "email-reconciliation" ||
+    value.version !== 1 ||
+    typeof value.challengeRef !== "string" ||
+    !challengeReferencePattern.test(value.challengeRef) ||
+    typeof value.issuedAt !== "number" ||
+    !Number.isSafeInteger(value.issuedAt) ||
+    value.issuedAt > now + allowedFutureSkewMs ||
+    now - value.issuedAt > intentLifetimeMs ||
+    typeof value.receiptRef !== "string" ||
+    !opaqueReferencePattern.test(value.receiptRef) ||
+    typeof value.receiptVersion !== "number" ||
+    !Number.isSafeInteger(value.receiptVersion) ||
+    value.receiptVersion < 1 ||
+    typeof value.receiptDigest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.receiptDigest) ||
+    typeof value.connectionRef !== "string" ||
+    !opaqueReferencePattern.test(value.connectionRef) ||
+    typeof value.invocationRef !== "string" ||
+    !opaqueReferencePattern.test(value.invocationRef) ||
+    value.returnPath !==
+      emailReconciliationPath(value.connectionRef, value.invocationRef)
+  )
+    throw new Error("Invalid email reconciliation OIDC intent");
+  return value as unknown as EmailReconciliationIntent;
+}
 
 export type ReauthIntent =
   | RuntimeSecretRevealIntent
-  | RuntimeEnvironmentPolicyIntent;
+  | RuntimeEnvironmentPolicyIntent
+  | EmailReconciliationIntent;
 export type OidcIntent = { readonly kind: "login" } | ReauthIntent;
 
 interface RuntimeEnvironmentPolicyReauthCompletion {
@@ -99,19 +187,32 @@ function sameIntent(left: ReauthIntent, right: ReauthIntent): boolean {
   if (
     left.challengeRef !== right.challengeRef ||
     left.issuedAt !== right.issuedAt ||
-    left.projectRef !== right.projectRef ||
     left.returnPath !== right.returnPath
   )
     return false;
   if (left.kind === "runtime-secret" && right.kind === "runtime-secret")
-    return left.secretRef === right.secretRef;
+    return (
+      left.secretRef === right.secretRef && left.projectRef === right.projectRef
+    );
   if (
     left.kind === "runtime-environment-policy" &&
     right.kind === "runtime-environment-policy"
   )
     return (
       left.environmentRef === right.environmentRef &&
+      left.projectRef === right.projectRef &&
       left.operation === right.operation
+    );
+  if (
+    left.kind === "email-reconciliation" &&
+    right.kind === "email-reconciliation"
+  )
+    return (
+      left.receiptRef === right.receiptRef &&
+      left.receiptVersion === right.receiptVersion &&
+      left.receiptDigest === right.receiptDigest &&
+      left.connectionRef === right.connectionRef &&
+      left.invocationRef === right.invocationRef
     );
   return false;
 }
@@ -236,6 +337,8 @@ function parseReauthIntent(value: unknown, now: number): ReauthIntent {
     return parseRuntimeSecretRevealIntent(value, now);
   if (value.kind === "runtime-environment-policy")
     return parseRuntimeEnvironmentPolicyIntent(value, now);
+  if (value.kind === "email-reconciliation")
+    return parseEmailReconciliationIntent(value, now);
   throw new Error("OIDC re-auth state kind is invalid");
 }
 

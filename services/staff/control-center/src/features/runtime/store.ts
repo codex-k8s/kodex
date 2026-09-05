@@ -293,6 +293,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     projectRef: string,
     search: string,
     pageToken?: string,
+    signal?: AbortSignal,
   ): Promise<RuntimeEnvironmentPage> {
     return (
       await unwrap(
@@ -303,7 +304,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             ...(pageToken ? { pageToken } : {}),
             pageSize: 30,
           },
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       )
     ).data;
@@ -411,6 +412,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
 
   async function loadEnvironmentReadiness(
     environmentRef: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     await query(
       `environment-readiness:${environmentRef}`,
@@ -419,11 +421,12 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           await unwrap(
             getRuntimeEnvironmentReadiness({
               path: { environmentRef },
-              signal: requestSignal(),
+              signal: requestSignal(signal),
             }),
           )
         ).data,
       (value) => {
+        if (signal?.aborted) return;
         environmentReadiness[environmentRef] = value;
       },
     );
@@ -432,6 +435,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadEnvironmentAgents(
     environmentRef: string,
     reset = true,
+    signal?: AbortSignal,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -448,11 +452,12 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
                 pageSize: 30,
                 ...(pageToken ? { pageToken } : {}),
               },
-              signal: requestSignal(),
+              signal: requestSignal(signal),
             }),
           )
         ).data,
       (page) => {
+        if (signal?.aborted) return;
         if (reset) environmentAgents[environmentRef] = page.items;
         else {
           const merged = new Map(

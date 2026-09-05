@@ -50,7 +50,10 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   const mutating = ref(false);
   const problem = ref<AppProblem>();
   let catalogGeneration = 0;
+  let catalogController: AbortController | undefined;
   let detailGeneration = 0;
+  let supportingGeneration = 0;
+  let supportingController: AbortController | undefined;
 
   const environmentByKey = computed(
     () => new Map(environments.value.map((value) => [value.key, value])),
@@ -66,7 +69,17 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadCatalog(projectRef: string, reset = true): Promise<void> {
-    if (!reset && !projectNextPageToken[projectRef]) return;
+    if (
+      !reset &&
+      (!projectNextPageToken[projectRef] ||
+        loadingCatalog.value ||
+        loadingMore.value)
+    )
+      return;
+    catalogController?.abort();
+    const controller = new AbortController();
+    catalogController = controller;
+    const cursor = reset ? undefined : projectNextPageToken[projectRef];
     const current = ++catalogGeneration;
     if (reset) loadingCatalog.value = true;
     else loadingMore.value = true;
@@ -74,13 +87,22 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     try {
       const page = await loadRoleImagePage(
         projectRef,
-        reset ? undefined : projectNextPageToken[projectRef],
+        cursor,
+        controller.signal,
       );
       if (current !== catalogGeneration) return;
+      if (
+        !Array.isArray(page.items) ||
+        page.items.some((recipe) => recipe.projectRef !== projectRef) ||
+        (page.nextPageToken && page.nextPageToken === cursor)
+      )
+        throw new Error("Invalid role image catalog scope or cursor");
       const refs = reset ? [] : [...(projectRecipeRefs[projectRef] ?? [])];
       const seen = new Set(refs);
       for (const recipe of page.items) {
-        recipes[recipe.ref] = recipe;
+        const previous = recipes[recipe.ref];
+        if (!previous || previous.version <= recipe.version)
+          recipes[recipe.ref] = recipe;
         if (!seen.has(recipe.ref)) {
           seen.add(recipe.ref);
           refs.push(recipe.ref);
@@ -166,16 +188,24 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadSupportingCatalogs(projectRef: string): Promise<void> {
+    const current = ++supportingGeneration;
+    supportingController?.abort();
+    const controller = new AbortController();
+    supportingController = controller;
+    roleDefinitions.value = [];
+    environments.value = [];
     problem.value = undefined;
     try {
       const [definitions, environmentCatalog] = await Promise.all([
-        loadRoleDefinitionOptions(projectRef),
-        loadRoleEnvironmentCatalog(),
+        loadRoleDefinitionOptions(projectRef, controller.signal),
+        loadRoleEnvironmentCatalog(controller.signal),
       ]);
+      if (current !== supportingGeneration) return;
       roleDefinitions.value = definitions;
       environments.value = environmentCatalog;
     } catch (error) {
-      problem.value = asProblem(error);
+      if (current === supportingGeneration && !controller.signal.aborted)
+        problem.value = asProblem(error);
     }
   }
 
@@ -269,6 +299,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   function dispose(): void {
+    catalogController?.abort();
+    supportingController?.abort();
+    supportingGeneration += 1;
     catalogGeneration += 1;
     detailGeneration += 1;
   }

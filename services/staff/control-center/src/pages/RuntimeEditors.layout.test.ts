@@ -12,7 +12,7 @@ const runtimeSource = readFileSync(
 );
 
 describe("runtime editors layout", () => {
-  it("оставляет env и tools lifecycle доступным из постоянной командной панели", () => {
+  it("разделяет постоянный draft lifecycle и контекстные действия вкладок", () => {
     const template = environmentSource.slice(
       environmentSource.indexOf("<template>"),
       environmentSource.indexOf("<style scoped>"),
@@ -21,14 +21,17 @@ describe("runtime editors layout", () => {
     expect(template).toContain('role="tablist"');
     expect(template).toContain('role="tab"');
     expect(template).toContain('role="tabpanel"');
-    expect(template).toContain('role="toolbar"');
+    expect(template).not.toContain('class="environment-command-bar"');
     expect(template).toContain('$t("runtime.addVariable")');
-    expect(template).toContain("openSection('IMAGE_TOOLS')");
-    expect(template).toContain("openSection('POLICY')");
+    expect(template).not.toContain("openSection('IMAGE_TOOLS')");
+    expect(template).not.toContain("openSection('POLICY')");
     expect(template).toContain("data-environment-variable-name");
-    expect(template.indexOf('class="environment-command-bar"')).toBeLessThan(
-      template.indexOf('class="panel environment-editor"'),
-    );
+    const values = template.indexOf("activeSection === 'VALUES'");
+    const secrets = template.indexOf("activeSection === 'SECRETS'");
+    expect(template.indexOf('@click="addValue"')).toBeGreaterThan(values);
+    expect(template.indexOf('@click="addValue"')).toBeLessThan(secrets);
+    expect(template.indexOf('@click="addSecret"')).toBeGreaterThan(secrets);
+    expect(template.indexOf('@click="save"')).toBeLessThan(values);
   });
 
   it("показывает отдельный config.toml draft lifecycle и safe effective readback", () => {

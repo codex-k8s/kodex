@@ -135,7 +135,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 250 },
+  { debounceMs: 500 },
 );
 const {
   error: loadError,
@@ -453,7 +453,7 @@ watch(
   (artifacts) => {
     if (initialLoading.value && artifacts.length === 0) return;
     if (!artifacts.some((artifact) => artifact.ref === selectedRef.value))
-      selectedRef.value = artifacts[0]?.ref ?? "";
+      selectedRef.value = "";
   },
   { immediate: true },
 );
@@ -1244,7 +1244,10 @@ onBeforeUnmount(() => {
       </ul>
     </section>
 
-    <section class="trash-toolbar">
+    <section
+      v-if="trashMode || selectedArtifacts.length > 0"
+      :class="trashMode ? 'trash-toolbar' : 'selection-toolbar'"
+    >
       <div>
         <strong>{{ trashMode ? custom.trash : custom.activeSelection }}</strong>
         <p>
@@ -1413,10 +1416,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1555,10 +1559,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1917,6 +1922,8 @@ onBeforeUnmount(() => {
 .files-workspace {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   min-height: 640px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2434,8 +2441,7 @@ onBeforeUnmount(() => {
     width: auto;
     max-width: calc(50vw - 20px);
   }
-  .files-workspace__count,
-  .files-workspace__view-toggle {
+  .files-workspace__count {
     display: none;
   }
   .files-workspace__toolbar .button {
@@ -2461,12 +2467,15 @@ onBeforeUnmount(() => {
   .files-list {
     min-width: 0;
   }
+  .files-list__head {
+    display: none;
+  }
   .file-list-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: 76px;
     gap: 6px 10px;
-    padding: 10px 154px 10px 2px;
+    padding: 10px 8px 10px 48px;
   }
   .file-list-row__identity {
     grid-row: 1 / 3;
@@ -2486,7 +2495,17 @@ onBeforeUnmount(() => {
     border-left: 0;
   }
   .files-list .file-collection-item__actions {
-    right: 0;
+    position: static;
+    justify-content: flex-end;
+    padding: 0 8px 8px 48px;
+    transform: none;
+  }
+  .file-list-row__identity strong {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 </style>

@@ -1,12 +1,25 @@
 <script setup lang="ts">
-import { Eye, Plus, RotateCw, Search, ShieldCheck, ShieldX } from "@lucide/vue";
+import {
+  Eye,
+  Link2,
+  Maximize2,
+  Plus,
+  RotateCw,
+  Search,
+  ShieldCheck,
+  ShieldX,
+} from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useSessionStore } from "@/features/session/store";
+import SecretImpactDialog from "@/features/runtime/SecretImpactDialog.vue";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { readRuntimeSecret } from "./api";
 
 import type { RuntimeSecret } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
@@ -15,15 +28,19 @@ import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
 import { useRuntimeSecretsStore } from "./store";
 
-const props = defineProps<{ projectRef: string }>();
+const props = defineProps<{ projectRef: string; initialSecretRef?: string }>();
 const store = useRuntimeSecretsStore();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
 const createOpen = ref(false);
+const expanded = ref(false);
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
 const revokeTarget = ref<RuntimeSecret>();
+const details = ref<RuntimeSecret>();
+const impactTarget = ref<RuntimeSecret>();
+const detailsProblem = ref<AppProblem>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 function prepareMutation(): void {
@@ -39,12 +56,14 @@ function openRotate(secret: RuntimeSecret): void {
   if (!canRuntimeSecretAction(secret, "ROTATE")) return;
   prepareMutation();
   rotateTarget.value = secret;
+  details.value = undefined;
 }
 
 function openRevoke(secret: RuntimeSecret): void {
   if (!canRuntimeSecretAction(secret, "REVOKE")) return;
   prepareMutation();
   revokeTarget.value = secret;
+  details.value = undefined;
 }
 
 async function createSecret(
@@ -53,6 +72,7 @@ async function createSecret(
   try {
     await store.create(input);
     createOpen.value = false;
+    impactTarget.value = undefined;
   } catch {
     // Store передаёт безопасную problem-модель в открытый диалог.
   }
@@ -107,11 +127,38 @@ function restoreReauthenticatedReveal(): void {
 
 watch(search, (value) => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(props.projectRef, value), 300);
+  searchTimer = setTimeout(() => void store.load(props.projectRef, value), 500);
 });
+watch(
+  () => [props.projectRef, props.initialSecretRef],
+  async (_value, _previous, cleanup) => {
+    details.value = undefined;
+    detailsProblem.value = undefined;
+    if (!props.initialSecretRef) return;
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
+    try {
+      const secret = await readRuntimeSecret(
+        props.initialSecretRef,
+        props.projectRef,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) details.value = secret;
+    } catch (error) {
+      if (!controller.signal.aborted) detailsProblem.value = asProblem(error);
+    }
+  },
+  { immediate: true },
+);
 watch(
   () => props.projectRef,
   (value) => {
+    createOpen.value = false;
+    rotateTarget.value = undefined;
+    revealTarget.value = undefined;
+    revokeTarget.value = undefined;
+    expanded.value = false;
+    if (searchTimer) clearTimeout(searchTimer);
     search.value = "";
     void store.load(value);
   },
@@ -129,7 +176,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="runtime-secrets panel">
+  <component
+    :is="expanded ? ModalDialog : 'section'"
+    class="runtime-secrets"
+    :class="{ 'runtime-secrets--expanded': expanded }"
+    :title="expanded ? $t('runtimeSecrets.secret') : undefined"
+    size="full"
+    @close="expanded = false"
+  >
     <header class="runtime-secrets__toolbar">
       <label class="runtime-secrets__search">
         <Search :size="17" aria-hidden="true" />
@@ -141,6 +195,16 @@ onBeforeUnmount(() => {
         />
       </label>
       <div class="runtime-secrets__toolbar-meta">
+        <button
+          v-if="!expanded"
+          class="icon-button"
+          type="button"
+          :title="$t('catalog.expand')"
+          :aria-label="$t('catalog.expand')"
+          @click="expanded = true"
+        >
+          <Maximize2 :size="17" />
+        </button>
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
@@ -155,9 +219,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </header>
+    <ProblemNotice v-if="detailsProblem" :problem="detailsProblem" compact />
 
     <AsyncState
-      :loading="store.loading"
+      :loading="store.loading && !store.items.length"
       :problem="store.items.length ? undefined : store.problem"
       :empty="store.empty"
       :empty-title="$t('runtimeSecrets.emptyTitle')"
@@ -171,7 +236,7 @@ onBeforeUnmount(() => {
       <ProblemNotice
         v-if="store.problem && store.items.length"
         :problem="store.problem"
-        @retry="store.loadMore"
+        @retry="store.reload"
       />
       <div class="runtime-secrets__scroll" @scroll.passive="onScroll">
         <table class="runtime-secrets__table">
@@ -196,7 +261,12 @@ onBeforeUnmount(() => {
                     <ShieldX v-else :size="18" />
                   </span>
                   <div>
-                    <strong>{{ secret.name }}</strong>
+                    <button
+                      class="runtime-secrets__name"
+                      @click="details = secret"
+                    >
+                      {{ secret.name }}
+                    </button>
                     <p>{{ secret.description || $t("common.noData") }}</p>
                   </div>
                   <StatusBadge :state="secret.state" />
@@ -279,7 +349,77 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </AsyncState>
-  </section>
+  </component>
+  <ModalDialog
+    v-if="details"
+    :title="details.name"
+    @close="details = undefined"
+  >
+    <div class="runtime-secret-details">
+      <StatusBadge :state="details.state" />
+      <p>{{ details.description }}</p>
+      <dl>
+        <dt>{{ $t("runtimeSecrets.valueType") }}</dt>
+        <dd>{{ $t(`runtimeSecrets.types.${details.valueType}`) }}</dd>
+        <dt>{{ $t("runtimeSecrets.revision") }}</dt>
+        <dd>v{{ details.currentRevision }}</dd>
+        <dt>{{ $t("runtimeSecrets.maskedHint") }}</dt>
+        <dd>{{ maskedSecretHint(details) }}</dd>
+        <dt>{{ $t("runtimeSecrets.updatedAt") }}</dt>
+        <dd>{{ formatDate(details.updatedAt) }}</dd>
+      </dl>
+      <div class="runtime-secrets__actions">
+        <button
+          class="icon-button"
+          :title="$t('impact.inspect')"
+          :aria-label="$t('impact.inspect')"
+          @click="
+            impactTarget = details;
+            details = undefined;
+          "
+        >
+          <Link2 :size="18" />
+        </button>
+        <button
+          v-if="canRuntimeSecretAction(details, 'REVEAL')"
+          class="icon-button"
+          :title="$t('runtimeSecrets.reveal')"
+          :aria-label="$t('runtimeSecrets.reveal')"
+          @click="
+            revealTarget = details;
+            details = undefined;
+          "
+        >
+          <Eye :size="18" />
+        </button>
+        <button
+          v-if="canRuntimeSecretAction(details, 'ROTATE')"
+          class="icon-button"
+          :title="$t('runtimeSecrets.rotate')"
+          :aria-label="$t('runtimeSecrets.rotate')"
+          @click="openRotate(details)"
+        >
+          <RotateCw :size="18" />
+        </button>
+        <button
+          v-if="canRuntimeSecretAction(details, 'REVOKE')"
+          class="icon-button icon-button--danger"
+          :title="$t('runtimeSecrets.revoke')"
+          :aria-label="$t('runtimeSecrets.revoke')"
+          @click="openRevoke(details)"
+        >
+          <ShieldX :size="18" />
+        </button>
+      </div>
+    </div>
+  </ModalDialog>
+  <SecretImpactDialog
+    v-if="impactTarget"
+    :key="`${impactTarget.ref}:${impactTarget.currentRevision}`"
+    :secret-ref="impactTarget.ref"
+    :revision="impactTarget.currentRevision"
+    @close="impactTarget = undefined"
+  />
   <RuntimeSecretRevealDialog
     v-if="revealTarget"
     :secret="revealTarget"
@@ -315,6 +455,29 @@ onBeforeUnmount(() => {
   padding: 0;
   overflow: hidden;
 }
+.runtime-secrets__name {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.runtime-secrets__name:hover {
+  color: var(--accent);
+}
+.runtime-secret-details {
+  overflow-wrap: anywhere;
+}
+.runtime-secret-details dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 16px;
+}
+.runtime-secret-details dd {
+  margin: 0;
+}
 .runtime-secrets__toolbar {
   display: flex;
   min-height: 62px;
@@ -340,9 +503,14 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .runtime-secrets__scroll {
-  max-height: calc(100dvh - 245px);
-  min-height: 360px;
+  max-height: 526px;
   overflow: auto;
+}
+.runtime-secrets--expanded .runtime-secrets__scroll {
+  max-height: calc(100dvh - 220px);
+}
+.runtime-secrets__table tbody tr {
+  height: 80px;
 }
 .runtime-secrets__table {
   width: 100%;
@@ -408,6 +576,39 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 @media (max-width: 760px) {
+  .runtime-secrets__table {
+    min-width: 0;
+    display: block;
+  }
+  .runtime-secrets__table thead {
+    display: none;
+  }
+  .runtime-secrets__table tbody {
+    display: grid;
+  }
+  .runtime-secrets__table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .runtime-secrets__table td {
+    min-width: 0;
+    border: 0;
+    padding: 6px 14px;
+    overflow-wrap: anywhere;
+  }
+  .runtime-secrets__table td:first-child,
+  .runtime-secrets__table td:last-child {
+    grid-column: 1 / -1;
+  }
+  .runtime-secrets__identity {
+    min-width: 0;
+  }
+  .runtime-secrets__mask {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
   .runtime-secrets__toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -419,7 +620,24 @@ onBeforeUnmount(() => {
     flex: 0 0 auto;
   }
   .runtime-secrets__scroll {
-    max-height: none;
+    max-height: 1512px;
+  }
+  .runtime-secrets__table tbody tr {
+    height: 252px;
+    grid-template-rows: minmax(0, 1fr) 30px 30px 44px;
+  }
+  .runtime-secrets__name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .runtime-secrets__identity {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+  .runtime-secrets__identity > :last-child {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 </style>

@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { PackageOpen } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { PackageOpen, RefreshCw } from "@lucide/vue";
+import { useRoute } from "vue-router";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 
 import {
   canConfigureCredential,
@@ -16,31 +24,257 @@ import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrants
 import IntegrationSectionTabs from "@/features/integrations/ui/IntegrationSectionTabs.vue";
 import {
   buildIntegrationPackages,
-  filterIntegrationPackages,
   flattenIntegrationGrants,
   integrationCategories,
   type IntegrationGrantPresentation,
   type IntegrationsSection,
 } from "@/features/integrations/ui/model";
 import { usePlatformStore } from "@/features/platform/store";
-import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
+import {
+  listIntegrationDefinitions,
+  listIntegrationConnections,
+} from "@/shared/api/generated/openapi/sdk.gen";
+import { requestSignal } from "@/shared/api/client";
 import type {
   IntegrationConnection,
   IntegrationConfigurationField,
+  IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
 import { idempotencyKey } from "@/shared/api/mutation";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import InteractionIdentitiesPanel from "@/features/integrations/ui/InteractionIdentitiesPanel.vue";
+import EmailEffectPanel from "@/features/integrations/ui/EmailEffectPanel.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import CodeDiff from "@/shared/ui/CodeDiff.vue";
+import { serializeConfigurationDocument } from "@/features/managed-configurations/document";
+import {
+  connectionYaml,
+  parseConnectionYaml,
+} from "@/features/integrations/configuration-yaml";
 
 const platform = usePlatformStore();
+const connectionSearch = ref("");
+const connectionEntries = ref<IntegrationConnection[]>([]);
+const connectionCursor = ref("");
+const connectionLoading = ref(false);
+const connectionProblem = ref<AppProblem>();
+let connectionController: AbortController | undefined;
+let connectionTimer: ReturnType<typeof setTimeout> | undefined;
+let connectionGeneration = 0;
+let connectionActive = true;
+let connectionLoaded = false;
+const connectionCursors = new Set<string>();
+async function loadConnections(more = false): Promise<void> {
+  if (
+    !connectionActive ||
+    (more && (connectionLoading.value || !connectionCursor.value))
+  )
+    return;
+  connectionController?.abort();
+  const controller = new AbortController();
+  connectionController = controller;
+  const current = ++connectionGeneration;
+  connectionLoading.value = true;
+  connectionProblem.value = undefined;
+  try {
+    const token = more ? connectionCursor.value : undefined;
+    const page = (
+      await unwrap(
+        listIntegrationConnections({
+          query: {
+            query: connectionSearch.value.trim(),
+            pageSize: 40,
+            pageToken: token,
+          },
+          signal: requestSignal(controller.signal),
+        }),
+      )
+    ).data;
+    if (current !== connectionGeneration || controller.signal.aborted) return;
+    const items = more
+      ? [...connectionEntries.value, ...page.items]
+      : page.items;
+    if (
+      typeof page.nextPageToken !== "string" ||
+      page.nextPageToken.length > 512 ||
+      new Set(items.map((item) => item.ref)).size !== items.length ||
+      (page.nextPageToken &&
+        (page.nextPageToken === token ||
+          (more && connectionCursors.has(page.nextPageToken))))
+    )
+      throw new Error("Invalid integration connection cursor sequence");
+    if (!more) connectionCursors.clear();
+    if (token) connectionCursors.add(token);
+    connectionEntries.value = items;
+    connectionCursor.value = page.nextPageToken;
+    connectionLoaded = true;
+  } catch (error) {
+    if (current === connectionGeneration && !controller.signal.aborted)
+      connectionProblem.value = asProblem(error);
+  } finally {
+    if (current === connectionGeneration) connectionLoading.value = false;
+  }
+}
+watch(connectionSearch, () => {
+  connectionController?.abort();
+  connectionGeneration += 1;
+  if (connectionTimer) clearTimeout(connectionTimer);
+  connectionEntries.value = [];
+  connectionCursor.value = "";
+  connectionLoading.value = true;
+  connectionTimer = setTimeout(() => void loadConnections(), 500);
+});
+watch(
+  () =>
+    Object.values(platform.connections)
+      .map((item) => `${item.ref}:${String(item.version)}`)
+      .sort()
+      .join("|"),
+  () => {
+    if (connectionLoaded) void loadConnections();
+  },
+);
 const activeSection = ref<IntegrationsSection>("CONNECTIONS");
 const catalogSearch = ref("");
 const catalogCategory = ref("");
+const catalogDefinitions = ref<IntegrationDefinition[]>([]);
+const catalogNextPageToken = ref<string>();
+const catalogLoading = ref(false);
+const catalogProblem = ref<AppProblem>();
+let catalogController: AbortController | undefined;
+let catalogGeneration = 0;
+let catalogTimer: ReturnType<typeof setTimeout> | undefined;
+const catalogCursors = new Set<string>();
+async function loadCatalogPage(more = false): Promise<void> {
+  if (
+    more &&
+    (!catalogNextPageToken.value ||
+      catalogLoading.value ||
+      catalogProblem.value)
+  )
+    return;
+  catalogController?.abort();
+  const request = new AbortController();
+  catalogController = request;
+  const generation = ++catalogGeneration;
+  catalogLoading.value = true;
+  catalogProblem.value = undefined;
+  try {
+    const page = (
+      await unwrap(
+        listIntegrationDefinitions({
+          query: {
+            query: catalogSearch.value.trim(),
+            category: catalogCategory.value || undefined,
+            pageSize: 30,
+            pageToken: more ? catalogNextPageToken.value : undefined,
+          },
+          signal: requestSignal(request.signal),
+        }),
+      )
+    ).data;
+    if (request.signal.aborted || generation !== catalogGeneration) return;
+    const items = more
+      ? [...catalogDefinitions.value, ...page.items]
+      : page.items;
+    if (
+      new Set(items.map((item) => item.key)).size !== items.length ||
+      (more && page.nextPageToken && catalogCursors.has(page.nextPageToken))
+    )
+      throw new Error("Invalid integration catalog page");
+    if (!more) catalogCursors.clear();
+    if (page.nextPageToken) catalogCursors.add(page.nextPageToken);
+    catalogDefinitions.value = items;
+    catalogNextPageToken.value = page.nextPageToken || undefined;
+    platform.integrationDefinitionActions = page.nextActions;
+  } catch (error) {
+    if (!request.signal.aborted && generation === catalogGeneration)
+      catalogProblem.value = asProblem(error);
+  } finally {
+    if (generation === catalogGeneration) catalogLoading.value = false;
+  }
+}
+watch(
+  () => [activeSection.value, catalogSearch.value, catalogCategory.value],
+  (_value, previous) => {
+    catalogController?.abort();
+    catalogGeneration += 1;
+    if (catalogTimer) clearTimeout(catalogTimer);
+    if (activeSection.value !== "CATALOG") return;
+    catalogDefinitions.value = [];
+    catalogNextPageToken.value = undefined;
+    catalogProblem.value = undefined;
+    catalogLoading.value = true;
+    catalogTimer = setTimeout(
+      () => void loadCatalogPage(),
+      previous[0] === "CATALOG" ? 500 : 0,
+    );
+  },
+);
 const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
+const detailsConnection = ref<IntegrationConnection>();
+const route = useRoute();
+let detailsGeneration = 0;
+const returnedInvocationRef = computed(() =>
+  route.query.connectionRef === detailsConnection.value?.ref &&
+  typeof route.query.invocationRef === "string"
+    ? route.query.invocationRef
+    : undefined,
+);
+const detailsProblem = ref<AppProblem>();
+const detailsLoading = ref(false);
+watch(
+  () => [route.query.connectionRef, route.query.invocationRef],
+  async ([connectionRef, invocationRef]) => {
+    const current = ++detailsGeneration;
+    if (
+      typeof connectionRef !== "string" ||
+      typeof invocationRef !== "string" ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(connectionRef) ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(invocationRef)
+    )
+      return;
+    try {
+      const connection = await platform.readConnection(connectionRef);
+      if (current !== detailsGeneration) return;
+      if (
+        connection.ref !== connectionRef ||
+        connection.definitionKey !== "email"
+      )
+        throw new Error("Invalid email confirmation connection");
+      detailsConnection.value = connection;
+    } catch (error) {
+      if (current === detailsGeneration)
+        detailsProblem.value = asProblem(error);
+    }
+  },
+  { immediate: true },
+);
+async function refreshConnectionDetails(): Promise<void> {
+  const current = detailsConnection.value;
+  if (!current || detailsLoading.value) return;
+  detailsLoading.value = true;
+  detailsProblem.value = undefined;
+  try {
+    const fresh = await platform.readConnection(current.ref);
+    if (detailsConnection.value?.ref !== current.ref) return;
+    if (fresh.ref !== current.ref || fresh.version < current.version)
+      throw new Error("Integration connection readback mismatch");
+    detailsConnection.value = fresh;
+  } catch (error) {
+    if (detailsConnection.value?.ref === current.ref)
+      detailsProblem.value = asProblem(error);
+  } finally {
+    detailsLoading.value = false;
+  }
+}
 const deleteCandidate = ref<IntegrationConnection>();
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -54,6 +288,66 @@ const operationSuccess = ref("");
 const grantConnectionRef = ref("");
 const targetsLoading = ref(false);
 const formSubmitted = ref(false);
+const configurationMode = ref<"FORM" | "YAML">("FORM");
+const yamlContent = ref("");
+const yamlInvalid = ref(false);
+const configurationDiff = ref(false);
+const originalConfigurationYaml = computed(() =>
+  serializeConfigurationDocument(
+    Object.fromEntries(
+      (selectedDefinition.value?.configurationFields ?? [])
+        .filter((field) =>
+          Object.hasOwn(
+            editingConnection.value?.publicConfiguration ?? {},
+            field.key,
+          ),
+        )
+        .map((field) => [
+          field.key,
+          editingConnection.value?.publicConfiguration[field.key],
+        ]),
+    ),
+    "YAML",
+  ),
+);
+const normalizedConfigurationYaml = computed(() =>
+  serializeConfigurationDocument(preparedConfiguration.value.value, "YAML"),
+);
+
+function selectConfigurationMode(mode: "FORM" | "YAML"): void {
+  if (mode === configurationMode.value || !selectedDefinition.value) return;
+  try {
+    if (mode === "YAML")
+      yamlContent.value = connectionYaml(
+        selectedDefinition.value.configurationFields,
+        form.configuration,
+      );
+    else
+      form.configuration = parseConnectionYaml(
+        yamlContent.value,
+        selectedDefinition.value.configurationFields,
+      );
+    yamlInvalid.value = false;
+    configurationMode.value = mode;
+  } catch {
+    formSubmitted.value = true;
+    yamlInvalid.value = true;
+  }
+}
+
+function updateYaml(value: string): void {
+  yamlContent.value = value;
+  if (!selectedDefinition.value) return;
+  try {
+    form.configuration = parseConnectionYaml(
+      value,
+      selectedDefinition.value.configurationFields,
+    );
+    yamlInvalid.value = false;
+  } catch {
+    yamlInvalid.value = true;
+  }
+}
 
 const form = reactive({
   definitionKey: "",
@@ -68,7 +362,12 @@ const grant = reactive({
 });
 
 const definitions = computed(() => Object.values(platform.definitions));
-const connections = computed(() => Object.values(platform.connections));
+const connections = computed(() =>
+  connectionEntries.value.map((item) => {
+    const receipt = platform.connections[item.ref];
+    return receipt && receipt.version >= item.version ? receipt : item;
+  }),
+);
 const canCreateConnection = computed(() =>
   platform.integrationDefinitionActions.includes("CREATE_CONNECTION"),
 );
@@ -81,10 +380,10 @@ const packages = computed(() =>
 );
 const categories = computed(() => integrationCategories(packages.value));
 const visiblePackages = computed(() =>
-  filterIntegrationPackages(
-    packages.value,
-    catalogSearch.value,
-    catalogCategory.value || undefined,
+  buildIntegrationPackages(
+    catalogDefinitions.value,
+    connections.value,
+    canCreateConnection.value,
   ),
 );
 const allGrants = computed(() => flattenIntegrationGrants(connections.value));
@@ -96,7 +395,9 @@ const visibleGrants = computed(() =>
     : allGrants.value,
 );
 const selectedDefinition = computed(
-  () => platform.definitions[form.definitionKey],
+  () =>
+    catalogDefinitions.value.find((item) => item.key === form.definitionKey) ??
+    platform.definitions[form.definitionKey],
 );
 const requiresCredential = computed(() =>
   definitionRequiresCredential(selectedDefinition.value),
@@ -147,13 +448,18 @@ function selectSection(section: IntegrationsSection): void {
 }
 
 function openConnection(definitionKey: string): void {
-  const definition = platform.definitions[definitionKey];
+  const definition =
+    catalogDefinitions.value.find((item) => item.key === definitionKey) ??
+    platform.definitions[definitionKey];
   if (!canCreateConnection.value || !definition?.available) return;
   dialogMode.value = "CREATE";
   form.definitionKey = definition.key;
   form.name = definition.name;
   form.configuration = Object.fromEntries(
-    definition.configurationFields.map((field) => [field.key, ""]),
+    definition.configurationFields.map((field) => [
+      field.key,
+      field.valueType === "BOOLEAN" ? "false" : "",
+    ]),
   );
   credentialValue.value = "";
   pendingCredential.value = undefined;
@@ -163,6 +469,9 @@ function openConnection(definitionKey: string): void {
   problem.value = undefined;
   operationSuccess.value = "";
   editingConnection.value = undefined;
+  configurationMode.value = "FORM";
+  yamlContent.value = "";
+  yamlInvalid.value = false;
   dialog.value = true;
 }
 
@@ -170,6 +479,9 @@ function closeConnectionDialog(force = false): void {
   if (busy.value && !force) return;
   dialog.value = false;
   dialogMode.value = "CREATE";
+  configurationMode.value = "FORM";
+  yamlContent.value = "";
+  yamlInvalid.value = false;
   credentialValue.value = "";
   pendingCredential.value = undefined;
   editingConnection.value = undefined;
@@ -274,6 +586,8 @@ function configurationProblem(field: IntegrationConfigurationField): string {
   if (code === "REQUIRED") return "Заполните обязательное поле.";
   if (code === "INVALID_HTTPS_URL")
     return "Укажите полный URL с протоколом https://.";
+  if (code === "INVALID_VALUE")
+    return "Значение не соответствует схеме подключения.";
   return "";
 }
 
@@ -288,6 +602,12 @@ async function submit(): Promise<void> {
   )
     return;
   formSubmitted.value = true;
+  if (
+    dialogMode.value !== "CREDENTIAL" &&
+    configurationMode.value === "YAML" &&
+    yamlInvalid.value
+  )
+    return;
   if (
     dialogMode.value !== "CREDENTIAL" &&
     Object.keys(preparedConfiguration.value.problems).length
@@ -423,22 +743,29 @@ async function command(
   }
 }
 
-function selectGrantConnection(connectionRef: string): void {
+let grantSelectionGeneration = 0;
+async function selectGrantConnection(connectionRef: string): Promise<void> {
+  const generation = ++grantSelectionGeneration;
   grantConnectionRef.value = connectionRef;
-  const connection = connectionRef
-    ? platform.connections[connectionRef]
-    : undefined;
-  grant.capabilityKey = connection?.capabilities[0]?.key ?? "";
-  grant.projectRef = platform.projectList[0]?.ref ?? "";
+  grant.capabilityKey = "";
+  grant.projectRef = "";
   grant.targetKind = "AGENT";
   grant.targetRef = "";
-  if (connection && grant.projectRef) void loadGrantTargets();
+  if (!connectionRef) return;
+  try {
+    const connection = await platform.readConnection(connectionRef);
+    if (generation !== grantSelectionGeneration) return;
+    platform.connections[connection.ref] = connection;
+  } catch (error) {
+    if (generation === grantSelectionGeneration)
+      problem.value = asProblem(error);
+  }
 }
 
 function openGrants(connection: IntegrationConnection): void {
   if (!connection.nextActions.includes("MANAGE_GRANTS")) return;
   activeSection.value = "GRANTS";
-  selectGrantConnection(connection.ref);
+  void selectGrantConnection(connection.ref);
 }
 
 async function loadGrantTargets(): Promise<void> {
@@ -504,11 +831,20 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
 }
 
 onMounted(() => {
-  void platform.loadIntegrations();
+  void platform.loadIntegrations().then(() => loadConnections());
   void platform.loadProjects();
 });
 
 onBeforeUnmount(() => {
+  detailsGeneration++;
+  connectionActive = false;
+  connectionGeneration += 1;
+  connectionController?.abort();
+  if (connectionTimer) clearTimeout(connectionTimer);
+  catalogController?.abort();
+  catalogGeneration += 1;
+  grantSelectionGeneration += 1;
+  if (catalogTimer) clearTimeout(catalogTimer);
   credentialValue.value = "";
   editingConnection.value = undefined;
   deleteCandidate.value = undefined;
@@ -533,6 +869,10 @@ onBeforeUnmount(() => {
     </template>
 
     <div class="integration-page">
+      <ProblemNotice
+        v-if="detailsProblem && !detailsConnection"
+        :problem="detailsProblem"
+      />
       <IntegrationSectionTabs
         :active="activeSection"
         :connection-count="connections.length"
@@ -560,6 +900,11 @@ onBeforeUnmount(() => {
         :problem="platform.problems.integrations"
         @retry="platform.loadIntegrations()"
       >
+        <ProblemNotice
+          v-if="connectionProblem && activeSection === 'CONNECTIONS'"
+          :problem="connectionProblem"
+          @retry="loadConnections()"
+        />
         <IntegrationConnectionsPanel
           v-if="activeSection === 'CONNECTIONS'"
           :connections="connections"
@@ -567,11 +912,20 @@ onBeforeUnmount(() => {
           :core-ready="platform.integrationCoreReady === true"
           :busy-ref="commandRef"
           :busy-action="commandAction"
+          :search="connectionSearch"
+          :loading="connectionLoading"
+          :has-more="!!connectionCursor"
+          @update:search="connectionSearch = $event"
+          @more="loadConnections(true)"
           @command="command"
           @credential="openCredential"
           @edit="openEdit"
           @delete="openDelete"
           @grants="openGrants"
+          @details="
+            detailsProblem = undefined;
+            detailsConnection = $event;
+          "
         />
 
         <IntegrationCatalogPanel
@@ -580,6 +934,11 @@ onBeforeUnmount(() => {
           :categories="categories"
           :search="catalogSearch"
           :category="catalogCategory"
+          :loading="catalogLoading"
+          :has-more="!!catalogNextPageToken"
+          :problem="catalogProblem"
+          @more="loadCatalogPage(true)"
+          @retry="loadCatalogPage()"
           @update:search="catalogSearch = $event"
           @update:category="catalogCategory = $event"
           @connect="openConnection"
@@ -613,6 +972,46 @@ onBeforeUnmount(() => {
       <IntegrationApprovalPanel v-else />
     </div>
 
+    <ModalDialog
+      v-if="detailsConnection"
+      :title="detailsConnection.name"
+      size="xl"
+      @close="detailsConnection = undefined"
+    >
+      <StatusBadge :state="detailsConnection.state" />
+      <button
+        class="icon-button"
+        :disabled="detailsLoading"
+        :title="$t('vfs.refresh')"
+        :aria-label="$t('vfs.refresh')"
+        @click="refreshConnectionDetails"
+      >
+        <RefreshCw :size="18" />
+      </button>
+      <ProblemNotice v-if="detailsProblem" :problem="detailsProblem" compact />
+      <p>
+        {{
+          $t("identity.connectionVersion", {
+            version: detailsConnection.version,
+          })
+        }}
+      </p>
+      <code
+        >{{ detailsConnection.definitionKey }} /
+        {{ detailsConnection.definitionVersion }}</code
+      >
+      <InteractionIdentitiesPanel
+        v-if="detailsConnection.definitionKey === 'mattermost'"
+        :key="detailsConnection.ref"
+        :connection="detailsConnection"
+      />
+      <EmailEffectPanel
+        v-if="detailsConnection.definitionKey === 'email'"
+        :key="detailsConnection.ref"
+        :connection="detailsConnection"
+        :initial-invocation-ref="returnedInvocationRef"
+      />
+    </ModalDialog>
     <ModalDialog
       v-if="dialog && selectedDefinition"
       :title="
@@ -657,20 +1056,103 @@ onBeforeUnmount(() => {
           <span>{{ $t("common.name") }}</span>
           <input v-model.trim="form.name" required maxlength="160" autofocus />
         </label>
+        <div
+          v-if="dialogMode !== 'CREDENTIAL'"
+          class="field field--wide"
+          role="group"
+          :aria-label="$t('managed.editMode')"
+        >
+          <div class="segmented-control">
+            <button
+              v-for="mode in ['FORM', 'YAML'] as const"
+              :key="mode"
+              type="button"
+              :aria-pressed="configurationMode === mode"
+              @click="selectConfigurationMode(mode)"
+            >
+              {{ mode === "FORM" ? $t("managed.form") : "YAML" }}
+            </button>
+          </div>
+          <p v-if="yamlInvalid" role="alert">
+            {{ $t("managed.invalidDocument") }}
+          </p>
+          <CodeEditor
+            v-if="configurationMode === 'YAML'"
+            :model-value="yamlContent"
+            :label="$t('managed.content')"
+            language="yaml"
+            :disabled="busy"
+            @update:model-value="updateYaml"
+          />
+          <button
+            v-if="dialogMode === 'EDIT'"
+            class="button"
+            type="button"
+            :aria-expanded="configurationDiff"
+            @click="configurationDiff = !configurationDiff"
+          >
+            {{ $t("managed.diff") }}
+          </button>
+          <CodeDiff
+            v-if="dialogMode === 'EDIT' && configurationDiff && !yamlInvalid"
+            :original="originalConfigurationYaml"
+            :modified="normalizedConfigurationYaml"
+            :label="$t('managed.diff')"
+          />
+        </div>
         <label
-          v-for="field in dialogMode !== 'CREDENTIAL'
+          v-for="field in dialogMode !== 'CREDENTIAL' &&
+          configurationMode === 'FORM'
             ? selectedDefinition.configurationFields
             : []"
           :key="field.key"
           class="field field--wide"
         >
           <span>{{ field.label }}</span>
-          <input
+          <select
+            v-if="field.allowedValues?.length"
             v-model="form.configuration[field.key]"
-            :type="field.valueType === 'URL' ? 'url' : 'text'"
+            :required="field.required"
+          >
+            <option value=""></option>
+            <option
+              v-for="value in field.allowedValues"
+              :key="value"
+              :value="value"
+            >
+              {{ value }}
+            </option>
+          </select>
+          <input
+            v-else-if="field.valueType === 'BOOLEAN'"
+            type="checkbox"
+            :checked="form.configuration[field.key] === 'true'"
+            @change="
+              form.configuration[field.key] = (
+                $event.target as HTMLInputElement
+              ).checked
+                ? 'true'
+                : 'false'
+            "
+          />
+          <input
+            v-else
+            v-model="form.configuration[field.key]"
+            :type="
+              field.valueType === 'URL'
+                ? 'url'
+                : field.valueType === 'INTEGER'
+                  ? 'number'
+                  : 'text'
+            "
+            :min="field.minimum"
+            :max="field.maximum"
+            :step="field.valueType === 'INTEGER' ? 1 : undefined"
             :required="field.required"
             :placeholder="field.placeholder"
-            :maxlength="field.valueType === 'URL' ? 2048 : 500"
+            :maxlength="
+              field.maximumLength ?? (field.valueType === 'URL' ? 2048 : 500)
+            "
             :aria-invalid="
               formSubmitted &&
               Boolean(preparedConfiguration.problems[field.key])

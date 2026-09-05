@@ -31,7 +31,7 @@ const messages = {
       connectionCount: "Подключений: {count}",
       capabilityCount: "Возможностей: {count}",
       approvalCapabilityCount: "Human Gate: {count}",
-      packageDetails: "Описание пакета",
+      packageDetails: "Подробнее",
       packageDetailsUnavailable: "Backend manifest недоступен",
       connectUnavailable: "Подключение недоступно",
       noPackages: "Не найдено",
@@ -84,6 +84,9 @@ function githubDefinition(): IntegrationDefinition {
     origin: "SHIPPED",
     digest: "a".repeat(64),
     adapter: "GITHUB",
+    adapterOwner: "integration-gateway",
+    executionRoute: "MANAGED_MCP",
+    adapterReadiness: "READY",
   };
 }
 
@@ -111,10 +114,9 @@ describe("IntegrationCatalogPanel", () => {
     }
     expect(html).not.toContain("YAML · API —");
     expect(html.match(/<button[^>]*disabled/g)).toBeNull();
-    expect(html).toContain("Схема подключения");
-    expect(html).toContain("Адрес API");
-    expect(html).toContain("GITHUB_REPOSITORY");
-    expect(html).toContain("NONE");
-    expect(html).toContain("Ревизия");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain("Подробнее");
+    expect(html).not.toContain("package-details");
+    expect(html).not.toContain("zero-connection-notice");
   });
 });

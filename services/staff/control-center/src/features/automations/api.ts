@@ -7,6 +7,7 @@ import {
   listScheduleRevisions,
   listScheduleRuns,
   listSchedules,
+  previewSchedule,
   updateSchedule as updateScheduleRequest,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -15,8 +16,9 @@ import type {
   ScheduleInput,
   ScheduleRevisionPage,
   ScheduleRunOccurrencePage,
+  SchedulePreviewInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import { mutate, csrfToken, type MutationHeaders } from "@/shared/api/mutation";
 import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 
 import {
@@ -31,6 +33,21 @@ export interface SchedulePage {
 }
 
 const pageSize = 40;
+
+export async function loadSchedulePreview(
+  body: SchedulePreviewInput,
+  signal: AbortSignal,
+) {
+  return (
+    await unwrap(
+      previewSchedule({
+        body,
+        headers: { "X-CSRF-Token": csrfToken() },
+        signal: AbortSignal.any([signal, requestSignal()]),
+      }),
+    )
+  ).data;
+}
 
 function mutationHeaders(headers: MutationHeaders): {
   "Idempotency-Key": string;
@@ -77,7 +94,11 @@ export async function readSchedule(
   scheduleRef: string,
   signal: AbortSignal = requestSignal(),
 ): Promise<Schedule> {
-  return (await unwrap(getSchedule({ path: { scheduleRef }, signal }))).data;
+  return (
+    await unwrap(
+      getSchedule({ path: { scheduleRef }, signal: requestSignal(signal) }),
+    )
+  ).data;
 }
 
 export async function saveSchedule(

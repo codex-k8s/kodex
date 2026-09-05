@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-synthetic/
 playwright-report/
 test-results/
 .auth/

@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -64,7 +64,9 @@ let materializedController: AbortController | undefined;
 const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
-const loadVariables = createTemplateVariableLoader(props.projectRef);
+const loadVariables = computed(() =>
+  createTemplateVariableLoader(props.projectRef),
+);
 const materializedContent = computed(
   () =>
     materializedPreview.value?.fullMaterializedPrompt ??
@@ -72,7 +74,9 @@ const materializedContent = computed(
     "",
 );
 const materializedStale = computed(
-  () => materializedTemplate.value !== props.modelValue,
+  () =>
+    !materializedPreview.value ||
+    materializedTemplate.value !== props.modelValue,
 );
 
 function insertVariable(item: TemplateVariablePickerItem): void {
@@ -89,15 +93,19 @@ async function refreshMaterializedPreview(): Promise<void> {
   if (!props.modelValue.trim() || materializedBusy.value) return;
   materializedController?.abort();
   const controller = new AbortController();
+  const template = props.modelValue;
   materializedController = controller;
   materializedBusy.value = true;
   materializedProblem.value = undefined;
   try {
-    materializedPreview.value = await loadMaterializedTemplatePreview(
-      props.modelValue,
+    const preview = await loadMaterializedTemplatePreview(
+      template,
       controller.signal,
     );
-    materializedTemplate.value = props.modelValue;
+    if (controller.signal.aborted || materializedController !== controller)
+      return;
+    materializedPreview.value = preview;
+    materializedTemplate.value = template;
   } catch (error) {
     if (!controller.signal.aborted)
       materializedProblem.value = asProblem(error);
@@ -113,7 +121,7 @@ const completeVariables: CodeEditorCompletionProvider = async (
   query,
   signal,
 ): Promise<CodeEditorCompletionItem[]> => {
-  const page = await loadVariables({ cursor: undefined, query, signal });
+  const page = await loadVariables.value({ cursor: undefined, query, signal });
   return page.items.map((item) => ({
     label: item.variable.name,
     apply: templateVariableInsertion(item.variable),
@@ -129,7 +137,17 @@ const completeVariables: CodeEditorCompletionProvider = async (
   }));
 };
 
-onBeforeUnmount(() => materializedController?.abort());
+function invalidatePreview(): void {
+  materializedController?.abort();
+  materializedController = undefined;
+  materializedBusy.value = false;
+  materializedPreview.value = undefined;
+  materializedProblem.value = undefined;
+}
+watch(() => [props.modelValue, props.projectRef], invalidatePreview, {
+  flush: "sync",
+});
+onBeforeUnmount(invalidatePreview);
 </script>
 
 <template>
@@ -364,14 +382,14 @@ onBeforeUnmount(() => materializedController?.abort());
   display: inline-flex;
   width: max-content;
   max-width: 100%;
-  overflow: hidden;
+  flex-wrap: wrap;
   border: 1px solid var(--border);
   border-radius: 7px;
 }
 .instructions-panel__mode {
   display: inline-flex;
   min-height: 32px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
@@ -380,7 +398,8 @@ onBeforeUnmount(() => materializedController?.abort());
   color: var(--muted);
   background: var(--surface);
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .instructions-panel__mode:last-child {
   border-right: 0;
@@ -407,6 +426,7 @@ onBeforeUnmount(() => materializedController?.abort());
 }
 .instructions-panel__preview-bar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 36px;
   align-items: center;
   gap: 6px;

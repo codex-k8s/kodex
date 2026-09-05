@@ -52,6 +52,12 @@ const input: ScheduleInput = {
   input: { task: "Подготовить сводку" },
   sessionPolicy: "NEW_EACH_RUN",
   notificationPolicy: "CONTROL_CENTER_ONLY",
+  dstGapPolicy: "SHIFT_FORWARD",
+  dstFoldPolicy: "RUN_ONCE_EARLIEST",
+  misfirePolicy: "COALESCE",
+  overlapPolicy: "FORBID",
+  automationText: "",
+  promptInputs: {},
 };
 
 function revision(value = 4): ScheduleRevision {
@@ -59,6 +65,8 @@ function revision(value = 4): ScheduleRevision {
     ref: `schedule_revision_${String(value)}`,
     revision: value,
     digest: String(value).repeat(64),
+    targetVersion: 2,
+    targetDigest: "b".repeat(64),
     name: input.name,
     target: {
       type: "AGENT",
@@ -72,6 +80,12 @@ function revision(value = 4): ScheduleRevision {
     input: input.input,
     sessionPolicy: input.sessionPolicy,
     notificationPolicy: input.notificationPolicy,
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy: "COALESCE",
+    overlapPolicy: "FORBID",
+    automationText: "",
+    promptInputs: {},
     createdAt: "2026-08-30T06:00:00Z",
   };
 }
@@ -90,6 +104,15 @@ function schedule(overrides: Partial<Schedule> = {}): Schedule {
     input: input.input,
     sessionPolicy: input.sessionPolicy,
     notificationPolicy: input.notificationPolicy,
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy: "COALESCE",
+    overlapPolicy: "FORBID",
+    automationText: "",
+    promptInputs: {},
+    targetVersion: 2,
+    targetDigest: "b".repeat(64),
+    cronExpression: "0 9 * * *",
     currentRevision: revision(),
     nextActions: ["EDIT", "DISABLE", "ARCHIVE", "DELETE"],
     ...overrides,
@@ -148,6 +171,9 @@ describe("automation API boundary", () => {
     const current = schedule();
     const updated = schedule({
       version: 5,
+      targetVersion: 2,
+      targetDigest: "b".repeat(64),
+      cronExpression: "0 9 * * *",
       currentRevision: revision(5),
     });
     mocks.update.mockResolvedValue(response(updated));
@@ -169,6 +195,9 @@ describe("automation API boundary", () => {
   it("отклоняет несовпавший readback после update", async () => {
     const updated = schedule({
       version: 5,
+      targetVersion: 2,
+      targetDigest: "b".repeat(64),
+      cronExpression: "0 9 * * *",
       currentRevision: revision(5),
     });
     mocks.update.mockResolvedValue(response(updated));

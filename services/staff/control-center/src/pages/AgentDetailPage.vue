@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Play, Power, PowerOff } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -636,7 +637,7 @@ onMounted(() => void load());
               <h2>{{ $t("runs.new") }}</h2>
               <label class="field">
                 <span>{{ $t("runs.task") }}</span>
-                <textarea v-model="task" required maxlength="8000" />
+                <VoiceTextarea v-model="task" required maxlength="8000" />
               </label>
               <button
                 class="button button--primary"
@@ -770,6 +771,8 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-access"
         >
           <AgentAccessPanel
+            :project-ref="agent.projectRef"
+            :agent-ref="agent.ref"
             :capabilities="capabilityCatalog"
             :granted-keys="agent.capabilities.map((item) => item.key)"
             :integrations="agent.integrations"
@@ -864,7 +867,7 @@ onMounted(() => void load());
   margin: 0;
   font-size: 1rem;
 }
-.launch-panel textarea {
+.launch-panel :deep(textarea) {
   min-height: 150px;
 }
 .agent-summary dl {

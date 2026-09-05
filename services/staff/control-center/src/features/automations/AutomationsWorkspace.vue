@@ -52,7 +52,10 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{ projectRef: string }>();
+const props = defineProps<{
+  projectRef: string;
+  initialScheduleRef?: string;
+}>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 
@@ -104,22 +107,45 @@ const filteredSchedules = computed(() =>
     scheduleMatchesFilter(schedule, state.value),
   ),
 );
-const selectedSchedule = computed(() =>
-  schedules.value.find((schedule) => schedule.ref === selectedRef.value),
-);
+const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
 const selectedCapabilities = computed(() =>
   selectedSchedule.value
     ? scheduleCapabilities(selectedSchedule.value)
     : undefined,
 );
-const editorSchedule = computed(() =>
-  schedules.value.find((schedule) => schedule.ref === editorScheduleRef.value),
-);
+const editorSchedule = computed(() => scopedSchedule(editorScheduleRef.value));
 const archiveSchedule = computed(() =>
-  schedules.value.find((schedule) => schedule.ref === archiveScheduleRef.value),
+  scopedSchedule(archiveScheduleRef.value),
 );
-const deleteCandidate = computed(() =>
-  schedules.value.find((schedule) => schedule.ref === deleteScheduleRef.value),
+const deleteCandidate = computed(() => scopedSchedule(deleteScheduleRef.value));
+function scopedSchedule(ref: string): Schedule | undefined {
+  const schedule = platform.schedules[ref];
+  return schedule?.projectRef === props.projectRef ? schedule : undefined;
+}
+watch(
+  () => [props.projectRef, props.initialScheduleRef],
+  async (_value, _previous, cleanup) => {
+    if (!props.initialScheduleRef) return;
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
+    try {
+      const schedule = await readSchedule(
+        props.initialScheduleRef,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      if (
+        schedule.projectRef !== props.projectRef ||
+        schedule.ref !== props.initialScheduleRef
+      )
+        throw new Error("Schedule link scope mismatch");
+      replaceSchedule(schedule);
+      selectedRef.value = schedule.ref;
+    } catch (error) {
+      if (!controller.signal.aborted) problem.value = asProblem(error);
+    }
+  },
+  { immediate: true },
 );
 const custom = computed(() =>
   locale.value.startsWith("en")
@@ -252,13 +278,15 @@ async function loadList(reset = false): Promise<void> {
 }
 
 watch(search, () => {
+  listController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void loadList(true), 280);
+  searchTimer = setTimeout(() => void loadList(true), 500);
 });
 
 watch(
   [schedules, filteredSchedules],
   ([allSchedules, visibleSchedules]) => {
+    if (selectedRef.value === props.initialScheduleRef) return;
     if (!allSchedules.some((schedule) => schedule.ref === selectedRef.value))
       selectedRef.value = visibleSchedules[0]?.ref ?? "";
   },
@@ -373,7 +401,7 @@ function formatDate(value: string): string {
 }
 
 function task(value: Schedule | ScheduleRevision): string {
-  const item = value.input?.task;
+  const item = value.input.task;
   return typeof item === "string" ? item : t("common.noData");
 }
 
@@ -540,13 +568,13 @@ onBeforeUnmount(() => {
     <AsyncState
       :loading="listLoading"
       :problem="listProblem"
-      :empty="schedules.length === 0"
+      :empty="schedules.length === 0 && !selectedSchedule"
       :empty-title="$t('automations.emptyTitle')"
       :empty-text="$t('automations.emptyText')"
       @retry="loadList(true)"
     >
       <section
-        v-if="filteredSchedules.length === 0"
+        v-if="filteredSchedules.length === 0 && !selectedSchedule"
         class="empty-state automations-workspace__empty"
       >
         <h2>{{ custom.noMatches }}</h2>

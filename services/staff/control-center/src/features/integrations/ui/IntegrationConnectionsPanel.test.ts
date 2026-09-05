@@ -43,6 +43,9 @@ const definition: IntegrationDefinition = {
   origin: "SHIPPED",
   digest: "a".repeat(64),
   adapter: "SYNTHETIC_HTTP",
+  adapterOwner: "integration-gateway",
+  executionRoute: "MANAGED_MCP",
+  adapterReadiness: "READY",
 };
 
 const connection: IntegrationConnection = {

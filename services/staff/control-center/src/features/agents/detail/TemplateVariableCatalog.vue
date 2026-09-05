@@ -30,7 +30,7 @@ const {
   phase,
   query,
   refresh,
-} = useAsyncEntityCollection(loader, { debounceMs: 250 });
+} = useAsyncEntityCollection(loader, { debounceMs: 500 });
 
 const scopeOrder = [
   "SYSTEM",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LockKeyhole, Plus, ShieldCheck, Trash2 } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -14,6 +14,16 @@ import type {
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
+import { searchProjects } from "@/features/projects/api";
+import { loadCatalog } from "@/features/catalogs/api";
+import { listIntegrationConnections } from "@/shared/api/generated/openapi/sdk.gen";
+import { unwrap } from "@/shared/api/problem";
+import { requestSignal } from "@/shared/api/client";
 
 const props = defineProps<{
   connections: readonly IntegrationConnection[];
@@ -45,6 +55,114 @@ const { t } = useI18n();
 const targets = computed(() =>
   props.targetKind === "AGENT" ? props.agents : props.workflows,
 );
+const chosenProject = ref<AsyncEntityOption>();
+const chosenTarget = ref<AsyncEntityOption>();
+const projectOption = computed(() =>
+  chosenProject.value?.ref === props.projectRef
+    ? chosenProject.value
+    : props.projects.find((item) => item.ref === props.projectRef)
+      ? {
+          ref: props.projectRef,
+          title:
+            props.projects.find((item) => item.ref === props.projectRef)
+              ?.name ?? "",
+        }
+      : undefined,
+);
+const targetOption = computed(() =>
+  chosenTarget.value?.ref === props.targetRef
+    ? chosenTarget.value
+    : targets.value.find((item) => item.ref === props.targetRef)
+      ? {
+          ref: props.targetRef,
+          title:
+            targets.value.find((item) => item.ref === props.targetRef)?.name ??
+            "",
+        }
+      : undefined,
+);
+const connectionOption = computed(() =>
+  props.selectedConnection
+    ? {
+        ref: props.selectedConnection.ref,
+        title: props.selectedConnection.name,
+        description: props.selectedConnection.credentialsHint,
+        meta: t(`states.${props.selectedConnection.state}`),
+      }
+    : undefined,
+);
+async function loadProjects(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  const page = await searchProjects(query, cursor, signal);
+  return {
+    items: page.items.map((item) => ({
+      ref: item.ref,
+      title: item.name,
+      description: item.purpose,
+      meta: t(`states.${item.lifecycle}`),
+    })),
+    nextPageToken: page.nextPageToken,
+  };
+}
+async function loadRecipients(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  if (!props.projectRef || !props.selectedConnection) return { items: [] };
+  const project = props.projectRef;
+  const page = await loadCatalog(
+    props.targetKind === "AGENT" ? "agents" : "workflows",
+    query,
+    signal,
+    cursor,
+    project,
+  );
+  if (page.items.some((item) => item.projectRef !== project))
+    throw new Error("Invalid integration recipient project");
+  return {
+    items: page.items.map((item) => ({
+      ref: item.ref,
+      title: item.title,
+      description: item.description,
+      meta: [t(`states.${item.state}`), ...item.meta].join(" · "),
+    })),
+    nextPageToken: page.nextPageToken,
+  };
+}
+async function loadConnections(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  const page = (
+    await unwrap(
+      listIntegrationConnections({
+        query: { query, pageToken: cursor, pageSize: 30 },
+        signal: requestSignal(signal),
+      }),
+    )
+  ).data;
+  return {
+    items: page.items.map((item) => ({
+      ref: item.ref,
+      title: item.name,
+      description: item.credentialsHint,
+      meta: t(`states.${item.state}`),
+    })),
+    nextPageToken: page.nextPageToken,
+  };
+}
+watch(
+  () => [props.projectRef, props.targetKind, props.selectedConnection?.ref],
+  () => {
+    chosenTarget.value = undefined;
+    emit("update:targetRef", "");
+  },
+);
 const selectedCapability = computed(() =>
   props.selectedConnection?.capabilities.find(
     (item) => item.key === props.capabilityKey,
@@ -73,26 +191,14 @@ const canManageSelected = computed(
       <div class="grant-list-column">
         <label class="connection-picker">
           <span>{{ t("integrationsRedesign.connectionPicker") }}</span>
-          <select
-            :value="selectedConnection?.ref ?? ''"
-            @change="
-              emit(
-                'selectConnection',
-                ($event.target as HTMLSelectElement).value,
-              )
-            "
-          >
-            <option value="">
-              {{ t("integrationsRedesign.allConnections") }}
-            </option>
-            <option
-              v-for="connection in connections"
-              :key="connection.ref"
-              :value="connection.ref"
-            >
-              {{ connection.name }}
-            </option>
-          </select>
+          <AsyncEntityPicker
+            :model-value="selectedConnection?.ref"
+            :selected="connectionOption"
+            :load-page="loadConnections"
+            :trigger-label="t('integrationsRedesign.connectionPicker')"
+            :placeholder="t('integrationsRedesign.allConnections')"
+            @select="emit('selectConnection', $event.ref)"
+          />
         </label>
 
         <div v-if="grants.length" class="grant-list" role="list">
@@ -172,27 +278,18 @@ const canManageSelected = computed(
         <form class="grant-form" @submit.prevent="emit('save')">
           <label class="field">
             <span>{{ t("integrations.project") }}</span>
-            <select
-              :value="projectRef"
+            <AsyncEntityPicker
+              :model-value="projectRef"
+              :selected="projectOption"
+              :load-page="loadProjects"
               :disabled="!canManageSelected"
-              required
-              @change="
-                emit(
-                  'update:projectRef',
-                  ($event.target as HTMLSelectElement).value,
-                );
-                emit('loadTargets');
+              :trigger-label="t('integrations.project')"
+              :placeholder="t('integrations.chooseProject')"
+              @select="
+                chosenProject = $event;
+                emit('update:projectRef', $event.ref);
               "
-            >
-              <option value="">{{ t("integrations.chooseProject") }}</option>
-              <option
-                v-for="project in projects"
-                :key="project.ref"
-                :value="project.ref"
-              >
-                {{ project.name }}
-              </option>
-            </select>
+            />
           </label>
           <label class="field">
             <span>{{ t("integrations.targetType") }}</span>
@@ -215,32 +312,26 @@ const canManageSelected = computed(
           </label>
           <label class="field">
             <span>{{ t("integrations.target") }}</span>
-            <select
-              :value="targetRef"
-              :disabled="!canManageSelected || targetsLoading || !projectRef"
-              required
-              @change="
-                emit(
-                  'update:targetRef',
-                  ($event.target as HTMLSelectElement).value,
-                )
+            <AsyncEntityPicker
+              :key="
+                [
+                  'recipient',
+                  projectRef,
+                  targetKind,
+                  selectedConnection?.ref,
+                ].join(':')
               "
-            >
-              <option value="">
-                {{
-                  targetsLoading
-                    ? t("common.loading")
-                    : t("integrations.chooseTarget")
-                }}
-              </option>
-              <option
-                v-for="target in targets"
-                :key="target.ref"
-                :value="target.ref"
-              >
-                {{ target.name }}
-              </option>
-            </select>
+              :model-value="targetRef"
+              :selected="targetOption"
+              :load-page="loadRecipients"
+              :disabled="!canManageSelected || targetsLoading || !projectRef"
+              :trigger-label="t('integrations.target')"
+              :placeholder="t('integrations.chooseTarget')"
+              @select="
+                chosenTarget = $event;
+                emit('update:targetRef', $event.ref);
+              "
+            />
           </label>
           <label class="field">
             <span>{{ t("integrations.capability") }}</span>
