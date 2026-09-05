@@ -124,6 +124,9 @@ func Parse(raw []byte) (Package, error) {
 	if len(raw) == 0 || len(raw) > maxBytes {
 		return Package{}, errors.New("integration package size is invalid")
 	}
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && trimmed[0] == '{' {
+		return parsePackageJSON(trimmed)
+	}
 	var document yaml.Node
 	nodeDecoder := yaml.NewDecoder(bytes.NewReader(raw))
 	if err := nodeDecoder.Decode(&document); err != nil {
