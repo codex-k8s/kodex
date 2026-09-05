@@ -19,8 +19,8 @@ images:
     digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 YAML
 kubectl kustomize "$temporary" > "$temporary/render.yaml"
-python3 - "$temporary/render.yaml" "$root/tools/install/secret-projections.json" <<'PY'
-import json, sys, yaml
+python3 - "$temporary/render.yaml" "$root/tools/install/secret-projections.json" "$root" <<'PY'
+import json, pathlib, sys, yaml
 objects = list(yaml.safe_load_all(open(sys.argv[1])))
 def get(kind, name):
     return next(o for o in objects if o['kind'] == kind and o['metadata']['name'] == name)
@@ -62,6 +62,22 @@ for rule in get('NetworkPolicy', 'email-bridge')['spec']['egress']:
 assert destinations['control-plane'] == ('kodex-system', 8443)
 assert destinations['email-bridge-postgresql'] == ('kodex-system', 5432)
 assert destinations['opentelemetry-collector'] == ('observability', 4317)
+root = pathlib.Path(sys.argv[3])
+descriptor = yaml.safe_load((root / 'contracts/email-bridge/v1/deployable.yaml').read_text())
+runtime = get('ConfigMap', 'email-bridge-runtime')['data']
+authority = descriptor['authority']
+assert authority['transport'] == 'grpc'
+assert authority['endpoint'] == runtime['EMAIL_BRIDGE_AUTHORITY_TARGET']
+assert authority['application_grant_env'] in runtime
+assert authority['issuer_proof'] == 'local-internal-rpc-authority'
+methods = ['ResolveEmailAuthorization', 'ReportEmailEffectReceipt', 'ResolveEmailReconciliation']
+assert authority['methods'] == ['/controlplane.v1.RuntimeWorkService/' + name for name in methods]
+generated = (root / 'libs/go/controlplaneapi/gen/controlplane/v1/control_plane_grpc.pb.go').read_text()
+assert all('"' + method + '"' in generated for method in authority['methods'])
+migrations = root / 'services/internal/email-bridge/cmd/cli/migrations'
+assert int(descriptor['migration_version']) == max(int(path.name.split('_')[0]) for path in migrations.glob('*.sql'))
+assert descriptor['egress']['endpoint'] == runtime['EMAIL_BRIDGE_EGRESS_ADDRESS']
+assert 'owner-authorization' not in descriptor['readiness']['local_requires']
 assert get('Job', 'email-bridge-migration')['spec']['activeDeadlineSeconds'] == 120
 database = get('StatefulSet', 'email-bridge-postgresql')['spec']
 assert database['volumeClaimTemplates']
