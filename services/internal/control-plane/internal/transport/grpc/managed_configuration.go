@@ -177,7 +177,7 @@ func (server *Server) GetManagedConfigurationImpact(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef())
+	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef(), query.Filter{Query: request.GetQuery(), Page: query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()}})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -282,7 +282,7 @@ func castManagedBinding(value entity.ManagedConfigurationBindingSnapshot) *contr
 }
 
 func castManagedImpact(value entity.ManagedConfigurationImpact) *controlplanev1.ManagedConfigurationImpact {
-	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest}
+	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest, Total: value.Total, Page: &controlplanev1.PageInfo{NextPageToken: value.NextPageToken}}
 	for _, item := range value.Consumers {
 		result.Consumers = append(result.Consumers, castManagedConsumer(item))
 	}

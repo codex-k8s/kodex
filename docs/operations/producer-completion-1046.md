@@ -333,7 +333,19 @@ Cursor связан с organization/actor/authority project, ресурсом, t
 Локально PASS: Proto lint/codegen, `TestImpactSearchRejectsInvalidInput`/race,
 targeted PG `role_image_promotion|runtime_environment_draft|secret_revision_impact`.
 Первый запуск без image fixture: FAIL (no rows), исправление assertions не
-требовалось. Managed impact query/cursor остаётся отдельной незавершённой частью D7.
+требовалось.
+
+`GetManagedConfigurationImpactRequest`: `query = 3`, `page = 4`;
+`ManagedConfigurationImpact`: `total = 5`, `page = 6`. Поиск по consumer kind/ref,
+лимит и правила cursor аналогичны. SQL вычисляет неизменённый full-binding digest
+для OCC независимо от доступной страницы; consumer eligibility выполняется до
+LIMIT. Rebind отдельно проверяет права на каждого выбранного consumer.
+Targeted PG `role_image_promotion|runtime_environment_lifecycle|managed_configuration`
+PASS: две страницы, фильтр, отказ cursor при смене query, digest совпадает с
+прежним byte-exact алгоритмом. Go/race managed transport/repository и Proto
+lint/codegen PASS. Промежуточные FAIL новых fixtures (добавленный agent менял
+VFS count; stale configuration version) исправлены порядком fixture и точным
+readback текущей version, без ослабления assertions.
 
 ## Оставшаяся реализация
 
