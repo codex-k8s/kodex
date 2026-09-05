@@ -1755,6 +1755,21 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RunWorkspace' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runs/{runRef}/runtime-revision-diff:
+    get:
+      tags: [Runs]
+      operationId: getRuntimeRevisionDiff
+      parameters:
+        - { $ref: '#/components/parameters/RunRef' }
+        - name: currentRevisionRef
+          in: query
+          description: Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Безопасные изменения относительно предыдущей ревизии той же сессии; значения, prompts и worker snapshot отсутствуют.
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRevisionDiff' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/runs/{runRef}:
     get:
       tags: [Runs]
@@ -6211,6 +6226,44 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         nodes: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/RunNode' } }
         edges: { type: array, maxItems: 4000, items: { $ref: '#/components/schemas/RunEdge' } }
+    PublicRuntimeRevisionIdentity:
+      type: object
+      additionalProperties: false
+      required: [ref, version, runRef, sessionRef, attempt, revisionDigest, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        attempt: { type: integer, minimum: 1, maximum: 2147483647 }
+        revisionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeRevisionDiffValue:
+      type: object
+      additionalProperties: false
+      description: Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^(sha256:)?[a-f0-9]{64}$' }
+        revision: { type: string, minLength: 1, maxLength: 160 }
+    RuntimeRevisionDiffChange:
+      type: object
+      additionalProperties: false
+      required: [component, current]
+      properties:
+        component: { type: string, enum: [PROVIDER, MODEL, RUNTIME_PROFILE, RUNTIME_CONFIGURATION, PROVIDER_POLICY, CONFIG_OVERLAY, ENVIRONMENT, ENVIRONMENT_BINDING, INSTRUCTION, INTEGRATION_GRANTS, IMAGE] }
+        previous: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+        current: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+    RuntimeRevisionDiff:
+      type: object
+      additionalProperties: false
+      required: [current, changes]
+      properties:
+        current: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        previous: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        changes: { type: array, maxItems: 11, items: { $ref: '#/components/schemas/RuntimeRevisionDiffChange' } }
     RunWorkspace:
       type: object
       additionalProperties: false

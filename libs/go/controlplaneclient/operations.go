@@ -90,6 +90,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.workflows.get":                             controlplanev1.PlatformQueryService_GetWorkflow_FullMethodName,
 		"platform.query.runs.list":                                 controlplanev1.PlatformQueryService_ListRuns_FullMethodName,
 		"platform.query.runs.get":                                  controlplanev1.PlatformQueryService_GetRun_FullMethodName,
+		"platform.query.runtime-revisions.diff":                    controlplanev1.PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName,
 		"platform.query.run-graph.get":                             controlplanev1.PlatformQueryService_GetRunGraph_FullMethodName,
 		"platform.query.run-events.list":                           controlplanev1.PlatformQueryService_ListRunEvents_FullMethodName,
 		"platform.query.owner-gates.list":                          controlplanev1.PlatformQueryService_ListOwnerGates_FullMethodName,
