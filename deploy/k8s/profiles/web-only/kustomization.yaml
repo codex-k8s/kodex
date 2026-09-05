@@ -12,6 +12,7 @@ resources:
   - ../../overlays/production/role-image-builder
   - ../../overlays/production/runtime-controller
   - ../../base/runtime-workloads
+  - ../../base/runtime-secret-drafts
   - ../../overlays/production/integration-gateway
   - ../../overlays/production/automation-scheduler
   - ../../overlays/production/secret-broker

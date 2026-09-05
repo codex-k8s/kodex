@@ -236,7 +236,7 @@ yq -N -r '
       "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
       "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
       "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness"] | sort) and
-    ([.policy.authority_proof_producers[] |
+  ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
       .application_credential == "PLATFORM_WORKER_GRANT" and

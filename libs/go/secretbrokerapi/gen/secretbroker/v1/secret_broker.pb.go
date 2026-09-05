@@ -640,7 +640,7 @@ func (x *CheckSecretDraftReadinessResponse) GetReady() bool {
 	return false
 }
 
-// Safe metadata не содержит value digest, hint, ciphertext или locators.
+// Безопасная metadata не содержит value digest, hint, ciphertext или locators.
 type RuntimeSecretDraftMetadata struct {
 	state             protoimpl.MessageState  `protogen:"open.v1"`
 	Ref               string                  `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
@@ -656,6 +656,7 @@ type RuntimeSecretDraftMetadata struct {
 	CreatedAt         *timestamppb.Timestamp  `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt         *timestamppb.Timestamp  `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ExpiresAt         *timestamppb.Timestamp  `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	SecretVersion     int64                   `protobuf:"varint,14,opt,name=secret_version,json=secretVersion,proto3" json:"secret_version,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -779,6 +780,13 @@ func (x *RuntimeSecretDraftMetadata) GetExpiresAt() *timestamppb.Timestamp {
 		return x.ExpiresAt
 	}
 	return nil
+}
+
+func (x *RuntimeSecretDraftMetadata) GetSecretVersion() int64 {
+	if x != nil {
+		return x.SecretVersion
+	}
+	return 0
 }
 
 type MaterializeRuntimeCredentialsRequest struct {
@@ -1982,7 +1990,7 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\x05draft\x18\x01 \x01(\v2+.secretbroker.v1.RuntimeSecretDraftMetadataR\x05draft\"\"\n" +
 	" CheckSecretDraftReadinessRequest\"9\n" +
 	"!CheckSecretDraftReadinessResponse\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready\"\xc6\x04\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\"\xed\x04\n" +
 	"\x1aRuntimeSecretDraftMetadata\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1e\n" +
@@ -2005,7 +2013,8 @@ const file_secretbroker_v1_secret_broker_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x129\n" +
 	"\n" +
-	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x89\x03\n" +
+	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12%\n" +
+	"\x0esecret_version\x18\x0e \x01(\x03R\rsecretVersion\"\x89\x03\n" +
 	"$MaterializeRuntimeCredentialsRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +

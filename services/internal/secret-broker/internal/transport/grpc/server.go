@@ -58,6 +58,7 @@ type Server struct {
 	store               Store
 	recovery            Recovery
 	providerCredentials ProviderCredentialMaterializer
+	drafts              DraftCommands
 	namespace           string
 	maximumSize         int
 }
