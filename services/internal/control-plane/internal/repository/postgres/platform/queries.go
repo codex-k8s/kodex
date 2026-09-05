@@ -81,7 +81,7 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	gates, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
+	gates, _, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -1244,27 +1244,6 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		return nil, 0, false, errs.ErrUnavailable
 	}
 	return result, run.EventSequence, complete, nil
-}
-
-func (repository *Repository) ListOwnerGates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OwnerGate, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, "", err
-	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListownergatesSelectOwnerGatesOrganizationIdRefState, scope.organizationID, filter.ProjectRef, filter.State, scope.role, scope.actorID, boundedPage(filter.Page))
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.OwnerGate
-	for rows.Next() {
-		item, scanErr := scanGate(rows, true)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	return result, "", rows.Err()
 }
 
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {

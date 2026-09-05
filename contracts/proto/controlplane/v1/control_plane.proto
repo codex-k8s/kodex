@@ -2085,10 +2085,12 @@ message ListOwnerGatesRequest {
   string project_ref = 1;
   PageRequest page = 2;
   OwnerGateState state = 3;
+  string query = 4;
 }
 message ListOwnerGatesResponse {
   repeated OwnerGate gates = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 message GetOwnerGateRequest {
   string gate_ref = 1;

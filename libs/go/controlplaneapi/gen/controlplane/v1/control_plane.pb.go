@@ -17170,6 +17170,7 @@ type ListOwnerGatesRequest struct {
 	ProjectRef    string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	State         OwnerGateState         `protobuf:"varint,3,opt,name=state,proto3,enum=controlplane.v1.OwnerGateState" json:"state,omitempty"`
+	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -17225,10 +17226,18 @@ func (x *ListOwnerGatesRequest) GetState() OwnerGateState {
 	return OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED
 }
 
+func (x *ListOwnerGatesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
 type ListOwnerGatesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Gates         []*OwnerGate           `protobuf:"bytes,1,rep,name=gates,proto3" json:"gates,omitempty"`
 	Page          *PageInfo              `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	Total         int64                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -17275,6 +17284,13 @@ func (x *ListOwnerGatesResponse) GetPage() *PageInfo {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *ListOwnerGatesResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
 }
 
 type GetOwnerGateRequest struct {
@@ -59376,15 +59392,17 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\"k\n" +
 	"\x10RetryRunResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
-	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xa1\x01\n" +
+	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xb7\x01\n" +
 	"\x15ListOwnerGatesRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x120\n" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x125\n" +
-	"\x05state\x18\x03 \x01(\x0e2\x1f.controlplane.v1.OwnerGateStateR\x05state\"y\n" +
+	"\x05state\x18\x03 \x01(\x0e2\x1f.controlplane.v1.OwnerGateStateR\x05state\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\"\x8f\x01\n" +
 	"\x16ListOwnerGatesResponse\x120\n" +
 	"\x05gates\x18\x01 \x03(\v2\x1a.controlplane.v1.OwnerGateR\x05gates\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"0\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x03R\x05total\"0\n" +
 	"\x13GetOwnerGateRequest\x12\x19\n" +
 	"\bgate_ref\x18\x01 \x01(\tR\agateRef\"F\n" +
 	"\x14GetOwnerGateResponse\x12.\n" +
