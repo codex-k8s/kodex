@@ -32600,8 +32600,10 @@ type RuntimeSecretDraft struct {
 	CreatedAt         *timestamppb.Timestamp  `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt         *timestamppb.Timestamp  `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ExpiresAt         *timestamppb.Timestamp  `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Текущая owner version Secret из того же read/lock, включая PROVISIONING.
+	SecretVersion int64 `protobuf:"varint,14,opt,name=secret_version,json=secretVersion,proto3" json:"secret_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RuntimeSecretDraft) Reset() {
@@ -32723,6 +32725,13 @@ func (x *RuntimeSecretDraft) GetExpiresAt() *timestamppb.Timestamp {
 		return x.ExpiresAt
 	}
 	return nil
+}
+
+func (x *RuntimeSecretDraft) GetSecretVersion() int64 {
+	if x != nil {
+		return x.SecretVersion
+	}
+	return 0
 }
 
 // Внутренний exact readback immutable ciphertext; не выдаётся browser.
@@ -57462,7 +57471,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1dListTemplateVariablesResponse\x12?\n" +
 	"\tvariables\x18\x01 \x03(\v2!.controlplane.v1.TemplateVariableR\tvariables\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x03R\x05total\"\xbe\x04\n" +
+	"\x05total\x18\x03 \x01(\x03R\x05total\"\xe5\x04\n" +
 	"\x12RuntimeSecretDraft\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1e\n" +
@@ -57485,7 +57494,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x129\n" +
 	"\n" +
-	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xf1\x02\n" +
+	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12%\n" +
+	"\x0esecret_version\x18\x0e \x01(\x03R\rsecretVersion\"\xf1\x02\n" +
 	"%RuntimeSecretDraftEncryptedDescriptor\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1f\n" +
 	"\vsecret_name\x18\x02 \x01(\tR\n" +
