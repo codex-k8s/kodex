@@ -250,6 +250,7 @@ service SystemAssistantService {
   rpc ListAssistantConversations(ListAssistantConversationsRequest) returns (ListAssistantConversationsResponse);
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
   rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
+  rpc ArchiveAssistantConversation(ArchiveAssistantConversationRequest) returns (ArchiveAssistantConversationResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
   rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
   rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
@@ -1434,6 +1435,13 @@ message AssistantTurn {
   string attachment_set_ref = 8;
 }
 
+enum AssistantConversationState {
+  ASSISTANT_CONVERSATION_STATE_UNSPECIFIED = 0;
+  ASSISTANT_CONVERSATION_STATE_ACTIVE = 1;
+  ASSISTANT_CONVERSATION_STATE_CLOSED = 2;
+  ASSISTANT_CONVERSATION_STATE_ARCHIVED = 3;
+}
+
 message AssistantConversation {
   string ref = 1;
   int64 version = 2;
@@ -1444,6 +1452,7 @@ message AssistantConversation {
   string title_source = 7;
   int64 title_revision = 8;
   AssistantContextDescriptor context = 9;
+  AssistantConversationState state = 10;
 }
 
 message SystemAssistant {
@@ -2397,6 +2406,8 @@ message GetSystemAssistantResponse {
 message ListAssistantConversationsRequest {
   PageRequest page = 1;
   string project_ref = 2;
+  string query = 3;
+  AssistantConversationState state = 4;
 }
 message ListAssistantConversationsResponse {
   repeated AssistantConversation conversations = 1;
@@ -2410,6 +2421,13 @@ message CreateAssistantConversationRequest {
   AssistantContextDescriptor context = 4;
 }
 message CreateAssistantConversationResponse {
+  AssistantConversation conversation = 1;
+}
+message ArchiveAssistantConversationRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+}
+message ArchiveAssistantConversationResponse {
   AssistantConversation conversation = 1;
 }
 message UpdateAssistantConversationTitleRequest {

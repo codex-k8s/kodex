@@ -408,6 +408,8 @@ export type ManagedConfigurationImpact = {
     targetRevisionRef: OpaqueRef;
     consumers: Array<ManagedConfigurationConsumer>;
     digest: string;
+    total: number;
+    nextPageToken?: string;
 };
 
 export type ContextResourceState = 'ACTIVE' | 'ARCHIVED' | 'EXPIRED' | 'PURGED';
@@ -2355,10 +2357,13 @@ export type AssistantTurn = {
     createdAt: Timestamp;
 };
 
+export type AssistantConversationState = 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+
 export type AssistantConversation = {
     ref: OpaqueRef;
     version: number;
     title: string;
+    state: AssistantConversationState;
     titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
     titleRevision: number;
     context: AssistantContextDescriptor;
@@ -7575,8 +7580,10 @@ export type ListAssistantConversationsData = {
     path?: never;
     query?: {
         projectRef?: OpaqueRef;
+        query?: string;
         pageSize?: number;
         pageToken?: string;
+        state?: AssistantConversationState;
     };
     url: '/api/v1/assistant-conversations';
 };
@@ -7633,6 +7640,38 @@ export type CreateAssistantConversationResponses = {
 };
 
 export type CreateAssistantConversationResponse = CreateAssistantConversationResponses[keyof CreateAssistantConversationResponses];
+
+export type ArchiveAssistantConversationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        conversationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-conversations/{conversationRef}/archive';
+};
+
+export type ArchiveAssistantConversationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveAssistantConversationError = ArchiveAssistantConversationErrors[keyof ArchiveAssistantConversationErrors];
+
+export type ArchiveAssistantConversationResponses = {
+    /**
+     * Диалог архивирован владельцем без удаления истории
+     */
+    200: AssistantConversation;
+};
+
+export type ArchiveAssistantConversationResponse = ArchiveAssistantConversationResponses[keyof ArchiveAssistantConversationResponses];
 
 export type UpdateAssistantConversationTitleData = {
     body: {
@@ -9181,7 +9220,11 @@ export type GetManagedConfigurationImpactData = {
         configurationRef: OpaqueRef;
         revisionRef: OpaqueRef;
     };
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact';
 };
 

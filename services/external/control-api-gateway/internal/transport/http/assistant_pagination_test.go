@@ -17,7 +17,7 @@ func assistantCatalogHandler(client *catalogRPCRecorder) http.Handler {
 }
 
 func TestAssistantHistoryPreservesPagination(t *testing.T) {
-	client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{Conversations: []*cp.AssistantConversation{{Ref: "conv_fixture01", ProjectRef: "prj_fixture01"}}, Page: &cp.PageInfo{NextPageToken: "opaque-next"}}}
+	client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{Conversations: []*cp.AssistantConversation{{Ref: "conv_fixture01", ProjectRef: "prj_fixture01", State: cp.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE}}, Page: &cp.PageInfo{NextPageToken: "opaque-next"}}}
 	w := httptest.NewRecorder()
 	assistantCatalogHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/assistant-conversations?projectRef=prj_fixture01&pageSize=20&pageToken=opaque-first", nil))
 	if w.Code != 200 || client.method != cp.SystemAssistantService_ListAssistantConversations_FullMethodName {

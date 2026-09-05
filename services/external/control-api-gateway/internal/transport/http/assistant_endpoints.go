@@ -18,11 +18,19 @@ func (server *Server) GetSystemAssistant(w http.ResponseWriter, r *http.Request)
 	writeMessage(w, http.StatusOK, response, "assistant", "")
 }
 func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.Request, p generated.ListAssistantConversationsParams) {
-	r, ok := catalogRequest(w, r, p.ProjectRef, nil, p.PageSize, p.PageToken)
+	state := controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE
+	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && !p.State.Valid() {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	if p.State != nil {
+		state = controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+string(*p.State)])
+	}
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
-	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken)})
+	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), State: state, Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -33,13 +41,35 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 		return
 	}
 	for _, conversation := range response.Conversations {
-		if conversation == nil || !opaqueHTTPReference.MatchString(conversation.Ref) ||
+		if conversation == nil || !opaqueHTTPReference.MatchString(conversation.Ref) || conversation.State != state ||
 			p.ProjectRef != nil && conversation.GetProjectRef() != *p.ProjectRef {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
 	}
 	writeMessage(w, http.StatusOK, response, "", "conversations")
+}
+
+func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.ArchiveAssistantConversationParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.ArchiveAssistantConversation(r.Context(), &controlplanev1.ArchiveAssistantConversationRequest{Mutation: mutation, ConversationRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	conversation := response.GetConversation()
+	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ARCHIVED {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
 func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http.Request, p generated.CreateAssistantConversationParams) {
 	body, ok := decodeJSON[generated.CreateAssistantConversationJSONBody](w, r)
