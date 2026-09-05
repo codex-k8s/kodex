@@ -261,6 +261,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("managed configuration lifecycle is immutable and selectively rebound", func(t *testing.T) {
 		testManagedConfigurationLifecycle(t, ctx, repository, pool)
 	})
+	t.Run("managed draft save and discard preserve immutable history", func(t *testing.T) {
+		testManagedDraftLifecycle(t, ctx, repository)
+	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})
