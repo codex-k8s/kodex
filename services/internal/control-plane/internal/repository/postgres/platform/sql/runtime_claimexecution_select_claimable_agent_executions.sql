@@ -576,7 +576,8 @@ SELECT n.id::text,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
        runtime_environment.rbac_digest,
-       COALESCE(session_storage.codex_session_id::text, '')
+       COALESCE(session_storage.codex_session_id::text, ''),
+       COALESCE(storage_revision.safe_snapshot #>> '{contextSnapshot,digest}', '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
@@ -602,6 +603,10 @@ JOIN control_plane.organizations organization ON organization.id = r.organizatio
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
+LEFT JOIN control_plane.runtime_revisions storage_revision
+  ON storage_revision.id = session_storage.runtime_revision_id
+ AND storage_revision.organization_id = r.organization_id
+ AND storage_revision.session_id = s.id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id

@@ -297,7 +297,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
+	codexSessionID, previousContextDigest                                                        string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -362,7 +362,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -689,6 +689,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, err
 		}
 		snapshot["contextSnapshot"] = contextSnapshot
+		snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
