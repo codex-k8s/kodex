@@ -166,6 +166,7 @@ func TestBootstrapComponent(t *testing.T) {
 	}
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
+	t.Run("config overlay published history and rollback", func(t *testing.T) { testConfigOverlayHistory(t, ctx, repository) })
 	t.Run("STT catalog requires organization management before configuration", func(t *testing.T) { testSTTCatalogAuthority(t, ctx, repository) })
 	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
 		var platformBefore, proofBefore int64
@@ -1132,6 +1133,12 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 	if _, err := service.GetAgentRuntimeConfiguration(ctx, outsider, assistant.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("agent wildcard granted system runtime read: %v", err)
+	}
+	if _, _, _, err := service.ListConfigOverlayRevisions(ctx, outsider, query.Filter{ResourceRef: assistant.Ref}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system overlay history: %v", err)
+	}
+	if _, err := service.GetConfigOverlayRevision(ctx, outsider, assistant.Ref, configuration.PublishedOverlay.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system overlay preview: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: outsider,
 		Mutation: value.Mutation{IdempotencyKey: "warm-agent-manager-publish", ExpectedVersion: &configuration.AgentVersion},

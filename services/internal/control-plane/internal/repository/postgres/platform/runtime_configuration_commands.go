@@ -385,6 +385,17 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	var publicationSchema runtimecontract.ConfigOverlaySchema
+	if input.Kind == command.PublishConfigOverlayDraft || input.Kind == command.RollbackConfigOverlay {
+		configuration, _, readErr := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		publicationSchema, err = runtimeOverlaySchema(ctx, tx, scope, configuration)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	switch input.Kind {
 	case command.CreateConfigOverlayDraft:
 		if runtimecontract.ValidateConfigOverlayDraftPayload(payload.Content) != nil {
@@ -459,6 +470,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err := tx.QueryRow(ctx, queryRuntimeConfigurationPublishOverlay, pgx.StrictNamedArgs{
 			"agent_id": agent.id, "organization_id": scope.organizationID, "draft_id": draftID,
 			"ref": ref, "content": canonical, "digest": digest, "created_by": scope.actorID,
+			"schema_revision": publicationSchema.Revision, "schema_digest": publicationSchema.Digest,
 		}).Scan(&published); err != nil || published != ref {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -474,6 +486,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err := tx.QueryRow(ctx, queryRuntimeConfigurationRollbackOverlay, pgx.StrictNamedArgs{
 			"agent_id": agent.id, "organization_id": scope.organizationID, "source_ref": payload.PublishedOverlayRef,
 			"ref": ref, "created_by": scope.actorID,
+			"schema_revision": publicationSchema.Revision, "schema_digest": publicationSchema.Digest,
 		}).Scan(&published); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		} else if err != nil || published != ref {

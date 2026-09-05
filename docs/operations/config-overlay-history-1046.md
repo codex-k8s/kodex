@@ -31,6 +31,8 @@ Preview ограничен существующим TOML budget 64 KiB и при
 защищённому читателю, что safe effective configuration.
 
 List использует RepeatableRead, count до pagination, revision DESC/ref DESC.
+Страница ограничена 20 ревизиями, чтобы bounded TOML preview оставался
+в пределах транспортного бюджета.
 Query — буквальная подстрока ref, максимум 200 символов. Cursor связывает
 tenant, actor, agent и нормализованный query; изменение scope даёт
 InvalidArgument. Total ограничен точным публичным integer range.

@@ -268,6 +268,8 @@ type Repository interface {
 	GetEffectivePromptTemplate(context.Context, value.Principal, string) (entity.InstructionVersion, error)
 	GetPromptMaterializationSnapshot(context.Context, value.Principal, string, string) (entity.PromptMaterializationSnapshot, error)
 	GetAgentRuntimeConfiguration(context.Context, value.Principal, string) (entity.AgentRuntimeConfigurationView, error)
+	ListConfigOverlayRevisions(context.Context, value.Principal, query.Filter) ([]entity.ConfigOverlayVersion, int64, string, error)
+	GetConfigOverlayRevision(context.Context, value.Principal, string, string) (entity.ConfigOverlayVersion, error)
 	ListAgentRuntimeConfigurations(context.Context, value.Principal, query.Filter) ([]entity.AgentRuntimeConfiguration, string, error)
 	ListRuntimeEnvironments(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentSet, string, error)
 	GetRuntimeEnvironment(context.Context, value.Principal, string) (entity.RuntimeEnvironmentSet, error)
