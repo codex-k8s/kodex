@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,6 +22,7 @@ func TestDatabaseTransport(t *testing.T) {
 }
 
 func TestMailEgressDestination(t *testing.T) {
+	t.Setenv("EMAIL_BRIDGE_EGRESS_POLICY_DIGEST", strings.Repeat("a", 64))
 	for _, key := range []string{"EMAIL_BRIDGE_SECRETS_ROOT", "EMAIL_BRIDGE_DSN_FILE", "EMAIL_BRIDGE_CERTIFICATE_FILE", "EMAIL_BRIDGE_PRIVATE_KEY_FILE", "EMAIL_BRIDGE_CA_FILE", "EMAIL_BRIDGE_APPLICATION_GRANT_FILE", "OTEL_EXPORTER_OTLP_CA_FILE"} {
 		t.Setenv(key, "/fixture/"+key)
 	}
@@ -39,5 +41,12 @@ func TestMailEgressDestination(t *testing.T) {
 				t.Fatal("mail egress destination validation mismatch")
 			}
 		})
+	}
+	for _, digest := range []string{"", "invalid", strings.Repeat("A", 64), strings.Repeat("a", 63)} {
+		t.Setenv("EMAIL_BRIDGE_EGRESS_ADDRESS", mailEgressAddress)
+		t.Setenv("EMAIL_BRIDGE_EGRESS_POLICY_DIGEST", digest)
+		if _, err := loadConfig(); err == nil {
+			t.Fatal("invalid egress digest accepted")
+		}
 	}
 }

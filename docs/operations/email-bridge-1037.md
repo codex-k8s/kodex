@@ -488,3 +488,43 @@ live delivery или CNI enforcement. UI/credential write lifecycle D5, защи
 [обновляемые Secret volumes](https://kubernetes.io/docs/concepts/storage/volumes/#secret)
 и AtomicWriter с переключением `..data`. В работающем кластере доставка имеет
 задержку kubelet; consumer monitor перечитывает mount каждые 15 секунд.
+
+## Сверка mail egress #1029
+
+| Переход | Источник и проверка | Эффект / read path |
+| --- | --- | --- |
+| Snapshot/reload | Source revision и `api.Digest(Configuration)` берутся из одной immutable configuration/credential пары | Новая попытка получает новый Tunnel; прежняя пара не изменяется |
+| CONNECT | Только listener8082; bodyless запрос не передаёт actor/grant или ожидаемую revision как authority | CNI/listener определяют workload; CP authorization остаётся в EMAIL |
+| CONNECT200 | Exact profile email-mail, workload email-bridge, operation email.transport, revision mail-N, pinned mail policy digest и source revision/digest | Только после проверки всех семи одиночных headers соединение передаётся TLS/provider |
+| Mismatch/duplicate/missing/oversize/timeout | Закрыть socket, bounded deadline и cancel | Нет TLS ClientHello, STARTTLS commands, credentials или повторного effect |
+| Rolling reload | Старый gateway source/digest не совпадает с новым snapshot | Fail closed до согласованной проекции/rollout; нет fallback8080/direct |
+| STARTTLS | Сохранить buffered server greeting после проверенного CONNECT | TLS остаётся end-to-end, CP receipt/reconciliation не меняются |
+
+`EMAIL_BRIDGE_EGRESS_POLICY_DIGEST` назначается deployment owner из
+`EGRESS_GATEWAY_MAIL_POLICY_DIGEST` точного render #1029; caller не задаёт его.
+После смены mailbox source или DNS pins оба rollout должны согласовать этот
+digest. Local readiness не подменяет проверку каждого реального CONNECT.
+
+Потреблён #1029 `f8da405af7648fb395a3be9f2e7a2858aa856245` merge
+`f46226e48`. Четыре конфликта старой EMAIL истории разрешены сохранением
+root `2d66e9d67`; reload/поздний Report/POP identity/port8082 не откатывались.
+
+Локально PASS на текущем consumer tree:
+- `timeout 180s go test -race ./... -count=1 -timeout=120s`, EMAIL module;
+- `timeout 120s go vet ./...` и `go build ./...`;
+- 7 headers × missing/mismatch/duplicate × implicit/STARTTLS: socket закрыт
+  до provider bytes; oversize/malformed/body/stale source/stale policy negatives;
+- buffered greeting и cancel во время CONNECT; exact readback не добавляется
+  к запросу и не заимствует caller authority;
+- `timeout 180s bash scripts/tests/email-bridge-test.sh '^Test(CONNECTTransport|MailboxProjectionReloadHTTPS)$'`:
+  disposable PostgreSQL migrations up/status/up, actual SMTP/POP STARTTLS CONNECT
+  и HTTPS snapshot reload, component race 1.459 с;
+- `timeout 120s make test-email-bridge-render`: staging, оба полных профиля,
+  actual immutable policy SHA256 ↔ gateway env ↔ EMAIL env;
+- `timeout 120s bash tools/verify-egress-mail.sh`: producer/source и оба
+  environment render, пустой bootstrap без внешнего allowlist.
+
+Первый новый тест не компилировался из-за string вместо generated
+EndpointTlsMode; исправлен test cast, затем полный race PASS. API/codegen
+источники не менялись. Повтор общего baseline/Docker не выполнялся.
+Live mail/CNI enforcement/staging: NOT RUN. Push/PR/merge-main/deploy не было.

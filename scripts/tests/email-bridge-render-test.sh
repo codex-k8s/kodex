@@ -85,6 +85,10 @@ migrations = root / 'services/internal/email-bridge/cmd/cli/migrations'
 assert int(descriptor['migration_version']) == max(int(path.name.split('_')[0]) for path in migrations.glob('*.sql'))
 assert descriptor['egress']['endpoint'] == runtime['EMAIL_BRIDGE_EGRESS_ADDRESS']
 assert runtime['EMAIL_BRIDGE_EGRESS_ADDRESS'] == 'egress-gateway.kodex-system.svc:8082'
+mail_patch = json.loads((root / 'deploy/k8s/base/egress-gateway/mail/mail-deployment-patch.json').read_text())
+mail_env = mail_patch['spec']['template']['spec']['containers'][0]['env']
+expected_mail_digest = next(e['value'] for e in mail_env if e['name'] == 'EGRESS_GATEWAY_MAIL_POLICY_DIGEST')
+assert runtime[descriptor['egress']['policy_digest_env']] == expected_mail_digest
 assert 'owner-authorization' not in descriptor['readiness']['local_requires']
 assert get('Job', 'email-bridge-migration')['spec']['activeDeadlineSeconds'] == 120
 database = get('StatefulSet', 'email-bridge-postgresql')['spec']
@@ -123,7 +127,7 @@ for profile in web-only web-with-mattermost; do
   kubectl kustomize "$root/deploy/k8s/profiles/$profile" > "$temporary/$profile.yaml"
 done
 python3 - "$temporary" "$root/tools/release/images.json" <<'PY'
-import json, pathlib, re, sys, yaml
+import hashlib, json, pathlib, re, sys, yaml
 base = pathlib.Path(sys.argv[1])
 images = json.loads(pathlib.Path(sys.argv[2]).read_text())['images']
 for component, target in [('email-bridge', 'runtime'), ('email-bridge-migration', 'migration')]:
@@ -140,6 +144,16 @@ for profile in ['web-only', 'web-with-mattermost']:
     assert runtime['DEPLOYMENT_ENVIRONMENT'] == 'production'
     assert runtime['EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS'] == '15'
     assert runtime['EMAIL_BRIDGE_RECONCILIATION_BATCH'] == '16'
+    gateway = get('Deployment', 'egress-gateway')['spec']['template']['spec']
+    gateway_env = next(c for c in gateway['containers'] if c['name'] == 'egress-gateway')['env']
+    expected = next(e['value'] for e in gateway_env if e['name'] == 'EGRESS_GATEWAY_MAIL_POLICY_DIGEST')
+    policy_volume = next(v for v in gateway['volumes'] if v['name'] == 'mail-policy')['configMap']
+    policy_map = get('ConfigMap', policy_volume['name'])
+    policy_raw = policy_map['data']['mail-policy.json']
+    assert policy_map['immutable'] and policy_volume['defaultMode'] == 292
+    assert runtime['EMAIL_BRIDGE_EGRESS_POLICY_DIGEST'] == expected == hashlib.sha256(policy_raw.encode()).hexdigest()
+    source = json.loads(policy_raw)
+    assert source['configurationRevision'] > 0 and re.fullmatch('[a-f0-9]{64}', source['configurationDigest'])
     assert get('StatefulSet', 'email-bridge-postgresql')
     for kind, name, container in [('Deployment', 'email-bridge', 'email-bridge'), ('Job', 'email-bridge-migration', 'migration')]:
         pod = get(kind, name)['spec']['template']['spec']

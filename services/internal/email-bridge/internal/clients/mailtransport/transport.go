@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -42,9 +43,39 @@ type Dialer interface {
 }
 
 // Tunnel не содержит прямого внешнего dial: только platform egress CONNECT.
-type Tunnel struct{ Address string }
+type Tunnel struct {
+	Address, PolicyDigest, ConfigurationDigest string
+	ConfigurationRevision                      int64
+}
+
+func ValidEgressDigest(value string) bool {
+	raw, err := hex.DecodeString(value)
+	return err == nil && len(raw) == 32 && hex.EncodeToString(raw) == value
+}
+
+func (t Tunnel) readbackValid(headers http.Header) bool {
+	revision := strconv.FormatInt(t.ConfigurationRevision, 10)
+	for key, expected := range map[string]string{
+		"X-Kodex-Egress-Revision":               "mail-" + revision,
+		"X-Kodex-Egress-Digest":                 t.PolicyDigest,
+		"X-Kodex-Egress-Profile":                "email-mail",
+		"X-Kodex-Egress-Workload":               "email-bridge",
+		"X-Kodex-Egress-Operation":              "email.transport",
+		"X-Kodex-Egress-Configuration-Revision": revision,
+		"X-Kodex-Egress-Configuration-Digest":   t.ConfigurationDigest,
+	} {
+		values := headers.Values(key)
+		if len(values) != 1 || values[0] != expected {
+			return false
+		}
+	}
+	return true
+}
 
 func (t Tunnel) Dial(ctx context.Context, target string) (net.Conn, error) {
+	if t.ConfigurationRevision < 1 || !ValidEgressDigest(t.PolicyDigest) || !ValidEgressDigest(t.ConfigurationDigest) {
+		return nil, errs.Unavailable
+	}
 	c, e := (&net.Dialer{}).DialContext(ctx, "tcp", t.Address)
 	if e != nil {
 		return nil, errs.Unavailable
@@ -62,7 +93,7 @@ func (t Tunnel) Dial(ctx context.Context, target string) (net.Conn, error) {
 	}
 	reader := bufio.NewReader(io.LimitReader(c, 16384))
 	resp, e := http.ReadResponse(reader, &http.Request{Method: http.MethodConnect})
-	if e != nil || resp.StatusCode != 200 || ctx.Err() != nil {
+	if e != nil || resp.StatusCode != 200 || ctx.Err() != nil || !t.readbackValid(resp.Header) || resp.ContentLength > 0 || len(resp.TransferEncoding) != 0 {
 		c.Close()
 		return nil, errs.Unavailable
 	}
