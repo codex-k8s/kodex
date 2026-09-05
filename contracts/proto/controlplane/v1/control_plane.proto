@@ -4162,6 +4162,11 @@ message RebindRuntimeEnvironmentResponse {
 message ProviderAccountCandidate {
   string account_ref = 1;
   int32 weight = 2;
+  string catalog_revision = 3;
+  string catalog_digest = 4;
+  string provider_definition_key = 5;
+  // Назначаемый сервером default выбранной модели из exact catalog snapshot.
+  string default_reasoning_effort = 6;
 }
 
 message ProviderAccountPolicyVersion {
@@ -4195,6 +4200,35 @@ message ConfigOverlayVersion {
   repeated string validation_messages = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp published_at = 9;
+  repeated ConfigOverlayDiagnostic diagnostics = 10;
+  string schema_revision = 11;
+  string schema_digest = 12;
+}
+
+// Поля ограничены каноническим allowlist; значения credentials не возвращаются.
+message ConfigOverlayDiagnostic {
+  string code = 1;
+  string key = 2;
+  int32 line = 3;
+  int32 column = 4;
+  string message = 5;
+}
+
+message ConfigOverlayField {
+  string key = 1;
+  string value_type = 2;
+  repeated string allowed_values = 3;
+  string default_value = 4;
+  string description = 5;
+  string completion = 6;
+  string hover = 7;
+}
+
+message ConfigOverlaySchema {
+  string revision = 1;
+  string digest = 2;
+  repeated ConfigOverlayField fields = 3;
+  int32 maximum_bytes = 4;
 }
 
 message RuntimeEnvironmentValue {
@@ -4513,6 +4547,7 @@ message AgentRuntimeConfigurationView {
   int64 agent_version = 7;
   repeated AgentContextBinding skill_bindings = 8;
   repeated AgentContextBinding memory_bindings = 9;
+  ConfigOverlaySchema overlay_schema = 10;
 }
 
 enum TemplateVariableAvailabilityReason {
