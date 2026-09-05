@@ -115,6 +115,31 @@ func TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC(t *testing.T) {
 	}
 }
 
+func TestEnvironmentPublishedSecretDescriptorPreservesPin(t *testing.T) {
+	for _, revision := range []int64{0, -1, 7, maximumSafeJSONInteger, maximumSafeJSONInteger + 1} {
+		client := &catalogRPCRecorder{response: &controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{
+			Ref: "renv_fixture01", Version: 3, CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Ref: "renvv_fixture01", SecretDescriptors: []*controlplanev1.RuntimeSecretDescriptor{{
+				Name: "API_TOKEN", SecretRef: "sec_fixture01", Revision: revision, Namespace: "internal-only-namespace", SecretName: "secret-fixture", SecretKey: "value", SecretUid: "uid-fixture", SecretResourceVersion: "9", ContentSha256: strings.Repeat("a", 64),
+			}}},
+		}}}
+		w := httptest.NewRecorder()
+		catalogTestHandler(client).ServeHTTP(w, managedTestRequest("GET", "/api/v1/runtime-environments/renv_fixture01", ""))
+		if revision < 1 || revision > maximumSafeJSONInteger {
+			if w.Code != 502 {
+				t.Fatalf("invalid descriptor revision accepted: %d", w.Code)
+			}
+			continue
+		}
+		var result generated.RuntimeEnvironmentSet
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || len(result.CurrentVersion.SecretDescriptors) != 1 || result.CurrentVersion.SecretDescriptors[0].Revision != revision {
+			t.Fatalf("published Secret pin lost: %d", w.Code)
+		}
+		if strings.Contains(w.Body.String(), "internal-only-namespace") || strings.Contains(w.Body.String(), `"namespace"`) {
+			t.Fatal("private namespace leaked")
+		}
+	}
+}
+
 func draftTestHandler(client *environmentDraftRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{
 		Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client),

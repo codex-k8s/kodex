@@ -5536,7 +5536,7 @@ components:
       type: object
       additionalProperties: false
       description: Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
-      required: [name, secretRef, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
+      required: [name, secretRef, revision, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -5545,6 +5545,7 @@ components:
         secretUid: { type: string, minLength: 1, maxLength: 128 }
         secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
         contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     RuntimeSecretBinding:
       type: object
       additionalProperties: false
