@@ -71,6 +71,8 @@ service PlatformQueryService {
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc ListConfigOverlayRevisions(ListConfigOverlayRevisionsRequest) returns (ListConfigOverlayRevisionsResponse);
+  rpc GetConfigOverlayRevision(GetConfigOverlayRevisionRequest) returns (GetConfigOverlayRevisionResponse);
   rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
   rpc ListRuntimeEnvironmentSets(ListRuntimeEnvironmentSetsRequest) returns (ListRuntimeEnvironmentSetsResponse);
   rpc GetRuntimeEnvironmentSet(GetRuntimeEnvironmentSetRequest) returns (GetRuntimeEnvironmentSetResponse);
@@ -2020,6 +2022,7 @@ message ListRunsRequest {
 message ListRunsResponse {
   repeated Run runs = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 message GetRunRequest {
   string run_ref = 1;
@@ -2140,6 +2143,7 @@ message ListArtifactsRequest {
 message ListArtifactsResponse {
   repeated Artifact artifacts = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 message GetArtifactRequest {
   string artifact_ref = 1;
@@ -2622,6 +2626,12 @@ message GetRuntimeRevisionDiffResponse {
   repeated RuntimeRevisionDiffChange changes = 3;
 }
 
+enum RuntimeReasoningMode {
+  RUNTIME_REASONING_MODE_UNSPECIFIED = 0;
+  RUNTIME_REASONING_MODE_SUPPORTED = 1;
+  RUNTIME_REASONING_MODE_UNSUPPORTED = 2;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -2699,6 +2709,7 @@ message RuntimeRevisionSnapshot {
   repeated RuntimeMemoryRecordSnapshot memory_records = 70;
   // Server-owned effective effort из exact catalog default либо TOML override.
   string effective_reasoning_effort = 71;
+  RuntimeReasoningMode reasoning_mode = 72;
 }
 
 message SavePromptTemplateDraftRequest {
@@ -3417,6 +3428,11 @@ message InteractionSource {
   string credential_revision_ref = 9;
   int64 credential_revision = 10;
   IntegrationCredentialRevision credential_descriptor = 11;
+  string definition_key = 12;
+  string definition_version = 13;
+  string definition_digest = 14;
+  // Private snapshot владельца для проверки системной подписки.
+  bytes definition_package = 15;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3443,6 +3459,15 @@ message InteractionDeliveryClaim {
   string external_root_post_ref = 17;
   string acceptance_receipt_ref = 18;
   IntegrationCredentialRevision credential_descriptor = 19;
+  string definition_key = 20;
+  string definition_version = 21;
+  string definition_digest = 22;
+  // Private snapshot владельца; не входит в public read model.
+  bytes definition_package = 23;
+  int64 connection_version = 24;
+  string approval_gate_ref = 25;
+  int64 approval_gate_version = 26;
+  string source_capability_key = 27;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;
@@ -3563,6 +3588,23 @@ message GetAgentRuntimeConfigurationRequest {
 }
 message GetAgentRuntimeConfigurationResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ListConfigOverlayRevisionsRequest {
+  string agent_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListConfigOverlayRevisionsResponse {
+  repeated ConfigOverlayVersion revisions = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message GetConfigOverlayRevisionRequest {
+  string agent_ref = 1;
+  string revision_ref = 2;
+}
+message GetConfigOverlayRevisionResponse {
+  ConfigOverlayVersion revision = 1;
 }
 message ListAgentRuntimeConfigurationVersionsRequest {
   string agent_ref = 1;
@@ -4076,6 +4118,9 @@ message RuntimeEnvironmentDraft {
   string validation_digest = 8;
   repeated string diagnostics = 9;
   string published_environment_ref = 10;
+  string base_version_ref = 11;
+  int64 base_revision = 12;
+  google.protobuf.Timestamp saved_at = 13;
 }
 message GetRuntimeEnvironmentDraftRequest { string draft_ref = 1; }
 message GetRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
@@ -4182,6 +4227,11 @@ message RebindRuntimeEnvironmentResponse {
 message ProviderAccountCandidate {
   string account_ref = 1;
   int32 weight = 2;
+  string catalog_revision = 3;
+  string catalog_digest = 4;
+  string provider_definition_key = 5;
+  // Назначаемый сервером default выбранной модели из exact catalog snapshot.
+  string default_reasoning_effort = 6;
 }
 
 message ProviderAccountPolicyVersion {
@@ -4215,6 +4265,35 @@ message ConfigOverlayVersion {
   repeated string validation_messages = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp published_at = 9;
+  repeated ConfigOverlayDiagnostic diagnostics = 10;
+  string schema_revision = 11;
+  string schema_digest = 12;
+}
+
+// Поля ограничены каноническим allowlist; значения credentials не возвращаются.
+message ConfigOverlayDiagnostic {
+  string code = 1;
+  string key = 2;
+  int32 line = 3;
+  int32 column = 4;
+  string message = 5;
+}
+
+message ConfigOverlayField {
+  string key = 1;
+  string value_type = 2;
+  repeated string allowed_values = 3;
+  string default_value = 4;
+  string description = 5;
+  string completion = 6;
+  string hover = 7;
+}
+
+message ConfigOverlaySchema {
+  string revision = 1;
+  string digest = 2;
+  repeated ConfigOverlayField fields = 3;
+  int32 maximum_bytes = 4;
 }
 
 message RuntimeEnvironmentValue {
@@ -4533,6 +4612,7 @@ message AgentRuntimeConfigurationView {
   int64 agent_version = 7;
   repeated AgentContextBinding skill_bindings = 8;
   repeated AgentContextBinding memory_bindings = 9;
+  ConfigOverlaySchema overlay_schema = 10;
 }
 
 enum TemplateVariableAvailabilityReason {
@@ -4613,6 +4693,24 @@ message ListModelCapabilitiesResponse {
   string catalog_revision = 4;
   // SHA-256 канонического снимка, lowercase hex без префикса.
   string catalog_digest = 5;
+  // Account-scoped freshness; не входит в content digest и не заменяет pin.
+  ProviderModelCatalogStatus catalog_status = 6;
+}
+
+enum ProviderModelCatalogState {
+  PROVIDER_MODEL_CATALOG_STATE_UNSPECIFIED = 0;
+  PROVIDER_MODEL_CATALOG_STATE_PENDING = 1;
+  PROVIDER_MODEL_CATALOG_STATE_READY = 2;
+  PROVIDER_MODEL_CATALOG_STATE_FAILED = 3;
+  PROVIDER_MODEL_CATALOG_STATE_EXPIRED = 4;
+}
+
+message ProviderModelCatalogStatus {
+  ProviderModelCatalogState state = 1;
+  google.protobuf.Timestamp observed_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  ProviderModelCatalogSource source = 4;
+  ProviderModelCatalogFailure failure = 5;
 }
 
 message RoleImageRecipeRevision {

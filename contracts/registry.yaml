@@ -96,6 +96,13 @@ packages:
     consumers:
       - runtime-controller
       - agent-runner
+  - id: runtime-controller-agent-runner-input-v7
+    format: json-schema
+    owner: runtime-controller
+    source: contracts/runtime-controller/v7/agent-runner-input.schema.json
+    consumers:
+      - runtime-controller
+      - agent-runner
   - id: scheduled-result-v1
     format: json-schema
     owner: control-plane

@@ -12,13 +12,14 @@ import (
 )
 
 func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repository) {
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.models.list"}, "control-api-gateway")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2}})
-	if err != nil || first.Total < 7 || first.NextPageToken == "" || len(first.NextPageToken) > 512 || len(first.Digest) != 64 || first.Revision != "mcat_"+first.Digest {
+	if err != nil || first.Total != 3 || first.NextPageToken == "" || len(first.NextPageToken) > 512 || len(first.Digest) != 64 || first.Revision != "mcat_"+first.Digest {
 		t.Fatalf("first catalog: %v", err)
 	}
 	filter := query.Filter{Page: query.Page{Size: 2, Token: first.NextPageToken}, ExpectedCatalogRevision: first.Revision, ExpectedCatalogDigest: first.Digest}
@@ -38,6 +39,15 @@ func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repo
 		t.Fatal(err)
 	}
 	filter.ExpectedCatalogDigest = first.Digest
+	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); err != nil {
+		t.Fatalf("metadata-only update changed capabilities pin: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, first.Models[0].EligibleProviderAccountRefs[0]); err != nil {
+		t.Fatal(err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository, func(observation *platformrepo.ProviderModelCatalogObservation) {
+		observation.Models[0].DefaultReasoningEffort = "low"
+	})
 	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("stale source pin: %v", err)
 	}
@@ -54,6 +64,10 @@ func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repo
 	if _, err := service.ListModelCatalog(canceled, owner, "openai-codex", "", query.Filter{}); err == nil {
 		t.Fatal("cancellation accepted")
 	}
+	if _, err := repository.pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, first.Models[0].EligibleProviderAccountRefs[0]); err != nil {
+		t.Fatal(err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository)
 }
 
 func TestModelCatalogCursorBindsAuthority(t *testing.T) {

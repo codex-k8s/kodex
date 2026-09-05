@@ -1,3 +1,4 @@
+// Package modelcatalog вычисляет identity наблюдаемого каталога без локального списка моделей.
 package modelcatalog
 
 import (

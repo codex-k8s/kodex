@@ -527,6 +527,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		}
 		if !payload.Enabled {
 			args := pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}
+			if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.Ref); err != nil {
+				return commandOutcome{}, err
+			}
 			if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationGrantsEnabledVersionUpdatedAt, args); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
@@ -756,6 +759,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 			return commandOutcome{}, errs.ErrNotFound
 		}
 	}
+	if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.ConnectionRef); err != nil {
+		return commandOutcome{}, err
+	}
 	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -930,6 +936,9 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 	if err := tx.QueryRow(ctx, queryConfigurationCreateassistantconversationInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
 	ref, _ := newRef("cnv")
 	resolvedContext, err := repository.resolveAssistantContext(ctx, tx, scope, payload.Context, payload.ProjectRef)
 	if err != nil {
@@ -1026,6 +1035,13 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
 	turnRef, _ := newRef("trn")
 	attachmentSet, err := repository.resolveFinalizedAttachmentSet(ctx, tx, scope, projectID, payload.AttachmentSetRef, "ASSISTANT_MESSAGE", false)
 	if err != nil {
@@ -1090,7 +1106,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, err
 	}
 	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "COMPLETED", CreatedAt: time.Now().UTC()}}
-	assistant, err := repository.getAssistantTx(ctx, tx, scope)
+	assistant, err = repository.getAssistantTx(ctx, tx, scope)
 	if err != nil {
 		return commandOutcome{}, err
 	}

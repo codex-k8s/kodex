@@ -30,6 +30,11 @@ WHERE c.organization_id = @organization_id::uuid
   AND c.enabled
   AND c.state IN ('CONNECTED', 'DEGRADED')
   AND g.enabled
+  AND g.organization_id = c.organization_id
+  AND g.definition_version = c.definition_version
+  AND g.definition_digest = c.definition_digest
+  AND c.lifecycle_state = 'ACTIVE'
+  AND project.organization_id = c.organization_id AND project.lifecycle = 'ACTIVE'
   AND g.capability_key IN ('mattermost.inbound', 'mattermost.gate_decisions')
 GROUP BY c.id
 ORDER BY c.ref

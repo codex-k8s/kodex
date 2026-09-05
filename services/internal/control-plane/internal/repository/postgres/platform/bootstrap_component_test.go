@@ -149,6 +149,7 @@ func TestBootstrapComponent(t *testing.T) {
 		}
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("catalog owner probe", func(t *testing.T) { testCatalogOwnerProbe(t, ctx, repository) })
 
 	for name, query := range map[string]string{
 		"disable system assistant":         bootstrapComponentDisableSystemAssistantQuery,
@@ -202,6 +203,7 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
+		seedObservedCatalogFixture(t, ctx, repository)
 	})
 	t.Run("provider credential refresh is fenced idempotent and capacity bounded", func(t *testing.T) {
 		testProviderCredentialRefreshAndCapacity(t, ctx, repository, pool)
@@ -216,6 +218,7 @@ func TestBootstrapComponent(t *testing.T) {
 		testInstructionDraftSave(t, ctx, repository)
 	})
 	t.Run("system assistant proposes and applies typed plan", func(t *testing.T) {
+		prepareObservedWarmFixture(t, ctx, repository)
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
 	t.Run("assistant history search archive and actor cursor", func(t *testing.T) { testAssistantHistoryArchive(t, ctx, repository) })
@@ -510,11 +513,11 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		t.Fatalf("search VFS agents: nodes=%#v total=%d err=%v", foundNodes, foundTotal, err)
 	}
 	models, modelTotal, modelNext, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2}})
-	if err != nil || len(models) != 2 || modelTotal < 7 || modelNext == "" || models[0].ID != "gpt-6-astra" || models[0].DefaultReasoningEffort != "medium" {
+	if err != nil || len(models) != 2 || modelTotal != 3 || modelNext == "" || models[0].ID != "future-model" || models[0].DefaultReasoningEffort != "adaptive" {
 		t.Fatalf("list model capabilities: models=%#v total=%d next=%q err=%v", models, modelTotal, modelNext, err)
 	}
 	secondModels, secondTotal, secondNext, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2, Token: modelNext}})
-	if err != nil || len(secondModels) != 2 || secondTotal != modelTotal || secondNext == modelNext {
+	if err != nil || len(secondModels) != 1 || secondTotal != modelTotal || secondNext == modelNext {
 		t.Fatalf("continue model capabilities: models=%#v total=%d next=%q err=%v", secondModels, secondTotal, secondNext, err)
 	}
 	if _, _, _, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Query: "gpt", Page: query.Page{Size: 2, Token: modelNext}}); !errors.Is(err, domainerrs.ErrInvalid) {
@@ -708,6 +711,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		t.Fatalf("generic managed configuration kind escalation was accepted: %v", err)
 	}
 	testManagedIntegrationPackageExecution(t, ctx, repository, service, owner, connection.Connection.Ref, integrationDefinition)
+	testConfigurationSourceLifecycle(t, ctx, repository, service, owner)
 	gitContent := "Git-owned prompt for {{ .project.ref }}."
 	gitDigest := sha256.Sum256([]byte(gitContent))
 	var gitConfigurationID, gitRevisionID string
@@ -1064,6 +1068,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if _, err := pool.Exec(ctx, bootstrapComponentInsertWarmFailoverProviderQuery); err != nil {
 		t.Fatalf("insert warm failover provider account: %v", err)
 	}
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		ExternalDisplayName: "Warm failover owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
@@ -1087,6 +1092,51 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	configuration, err := service.GetAgentRuntimeConfiguration(ctx, owner, assistant.Ref)
 	if err != nil {
 		t.Fatalf("read system assistant runtime configuration: %v", err)
+	}
+	outsiderInput := platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000092", ExternalTenantID: "20000000-0000-4000-8000-000000000002", ExternalDisplayName: "Runtime configuration outsider", CallerWorkload: "control-api-gateway", Operation: "platform.query.agents.runtime-configuration.get"}
+	if _, outsiderErr := repository.ResolveProofAuthority(ctx, outsiderInput); !errors.Is(outsiderErr, domainerrs.ErrForbidden) {
+		t.Fatalf("outsider runtime authority: %v", outsiderErr)
+	}
+	subjects, _, err := service.ListAccessSubjects(ctx, owner, query.Filter{Query: outsiderInput.ExternalDisplayName, Page: query.Page{Size: 20}}, "USER")
+	if err != nil || len(subjects) != 1 {
+		t.Fatalf("outsider subject: %v", err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := repository.resolveAccessSubject(ctx, tx, owner.AuthorityTenant, subjects[0].Ref)
+	_ = tx.Rollback(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outsider := owner
+	outsider.ActorID = resolved.id
+	if _, err := service.GetAgentRuntimeConfiguration(ctx, outsider, assistant.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("outsider read system configuration: %v", err)
+	}
+	agentRole, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessRole, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "warm-agent-manager-role"}, Payload: command.AccessRoleInput{
+			Name: "Warm agent manager", PermissionKeys: []string{"agent.view", "agent.manage"}, AllowedScopes: []string{"RESOURCE_KIND"}, ChangeComment: "System runtime boundary regression",
+		}})
+	if err != nil || agentRole.AccessRole == nil {
+		t.Fatalf("agent role: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "warm-agent-manager-binding"}, Payload: command.AccessBindingInput{
+			SubjectKind: "USER", SubjectRef: subjects[0].Ref, RoleVersionRef: agentRole.AccessRole.CurrentVersion.Ref,
+			Scope: entity.AccessScope{Kind: "RESOURCE_KIND", ResourceKind: "AGENT"},
+		}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.GetAgentRuntimeConfiguration(ctx, outsider, assistant.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system runtime read: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: outsider,
+		Mutation: value.Mutation{IdempotencyKey: "warm-agent-manager-publish", ExpectedVersion: &configuration.AgentVersion},
+		Payload:  command.AgentRuntimeConfigurationInput{AgentRef: assistant.Ref},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system runtime publication: %v", err)
 	}
 	initialConfigurationVersion := configuration.Configuration.Version
 	var initialConfigurationCount int64
@@ -1152,9 +1202,13 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if err != nil || !required {
 		t.Fatalf("reconcile rejected warm provider: assistant=%#v required=%v err=%v", failedOver, required, err)
 	}
+	selectedFallback := stringMap(desired, "providerAccountRef")
 	if failedOver.WarmSessionRef == currentSessionRef || failedOver.RuntimeState != "RECOVERING" ||
-		failedOver.LastHeartbeatAt != nil || stringMap(desired, "providerAccountRef") != "pacc_component_warm_failover" {
+		failedOver.LastHeartbeatAt != nil || selectedFallback == "" || selectedFallback == currentAccountRef || stringMap(desired, "reasoningMode") != "SUPPORTED" || stringMap(desired, "effectiveReasoningEffort") == "" {
 		t.Fatalf("warm provider failover readback mismatch: assistant=%#v desired=%#v", failedOver, desired)
+	}
+	if err := pool.QueryRow(ctx, queryCatalogFixtureAccountID, owner.AuthorityTenant, selectedFallback).Scan(&fallbackAccountID); err != nil {
+		t.Fatal(err)
 	}
 	var reconciledConfigurationVersion, reconciledConfigurationCount int64
 	var reconciledPolicyMode string
@@ -1194,7 +1248,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		      WHERE agent.ref = $1
 		  )
 		  AND account.current_credential_revision_id IS NOT NULL
-		  AND account.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED')
+		  AND account.state = 'AUTHORIZED' AND account.enabled
 		ORDER BY account.ref
 	`, assistant.Ref)
 	if err != nil {
@@ -1212,9 +1266,26 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	if err := rows.Err(); err != nil {
 		t.Fatalf("read expected system assistant provider accounts: %v", err)
 	}
+	for index := range expectedCandidates {
+		catalog, readErr := service.ListModelCatalog(ctx, owner, "openai-codex", expectedCandidates[index].AccountRef, query.Filter{})
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		expectedCandidates[index].ProviderDefinitionKey = "openai-codex"
+		expectedCandidates[index].CatalogRevision, expectedCandidates[index].CatalogDigest = catalog.Revision, catalog.Digest
+		for _, model := range catalog.Models {
+			if model.ID == configuration.Configuration.Model {
+				expectedCandidates[index].DefaultReasoningEffort = model.DefaultReasoningEffort
+			}
+		}
+	}
+	expectedMode := "LEAST_USED"
+	if len(expectedCandidates) == 1 {
+		expectedMode = "FIXED"
+	}
 	if reconciledConfigurationVersion != initialConfigurationVersion+1 ||
 		reconciledConfigurationCount != initialConfigurationCount+1 ||
-		reconciledPolicyMode != "LEAST_USED" ||
+		reconciledPolicyMode != expectedMode ||
 		!providerCandidatesEqual(reconciledCandidates, expectedCandidates) {
 		t.Fatalf("system assistant provider policy was not reconciled: version=%d count=%d mode=%s candidates=%#v",
 			reconciledConfigurationVersion, reconciledConfigurationCount, reconciledPolicyMode, reconciledCandidates)
@@ -1495,6 +1566,7 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	if _, err := repository.pool.Exec(ctx, bootstrapComponentInsertSecondaryProviderQuery); err != nil {
 		t.Fatalf("insert secondary provider account: %v", err)
 	}
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		ExternalDisplayName: "Runtime configuration owner", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
@@ -1533,12 +1605,38 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 			current.Configuration.ProviderPolicy)
 	}
 	expectedVersion := current.AgentVersion
+	inputCandidates := append([]entity.ProviderAccountCandidate{}, current.Configuration.ProviderPolicy.AccountCandidates...)
+	for index := range inputCandidates {
+		inputCandidates[index].DefaultReasoningEffort = ""
+	}
+	for name, mutate := range map[string]func(*entity.ProviderAccountCandidate){
+		"missing-pin": func(candidate *entity.ProviderAccountCandidate) {
+			candidate.CatalogRevision = ""
+			candidate.CatalogDigest = ""
+		},
+		"stale-pin": func(candidate *entity.ProviderAccountCandidate) {
+			candidate.CatalogDigest = strings.Repeat("f", 64)
+			candidate.CatalogRevision = "mcat_" + candidate.CatalogDigest
+		},
+		"self-issued-default": func(candidate *entity.ProviderAccountCandidate) { candidate.DefaultReasoningEffort = "high" },
+		"other-provider":      func(candidate *entity.ProviderAccountCandidate) { candidate.ProviderDefinitionKey = "other-provider" },
+	} {
+		candidates := append([]entity.ProviderAccountCandidate{}, inputCandidates...)
+		mutate(&candidates[0])
+		_, failure := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "runtime-configuration-" + name, ExpectedVersion: &expectedVersion},
+			Payload:  command.AgentRuntimeConfigurationInput{AgentRef: agent.Ref, RuntimeProfileRef: current.Configuration.RuntimeProfileRef, Model: current.Configuration.Model, ProviderPolicyMode: current.Configuration.ProviderPolicy.Mode, ProviderAccounts: candidates},
+		})
+		if name == "stale-pin" && !errors.Is(failure, domainerrs.ErrVersionMismatch) || name != "stale-pin" && !errors.Is(failure, domainerrs.ErrInvalid) {
+			t.Fatalf("catalog mutation %s: %v", name, failure)
+		}
+	}
 	result, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-configuration-publish", ExpectedVersion: &expectedVersion},
 		Payload: command.AgentRuntimeConfigurationInput{
 			AgentRef: agent.Ref, RuntimeProfileRef: current.Configuration.RuntimeProfileRef,
 			Model: current.Configuration.Model, ProviderPolicyMode: current.Configuration.ProviderPolicy.Mode,
-			ProviderAccounts: current.Configuration.ProviderPolicy.AccountCandidates,
+			ProviderAccounts: inputCandidates,
 		}})
 	if err != nil || result.RuntimeConfiguration == nil {
 		t.Fatalf("publish runtime configuration: configuration=%#v err=%v", result.RuntimeConfiguration, err)
@@ -1548,6 +1646,33 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 		result.RuntimeConfiguration.Configuration.Provider != current.Configuration.Provider {
 		t.Fatalf("published runtime configuration readback mismatch: before=%#v after=%#v",
 			current, *result.RuntimeConfiguration)
+	}
+	expectedVersion = result.RuntimeConfiguration.AgentVersion
+	draft, err := service.Execute(ctx, command.Command{Kind: command.CreateConfigOverlayDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-overlay-unsupported-effort", ExpectedVersion: &expectedVersion},
+		Payload:  command.ConfigOverlayInput{AgentRef: agent.Ref, Content: "model_reasoning_effort = \"adaptive\"\n"},
+	})
+	if err != nil || draft.RuntimeConfiguration == nil || draft.RuntimeConfiguration.DraftOverlay == nil {
+		t.Fatalf("create overlay: %v", err)
+	}
+	expectedVersion = draft.RuntimeConfiguration.AgentVersion
+	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateConfigOverlayDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-overlay-validate-unsupported", ExpectedVersion: &expectedVersion},
+		Payload:  command.ConfigOverlayInput{AgentRef: agent.Ref},
+	})
+	if err != nil || validated.RuntimeConfiguration == nil || validated.RuntimeConfiguration.DraftOverlay == nil {
+		t.Fatalf("validate overlay: %v", err)
+	}
+	invalid := validated.RuntimeConfiguration.DraftOverlay
+	if invalid.State != "INVALID" || len(invalid.Diagnostics) != 1 || invalid.Diagnostics[0].Code != "CONFIG_OVERLAY_EFFORT_UNSUPPORTED" || invalid.Diagnostics[0].Key != "model_reasoning_effort" || invalid.Diagnostics[0].Line != 1 || invalid.Diagnostics[0].Column < 1 || invalid.SchemaRevision == "" || invalid.SchemaDigest == "" {
+		t.Fatalf("safe versioned diagnostic missing: %+v", invalid)
+	}
+	expectedVersion = validated.RuntimeConfiguration.AgentVersion
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishConfigOverlayDraft, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-overlay-publish-unsupported", ExpectedVersion: &expectedVersion},
+		Payload:  command.ConfigOverlayInput{AgentRef: agent.Ref},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("unsupported overlay published: %v", err)
 	}
 }
 
@@ -1597,19 +1722,27 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref,
 		"provider-affinity-agent", "Provider affinity specialist")
 
-	publishFixedPolicy := func(key, accountRef string) {
+	publishFixedPolicy := func(key, accountRef string, selectedModel ...string) {
 		t.Helper()
 		current, readErr := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
 		if readErr != nil {
 			t.Fatalf("read provider affinity runtime configuration: %v", readErr)
 		}
+		catalog, catalogErr := service.ListModelCatalog(ctx, owner, current.Configuration.Provider, accountRef, query.Filter{})
+		if catalogErr != nil {
+			t.Fatalf("read provider affinity catalog: %v", catalogErr)
+		}
 		expectedVersion := current.AgentVersion
+		model := current.Configuration.Model
+		if len(selectedModel) != 0 {
+			model = selectedModel[0]
+		}
 		published, publishErr := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner,
 			Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &expectedVersion},
 			Payload: command.AgentRuntimeConfigurationInput{
 				AgentRef: agent.Ref, RuntimeProfileRef: current.Configuration.RuntimeProfileRef,
-				Model: current.Configuration.Model, ProviderPolicyMode: "FIXED",
-				ProviderAccounts: []entity.ProviderAccountCandidate{{AccountRef: accountRef, Weight: 1}},
+				Model: model, ProviderPolicyMode: "FIXED",
+				ProviderAccounts: []entity.ProviderAccountCandidate{{AccountRef: accountRef, Weight: 1, ProviderDefinitionKey: current.Configuration.Provider, CatalogRevision: catalog.Revision, CatalogDigest: catalog.Digest}},
 			}})
 		if publishErr != nil || published.RuntimeConfiguration == nil {
 			t.Fatalf("publish fixed provider policy for %s: configuration=%#v err=%v",
@@ -1637,6 +1770,9 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("claim switched Session provider after policy mutation: claims=%#v err=%v", claimed.RuntimeItems, err)
 	}
 	lease := claimed.RuntimeItems[0]
+	if stringMap(lease, "effectiveReasoningEffort") != "high" || stringMap(lease, "reasoningMode") != "SUPPORTED" {
+		t.Fatal("materialization lost server-owned model effort")
+	}
 	workspacePolicy, ok := lease["workspacePolicy"].(entity.RuntimeWorkspacePolicy)
 	if !ok || !reflect.DeepEqual(workspacePolicy, runtimeWorkspacePolicy()) {
 		t.Fatalf("claim does not carry a bounded workspace policy: %#v", lease["workspacePolicy"])
@@ -1668,10 +1804,31 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("RuntimeRevision account differs from Session: session=%s revision=%s want=%s",
 			sessionAccountID, revisionAccountID, primaryAccountID)
 	}
+	refresh := command.ProviderCredentialRefreshInput{
+		LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
+		PreviousCredentialRevisionRef: stringMap(lease, "providerCredentialRevisionRef"), PreviousContentSHA256: stringMap(lease, "providerCredentialSHA256"),
+		SecretName: "runtime-provider-affinity-refreshed", SecretUID: "50000000-0000-4000-8000-000000000091", SecretResourceVersion: "affinity-refresh-1", ContentSHA256: strings.Repeat("9", 64),
+	}
+	refreshed, err := service.Execute(ctx, command.Command{Kind: command.CommitProviderCredentialRefresh, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-managed-refresh"}, Payload: refresh,
+	})
+	if err != nil || stringMap(refreshed.Runtime, "providerCredentialRevisionRef") == "" {
+		t.Fatalf("managed refresh: %v", err)
+	}
+	if err := pool.QueryRow(ctx, queryCatalogFixtureCredentialID, stringMap(refreshed.Runtime, "providerCredentialRevisionRef")).Scan(&primaryCredentialID); err != nil {
+		t.Fatal(err)
+	}
 	completed := completeClaimedExecution(t, ctx, service, worker, lease, "provider-affinity-first", false)
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
 		t.Fatalf("complete provider affinity run: run=%#v", completed.Run)
 	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-refresh-without-observation"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: launched.Run.Ref, Task: "Continue after managed refresh."},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("managed refresh reused stale observation: %v", err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository)
 
 	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-continuation"}, Payload: command.SessionTurnInput{
@@ -1720,6 +1877,13 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("restore provider affinity account: %v", err)
 	}
 	restored = true
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim-before-observation"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity-unobserved", Limit: 1},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("restored account reused old observation: %v", err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository)
 
 	recovered, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim-restored"},
@@ -1751,6 +1915,70 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("exact continuation Run preview selected another root revision: preview=%#v err=%v", continuedRunPreview, err)
 	}
 	completeClaimedExecution(t, ctx, service, worker, recovered.RuntimeItems[0], "provider-affinity-restored", false)
+	if _, err := pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, primaryAccountRef); err != nil {
+		t.Fatal(err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository, func(observation *platformrepo.ProviderModelCatalogObservation) {
+		observation.Models[0].DefaultReasoningEffort = "low"
+	})
+	if _, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-changed-default-denied"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: continued.Run.Ref, Task: "Continue after changed default."},
+	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("changed capabilities reused Session pin: %v", err)
+	}
+	publishFixedPolicy("provider-affinity-republish-default", primaryAccountRef)
+	next, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-new-default-turn"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: continued.Run.Ref, Task: "Use explicitly republished model default."},
+	})
+	if err != nil || next.Run == nil {
+		t.Fatalf("republished default turn: %v", err)
+	}
+	newDefault, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-new-default-claim"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity-default", Limit: 1},
+	})
+	if err != nil || len(newDefault.RuntimeItems) != 1 || stringMap(newDefault.RuntimeItems[0], "effectiveReasoningEffort") != "low" || stringMap(newDefault.RuntimeItems[0], "providerAccountRef") != primaryAccountRef {
+		t.Fatalf("new server default not materialized: %+v %v", newDefault.RuntimeItems, err)
+	}
+	completeClaimedExecution(t, ctx, service, worker, newDefault.RuntimeItems[0], "provider-affinity-new-default", false)
+	publishFixedPolicy("provider-affinity-non-reasoning-model", primaryAccountRef, "non-reasoning")
+	next, err = service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-non-reasoning-turn"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: next.Run.Ref, Task: "Use a model without reasoning support."},
+	})
+	if err != nil || next.Run == nil {
+		t.Fatalf("non-reasoning turn: %v", err)
+	}
+	unsupported, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-non-reasoning-claim"},
+		Payload:  command.LeaseInput{WorkloadInstance: "runtime-provider-affinity-non-reasoning", Limit: 1},
+	})
+	if err != nil || len(unsupported.RuntimeItems) != 1 || stringMap(unsupported.RuntimeItems[0], "effectiveReasoningEffort") != "" || stringMap(unsupported.RuntimeItems[0], "reasoningMode") != "UNSUPPORTED" {
+		t.Fatalf("non-reasoning model received invented effort: %+v %v", unsupported.RuntimeItems, err)
+	}
+	completeClaimedExecution(t, ctx, service, worker, unsupported.RuntimeItems[0], "provider-affinity-non-reasoning", false)
+	if _, err := pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, secondaryAccountRef); err != nil {
+		t.Fatal(err)
+	}
+	seedObservedCatalogFixture(t, ctx, repository, func(observation *platformrepo.ProviderModelCatalogObservation) {
+		observation.Models = append(observation.Models, platformrepo.ProviderModelCatalogRecord{ID: "secondary-only"})
+	})
+	publishFixedPolicy("provider-affinity-secondary-only-model", secondaryAccountRef, "secondary-only")
+	if _, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-unsupported-new-model"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: next.Run.Ref, Task: "Reject model absent from the selected Session account."},
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("unsupported model switched Session account: %v", err)
+	}
+	publishFixedPolicy("provider-affinity-restore-model", primaryAccountRef, "gpt-5")
+	for _, ref := range []string{primaryAccountRef, secondaryAccountRef} {
+		if _, err := pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, ref); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedObservedCatalogFixture(t, ctx, repository)
 }
 
 func testRuntimeEnvironmentRejectsMissingImage(t *testing.T, ctx context.Context, repository *Repository) {
@@ -3352,8 +3580,8 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || runResult.Run == nil {
 		t.Fatalf("create action readback run: run=%#v err=%v", runResult.Run, err)
 	}
-	runs, _, err := service.ListRuns(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
-	if err != nil || len(runs) != 1 || len(runs[0].NextActions) != 1 || runs[0].NextActions[0] != "OPEN" {
+	runs, runTotal, _, err := service.ListRuns(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || runTotal != 1 || len(runs) != 1 || len(runs[0].NextActions) != 1 || runs[0].NextActions[0] != "OPEN" {
 		t.Fatalf("read-only run actions are not authoritative: runs=%#v err=%v", runs, err)
 	}
 	runVersion := runResult.Run.Version
@@ -3391,6 +3619,7 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || len(hiddenAuditEvents) != 0 {
 		t.Fatalf("audit readback ignored VIEW_AUDIT eligibility: events=%#v err=%v", hiddenAuditEvents, err)
 	}
+	testRunCatalogTotals(t, ctx, service, owner, candidate, projectRef, actionAgent.Ref)
 	remaining, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("assigned member remained a candidate: candidates=%#v err=%v", remaining, err)
@@ -4740,6 +4969,7 @@ func testProviderCredentialRefreshAndCapacity(t *testing.T, ctx context.Context,
 	}
 
 	completeClaimedExecution(t, ctx, service, worker, firstLease, "provider-refresh-first", false)
+	seedObservedCatalogFixture(t, ctx, repository)
 	second, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-refresh-claim-after-release"},
 		Payload:  command.LeaseInput{WorkloadInstance: "provider-refresh-after-release", Limit: 1}})
@@ -4806,9 +5036,14 @@ func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, r
 	`, defaultOrganizationID); err != nil {
 		t.Fatalf("activate warm provider consumer fixture: %v", err)
 	}
+	var warmAccountRef string
+	var warmAccountVersion int64
+	if err := pool.QueryRow(ctx, queryCatalogFixtureWarmAccount, defaultOrganizationID).Scan(&warmAccountRef, &warmAccountVersion); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeProviderAccount, Principal: revokeOwner,
-		Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-warm-block", ExpectedVersion: &defaultAccountVersion},
-		Payload:  command.ProviderAccountInput{AccountRef: defaultAccountRef},
+		Mutation: value.Mutation{IdempotencyKey: "provider-cleanup-warm-block", ExpectedVersion: &warmAccountVersion},
+		Payload:  command.ProviderAccountInput{AccountRef: warmAccountRef},
 	}); !errors.Is(err, domainerrs.ErrConflict) {
 		t.Fatalf("active warm consumer did not block provider revoke: %v", err)
 	}
@@ -5157,6 +5392,7 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 		t.Fatalf("stale rejection disabled a rotated credential: state=%s credential=%s version=%d", state, currentCredentialID, versionAfterStale)
 	}
 
+	seedObservedCatalogFixture(t, ctx, repository)
 	currentLease := launchAndClaim("current")
 	currentAccountID, runtimeCredentialID := providerForRevision(stringMap(currentLease, "runtimeRevisionRef"))
 	if currentAccountID != accountID || runtimeCredentialID != rotatedCredentialID {
@@ -5345,30 +5581,30 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || quarantined.ScanState != "QUARANTINED" {
 		t.Fatalf("quarantine executable artifact: artifact=%#v err=%v", quarantined, err)
 	}
-	cleanArtifacts, cleanNext, err := service.ListArtifacts(ctx, owner, query.Filter{
+	cleanArtifacts, cleanTotal, cleanNext, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Query: "support-policy", ArtifactType: "TEXT", ScanState: "CLEAN",
 		SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 1},
 	})
-	if err != nil || cleanNext != "" || len(cleanArtifacts) != 1 || cleanArtifacts[0].Ref != uploaded.Ref {
+	if err != nil || cleanTotal != 1 || cleanNext != "" || len(cleanArtifacts) != 1 || cleanArtifacts[0].Ref != uploaded.Ref {
 		t.Fatalf("server-side artifact filters were not applied before limit: artifacts=%#v next=%q err=%v", cleanArtifacts, cleanNext, err)
 	}
-	firstPage, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+	firstPage, firstTotal, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
 	firstRef, secondRef := quarantined.Ref, uploaded.Ref
 	if firstRef > secondRef {
 		firstRef, secondRef = secondRef, firstRef
 	}
-	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
+	if err != nil || firstTotal != 2 || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
 	}
-	secondPage, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+	secondPage, secondTotal, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1, Token: nextPageToken},
 	})
-	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
+	if err != nil || secondTotal != 2 || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
 		t.Fatalf("second artifact cursor page is unstable: artifacts=%#v next=%q err=%v", secondPage, finalPageToken, err)
 	}
-	if _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+	if _, _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, ArtifactType: "EXECUTABLE", Page: query.Page{Size: 1},
 	}); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("unknown artifact type was accepted: %v", err)
@@ -5376,6 +5612,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if _, err := service.DownloadArtifact(ctx, owner, quarantined.Ref, "DOWNLOAD"); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
 	}
+	testArtifactCatalogTotals(t, ctx, service, owner, project.Project.Ref)
 	uploadedVersion := uploaded.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-without-capability", ExpectedVersion: &uploadedVersion},
@@ -5635,8 +5872,12 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil {
 		t.Fatalf("construct platform service: %v", err)
 	}
+	assistantReadback, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	firstHeartbeat, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistantReadback.DesiredRuntimeRevision, State: "READY",
 	})
 	if err != nil {
 		t.Fatalf("report assistant readiness: %v", err)
@@ -5647,7 +5888,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	time.Sleep(2 * time.Millisecond)
 	secondHeartbeat, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
-		WorkloadInstance: "runtime-test", RuntimeRevision: systemassistant.CorePromptRevision, State: "READY",
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistantReadback.DesiredRuntimeRevision, State: "READY",
 	})
 	if err != nil {
 		t.Fatalf("repeat assistant heartbeat: %v", err)
@@ -5681,7 +5922,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	assistantAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, "",
 		"ASSISTANT_MESSAGE", "assistant-attachment-set", assistantInput.Ref)
-	organizationArtifacts, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+	organizationArtifacts, _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
 		Query: "organization-policy", ArtifactType: "TEXT", ScanState: "CLEAN", SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 10},
 	})
 	if err != nil || len(organizationArtifacts) != 1 || organizationArtifacts[0].Ref != assistantInput.Ref || organizationArtifacts[0].ProjectRef != "" {
