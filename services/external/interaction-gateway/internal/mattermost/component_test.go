@@ -97,6 +97,9 @@ func TestAcknowledgementDeliveryUsesOwnerThreadAndExactReadback(t *testing.T) {
 		return jsonResponse(t, 201, &post), true
 	})
 	claim := &controlplanev1.InteractionDeliveryClaim{DeliveryRef: "delivery", ConnectionRef: "connection", BaseUrl: "https://chat.example.test", TeamName: "team", ChannelName: "channel", CredentialDescriptor: credential, CapabilityKey: "mattermost.acknowledgements", AcceptanceReceiptRef: "receipt", ExternalTeamRef: testTeamID, ExternalChannelRef: testChannelID, ExternalRootPostRef: testPostID, MessageKey: "READY", Locale: "en"}
+	claim.DefinitionPackage, _ = json.Marshal(adapter.definition)
+	claim.DefinitionKey, claim.DefinitionVersion, claim.DefinitionDigest = "mattermost", adapter.definition.Metadata.Version, adapter.definition.Digest
+	claim.ConnectionVersion, claim.SourceCapabilityKey = 1, "mattermost.inbound"
 	result, err := adapter.Deliver(t.Context(), claim)
 	if err != nil || result.PostRef != testFileID || result.ThreadRef != testPostID || result.TeamRef != testTeamID || result.ChannelRef != testChannelID || posts != 1 {
 		t.Fatalf("ACK result=%+v err=%v", result, err)

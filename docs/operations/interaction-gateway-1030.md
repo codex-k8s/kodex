@@ -4,7 +4,7 @@ title: Доставка Mattermost и привязка внешнего поль
 type: operational-contract
 status: approved
 owner: platform
-version: 1.3.0
+version: 1.4.0
 updated: 2026-09-05
 ---
 
@@ -19,7 +19,8 @@ updated: 2026-09-05
 
 | Фаза | Инициатор и полномочия | Команда и состояние владельца | Результат и потребитель |
 | --- | --- | --- | --- |
-| Создание | Core lifecycle и активный connection grant | Сервер создаёт delivery в своей транзакции | Авторитетная очередь control-plane |
+| Создание | Core lifecycle и активный connection grant | Для notification/result mirror сервер создаёт `WAITING_APPROVAL` и отдельный OwnerGate с точными pins | Решение владельца до внешнего действия |
+| Решение | Проверенный субъект с `gate.resolve` на ресурсе | `APPROVE` переводит intent в `DUE`, `REJECT`/`CANCEL` — в `CANCELLED` | Receipt, `OWNER_GATE_RESOLVED`, неизменные state/version core Run |
 | Claim | Проверенный workload interaction-gateway | `ClaimInteractionDeliveries`, точный lease/fence/generation | Одна доставка непосредственно перед исполнением |
 | Подготовка | Только выданный connection snapshot | Exact credential file, HTTPS origin, team/channel lookup | Нет внешнего изменяющего действия |
 | Отправка | Активная арендованная попытка | Mattermost `POST /api/v4/posts` в точном канале | Только HTTP 201 и совпадающие post/channel/thread образуют success |
@@ -27,9 +28,15 @@ updated: 2026-09-05
 | Истечение | Время БД владельца | Неоконченная claimed delivery становится `UNKNOWN_OUTCOME` | Не возвращается в автоматическую очередь отправки |
 | Сверка | Авторитетный read path control-plane | Incident и сохранённый delivery outcome | Ошибка optional delivery не меняет core Run на FAILED |
 
-Для перечисленных delivery-переходов отдельное доменное событие consumer не
-требуется: очередь и incidents читаются через защищённые RPC владельца.
-События core Run не подменяются событиями доставки Mattermost.
+Создание и решение отдельного OwnerGate атомарно публикуют `OWNER_GATE_OPENED`
+и `OWNER_GATE_RESOLVED`. Для claim/completion/expiry отдельное доменное событие
+consumer не требуется: очередь и incidents читаются через защищённые RPC
+владельца. События core Run не подменяются событиями доставки Mattermost.
+
+Изменение grant или выключение подключения закрывает ожидающие intents и
+открытые gates в той же транзакции; уже claimed отправка становится
+`UNKNOWN_OUTCOME`. Миграция 637 закрывает прежние неподтверждённые optional
+доставки, сохраняя их авторитетный read path. Она не создаёт одобрение задним числом.
 
 Тайм-аут или HTTP 5xx после попытки отправки не доказывает отсутствие post.
 Только ошибка до отправки либо документированный отказ HTTP 400/401/403/404/
@@ -51,7 +58,8 @@ thread, изменённый текст либо удалённый post не п
 
 Замена версии подключения или immutable credential descriptor отменяет старый
 listener даже при прежнем имени Secret. Удаление подключения также отменяет
-listener. Новое поколение,
+listener. Ошибка authoritative discovery отменяет прежние подписки до получения
+следующего подтверждённого snapshot. Новое поколение,
 включая быстро отменённое промежуточное, ждёт завершения всей цепочки
 предшественников. При shutdown SDK reader дренируется до закрытия каналов.
 
@@ -90,7 +98,8 @@ gate/run/version передаются в `AcceptInteractionMessage`.
 Административная привязка выполняется отдельными командами
 `BindInteractionIdentity`/`RevokeInteractionIdentity`, читается через
 `ListInteractionIdentities`. HTTP/PWA-поверхность этих новых producer-команд
-подключается в зависимых unit и пока не объявляется готовой этим checkpoint.
+подключается в зависимых unit; удобный выбор внешнего пользователя и финальный
+сквозной сценарий не объявляются готовыми этим checkpoint.
 
 ## Типизированные операции MCP
 
@@ -124,6 +133,15 @@ revision. Health check также выполняет объявленную type
 проверяет output; его бюджет ограничен обоими пределами capability и health.
 Если read operation требует `HUMAN_EACH_EFFECT`, автоматический connection
 test закрыто отклоняется без внешнего вызова.
+
+Системные подписки и доставки также получают private package и connection
+version. Они проверяют actual configuration, enabled source capability и
+бюджет выбранной revision. Входящий gate decision проходит её input schema;
+неподдержанный либо исключённый из revision вариант не доходит до owner RPC.
+Notification/result mirror требует отдельные `approval_gate_ref/version` и
+проверяет локализованный message по actual schema до чтения credential.
+ACK остаётся связанным с исходной принятой source capability, а запрос решения
+gate — с `mattermost.gate_decisions`; они не получают выдуманный approval.
 
 Поиск принудительно ограничен каналом и не принимает пользовательские search
 operators. File download требует attachment membership в предварительно
@@ -167,9 +185,13 @@ Live Mattermost и staging не запускались.
 Managed revision tests дополнительно проверяют конкурентное исполнение UI и
 Git revisions, выбранный deadline, неизменность registry, отклонение неверных
 package bytes/pins и недопустимого автоматического health check. Это evidence
-для connection tests и MCP invocations. Полный CFG lifecycle также требует
-владельца Git source/write-back и отдельной проверки системных подписок и
-delivery при изменении binding; готовность этих путей здесь не заявляется.
+для connection tests и MCP invocations. Дополнительные системные тесты
+проверяют отсутствие любого provider-запроса при missing/mismatched package,
+approval и connection version; exact approved delivery, выбранный deadline,
+запрет gated inbound и остановку подписки при потере owner discovery.
+Owner PostgreSQL-сценарии отдельно проверяют approve/reject/cancel, stale pins
+и отзыв grant. Полный CFG lifecycle, Git write-back и live acceptance ещё не
+завершены; эти результаты не подменяют итоговую приёмку.
 
 ## Совместная Сборка С Выдачей Ключей
 
