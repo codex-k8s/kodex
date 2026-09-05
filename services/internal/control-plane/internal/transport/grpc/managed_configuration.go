@@ -235,10 +235,29 @@ func castManagedRevision(value *entity.ManagedConfigurationRevision) *controlpla
 		return nil
 	}
 	return &controlplanev1.ManagedConfigurationRevision{Ref: value.Ref, Revision: value.Revision,
-		State:         controlplanev1.ManagedConfigurationState(controlplanev1.ManagedConfigurationState_value["MANAGED_CONFIGURATION_STATE_"+value.State]),
+		State:         managedRevisionStateProto(value.State),
 		ContentFormat: value.ContentFormat, Content: value.Content, Digest: value.Digest,
 		ValidationDiagnostics: append([]string(nil), value.ValidationDiagnostics...), ParentRevisionRef: value.ParentRevisionRef,
 		CreatedAt: timestamp(value.CreatedAt), ValidatedAt: optionalTimestamp(value.ValidatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+}
+
+func managedRevisionStateProto(state string) controlplanev1.ManagedConfigurationState {
+	switch state {
+	case "DRAFT":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT
+	case "VALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_VALID
+	case "INVALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_INVALID
+	case "PUBLISHED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_PUBLISHED
+	case "SUPERSEDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_SUPERSEDED
+	case "DISCARDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
+	default:
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_UNSPECIFIED
+	}
 }
 
 func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlplanev1.ManagedConfigurationSet {
