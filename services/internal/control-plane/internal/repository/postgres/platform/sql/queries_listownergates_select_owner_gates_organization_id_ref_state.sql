@@ -5,7 +5,7 @@ WITH visible AS MATERIALIZED (
     JOIN control_plane.projects p ON p.id=g.project_id
     WHERE g.organization_id=$1::uuid
       AND ($2='' OR p.ref=$2)
-      AND ($3='' OR g.state=$3)
+      AND (cardinality($3::text[])=0 OR g.state=ANY($3::text[]))
       AND ($9='' OR strpos(lower(g.title),lower($9))>0 OR strpos(lower(g.prompt),lower($9))>0 OR strpos(lower(g.context_summary),lower($9))>0)
       AND ($4 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
         SELECT 1 FROM control_plane.memberships m

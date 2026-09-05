@@ -41,6 +41,28 @@ func testOwnerGateList(t *testing.T, ctx context.Context, service *platformservi
 	if err != nil || total != 2 {
 		t.Fatalf("gate exact state count: total=%d err=%v", total, err)
 	}
+	filter.State = ""
+	filter.States = []string{"CHANGES_REQUESTED", "APPROVED"}
+	_, total, next, err = service.ListOwnerGates(ctx, owner, filter)
+	if err != nil || total != 3 || next == "" {
+		t.Fatalf("gate history multi-state count: total=%d err=%v", total, err)
+	}
+	filter.States = []string{"APPROVED", "CHANGES_REQUESTED"}
+	filter.Page.Token = next
+	if _, _, _, err := service.ListOwnerGates(ctx, owner, filter); err != nil {
+		t.Fatalf("gate canonical state set cursor: %v", err)
+	}
+	filter.Page.Token = ""
+	filter.State = "OPEN"
+	if _, _, _, err := service.ListOwnerGates(ctx, owner, filter); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("gate singular and plural state conflict: %v", err)
+	}
+	filter.State = ""
+	filter.States = []string{"APPROVED", "APPROVED"}
+	if _, _, _, err := service.ListOwnerGates(ctx, owner, filter); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("gate duplicated state: %v", err)
+	}
+	filter.States = nil
 	filter.State, filter.Query = "", strings.ToUpper(first[0].Title)
 	items, total, _, err := service.ListOwnerGates(ctx, owner, filter)
 	if err != nil || total == 0 || len(items) != 1 {

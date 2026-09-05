@@ -20,6 +20,16 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 		return nil, 0, "", err
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
+	if len(filter.States) > 6 || filter.State != "" && len(filter.States) != 0 {
+		return nil, 0, "", errs.ErrInvalid
+	}
+	filter.States = slices.Clone(filter.States)
+	slices.Sort(filter.States)
+	for index, state := range filter.States {
+		if !slices.Contains([]string{"OPEN", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"}, state) || index > 0 && filter.States[index-1] == state {
+			return nil, 0, "", errs.ErrInvalid
+		}
+	}
 	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) ||
 		!slices.Contains([]string{"", "OPEN", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"}, filter.State) {
 		return nil, 0, "", errs.ErrInvalid
@@ -44,8 +54,15 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 	}
 	defer tx.Rollback(ctx)
 	limit := boundedPage(filter.Page)
+	states := filter.States
+	if filter.State != "" {
+		states = []string{filter.State}
+	}
+	if states == nil {
+		states = []string{}
+	}
 	rows, err := tx.Query(ctx, queryQueriesListownergatesSelectOwnerGatesOrganizationIdRefState,
-		current.organizationID, filter.ProjectRef, filter.State, current.role, current.actorID, limit+1, cursorRef, cursorTime, filter.Query)
+		current.organizationID, filter.ProjectRef, states, current.role, current.actorID, limit+1, cursorRef, cursorTime, filter.Query)
 	if err != nil {
 		return nil, 0, "", errs.ErrUnavailable
 	}

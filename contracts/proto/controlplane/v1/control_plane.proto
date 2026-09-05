@@ -2086,6 +2086,7 @@ message ListOwnerGatesRequest {
   PageRequest page = 2;
   OwnerGateState state = 3;
   string query = 4;
+  repeated OwnerGateState states = 5;
 }
 message ListOwnerGatesResponse {
   repeated OwnerGate gates = 1;
