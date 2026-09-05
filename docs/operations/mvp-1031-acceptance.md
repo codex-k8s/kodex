@@ -74,6 +74,68 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 [Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
 и [declarative configuration](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/).
 
+## Локальная подготовка EMAIL
+
+Зависимость: EMAIL #1037, [PR #1062](https://github.com/codex-k8s/kodex/pull/1062),
+`4813c147ad97dfe45f7987c901e8b350b073611c` поверх `8026633a9`.
+Она включена вместе с сохранённым #1056: optional session-archive,
+backup-controller и точное назначение archive issuer не удаляются.
+
+В обоих локальных профилях исполняются email-bridge, authority issuer и
+platform-worker-grant-agent через закреплённые Go/Air, а CLI миграции через
+`run-go-command.sh services/internal/email-bridge ./cmd/cli up`.
+Host заранее загружает Go modules; source, modules, sumdb и Air внутри
+контейнеров read-only. У каждого процесса отдельный writable build cache и
+ограниченный tmp; root filesystem read-only. Socket init запускается сразу
+с UID/GID 29000 без capabilities; bridge/migration сохраняют UID 10001,
+issuer 29001, grant agent 29004. Writable grant volume остаётся доступен
+только producer, consumer получает read-only mount.
+
+| Сценарий | Авторитетный путь и результат |
+| --- | --- |
+| Подготовка без API | `render-local.sh` использует локальный Kustomize и сохраняет profile, source SHA и content digest. Новые credentials не выдаются. |
+| Разрешённая установка оператором | Существующий installer материализует отдельные runtime/migration DB descriptors и сертификаты; `deploy-local.sh` ждёт Certificates, PostgreSQL StatefulSet, затем запускает точный migration Job и ждёт completion до application Deployments. |
+| Повторная установка | Точное имя migration Job пересоздаётся bounded-командой; goose использует собственную таблицу версий EMAIL. Ошибка миграции прерывает установку. Итоговый readback включает EMAIL PostgreSQL и migration Job. |
+| Hot reload | Air наблюдает модуль EMAIL и `libs/go`; не переписывает authority, TLS, Secret descriptors или immutable runner pins. Почтовые effects и unknown-outcome остаются ответственностью EMAIL owner. |
+| Недоступный producer | `COMMON_EMAIL` / `email-bridge-mailbox-projection` не синтезируется из allowlist. Нет фиктивных mailbox credentials или обхода readiness. |
+
+Service остаётся внутренним HTTPS `443 -> https/8443`, CP authority идёт по
+точному gRPC target с TLS, egress и NetworkPolicy сохраняются из EMAIL dependency.
+Новый Ingress для EMAIL не создаётся. Проверка сравнивает полные canonical
+NetworkPolicy specs, issuer binding и имена Secret descriptors, не их значения.
+Локальная замена Go image не меняет runtime-controller schema/policy и
+передаваемый immutable runner image; соответствующие существующие renderer
+assertions остаются обязательными.
+
+Проверки подготовки без живого API:
+
+```bash
+make test-full-local-e2e-entrypoint test-local-go-cache-contract \
+  test-local-image-cache-import-contract test-local-material-contract-revision \
+  test-local-backup-controller-credentials-contract
+timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
+  --profile web-only --cache-root /tmp/kodex-1031-email-render-cache
+timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
+  --profile web-with-mattermost --cache-root /tmp/kodex-1031-email-render-cache
+timeout 450s bash scripts/tests/local-email-process-contract-test.sh \
+  /tmp/kodex-1031-email-render-cache
+```
+
+Оба renderer запускают EMAIL positive и 17 negative cases. Process fixture
+требует заранее доступный закреплённый Go image и primed cache: Docker
+`--network none`, non-root, read-only root/source/modules, отдельные tmpfs.
+Она выполняет настоящий socket init, отказ CLI без DSN и сборку через Air;
+не подключается к PostgreSQL, mailbox или Kubernetes и не заменяет live E2E.
+
+На исходном EMAIL SHA root подтвердил install/TLS bootstrap, оба production
+render, protocol/PG race и codegen/Go checks. Эти проверки здесь не дублируются.
+Сообщённый root результат полного `test-web-only-release` остаётся **FAIL**:
+отсутствует producer `email-bridge-mailbox-projection` у CP #1046. Локальный
+render PASS означает только готовность подготовки, не устранение этого FAIL.
+После интеграции producer нужен новый общий gate на точном интегрированном SHA.
+До разрешения владельца `up`, import в k3s, apply/deploy, SSH, live provider
+и live E2E остаются **NOT RUN**.
+
 ## Локальная подготовка STT
 
 `dev.sh up` собирает `tools/dev/Dockerfile.local-stt` через

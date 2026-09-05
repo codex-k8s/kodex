@@ -205,6 +205,7 @@ go_modules=(
   services/internal/control-plane
   services/internal/secret-broker
   services/internal/stt-tts-service
+  services/internal/email-bridge
   services/internal/internal-rpc-authority
   services/internal/runtime-controller
   services/external/control-api-gateway
@@ -354,6 +355,7 @@ yq -i '
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
       .metadata.name == "stt-tts-service" or
+      .metadata.name == "email-bridge" or
       .metadata.name == "interaction-gateway" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
@@ -374,6 +376,7 @@ yq -i '
       .metadata.name == "image-admission-controller" or
       .metadata.name == "role-image-builder") and
     (.kind != "Job" or .metadata.name == "control-plane-migrate" or
+      .metadata.name == "email-bridge-migration" or
       .metadata.name == "control-plane-broker-bootstrap" or
       .metadata.name == "internal-rpc-authority-migrate" or
       .metadata.name == "kodex-postgresql-runtime-credentials" or
@@ -853,6 +856,9 @@ patch_go_container Deployment secret-broker platform-worker-grant-agent services
 patch_go_container Deployment stt-tts-service stt-tts-service services/internal/stt-tts-service ./cmd/stt-tts-service
 patch_go_container Deployment stt-tts-service internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment stt-tts-service internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
+patch_go_container Deployment email-bridge email-bridge services/internal/email-bridge ./cmd/email-bridge
+patch_go_container Deployment email-bridge internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment email-bridge platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
@@ -906,7 +912,7 @@ STT_IMAGE="$stt_hot_reload_image" yq -i '
   )
 ' "$render"
 
-for workload in control-plane secret-broker stt-tts-service control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
+for workload in control-plane secret-broker stt-tts-service email-bridge control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
@@ -914,6 +920,47 @@ done
 patch_go_job internal-rpc-authority-migrate migrate services/internal/internal-rpc-authority ./cmd/cli up
 patch_go_job control-plane-migrate migrate services/internal/control-plane ./cmd/cli up
 patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-plane ./cmd/cli broker bootstrap
+patch_go_job email-bridge-migration migration services/internal/email-bridge ./cmd/cli up
+
+# EMAIL сохраняет production TLS и non-root identities. Air пишет только
+# в ограниченный tmp и отдельный build cache; migration не запускается через Air.
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "email-bridge");
+    (.spec.template.spec.initContainers[] | select(.name == "internal-rpc-authority-socket-init")) |= (
+      .securityContext.runAsNonRoot = true |
+      .securityContext.runAsUser = 29000 |
+      .securityContext.runAsGroup = 29000 |
+      .securityContext.readOnlyRootFilesystem = true |
+      .securityContext.capabilities = {"drop":["ALL"]} |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .volumeMounts += [
+        {"name":"dev-email-init-bin","mountPath":"/usr/local/bin"},
+        {"name":"dev-email-init-tmp","mountPath":"/tmp"}
+      ]
+    ) |
+    .spec.template.spec.volumes += [
+      {"name":"dev-email-init-bin","emptyDir":{"sizeLimit":"128Mi"}},
+      {"name":"dev-email-init-tmp","emptyDir":{"sizeLimit":"128Mi"}}
+    ] |
+    (.spec.template.spec.containers[]) |= (
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .startupProbe.failureThreshold = 150 |
+      .volumeMounts += [{"name":("dev-email-tmp-" + .name),"mountPath":"/tmp"}]
+    ) |
+    .spec.template.spec.volumes += [
+      .spec.template.spec.containers[] |
+      {"name":("dev-email-tmp-" + .name),"emptyDir":{"sizeLimit":"128Mi"}}
+    ]
+  ) |
+  with(select(.kind == "Job" and .metadata.name == "email-bridge-migration");
+    .spec.activeDeadlineSeconds = 300 |
+    (.spec.template.spec.containers[] | select(.name == "migration")) |= (
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"}
+    )
+  )
+' "$render"
 
 frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
 api_middlewares=""
@@ -1071,6 +1118,7 @@ AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
         .workload_id == "role-image-builder" or
         .workload_id == "secret-broker" or
         .workload_id == "stt-tts-service" or
+        .workload_id == "email-bridge" or
         .workload_id == "session-archive" or
         .workload_id == "runtime-controller"
       )) |
@@ -1177,6 +1225,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
 "$repository_root/tools/dev/verify-local-stt-render.sh" "$output" "$stt_hot_reload_image"
+"$repository_root/tools/dev/verify-local-email-render.sh" "$output"
 "$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];

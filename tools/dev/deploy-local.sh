@@ -1081,8 +1081,8 @@ if [[ "$mode" == apply ]]; then
   cleanup_legacy_session_archive_worker_resources
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
-  reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs
-  for workload in kodex-postgresql kodex-nats seaweedfs; do
+  reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql
+  for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do
     kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
       fail "local StatefulSet is unavailable: $workload"
   done
@@ -1091,6 +1091,7 @@ if [[ "$mode" == apply ]]; then
 
   apply_job internal-rpc-authority-migrate
   apply_job control-plane-migrate
+  apply_job email-bridge-migration
   apply_job kodex-postgresql-runtime-credentials
   apply_job control-plane-broker-bootstrap
 
@@ -1133,7 +1134,7 @@ readback_local_object_storage_secret
 expected_backup_credentials="$temporary_directory/backup-controller-credentials-expected.json"
 write_local_backup_controller_credentials "$expected_backup_credentials"
 readback_local_backup_controller_secret "$expected_backup_credentials"
-for workload in kodex-postgresql kodex-nats seaweedfs; do
+for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do
   kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
     fail "local StatefulSet is unavailable: $workload"
 done
@@ -1147,7 +1148,7 @@ while IFS= read -r workload; do
 done < <(yq -N -r 'select(.kind == "Deployment") | .metadata.name' "$render" | sort -u)
 
 for job in seaweedfs-bucket-bootstrap internal-rpc-authority-migrate control-plane-migrate \
-  kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
+  email-bridge-migration kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
   [[ "$(kubectl -n "$namespace" get "job/$job" -o jsonpath='{.status.succeeded}')" == 1 ]] ||
     fail "local Job readback failed: $job"
 done

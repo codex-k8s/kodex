@@ -214,6 +214,8 @@ for mutation in \
   fi
 done
 
+bash "$source_root/scripts/tests/local-email-render-contract-test.sh" "$render"
+
 air_binary="$cache_root/go-tools/air"
 [[ -x "$air_binary" ]] || fail 'pinned Air executable is absent from the local tool cache'
 if readelf -l "$air_binary" | rg -q 'Requesting program interpreter'; then
