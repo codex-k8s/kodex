@@ -149,9 +149,43 @@ credential не принимается; непустой путь должен �
   exact worker/decision/source, отсутствие retry и immutable observations.
 - Source authorization/report через реальный protected bridge RPC: NOT RUN.
 
+## Доверенная mailbox configuration
+
+CP принимает `CONTROL_PLANE_EMAIL_CONFIGURATION_FILE` до запуска gRPC/workers.
+Это тот же строгий документ `email-bridge/v1`, который получает bridge, до
+24 MiB, не отдельный пользовательский RPC. `DecodeConfiguration` использует
+общие schema и validator `libs/go/emailbridgeapi`. Документ не содержит secret
+values; в PostgreSQL попадает только mailbox authority projection, без endpoint,
+username/secret/CA descriptors. Digest полного исходного mailbox сохраняет
+commitment на эти descriptors, не раскрывая их в проекции.
+
+Tenant/connection проверяются по существующему CP owner state: exact refs,
+`definition_key=email`, `public_configuration.mailbox_id/from_address`.
+Отсутствующая или несовпадающая connection закрывает весь приём атомарно.
+Binding `credential_generation` независим от поколений endpoint descriptors.
+
+Миграция `20260904000618` хранит installation document watermark, immutable
+mailbox revisions и tombstones. Та же revision допускает только exact digest;
+mailbox content/descriptor change требует новой mailbox revision. Поколение
+binding не понижается. Удалённая mailbox возвращается только с новой revision.
+Новая document revision блокирует старый CP instance read даже при неизменённой
+mailbox revision. Изменение/отключение connection также закрывает чтение.
+Событий нет: authority read идёт в PostgreSQL при каждом разрешении операции.
+
+Deployment-последовательность: создать owner connection, доставить один exact
+документ CP и bridge, перезапустить consumers, проверить protected path.
+Без файла CP не активирует mailbox authorization из оставшегося DB snapshot.
+Mount/delivery этого документа ещё требуется согласовать с root; startup import
+не заменяет delivery и не доказывает работу почтового сервера.
+
+Локальные проверки `email_configuration` disposable PG и Go/race emailpolicy/app:
+PASS. Проверены exact replay, document/mailbox rollback, descriptor commitment,
+binding generation rollback, удаление/возврат, unknown connection, атомарный
+отказ с сохранением прежнего состояния и запрет старого instance read.
+
 ## Оставшийся producer
 
-- Owner mailbox configuration с immutable revision и credential generation.
+- Доставка доверенной mailbox configuration в CP и bridge.
 - Авторизация по текущему claim/grant/gate и проверенному semantic command.
 - Привязка Report к durable receipts и source authorization перед первым write.
 - Worker credential issuance, trust registration и deploy key delivery.

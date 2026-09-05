@@ -81,6 +81,15 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
+	if config.EmailConfigurationFile != "" {
+		raw, err := readBoundedFileLimit(config.EmailConfigurationFile, 24<<20)
+		if err != nil {
+			return fmt.Errorf("read email configuration: %w", err)
+		}
+		if err := repository.ConfigureEmail(startup, raw); err != nil {
+			return fmt.Errorf("configure email projection: %w", err)
+		}
+	}
 	skillScanner, err := skillscanclient.New(config.SkillScannerSocket, config.SkillScannerTimeout)
 	if err != nil {
 		return fmt.Errorf("construct skill scanner: %w", err)
@@ -343,17 +352,21 @@ func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger
 }
 
 func readBoundedFile(path string) ([]byte, error) {
+	return readBoundedFileLimit(path, maximumSecretFileBytes)
+}
+
+func readBoundedFileLimit(path string, maximum int64) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, errors.New("open protected file")
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximumSecretFileBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximum {
 		return nil, errors.New("protected file is invalid")
 	}
-	value, err := io.ReadAll(io.LimitReader(file, maximumSecretFileBytes+1))
-	if err != nil || len(value) == 0 || len(value) > maximumSecretFileBytes {
+	value, err := io.ReadAll(io.LimitReader(file, maximum+1))
+	if err != nil || len(value) == 0 || int64(len(value)) > maximum {
 		return nil, errors.New("read protected file")
 	}
 	return value, nil

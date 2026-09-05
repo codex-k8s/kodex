@@ -189,6 +189,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("email worker watermark rejects rollback", func(t *testing.T) {
 		testEmailWorkerWatermark(t, ctx, repository)
 	})
+	t.Run("email configuration is immutable and revokes old readers", func(t *testing.T) {
+		testEmailConfiguration(t, ctx, repository)
+	})
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
 	})

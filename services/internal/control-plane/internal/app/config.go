@@ -78,6 +78,7 @@ type Config struct {
 	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
 	EmailGrantTrustFile             string        `env:"CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE"`
+	EmailConfigurationFile          string        `env:"CONTROL_PLANE_EMAIL_CONFIGURATION_FILE"`
 	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
 	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
@@ -222,6 +223,9 @@ func (config Config) validate() error {
 	}
 	if config.EmailGrantTrustFile != "" && (!filepath.IsAbs(config.EmailGrantTrustFile) || filepath.Clean(config.EmailGrantTrustFile) != config.EmailGrantTrustFile) {
 		return errors.New("control-plane email grant trust path is invalid")
+	}
+	if config.EmailConfigurationFile != "" && (!filepath.IsAbs(config.EmailConfigurationFile) || filepath.Clean(config.EmailConfigurationFile) != config.EmailConfigurationFile) {
+		return errors.New("control-plane email configuration path is invalid")
 	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
 		config.NATSTLSServerName == "" || net.ParseIP(config.NATSTLSServerName) != nil || config.NATSURL == "" ||
