@@ -14,7 +14,7 @@ func (server *Server) GetRuntimeSecretImpact(ctx context.Context, request *contr
 	if err != nil {
 		return nil, err
 	}
-	result, err := server.service.GetRuntimeSecretImpact(ctx, p, request.GetSecretRef(), request.GetRevision(), query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
+	result, err := server.service.GetRuntimeSecretImpact(ctx, p, request.GetSecretRef(), request.GetRevision(), request.GetQuery(), query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
 	if err != nil {
 		return nil, transportError(err)
 	}

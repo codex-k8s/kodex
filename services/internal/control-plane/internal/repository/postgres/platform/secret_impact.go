@@ -6,7 +6,9 @@ import (
 	"errors"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -53,7 +55,11 @@ func (repository *Repository) secretImpactTarget(ctx context.Context, tx pgx.Tx,
 	return result, projectRef, nil
 }
 
-func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, page query.Page) (entity.RuntimeSecretImpact, error) {
+func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, search string, page query.Page) (entity.RuntimeSecretImpact, error) {
+	search = strings.TrimSpace(search)
+	if !utf8.ValidString(search) || utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
+		return entity.RuntimeSecretImpact{}, errs.ErrInvalid
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	current, err := repository.resolveScope(ctx, principal)
@@ -69,13 +75,13 @@ func (repository *Repository) GetRuntimeSecretImpact(ctx context.Context, princi
 	if err != nil {
 		return result, err
 	}
-	filter := query.Filter{Query: ref, Category: strconv.FormatInt(result.TargetRevision, 10), Page: page}
+	filter := query.Filter{ResourceRef: ref, Query: search, Category: strconv.FormatInt(result.TargetRevision, 10), Page: page}
 	cursor, err := decodeCatalogCursor(current, "SECRET_IMPACT", filter)
 	if err != nil {
 		return result, err
 	}
 	limit := boundedPage(page)
-	rows, err := tx.Query(ctx, querySecretImpactConsumers, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID,
+	rows, err := tx.Query(ctx, querySecretImpactConsumers, pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "query": search,
 		"authority_project": current.authorityProjectID, "secret_ref": ref, "target_revision": result.TargetRevision, "evaluated_at": time.Now().UTC(), "cursor_ref": cursor, "page_size": limit + 1})
 	if err != nil {
 		return result, errs.ErrUnavailable

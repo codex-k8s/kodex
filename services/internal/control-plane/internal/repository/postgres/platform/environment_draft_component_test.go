@@ -131,16 +131,23 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 			t.Fatalf("publication changed pinned consumer: %v", err)
 		}
 	}
-	impact, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, newVersion.RuntimeEnvironment.CurrentVersion.Ref, query.Page{Size: 1})
+	impact, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, newVersion.RuntimeEnvironment.CurrentVersion.Ref, "", query.Page{Size: 1})
 	if err != nil || impact.Total != 2 || len(impact.Consumers) != 1 || impact.NextPageToken == "" {
 		t.Fatalf("impact first page: %#v %v", impact, err)
 	}
-	lastPage, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, newVersion.RuntimeEnvironment.CurrentVersion.Ref, query.Page{Size: 1, Token: impact.NextPageToken})
+	lastPage, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, newVersion.RuntimeEnvironment.CurrentVersion.Ref, "", query.Page{Size: 1, Token: impact.NextPageToken})
 	if err != nil || lastPage.Total != 2 || len(lastPage.Consumers) != 1 || lastPage.NextPageToken != "" || lastPage.Consumers[0].AgentRef == impact.Consumers[0].AgentRef {
 		t.Fatalf("impact last page: %#v %v", lastPage, err)
 	}
-	if _, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, target.CurrentVersion.Ref, query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+	if _, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, target.CurrentVersion.Ref, "", query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("impact cursor crossed target revision: %v", err)
+	}
+	if _, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, impact.TargetVersionRef, "changed", query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("impact cursor crossed search: %v", err)
+	}
+	filtered, err := service.GetRuntimeEnvironmentImpact(ctx, owner, target.Ref, impact.TargetVersionRef, impact.Consumers[0].AgentRef, query.Page{Size: 1})
+	if err != nil || filtered.Total != 1 || len(filtered.Consumers) != 1 || filtered.NextPageToken != "" {
+		t.Fatalf("environment impact SQL search: total=%d err=%v", filtered.Total, err)
 	}
 	selections := append(impact.Consumers, lastPage.Consumers...)
 	staleSelections := append([]entity.RuntimeEnvironmentConsumer(nil), selections...)

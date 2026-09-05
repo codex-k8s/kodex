@@ -3865,6 +3865,7 @@ message GetRuntimeEnvironmentImpactRequest {
   string environment_ref = 1;
   string version_ref = 2;
   PageRequest page = 3;
+  string query = 4;
 }
 message GetRuntimeEnvironmentImpactResponse {
   string environment_ref = 1;
@@ -3939,6 +3940,7 @@ message GetRuntimeSecretImpactRequest {
   string secret_ref = 1;
   int64 revision = 2;
   PageRequest page = 3;
+  string query = 4;
 }
 message GetRuntimeSecretImpactResponse {
   string secret_ref = 1;

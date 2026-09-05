@@ -76,16 +76,23 @@ WHERE project.name='Role image promotion' AND image.promotion_state='PROMOTED' A
 		}
 	}
 	recoverOld("KEEP")
-	impact, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, query.Page{Size: 1})
+	impact, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, "", query.Page{Size: 1})
 	if err != nil || impact.Total != 2 || len(impact.Consumers) != 1 || impact.NextPageToken == "" {
 		t.Fatalf("secret impact page: total=%d count=%d %v", impact.Total, len(impact.Consumers), err)
 	}
-	next, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, query.Page{Size: 1, Token: impact.NextPageToken})
+	next, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, "", query.Page{Size: 1, Token: impact.NextPageToken})
 	if err != nil || len(next.Consumers) != 1 || next.Consumers[0].Consumer.AgentRef == impact.Consumers[0].Consumer.AgentRef {
 		t.Fatalf("secret impact cursor: %v", err)
 	}
-	if _, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, 1, query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+	if _, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, 1, "", query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("secret target cursor reused: %v", err)
+	}
+	if _, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, "changed", query.Page{Size: 1, Token: impact.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("secret impact cursor crossed search: %v", err)
+	}
+	filtered, err := service.GetRuntimeSecretImpact(ctx, owner, secret.Ref, rotated.CurrentRevision, impact.Consumers[0].Consumer.AgentRef, query.Page{Size: 1})
+	if err != nil || filtered.Total != 1 || len(filtered.Consumers) != 1 || filtered.NextPageToken != "" {
+		t.Fatalf("secret impact SQL search: total=%d err=%v", filtered.Total, err)
 	}
 	selection := entity.RuntimeSecretRebindSelection{EnvironmentRef: environment.Ref, ExpectedEnvironmentVersion: environment.Version, SourceVersionRef: environment.CurrentVersion.Ref, Consumers: append([]entity.RuntimeEnvironmentConsumer(nil), consumers...)}
 	selection.Consumers[1].BindingVersion++
