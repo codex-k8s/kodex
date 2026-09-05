@@ -12,6 +12,9 @@ import (
 
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
+	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
+		_, err := repository.writeBackCommandAuthority(ctx, tx, current, input)
+		return err
 	case command.ConfigureRoleImageGitSource, command.ConfigureIntegrationDefinitionGitSource, command.RefreshRoleImageGitSource, command.RefreshIntegrationDefinitionGitSource:
 		_, err := repository.configurationSourceAuthority(ctx, tx, current, input)
 		return err

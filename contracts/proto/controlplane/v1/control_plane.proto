@@ -6545,6 +6545,7 @@ message BeginManagedConfigurationGitWriteBackEffectRequest {
   string candidate_blob_sha = 5;
   string parent_commit_sha = 6;
   string content_sha256 = 7;
+  string base_blob_sha = 8;
 }
 // Повтор Begin возвращает already_started=true и не разрешает повторный effect.
 message BeginManagedConfigurationGitWriteBackEffectResponse {

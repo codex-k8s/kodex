@@ -32,7 +32,14 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 64 and .policy.authority_abi_version == 2 and
+	.policy_revision == 65 and .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id | startswith("platform.configuration-writebacks.work.")) |
+    select(.caller_workload_id == "integration-gateway" and .target_workload_id == "control-plane" and .project_required == false and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 5 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.query.configuration-writebacks.get" or .operation_id == "platform.query.configuration-writebacks.list") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-image-writebacks.prepare" or .operation_id == "platform.command.integration-definition-writebacks.prepare" or .operation_id == "platform.command.configuration-writebacks.approve" or .operation_id == "platform.command.configuration-writebacks.reject" or .operation_id == "platform.command.configuration-writebacks.cancel") |
+    select(.request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"} and .project_required == false)] | length) == 5 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.agent-effective-capabilities.get" and
     .full_method == "/controlplane.v1.PlatformQueryService/GetAgentEffectiveCapabilities" and
     .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"} and .project_required == false)] | length) == 1 and

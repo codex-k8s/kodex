@@ -58,6 +58,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
+	if action == "DETACH" {
+		if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, configuration.Ref, ""); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	if (action == "CREATE" || action == "SAVE" || action == "DISCARD" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -260,6 +265,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				})
 				if resolveErr != nil || repository.requireAccess(ctx, tx, current, "integration.manage", connection) != nil {
 					return commandOutcome{}, errs.ErrNotFound
+				}
+				if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, "", consumer.Ref); err != nil {
+					return commandOutcome{}, err
 				}
 			}
 			var allowed bool

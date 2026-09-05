@@ -63813,6 +63813,7 @@ type BeginManagedConfigurationGitWriteBackEffectRequest struct {
 	CandidateBlobSha   string                                 `protobuf:"bytes,5,opt,name=candidate_blob_sha,json=candidateBlobSha,proto3" json:"candidate_blob_sha,omitempty"`
 	ParentCommitSha    string                                 `protobuf:"bytes,6,opt,name=parent_commit_sha,json=parentCommitSha,proto3" json:"parent_commit_sha,omitempty"`
 	ContentSha256      string                                 `protobuf:"bytes,7,opt,name=content_sha256,json=contentSha256,proto3" json:"content_sha256,omitempty"`
+	BaseBlobSha        string                                 `protobuf:"bytes,8,opt,name=base_blob_sha,json=baseBlobSha,proto3" json:"base_blob_sha,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -63892,6 +63893,13 @@ func (x *BeginManagedConfigurationGitWriteBackEffectRequest) GetParentCommitSha(
 func (x *BeginManagedConfigurationGitWriteBackEffectRequest) GetContentSha256() string {
 	if x != nil {
 		return x.ContentSha256
+	}
+	return ""
+}
+
+func (x *BeginManagedConfigurationGitWriteBackEffectRequest) GetBaseBlobSha() string {
+	if x != nil {
+		return x.BaseBlobSha
 	}
 	return ""
 }
@@ -69163,7 +69171,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"0RenewManagedConfigurationGitWriteBackWorkRequest\x12L\n" +
 	"\x05lease\x18\x01 \x01(\v26.controlplane.v1.ManagedConfigurationGitWriteBackLeaseR\x05lease\"\x81\x01\n" +
 	"1RenewManagedConfigurationGitWriteBackWorkResponse\x12L\n" +
-	"\x05lease\x18\x01 \x01(\v26.controlplane.v1.ManagedConfigurationGitWriteBackLeaseR\x05lease\"\xb4\x03\n" +
+	"\x05lease\x18\x01 \x01(\v26.controlplane.v1.ManagedConfigurationGitWriteBackLeaseR\x05lease\"\xd8\x03\n" +
 	"2BeginManagedConfigurationGitWriteBackEffectRequest\x12L\n" +
 	"\x05lease\x18\x01 \x01(\v26.controlplane.v1.ManagedConfigurationGitWriteBackLeaseR\x05lease\x12O\n" +
 	"\x06effect\x18\x02 \x01(\x0e27.controlplane.v1.ManagedConfigurationGitWriteBackEffectR\x06effect\x120\n" +
@@ -69171,7 +69179,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12candidate_tree_sha\x18\x04 \x01(\tR\x10candidateTreeSha\x12,\n" +
 	"\x12candidate_blob_sha\x18\x05 \x01(\tR\x10candidateBlobSha\x12*\n" +
 	"\x11parent_commit_sha\x18\x06 \x01(\tR\x0fparentCommitSha\x12%\n" +
-	"\x0econtent_sha256\x18\a \x01(\tR\rcontentSha256\"\xad\x01\n" +
+	"\x0econtent_sha256\x18\a \x01(\tR\rcontentSha256\x12\"\n" +
+	"\rbase_blob_sha\x18\b \x01(\tR\vbaseBlobSha\"\xad\x01\n" +
 	"3BeginManagedConfigurationGitWriteBackEffectResponse\x12M\n" +
 	"\bproposal\x18\x01 \x01(\v21.controlplane.v1.ManagedConfigurationGitWriteBackR\bproposal\x12'\n" +
 	"\x0falready_started\x18\x02 \x01(\bR\x0ealreadyStarted\"\x83\x03\n" +

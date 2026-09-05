@@ -443,6 +443,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	if payload.Ref == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.Ref); err != nil {
+		return commandOutcome{}, err
+	}
 	if input.Kind == command.UpdateConnection {
 		return repository.updateIntegrationConnection(ctx, tx, scope, input.Mutation, payload)
 	}
@@ -760,6 +763,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		}
 	}
 	if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.ConnectionRef); err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.ConnectionRef); err != nil {
 		return commandOutcome{}, err
 	}
 	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)

@@ -193,6 +193,9 @@ func (repository *Repository) changeConfigurationSource(ctx context.Context, tx 
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	payload := input.Payload.(command.ManagedConfigurationGitSourceInput)
+	if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, set.Ref, ""); err != nil {
+		return commandOutcome{}, err
+	}
 	_, configure := configurationSourceCommand(input.Kind)
 	source, readErr := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)
 	if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {

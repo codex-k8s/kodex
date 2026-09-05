@@ -330,6 +330,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.applyAccessCommand(ctx, tx, scope, input)
 	case command.ConfigureRoleImageGitSource, command.ConfigureIntegrationDefinitionGitSource, command.RefreshRoleImageGitSource, command.RefreshIntegrationDefinitionGitSource:
 		return repository.changeConfigurationSource(ctx, tx, scope, input)
+	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
+		return repository.changeConfigurationWriteBack(ctx, tx, scope, input)
 	case command.CreateEmailMailboxDraft, command.SaveEmailMailboxDraft, command.ValidateEmailMailboxDraft,
 		command.PublishEmailMailboxDraft, command.DiscardEmailMailboxDraft:
 		return repository.changeEmailMailbox(ctx, tx, scope, input)

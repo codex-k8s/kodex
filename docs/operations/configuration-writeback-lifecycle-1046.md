@@ -142,3 +142,21 @@ single PR/MR marker, ambiguity/timeout read-only recovery, credential redaction,
 bounded process cleanup и exact environment render. Contract/codegen/policy65,
 Go race/vet/build, Docker и ручной browser scenario фиксируются по фактическому
 SHA как PASS/FAIL/NOT RUN; synthetic не заменяет provider/live приёмку.
+
+## Checkpoint владельца состояния
+
+Migration640 и policy65 реализуют durable proposal, отдельное решение владельца,
+две квитанции эффектов, exact lease и read-only recovery. Accepted raw Git bytes
+сохраняются только после typed validation и проверяются PostgreSQL SHA256;
+источнику без сохранённых bytes требуется обычный refresh. Отзыв connection
+во время эффекта не блокируется: прежний claim закрывается, proposal остаётся
+UNKNOWN_OUTCOME до readback, создание следующего PR после отзыва запрещено.
+
+На неизменённом дереве checkpoint выполнены локально: полный
+`TestBootstrapComponent` — PASS (20,210 с), три пакета CP с `-race`, полный
+`go vet ./...` и `go build ./...` — PASS. PostgreSQL сценарий включает prepare,
+явное approval, exact replay, stale digest/OCC, reject/cancel/expiry, утрату ACK,
+новое поколение read-only claim, две квитанции, неизменность runtime source и
+реальный отзыв connection после BeginEffect. SQL boundary, Proto lint/build и
+policy65 replay — PASS. Git receive-pack, PR/MR consumer, его environment render,
+HTTP/PWA и live provider сценарий — NOT RUN; этот checkpoint не завершает CFG.

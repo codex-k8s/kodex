@@ -1172,6 +1172,10 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 }
 
 func knownCommand(kind command.Kind) bool {
+	switch kind {
+	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
+		return true
+	}
 	if kind == command.ConfigureRoleImageGitSource || kind == command.ConfigureIntegrationDefinitionGitSource || kind == command.RefreshRoleImageGitSource || kind == command.RefreshIntegrationDefinitionGitSource {
 		return true
 	}
