@@ -4,7 +4,7 @@ title: Проекция Skills и памяти runtime-controller
 type: operations
 status: approved
 owner: backend
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -73,20 +73,22 @@ Generated integration registry при конфликте пересоздан и
 проверяет exact Skill file membership, текущие bindings, root actor eligibility,
 lease/fence/generation через существующий ReadExecutionArtifact; read bounded
 32MiB. Его зависимости также перенесены без редактирования owner реализации.
-Сброс CodexSessionID при changed context ещё требуется от owner: сравнить
-context digest с авторитетной предыдущей revision в ClaimExecution, до sealing
-новой revision. Неизменный context сохраняет разрешённый resume. Controller не
-меняет CodexSessionID после проверки owner digest.
+В CP checkpoint `98a71da1e` включён `b20884535`: ClaimExecution получает context
+digest предыдущей revision через принадлежащую session запись session_storage,
+сверяет organization/session и сбрасывает CodexSessionID до sealing новой
+revision при changed/missing context. Неизменный context сохраняет разрешённый
+resume. Controller не меняет CodexSessionID после проверки owner digest.
 
 Shared workspace policy включает `/workspace/context=READ_ONLY`. Producer и
 consumer пересобираются с одной версией shared policy: её digest изменился,
 старый snapshot с четырьмя правилами не принимается. Завершённый WT #1026 не меняется;
 узкие изменения runner находятся в интеграционном WT #1025.
-В CP checkpoint `2bb8df5ba` функция `platform.runtimeWorkspacePolicy()` ещё
-дублирует четыре правила вручную. Owner должен отобразить shared V1 в entity
-либо добавить context RO в том же порядке перед provider auth. До этого claim
-producer несовместим с новым consumer; наличие успешных fake tests не закрывает
-эту интеграционную зависимость.
+CP `8125c13db`, включённый в `98a71da1e`, отображает shared V1 в entity вместе
+с canonical digest. Прежнее расхождение четырёх и пяти правил устранено.
+Для этой проверки runner/controller commits перенесены поверх точного CP
+checkpoint без изменения `services/internal/control-plane`, Proto и generated
+client. Предыдущий `1360c249` сохранён ссылкой
+`kodex-agent/issue-1025-before-cp98a`; завершённые WT #1031 и EMAIL не менялись.
 
 ## Writable readiness
 
@@ -112,6 +114,9 @@ Pod/следующая attempt очищает outbox существующим se
 
 - `TestHydratesTypedContextAndPublishesOnlyExactRecords`: typed mapper, schema,
   digest, scope, attempt и отказ при unsealed drift.
+- `TestOwnerSealedContextResumeSurvivesProtoAndProjection`: Proto roundtrip,
+  owner-selected resume/reset, exact shared workspace digest, материализация
+  Pod и отказ при подмене CodexSessionID после sealing.
 - `TestContextHydrationRejectsInvalidPinsBeforeMaterialization`: nil/provenance,
   invalid timestamp, traversal, oversize и retention.
 - `TestContextArtifactRouteBindsOwnerReadAndDoesNotExposeMismatches`: exact
@@ -137,3 +142,40 @@ CEL проверяется существующей в репозитории в
 актуальные Compile/Program/Eval APIs сверены через Context7 `/cel-expr/cel-go`.
 Это тест конкретной mount boundary, не замена полной Kubernetes admission
 проверки или live rollout. Последние выполняются только по отдельному допуску.
+
+## Проверка CP checkpoint 98a71da1e
+
+Локальная проверка включает controller и runner `go test -race ./...`, shared
+runtimecontract race, controller `go vet ./...` и `go build ./...`.
+CP unit/caster проверяются без правок owner-кода:
+
+```bash
+cd services/internal/control-plane
+go test -race ./internal/repository/postgres/platform ./internal/transport/grpc \
+  -run 'Test(Runtime|CastRuntime)' -count=1
+```
+
+Из корня выполняется disposable PostgreSQL suite:
+
+```bash
+timeout 240s bash scripts/tests/control-plane-postgres-test.sh \
+  '^TestBootstrapComponent$/(memory_records|skill_bundle|direct_run|session_archive|runtime_environment|role_image_promotion)'
+make check-proto-codegen test-authority-policy-codegen test-go-toolchain-contract
+docker build --file services/internal/runtime-controller/Dockerfile \
+  --tag kodex-runtime-controller:issue-1025-cp98a .
+```
+
+PostgreSQL fixture проверяет миграции/reapply, memory/skill lifecycle,
+continuation/cancel/retry, archive restore/GC, exact image admission и pinned
+runtime environment. Это локальный PostgreSQL, не staging. Context7
+`/protocolbuffers/protobuf-go` использован для проверки Proto Marshal/Unmarshal;
+сверяются семантические поля и canonical domain digest, не порядок wire bytes.
+
+Оба Kustomize-профиля проверены отдельно в области controller: non-root,
+read-only root, issuer/grant-agent, readiness, exact network и context admission.
+Общий `make test-web-only-release` на этой интеграции остаётся **FAIL**:
+`release references Kubernetes Secrets without a producer: email-bridge-mailbox-projection`.
+Это отдельная CP/EMAIL integration dependency, а не разрешение скрыть Secret
+allowlist или изменить mailbox policy в controller. Общий release gate требует
+исправления владельцем и повторного запуска на интегрированном SHA.
+Staging, Kubernetes apply/import, live providers и browser E2E: **NOT RUN**.

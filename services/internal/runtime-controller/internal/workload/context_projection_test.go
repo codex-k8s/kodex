@@ -144,6 +144,64 @@ func TestContextHydrationRejectsInvalidPinsBeforeMaterialization(t *testing.T) {
 	}
 }
 
+func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
+	for _, test := range []struct {
+		name, sessionID string
+		context         bool
+	}{
+		{name: "initial", context: true},
+		{name: "unchanged resume", sessionID: "10000000-0000-4000-8000-000000000001", context: true},
+		{name: "changed context resets thread", context: true},
+		{name: "removed context resets thread"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			execution := testExecution(false)
+			if test.context {
+				testContextRevision(execution.Revision)
+			}
+			// Решение о resume принимает CP до sealing, controller его не меняет.
+			execution.Revision.CodexSessionId = test.sessionID
+			sealTestTurnExecution(execution)
+			raw, err := proto.Marshal(execution)
+			if err != nil {
+				t.Fatal(err)
+			}
+			received := &cp.ClaimedExecution{}
+			if err := proto.Unmarshal(raw, received); err != nil {
+				t.Fatal(err)
+			}
+			client := fake.NewSimpleClientset()
+			manager := newTestManager(t, client)
+			input, binding, err := manager.BuildTurnInput(received)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if input.CodexSessionID != test.sessionID || input.RuntimeRevisionDigest != execution.Revision.RevisionDigest {
+				t.Fatal("owner-sealed resume decision changed at consumer boundary")
+			}
+			policy := runtimecontract.RuntimeWorkspacePolicyV1()
+			if input.WorkspacePolicy.Digest != policy.Digest {
+				t.Fatal("producer workspace policy does not match shared consumer policy")
+			}
+			if err := manager.EnsureTurn(t.Context(), input, binding, testCredentialProjection(input)); err != nil {
+				t.Fatal(err)
+			}
+			data, err := runtimeProjectionData(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := runtimecontract.EncodeRunnerInput(input)
+			if err != nil || !strings.Contains(string(encoded), `"context_snapshot"`) || len(data) == 0 {
+				t.Fatal("runtime context did not survive immutable projection")
+			}
+			received.Revision.CodexSessionId = "10000000-0000-4000-8000-000000000002"
+			if _, _, err := manager.BuildTurnInput(received); err == nil {
+				t.Fatal("unsealed resume override was accepted")
+			}
+		})
+	}
+}
+
 func TestContextVolumeSeparatesInitWriterFromRuntimeReaders(t *testing.T) {
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, binding, err := manager.BuildTurnInput(testExecution(false))
