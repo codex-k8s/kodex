@@ -698,6 +698,7 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-instructions"
         >
           <AgentInstructionsPanel
+            :agent-ref="agent.ref"
             :model-value="instructions"
             :project-ref="projectRef"
             :state="instructionState"

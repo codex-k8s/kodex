@@ -232,18 +232,18 @@ AsyncAPI generator также пишет Go-модели; из корня реп
 ## Матрица приёмки MVP #1022
 
 Проверенный накопленный code checkpoint:
-`128223747b7a3e533622eb5c6cd254b479394ad0`.
-Локально PASS: production build с typecheck, unit 815/815 в 168 файлах,
+`f36f9df41ba256ee8581fe8dde045b238d7093b7`.
+Локально PASS: production build с typecheck, unit 821/821 в 168 файлах,
 полный lint, format:check, отдельный TypeScript check E2E и synthetic
-Playwright 12/12. Synthetic покрывает 1280/1440/1920/2560/2900, 900 и 390;
-новые model/history/file-selection сценарии дополнительно выполняются
+Playwright 20/20. Synthetic покрывает 1280/1440/1920/2560/2900, 900 и 390;
+новые model/history/file-selection/impact/voice сценарии выполняются
 на 1440/390. Console/network assertions прошли. Скриншоты этого запуска
-сохранены в `/tmp/kodex-1022-128223747-synthetic.tgz`; это архив локальных
+сохранены в `/tmp/kodex-1022-f36f9df41-synthetic.tgz`; это архив локальных
 безопасных fixtures, не staging и не проверка реального provider.
-Повтор OpenAPI generation на принятом HTTP `11401f0ac` дал пустой generated
+Повтор OpenAPI generation на принятом HTTP `03564b5f4` дал пустой generated
 diff; после него исходный контракт не менялся. CI/live/staging/Safari:
 NOT RUN. Полный unit остаётся незавершённым по перечисленным ниже контрактным
-зависимостям; 12 тестов не означают 61 успешный приёмочный сценарий.
+зависимостям; 20 тестов не означают 61 успешный приёмочный сценарий.
 
 Матрица связывает обязательный scope с кодом и проверками, но не заменяет
 итоговый отчёт exact SHA. Наличие строки не означает завершённую приёмку.
@@ -370,6 +370,65 @@ Fixture `impact.html` не включена в production build. Эти шест
 сценариев проверяют PWA с безопасными HTTP fixtures, не CP SQL или live authority.
 Через Context7 `/websites/vuejs` сверены watcher cleanup, AbortController,
 flush sync и освобождение timers при закрытии/unmount.
+
+### Передача текущего checkpoint D3/D5
+
+Сохранён связный checkpoint предыдущего исполнителя; работа над полным #1022
+продолжается. HTTP D3 `2b7a0c18d` принят как `76ec96f59`,
+exact HTTP D5 `cfb18a17e2048f5056ddd46c8fccbd3f1e18a3d6` как `d53ee870f`.
+Generated SDK вручную не редактировался.
+
+| Критерий                                                                                 | Файл                                                                                                                                      | Проверка                                                                                                            |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| D3 available/reason, точный agent/runtime context, запрет недоступной вставки            | `src/features/agents/detail/{api,model}.ts`, `AgentInstructionsPanel.vue`, `TemplateVariableCatalog.vue`, `src/pages/AgentDetailPage.vue` | `api.test.ts`, `model.test.ts`; `e2e/checkpoint.synthetic.spec.ts` на 1440/390 px                                   |
+| D5 CA/username/auth secret, byte limits, exact OCC/idempotency, safe descriptor          | `src/features/integrations/email-credentials.ts`, `ui/EmailMailboxCredentialPanel.vue`, `src/pages/IntegrationsPage.vue`                  | `email-credentials.test.ts`, `ui/EmailMailboxCredentialPanel.test.ts`; тот же browser scenario                      |
+| Очистка ввода до ответа, отсутствие voice, неизвестный исход без автоматического повтора | Те же D5 файлы                                                                                                                            | Unit: mismatch, поздний ответ после закрытия, redacted error; browser: пустое поле после save, отсутствие микрофона |
+
+Локально для содержимого этого checkpoint: targeted unit **40 PASS / 4 файла**,
+typecheck + production build **PASS**, lint **PASS**. Targeted synthetic
+**2 PASS**: 1440/390 px, screenshots, page overflow, console/network.
+Production build сохраняет предупреждение о главном chunk >500 kB.
+При передаче повторены 40 targeted unit, production build/typecheck,
+lint/format и два synthetic сценария 1440/390: PASS. Для совместимости с
+интеграционной JSON Schema handwritten `PackageFieldSchema.const` допускает
+JSON scalar, включая boolean; schema и generated validator не менялись.
+Полные unit/synthetic, повторный codegen и live/staging на этом checkpoint
+**NOT RUN**; предыдущие полные результаты выше не перенесены на новый SHA.
+
+Воспроизведение из каталога PWA:
+
+```bash
+npm run test:unit -- src/features/agents/detail/api.test.ts src/features/agents/detail/model.test.ts src/features/integrations/email-credentials.test.ts src/features/integrations/ui/EmailMailboxCredentialPanel.test.ts
+npm run build
+npm run lint
+npx vite build --config vite.synthetic.config.ts
+npx playwright test --config playwright.synthetic.config.ts e2e/checkpoint.synthetic.spec.ts
+```
+
+Ручная приёмка: в инструкциях агента открыть каталог, проверить причины
+недоступности и запрет вставки, сменить контекст и поиск. В деталях EMAIL
+поочерёдно отправить три типа credential, проверить пустое поле после отправки,
+safe descriptor и новую connection version после authoritative refresh.
+Пробелы не обрезаются; CR/LF допустимы только в CA. При сетевой неопределённости
+команда не повторяется сама: повтор требует заново введённого точного значения,
+сохраняет исходные If-Match и Idempotency-Key. Значение и digest не сохраняются
+в browser storage/Pinia/логах; digest попытки существует только в памяти формы.
+
+Остаток для нового manager:
+
+- D3 не заменяет effective user∩agent capability projection. Каталог готовности
+  не доказывает runtime materialization; D4 exact target/diff остаётся зависимостью.
+- D5 credential сохранён отдельно от mailbox publication: D5-config отсутствует.
+  После закрытия/перезагрузки формы теряется контекст неопределённой попытки;
+  durable recovery/read path требует отдельного согласованного решения, без
+  сохранения credential или имитации authoritative receipt.
+- D2: version/digest model catalog и persisted reasoning effort; D4: exact
+  AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview и RuntimeRevision diff;
+  D6: server-side staged SecretDraft lifecycle.
+- Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
+  Home server states, Mattermost selector eligibility, RoleImage ownership/build,
+  UI/GIT IntegrationPackage execution. Полная MVP-UI-01..61 и staging-приёмка
+  остаются незавершёнными; новые блоки в рамках этой передачи не реализовывались.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).

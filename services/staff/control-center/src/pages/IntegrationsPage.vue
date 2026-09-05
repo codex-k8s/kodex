@@ -47,6 +47,7 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import InteractionIdentitiesPanel from "@/features/integrations/ui/InteractionIdentitiesPanel.vue";
 import EmailEffectPanel from "@/features/integrations/ui/EmailEffectPanel.vue";
+import EmailMailboxCredentialPanel from "@/features/integrations/ui/EmailMailboxCredentialPanel.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
@@ -220,6 +221,7 @@ const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
+const mailboxCredentialBusy = ref(false);
 const route = useRoute();
 let detailsGeneration = 0;
 const returnedInvocationRef = computed(() =>
@@ -975,6 +977,7 @@ onBeforeUnmount(() => {
     <ModalDialog
       v-if="detailsConnection"
       :title="detailsConnection.name"
+      :busy="mailboxCredentialBusy"
       size="xl"
       @close="detailsConnection = undefined"
     >
@@ -1004,6 +1007,13 @@ onBeforeUnmount(() => {
         v-if="detailsConnection.definitionKey === 'mattermost'"
         :key="detailsConnection.ref"
         :connection="detailsConnection"
+      />
+      <EmailMailboxCredentialPanel
+        v-if="detailsConnection.definitionKey === 'email'"
+        :key="detailsConnection.ref"
+        :connection="detailsConnection"
+        @saved="refreshConnectionDetails"
+        @busy="mailboxCredentialBusy = $event"
       />
       <EmailEffectPanel
         v-if="detailsConnection.definitionKey === 'email'"

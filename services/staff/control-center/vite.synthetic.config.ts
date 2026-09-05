@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        checkpoint: fileURLToPath(
+          new URL("./e2e/fixtures/checkpoint.html", import.meta.url),
+        ),
         application: fileURLToPath(new URL("./index.html", import.meta.url)),
         voice: fileURLToPath(
           new URL("./e2e/fixtures/voice.html", import.meta.url),

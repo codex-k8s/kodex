@@ -33,6 +33,8 @@ describe("agent detail api", () => {
         items: [
           {
             name: "runtime.environment.tools",
+            available: true,
+            reason: "AVAILABLE",
             valueType: "collection",
             description: "Разрешённые инструменты",
             example:
@@ -41,6 +43,7 @@ describe("agent detail api", () => {
           },
         ],
         nextPageToken: "runtime.environment.tools",
+        total: 1,
       },
     });
     const signal = new AbortController().signal;
@@ -72,6 +75,37 @@ describe("agent detail api", () => {
     });
     expect(page.nextCursor).toBe("runtime.environment.tools");
   });
+
+  it("передаёт точный контекст агента и immutable runtime revision", async () => {
+    listTemplateVariables.mockResolvedValue({ data: { items: [], total: 0 } });
+    const signal = new AbortController().signal;
+    await createTemplateVariableLoader("project_sales", {
+      agentRef: "agent_sales",
+      runtimeRevisionRef: "revision_exact",
+    })({ query: "", signal });
+    expect(listTemplateVariables).toHaveBeenCalledWith({
+      path: { projectRef: "project_sales" },
+      query: {
+        pageSize: 50,
+        agentRef: "agent_sales",
+        runtimeRevisionRef: "revision_exact",
+      },
+      signal,
+    });
+  });
+
+  it.each([undefined, -1, 0.5])(
+    "отклоняет некорректный total %j",
+    async (total) => {
+      listTemplateVariables.mockResolvedValue({ data: { items: [], total } });
+      await expect(
+        createTemplateVariableLoader("project_sales")({
+          query: "",
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow();
+    },
+  );
 
   it("получает synthetic materialized preview без локальной подстановки", async () => {
     previewPromptTemplate.mockResolvedValue({
