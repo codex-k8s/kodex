@@ -16,7 +16,91 @@ import (
 // Каждый advertised operation обязан иметь отдельный положительный сценарий.
 func catalogInputs() map[string]string {
 	return map[string]string{
-		"github.repository.metadata.read": `{}`, "github.issue.list": `{"limit":1,"cursor":2}`,
+		"github.pull_request.file.list":        `{"pull_request_number":3,"limit":1,"cursor":2}`,
+		"gitlab.merge_request.diff.list":       `{"merge_request_iid":3,"limit":1,"cursor":2}`,
+		"confluence.space.list":                `{}`,
+		"confluence.page.descendant.list":      `{"page_id":"3","limit":1,"cursor":"cursor-2"}`,
+		"confluence.page.comment.list":         `{"page_id":"3","limit":1,"cursor":"cursor-2"}`,
+		"confluence.page.comment.read":         `{"page_id":"3","comment_id":"4"}`,
+		"confluence.page.comment.create":       `{"page_id":"3","body":"Text"}`,
+		"confluence.page.comment.update":       `{"page_id":"3","comment_id":"4","expected_version":1,"body":"Text"}`,
+		"confluence.page.comment.delete":       `{"page_id":"3","comment_id":"4","expected_version":1}`,
+		"confluence.attachment.list":           `{"page_id":"3","limit":1,"cursor":"cursor-2"}`,
+		"confluence.attachment.read":           `{"page_id":"3","attachment_id":"4"}`,
+		"confluence.attachment.delete":         `{"page_id":"3","attachment_id":"4"}`,
+		"jira.project.user.search":             `{"query":"test","limit":1,"cursor":1}`,
+		"jira.project.user.read":               `{"account_id":"account-4"}`,
+		"jira.issue.transition.list":           `{"issue_key":"OPS-3"}`,
+		"jira.issue.transition.apply":          `{"issue_key":"OPS-3","transition_id":"4"}`,
+		"jira.issue.comment.list":              `{"issue_key":"OPS-3","limit":1,"cursor":1}`,
+		"jira.issue.comment.read":              `{"issue_key":"OPS-3","comment_id":"4"}`,
+		"jira.issue.comment.update":            `{"issue_key":"OPS-3","comment_id":"4","body":"Text"}`,
+		"jira.issue.comment.delete":            `{"issue_key":"OPS-3","comment_id":"4"}`,
+		"jira.issue.link.list":                 `{"issue_key":"OPS-3"}`,
+		"jira.issue.link.read":                 `{"issue_key":"OPS-3","link_id":"4"}`,
+		"jira.issue.link.delete":               `{"issue_key":"OPS-3","link_id":"4"}`,
+		"jira.attachment.list":                 `{"issue_key":"OPS-3"}`,
+		"jira.attachment.read":                 `{"issue_key":"OPS-3","attachment_id":"4"}`,
+		"jira.attachment.upload":               `{"issue_key":"OPS-3","file_name":"a.txt","media_type":"text/plain","content_base64":"VGV4dA=="}`,
+		"jira.attachment.delete":               `{"issue_key":"OPS-3","attachment_id":"4"}`,
+		"gitlab.branch.list":                   `{"limit":1,"cursor":2}`,
+		"gitlab.branch.read":                   `{"branch":"main"}`,
+		"gitlab.branch.delete":                 `{"branch":"feature"}`,
+		"gitlab.commit.list":                   `{"ref":"main","limit":1,"cursor":2}`,
+		"gitlab.commit.read":                   `{"ref":"abc"}`,
+		"gitlab.commit.diff":                   `{"ref":"abc","limit":1,"cursor":2}`,
+		"gitlab.repository.tree.list":          `{"ref":"main","limit":1,"cursor":2}`,
+		"gitlab.issue.note.list":               `{"issue_iid":3,"limit":1,"cursor":2}`,
+		"gitlab.issue.note.read":               `{"issue_iid":3,"note_id":4}`,
+		"gitlab.issue.note.create":             `{"issue_iid":3,"body":"Text"}`,
+		"gitlab.issue.note.update":             `{"issue_iid":3,"note_id":4,"body":"Text"}`,
+		"gitlab.issue.note.delete":             `{"issue_iid":3,"note_id":4}`,
+		"gitlab.merge_request.list":            `{"limit":1,"cursor":2}`,
+		"gitlab.merge_request.update":          `{"merge_request_iid":3,"title":"Title"}`,
+		"gitlab.merge_request.merge":           `{"merge_request_iid":3,"sha":"abc"}`,
+		"gitlab.merge_request.discussion.list": `{"merge_request_iid":3,"limit":1,"cursor":2}`,
+		"gitlab.pipeline.list":                 `{"limit":1,"cursor":2}`,
+		"gitlab.pipeline.cancel":               `{"pipeline_id":3}`,
+		"gitlab.job.list":                      `{"pipeline_id":3,"limit":1,"cursor":2}`,
+		"gitlab.job.read":                      `{"job_id":4}`,
+		"gitlab.job.retry":                     `{"job_id":4}`,
+		"gitlab.job.cancel":                    `{"job_id":4}`,
+		"gitlab.job.trace.read":                `{"job_id":4}`,
+		"github.repository.content.list":       `{"path":"src","ref":"main"}`,
+		"github.repository.content.read":       `{"path":"src/a.txt","ref":"main"}`,
+		"github.repository.content.create":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA=="}`,
+		"github.repository.content.update":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA==","sha":"abc"}`,
+		"github.repository.content.delete":     `{"path":"src/a.txt","branch":"main","message":"Change","sha":"abc"}`,
+		"github.branch.list":                   `{"limit":1,"cursor":2}`,
+		"github.branch.read":                   `{"branch":"main"}`,
+		"github.branch.create":                 `{"branch":"feature","sha":"abc"}`,
+		"github.branch.delete":                 `{"branch":"feature"}`,
+		"github.commit.list":                   `{"ref":"main","limit":1,"cursor":2}`,
+		"github.commit.read":                   `{"ref":"abc"}`,
+		"github.pull_request.list":             `{"limit":1,"cursor":2}`,
+		"github.pull_request.read":             `{"pull_request_number":3}`,
+		"github.pull_request.create":           `{"title":"Title","head":"feature","base":"main"}`,
+		"github.pull_request.update":           `{"pull_request_number":3,"title":"Title"}`,
+		"github.pull_request.merge":            `{"pull_request_number":3,"sha":"abc","merge_method":"merge"}`,
+		"github.pull_request.review.list":      `{"pull_request_number":3,"limit":1,"cursor":2}`,
+		"github.pull_request.review.read":      `{"pull_request_number":3,"review_id":4}`,
+		"github.pull_request.review.create":    `{"pull_request_number":3,"sha":"abc","event":"COMMENT","body":"Text"}`,
+		"github.issue.comment.list":            `{"issue_number":3,"limit":1,"cursor":2}`,
+		"github.issue.comment.read":            `{"issue_number":3,"comment_id":4}`,
+		"github.issue.comment.update":          `{"issue_number":3,"comment_id":4,"body":"Text"}`,
+		"github.issue.comment.delete":          `{"issue_number":3,"comment_id":4}`,
+		"github.check_run.list":                `{"ref":"abc","limit":1,"cursor":2}`,
+		"github.check_run.read":                `{"check_run_id":4}`,
+		"github.actions.workflow.list":         `{"limit":1,"cursor":2}`,
+		"github.actions.workflow.read":         `{"workflow_id":4}`,
+		"github.actions.workflow.dispatch":     `{"workflow_id":4,"ref":"main"}`,
+		"github.actions.run.list":              `{"limit":1,"cursor":2}`,
+		"github.actions.run.read":              `{"run_id":4}`,
+		"github.actions.run.rerun":             `{"run_id":4}`,
+		"github.actions.run.cancel":            `{"run_id":4}`,
+		"github.actions.job.list":              `{"run_id":4,"limit":1,"cursor":2}`,
+		"github.actions.job.read":              `{"run_id":4,"job_id":5}`,
+		"github.repository.metadata.read":      `{}`, "github.issue.list": `{"limit":1,"cursor":2}`,
 		"github.issue.read": `{"issue_number":3}`, "github.issue.create": `{"title":"Title"}`,
 		"github.issue.update": `{"issue_number":3,"title":"Title"}`, "github.issue.comment.create": `{"issue_number":3,"body":"Text"}`,
 		"gitlab.project.metadata.read": `{}`, "gitlab.repository.file.read": `{"file_path":"a.txt","ref":"main"}`,
@@ -39,6 +123,24 @@ func catalogInputs() map[string]string {
 		"confluence.attachment.upload": `{"page_id":"3","file_name":"a.txt","media_type":"text/plain","content_base64":"VGV4dA=="}`,
 		"email.delivery.health.read":   `{}`, "email.message.send": `{"to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
 		"email.message.status.read": `{"message_id":"3"}`,
+		"email.mailbox.list":        `{}`,
+		"email.message.list":        `{"cursor":"cursor-2"}`,
+		"email.message.search":      `{"query":"Title","cursor":"cursor-2"}`,
+		"email.message.read":        `{"uid":"uid-1"}`,
+		"email.attachment.read":     `{"uid":"uid-1","attachment_index":0}`,
+		"email.message.reply":       `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1"}`,
+		"email.message.reply_all":   `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1","cc":"[\"copy@example.test\"]"}`,
+		"email.message.forward":     `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1","attachments":"[{\"filename\":\"a.txt\",\"content_type\":\"text/plain\",\"content_base64\":\"VGV4dA==\"}]"}`,
+		"email.message.delete":      `{"uid":"uid-1"}`,
+		"email.thread.read":         `{"thread_id":"source@example.test"}`,
+		"email.attachment.list":     `{"uid":"1","uid_validity":1}`,
+		"email.message.mark_read":   `{"uid":"1","uid_validity":1}`,
+		"email.message.mark_unread": `{"uid":"1","uid_validity":1}`,
+		"email.message.move":        `{"uid":"1","uid_validity":1,"destination_folder":"Archive"}`,
+		"email.message.archive":     `{"uid":"1","uid_validity":1}`,
+		"email.draft.create":        `{"to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
+		"email.draft.update":        `{"uid":"1","uid_validity":1,"expected_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
+		"email.draft.delete":        `{"uid":"1","uid_validity":1}`,
 		"synthetic.journal.read":    `{}`, "synthetic.journal.write": `{"value":"Text"}`,
 	}
 }
@@ -77,12 +179,16 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 						synthetic.ServeHTTP(w, r)
 						return
 					}
-					if r.Header.Get("Authorization") != "Bearer test-token" {
+					expectedToken := "Bearer test-token"
+					if key == "email" {
+						expectedToken = "Bearer fixture-fence"
+					}
+					if r.Header.Get("Authorization") != expectedToken {
 						t.Error("missing authorization")
 					}
 					body := catalogResponse(t, key, capability.Operation, r)
 					w.Header().Set("Content-Type", "application/json")
-					if capability.Operation == "github.issue.list" {
+					if key == "github" && strings.HasSuffix(capability.Operation, ".list") && capability.Operation != "github.repository.content.list" {
 						w.Header().Set("Link", `<https://api.github.com/repos/acme/repo/issues?page=3>; rel="next"`)
 					}
 					_, _ = io.WriteString(w, body)
@@ -93,7 +199,11 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 				adapter.syntheticBaseURL = mustParseURL(t, server.URL)
 				adapter.syntheticClient = server.Client()
 				adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-					if r.URL.Scheme != "https" || r.URL.Host != key+".example.test" {
+					expectedHost := key + ".example.test"
+					if key == "email" {
+						expectedHost = "email-bridge.kodex-system.svc.cluster.local"
+					}
+					if r.URL.Scheme != "https" || r.URL.Host != expectedHost {
 						t.Error("provider escaped configured origin")
 					}
 					clone := r.Clone(r.Context())
@@ -103,12 +213,13 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 					clone.URL = &endpoint
 					return server.Client().Transport.RoundTrip(clone)
 				})}
+				adapter.emailHTTPClient = adapter.providerHTTPClient
 				request := invocationRequest(t, definition, capability.Key, input, credential)
 				result, err := adapter.Execute(t.Context(), request)
 				if err != nil || calls == 0 || result.Receipt.EffectKey != request.EffectKey || result.Receipt.InputDigest != request.InputDigest {
 					t.Fatalf("operation result: %v, calls=%d", err, calls)
 				}
-				if strings.HasSuffix(capability.Operation, ".search") || strings.HasSuffix(capability.Operation, ".list") {
+				if capability.Operation != "email.mailbox.list" && capability.Operation != "email.attachment.list" && (strings.HasSuffix(capability.Operation, ".search") || strings.HasSuffix(capability.Operation, ".list")) && request.Input["cursor"] != nil {
 					if !strings.Contains(result.Summary, "next_cursor") {
 						t.Fatal("pagination cursor lost")
 					}
@@ -120,6 +231,18 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 
 func catalogResponse(t *testing.T, provider, operation string, r *http.Request) string {
 	t.Helper()
+	if body, ok := confluenceExtendedResponse(t, operation, r); ok {
+		return body
+	}
+	if body, ok := jiraExtendedResponse(t, operation, r); ok {
+		return body
+	}
+	if body, ok := gitLabExtendedResponse(t, operation, r); ok {
+		return body
+	}
+	if body, ok := githubExtendedResponse(t, operation, r); ok {
+		return body
+	}
 	path := r.URL.Path
 	switch provider {
 	case "github":
@@ -230,8 +353,20 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 		}
 		return page
 	case "email":
-		if path == "/v1/health" {
+		if operation == "email.delivery.health.read" {
 			return `{"status":"ready"}`
+		}
+		if operation == "email.message.delete" || operation == "email.draft.delete" {
+			return `{"message_id":"3","status":"deleted"}`
+		}
+		if operation == "email.mailbox.list" {
+			return `{"status":"ok","mailboxes":["mailbox"]}`
+		}
+		if operation == "email.message.list" || operation == "email.message.search" || operation == "email.thread.read" {
+			return `{"status":"ok","headers":[{"uid":"uid-1","from":"sender@example.test","to":"recipient@example.test","subject":"Title","size":10}],"next_cursor":"cursor-3"}`
+		}
+		if operation == "email.message.read" || operation == "email.attachment.read" || operation == "email.attachment.list" {
+			return `{"status":"ok","body_text":"Text","attachments":[{"filename":"a.txt","content_type":"text/plain","content_base64":"VGV4dA=="}]}`
 		}
 		return `{"message_id":"3","status":"accepted"}`
 	}
@@ -242,7 +377,7 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		provider := strings.Split(operation, ".")[0]
-		if provider == "github" || provider == "synthetic" {
+		if provider == "synthetic" {
 			continue
 		}
 		adapter := testAdapter(t)
@@ -254,7 +389,7 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			credential := testCredential(t, adapter, "test-token")
 			mutations := 0
-			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				if r.Method != "GET" {
 					mutations++
 					if r.GetBody != nil {
@@ -265,8 +400,13 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 				if strings.Contains(r.URL.Path, "by-idempotency-key") {
 					return nil, errors.New("reconciliation unavailable")
 				}
-				return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(catalogResponse(t, provider, operation, r)))}, nil
+				body := catalogResponse(t, provider, operation, r)
+				if operation == "github.issue.update" {
+					body = strings.ReplaceAll(body, `"title":"Title"`, `"title":"Before"`)
+				}
+				return &http.Response{Request: r, StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
 			})}
+			adapter.providerHTTPClient, adapter.githubHTTPClient, adapter.emailHTTPClient = client, client, client
 			var input map[string]any
 			_ = json.Unmarshal([]byte(raw), &input)
 			_, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential))
@@ -328,10 +468,27 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				response.Body = io.NopCloser(strings.NewReader(body))
 				return response, nil
 			})}
-			adapter.providerHTTPClient, adapter.githubHTTPClient = client, client
+			adapter.providerHTTPClient, adapter.githubHTTPClient, adapter.emailHTTPClient = client, client, client
 			var input map[string]any
 			_ = json.Unmarshal([]byte(raw), &input)
-			if _, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential)); err != nil || calls != 2 {
+			_, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential))
+			if provider == "email" {
+				if err == nil || calls != 1 {
+					t.Fatal("email rate limit must fail closed without retry")
+				}
+				return
+			}
+			expectedCalls := 2
+			if strings.HasPrefix(operation, "confluence.") && operation != "confluence.space.list" && operation != "confluence.space.read" && operation != "confluence.page.read" && operation != "confluence.page.search" {
+				expectedCalls = 3
+			}
+			if operation == "confluence.attachment.read" {
+				expectedCalls = 4
+			}
+			if operation == "github.issue.comment.list" || operation == "github.issue.comment.read" || operation == "jira.attachment.read" {
+				expectedCalls = 3
+			}
+			if err != nil || calls != expectedCalls {
 				t.Fatalf("rate retry err=%v calls=%d", err, calls)
 			}
 		})
@@ -342,12 +499,12 @@ func TestEmailNotReadyCannotSend(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
 	calls := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.Method != "GET" || r.URL.Query().Get("sender") != "sender@example.test" {
+		if r.Method != "POST" || r.URL.Path != "/v1/mailbox-operations" {
 			t.Fatal("email readiness boundary bypassed")
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"status":"not_ready"}`))}, nil
+		return &http.Response{StatusCode: 503, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"code":"UNAVAILABLE"}`))}, nil
 	})}
 	var input map[string]any
 	_ = json.Unmarshal([]byte(catalogInputs()["email.message.send"]), &input)

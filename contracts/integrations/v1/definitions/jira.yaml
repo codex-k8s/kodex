@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira
-  version: 1.1.0
+  version: 1.2.0
   origin: SHIPPED
 spec:
   name: Jira
@@ -126,3 +126,225 @@ spec:
         - {key: outward_issue_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 80}
         - {key: linked, type: BOOLEAN, required: true}
       execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: jira.project.user.search
+      name: Найти назначаемых пользователей проекта
+      description: Найти назначаемых пользователей проекта в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.project.user.search
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"query","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":0,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.project.user.read
+      name: Прочитать назначаемого пользователя проекта
+      description: Прочитать назначаемого пользователя проекта в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.project.user.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"account_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"account_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"display_name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"active","type":"BOOLEAN","required":true}
+        - {"key":"account_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.transition.list
+      name: Получить доступные переходы issue
+      description: Получить доступные переходы issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.transition.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.transition.apply
+      name: Выполнить переход issue
+      description: Выполнить переход issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.transition.apply
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"transition_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: jira.issue.comment.list
+      name: Получить комментарии issue
+      description: Получить комментарии issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.comment.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
+        - {"key":"cursor","type":"INTEGER","required":false,"minimum":0,"maximum":10000}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.comment.read
+      name: Прочитать комментарий
+      description: Прочитать комментарий в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.comment.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.comment.update
+      name: Обновить комментарий
+      description: Обновить комментарий в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.comment.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: jira.issue.comment.delete
+      name: Удалить комментарий
+      description: Удалить комментарий в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.comment.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"comment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: jira.issue.link.list
+      name: Получить связи issue в проекте
+      description: Получить связи issue в проекте в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.link.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.link.read
+      name: Прочитать связь issue в проекте
+      description: Прочитать связь issue в проекте в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.link.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"link_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"inward_issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"outward_issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.issue.link.delete
+      name: Удалить связь issue в проекте
+      description: Удалить связь issue в проекте в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.issue.link.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"link_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: jira.attachment.list
+      name: Получить вложения issue
+      description: Получить вложения issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.attachment.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
+        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
+        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.attachment.read
+      name: Прочитать вложение issue
+      description: Прочитать вложение issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.attachment.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"attachment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"file_name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"media_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":false,"maximumLength":65536,"allowEmpty":true}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+    - key: jira.attachment.upload
+      name: Загрузить вложение issue
+      description: Загрузить вложение issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.attachment.upload
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"file_name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"media_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+      outputFields:
+        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"file_name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":65536}
+        - {"key":"media_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":false,"maximumLength":65536,"allowEmpty":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: jira.attachment.delete
+      name: Удалить вложение issue
+      description: Удалить вложение issue в одном разрешённом проекте с ограниченным результатом и receipt.
+      operation: jira.attachment.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: JIRA_PROJECT, connectionFields: [base_url, project_key]}
+      inputFields:
+        - {"key":"issue_key","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {"key":"attachment_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+      outputFields:
+        - {"key":"accepted","type":"BOOLEAN","required":true}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}

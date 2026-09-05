@@ -1,61 +1,1582 @@
-apiVersion: integrations.kodex.io/v1
-kind: IntegrationPackage
-metadata:
-  key: email
-  version: 1.1.0
-  origin: SHIPPED
-spec:
-  name: Электронная почта
-  description: Отправка писем через provider-neutral HTTPS bridge с нативной идемпотентностью.
-  category: communications
-  adapter: EMAIL_HTTPS
-  adapterOwner: integration-gateway
-  executionRoute: MANAGED_MCP
-  readiness: READY
-  credential: {secretKey: token, kind: TOKEN}
-  configurationFields:
-    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
-    - {key: from_address, type: STRING, format: EMAIL, required: true, maximumLength: 320}
-  networkDestinations:
-    - {key: email_bridge, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
-  healthCheck: {operation: email.delivery.health.read, timeoutSeconds: 15, maxAttempts: 3}
-  capabilities:
-    - key: email.delivery.health.read
-      name: Проверить готовность доставки
-      description: Проверяет готовность HTTPS bridge без отправки сообщения.
-      operation: email.delivery.health.read
-      risk: READ
-      approvalPolicy: NONE
-      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
-      inputFields: []
-      outputFields:
-        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 3, retryBackoffMilliseconds: 250}
-    - key: email.message.send
-      name: Отправить письмо
-      description: Отправляет одно текстовое письмо после Human Gate с provider-native idempotency key.
-      operation: email.message.send
-      risk: SENSITIVE
-      approvalPolicy: HUMAN_EACH_EFFECT
-      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
-      inputFields:
-        - {key: to, type: STRING, format: EMAIL, required: true, maximumLength: 320}
-        - {key: subject, type: STRING, format: PLAIN, required: true, maximumLength: 998}
-        - {key: body_text, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-      outputFields:
-        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 500}
-    - key: email.message.status.read
-      name: Прочитать статус сообщения
-      description: Возвращает статус одного сообщения у HTTPS email bridge.
-      operation: email.message.status.read
-      risk: READ
-      approvalPolicy: NONE
-      resourceScope: {kind: EMAIL_SENDER, connectionFields: [base_url, from_address]}
-      inputFields:
-        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-      outputFields:
-        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "email",
+    "version": "1.3.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Электронная почта",
+    "description": "SMTP и IMAP через внутренний mTLS bridge; POP3 только compatibility без folders, flags и drafts. cc/bcc и attachments используют JSON-строки закрытой схемы.",
+    "category": "communications",
+    "adapter": "EMAIL_HTTPS",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "allowedValues": [
+          "https://email-bridge.kodex-system.svc.cluster.local"
+        ]
+      },
+      {
+        "key": "from_address",
+        "type": "STRING",
+        "format": "EMAIL",
+        "required": true,
+        "maximumLength": 320
+      },
+      {
+        "key": "mailbox_id",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 63
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "email_bridge",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "email.delivery.health.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "email.delivery.health.read",
+        "name": "Проверить готовность",
+        "description": "Проверить готовность в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.delivery.health.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.mailbox.list",
+        "name": "Перечислить доступную mailbox",
+        "description": "Перечислить доступную mailbox в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.mailbox.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.list",
+        "name": "Получить страницу заголовков",
+        "description": "Получить страницу заголовков в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 512
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.search",
+        "name": "Поиск по заголовкам",
+        "description": "Поиск по заголовкам в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.search",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256
+          },
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 512
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.read",
+        "name": "Прочитать письмо",
+        "description": "Прочитать письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.attachment.read",
+        "name": "Скачать вложение",
+        "description": "Скачать вложение в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.attachment.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "attachment_index",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 19
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.send",
+        "name": "Отправить письмо",
+        "description": "Отправить письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.send",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": true,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.reply",
+        "name": "Ответить отправителю",
+        "description": "Ответить отправителю в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.reply",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": true,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "source_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "source_uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.reply_all",
+        "name": "Ответить всем",
+        "description": "Ответить всем в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.reply_all",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": true,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "source_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "source_uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.forward",
+        "name": "Переслать письмо",
+        "description": "Переслать письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.forward",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": true,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "source_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "source_uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.delete",
+        "name": "Удалить письмо",
+        "description": "Удалить письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.delete",
+        "risk": "DESTRUCTIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.status.read",
+        "name": "Прочитать receipt",
+        "description": "Прочитать receipt в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
+        "operation": "email.message.status.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "effect_key",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 128
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.thread.read",
+        "name": "Прочитать цепочку писем",
+        "description": "Прочитать цепочку писем в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.thread.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 512
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "thread_id",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 998
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.attachment.list",
+        "name": "Перечислить вложения",
+        "description": "Перечислить вложения в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.attachment.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.mark_read",
+        "name": "Отметить прочитанным",
+        "description": "Отметить прочитанным в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.message.mark_read",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.mark_unread",
+        "name": "Отметить непрочитанным",
+        "description": "Отметить непрочитанным в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.message.mark_unread",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.move",
+        "name": "Переместить письмо",
+        "description": "Переместить письмо в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.message.move",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          },
+          {
+            "key": "destination_folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.message.archive",
+        "name": "Архивировать письмо",
+        "description": "Архивировать письмо в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.message.archive",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.draft.create",
+        "name": "Создать черновик",
+        "description": "Создать черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.draft.create",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": false,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.draft.update",
+        "name": "Обновить черновик",
+        "description": "Обновить черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.draft.update",
+        "risk": "SENSITIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "to",
+            "type": "STRING",
+            "format": "EMAIL",
+            "required": false,
+            "maximumLength": 320
+          },
+          {
+            "key": "subject",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 998
+          },
+          {
+            "key": "body_text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "cc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "bcc",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "attachments",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 65536
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 4294967295
+          },
+          {
+            "key": "expected_digest",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 64
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "email.draft.delete",
+        "name": "Удалить черновик",
+        "description": "Удалить черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
+        "operation": "email.draft.delete",
+        "risk": "DESTRUCTIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "resourceScope": {
+          "kind": "EMAIL_SENDER",
+          "connectionFields": [
+            "base_url",
+            "from_address",
+            "mailbox_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 70
+          },
+          {
+            "key": "folder",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 255
+          },
+          {
+            "key": "uid_validity",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "message_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 255
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "result_json",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 20,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

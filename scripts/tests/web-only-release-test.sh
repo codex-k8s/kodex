@@ -44,9 +44,9 @@ yq -e 'select(.apiVersion == "cert-manager.io/v1" and .kind == "Certificate" and
   .metadata.labels["kodex.dev/owner-intent"] == "true" and
   .spec.secretName == "staff-control-center-public-tls"' "$render" >/dev/null ||
   fail 'public TLS Certificate disagrees with the installer ownership contract'
-[[ $(yq -N -r 'select(.kind == "StatefulSet") | .metadata.name' "$render" | sort -u | wc -l) -eq 2 ]] ||
+[[ $(yq -N -r 'select(.kind == "StatefulSet") | .metadata.name' "$render" | sort -u | wc -l) -eq 3 ]] ||
   fail 'web-only stateful dependency count is invalid'
-for workload in kodex-postgresql kodex-nats; do
+for workload in kodex-postgresql kodex-nats email-bridge-postgresql; do
   WORKLOAD_NAME="$workload" yq -e \
     'select(.kind == "StatefulSet" and .metadata.name == strenv(WORKLOAD_NAME))' "$render" >/dev/null ||
     fail "stateful dependency is absent: $workload"
@@ -200,7 +200,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["key-delivery-targets.yaml"]
 ' "$render" | yq -e '
-  .source_revision == 6 and
+  .source_revision == 7 and
   ([.targets[] | select(.workload_id == "control-plane" and
     .role == "AUTHORIZATION_ISSUER" and
     .database_identity.login_principal == "ira_control_plane_issuer_g1" and
@@ -222,7 +222,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
 ' "$render" | jq -e '
-  .policy_revision == 44 and
+  .policy_revision == 52 and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
@@ -252,11 +252,12 @@ yq -N -r '
     select(.operation_id == "platform.stt.credential.project" and
       .caller_workload_id == "stt-tts-service" and
       .target_workload_id == "secret-broker" and
-      .project_required == true and
+      .project_required == false and
       .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
 ' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  email-bridge-migration; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done

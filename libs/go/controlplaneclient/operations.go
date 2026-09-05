@@ -2,6 +2,14 @@ package controlplaneclient
 
 import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 
+func EmailBridgeOperations() map[string]string {
+	return map[string]string{
+		"platform.email.authorization.resolve":  controlplanev1.RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
+		"platform.email.effect-receipts.report": controlplanev1.RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
+		"platform.email.reconciliation.resolve": controlplanev1.RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
+	}
+}
+
 func STTGatewayOperations() map[string]string {
 	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
 }
@@ -13,6 +21,32 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.query.email-effect-receipts.get":                 controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
+		"platform.command.email-effects.reconcile":                 controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
+		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
+		"platform.query.skill-bundles.get":                         controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName,
+		"platform.query.skill-bundle-revisions.list":               controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName,
+		"platform.query.memory-records.list":                       controlplanev1.PlatformQueryService_ListMemoryRecords_FullMethodName,
+		"platform.query.memory-records.get":                        controlplanev1.PlatformQueryService_GetMemoryRecord_FullMethodName,
+		"platform.query.memory-record-revisions.list":              controlplanev1.PlatformQueryService_ListMemoryRecordRevisions_FullMethodName,
+		"platform.command.skill-bundle-drafts.create":              controlplanev1.PlatformCommandService_CreateSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.save":                controlplanev1.PlatformCommandService_SaveSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.validate":            controlplanev1.PlatformCommandService_ValidateSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.review":              controlplanev1.PlatformCommandService_ReviewSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.publish":             controlplanev1.PlatformCommandService_PublishSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundle-drafts.discard":             controlplanev1.PlatformCommandService_DiscardSkillBundleDraft_FullMethodName,
+		"platform.command.skill-bundles.archive":                   controlplanev1.PlatformCommandService_ArchiveSkillBundle_FullMethodName,
+		"platform.command.skill-bundles.restore":                   controlplanev1.PlatformCommandService_RestoreSkillBundle_FullMethodName,
+		"platform.command.skill-bundles.purge":                     controlplanev1.PlatformCommandService_PurgeSkillBundle_FullMethodName,
+		"platform.command.agent-skill-bundles.bind":                controlplanev1.PlatformCommandService_BindAgentSkillBundle_FullMethodName,
+		"platform.command.agent-skill-bundles.unbind":              controlplanev1.PlatformCommandService_UnbindAgentSkillBundle_FullMethodName,
+		"platform.command.memory-records.create":                   controlplanev1.PlatformCommandService_CreateMemoryRecord_FullMethodName,
+		"platform.command.memory-records.revise":                   controlplanev1.PlatformCommandService_ReviseMemoryRecord_FullMethodName,
+		"platform.command.memory-records.archive":                  controlplanev1.PlatformCommandService_ArchiveMemoryRecord_FullMethodName,
+		"platform.command.memory-records.restore":                  controlplanev1.PlatformCommandService_RestoreMemoryRecord_FullMethodName,
+		"platform.command.memory-records.purge":                    controlplanev1.PlatformCommandService_PurgeMemoryRecord_FullMethodName,
+		"platform.command.agent-memory-records.bind":               controlplanev1.PlatformCommandService_BindAgentMemoryRecord_FullMethodName,
+		"platform.command.agent-memory-records.unbind":             controlplanev1.PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName,
 		"platform.query.bootstrap.get":                             controlplanev1.PlatformQueryService_GetBootstrapState_FullMethodName,
 		"platform.query.event-cursor.get":                          controlplanev1.PlatformQueryService_GetPlatformEventCursor_FullMethodName,
 		"platform.query.overview.get":                              controlplanev1.PlatformQueryService_GetOverview_FullMethodName,
@@ -26,6 +60,19 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.organization-memberships.list":             controlplanev1.PlatformQueryService_ListPlatformMemberships_FullMethodName,
 		"platform.query.organization-membership-candidates.list":   controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName,
 		"platform.query.memberships.list":                          controlplanev1.PlatformQueryService_ListProjectMemberships_FullMethodName,
+		"platform.query.runtime-environment-drafts.get":            controlplanev1.PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName,
+		"platform.query.interaction-identities.list":               controlplanev1.PlatformQueryService_ListInteractionIdentities_FullMethodName,
+		"platform.command.interaction-identities.bind":             controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName,
+		"platform.command.interaction-identities.revoke":           controlplanev1.PlatformCommandService_RevokeInteractionIdentity_FullMethodName,
+		"platform.query.runtime-environments.impact":               controlplanev1.PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName,
+		"platform.query.runtime-secrets.impact":                    controlplanev1.PlatformQueryService_GetRuntimeSecretImpact_FullMethodName,
+		"platform.command.runtime-secrets.rebind":                  controlplanev1.PlatformCommandService_RebindRuntimeSecret_FullMethodName,
+		"platform.command.runtime-environments.rebind":             controlplanev1.PlatformCommandService_RebindRuntimeEnvironment_FullMethodName,
+		"platform.command.runtime-environment-drafts.create":       controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.save":         controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.validate":     controlplanev1.PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.publish":      controlplanev1.PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName,
+		"platform.command.runtime-environment-drafts.discard":      controlplanev1.PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName,
 		"platform.query.membership-candidates.list":                controlplanev1.PlatformQueryService_ListProjectMembershipCandidates_FullMethodName,
 		"platform.query.agents.list":                               controlplanev1.PlatformQueryService_ListAgents_FullMethodName,
 		"platform.query.agents.get":                                controlplanev1.PlatformQueryService_GetAgent_FullMethodName,
@@ -82,6 +129,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.prompt-templates.validate":                 controlplanev1.PlatformQueryService_ValidatePromptTemplate_FullMethodName,
 		"platform.query.prompt-templates.preview":                  controlplanev1.PlatformQueryService_PreviewPromptTemplate_FullMethodName,
 		"platform.query.managed-configurations.history.list":       controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName,
+		"platform.query.managed-configurations.list":               controlplanev1.PlatformQueryService_ListManagedConfigurations_FullMethodName,
 		"platform.query.managed-configurations.impact.get":         controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName,
 		"platform.query.system-stt.get":                            controlplanev1.PlatformQueryService_GetSystemSTTConfiguration_FullMethodName,
 		"platform.query.role-image-revisions.list":                 controlplanev1.PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName,
@@ -236,8 +284,9 @@ func ProviderCredentialMaterializerOperations() map[string]string {
 // который материализует и проверяет credentials одной execution lease.
 func RuntimeCredentialProjectionOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime.credentials.materialize":     "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
-		"platform.runtime.credentials.readiness.check": "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
+		"platform.runtime.credentials.materialize":                  "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials",
+		"platform.runtime.credentials.system-assistant.materialize": "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials",
+		"platform.runtime.credentials.readiness.check":              "/secretbroker.v1.RuntimeCredentialProjectionService/CheckRuntimeCredentialProjectionReadiness",
 	}
 }
 
@@ -338,10 +387,14 @@ func IntegrationGatewayOperations() map[string]string {
 
 func InteractionGatewayOperations() map[string]string {
 	return map[string]string{
-		"platform.interactions.sources.list":        controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
-		"platform.interactions.deliveries.claim":    controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
-		"platform.interactions.deliveries.complete": controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
-		"platform.interactions.messages.accept":     controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
+		"platform.interactions.connection-tests.claim":    controlplanev1.RuntimeWorkService_ClaimIntegrationConnectionTests_FullMethodName,
+		"platform.interactions.connection-tests.complete": controlplanev1.RuntimeWorkService_CompleteIntegrationConnectionTest_FullMethodName,
+		"platform.interactions.invocations.claim":         controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName,
+		"platform.interactions.invocations.complete":      controlplanev1.RuntimeWorkService_CompleteIntegrationInvocation_FullMethodName,
+		"platform.interactions.sources.list":              controlplanev1.InteractionWorkService_ListInteractionSources_FullMethodName,
+		"platform.interactions.deliveries.claim":          controlplanev1.InteractionWorkService_ClaimInteractionDeliveries_FullMethodName,
+		"platform.interactions.deliveries.complete":       controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName,
+		"platform.interactions.messages.accept":           controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName,
 	}
 }
 
@@ -351,15 +404,10 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
+		"platform.command.skill-bundle-drafts.create":           {},
+		"platform.command.memory-records.create":                {},
 		"platform.query.projects.get":                           {},
-		"platform.query.memberships.list":                       {},
 		"platform.query.membership-candidates.list":             {},
-		"platform.query.agents.list":                            {},
-		"platform.query.workflows.list":                         {},
-		"platform.query.artifacts.list":                         {},
-		"platform.query.schedules.list":                         {},
-		"platform.query.runtime-environments.list":              {},
-		"platform.query.runtime-secrets.list":                   {},
 		"platform.query.template-variables.list":                {},
 		"platform.query.role-image-revisions.list":              {},
 		"platform.command.projects.update":                      {},

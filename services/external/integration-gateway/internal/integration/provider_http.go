@@ -27,6 +27,19 @@ type providerCall struct {
 }
 
 func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]byte, error) {
+	response, err := adapter.callProviderResponse(ctx, call)
+	if err != nil {
+		return nil, err
+	}
+	return response.Body, nil
+}
+
+type providerResponse struct {
+	Body   []byte
+	Header http.Header
+}
+
+func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerCall) (*providerResponse, error) {
 	baseURL, err := parseProviderBaseURL(call.BaseURL)
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
@@ -133,7 +146,7 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
-			return responseBody, nil
+			return &providerResponse{Body: responseBody, Header: response.Header.Clone()}, nil
 		}
 		if mutation && response.StatusCode >= http.StatusInternalServerError {
 			return nil, &UnknownOutcomeError{}
