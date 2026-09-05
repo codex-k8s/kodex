@@ -59,6 +59,7 @@ func testManagedIntegrationPackageExecution(t *testing.T, ctx context.Context, r
 	if err != nil || completed.Connection == nil || completed.Connection.State != "CONNECTED" {
 		t.Fatalf("managed test completion: %v", err)
 	}
+	testManagedRuntimeCapabilityAuthority(t, ctx, repository, service, owner, *completed.Connection, definition)
 	for index := range definition.Spec.Capabilities {
 		if definition.Spec.Capabilities[index].Operation == definition.Spec.HealthCheck.Operation {
 			definition.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"

@@ -167,6 +167,7 @@ func TestBootstrapComponent(t *testing.T) {
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
 	t.Run("config overlay published history and rollback", func(t *testing.T) { testConfigOverlayHistory(t, ctx, repository) })
+	t.Run("effective capabilities use current exact authority", func(t *testing.T) { testEffectiveCapabilities(t, ctx, repository) })
 	t.Run("STT catalog requires organization management before configuration", func(t *testing.T) { testSTTCatalogAuthority(t, ctx, repository) })
 	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
 		var platformBefore, proofBefore int64
@@ -701,7 +702,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		"managed-integration-definition", command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.ManagedConfigurationInput{Name: "Synthetic managed definition",
-			ContentFormat: "JSON", Content: string(asJSON(repository.integrationDefinitions["synthetic"]))},
+			ContentFormat: "JSON", Content: narrowedSyntheticPackageFixture(t, repository)},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref})
 	testIntegrationDefinitionRebindAuthority(t, ctx, repository, service, owner, integrationDefinition, *connection.Connection)
 	integrationReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
