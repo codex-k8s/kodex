@@ -123,6 +123,28 @@ func TestMailboxCredentialIdentityIncludesGeneration(t *testing.T) {
 	}
 }
 
+func TestMailboxPublicationClosedFailureCodesAndIndependentHistory(t *testing.T) {
+	for _, code := range []string{"", "EMAIL_MAILBOX_DELIVERY_EXPIRED", "EMAIL_MAILBOX_CONNECTION_CHANGED", "EMAIL_MAILBOX_DELIVERY_REJECTED", "FUTURE_FAILURE", "private failure text"} {
+		for _, state := range []cp.EmailMailboxPublicationState{cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_PENDING, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED} {
+			v := mailboxPublicationFixture()
+			v.State, v.FailureCode = state, code
+			_, ok := mailboxPublicationView(v)
+			expected := state != cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED && code == "" || state == cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED && (code == "EMAIL_MAILBOX_DELIVERY_EXPIRED" || code == "EMAIL_MAILBOX_CONNECTION_CHANGED" || code == "EMAIL_MAILBOX_DELIVERY_REJECTED")
+			if ok != expected {
+				t.Fatalf("publication failure registry mismatch: state=%s", state)
+			}
+		}
+	}
+	view := mailboxViewFixture()
+	view.Publication = mailboxPublicationFixture()
+	view.Publication.ConfigurationRevisionRef = "mrev_published01"
+	view.BoundRevisionRef = "mrev_published01"
+	result, ok := mailboxConfigurationView(view)
+	if !ok || result.Revision.Ref != "mrev_fixture01" || result.Publication.ConfigurationRevisionRef != "mrev_published01" {
+		t.Fatal("selected draft replaced connection publication history")
+	}
+}
+
 func TestMailboxRoutesPreserveTypedRPCAndIndependentOCC(t *testing.T) {
 	for _, test := range []struct {
 		method, path, body, rpc string
@@ -276,6 +298,9 @@ func TestMailboxPublicationAndDiagnosticsNeverInventReadinessOrEchoValues(t *tes
 	for _, state := range []cp.EmailMailboxPublicationState{cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_PENDING, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_READY, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED, cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED} {
 		v := mailboxPublicationFixture()
 		v.State = state
+		if state == cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_FAILED {
+			v.FailureCode = "EMAIL_MAILBOX_DELIVERY_REJECTED"
+		}
 		if state == cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_READY || state == cp.EmailMailboxPublicationState_EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED {
 			v.ReadyAt = timestamppb.New(time.Now())
 		}

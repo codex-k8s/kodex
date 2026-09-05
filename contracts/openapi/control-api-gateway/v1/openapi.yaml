@@ -7257,7 +7257,10 @@ components:
         configurationRevisionRef: { type: string, maxLength: 96 }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         readyAt: { $ref: '#/components/schemas/Timestamp' }
-        failureCode: { type: string, maxLength: 64 }
+        failureCode:
+          type: string
+          enum: ['', EMAIL_MAILBOX_DELIVERY_EXPIRED, EMAIL_MAILBOX_CONNECTION_CHANGED, EMAIL_MAILBOX_DELIVERY_REJECTED]
+          description: Непустой код допускается только для FAILED.
     EmailMailboxConfigurationView:
       type: object
       additionalProperties: false

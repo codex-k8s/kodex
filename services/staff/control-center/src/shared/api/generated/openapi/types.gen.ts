@@ -2437,7 +2437,10 @@ export type EmailMailboxPublication = {
     configurationRevisionRef: string;
     createdAt: Timestamp;
     readyAt?: Timestamp;
-    failureCode: string;
+    /**
+     * Непустой код допускается только для FAILED.
+     */
+    failureCode: '' | 'EMAIL_MAILBOX_DELIVERY_EXPIRED' | 'EMAIL_MAILBOX_CONNECTION_CHANGED' | 'EMAIL_MAILBOX_DELIVERY_REJECTED';
 };
 
 export type EmailMailboxConfigurationView = {
