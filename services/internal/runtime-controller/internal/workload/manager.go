@@ -508,7 +508,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV7, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		OrganizationRef:    revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
@@ -537,6 +537,8 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ConfigOverlayVersion:       revision.GetConfigOverlayVersion(),
 		ConfigOverlayDigest:        revision.GetConfigOverlayDigest(),
 		ConfigOverlay:              revision.GetConfigOverlay(),
+		EffectiveReasoningEffort:   revision.GetEffectiveReasoningEffort(),
+		ReasoningMode:              strings.TrimPrefix(revision.GetReasoningMode().String(), "RUNTIME_REASONING_MODE_"),
 		RuntimeEnvironmentRef:      revision.GetRuntimeEnvironmentRef(),
 		RuntimeEnvironmentVersion:  revision.GetRuntimeEnvironmentVersion(),
 		RuntimeEnvironmentDigest:   revision.GetRuntimeEnvironmentDigest(),
