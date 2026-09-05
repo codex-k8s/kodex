@@ -88,6 +88,11 @@ func testConfigurationSourceLifecycle(t *testing.T, ctx context.Context, reposit
 	if err != nil || read.GitSource == nil || read.GitSource.AcceptedRevisionRef != accepted.AcceptedRevisionRef || len(history) != 2 {
 		t.Fatalf("source history count=%d: %v", len(history), err)
 	}
+	testConfigurationWriteBackLifecycle(t, ctx, repository, service, owner, worker, read, string(content))
+	connection, err = service.GetIntegrationConnection(ctx, owner, connection.Ref)
+	if err != nil {
+		t.Fatalf("connection after writeback recovery: %v", err)
+	}
 	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.managed_configuration_git_sources SET next_refresh_at=clock_timestamp()-interval '1 second' WHERE ref=$1`, accepted.Ref); err != nil {
 		t.Fatal(err)
 	}

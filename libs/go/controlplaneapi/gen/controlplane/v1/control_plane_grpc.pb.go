@@ -76,6 +76,7 @@ const (
 	PlatformQueryService_GetAdministration_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetAdministration"
 	PlatformQueryService_ListAuditEvents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
+	PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetAgentEffectiveCapabilities"
 	PlatformQueryService_ListConfigOverlayRevisions_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListConfigOverlayRevisions"
 	PlatformQueryService_GetConfigOverlayRevision_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetConfigOverlayRevision"
 	PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName = "/controlplane.v1.PlatformQueryService/ListAgentRuntimeConfigurationVersions"
@@ -95,6 +96,8 @@ const (
 	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
 	PlatformQueryService_ListManagedConfigurations_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
 	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
+	PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationGitWriteBack"
+	PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationGitWriteBacks"
 	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
 	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
 	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
@@ -165,6 +168,7 @@ type PlatformQueryServiceClient interface {
 	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(ctx context.Context, in *GetAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*GetAgentRuntimeConfigurationResponse, error)
+	GetAgentEffectiveCapabilities(ctx context.Context, in *GetAgentEffectiveCapabilitiesRequest, opts ...grpc.CallOption) (*GetAgentEffectiveCapabilitiesResponse, error)
 	ListConfigOverlayRevisions(ctx context.Context, in *ListConfigOverlayRevisionsRequest, opts ...grpc.CallOption) (*ListConfigOverlayRevisionsResponse, error)
 	GetConfigOverlayRevision(ctx context.Context, in *GetConfigOverlayRevisionRequest, opts ...grpc.CallOption) (*GetConfigOverlayRevisionResponse, error)
 	ListAgentRuntimeConfigurationVersions(ctx context.Context, in *ListAgentRuntimeConfigurationVersionsRequest, opts ...grpc.CallOption) (*ListAgentRuntimeConfigurationVersionsResponse, error)
@@ -184,6 +188,8 @@ type PlatformQueryServiceClient interface {
 	ListManagedConfigurationHistory(ctx context.Context, in *ListManagedConfigurationHistoryRequest, opts ...grpc.CallOption) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(ctx context.Context, in *ListManagedConfigurationsRequest, opts ...grpc.CallOption) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(ctx context.Context, in *GetManagedConfigurationImpactRequest, opts ...grpc.CallOption) (*GetManagedConfigurationImpactResponse, error)
+	GetManagedConfigurationGitWriteBack(ctx context.Context, in *GetManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*GetManagedConfigurationGitWriteBackResponse, error)
+	ListManagedConfigurationGitWriteBacks(ctx context.Context, in *ListManagedConfigurationGitWriteBacksRequest, opts ...grpc.CallOption) (*ListManagedConfigurationGitWriteBacksResponse, error)
 	GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(ctx context.Context, in *GetRuntimeEnvironmentDraftRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentDraftResponse, error)
 	GetRuntimeEnvironmentImpact(ctx context.Context, in *GetRuntimeEnvironmentImpactRequest, opts ...grpc.CallOption) (*GetRuntimeEnvironmentImpactResponse, error)
@@ -769,6 +775,16 @@ func (c *platformQueryServiceClient) GetAgentRuntimeConfiguration(ctx context.Co
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetAgentEffectiveCapabilities(ctx context.Context, in *GetAgentEffectiveCapabilitiesRequest, opts ...grpc.CallOption) (*GetAgentEffectiveCapabilitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentEffectiveCapabilitiesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListConfigOverlayRevisions(ctx context.Context, in *ListConfigOverlayRevisionsRequest, opts ...grpc.CallOption) (*ListConfigOverlayRevisionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListConfigOverlayRevisionsResponse)
@@ -959,6 +975,26 @@ func (c *platformQueryServiceClient) GetManagedConfigurationImpact(ctx context.C
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetManagedConfigurationGitWriteBack(ctx context.Context, in *GetManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*GetManagedConfigurationGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetManagedConfigurationGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListManagedConfigurationGitWriteBacks(ctx context.Context, in *ListManagedConfigurationGitWriteBacksRequest, opts ...grpc.CallOption) (*ListManagedConfigurationGitWriteBacksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListManagedConfigurationGitWriteBacksResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetSystemSTTConfiguration(ctx context.Context, in *GetSystemSTTConfigurationRequest, opts ...grpc.CallOption) (*GetSystemSTTConfigurationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSystemSTTConfigurationResponse)
@@ -1072,6 +1108,7 @@ type PlatformQueryServiceServer interface {
 	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error)
+	GetAgentEffectiveCapabilities(context.Context, *GetAgentEffectiveCapabilitiesRequest) (*GetAgentEffectiveCapabilitiesResponse, error)
 	ListConfigOverlayRevisions(context.Context, *ListConfigOverlayRevisionsRequest) (*ListConfigOverlayRevisionsResponse, error)
 	GetConfigOverlayRevision(context.Context, *GetConfigOverlayRevisionRequest) (*GetConfigOverlayRevisionResponse, error)
 	ListAgentRuntimeConfigurationVersions(context.Context, *ListAgentRuntimeConfigurationVersionsRequest) (*ListAgentRuntimeConfigurationVersionsResponse, error)
@@ -1091,6 +1128,8 @@ type PlatformQueryServiceServer interface {
 	ListManagedConfigurationHistory(context.Context, *ListManagedConfigurationHistoryRequest) (*ListManagedConfigurationHistoryResponse, error)
 	ListManagedConfigurations(context.Context, *ListManagedConfigurationsRequest) (*ListManagedConfigurationsResponse, error)
 	GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error)
+	GetManagedConfigurationGitWriteBack(context.Context, *GetManagedConfigurationGitWriteBackRequest) (*GetManagedConfigurationGitWriteBackResponse, error)
+	ListManagedConfigurationGitWriteBacks(context.Context, *ListManagedConfigurationGitWriteBacksRequest) (*ListManagedConfigurationGitWriteBacksResponse, error)
 	GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error)
 	GetRuntimeEnvironmentDraft(context.Context, *GetRuntimeEnvironmentDraftRequest) (*GetRuntimeEnvironmentDraftResponse, error)
 	GetRuntimeEnvironmentImpact(context.Context, *GetRuntimeEnvironmentImpactRequest) (*GetRuntimeEnvironmentImpactResponse, error)
@@ -1277,6 +1316,9 @@ func (UnimplementedPlatformQueryServiceServer) ListAuditEvents(context.Context, 
 func (UnimplementedPlatformQueryServiceServer) GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentRuntimeConfiguration not implemented")
 }
+func (UnimplementedPlatformQueryServiceServer) GetAgentEffectiveCapabilities(context.Context, *GetAgentEffectiveCapabilitiesRequest) (*GetAgentEffectiveCapabilitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentEffectiveCapabilities not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) ListConfigOverlayRevisions(context.Context, *ListConfigOverlayRevisionsRequest) (*ListConfigOverlayRevisionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListConfigOverlayRevisions not implemented")
 }
@@ -1333,6 +1375,12 @@ func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurations(context
 }
 func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationImpact(context.Context, *GetManagedConfigurationImpactRequest) (*GetManagedConfigurationImpactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetManagedConfigurationImpact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetManagedConfigurationGitWriteBack(context.Context, *GetManagedConfigurationGitWriteBackRequest) (*GetManagedConfigurationGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetManagedConfigurationGitWriteBack not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListManagedConfigurationGitWriteBacks(context.Context, *ListManagedConfigurationGitWriteBacksRequest) (*ListManagedConfigurationGitWriteBacksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListManagedConfigurationGitWriteBacks not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetSystemSTTConfiguration(context.Context, *GetSystemSTTConfigurationRequest) (*GetSystemSTTConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemSTTConfiguration not implemented")
@@ -2396,6 +2444,24 @@ func _PlatformQueryService_GetAgentRuntimeConfiguration_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetAgentEffectiveCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentEffectiveCapabilitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetAgentEffectiveCapabilities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetAgentEffectiveCapabilities(ctx, req.(*GetAgentEffectiveCapabilitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListConfigOverlayRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListConfigOverlayRevisionsRequest)
 	if err := dec(in); err != nil {
@@ -2738,6 +2804,42 @@ func _PlatformQueryService_GetManagedConfigurationImpact_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetManagedConfigurationGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetManagedConfigurationGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetManagedConfigurationGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetManagedConfigurationGitWriteBack(ctx, req.(*GetManagedConfigurationGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListManagedConfigurationGitWriteBacks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListManagedConfigurationGitWriteBacksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurationGitWriteBacks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListManagedConfigurationGitWriteBacks(ctx, req.(*ListManagedConfigurationGitWriteBacksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetSystemSTTConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSystemSTTConfigurationRequest)
 	if err := dec(in); err != nil {
@@ -3064,6 +3166,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetAgentRuntimeConfiguration_Handler,
 		},
 		{
+			MethodName: "GetAgentEffectiveCapabilities",
+			Handler:    _PlatformQueryService_GetAgentEffectiveCapabilities_Handler,
+		},
+		{
 			MethodName: "ListConfigOverlayRevisions",
 			Handler:    _PlatformQueryService_ListConfigOverlayRevisions_Handler,
 		},
@@ -3138,6 +3244,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetManagedConfigurationImpact",
 			Handler:    _PlatformQueryService_GetManagedConfigurationImpact_Handler,
+		},
+		{
+			MethodName: "GetManagedConfigurationGitWriteBack",
+			Handler:    _PlatformQueryService_GetManagedConfigurationGitWriteBack_Handler,
+		},
+		{
+			MethodName: "ListManagedConfigurationGitWriteBacks",
+			Handler:    _PlatformQueryService_ListManagedConfigurationGitWriteBacks_Handler,
 		},
 		{
 			MethodName: "GetSystemSTTConfiguration",
@@ -3317,6 +3431,11 @@ const (
 	PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName  = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationDefinitionGitSource"
 	PlatformCommandService_RefreshRoleImageGitSource_FullMethodName                = "/controlplane.v1.PlatformCommandService/RefreshRoleImageGitSource"
 	PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName    = "/controlplane.v1.PlatformCommandService/RefreshIntegrationDefinitionGitSource"
+	PlatformCommandService_PrepareRoleImageGitWriteBack_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareRoleImageGitWriteBack"
+	PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_FullMethodName = "/controlplane.v1.PlatformCommandService/PrepareIntegrationDefinitionGitWriteBack"
+	PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName  = "/controlplane.v1.PlatformCommandService/ApproveManagedConfigurationGitWriteBack"
+	PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformCommandService/RejectManagedConfigurationGitWriteBack"
+	PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformCommandService/CancelManagedConfigurationGitWriteBack"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -3480,6 +3599,11 @@ type PlatformCommandServiceClient interface {
 	ConfigureIntegrationDefinitionGitSource(ctx context.Context, in *ConfigureIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
 	RefreshRoleImageGitSource(ctx context.Context, in *RefreshRoleImageGitSourceRequest, opts ...grpc.CallOption) (*RefreshRoleImageGitSourceResponse, error)
 	RefreshIntegrationDefinitionGitSource(ctx context.Context, in *RefreshIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*RefreshIntegrationDefinitionGitSourceResponse, error)
+	PrepareRoleImageGitWriteBack(ctx context.Context, in *PrepareRoleImageGitWriteBackRequest, opts ...grpc.CallOption) (*PrepareRoleImageGitWriteBackResponse, error)
+	PrepareIntegrationDefinitionGitWriteBack(ctx context.Context, in *PrepareIntegrationDefinitionGitWriteBackRequest, opts ...grpc.CallOption) (*PrepareIntegrationDefinitionGitWriteBackResponse, error)
+	ApproveManagedConfigurationGitWriteBack(ctx context.Context, in *ApproveManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*ApproveManagedConfigurationGitWriteBackResponse, error)
+	RejectManagedConfigurationGitWriteBack(ctx context.Context, in *RejectManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*RejectManagedConfigurationGitWriteBackResponse, error)
+	CancelManagedConfigurationGitWriteBack(ctx context.Context, in *CancelManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*CancelManagedConfigurationGitWriteBackResponse, error)
 }
 
 type platformCommandServiceClient struct {
@@ -5028,6 +5152,56 @@ func (c *platformCommandServiceClient) RefreshIntegrationDefinitionGitSource(ctx
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) PrepareRoleImageGitWriteBack(ctx context.Context, in *PrepareRoleImageGitWriteBackRequest, opts ...grpc.CallOption) (*PrepareRoleImageGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRoleImageGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareRoleImageGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareIntegrationDefinitionGitWriteBack(ctx context.Context, in *PrepareIntegrationDefinitionGitWriteBackRequest, opts ...grpc.CallOption) (*PrepareIntegrationDefinitionGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareIntegrationDefinitionGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ApproveManagedConfigurationGitWriteBack(ctx context.Context, in *ApproveManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*ApproveManagedConfigurationGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveManagedConfigurationGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RejectManagedConfigurationGitWriteBack(ctx context.Context, in *RejectManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*RejectManagedConfigurationGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectManagedConfigurationGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CancelManagedConfigurationGitWriteBack(ctx context.Context, in *CancelManagedConfigurationGitWriteBackRequest, opts ...grpc.CallOption) (*CancelManagedConfigurationGitWriteBackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelManagedConfigurationGitWriteBackResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlatformCommandServiceServer is the server API for PlatformCommandService service.
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
@@ -5189,6 +5363,11 @@ type PlatformCommandServiceServer interface {
 	ConfigureIntegrationDefinitionGitSource(context.Context, *ConfigureIntegrationDefinitionGitSourceRequest) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
 	RefreshRoleImageGitSource(context.Context, *RefreshRoleImageGitSourceRequest) (*RefreshRoleImageGitSourceResponse, error)
 	RefreshIntegrationDefinitionGitSource(context.Context, *RefreshIntegrationDefinitionGitSourceRequest) (*RefreshIntegrationDefinitionGitSourceResponse, error)
+	PrepareRoleImageGitWriteBack(context.Context, *PrepareRoleImageGitWriteBackRequest) (*PrepareRoleImageGitWriteBackResponse, error)
+	PrepareIntegrationDefinitionGitWriteBack(context.Context, *PrepareIntegrationDefinitionGitWriteBackRequest) (*PrepareIntegrationDefinitionGitWriteBackResponse, error)
+	ApproveManagedConfigurationGitWriteBack(context.Context, *ApproveManagedConfigurationGitWriteBackRequest) (*ApproveManagedConfigurationGitWriteBackResponse, error)
+	RejectManagedConfigurationGitWriteBack(context.Context, *RejectManagedConfigurationGitWriteBackRequest) (*RejectManagedConfigurationGitWriteBackResponse, error)
+	CancelManagedConfigurationGitWriteBack(context.Context, *CancelManagedConfigurationGitWriteBackRequest) (*CancelManagedConfigurationGitWriteBackResponse, error)
 	mustEmbedUnimplementedPlatformCommandServiceServer()
 }
 
@@ -5654,6 +5833,21 @@ func (UnimplementedPlatformCommandServiceServer) RefreshRoleImageGitSource(conte
 }
 func (UnimplementedPlatformCommandServiceServer) RefreshIntegrationDefinitionGitSource(context.Context, *RefreshIntegrationDefinitionGitSourceRequest) (*RefreshIntegrationDefinitionGitSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshIntegrationDefinitionGitSource not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareRoleImageGitWriteBack(context.Context, *PrepareRoleImageGitWriteBackRequest) (*PrepareRoleImageGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRoleImageGitWriteBack not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareIntegrationDefinitionGitWriteBack(context.Context, *PrepareIntegrationDefinitionGitWriteBackRequest) (*PrepareIntegrationDefinitionGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareIntegrationDefinitionGitWriteBack not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ApproveManagedConfigurationGitWriteBack(context.Context, *ApproveManagedConfigurationGitWriteBackRequest) (*ApproveManagedConfigurationGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveManagedConfigurationGitWriteBack not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RejectManagedConfigurationGitWriteBack(context.Context, *RejectManagedConfigurationGitWriteBackRequest) (*RejectManagedConfigurationGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RejectManagedConfigurationGitWriteBack not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CancelManagedConfigurationGitWriteBack(context.Context, *CancelManagedConfigurationGitWriteBackRequest) (*CancelManagedConfigurationGitWriteBackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelManagedConfigurationGitWriteBack not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) mustEmbedUnimplementedPlatformCommandServiceServer() {
 }
@@ -8373,6 +8567,96 @@ func _PlatformCommandService_RefreshIntegrationDefinitionGitSource_Handler(srv i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_PrepareRoleImageGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRoleImageGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareRoleImageGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareRoleImageGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareRoleImageGitWriteBack(ctx, req.(*PrepareRoleImageGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareIntegrationDefinitionGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareIntegrationDefinitionGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareIntegrationDefinitionGitWriteBack(ctx, req.(*PrepareIntegrationDefinitionGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ApproveManagedConfigurationGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveManagedConfigurationGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ApproveManagedConfigurationGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ApproveManagedConfigurationGitWriteBack(ctx, req.(*ApproveManagedConfigurationGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RejectManagedConfigurationGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectManagedConfigurationGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RejectManagedConfigurationGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RejectManagedConfigurationGitWriteBack(ctx, req.(*RejectManagedConfigurationGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CancelManagedConfigurationGitWriteBack_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelManagedConfigurationGitWriteBackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CancelManagedConfigurationGitWriteBack(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CancelManagedConfigurationGitWriteBack(ctx, req.(*CancelManagedConfigurationGitWriteBackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlatformCommandService_ServiceDesc is the grpc.ServiceDesc for PlatformCommandService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -8972,6 +9256,26 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RefreshIntegrationDefinitionGitSource",
 			Handler:    _PlatformCommandService_RefreshIntegrationDefinitionGitSource_Handler,
 		},
+		{
+			MethodName: "PrepareRoleImageGitWriteBack",
+			Handler:    _PlatformCommandService_PrepareRoleImageGitWriteBack_Handler,
+		},
+		{
+			MethodName: "PrepareIntegrationDefinitionGitWriteBack",
+			Handler:    _PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_Handler,
+		},
+		{
+			MethodName: "ApproveManagedConfigurationGitWriteBack",
+			Handler:    _PlatformCommandService_ApproveManagedConfigurationGitWriteBack_Handler,
+		},
+		{
+			MethodName: "RejectManagedConfigurationGitWriteBack",
+			Handler:    _PlatformCommandService_RejectManagedConfigurationGitWriteBack_Handler,
+		},
+		{
+			MethodName: "CancelManagedConfigurationGitWriteBack",
+			Handler:    _PlatformCommandService_CancelManagedConfigurationGitWriteBack_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -8995,6 +9299,265 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName      = "/controlplane.v1.ManagedConfigurationGitWriteBackWorkService/ClaimManagedConfigurationGitWriteBackWork"
+	ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_FullMethodName      = "/controlplane.v1.ManagedConfigurationGitWriteBackWorkService/RenewManagedConfigurationGitWriteBackWork"
+	ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_FullMethodName    = "/controlplane.v1.ManagedConfigurationGitWriteBackWorkService/BeginManagedConfigurationGitWriteBackEffect"
+	ManagedConfigurationGitWriteBackWorkService_CompleteManagedConfigurationGitWriteBackEffect_FullMethodName = "/controlplane.v1.ManagedConfigurationGitWriteBackWorkService/CompleteManagedConfigurationGitWriteBackEffect"
+	ManagedConfigurationGitWriteBackWorkService_FailManagedConfigurationGitWriteBackWork_FullMethodName       = "/controlplane.v1.ManagedConfigurationGitWriteBackWorkService/FailManagedConfigurationGitWriteBackWork"
+)
+
+// ManagedConfigurationGitWriteBackWorkServiceClient is the client API for ManagedConfigurationGitWriteBackWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Только integration-gateway; proposal branch и PR имеют отдельные effect receipts.
+type ManagedConfigurationGitWriteBackWorkServiceClient interface {
+	ClaimManagedConfigurationGitWriteBackWork(ctx context.Context, in *ClaimManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*ClaimManagedConfigurationGitWriteBackWorkResponse, error)
+	RenewManagedConfigurationGitWriteBackWork(ctx context.Context, in *RenewManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*RenewManagedConfigurationGitWriteBackWorkResponse, error)
+	BeginManagedConfigurationGitWriteBackEffect(ctx context.Context, in *BeginManagedConfigurationGitWriteBackEffectRequest, opts ...grpc.CallOption) (*BeginManagedConfigurationGitWriteBackEffectResponse, error)
+	CompleteManagedConfigurationGitWriteBackEffect(ctx context.Context, in *CompleteManagedConfigurationGitWriteBackEffectRequest, opts ...grpc.CallOption) (*CompleteManagedConfigurationGitWriteBackEffectResponse, error)
+	FailManagedConfigurationGitWriteBackWork(ctx context.Context, in *FailManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*FailManagedConfigurationGitWriteBackWorkResponse, error)
+}
+
+type managedConfigurationGitWriteBackWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewManagedConfigurationGitWriteBackWorkServiceClient(cc grpc.ClientConnInterface) ManagedConfigurationGitWriteBackWorkServiceClient {
+	return &managedConfigurationGitWriteBackWorkServiceClient{cc}
+}
+
+func (c *managedConfigurationGitWriteBackWorkServiceClient) ClaimManagedConfigurationGitWriteBackWork(ctx context.Context, in *ClaimManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*ClaimManagedConfigurationGitWriteBackWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimManagedConfigurationGitWriteBackWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationGitWriteBackWorkServiceClient) RenewManagedConfigurationGitWriteBackWork(ctx context.Context, in *RenewManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*RenewManagedConfigurationGitWriteBackWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewManagedConfigurationGitWriteBackWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationGitWriteBackWorkServiceClient) BeginManagedConfigurationGitWriteBackEffect(ctx context.Context, in *BeginManagedConfigurationGitWriteBackEffectRequest, opts ...grpc.CallOption) (*BeginManagedConfigurationGitWriteBackEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginManagedConfigurationGitWriteBackEffectResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationGitWriteBackWorkServiceClient) CompleteManagedConfigurationGitWriteBackEffect(ctx context.Context, in *CompleteManagedConfigurationGitWriteBackEffectRequest, opts ...grpc.CallOption) (*CompleteManagedConfigurationGitWriteBackEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteManagedConfigurationGitWriteBackEffectResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationGitWriteBackWorkService_CompleteManagedConfigurationGitWriteBackEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *managedConfigurationGitWriteBackWorkServiceClient) FailManagedConfigurationGitWriteBackWork(ctx context.Context, in *FailManagedConfigurationGitWriteBackWorkRequest, opts ...grpc.CallOption) (*FailManagedConfigurationGitWriteBackWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailManagedConfigurationGitWriteBackWorkResponse)
+	err := c.cc.Invoke(ctx, ManagedConfigurationGitWriteBackWorkService_FailManagedConfigurationGitWriteBackWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ManagedConfigurationGitWriteBackWorkServiceServer is the server API for ManagedConfigurationGitWriteBackWorkService service.
+// All implementations must embed UnimplementedManagedConfigurationGitWriteBackWorkServiceServer
+// for forward compatibility.
+//
+// Только integration-gateway; proposal branch и PR имеют отдельные effect receipts.
+type ManagedConfigurationGitWriteBackWorkServiceServer interface {
+	ClaimManagedConfigurationGitWriteBackWork(context.Context, *ClaimManagedConfigurationGitWriteBackWorkRequest) (*ClaimManagedConfigurationGitWriteBackWorkResponse, error)
+	RenewManagedConfigurationGitWriteBackWork(context.Context, *RenewManagedConfigurationGitWriteBackWorkRequest) (*RenewManagedConfigurationGitWriteBackWorkResponse, error)
+	BeginManagedConfigurationGitWriteBackEffect(context.Context, *BeginManagedConfigurationGitWriteBackEffectRequest) (*BeginManagedConfigurationGitWriteBackEffectResponse, error)
+	CompleteManagedConfigurationGitWriteBackEffect(context.Context, *CompleteManagedConfigurationGitWriteBackEffectRequest) (*CompleteManagedConfigurationGitWriteBackEffectResponse, error)
+	FailManagedConfigurationGitWriteBackWork(context.Context, *FailManagedConfigurationGitWriteBackWorkRequest) (*FailManagedConfigurationGitWriteBackWorkResponse, error)
+	mustEmbedUnimplementedManagedConfigurationGitWriteBackWorkServiceServer()
+}
+
+// UnimplementedManagedConfigurationGitWriteBackWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedManagedConfigurationGitWriteBackWorkServiceServer struct{}
+
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) ClaimManagedConfigurationGitWriteBackWork(context.Context, *ClaimManagedConfigurationGitWriteBackWorkRequest) (*ClaimManagedConfigurationGitWriteBackWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimManagedConfigurationGitWriteBackWork not implemented")
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) RenewManagedConfigurationGitWriteBackWork(context.Context, *RenewManagedConfigurationGitWriteBackWorkRequest) (*RenewManagedConfigurationGitWriteBackWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewManagedConfigurationGitWriteBackWork not implemented")
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) BeginManagedConfigurationGitWriteBackEffect(context.Context, *BeginManagedConfigurationGitWriteBackEffectRequest) (*BeginManagedConfigurationGitWriteBackEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginManagedConfigurationGitWriteBackEffect not implemented")
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) CompleteManagedConfigurationGitWriteBackEffect(context.Context, *CompleteManagedConfigurationGitWriteBackEffectRequest) (*CompleteManagedConfigurationGitWriteBackEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteManagedConfigurationGitWriteBackEffect not implemented")
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) FailManagedConfigurationGitWriteBackWork(context.Context, *FailManagedConfigurationGitWriteBackWorkRequest) (*FailManagedConfigurationGitWriteBackWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailManagedConfigurationGitWriteBackWork not implemented")
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) mustEmbedUnimplementedManagedConfigurationGitWriteBackWorkServiceServer() {
+}
+func (UnimplementedManagedConfigurationGitWriteBackWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeManagedConfigurationGitWriteBackWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ManagedConfigurationGitWriteBackWorkServiceServer will
+// result in compilation errors.
+type UnsafeManagedConfigurationGitWriteBackWorkServiceServer interface {
+	mustEmbedUnimplementedManagedConfigurationGitWriteBackWorkServiceServer()
+}
+
+func RegisterManagedConfigurationGitWriteBackWorkServiceServer(s grpc.ServiceRegistrar, srv ManagedConfigurationGitWriteBackWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedManagedConfigurationGitWriteBackWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ManagedConfigurationGitWriteBackWorkService_ServiceDesc, srv)
+}
+
+func _ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimManagedConfigurationGitWriteBackWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).ClaimManagedConfigurationGitWriteBackWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).ClaimManagedConfigurationGitWriteBackWork(ctx, req.(*ClaimManagedConfigurationGitWriteBackWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewManagedConfigurationGitWriteBackWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).RenewManagedConfigurationGitWriteBackWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).RenewManagedConfigurationGitWriteBackWork(ctx, req.(*RenewManagedConfigurationGitWriteBackWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginManagedConfigurationGitWriteBackEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).BeginManagedConfigurationGitWriteBackEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).BeginManagedConfigurationGitWriteBackEffect(ctx, req.(*BeginManagedConfigurationGitWriteBackEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationGitWriteBackWorkService_CompleteManagedConfigurationGitWriteBackEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteManagedConfigurationGitWriteBackEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).CompleteManagedConfigurationGitWriteBackEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationGitWriteBackWorkService_CompleteManagedConfigurationGitWriteBackEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).CompleteManagedConfigurationGitWriteBackEffect(ctx, req.(*CompleteManagedConfigurationGitWriteBackEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ManagedConfigurationGitWriteBackWorkService_FailManagedConfigurationGitWriteBackWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailManagedConfigurationGitWriteBackWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).FailManagedConfigurationGitWriteBackWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ManagedConfigurationGitWriteBackWorkService_FailManagedConfigurationGitWriteBackWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ManagedConfigurationGitWriteBackWorkServiceServer).FailManagedConfigurationGitWriteBackWork(ctx, req.(*FailManagedConfigurationGitWriteBackWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ManagedConfigurationGitWriteBackWorkService_ServiceDesc is the grpc.ServiceDesc for ManagedConfigurationGitWriteBackWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ManagedConfigurationGitWriteBackWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.ManagedConfigurationGitWriteBackWorkService",
+	HandlerType: (*ManagedConfigurationGitWriteBackWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ClaimManagedConfigurationGitWriteBackWork",
+			Handler:    _ManagedConfigurationGitWriteBackWorkService_ClaimManagedConfigurationGitWriteBackWork_Handler,
+		},
+		{
+			MethodName: "RenewManagedConfigurationGitWriteBackWork",
+			Handler:    _ManagedConfigurationGitWriteBackWorkService_RenewManagedConfigurationGitWriteBackWork_Handler,
+		},
+		{
+			MethodName: "BeginManagedConfigurationGitWriteBackEffect",
+			Handler:    _ManagedConfigurationGitWriteBackWorkService_BeginManagedConfigurationGitWriteBackEffect_Handler,
+		},
+		{
+			MethodName: "CompleteManagedConfigurationGitWriteBackEffect",
+			Handler:    _ManagedConfigurationGitWriteBackWorkService_CompleteManagedConfigurationGitWriteBackEffect_Handler,
+		},
+		{
+			MethodName: "FailManagedConfigurationGitWriteBackWork",
+			Handler:    _ManagedConfigurationGitWriteBackWorkService_FailManagedConfigurationGitWriteBackWork_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
 

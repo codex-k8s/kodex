@@ -52,7 +52,7 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 	c, s := candidate.Spec, shipped.Spec
 	if c.Adapter != s.Adapter || c.AdapterOwner != s.AdapterOwner || c.ExecutionRoute != s.ExecutionRoute ||
 		c.Readiness != s.Readiness || !reflect.DeepEqual(c.Credential, s.Credential) ||
-		!reflect.DeepEqual(c.NetworkDestinations, s.NetworkDestinations) || !narrowFields(c.ConfigurationFields, s.ConfigurationFields) ||
+		!narrowNetworkDestinations(c.NetworkDestinations, s.NetworkDestinations) || !narrowFields(c.ConfigurationFields, s.ConfigurationFields) ||
 		c.HealthCheck.Operation != s.HealthCheck.Operation || c.HealthCheck.TimeoutSeconds > s.HealthCheck.TimeoutSeconds ||
 		c.HealthCheck.MaxAttempts > s.HealthCheck.MaxAttempts {
 		return errExecutableRevision
@@ -83,6 +83,32 @@ func canonicalPackage(value Package) bool {
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]) == value.Digest
+}
+
+// Каждый destination сохраняет полный поставленный tuple; допускается только удаление.
+func narrowNetworkDestinations(candidate, baseline []NetworkDestination) bool {
+	allowed := make(map[NetworkDestination]bool, len(baseline))
+	for _, destination := range baseline {
+		allowed[destination] = true
+	}
+	seen := make(map[NetworkDestination]bool, len(candidate))
+	for _, destination := range candidate {
+		if !allowed[destination] || seen[destination] {
+			return false
+		}
+		seen[destination] = true
+	}
+	return true
+}
+
+// HasNetworkDestination проверяет фактический request-local package, а не shipped registry.
+func (value Package) HasNetworkDestination(expected NetworkDestination) bool {
+	for _, destination := range value.Spec.NetworkDestinations {
+		if destination == expected {
+			return true
+		}
+	}
+	return false
 }
 
 // Набор полей сохраняется: adapter может читать даже необязательное поле.

@@ -269,7 +269,7 @@ func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.List
 	if err != nil {
 		return nil, err
 	}
-	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())}
+	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage()), ResumableSessionsOnly: request.GetResumableSessionsOnly(), TargetType: request.GetTargetType(), TargetRef: request.GetTargetRef()}
 	for _, state := range request.GetStates() {
 		if state == controlplanev1.RunState_RUN_STATE_UNSPECIFIED {
 			return nil, transportError(errs.ErrInvalid)

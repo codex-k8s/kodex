@@ -166,6 +166,9 @@ func TestBootstrapComponent(t *testing.T) {
 	}
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
+	t.Run("config overlay published history and rollback", func(t *testing.T) { testConfigOverlayHistory(t, ctx, repository) })
+	t.Run("effective capabilities use current exact authority", func(t *testing.T) { testEffectiveCapabilities(t, ctx, repository) })
+	t.Run("prompt context preview before launch", func(t *testing.T) { testPromptContextPreview(t, ctx, repository) })
 	t.Run("STT catalog requires organization management before configuration", func(t *testing.T) { testSTTCatalogAuthority(t, ctx, repository) })
 	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
 		var platformBefore, proofBefore int64
@@ -664,11 +667,15 @@ WHERE environment.organization_id = $1::uuid
 LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRef); err != nil {
 		t.Fatalf("read runtime environment consumer fixture: %v", err)
 	}
+	roleCatalog, _ := promotionComponentCatalog(t)
+	repository.ConfigureRoleImageCatalog(roleCatalog.Resolve)
+	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
+	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-role-image", command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
 		command.PublishRoleImageRevision, command.RebindRoleImage,
 		command.ManagedConfigurationInput{ProjectRef: environmentProjectRef, Name: "Runtime role image",
-			ContentFormat: "JSON", Content: `{"name":"Runtime role image","baseImage":"registry.invalid/base@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","packages":["ca-certificates"]}`},
+			ContentFormat: "JSON", Content: roleContent},
 		entity.ManagedConfigurationConsumer{Kind: "RUNTIME_ENVIRONMENT", Ref: environmentRef})
 	runtimeReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
@@ -696,7 +703,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		"managed-integration-definition", command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.ManagedConfigurationInput{Name: "Synthetic managed definition",
-			ContentFormat: "JSON", Content: string(asJSON(repository.integrationDefinitions["synthetic"]))},
+			ContentFormat: "JSON", Content: narrowedSyntheticPackageFixture(t, repository)},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref})
 	testIntegrationDefinitionRebindAuthority(t, ctx, repository, service, owner, integrationDefinition, *connection.Connection)
 	integrationReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -1132,6 +1139,12 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	}
 	if _, err := service.GetAgentRuntimeConfiguration(ctx, outsider, assistant.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("agent wildcard granted system runtime read: %v", err)
+	}
+	if _, _, _, err := service.ListConfigOverlayRevisions(ctx, outsider, query.Filter{ResourceRef: assistant.Ref}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system overlay history: %v", err)
+	}
+	if _, err := service.GetConfigOverlayRevision(ctx, outsider, assistant.Ref, configuration.PublishedOverlay.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("agent wildcard granted system overlay preview: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: outsider,
 		Mutation: value.Mutation{IdempotencyKey: "warm-agent-manager-publish", ExpectedVersion: &configuration.AgentVersion},
@@ -1588,13 +1601,24 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 	if err != nil {
 		t.Fatalf("resolve role image principal: %v", err)
 	}
-	recipes, _, err := repository.List(ctx, roleImagePrincipal, roleimagerepo.Filter{
+	recipes, _, total, err := repository.List(ctx, roleImagePrincipal, roleimagerepo.Filter{
 		ProjectRef: createdProject.Project.Ref,
 		Page:       query.Page{Size: 20},
 	})
-	if err != nil || len(recipes) != 1 || recipes[0].ActiveImageArtifactRef == "" ||
+	if err != nil || total != 1 || len(recipes) != 1 || recipes[0].ActiveImageArtifactRef == "" ||
 		recipes[0].PromotedImageReference != repository.roleImages.DefaultImageReference {
 		t.Fatalf("bootstrap role image is not active and promoted: recipes=%#v err=%v", recipes, err)
+	}
+	if recipes[0].ManagedLineage == nil || recipes[0].ManagedLineage.ManagedBy != "SHIPPED" || recipes[0].ManagedLineage.SourceRevision != repository.roleImages.DefaultImageDigest || !sameStrings(recipes[0].NextActions, []string{"OPEN"}) {
+		t.Fatal("system base did not expose exact readonly shipped provenance")
+	}
+	for _, action := range []string{"UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD"} {
+		version := int64(recipes[0].Version)
+		_, err := repository.Manage(ctx, roleimagerepo.ManageInput{Principal: roleImagePrincipal, Action: action, RecipeRef: recipes[0].Ref, ProjectRef: recipes[0].ProjectRef, Name: recipes[0].Name, Recipe: recipes[0].Input,
+			Mutation: roleImageTestMutation("bootstrap-shipped-deny-"+action, action, &version)})
+		if !errors.Is(err, domainerrs.ErrConflict) {
+			t.Fatalf("shipped recipe mutation %s was accepted: %v", action, err)
+		}
 	}
 	current, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
 	if err != nil {
@@ -1761,6 +1785,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("launch provider affinity run: run=%#v err=%v", launched.Run, err)
 	}
 	publishFixedPolicy("provider-affinity-policy-secondary", secondaryAccountRef)
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim"},
@@ -1830,6 +1855,10 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("managed refresh reused stale observation: %v", err)
 	}
 	seedObservedCatalogFixture(t, ctx, repository)
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, true)
+	testResumableTargetChange(t, ctx, repository, service, owner, *launched.Run)
+	resumableReader := testResumableSessionAuthority(t, ctx, repository, service, owner, *launched.Run)
+	testResumableSessionPagination(t, ctx, repository, service, owner, worker, resumableReader, *launched.Run)
 
 	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-continuation"}, Payload: command.SessionTurnInput{
@@ -1839,6 +1868,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if err != nil || continued.Run == nil {
 		t.Fatalf("continue provider affinity Session: run=%#v err=%v", continued.Run, err)
 	}
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 
 	restored := false
 	defer func() {
@@ -1928,6 +1958,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
 		t.Fatalf("changed capabilities reused Session pin: %v", err)
 	}
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 	publishFixedPolicy("provider-affinity-republish-default", primaryAccountRef)
 	next, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-new-default-turn"},
@@ -5782,6 +5813,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("retry cancelled run: run=%#v graph=%#v err=%v", retried.Run, retried.Graph, err)
 	}
 	completedRetry := claimAndCompleteRun(t, ctx, service, worker, retried.Run.Ref, "lifecycle-retry", false)
+	assertContinuationNoticeReadback(t, ctx, repository, retried.Run.Ref)
 	events, currentSequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completedRetry.Run.Ref, Limit: 100})
 	if err != nil || !complete || len(events) == 0 || currentSequence != events[len(events)-1].Sequence {
 		t.Fatalf("read retry event stream: events=%d sequence=%d complete=%v err=%v", len(events), currentSequence, complete, err)

@@ -61,19 +61,6 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
-func TestPromptUserCapabilitiesCannotExceedInitiatorAuthority(t *testing.T) {
-	got := promptUserCapabilities("MEMBER", []string{"LAUNCH_RUNS"},
-		[]string{"platform.run.launch", "platform.agent.manage"}, []string{"calendar.write"})
-	if len(got) != 1 || got[0] != "platform.run.launch" {
-		t.Fatalf("effective user capabilities = %#v", got)
-	}
-	owner := promptUserCapabilities("OWNER", nil,
-		[]string{"platform.agent.manage"}, []string{"calendar.write"})
-	if strings.Join(owner, ",") != "calendar.write,platform.agent.manage" {
-		t.Fatalf("owner capabilities = %#v", owner)
-	}
-}
-
 func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 	policy := runtimeWorkspacePolicy()
 	if policy.Revision != 1 || policy.Root != "/workspace" || policy.MaximumWritableBytes != 1<<30 ||

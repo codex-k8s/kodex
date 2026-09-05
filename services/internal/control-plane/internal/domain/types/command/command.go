@@ -504,6 +504,7 @@ type Result struct {
 	ProviderAccount         *entity.ProviderAccount
 	PromotionReceipt        *entity.RoleImagePromotionReceipt
 	ManagedConfiguration    *entity.ManagedConfigurationSet
+	ConfigurationWriteBack  *entity.ConfigurationWriteBack
 	ManagedRevision         *entity.ManagedConfigurationRevision
 }
 

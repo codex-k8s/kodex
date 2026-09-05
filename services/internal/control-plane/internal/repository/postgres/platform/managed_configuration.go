@@ -50,11 +50,19 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, configuration); err != nil {
+		return commandOutcome{}, err
+	}
 	if (action != "CREATE" || payload.ConfigurationRef != "") &&
 		(input.Mutation.ExpectedVersion == nil || configuration.Version != *input.Mutation.ExpectedVersion) {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
+	if action == "DETACH" {
+		if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, configuration.Ref, ""); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	if (action == "CREATE" || action == "SAVE" || action == "DISCARD" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -149,6 +157,16 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, lockErr
 		}
 		_, diagnostics, validationErr := revisionservice.Validate(kind, locked.ContentFormat, locked.Content)
+		if kind == revisionservice.KindRoleImage {
+			validationErr = repository.validateSourceRoleImage(configuration, locked.ContentFormat, locked.Content)
+			if errors.Is(validationErr, errs.ErrUnavailable) {
+				return commandOutcome{}, validationErr
+			}
+			diagnostics = nil
+			if validationErr != nil {
+				diagnostics = []revisionservice.Diagnostic{{Code: "ROLE_IMAGE_CONFIGURATION_INVALID", Message: "Role image configuration is incompatible with the active catalog"}}
+			}
+		}
 		if kind == revisionservice.KindEmailMailbox {
 			diagnostics, validationErr = repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision)
 			if validationErr != nil && !errors.Is(validationErr, errs.ErrInvalid) {
@@ -193,6 +211,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				return commandOutcome{}, errs.ErrInvalid
 			}
 		}
+		if kind == revisionservice.KindRoleImage {
+			if err := repository.publishSourceRoleImage(ctx, tx, current, configuration, locked.ManagedConfigurationRevision); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		item, setVersion, updatedAt, publishErr := scanPublishedManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationPublishRevision, pgx.StrictNamedArgs{
 			"configuration_set_id": configuration.id, "revision_id": locked.RefID, "expected_version": configuration.Version,
 		}))
@@ -218,6 +241,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				return commandOutcome{}, errs.ErrInvalid
 			}
 			switch consumer.Kind {
+			case "AGENT_CONTINUATION":
+				permission, target, resolveErr := repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", consumer.Ref)
+				if resolveErr != nil || repository.requireAccess(ctx, tx, current, permission, target) != nil {
+					return commandOutcome{}, errs.ErrNotFound
+				}
 			case "AGENT", "WORKFLOW", "SCHEDULE":
 				permission := strings.ToLower(consumer.Kind) + ".manage"
 				if err := repository.requireAccess(ctx, tx, current, permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: consumer.Kind, ResourceRef: consumer.Ref}); err != nil {
@@ -242,6 +270,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				})
 				if resolveErr != nil || repository.requireAccess(ctx, tx, current, "integration.manage", connection) != nil {
 					return commandOutcome{}, errs.ErrNotFound
+				}
+				if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, "", consumer.Ref); err != nil {
+					return commandOutcome{}, err
 				}
 			}
 			var allowed bool
@@ -450,7 +481,7 @@ func managedCommand(kind command.Kind) (string, string) {
 
 func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationConsumer) bool {
 	allowed := map[string][]string{
-		revisionservice.KindPromptTemplate:        {"AGENT", "WORKFLOW", "SCHEDULE"},
+		revisionservice.KindPromptTemplate:        {"AGENT", "AGENT_CONTINUATION", "WORKFLOW", "SCHEDULE"},
 		revisionservice.KindRoleImage:             {"RUNTIME_ENVIRONMENT"},
 		revisionservice.KindIntegrationDefinition: {"INTEGRATION_CONNECTION"},
 		revisionservice.KindSystemSTT:             {"STT_SERVICE"},

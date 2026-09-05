@@ -330,6 +330,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.applyAccessCommand(ctx, tx, scope, input)
 	case command.ConfigureRoleImageGitSource, command.ConfigureIntegrationDefinitionGitSource, command.RefreshRoleImageGitSource, command.RefreshIntegrationDefinitionGitSource:
 		return repository.changeConfigurationSource(ctx, tx, scope, input)
+	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
+		return repository.changeConfigurationWriteBack(ctx, tx, scope, input)
 	case command.CreateEmailMailboxDraft, command.SaveEmailMailboxDraft, command.ValidateEmailMailboxDraft,
 		command.PublishEmailMailboxDraft, command.DiscardEmailMailboxDraft:
 		return repository.changeEmailMailbox(ctx, tx, scope, input)
@@ -1021,24 +1023,28 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 	if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectAgentsOrganizationIdRef, scope.organizationID, payload.AgentRef).Scan(&projectID, &projectRef, &current); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
-	if current != *input.Mutation.ExpectedVersion {
-		return commandOutcome{}, errs.ErrVersionMismatch
-	}
-	grantCapability := payload.BindingRef
-	if input.Kind == command.ChangeAgentGrant {
-		grantCapability = "platform.integration.grant"
-	}
-	if payload.Enabled {
-		var allowed bool
-		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingActorCanGrant, pgx.StrictNamedArgs{
-			"actor_platform_role": scope.role, "organization_id": scope.organizationID,
-			"project_id": projectID, "actor_id": scope.actorID, "capability_key": grantCapability,
-		}).Scan(&allowed); err != nil {
+	var capabilityKey string
+	if input.Kind == command.ChangeAgentCapability {
+		if !validCapabilityKey(payload.BindingRef) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectEnabledCapability, payload.BindingRef).Scan(&capabilityKey); errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrNotFound
+		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if !allowed {
-			return commandOutcome{}, errs.ErrForbidden
+	}
+	if input.Kind == command.ChangeAgentGrant {
+		if err := repository.requireAgentIntegrationGrantAuthority(ctx, tx, scope, payload.AgentRef, payload.BindingRef); err != nil {
+			return commandOutcome{}, err
 		}
+	} else if payload.Enabled {
+		if err := repository.requireCapabilityGrantAuthority(ctx, tx, scope, projectRef, payload.AgentRef, payload.BindingRef); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if current != *input.Mutation.ExpectedVersion {
+		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	if input.Kind == command.ChangeAgentGrant {
 		if payload.Enabled {
@@ -1052,15 +1058,6 @@ func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx,
 			}
 		}
 	} else if input.Kind == command.ChangeAgentCapability {
-		if !validCapabilityKey(payload.BindingRef) {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		var capabilityKey string
-		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectEnabledCapability, payload.BindingRef).Scan(&capabilityKey); errors.Is(err, pgx.ErrNoRows) {
-			return commandOutcome{}, errs.ErrNotFound
-		} else if err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
 		query := queryCommandsChangeagentbindingRemoveCapability
 		if payload.Enabled {
 			query = queryCommandsChangeagentbindingAppendCapability
@@ -2064,6 +2061,9 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = launch
+	if err := repository.authorizeCommand(ctx, tx, scope, nested); err != nil {
+		return commandOutcome{}, err
+	}
 	outcome, err := repository.launchRun(ctx, tx, scope, nested)
 	if err != nil {
 		return commandOutcome{}, err

@@ -99,7 +99,7 @@
         "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] },
         "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] },
         "required": { "type": "boolean" },
-        "maximumLength": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 },
         "allowEmpty": { "type": "boolean", "description": "Пустая строка допустима только в PLAIN input/output, не в конфигурации подключения." },
         "minimum": { "type": "integer", "minimum": 0 },
         "maximum": { "type": "integer", "minimum": 0 },

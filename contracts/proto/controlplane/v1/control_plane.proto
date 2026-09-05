@@ -71,6 +71,7 @@ service PlatformQueryService {
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc GetAgentEffectiveCapabilities(GetAgentEffectiveCapabilitiesRequest) returns (GetAgentEffectiveCapabilitiesResponse);
   rpc ListConfigOverlayRevisions(ListConfigOverlayRevisionsRequest) returns (ListConfigOverlayRevisionsResponse);
   rpc GetConfigOverlayRevision(GetConfigOverlayRevisionRequest) returns (GetConfigOverlayRevisionResponse);
   rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
@@ -90,6 +91,8 @@ service PlatformQueryService {
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
   rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
+  rpc GetManagedConfigurationGitWriteBack(GetManagedConfigurationGitWriteBackRequest) returns (GetManagedConfigurationGitWriteBackResponse);
+  rpc ListManagedConfigurationGitWriteBacks(ListManagedConfigurationGitWriteBacksRequest) returns (ListManagedConfigurationGitWriteBacksResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
   rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
   rpc GetRuntimeEnvironmentImpact(GetRuntimeEnvironmentImpactRequest) returns (GetRuntimeEnvironmentImpactResponse);
@@ -255,6 +258,20 @@ service PlatformCommandService {
   rpc ConfigureIntegrationDefinitionGitSource(ConfigureIntegrationDefinitionGitSourceRequest) returns (ConfigureIntegrationDefinitionGitSourceResponse);
   rpc RefreshRoleImageGitSource(RefreshRoleImageGitSourceRequest) returns (RefreshRoleImageGitSourceResponse);
   rpc RefreshIntegrationDefinitionGitSource(RefreshIntegrationDefinitionGitSourceRequest) returns (RefreshIntegrationDefinitionGitSourceResponse);
+  rpc PrepareRoleImageGitWriteBack(PrepareRoleImageGitWriteBackRequest) returns (PrepareRoleImageGitWriteBackResponse);
+  rpc PrepareIntegrationDefinitionGitWriteBack(PrepareIntegrationDefinitionGitWriteBackRequest) returns (PrepareIntegrationDefinitionGitWriteBackResponse);
+  rpc ApproveManagedConfigurationGitWriteBack(ApproveManagedConfigurationGitWriteBackRequest) returns (ApproveManagedConfigurationGitWriteBackResponse);
+  rpc RejectManagedConfigurationGitWriteBack(RejectManagedConfigurationGitWriteBackRequest) returns (RejectManagedConfigurationGitWriteBackResponse);
+  rpc CancelManagedConfigurationGitWriteBack(CancelManagedConfigurationGitWriteBackRequest) returns (CancelManagedConfigurationGitWriteBackResponse);
+}
+
+// Только integration-gateway; proposal branch и PR имеют отдельные effect receipts.
+service ManagedConfigurationGitWriteBackWorkService {
+  rpc ClaimManagedConfigurationGitWriteBackWork(ClaimManagedConfigurationGitWriteBackWorkRequest) returns (ClaimManagedConfigurationGitWriteBackWorkResponse);
+  rpc RenewManagedConfigurationGitWriteBackWork(RenewManagedConfigurationGitWriteBackWorkRequest) returns (RenewManagedConfigurationGitWriteBackWorkResponse);
+  rpc BeginManagedConfigurationGitWriteBackEffect(BeginManagedConfigurationGitWriteBackEffectRequest) returns (BeginManagedConfigurationGitWriteBackEffectResponse);
+  rpc CompleteManagedConfigurationGitWriteBackEffect(CompleteManagedConfigurationGitWriteBackEffectRequest) returns (CompleteManagedConfigurationGitWriteBackEffectResponse);
+  rpc FailManagedConfigurationGitWriteBackWork(FailManagedConfigurationGitWriteBackWorkRequest) returns (FailManagedConfigurationGitWriteBackWorkResponse);
 }
 
 // Отдельный owner work для Git-конфигураций; не создаёт runtime Run/Turn/grant.
@@ -2018,6 +2035,9 @@ message ListRunsRequest {
   PageRequest page = 2;
   repeated RunState states = 3;
   string query = 4;
+  bool resumable_sessions_only = 5;
+  string target_type = 6;
+  string target_ref = 7;
 }
 message ListRunsResponse {
   repeated Run runs = 1;
@@ -3589,6 +3609,46 @@ message GetAgentRuntimeConfigurationRequest {
 message GetAgentRuntimeConfigurationResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
 }
+message GetAgentEffectiveCapabilitiesRequest {
+  string agent_ref = 1;
+  string workflow_ref = 2;
+  string step_key = 3;
+  string query = 4;
+  PageRequest page = 5;
+}
+message EffectiveCapability {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+  string source = 4;
+  string reason = 5;
+  bool requested = 6;
+  bool required = 7;
+  bool effective = 8;
+  bool grantable = 9;
+  string connection_ref = 10;
+  string grant_ref = 11;
+  string definition_digest = 12;
+  int64 connection_version = 13;
+  int64 grant_version = 14;
+}
+message GetAgentEffectiveCapabilitiesResponse {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 agent_version = 3;
+  string runtime_configuration_ref = 4;
+  int64 runtime_configuration_version = 5;
+  string environment_version_ref = 6;
+  string workflow_ref = 7;
+  string workflow_version_ref = 8;
+  string step_key = 9;
+  string digest = 10;
+  bool runtime_ready = 11;
+  google.protobuf.Timestamp evaluated_at = 12;
+  repeated EffectiveCapability capabilities = 13;
+  int64 total = 14;
+  PageInfo page = 15;
+}
 message ListConfigOverlayRevisionsRequest {
   string agent_ref = 1;
   string query = 2;
@@ -4970,6 +5030,7 @@ message PromptTemplateDiagnostic {
   string message = 3;
   int32 line = 4;
   int32 column = 5;
+  string variable_name = 6;
 }
 message ValidatePromptTemplateRequest {
   string template = 1;
@@ -4983,7 +5044,73 @@ message PreviewPromptTemplateRequest {
   string target_kind = 2;
   string target_ref = 3;
   bool include_full_materialization = 4;
+  PromptPreviewContext context = 5;
+  string expected_context_digest = 6;
 }
+
+// Все ссылки разрешает owner; значения служат только выбором и OCC pin.
+message PromptPreviewContext {
+  string agent_ref = 1;
+  string workflow_revision_ref = 2;
+  string workflow_stage_key = 3;
+  int64 expected_agent_version = 4;
+  int64 expected_workflow_version = 5;
+  google.protobuf.Struct input = 6;
+  string attachment_set_ref = 7;
+}
+
+enum PromptSemanticSlot {
+  PROMPT_SEMANTIC_SLOT_UNSPECIFIED = 0;
+  PROMPT_SEMANTIC_SLOT_WORKFLOW = 1;
+  PROMPT_SEMANTIC_SLOT_STAGE = 2;
+  PROMPT_SEMANTIC_SLOT_PURPOSE = 3;
+  PROMPT_SEMANTIC_SLOT_EXPECTED_RESULT = 4;
+  PROMPT_SEMANTIC_SLOT_INPUT = 5;
+  PROMPT_SEMANTIC_SLOT_CONSTRAINTS = 6;
+  PROMPT_SEMANTIC_SLOT_EFFECTIVE_CAPABILITIES = 7;
+  PROMPT_SEMANTIC_SLOT_FILES = 8;
+  PROMPT_SEMANTIC_SLOT_TOOLS = 9;
+  PROMPT_SEMANTIC_SLOT_INTEGRATIONS = 10;
+  PROMPT_SEMANTIC_SLOT_RUNTIME_CHANGES = 11;
+}
+
+enum PromptSectionSource {
+  PROMPT_SECTION_SOURCE_UNSPECIFIED = 0;
+  PROMPT_SECTION_SOURCE_USER_TEMPLATE = 1;
+  PROMPT_SECTION_SOURCE_PLATFORM = 2;
+}
+
+message PromptSlotProvenance {
+  PromptSemanticSlot slot = 1;
+  PromptSectionSource source = 2;
+  int32 position = 3;
+}
+
+message PromptPreviewSection {
+  PromptSectionSource source = 1;
+  PromptSemanticSlot slot = 2;
+  string content = 3;
+}
+
+message PromptContextPin {
+  string digest = 1;
+  string agent_ref = 2;
+  int64 agent_version = 3;
+  string workflow_ref = 4;
+  int64 workflow_version = 5;
+  string workflow_revision_ref = 6;
+  string workflow_stage_key = 7;
+  string runtime_configuration_ref = 8;
+  string runtime_configuration_digest = 9;
+  string environment_binding_ref = 10;
+  int64 environment_binding_version = 11;
+  string environment_version_ref = 12;
+  string environment_digest = 13;
+  string attachment_set_ref = 14;
+  string attachment_manifest_digest = 15;
+  string previous_runtime_revision_ref = 16;
+}
+
 message PreviewPromptTemplateResponse {
   string safe_preview = 1;
   string full_materialized_prompt = 2;
@@ -4992,6 +5119,14 @@ message PreviewPromptTemplateResponse {
   string template_digest = 5;
   string materialization_digest = 6;
   repeated string effective_capabilities = 7;
+  string service_template_revision = 8;
+  string service_template_digest = 9;
+  string variable_snapshot_digest = 10;
+  string locale = 11;
+  repeated PromptSlotProvenance slots = 12;
+  repeated PromptPreviewSection sections = 13;
+  PromptContextPin context_pin = 14;
+  bool complete = 15;
 }
 
 enum ManagedConfigurationKind {
@@ -6232,3 +6367,207 @@ message FailManagedConfigurationSourceWorkRequest {
   ManagedConfigurationSourceFailure failure_code = 2;
 }
 message FailManagedConfigurationSourceWorkResponse { ManagedConfigurationGitSource source = 1; }
+
+enum ManagedConfigurationGitWriteBackState {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_WAITING_APPROVAL = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_QUEUED = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_CLAIMED = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_EFFECT_STARTED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_SUCCEEDED = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_REJECTED = 6;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_CANCELLED = 7;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_EXPIRED = 8;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_FAILED = 9;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_STATE_UNKNOWN_OUTCOME = 10;
+}
+enum ManagedConfigurationGitWriteBackEffect {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_BRANCH = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_EFFECT_PULL_REQUEST = 2;
+}
+enum ManagedConfigurationGitWriteBackFailure {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_UNAVAILABLE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CREDENTIAL_REJECTED = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_ACCESS_DENIED = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_SOURCE_CHANGED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CONTENT_INVALID = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_RESPONSE_INVALID = 6;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_AUTHORITY_CHANGED = 7;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_DEADLINE_EXCEEDED = 8;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_BRANCH_CONFLICT = 9;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_OUTCOME_UNCONFIRMED = 10;
+}
+enum ManagedConfigurationGitWriteBackAction {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_APPROVE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REJECT = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_CANCEL = 3;
+}
+enum ManagedConfigurationGitWriteBackActionReason {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_NONE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_FORBIDDEN = 2;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_STATE = 3;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_SOURCE_CHANGED = 4;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_EXPIRED = 5;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_ACTION_REASON_OUTCOME_UNKNOWN = 6;
+}
+message ManagedConfigurationGitWriteBackActionAvailability {
+  ManagedConfigurationGitWriteBackAction action = 1;
+  bool enabled = 2;
+  ManagedConfigurationGitWriteBackActionReason reason = 3;
+}
+// Публичный summary не содержит content, credential descriptor или private package.
+message ManagedConfigurationGitWriteBack {
+  string ref = 1;
+  int64 version = 2;
+  string configuration_ref = 3;
+  ManagedConfigurationKind kind = 4;
+  int64 configuration_version = 5;
+  string source_ref = 6;
+  int64 source_version = 7;
+  string connection_ref = 8;
+  int64 connection_version = 9;
+  string repository_ref = 10;
+  string source_ref_name = 11;
+  string path = 12;
+  string base_commit_sha = 13;
+  string base_content_sha256 = 14;
+  string proposed_content_sha256 = 15;
+  string content_format = 16;
+  string proposal_branch = 17;
+  string approval_digest = 18;
+  ManagedConfigurationGitWriteBackState state = 19;
+  ManagedConfigurationGitWriteBackFailure failure_code = 20;
+  string candidate_commit_sha = 21;
+  string pull_request_ref = 22;
+  string pull_request_url = 23;
+  google.protobuf.Timestamp created_at = 24;
+  google.protobuf.Timestamp expires_at = 25;
+  google.protobuf.Timestamp approved_at = 26;
+  google.protobuf.Timestamp completed_at = 27;
+  repeated ManagedConfigurationGitWriteBackActionAvailability next_actions = 28;
+  google.protobuf.Timestamp branch_confirmed_at = 29;
+  google.protobuf.Timestamp pull_request_confirmed_at = 30;
+}
+message PrepareRoleImageGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  int64 expected_source_version = 3;
+  string content = 4;
+}
+message PrepareRoleImageGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message PrepareIntegrationDefinitionGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  int64 expected_source_version = 3;
+  string content = 4;
+}
+message PrepareIntegrationDefinitionGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message ApproveManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+  string approval_digest = 3;
+}
+message ApproveManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message RejectManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+  string approval_digest = 3;
+}
+message RejectManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message CancelManagedConfigurationGitWriteBackRequest {
+  MutationContext mutation = 1;
+  string proposal_ref = 2;
+}
+message CancelManagedConfigurationGitWriteBackResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message GetManagedConfigurationGitWriteBackRequest { string proposal_ref = 1; }
+// Полный plan требует того же отдельного source-read права, что и исходный editor.
+message GetManagedConfigurationGitWriteBackResponse {
+  ManagedConfigurationGitWriteBack proposal = 1;
+  string base_content = 2;
+  string proposed_content = 3;
+}
+message ListManagedConfigurationGitWriteBacksRequest {
+  string configuration_ref = 1;
+  PageRequest page = 2;
+}
+message ListManagedConfigurationGitWriteBacksResponse {
+  repeated ManagedConfigurationGitWriteBack proposals = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message ManagedConfigurationGitWriteBackLease {
+  string proposal_ref = 1;
+  int64 attempt = 2;
+  int64 claim_generation = 3;
+  string claimant = 4;
+  string fence = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+enum ManagedConfigurationGitWriteBackWorkMode {
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_EXECUTE = 1;
+  MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_RECOVER_READ_ONLY = 2;
+}
+// Commit identity и marker назначает owner; токен никогда не входит в URL/argv.
+message ManagedConfigurationGitWriteBackWork {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBack proposal = 2;
+  ManagedConfigurationGitWriteBackWorkMode mode = 3;
+  ManagedConfigurationGitWriteBackEffect effect = 4;
+  string definition_key = 5;
+  string definition_version = 6;
+  string definition_digest = 7;
+  bytes definition_package = 8;
+  google.protobuf.Struct public_configuration = 9;
+  IntegrationCredentialRevision credential_revision = 10;
+  bytes proposed_content = 11;
+  string effect_marker = 12;
+  string commit_message = 13;
+  string commit_author_name = 14;
+  string commit_author_email = 15;
+  google.protobuf.Timestamp commit_time = 16;
+  string candidate_tree_sha = 17;
+  string candidate_blob_sha = 18;
+  google.protobuf.Timestamp effect_started_at = 19;
+  google.protobuf.Timestamp deadline = 20;
+}
+message ClaimManagedConfigurationGitWriteBackWorkRequest {
+  string claimant = 1;
+  int32 limit = 2;
+}
+message ClaimManagedConfigurationGitWriteBackWorkResponse { repeated ManagedConfigurationGitWriteBackWork work = 1; }
+message RenewManagedConfigurationGitWriteBackWorkRequest { ManagedConfigurationGitWriteBackLease lease = 1; }
+message RenewManagedConfigurationGitWriteBackWorkResponse { ManagedConfigurationGitWriteBackLease lease = 1; }
+message BeginManagedConfigurationGitWriteBackEffectRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackEffect effect = 2;
+  string candidate_commit_sha = 3;
+  string candidate_tree_sha = 4;
+  string candidate_blob_sha = 5;
+  string parent_commit_sha = 6;
+  string content_sha256 = 7;
+  string base_blob_sha = 8;
+}
+// Повтор Begin возвращает already_started=true и не разрешает повторный effect.
+message BeginManagedConfigurationGitWriteBackEffectResponse {
+  ManagedConfigurationGitWriteBack proposal = 1;
+  bool already_started = 2;
+}
+message CompleteManagedConfigurationGitWriteBackEffectRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackEffect effect = 2;
+  string candidate_commit_sha = 3;
+  string content_sha256 = 4;
+  string pull_request_ref = 5;
+  string pull_request_url = 6;
+}
+message CompleteManagedConfigurationGitWriteBackEffectResponse { ManagedConfigurationGitWriteBack proposal = 1; }
+message FailManagedConfigurationGitWriteBackWorkRequest {
+  ManagedConfigurationGitWriteBackLease lease = 1;
+  ManagedConfigurationGitWriteBackFailure failure_code = 2;
+}
+message FailManagedConfigurationGitWriteBackWorkResponse { ManagedConfigurationGitWriteBack proposal = 1; }

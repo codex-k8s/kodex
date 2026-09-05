@@ -1018,7 +1018,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	encodedInput, err := json.Marshal(boundedInput)
-	if err != nil || len(encodedInput) > 64<<10 {
+	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
 	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef string
@@ -1050,6 +1050,9 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
+		return nil, errs.ErrInvalid
+	}
+	if len(encodedInput) > 64<<10 && (definitionKey != "github" || capability.Operation != "github.repository.content.update") {
 		return nil, errs.ErrInvalid
 	}
 	var resourceScope map[string]string

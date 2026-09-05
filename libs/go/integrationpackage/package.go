@@ -21,12 +21,14 @@ import (
 )
 
 const (
-	APIVersion = "integrations.kodex.io/v1"
-	Kind       = "IntegrationPackage"
-	Origin     = "SHIPPED"
-	OriginUI   = "UI"
-	OriginGit  = "GIT"
-	maxBytes   = 256 << 10
+	APIVersion     = "integrations.kodex.io/v1"
+	Kind           = "IntegrationPackage"
+	Origin         = "SHIPPED"
+	OriginUI       = "UI"
+	OriginGit      = "GIT"
+	maxBytes       = 256 << 10
+	maxObjectBytes = 512 << 10
+	maxFieldLength = 349528
 )
 
 var (
@@ -336,7 +338,7 @@ func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
 }
 
 func decodeJSONObject(raw []byte) (map[string]json.RawMessage, error) {
-	if len(raw) == 0 || len(raw) > maxBytes {
+	if len(raw) == 0 || len(raw) > maxObjectBytes {
 		return nil, errors.New("JSON object size is invalid")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -562,7 +564,7 @@ func validateFields(fields []Field) (map[string]struct{}, error) {
 	for _, field := range fields {
 		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			(field.AllowEmpty && (field.Type != "STRING" || field.Format != "PLAIN" || len(field.AllowedValues) > 0)) ||
-			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
+			field.MaximumLength < 0 || field.MaximumLength > maxFieldLength || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||
 			(field.Type != "STRING" && field.MaximumLength != 0) ||

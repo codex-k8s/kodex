@@ -115,6 +115,9 @@ func (repository *Repository) configurationSourceAuthority(ctx context.Context, 
 	if kind == "ROLE_IMAGE" && repository.requireAccess(ctx, tx, current, "image.build", target) != nil {
 		return managedSet{}, errs.ErrForbidden
 	}
+	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, set); err != nil {
+		return managedSet{}, err
+	}
 	connectionRef := payload.ConnectionRef
 	if !configure {
 		source, err := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)
@@ -190,6 +193,9 @@ func (repository *Repository) changeConfigurationSource(ctx context.Context, tx 
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	payload := input.Payload.(command.ManagedConfigurationGitSourceInput)
+	if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, set.Ref, ""); err != nil {
+		return commandOutcome{}, err
+	}
 	_, configure := configurationSourceCommand(input.Kind)
 	source, readErr := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)
 	if readErr != nil && !errors.Is(readErr, pgx.ErrNoRows) {

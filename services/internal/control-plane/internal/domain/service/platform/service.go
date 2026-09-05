@@ -378,12 +378,29 @@ func (service *Service) ValidatePromptTemplate(ctx context.Context, p value.Prin
 }
 
 func (service *Service) PreviewPromptTemplate(ctx context.Context, p value.Principal, template, targetKind, targetRef string, includeFull bool) (promptservice.Materialization, error) {
+	return service.PreviewPromptTemplateWithContext(ctx, p, template, targetKind, targetRef, includeFull, query.PromptPreviewContext{}, "")
+}
+
+func (service *Service) PreviewPromptTemplateWithContext(ctx context.Context, p value.Principal, template, targetKind, targetRef string, includeFull bool, previewContext query.PromptPreviewContext, expectedContextDigest string) (promptservice.Materialization, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return promptservice.Materialization{}, err
 	}
 	if targetKind == "" {
 		targetKind = "SYNTHETIC"
+	}
+	if expectedContextDigest != "" {
+		decoded, decodeErr := hex.DecodeString(expectedContextDigest)
+		if decodeErr != nil || len(decoded) != sha256.Size || strings.ToLower(expectedContextDigest) != expectedContextDigest {
+			return promptservice.Materialization{}, errs.ErrInvalid
+		}
+	}
+	if targetKind == "SYNTHETIC" || targetKind == "RUN" || targetKind == "SESSION" {
+		if previewContext.AgentRef != "" || previewContext.WorkflowRevisionRef != "" || previewContext.WorkflowStageKey != "" ||
+			previewContext.ExpectedAgentVersion != 0 || previewContext.ExpectedWorkflowVersion != 0 ||
+			len(previewContext.Input) != 0 || previewContext.AttachmentSetRef != "" {
+			return promptservice.Materialization{}, errs.ErrInvalid
+		}
 	}
 	var snapshot entity.PromptMaterializationSnapshot
 	authorizationTarget := organizationTargetForPreview(p.AuthorityTenant)
@@ -403,8 +420,21 @@ func (service *Service) PreviewPromptTemplate(ctx context.Context, p value.Princ
 		}
 		authorizationTarget = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: snapshot.ProjectRef,
 			ResourceKind: targetKind, ResourceRef: targetRef}
+	case promptservice.TargetAgent, promptservice.TargetWorkflowStage:
+		snapshot, err = service.repository.GetPromptPreviewContextSnapshot(ctx, p, targetKind, targetRef, previewContext)
+		if err != nil {
+			return promptservice.Materialization{}, err
+		}
+		resourceKind := targetKind
+		if targetKind == promptservice.TargetWorkflowStage {
+			resourceKind = "WORKFLOW"
+		}
+		authorizationTarget = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: snapshot.ProjectRef, ResourceKind: resourceKind, ResourceRef: targetRef}
 	default:
 		return promptservice.Materialization{}, errs.ErrInvalid
+	}
+	if expectedContextDigest != "" && expectedContextDigest != snapshot.ContextPin.Digest {
+		return promptservice.Materialization{}, errs.ErrVersionMismatch
 	}
 	if strings.TrimSpace(template) == "" {
 		template = snapshot.TemplateContent
@@ -414,15 +444,8 @@ func (service *Service) PreviewPromptTemplate(ctx context.Context, p value.Princ
 		snapshot.TemplateRef = "preview_" + snapshot.TemplateDigest[:24]
 		snapshot.TemplateContent = template
 	}
-	materialized, err := promptservice.Materialize(template, promptservice.Snapshot{
-		TargetKind: snapshot.TargetKind, TargetRef: snapshot.TargetRef, ProjectRef: snapshot.ProjectRef,
-		RunRef: snapshot.RunRef, SessionRef: snapshot.SessionRef, TemplateRef: snapshot.TemplateRef,
-		TemplateDigest: snapshot.TemplateDigest, Variables: snapshot.Variables, StructuredVariables: snapshot.StructuredVariables,
-		UserCapabilities: snapshot.UserCapabilities, AgentCapabilities: snapshot.AgentCapabilities,
-		WorkflowCapabilities: snapshot.WorkflowCapabilities, ConnectionCapabilities: snapshot.ConnectionCapabilities,
-		HumanGateCapabilities: snapshot.HumanGateCapabilities, WorkflowStage: snapshot.WorkflowStage,
-		Automation: snapshot.Automation, SessionContinuation: snapshot.SessionContinuation,
-	})
+	materialized, err := promptservice.Materialize(template, promptservice.FromSnapshot(snapshot))
+	materialized.ContextPin = snapshot.ContextPin
 	if err != nil {
 		return materialized, errs.ErrInvalid
 	}
@@ -448,6 +471,7 @@ func syntheticPromptSnapshot(template string) entity.PromptMaterializationSnapsh
 	variables["project.ref"], variables["project.name"] = "prj_preview0001", "Проект"
 	variables["agent.ref"], variables["agent.name"] = "agt_preview0001", "Агент"
 	return entity.PromptMaterializationSnapshot{
+		ServiceTemplateRevision: promptservice.ServiceTemplateRevision, Locale: "en",
 		TargetKind: promptservice.TargetAgent, TargetRef: "agt_preview0001", ProjectRef: "prj_preview0001",
 		TemplateRef: "preview_" + digestHex[:24], TemplateDigest: digestHex, TemplateContent: template,
 		Variables: variables, UserCapabilities: []string{}, AgentCapabilities: []string{},
@@ -1172,6 +1196,10 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 }
 
 func knownCommand(kind command.Kind) bool {
+	switch kind {
+	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
+		return true
+	}
 	if kind == command.ConfigureRoleImageGitSource || kind == command.ConfigureIntegrationDefinitionGitSource || kind == command.RefreshRoleImageGitSource || kind == command.RefreshIntegrationDefinitionGitSource {
 		return true
 	}

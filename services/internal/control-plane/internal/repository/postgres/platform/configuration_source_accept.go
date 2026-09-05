@@ -24,6 +24,9 @@ var queryConfigurationSourceAccept string
 //go:embed sql/configuration_source__accept_set.sql
 var queryConfigurationSourceAcceptSet string
 
+//go:embed sql/configuration_source__accept_raw.sql
+var queryConfigurationSourceAcceptRaw string
+
 func validSourceCommit(commit string) bool {
 	if len(commit) != 40 && len(commit) != 64 {
 		return false
@@ -173,6 +176,12 @@ func (repository *Repository) completeConfigurationSource(ctx context.Context, p
 			if err := tx.QueryRow(ctx, queryManagedConfigurationTouchSet, pgx.StrictNamedArgs{"configuration_set_id": set.id, "expected_version": set.Version}).Scan(&set.Version, &set.UpdatedAt); err != nil {
 				return entity.ManagedConfigurationGitSource{}, errs.ErrConflict
 			}
+		}
+	}
+	if next == entity.ConfigurationSourceReady {
+		tag, err := tx.Exec(ctx, queryConfigurationSourceAcceptRaw, source.id, input.CommitSHA, input.ContentSHA256, string(input.Content))
+		if err != nil || tag.RowsAffected() != 1 {
+			return entity.ManagedConfigurationGitSource{}, errs.ErrUnavailable
 		}
 	}
 	result, err := repository.sourceState(ctx, tx, actor, source, next, failure)

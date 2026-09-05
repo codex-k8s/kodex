@@ -5,14 +5,15 @@ WITH source AS (
     WHERE overlay_version.agent_id = @agent_id::uuid
       AND overlay_version.ref = @source_ref
       AND overlay_version.state IN ('PUBLISHED', 'SUPERSEDED')
+      AND overlay_version.published_at IS NOT NULL
 ), inserted AS (
     INSERT INTO control_plane.agent_config_overlay_versions
         (ref, organization_id, agent_id, version_number, parent_version_id, state, content, digest,
-         validation_errors, created_by, validated_at, published_at)
+         validation_errors, created_by, validated_at, published_at, diagnostics, schema_revision, schema_digest)
     SELECT @ref, @organization_id::uuid, @agent_id::uuid,
            (SELECT max(existing.version_number) + 1 FROM control_plane.agent_config_overlay_versions existing WHERE existing.agent_id = @agent_id::uuid),
            source.id, 'PUBLISHED', source.content, source.digest, '[]'::jsonb,
-           @created_by::uuid, clock_timestamp(), clock_timestamp()
+           @created_by::uuid, clock_timestamp(), clock_timestamp(), '[]'::jsonb, @schema_revision, @schema_digest
     FROM source
     RETURNING id, ref
 ), updated_agent AS (

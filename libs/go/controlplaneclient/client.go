@@ -68,24 +68,25 @@ type Config struct {
 }
 
 type Client struct {
-	Query                controlplanev1.PlatformQueryServiceClient
-	Command              controlplanev1.PlatformCommandServiceClient
-	Assistant            controlplanev1.SystemAssistantServiceClient
-	Runtime              controlplanev1.RuntimeWorkServiceClient
-	RuntimeSecrets       controlplanev1.RuntimeSecretWorkServiceClient
-	RuntimeSecretDrafts  controlplanev1.RuntimeSecretDraftWorkServiceClient
-	ConfigurationSources controlplanev1.ManagedConfigurationSourceWorkServiceClient
-	SessionArchive       controlplanev1.SessionArchiveWorkServiceClient
-	Interaction          controlplanev1.InteractionWorkServiceClient
-	RoleImages           controlplanev1.RoleImageServiceClient
-	Access               controlplanev1.AccessServiceClient
-	ProviderCredentials  controlplanev1.ProviderCredentialMaterializerServiceClient
-	resolver             internalrpcauthorityv1.AuthorityProofResolverServiceClient
-	issuer               *authorityclient.LocalConnection
-	raw, protected       *grpc.ClientConn
-	proofOperations      map[string]string
-	projectRequired      map[string]struct{}
-	grantFile            string
+	Query                   controlplanev1.PlatformQueryServiceClient
+	Command                 controlplanev1.PlatformCommandServiceClient
+	Assistant               controlplanev1.SystemAssistantServiceClient
+	Runtime                 controlplanev1.RuntimeWorkServiceClient
+	RuntimeSecrets          controlplanev1.RuntimeSecretWorkServiceClient
+	RuntimeSecretDrafts     controlplanev1.RuntimeSecretDraftWorkServiceClient
+	ConfigurationSources    controlplanev1.ManagedConfigurationSourceWorkServiceClient
+	ConfigurationWriteBacks controlplanev1.ManagedConfigurationGitWriteBackWorkServiceClient
+	SessionArchive          controlplanev1.SessionArchiveWorkServiceClient
+	Interaction             controlplanev1.InteractionWorkServiceClient
+	RoleImages              controlplanev1.RoleImageServiceClient
+	Access                  controlplanev1.AccessServiceClient
+	ProviderCredentials     controlplanev1.ProviderCredentialMaterializerServiceClient
+	resolver                internalrpcauthorityv1.AuthorityProofResolverServiceClient
+	issuer                  *authorityclient.LocalConnection
+	raw, protected          *grpc.ClientConn
+	proofOperations         map[string]string
+	projectRequired         map[string]struct{}
+	grantFile               string
 }
 
 type operationSet map[string]string
@@ -162,6 +163,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	client.RuntimeSecrets = controlplanev1.NewRuntimeSecretWorkServiceClient(protected)
 	client.RuntimeSecretDrafts = controlplanev1.NewRuntimeSecretDraftWorkServiceClient(protected)
 	client.ConfigurationSources = controlplanev1.NewManagedConfigurationSourceWorkServiceClient(protected)
+	client.ConfigurationWriteBacks = controlplanev1.NewManagedConfigurationGitWriteBackWorkServiceClient(protected)
 	client.SessionArchive = controlplanev1.NewSessionArchiveWorkServiceClient(protected)
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)

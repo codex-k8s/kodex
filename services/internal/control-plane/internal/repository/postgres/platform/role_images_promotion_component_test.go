@@ -55,6 +55,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if err != nil || created.Build == nil {
 		t.Fatalf("create promotion recipe: result=%#v err=%v", created, err)
 	}
+	assertManagedRoleImageBuild(t, ctx, repository, created.Recipe, *created.Build)
+	testManagedRoleImageDraftFence(t, ctx, repository, owner, resolvedOwner, created.Recipe, *created.Build)
 	artifact := seedAdmittedPromotionArtifact(t, ctx, repository, resolvedOwner,
 		created.Recipe, *created.Build)
 	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
