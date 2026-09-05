@@ -1083,6 +1083,30 @@ func (e EmailMailboxOperation) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxPublicationFailureCode.
+const (
+	EmailMailboxPublicationFailureCodeEMAILMAILBOXCONNECTIONCHANGED EmailMailboxPublicationFailureCode = "EMAIL_MAILBOX_CONNECTION_CHANGED"
+	EmailMailboxPublicationFailureCodeEMAILMAILBOXDELIVERYEXPIRED   EmailMailboxPublicationFailureCode = "EMAIL_MAILBOX_DELIVERY_EXPIRED"
+	EmailMailboxPublicationFailureCodeEMAILMAILBOXDELIVERYREJECTED  EmailMailboxPublicationFailureCode = "EMAIL_MAILBOX_DELIVERY_REJECTED"
+	EmailMailboxPublicationFailureCodeEmpty                         EmailMailboxPublicationFailureCode = ""
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxPublicationFailureCode enum.
+func (e EmailMailboxPublicationFailureCode) Valid() bool {
+	switch e {
+	case EmailMailboxPublicationFailureCodeEMAILMAILBOXCONNECTIONCHANGED:
+		return true
+	case EmailMailboxPublicationFailureCodeEMAILMAILBOXDELIVERYEXPIRED:
+		return true
+	case EmailMailboxPublicationFailureCodeEMAILMAILBOXDELIVERYREJECTED:
+		return true
+	case EmailMailboxPublicationFailureCodeEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailMailboxPublicationState.
 const (
 	EmailMailboxPublicationStateFAILED     EmailMailboxPublicationState = "FAILED"
@@ -4073,31 +4097,31 @@ func (e SchedulePreviewOverlapPolicy) Valid() bool {
 
 // Defines values for SchedulePreviewInputDayOfWeek.
 const (
-	FRIDAY    SchedulePreviewInputDayOfWeek = "FRIDAY"
-	MONDAY    SchedulePreviewInputDayOfWeek = "MONDAY"
-	SATURDAY  SchedulePreviewInputDayOfWeek = "SATURDAY"
-	SUNDAY    SchedulePreviewInputDayOfWeek = "SUNDAY"
-	THURSDAY  SchedulePreviewInputDayOfWeek = "THURSDAY"
-	TUESDAY   SchedulePreviewInputDayOfWeek = "TUESDAY"
-	WEDNESDAY SchedulePreviewInputDayOfWeek = "WEDNESDAY"
+	SchedulePreviewInputDayOfWeekFRIDAY    SchedulePreviewInputDayOfWeek = "FRIDAY"
+	SchedulePreviewInputDayOfWeekMONDAY    SchedulePreviewInputDayOfWeek = "MONDAY"
+	SchedulePreviewInputDayOfWeekSATURDAY  SchedulePreviewInputDayOfWeek = "SATURDAY"
+	SchedulePreviewInputDayOfWeekSUNDAY    SchedulePreviewInputDayOfWeek = "SUNDAY"
+	SchedulePreviewInputDayOfWeekTHURSDAY  SchedulePreviewInputDayOfWeek = "THURSDAY"
+	SchedulePreviewInputDayOfWeekTUESDAY   SchedulePreviewInputDayOfWeek = "TUESDAY"
+	SchedulePreviewInputDayOfWeekWEDNESDAY SchedulePreviewInputDayOfWeek = "WEDNESDAY"
 )
 
 // Valid indicates whether the value is a known member of the SchedulePreviewInputDayOfWeek enum.
 func (e SchedulePreviewInputDayOfWeek) Valid() bool {
 	switch e {
-	case FRIDAY:
+	case SchedulePreviewInputDayOfWeekFRIDAY:
 		return true
-	case MONDAY:
+	case SchedulePreviewInputDayOfWeekMONDAY:
 		return true
-	case SATURDAY:
+	case SchedulePreviewInputDayOfWeekSATURDAY:
 		return true
-	case SUNDAY:
+	case SchedulePreviewInputDayOfWeekSUNDAY:
 		return true
-	case THURSDAY:
+	case SchedulePreviewInputDayOfWeekTHURSDAY:
 		return true
-	case TUESDAY:
+	case SchedulePreviewInputDayOfWeekTUESDAY:
 		return true
-	case WEDNESDAY:
+	case SchedulePreviewInputDayOfWeekWEDNESDAY:
 		return true
 	default:
 		return false
@@ -6329,15 +6353,20 @@ type EmailMailboxPreview struct {
 
 // EmailMailboxPublication defines model for EmailMailboxPublication.
 type EmailMailboxPublication struct {
-	ConfigurationRevisionRef string                       `json:"configurationRevisionRef"`
-	CreatedAt                Timestamp                    `json:"createdAt"`
-	Digest                   string                       `json:"digest"`
-	FailureCode              string                       `json:"failureCode"`
-	ReadyAt                  *Timestamp                   `json:"readyAt,omitempty"`
-	Ref                      OpaqueRef                    `json:"ref"`
-	Revision                 int64                        `json:"revision"`
-	State                    EmailMailboxPublicationState `json:"state"`
+	ConfigurationRevisionRef string    `json:"configurationRevisionRef"`
+	CreatedAt                Timestamp `json:"createdAt"`
+	Digest                   string    `json:"digest"`
+
+	// FailureCode Непустой код допускается только для FAILED.
+	FailureCode EmailMailboxPublicationFailureCode `json:"failureCode"`
+	ReadyAt     *Timestamp                         `json:"readyAt,omitempty"`
+	Ref         OpaqueRef                          `json:"ref"`
+	Revision    int64                              `json:"revision"`
+	State       EmailMailboxPublicationState       `json:"state"`
 }
+
+// EmailMailboxPublicationFailureCode Непустой код допускается только для FAILED.
+type EmailMailboxPublicationFailureCode string
 
 // EmailMailboxPublicationState defines model for EmailMailboxPublication.State.
 type EmailMailboxPublicationState string

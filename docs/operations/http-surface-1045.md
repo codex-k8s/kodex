@@ -60,6 +60,10 @@ Published `secretDescriptors[].revision` также описан в SDK и пр�
 Регистрация всех 12 публичных RPC и internal EMAIL readback подключена через
 policy59 `78d700683`. Это устраняет structural profile gap, но не доказывает
 исполнение owner, доставку конфигурации или READY.
+Последняя publication относится к connection и может отличаться от выбранной
+draft/historical revision. Только FAILED содержит закрытый failureCode:
+`EMAIL_MAILBOX_DELIVERY_EXPIRED`, `EMAIL_MAILBOX_CONNECTION_CHANGED` либо
+`EMAIL_MAILBOX_DELIVERY_REJECTED`; прочие состояния содержат пустой код.
 
 Источники: #1045/#1046/#1018, MVP-UI-41, CFG и
 `mailbox-owner-lifecycle-1046.md`. HTTP потребляет специализированные CP RPC,
