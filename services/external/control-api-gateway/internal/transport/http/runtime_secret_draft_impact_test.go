@@ -158,11 +158,11 @@ func TestSecretDraftImpactRejectsBrokenOwnerSnapshot(t *testing.T) {
 }
 
 func TestSecretDraftImpactRejectsStaleCursorAndAuthorityWithoutFilteringLocally(t *testing.T) {
-	for _, code := range []codes.Code{codes.InvalidArgument, codes.NotFound, codes.PermissionDenied, codes.Aborted, codes.Unavailable} {
+	for code, expected := range map[codes.Code]int{codes.InvalidArgument: 400, codes.NotFound: 404, codes.PermissionDenied: 403, codes.Aborted: 412, codes.Unavailable: 503} {
 		c := &secretPlanRecorder{failure: status.Error(code, "private owner detail")}
 		w := httptest.NewRecorder()
 		secretPlanHandler(c).ServeHTTP(w, managedTestRequest("GET", "/api/v1/runtime-secret-draft-impact-plans/sdip_fixture01?pageToken=stale", ""))
-		if w.Code < 400 || strings.Contains(w.Body.String(), "private owner") {
+		if w.Code != expected || strings.Contains(w.Body.String(), "private owner") {
 			t.Fatal("owner denial became success")
 		}
 	}

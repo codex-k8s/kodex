@@ -242,13 +242,13 @@ func TestSecretDraftRejectsInvalidReceiptsAndBrokerReadback(t *testing.T) {
 }
 
 func TestSecretDraftPropagatesAuthorityAndUnknownOutcomeWithoutSuccess(t *testing.T) {
-	for _, code := range []codes.Code{codes.NotFound, codes.PermissionDenied, codes.Unauthenticated, codes.Aborted, codes.FailedPrecondition, codes.Unavailable, codes.DeadlineExceeded} {
+	for code, expected := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.Unauthenticated: 401, codes.Aborted: 412, codes.FailedPrecondition: 409, codes.Unavailable: 503, codes.DeadlineExceeded: 504} {
 		for _, method := range []string{"PrepareValidateRuntimeSecretDraft", "CheckSecretDraftReadiness", "ValidateSecretDraft"} {
 			t.Run(code.String()+method, func(t *testing.T) {
 				c := &secretDraftRecorder{failMethod: method, failure: status.Error(code, "private upstream detail")}
 				w := httptest.NewRecorder()
 				secretDraftHandler(c).ServeHTTP(w, managedTestRequest("POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/validate", ""))
-				if w.Code < 400 || strings.Contains(w.Body.String(), "private upstream") {
+				if w.Code != expected || strings.Contains(w.Body.String(), "private upstream") {
 					t.Fatalf("error became success or leaked: %d", w.Code)
 				}
 				if method == "CheckSecretDraftReadiness" && len(c.calls) != 2 {
