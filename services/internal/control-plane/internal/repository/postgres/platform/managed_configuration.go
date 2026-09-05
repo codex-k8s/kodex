@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	revisionservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/revision"
@@ -56,10 +57,53 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
-	if (action == "CREATE" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
+	if (action == "CREATE" || action == "SAVE" || action == "DISCARD" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	switch action {
+	case "SAVE", "DISCARD":
+		locked, lockErr := repository.lockManagedRevision(ctx, tx, current, configuration, payload.RevisionRef)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
+		}
+		if locked.State != "DRAFT" && locked.State != "VALID" && locked.State != "INVALID" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		item, discardErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationDiscardRevision, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "configuration_set_id": configuration.id, "revision_id": locked.RefID,
+		}))
+		if discardErr != nil {
+			return commandOutcome{}, mapWriteError(discardErr)
+		}
+		revision = &item.ManagedConfigurationRevision
+		if action == "SAVE" {
+			format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
+			if len(payload.Content) > 256<<10 || !utf8.ValidString(payload.Content) || strings.ContainsRune(payload.Content, 0) ||
+				kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
+				kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+			content := strings.TrimSpace(payload.Content)
+			digest := sha256.Sum256([]byte(content))
+			ref, refErr := newRef("mrev")
+			if refErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			created, createErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
+				"revision_ref": ref, "organization_id": current.organizationID, "configuration_set_id": configuration.id,
+				"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
+				"parent_revision_id": locked.RefID, "actor_id": current.actorID,
+			}))
+			if createErr != nil {
+				return commandOutcome{}, mapWriteError(createErr)
+			}
+			revision = &created.ManagedConfigurationRevision
+		}
+		if err := tx.QueryRow(ctx, queryManagedConfigurationTouchSet, pgx.StrictNamedArgs{
+			"configuration_set_id": configuration.id, "expected_version": configuration.Version,
+		}).Scan(&configuration.Version, &configuration.UpdatedAt); err != nil {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
 	case "CREATE":
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || strings.TrimSpace(payload.Content) == "" || len(payload.Content) > 256<<10 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -300,7 +344,15 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 
 func managedCommand(kind command.Kind) (string, string) {
 	mapping := map[command.Kind][2]string{
-		command.CreatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
+		command.SavePromptTemplateDraft:            {revisionservice.KindPromptTemplate, "SAVE"},
+		command.DiscardPromptTemplateDraft:         {revisionservice.KindPromptTemplate, "DISCARD"},
+		command.SaveRoleImageRevisionDraft:         {revisionservice.KindRoleImage, "SAVE"},
+		command.DiscardRoleImageRevisionDraft:      {revisionservice.KindRoleImage, "DISCARD"},
+		command.SaveIntegrationDefinitionDraft:     {revisionservice.KindIntegrationDefinition, "SAVE"},
+		command.DiscardIntegrationDefinitionDraft:  {revisionservice.KindIntegrationDefinition, "DISCARD"},
+		command.SaveSystemSTTConfigurationDraft:    {revisionservice.KindSystemSTT, "SAVE"},
+		command.DiscardSystemSTTConfigurationDraft: {revisionservice.KindSystemSTT, "DISCARD"},
+		command.CreatePromptTemplateDraft:          {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
 		command.CreateRoleImageRevisionDraft: {revisionservice.KindRoleImage, "CREATE"}, command.ValidateRoleImageRevision: {revisionservice.KindRoleImage, "VALIDATE"}, command.PublishRoleImageRevision: {revisionservice.KindRoleImage, "PUBLISH"}, command.RebindRoleImage: {revisionservice.KindRoleImage, "REBIND"},
 		command.CreateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "CREATE"}, command.ValidateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "VALIDATE"}, command.PublishIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "PUBLISH"}, command.RebindIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "REBIND"},
 		command.CreateSystemSTTDraft: {revisionservice.KindSystemSTT, "CREATE"}, command.ValidateSystemSTTDraft: {revisionservice.KindSystemSTT, "VALIDATE"}, command.PublishSystemSTTDraft: {revisionservice.KindSystemSTT, "PUBLISH"}, command.RebindSystemSTT: {revisionservice.KindSystemSTT, "REBIND"},

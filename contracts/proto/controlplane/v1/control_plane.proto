@@ -88,6 +88,14 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc SavePromptTemplateDraft(SavePromptTemplateDraftRequest) returns (SavePromptTemplateDraftResponse);
+  rpc DiscardPromptTemplateDraft(DiscardPromptTemplateDraftRequest) returns (DiscardPromptTemplateDraftResponse);
+  rpc SaveRoleImageRevisionDraft(SaveRoleImageRevisionDraftRequest) returns (SaveRoleImageRevisionDraftResponse);
+  rpc DiscardRoleImageRevisionDraft(DiscardRoleImageRevisionDraftRequest) returns (DiscardRoleImageRevisionDraftResponse);
+  rpc SaveIntegrationDefinitionDraft(SaveIntegrationDefinitionDraftRequest) returns (SaveIntegrationDefinitionDraftResponse);
+  rpc DiscardIntegrationDefinitionDraft(DiscardIntegrationDefinitionDraftRequest) returns (DiscardIntegrationDefinitionDraftResponse);
+  rpc SaveSystemSTTConfigurationDraft(SaveSystemSTTConfigurationDraftRequest) returns (SaveSystemSTTConfigurationDraftResponse);
+  rpc DiscardSystemSTTConfigurationDraft(DiscardSystemSTTConfigurationDraftRequest) returns (DiscardSystemSTTConfigurationDraftResponse);
   rpc ReconcileEmailEffect(ReconcileEmailEffectRequest) returns (ReconcileEmailEffectResponse);
   rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
   rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
@@ -2572,6 +2580,94 @@ message RuntimeRevisionSnapshot {
   string organization_ref = 68;
   repeated RuntimeSkillBundleSnapshot skill_bundles = 69;
   repeated RuntimeMemoryRecordSnapshot memory_records = 70;
+}
+
+message SavePromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SavePromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardPromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardPromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
 }
 
 message RuntimeSkillBundleSnapshot {
