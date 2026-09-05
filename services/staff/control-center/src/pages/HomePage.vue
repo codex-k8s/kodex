@@ -24,10 +24,8 @@ import {
   homeResumableSessions,
 } from "@/features/home/model";
 import { usePlatformStore } from "@/features/platform/store";
-import ArtifactList from "@/features/workboard/components/ArtifactList.vue";
-import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
+import HomeResultCatalog from "@/features/home/components/HomeResultCatalog.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
-import { projectArtifacts } from "@/features/workboard/model";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
@@ -58,7 +56,9 @@ let projectController: AbortController | undefined;
 let projectTimer: ReturnType<typeof setTimeout> | undefined;
 const runsReady = ref(platform.runList.length > 0);
 
-const activeRuns = computed(() => platform.overview?.activeRuns ?? []);
+const runCatalogTotal = ref<number>();
+const artifactCatalogTotal = ref<number>();
+const failedCatalogTotal = ref<number>();
 const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const openGates = computed(() => homeOpenGates(pendingGates.value));
 const failedRuns = computed(() =>
@@ -66,9 +66,6 @@ const failedRuns = computed(() =>
 );
 const resumableSessions = computed(() =>
   homeResumableSessions(platform.runList, platform.runList.length),
-);
-const recentArtifacts = computed(() =>
-  projectArtifacts(platform.overview?.recentArtifacts ?? []),
 );
 const currentUserName = computed(
   () => platform.bootstrap?.currentUser.displayName,
@@ -84,24 +81,14 @@ const refreshing = computed(
     (projectLoading.value && projectsReady.value) ||
     (platform.loading.runs && runsReady.value),
 );
-const showRuns = computed(
-  () =>
-    activeRuns.value.length > 0 ||
-    !overviewReady.value ||
-    !!platform.problems.overview,
-);
+const showRuns = computed(() => runCatalogTotal.value !== 0);
 const showSessions = computed(
   () =>
     resumableSessions.value.length > 0 ||
     !runsReady.value ||
     !!platform.problems.runs,
 );
-const showResults = computed(
-  () =>
-    recentArtifacts.value.length > 0 ||
-    !overviewReady.value ||
-    !!platform.problems.overview,
-);
+const showResults = computed(() => artifactCatalogTotal.value !== 0);
 const singleBlock = computed(
   () => !showRuns.value && !showSessions.value && !showResults.value,
 );
@@ -323,6 +310,7 @@ onBeforeUnmount(() => {
       :gates="openGates"
       :gates-count="platform.overview?.pendingGateCount"
       :failed-runs="failedRuns"
+      :failed-runs-count="failedCatalogTotal"
       :projects="visibleProjects"
       :gates-ready="overviewReady"
       :runs-ready="runsReady"
@@ -333,34 +321,27 @@ onBeforeUnmount(() => {
       :refreshing="refreshing"
       @retry-gates="refreshOverview"
       @retry-runs="refreshRuns"
-      ><template #gates><HomeGateCatalog /></template
-    ></HomeAttentionCenter>
+      ><template #gates><HomeGateCatalog /></template>
+      <template #failed
+        ><HomeResultCatalog
+          v-show="failedCatalogTotal !== 0"
+          kind="RUN"
+          fixed-filter="FAILED"
+          @total="failedCatalogTotal = $event"
+      /></template>
+    </HomeAttentionCenter>
 
     <div
       class="home-dashboard"
       :class="{ 'home-dashboard--single': singleBlock }"
     >
       <div class="home-dashboard__main">
-        <WorkboardSection
-          v-if="showRuns"
+        <HomeResultCatalog
+          v-show="showRuns"
+          kind="RUN"
           class="home-running-section"
-          :title="$t('workboard.runningNow')"
-          :count="platform.overview?.activeRunCount"
-          :loading="platform.loading.overview"
-          :refreshing="refreshing"
-          :ready="overviewReady"
-          :problem="platform.problems.overview"
-          :empty="activeRuns.length === 0"
-          :empty-text="$t('workboard.noActiveRuns')"
-          @retry="refreshOverview"
-        >
-          <template #action>
-            <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
-          </template>
-          <div class="home-bounded-runs">
-            <RunWorkItem v-for="run in activeRuns" :key="run.ref" :run="run" />
-          </div>
-        </WorkboardSection>
+          @total="runCatalogTotal = $event"
+        />
 
         <WorkboardSection
           v-if="showSessions"
@@ -422,21 +403,11 @@ onBeforeUnmount(() => {
           </button>
         </WorkboardSection>
 
-        <WorkboardSection
-          v-if="showResults"
-          :title="$t('workboard.recentResults')"
-          :loading="platform.loading.overview"
-          :refreshing="refreshing"
-          :ready="overviewReady"
-          :problem="platform.problems.overview"
-          :empty="recentArtifacts.length === 0"
-          :empty-text="$t('workboard.noRecentResults')"
-          @retry="refreshOverview"
-        >
-          <div class="home-bounded-results">
-            <ArtifactList :artifacts="recentArtifacts" />
-          </div>
-        </WorkboardSection>
+        <HomeResultCatalog
+          v-show="showResults"
+          kind="ARTIFACT"
+          @total="artifactCatalogTotal = $event"
+        />
       </aside>
     </div>
 

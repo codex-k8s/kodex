@@ -19,6 +19,7 @@ const props = defineProps<{
   gates: OwnerGate[];
   gatesCount?: number;
   failedRuns: Run[];
+  failedRunsCount?: number;
   projects: Project[];
   gatesReady: boolean;
   runsReady: boolean;
@@ -83,7 +84,9 @@ const serverMessage = useServerMessage();
       v-else
       class="home-attention__body"
       :class="{
-        'home-attention__body--single': !gates.length || !failedRuns.length,
+        'home-attention__body--single':
+          !(gatesCount ?? gates.length) ||
+          !(failedRunsCount ?? failedRuns.length),
       }"
     >
       <ProblemNotice
@@ -136,40 +139,41 @@ const serverMessage = useServerMessage();
           </RouterLink>
         </div>
       </slot>
-      <div v-if="failedRuns.length" class="home-attention__group">
-        <div
-          class="home-attention__group-head home-attention__group-head--danger"
-        >
-          <AlertTriangle :size="18" aria-hidden="true" />
-          <h3>{{ $t("runs.title") }} · {{ $t("workboard.attention") }}</h3>
-          <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
+      <slot name="failed">
+        <div v-if="failedRuns.length" class="home-attention__group">
+          <div
+            class="home-attention__group-head home-attention__group-head--danger"
+          >
+            <AlertTriangle :size="18" aria-hidden="true" />
+            <h3>{{ $t("runs.title") }} · {{ $t("workboard.attention") }}</h3>
+            <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
+          </div>
+          <RouterLink
+            v-for="run in failedRuns"
+            :key="run.ref"
+            :to="runPath(run.ref, run.projectRef)"
+            class="home-attention__item"
+          >
+            <div class="home-attention__copy">
+              <h4>{{ run.title }}</h4>
+              <SafeSummary
+                :content="run.safeErrorMessage ?? run.resultSummary"
+                :fallback="run.activitySummary"
+              />
+              <p>
+                <span>{{ projectName(run.projectRef) }}</span>
+                <span>{{ run.target.displayName }}</span>
+              </p>
+            </div>
+            <div class="home-attention__aside">
+              <StatusBadge :state="run.state" tone="danger" />
+              <time :datetime="run.finishedAt ?? run.createdAt">
+                {{ formatDate(run.finishedAt ?? run.createdAt) }}
+              </time>
+            </div>
+          </RouterLink>
         </div>
-        <RouterLink
-          v-for="run in failedRuns"
-          :key="run.ref"
-          :to="runPath(run.ref, run.projectRef)"
-          class="home-attention__item"
-        >
-          <div class="home-attention__copy">
-            <h4>{{ run.title }}</h4>
-            <SafeSummary
-              :content="run.safeErrorMessage ?? run.resultSummary"
-              :fallback="run.activitySummary"
-            />
-            <p>
-              <span>{{ projectName(run.projectRef) }}</span>
-              <span>{{ run.target.displayName }}</span>
-            </p>
-          </div>
-          <div class="home-attention__aside">
-            <StatusBadge :state="run.state" tone="danger" />
-            <time :datetime="run.finishedAt ?? run.createdAt">
-              {{ formatDate(run.finishedAt ?? run.createdAt) }}
-            </time>
-          </div>
-        </RouterLink>
-      </div>
-
+      </slot>
       <p
         v-if="
           !$slots.gates && ready && !gatesProblem && !runsProblem && total === 0

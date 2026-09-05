@@ -980,6 +980,27 @@ onBeforeUnmount(() => {
       <span v-if="serverDraft">{{
         $t("managed.revision", { revision: serverDraft.version })
       }}</span>
+      <p v-if="serverDraft">
+        {{ $t("runtimeOverlay.environmentBase") }}:
+        <template v-if="serverDraft.baseVersionRef && serverDraft.baseRevision">
+          {{ serverDraft.baseRevision }} ·
+          <code>{{ serverDraft.baseVersionRef }}</code>
+        </template>
+        <template v-else>{{
+          $t(
+            serverDraft.environmentRef
+              ? "runtimeOverlay.environmentBaseUnknown"
+              : "runtimeOverlay.environmentNew",
+          )
+        }}</template>
+      </p>
+      <p v-if="serverDraft">
+        {{ $t("runtimeOverlay.environmentSavedAt") }}:
+        <time v-if="serverDraft.savedAt" :datetime="serverDraft.savedAt">{{
+          serverDraft.savedAt
+        }}</time>
+        <span v-else>{{ $t("runtimeOverlay.environmentSavedUnknown") }}</span>
+      </p>
       <code v-if="serverDraft?.validationDigest">{{
         serverDraft.validationDigest
       }}</code>

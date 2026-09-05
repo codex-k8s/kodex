@@ -73,8 +73,7 @@ export function calculatePopoverPosition(
   );
   const availableAbove = Math.max(0, input.anchor.top - gap - margin);
   const side =
-    availableBelow >= Math.min(input.panelHeight, 240) ||
-    availableBelow >= availableAbove
+    availableBelow >= 240 || availableBelow >= availableAbove
       ? "bottom"
       : "top";
   const maxHeight = side === "bottom" ? availableBelow : availableAbove;

@@ -4,6 +4,18 @@ import { currentLocale } from "@/shared/locale";
 
 const ru = {
   runtimeOverlay: {
+    environmentBase: "Базовая опубликованная ревизия",
+    environmentBaseUnknown:
+      "База неизвестна: исторический черновик не содержит точной ссылки",
+    environmentNew: "Новое окружение: опубликованной базы нет",
+    environmentSavedAt: "Последнее сохранение на сервере",
+    environmentSavedUnknown:
+      "Время отсутствует в прежней квитанции; перечитайте черновик",
+    history: "История overlay",
+    chooseRevision: "Выберите опубликованную ревизию",
+    restore: "Восстановить выбранную ревизию",
+    restoreHelp:
+      "История содержит опубликованные неизменяемые ревизии. Восстановление проверяется сервером для текущей модели и создаёт новую публикацию; прежняя история сохраняется.",
     effort: "Степень рассуждения",
     defaultEffort: "По умолчанию из каталога: {value}",
     effortHelp:
@@ -661,6 +673,10 @@ const ru = {
     finish: "Завершить настройку",
   },
   home: {
+    failedRuns: "Запуски с ошибкой",
+    activeFilter: "Активные",
+    terminalFilter: "Завершённые",
+    stateFilter: "Состояние запусков",
     title: "Главная",
     subtitle: "Что выполняется сейчас и где требуется ваше участие",
     activeRuns: "Активные запуски",
@@ -2815,6 +2831,18 @@ const ru = {
 const en = {
   ...ru,
   runtimeOverlay: {
+    environmentBase: "Base published revision",
+    environmentBaseUnknown:
+      "Unknown base: the historical draft has no exact reference",
+    environmentNew: "New environment: no published base",
+    environmentSavedAt: "Last server save",
+    environmentSavedUnknown:
+      "Time is absent from the previous receipt; reload the draft",
+    history: "Overlay history",
+    chooseRevision: "Choose a published revision",
+    restore: "Restore selected revision",
+    restoreHelp:
+      "History contains published immutable revisions. The server validates restoration for the current model and creates a new publication; prior history is retained.",
     effort: "Reasoning effort",
     defaultEffort: "Catalog default: {value}",
     effortHelp:
@@ -3542,6 +3570,10 @@ const en = {
   },
   home: {
     ...ru.home,
+    failedRuns: "Failed runs",
+    activeFilter: "Active",
+    terminalFilter: "Completed",
+    stateFilter: "Run state",
     title: "Home",
     subtitle: "What is running and where your input is needed",
     activeRuns: "Active runs",

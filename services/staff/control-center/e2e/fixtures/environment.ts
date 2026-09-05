@@ -43,6 +43,7 @@ export async function installEnvironmentFixture(
     projectRef,
     version: 1,
     expectedEnvironmentVersion: 0,
+    savedAt: "2026-09-05T00:00:00Z",
     state: "DRAFT",
     specification: empty,
     diagnostics: [],
@@ -229,6 +230,7 @@ export async function installEnvironmentFixture(
         draft.version += 1;
       }
       if (action === "save") {
+        draft.savedAt = "2026-09-05T00:05:00Z";
         draft.specification =
           request.postDataJSON() as RuntimeEnvironmentDraftSpecification;
         draft.state = "DRAFT";

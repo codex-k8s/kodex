@@ -10,6 +10,7 @@ import { checkRunsCatalog } from "./fixtures/runs-catalog";
 import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import { checkFileSelection } from "./fixtures/file-selection";
 import { checkAssistantHistory } from "./fixtures/assistant-history";
+import { checkHomeResults } from "./fixtures/home-results";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -209,7 +210,8 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           items: projects,
           nextActions: ["CREATE_PROJECT"],
         },
-        "/api/v1/runs": { items: [], nextActions: [] },
+        "/api/v1/runs": { items: [], total: 0, nextActions: [] },
+        "/api/v1/artifacts": { items: [], total: 0 },
         "/api/v1/owner-gates": { items: [], total: 0, nextPageToken: "" },
         "/api/v1/system-assistant": assistant,
         "/api/v1/assistant-conversations": { items: [] },
@@ -759,6 +761,12 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       await expect(saveDraft).toBeEnabled();
       await saveDraft.click();
       await expect(page).toHaveURL(/draftRef=draft_synthetic_environment/);
+      await expect(page.locator(".environment-draft-state")).toContainText(
+        "Новое окружение: опубликованной базы нет",
+      );
+      await expect(
+        page.locator(".environment-draft-state time"),
+      ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
       expect(fixture.events).not.toContain("publish");
       await page
         .getByRole("button", { name: "Проверить", exact: true })
@@ -766,6 +774,9 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       await expect(page.locator(".environment-draft-state")).toContainText(
         "Окружение не прошло проверку",
       );
+      await expect(
+        page.locator(".environment-draft-state time"),
+      ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
       await expect(
         page.getByRole("button", { name: "Опубликовать", exact: true }),
       ).toBeDisabled();
@@ -777,6 +788,9 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
         "Незавершённое окружение",
       );
+      await expect(
+        page.locator(".environment-draft-state time"),
+      ).toHaveAttribute("datetime", "2026-09-05T00:05:00Z");
       await page
         .getByLabel("Название", { exact: true })
         .fill("Изменения перед выходом");
@@ -1227,6 +1241,13 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       });
     if (width === 1440 || width === 390)
       await checkAssistantHistory(page, catalogProject.ref);
+    if (width === 2900 || width === 390)
+      await checkHomeResults(page, catalogProject.ref, async () => {
+        await page.screenshot({
+          path: testInfo.outputPath(`home-results-${String(width)}.png`),
+          fullPage: false,
+        });
+      });
     expect(failures).toEqual([]);
   });
 }

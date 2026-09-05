@@ -745,6 +745,36 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRuntimeConfigurationPage' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/config-overlay/revisions:
+    get:
+      tags: [Agents]
+      operationId: listConfigOverlayRevisions
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Доступная история опубликованных overlay, максимум 20 записей на странице
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigOverlayRevisionPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef}:
+    get:
+      tags: [Agents]
+      operationId: getConfigOverlayRevision
+      parameters:
+        - { $ref: '#/components/parameters/AgentRef' }
+        - name: revisionRef
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Точная опубликованная ревизия и ограниченный TOML preview
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigOverlayVersion' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/config-overlay-drafts:
     post:
       tags: [Agents]
@@ -2382,7 +2412,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/ArtifactTypeQuery' }, { $ref: '#/components/parameters/ArtifactScanStateQuery' }, { $ref: '#/components/parameters/ArtifactSourceKindQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
-          description: Файлы организационного помощника текущего владельца
+          description: Общий каталог всех доступных файлов проектов и личной области без обхода проектов клиентом
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ArtifactPage' }
@@ -5569,6 +5599,14 @@ components:
         model: { type: string, minLength: 1, maxLength: 160 }
         providerPolicyMode: { type: string, enum: [FIXED, LEAST_USED, WEIGHTED] }
         providerAccounts: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/ProviderAccountCandidateInput' } }
+    ConfigOverlayRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/ConfigOverlayVersion' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
     ConfigOverlayVersion:
       type: object
       additionalProperties: false
@@ -5593,8 +5631,8 @@ components:
       properties:
         code: { type: string, enum: [CONFIG_OVERLAY_SYNTAX_INVALID, CONFIG_OVERLAY_KEY_FORBIDDEN, CONFIG_OVERLAY_VALUE_INVALID, CONFIG_OVERLAY_EFFORT_UNSUPPORTED] }
         key: { type: string, maxLength: 128 }
-        line: { type: integer, minimum: 0, maximum: 65537 }
-        column: { type: integer, minimum: 0, maximum: 65537 }
+        line: { type: integer, minimum: 0, maximum: 65537, description: Номер строки с 1; 0 означает неприменимо }
+        column: { type: integer, minimum: 0, maximum: 65537, description: Позиция UTF-8 byte с 1 внутри строки; 0 означает неприменимо }
         message: { type: string, maxLength: 256 }
     ConfigOverlayField:
       type: object
@@ -6152,6 +6190,9 @@ components:
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
         expectedEnvironmentVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        baseVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        baseRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Immutable published revision при создании draft; пара отсутствует для нового окружения или неизвестной legacy базы }
+        savedAt: { type: string, format: date-time, description: 'Время последнего create/save; может отсутствовать в историческом idempotency receipt, для восстановления нужен GET draft' }
         state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, DISCARDED] }
         specification: { $ref: '#/components/schemas/RuntimeEnvironmentDraftSpecification' }
         validationDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -6916,9 +6957,10 @@ components:
     RunPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Run' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string }
     RunEventPage:
       type: object
@@ -7027,9 +7069,10 @@ components:
     ArtifactPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Artifact' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string }
     AttachmentSetPurpose:
       type: string
