@@ -20,6 +20,7 @@ import type {
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
   SystemAssistant,
+  ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 
@@ -50,6 +51,28 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const problem = ref<AppProblem>();
   const receipt = ref<AssistantPlanReceipt>();
   let generation = 0;
+  let controller: AbortController | undefined;
+  const nextPageToken = ref<string>();
+  const loadingMore = ref(false);
+  const historyProblem = ref<AppProblem>();
+  const historyCursors = new Set<string>();
+
+  function cancelReads(): void {
+    controller?.abort();
+    generation += 1;
+    loading.value = false;
+    loadingMore.value = false;
+  }
+
+  function checkPage(
+    page: ListAssistantConversationsResponse,
+    scope?: string,
+  ): void {
+    if (scope && page.items.some((item) => item.projectRef !== scope))
+      throw new Error("Assistant history project scope mismatch");
+    if (page.nextPageToken && historyCursors.has(page.nextPageToken))
+      throw new Error("Assistant history cursor repeated");
+  }
 
   const selectedConversation = computed(() =>
     conversations.value.find((item) => item.ref === selectedRef.value),
@@ -78,17 +101,55 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     nextContext: AssistantContextDescriptor,
     nextProjectRef?: string,
   ): Promise<void> {
+    cancelReads();
     const current = ++generation;
+    const retained =
+      projectRef.value === nextProjectRef &&
+      selectedConversation.value &&
+      conversationMatchesContext(selectedConversation.value, nextContext)
+        ? selectedRef.value
+        : undefined;
+    if (projectRef.value !== nextProjectRef) {
+      conversations.value = [];
+      selectedRef.value = undefined;
+    }
+    controller = new AbortController();
+    const signal = controller.signal;
+    nextPageToken.value = undefined;
+    historyProblem.value = undefined;
+    historyCursors.clear();
     context.value = nextContext;
     projectRef.value = nextProjectRef;
     loading.value = true;
     problem.value = undefined;
     try {
-      const [assistantValue, conversationValues] = await Promise.all([
-        readAssistant(),
-        readConversations(nextProjectRef),
+      const [assistantValue, firstPage] = await Promise.all([
+        readAssistant(signal),
+        readConversations(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
+      checkPage(firstPage, nextProjectRef);
+      const conversationValues = [...firstPage.items];
+      let page = firstPage;
+      let count = 1;
+      while (
+        retained &&
+        !conversationValues.some((item) => item.ref === retained) &&
+        page.nextPageToken
+      ) {
+        if (count++ >= 30)
+          throw new Error("Assistant history readback page limit exceeded");
+        historyCursors.add(page.nextPageToken);
+        page = await readConversations(
+          nextProjectRef,
+          page.nextPageToken,
+          signal,
+        );
+        if (current !== generation) return;
+        checkPage(page, nextProjectRef);
+        conversationValues.push(...page.items);
+      }
+      nextPageToken.value = page.nextPageToken;
       assistant.value = assistantValue;
       const previousByRef = new Map(
         conversations.value.map((conversation) => [
@@ -96,7 +157,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           conversation,
         ]),
       );
-      conversations.value = conversationValues.map((conversation) =>
+      const unique = new Map<string, AssistantConversation>();
+      for (const conversation of conversationValues)
+        unique.set(
+          conversation.ref,
+          mergeConversation(unique.get(conversation.ref), conversation, true),
+        );
+      conversations.value = [...unique.values()].map((conversation) =>
         mergeConversation(
           previousByRef.get(conversation.ref),
           conversation,
@@ -111,6 +178,31 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     }
   }
 
+  async function loadMoreHistory(): Promise<void> {
+    const cursor = nextPageToken.value;
+    if (!cursor || loading.value || loadingMore.value || busy.value) return;
+    const current = generation;
+    controller ??= new AbortController();
+    loadingMore.value = true;
+    historyProblem.value = undefined;
+    try {
+      const page = await readConversations(
+        projectRef.value,
+        cursor,
+        controller.signal,
+      );
+      if (current !== generation) return;
+      historyCursors.add(cursor);
+      checkPage(page, projectRef.value);
+      for (const item of page.items) upsertConversation(item, false, true);
+      nextPageToken.value = page.nextPageToken;
+    } catch (error) {
+      if (current === generation) historyProblem.value = asProblem(error);
+    } finally {
+      if (current === generation) loadingMore.value = false;
+    }
+  }
+
   function setContext(
     nextContext: AssistantContextDescriptor,
     nextProjectRef?: string,
@@ -119,6 +211,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     context.value = nextContext;
     projectRef.value = nextProjectRef;
     if (projectChanged) {
+      cancelReads();
+      conversations.value = [];
+      nextPageToken.value = undefined;
+      historyCursors.clear();
       selectedRef.value = undefined;
       return;
     }
@@ -127,8 +223,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
 
   async function runMutation<T>(operation: () => Promise<T>): Promise<T> {
     // Mutation авторитетнее чтения, которое началось до него.
-    generation += 1;
-    loading.value = false;
+    cancelReads();
+    controller = undefined;
     busy.value = true;
     problem.value = undefined;
     try {
@@ -299,6 +395,11 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     receipt,
     selectedConversation,
     sortedConversations,
+    nextPageToken,
+    loadingMore,
+    historyProblem,
+    loadMoreHistory,
+    cancelReads,
     load,
     setContext,
     applyRealtimeSnapshot,

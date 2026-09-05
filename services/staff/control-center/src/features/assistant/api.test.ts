@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/shared/api/client", () => ({
-  requestSignal: () => mocks.signal,
+  requestSignal: (signal?: AbortSignal) => signal ?? mocks.signal,
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   addAssistantTurn: mocks.addAssistantTurn,
@@ -27,7 +27,7 @@ vi.mock("@/shared/api/problem", () => ({
   asProblem: (error: unknown) => error,
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
-import { appendTurn } from "@/features/assistant/api";
+import { appendTurn, readConversations } from "@/features/assistant/api";
 
 function conversation(
   turns: AssistantConversation["turns"],
@@ -66,6 +66,28 @@ describe("assistant api mutation reconciliation", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("передаёт project/cursor/pageSize и возвращает nextPageToken истории", async () => {
+    const data = { items: [conversation([])], nextPageToken: "after" };
+    mocks.listAssistantConversations.mockResolvedValue({ data });
+    const signal = new AbortController().signal;
+    expect(await readConversations("prj_sales", "before", signal)).toEqual(
+      data,
+    );
+    expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
+      query: { projectRef: "prj_sales", pageToken: "before", pageSize: 40 },
+      signal,
+    });
+  });
+
+  it("не вызывает SDK для отменённого чтения истории", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      readConversations(undefined, undefined, controller.signal),
+    ).rejects.toThrow();
+    expect(mocks.listAssistantConversations).not.toHaveBeenCalled();
   });
 
   it("повторяет turn с теми же key и полным payload", async () => {

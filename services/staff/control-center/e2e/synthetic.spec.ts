@@ -9,6 +9,7 @@ import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkRunsCatalog } from "./fixtures/runs-catalog";
 import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import { checkFileSelection } from "./fixtures/file-selection";
+import { checkAssistantHistory } from "./fixtures/assistant-history";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -1191,6 +1192,8 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           fullPage: true,
         });
       });
+    if (width === 1440 || width === 390)
+      await checkAssistantHistory(page, catalogProject.ref);
     expect(failures).toEqual([]);
   });
 }

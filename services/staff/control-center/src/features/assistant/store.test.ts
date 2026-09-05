@@ -6,6 +6,7 @@ import type {
   AssistantConversation,
   AssistantPlan,
   SystemAssistant,
+  ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 
@@ -147,6 +148,93 @@ describe("assistant workspace store", () => {
     vi.useRealTimers();
   });
 
+  it("добавляет cursor-страницу без потери выбранного диалога и понижения версии", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "next",
+    });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    store.selectedRef = "cnv_sales";
+    readConversationsMock.mockResolvedValueOnce({
+      items: [
+        { ...conversation(), version: 1 },
+        { ...conversation(), ref: "cnv_older" },
+      ],
+    });
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.lastCall?.[1]).toBe("next");
+    expect(store.conversations).toHaveLength(2);
+    expect(store.selectedConversation?.version).toBe(2);
+    expect(store.nextPageToken).toBeUndefined();
+  });
+
+  it("сохраняет выбранный диалог при realtime readback за первой страницей", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [conversation()];
+    store.selectedRef = "cnv_sales";
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [{ ...conversation(), ref: "cnv_new" }],
+        nextPageToken: "next",
+      })
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "remaining",
+      });
+    await store.load(context, "prj_sales");
+    expect(store.selectedRef).toBe("cnv_sales");
+    expect(store.conversations).toHaveLength(2);
+    expect(store.nextPageToken).toBe("remaining");
+  });
+
+  it("отменяет in-flight страницу при смене project и не публикует поздний ответ", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "next",
+    });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    const pending = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock.mockReturnValueOnce(pending.promise);
+    const operation = store.loadMoreHistory();
+    const signal = readConversationsMock.mock.lastCall?.[2] as AbortSignal;
+    store.setContext(context, "prj_other");
+    expect(signal.aborted).toBe(true);
+    expect(store.conversations).toEqual([]);
+    pending.resolve({ items: [conversation()] });
+    await operation;
+    expect(store.conversations).toEqual([]);
+    expect(store.loadingMore).toBe(false);
+  });
+
+  it("отклоняет чужой project и повторный cursor без добавления страницы", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "next",
+    });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), projectRef: "prj_other" }],
+    });
+    await store.loadMoreHistory();
+    expect(store.historyProblem).toBeDefined();
+    expect(store.conversations).toEqual([conversation()]);
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), ref: "cnv_older" }],
+      nextPageToken: "next",
+    });
+    await store.loadMoreHistory();
+    expect(store.historyProblem).toBeDefined();
+    expect(store.conversations).toEqual([conversation()]);
+  });
+
   it("создаёт server-context conversation перед первым сообщением", async () => {
     const created = { ...conversation(), turns: [] };
     createConversationMock.mockResolvedValue(created);
@@ -189,7 +277,8 @@ describe("assistant workspace store", () => {
 
   it("не позволяет устаревшему load стереть созданный диалог", async () => {
     const assistantReadback = deferred<SystemAssistant>();
-    const conversationsReadback = deferred<AssistantConversation[]>();
+    const conversationsReadback =
+      deferred<ListAssistantConversationsResponse>();
     const created = {
       ...conversation(),
       ref: "cnv_created_during_load",
@@ -203,7 +292,7 @@ describe("assistant workspace store", () => {
     const loading = store.load(context, "prj_sales");
     await store.startConversation();
     assistantReadback.resolve(systemAssistant());
-    conversationsReadback.resolve([]);
+    conversationsReadback.resolve({ items: [] });
     await loading;
 
     expect(store.loading).toBe(false);
@@ -234,7 +323,7 @@ describe("assistant workspace store", () => {
     expect(store.busy).toBe(false);
 
     readAssistantMock.mockResolvedValue(systemAssistant());
-    readConversationsMock.mockResolvedValue([]);
+    readConversationsMock.mockResolvedValue({ items: [] });
     await store.load(context, "prj_sales");
 
     expect(store.problem).toBeUndefined();

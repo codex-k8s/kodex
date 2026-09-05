@@ -18,32 +18,44 @@ import type {
   AssistantPlanDecisionResponse,
   AssistantPlanOperationInput,
   SystemAssistant,
+  ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, mutateWithRetry } from "@/shared/api/mutation";
 import { asProblem, unwrap } from "@/shared/api/problem";
 
 const readRetryDelaysMs = [0, 200, 600] as const;
 
-export async function readAssistant(): Promise<SystemAssistant> {
+export async function readAssistant(
+  signal?: AbortSignal,
+): Promise<SystemAssistant> {
   return readWithRetry(
     async () =>
-      (await unwrap(getSystemAssistant({ signal: requestSignal() }))).data,
+      (await unwrap(getSystemAssistant({ signal: requestSignal(signal) })))
+        .data,
+    signal,
   );
 }
 
 export async function readConversations(
   projectRef?: string,
-): Promise<AssistantConversation[]> {
+  pageToken?: string,
+  signal?: AbortSignal,
+): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
       (
         await unwrap(
           listAssistantConversations({
-            ...(projectRef ? { query: { projectRef } } : {}),
-            signal: requestSignal(),
+            query: {
+              pageSize: 40,
+              ...(projectRef ? { projectRef } : {}),
+              ...(pageToken ? { pageToken } : {}),
+            },
+            signal: requestSignal(signal),
           }),
         )
-      ).data.items,
+      ).data,
+    signal,
   );
 }
 
@@ -107,15 +119,20 @@ export async function appendTurn(
   ).data;
 }
 
-async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
+async function readWithRetry<T>(
+  request: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   let lastProblem = asProblem(new Error("Assistant read did not start"));
   for (const delayMs of readRetryDelaysMs) {
+    signal?.throwIfAborted();
     if (delayMs > 0) {
       await new Promise<void>((resolve) =>
         globalThis.setTimeout(resolve, delayMs),
       );
     }
     try {
+      signal?.throwIfAborted();
       return await request();
     } catch (error) {
       lastProblem = asProblem(error);

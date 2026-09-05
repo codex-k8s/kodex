@@ -35,7 +35,6 @@ import {
   persistAssistantWorkspaceOpen,
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
-import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
   AssistantContextDescriptor,
@@ -70,7 +69,6 @@ const props = withDefaults(
 );
 const { t } = useI18n();
 const store = useAssistantStore();
-const platform = usePlatformStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const message = ref("");
@@ -153,6 +151,7 @@ async function show(): Promise<void> {
 
 function close(): void {
   if (store.busy) return;
+  store.cancelReads();
   open.value = false;
   persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
@@ -310,11 +309,7 @@ watch(
   () => props.refreshRevision,
   (value, previous) => {
     if (open.value && value !== previous)
-      store.applyRealtimeSnapshot(
-        platform.assistant,
-        Object.values(platform.conversations),
-        props.projectRef,
-      );
+      void store.load(props.context, props.projectRef);
   },
 );
 watch(
@@ -342,6 +337,7 @@ onMounted(() => {
   if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
   window.removeEventListener(openAssistantEvent, handleOpenAssistant);
   persistAssistantWorkspaceOpen(false);
@@ -448,6 +444,21 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
               />
             </button>
+            <ProblemNotice
+              v-if="store.historyProblem"
+              :problem="store.historyProblem"
+              @retry="store.loadMoreHistory"
+            />
+            <button
+              v-if="store.nextPageToken"
+              type="button"
+              :disabled="store.loading || store.loadingMore || store.busy"
+              @click="store.loadMoreHistory"
+            >
+              <ChevronDown :size="16" />{{
+                store.loadingMore ? $t("common.loading") : $t("common.loadMore")
+              }}
+            </button>
           </section>
         </div>
         <button
@@ -486,6 +497,22 @@ onBeforeUnmount(() => {
           <time :datetime="conversation.updatedAt">{{
             new Date(conversation.updatedAt).toLocaleString()
           }}</time>
+        </button>
+        <ProblemNotice
+          v-if="store.historyProblem"
+          :problem="store.historyProblem"
+          @retry="store.loadMoreHistory"
+        />
+        <button
+          v-if="store.nextPageToken"
+          class="button"
+          type="button"
+          :disabled="store.loading || store.loadingMore || store.busy"
+          @click="store.loadMoreHistory"
+        >
+          <ChevronDown :size="16" />{{
+            store.loadingMore ? $t("common.loading") : $t("common.loadMore")
+          }}
         </button>
       </nav>
 
