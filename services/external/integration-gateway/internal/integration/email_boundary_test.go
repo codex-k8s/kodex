@@ -119,4 +119,15 @@ func TestEmailReadbackExactIdentity(t *testing.T) {
 	if validEmailReadback(api.Command{Operation: api.OperationThread, ThreadId: "one"}, api.Result{ThreadId: "two"}) {
 		t.Fatal("foreign thread accepted")
 	}
+	for _, operation := range []api.Operation{api.OperationFetch, api.OperationDownload, api.OperationAttachments} {
+		command := api.Command{Operation: operation, Uid: "uid-one", Folder: "INBOX"}
+		if !validEmailReadback(command, api.Result{Uid: "uid-one", Folder: "INBOX"}) {
+			t.Fatal("exact POP identity rejected")
+		}
+		for _, bad := range []api.Result{{Folder: "INBOX"}, {Uid: "uid-two", Folder: "INBOX"}, {Uid: "uid-one", Folder: "Other"}} {
+			if validEmailReadback(command, bad) {
+				t.Fatal("missing or foreign POP identity accepted")
+			}
+		}
+	}
 }

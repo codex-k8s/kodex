@@ -84,11 +84,12 @@ disposable PG. Push/PR/merge/deploy не выполнялись. Listener8082/co
 Зависимости: CP `88f4331ff`, EMAIL `07cd3ee69` и metadata `a67f200623`.
 Каталог остальных vendors сохранён из #1057 без расширения операций.
 
-Контрактное замечание для root #1037: POP fetch/download/attachment list пока
-возвращают parsed payload без `uid`. Текущий consumer допускает отсутствие UID
-только при отсутствии запрошенного UIDVALIDITY; присутствующий UID сверяет,
-для IMAP требует exact UID/UIDVALIDITY/folder. Это не новый authority источник:
-CP authorization и серверный source binding остаются обязательными.
+EMAIL `2759e04aa` исправляет отсутствие UID и папки в POP fetch/download/
+attachment list; HTTPS/POP fixture проверяет все три операции с двумя UID и
+обоими TLS режимами. Consumer требует exact UID для POP и IMAP без исключения
+для пустого поля, а также запрошенные UIDVALIDITY/folder. Negative tests
+отклоняют пустой/чужой UID и чужую папку. CP authorization и серверный source
+binding остаются обязательными; readback не является источником authority.
 Новых CP authority fields для 21 операций не требуется. Listener 8082 и live
 mail принадлежат #1029/root и здесь не меняются. Внутренний egress gateway →
 EMAIL открыт только по exact namespace/pod selector на workload port 8443.

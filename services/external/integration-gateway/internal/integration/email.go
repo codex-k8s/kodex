@@ -163,7 +163,7 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 func validEmailReadback(command api.Command, result api.Result) bool {
 	switch command.Operation {
 	case api.OperationFetch, api.OperationDownload, api.OperationAttachments:
-		return (result.Uid == command.Uid || (command.UidValidity == 0 && result.Uid == "")) &&
+		return result.Uid == command.Uid &&
 			(command.UidValidity == 0 || result.UidValidity == command.UidValidity) &&
 			(command.Folder == "" || result.Folder == command.Folder)
 	case api.OperationThread:
