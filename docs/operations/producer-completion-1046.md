@@ -252,11 +252,160 @@ updated: 2026-09-05
   последних fixture corrections: PASS. Git import/writeback и
   immutable Git source provenance ещё не объявлены реализованными.
 
+## STT immutable parameters
+
+- Из #1020 `c91cc7476959687d9e882109977655aec467f9fd` приняты shared STT Proto,
+  availability/catalog helpers и modelprofile. Generated пересоздан codegen;
+  service/deploy worker #1020 здесь не изменялись.
+- `SystemSTTConfiguration`: enabled=12, parameters=13, maximum_audio_bytes=14,
+  maximum_audio_duration_milliseconds=15, provider_timeout_milliseconds=16.
+  `SystemSTTParameters` содержит languages, keywords, prompt, temperature,
+  chunking_strategy, stream. ResolveTranscriptionPolicy отдаёт исходный shared
+  `TranscriptionParameters` field 12, без upload overrides.
+- Managed JSON содержит `stt.parameters` с camelCase `chunkingStrategy`.
+  Модель и параметры проверяются shared modelprofile; неподдерживаемые сочетания,
+  stream=true, неизвестные поля и credential values закрыто отклоняются.
+  Настраиваемые limits ограничены 25 MiB / 600 s / 120 s provider timeout;
+  отсутствующие значения получают 10 MiB / 120 s / 15 s. Digest сверяется с
+  immutable content; publish не перепривязывает consumer самовольно.
+- Runtime STT admission больше не использует LLM catalog и устаревший SQL Scan.
+  Owner разрешает исходного actor по server-owned root run и проверяет его
+  `platform.stt.use`, enabled configuration и credential eligibility.
+  Это не подтверждение live provider доступности; actual protected stream #1020
+  остаётся обязательной второй частью user availability.
+- `TestSystemSTTImmutableParametersAndLimits`, `TestSystemSTTModelMatchesExecutableProfile`,
+  managed STT PostgreSQL lifecycle: PASS. Полный CP PostgreSQL, targeted Go,
+  shared sttapi Go, Proto lint/codegen: PASS. Render/race этой передачи: NOT RUN.
+- Дополнительно исправлено stale revision-validator ожидание NOT_READY Mattermost:
+  negative case теперь явно портит READY registry descriptor, а не отклоняет
+  принятый executable package.
+
+## STT permission существующих установок
+
+Migration 00610 создаёт следующую immutable version только для активных
+SYSTEM OWNER/ADMINISTRATOR, которым не хватает `platform.stt.use`.
+Переводятся только активные bindings прежней current revision; custom roles,
+архивные роли и отключённые bindings не расширяются. Повторное применение
+не создаёт новых версий. `STT_system_roles_advance_immutably`: PASS в targeted
+PostgreSQL; проверены новая version, неизменность старой и перевод bindings.
+Полный suite после 00610: NOT RUN; последний полный PASS относится к STT params.
+
+## Managed draft Save и Discard
+
+Policy 53 и migration 00614 добавляют восемь специализированных RPC:
+`Save|Discard{PromptTemplate,RoleImageRevision,IntegrationDefinition,SystemSTTConfiguration}Draft`.
+Оба request содержат mutation/configuration_ref/revision_ref; Save дополнительно
+content_format/content. Response содержит configuration/revision.
+
+Owner разрешает существующий set по tenant до OCC/receipt, требует
+project.manage либо organization.manage и запрещает запись в Git-owned set.
+Save допускает неполное содержимое до 256 KiB в закрытом формате, переводит
+старый DRAFT/INVALID/VALID в DISCARDED и создаёт новый DRAFT с immutable parent.
+Новый revision_ref обязателен; set version увеличивается один раз. Discard
+терминален, не меняет current published revision и не переписывает content.
+Published/superseded revisions нельзя сохранить или discard. SQL trigger
+защищает immutable identity/content и закрытый граф переходов.
+
+В ответах history добавляется строковое state `DISCARDED`; source content
+остаётся в immutable истории. Идентификаторы operations:
+`platform.command.{prompt-templates,role-image-revisions,integration-definitions,system-stt}.{save-draft,discard-draft}`.
+Mutation, audit и receipt сохраняются одной owner-транзакцией. Новый domain
+event не вводится; авторитетный read path — ListManagedConfigurationHistory.
+
+Локально PASS: Proto lint/codegen, authority policy codegen, Go transport/domain;
+PostgreSQL `^TestBootstrapComponent$/(role_image_promotion|runtime_environment_lifecycle|managed)`.
+Проверены четыре kind, неполный save, lineage/history, OCC, terminal discard,
+новый draft после discard, published guard и Git write guard. Первые более
+узкие запуски FAIL из-за зависимостей старого managed scenario от environment
+и promoted-image fixtures; assertions не ослаблялись, зависимости включены явно.
+Один `managed_draft` subtest самодостаточен. Git import/writeback этим не реализованы.
+
+## Поиск Impact D7
+
+`GetRuntimeEnvironmentImpactRequest.query = 4` и
+`GetRuntimeSecretImpactRequest.query = 4`: строка до 200 Unicode символов,
+без NUL; пробелы по краям удаляются. Поиск без учёта регистра по именам и refs
+consumer/environment/project выполняется литеральной подстрокой в SQL до LIMIT.
+Eligibility остаётся до LIMIT; total относится к доступным найденным строкам.
+Cursor связан с organization/actor/authority project, ресурсом, target revision
+и поиском. Изменённый поиск с прежним cursor возвращает InvalidArgument.
+
+Локально PASS: Proto lint/codegen, `TestImpactSearchRejectsInvalidInput`/race,
+targeted PG `role_image_promotion|runtime_environment_draft|secret_revision_impact`.
+Первый запуск без image fixture: FAIL (no rows), исправление assertions не
+требовалось.
+
+`GetManagedConfigurationImpactRequest`: `query = 3`, `page = 4`;
+`ManagedConfigurationImpact`: `total = 5`, `page = 6`. Поиск по consumer kind/ref,
+лимит и правила cursor аналогичны. SQL вычисляет неизменённый full-binding digest
+для OCC независимо от доступной страницы; consumer eligibility выполняется до
+LIMIT. Rebind отдельно проверяет права на каждого выбранного consumer.
+Targeted PG `role_image_promotion|runtime_environment_lifecycle|managed_configuration`
+PASS: две страницы, фильтр, отказ cursor при смене query, digest совпадает с
+прежним byte-exact алгоритмом. Go/race managed transport/repository и Proto
+lint/codegen PASS. Промежуточные FAIL новых fixtures (добавленный agent менял
+VFS count; stale configuration version) исправлены порядком fixture и точным
+readback текущей version, без ослабления assertions.
+
+## История Assistant D1
+
+`ListAssistantConversationsRequest.query = 3`, `state = 4`;
+`AssistantConversation.state = 10`. Закрытый enum: ACTIVE, CLOSED, ARCHIVED;
+UNSPECIFIED в запросе означает ACTIVE. Поиск по title/ref ограничен 200 Unicode
+символами. SQL проверяет creator и актуальные project.view/organization.view
+до LIMIT. Keyset по created_at/ref связан с actor, organization, authority
+project и всеми фильтрами. История другого пользователя не выдаётся.
+
+`ArchiveAssistantConversation{mutation, conversation_ref}` возвращает
+`conversation`; операция `platform.assistant.conversations.archive`, policy 54.
+Owner разрешается до OCC/idempotency; чужой conversation возвращает NotFound.
+ACTIVE/CLOSED -> ARCHIVED допускается только без незавершённого run. В одной
+транзакции pending plans переходят в REJECTED, сохраняются command receipt,
+audit и SYSTEM_ASSISTANT_CHANGED. Повтор с исходным Idempotency-Key возвращает
+исходный результат. Новые turns требуют ACTIVE; архив не удаляет историю.
+Миграция: 20260904000622.
+
+Локально PASS: PostgreSQL `system_assistant_proposes|assistant_history` (owner,
+OCC, busy run, archive/replay, поиск, несколько страниц, подмена actor/filter);
+Go assistant transport/repository, controlplaneclient/race, policy codegen,
+Proto lint/codegen. Первые проверки FAIL из-за неподготовленного reader fixture
+и старого ожидаемого номера policy в тесте; исправлены fixture и revision, без
+ослабления проверок доступа. HTTP/browser путь: NOT RUN.
+
+## Доступность Template Variables D3
+
+`ListTemplateVariablesRequest.agent_ref = 4`, `runtime_revision_ref = 5`;
+`TemplateVariable.available = 10`, `reason = 11`. Reason - закрытый enum:
+AVAILABLE, PROJECT_CONTEXT_REQUIRED, AGENT_CONTEXT_REQUIRED,
+RUNTIME_CONTEXT_REQUIRED, NOT_MATERIALIZED. UNSPECIFIED не выдаётся owner-кодом.
+
+Без target доступны organization/user и разрешённый project context. Agent
+разрешается через agent.view, его environment читается из текущего owner view.
+Для exact RuntimeRevision SQL проверяет organization, authority project,
+совпадение optional agent/project и актуальный run.view до чтения snapshot.
+В ответ попадают только наличие переменной и reason, не значения, prompt,
+credential descriptors или файлы. Пустой materialized collection и нулевой
+счётчик доступны; отсутствующая/пустая строковая переменная disabled.
+Доступность переменной не является runtime readiness или разрешением запуска.
+
+Cursor теперь связан с tenant/actor/authority project, query и обоими context
+refs. RuntimeRevision не подменяется последней revision при чтении. Каталог
+замкнут и мал; его страница вычисляется в Go, без загрузки пользовательских
+коллекций. Локально PASS: template variable unit/race, transport compile/vet,
+Proto lint/codegen и PG `role_image_promotion|runtime_configuration_publish|
+session_provider_affinity` с проверками global/agent/sealed context, запрета
+без run.view, wrong agent и смены context в cursor. Первый узкий PG запуск
+FAIL до новых assertions из-за отсутствия secondary provider fixture;
+зависимость включена явно. HTTP/PWA: NOT RUN.
+
 ## Оставшаяся реализация
 
-Настоящий SkillBundle и KodexMemoryRecord; полный VFS дерева сущностей;
+SkillBundle/Memory CRUD, bindings и реальные VFS context узлы реализованы:
+см. `context-contracts-1046.md`. Остаются runtime pins/materialization,
+рабочий scanner deploy/signature delivery, физический Memory retention GC,
+полный VFS дерева сущностей;
 сквозная credential matrix secret revisions; проверка Git lifecycle;
-полные STT model params и immutable projection; mail authorization producer #1037;
+полная STT credential matrix; mail authorization producer #1037;
 сквозная проверка external subject mapping и INTERACTION routing #1030;
 полная негативная матрица, race и финальный exact-SHA review. Все восемь каталогов
 выполняют eligibility до SQL LIMIT, с дополнительной per-result проверкой Go.

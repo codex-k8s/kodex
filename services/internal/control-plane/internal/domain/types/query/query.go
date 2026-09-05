@@ -7,10 +7,16 @@ type Page struct {
 }
 
 type Filter struct {
+	ExpectedCatalogRevision, ExpectedCatalogDigest                                  string                   `json:",omitempty"`
+	TemplateContext                                                                 *TemplateVariableContext `json:",omitempty"`
 	ProjectRef, ResourceRef, Query, State, Category, DefinitionKey, Action, Outcome string
 	ArtifactType, ScanState, SourceKind                                             string
 	States                                                                          []string
 	AfterSequence                                                                   int64
 	Limit                                                                           int32
 	Page                                                                            Page
+}
+
+type TemplateVariableContext struct {
+	AgentRef, RuntimeRevisionRef string
 }

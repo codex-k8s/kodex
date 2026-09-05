@@ -7,10 +7,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-func (service *Service) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, page query.Page) (entity.RuntimeSecretImpact, error) {
+func (service *Service) GetRuntimeSecretImpact(ctx context.Context, principal value.Principal, ref string, revision int64, search string, page query.Page) (entity.RuntimeSecretImpact, error) {
 	principal, err := service.principal(ctx, principal)
 	if err != nil {
 		return entity.RuntimeSecretImpact{}, err
 	}
-	return service.repository.GetRuntimeSecretImpact(ctx, principal, ref, revision, page)
+	return service.repository.GetRuntimeSecretImpact(ctx, principal, ref, revision, search, page)
 }

@@ -12,6 +12,15 @@ import (
 
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
+	case command.ReportEmailEffect:
+		_, _, _, err := repository.authorizeEmailReport(ctx, tx, current, input)
+		return err
+	case command.ArchiveAssistantConversation:
+		_, err := repository.authorizeAssistantArchive(ctx, tx, current, input)
+		return err
+	case command.ReconcileEmailEffect:
+		_, err := repository.authorizeEmailReconciliation(ctx, tx, current, input)
+		return err
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
 		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
@@ -148,6 +157,47 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			projectRef = draft.ProjectRef
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+	case command.MemoryRecordInput:
+		projectRef, agentRef := payload.ProjectRef, payload.AgentRef
+		if input.Kind != command.CreateMemoryRecord {
+			record, err := scanMemoryRecord(tx.QueryRow(ctx, queryMemoryRecordGet, current.organizationID, payload.RecordRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			projectRef, agentRef = record.ProjectRef, record.AgentRef
+		}
+		if payload.Specification.SourceRunRef != "" {
+			if err := repository.requireAccess(ctx, tx, current, "run.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: payload.Specification.SourceRunRef}); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+		}
+		if agentRef != "" {
+			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", agentRef, projectRef)
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
+	case command.AgentContextBindingInput:
+		if err := repository.authorizeContextResource(ctx, tx, current, input, payload); err != nil {
+			return "", resolvedAccessTarget{}, err
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+	case command.SkillBundleInput:
+		projectRef := payload.ProjectRef
+		if payload.BundleRef != "" {
+			bundle, err := scanSkillBundle(tx.QueryRow(ctx, querySkillBundleGet, current.organizationID, payload.BundleRef))
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			if projectRef != "" && projectRef != bundle.ProjectRef {
+				return "", resolvedAccessTarget{}, errs.ErrForbidden
+			}
+			projectRef = bundle.ProjectRef
+		}
+		for _, file := range payload.Specification.Files {
+			if err := repository.requireAccess(ctx, tx, current, "artifact.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ARTIFACT", ResourceRef: file.ArtifactRef}); err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)
 	case command.WorkflowInput:
 		if input.Kind == command.CreateWorkflow {
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
@@ -222,6 +272,20 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "organization.manage", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.Ref, "")
+	case command.EmailCredentialInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", payload.ConnectionRef, "")
+	case command.EmailMailboxInput:
+		connectionRef := payload.ConnectionRef
+		if payload.Managed.ConfigurationRef != "" {
+			var mailboxRef string
+			if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.Managed.ConfigurationRef).Scan(&connectionRef, &mailboxRef); err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+			if payload.ConnectionRef != "" && payload.ConnectionRef != connectionRef {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 	case command.IntegrationGrantInput:
 		if payload.AgentRef != "" {
 			return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
@@ -246,13 +310,20 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 		}
 		if payload.ConfigurationRef != "" {
-			var projectRef string
+			var projectRef, configurationKind string
 			if err := tx.QueryRow(ctx, queryManagedConfigurationAccessTarget, pgx.StrictNamedArgs{
 				"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
-			}).Scan(&projectRef); errors.Is(err, pgx.ErrNoRows) {
+			}).Scan(&projectRef, &configurationKind); errors.Is(err, pgx.ErrNoRows) {
 				return "", resolvedAccessTarget{}, errs.ErrNotFound
 			} else if err != nil {
 				return "", resolvedAccessTarget{}, errs.ErrUnavailable
+			}
+			if configurationKind == "EMAIL_MAILBOX" {
+				var connectionRef, mailboxRef string
+				if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.ConfigurationRef).Scan(&connectionRef, &mailboxRef); err != nil {
+					return "", resolvedAccessTarget{}, errs.ErrNotFound
+				}
+				return repository.resolveCommandTarget(ctx, tx, current, "integration.manage", "INTEGRATION", connectionRef, "")
 			}
 			if projectRef != "" {
 				return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", projectRef, projectRef)

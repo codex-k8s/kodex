@@ -11,6 +11,7 @@ WITH eligible AS MATERIALIZED (
       ON target.organization_id = binding.organization_id AND target.kind = 'AGENT' AND target.id = agent.id
     WHERE binding.organization_id = @organization_id::uuid AND environment.ref = @environment_ref
       AND revision.ref <> @target_ref
+      AND (@query='' OR strpos(lower(agent.name || ' ' || agent.ref || ' ' || project.ref),lower(@query))>0)
       AND control_plane.catalog_resource_visible(binding.organization_id, @actor_id::uuid, 'agent.manage',
           target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at)
 ), page AS (

@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -35,14 +36,16 @@ const (
 )
 
 type Repository struct {
-	pool                   *pgxpool.Pool
-	defaultRuntimeProvider string
-	defaultRuntimeModel    string
-	providerCredential     ProviderCredentialConfig
-	roleImages             RoleImageConfig
-	objects                objectstorage.Store
-	integrationDefinitions map[string]integrationpackage.Package
-	runtimeSecretNamespace string
+	pool                          *pgxpool.Pool
+	defaultRuntimeProvider        string
+	defaultRuntimeModel           string
+	providerCredential            ProviderCredentialConfig
+	roleImages                    RoleImageConfig
+	objects                       objectstorage.Store
+	skillScanner                  skillpolicy.Scanner
+	integrationDefinitions        map[string]integrationpackage.Package
+	runtimeSecretNamespace        string
+	runtimeSecretStagingNamespace string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -74,7 +77,7 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	}
 	return &Repository{
 		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
-		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime",
+		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime", runtimeSecretStagingNamespace: "kodex-secret-drafts",
 	}, nil
 }
 
@@ -83,6 +86,14 @@ func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
 		return errors.New("runtime secret namespace is invalid")
 	}
 	repository.runtimeSecretNamespace = namespace
+	return nil
+}
+
+func (repository *Repository) ConfigureRuntimeSecretStaging(namespace string) error {
+	if !validDNSLabel(namespace) || namespace == repository.runtimeSecretNamespace {
+		return errors.New("runtime secret staging namespace is invalid")
+	}
+	repository.runtimeSecretStagingNamespace = namespace
 	return nil
 }
 
@@ -141,6 +152,10 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	}
 	if schemaVersion != 1 {
 		return errors.New("control-plane schema version is unsupported")
+	}
+	var draftsReady bool
+	if repository.pool.QueryRow(ctx, querySecretDraftReadiness).Scan(&draftsReady) != nil || !draftsReady {
+		return errors.New("runtime secret draft schema is unavailable")
 	}
 	if err := repository.objects.Check(ctx); err != nil {
 		return errors.New("artifact object storage is unavailable")
@@ -642,7 +657,7 @@ func (repository *Repository) ResolvePrincipal(ctx context.Context, principal va
 	return principal, nil
 }
 
-func (repository *Repository) ResolveProofAuthority(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+func (repository *Repository) resolveProofIdentity(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
 	if input.CallerWorkload == "" || input.Operation == "" {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}

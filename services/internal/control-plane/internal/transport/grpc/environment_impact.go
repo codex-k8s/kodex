@@ -14,7 +14,7 @@ func (server *Server) GetRuntimeEnvironmentImpact(ctx context.Context, request *
 	if err != nil {
 		return nil, err
 	}
-	result, err := server.service.GetRuntimeEnvironmentImpact(ctx, p, request.GetEnvironmentRef(), request.GetVersionRef(),
+	result, err := server.service.GetRuntimeEnvironmentImpact(ctx, p, request.GetEnvironmentRef(), request.GetVersionRef(), request.GetQuery(),
 		query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
 	if err != nil {
 		return nil, transportError(err)

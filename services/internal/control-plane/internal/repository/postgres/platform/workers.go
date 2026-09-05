@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -202,6 +203,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"workspacePolicy":             workspacePolicy,
 	}
+	contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, "", "", assistant.Ref)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	snapshot["contextSnapshot"] = contextSnapshot
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
@@ -884,6 +890,14 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	}
 	result := make([]map[string]any, 0, len(candidates))
 	for _, item := range candidates {
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
+		health, exists := definition.Capability(definition.Spec.HealthCheck.Operation)
+		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
+			return nil, errs.ErrForbidden
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
@@ -897,6 +911,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		_ = json.Unmarshal(item.configuration, &configuration)
 		claim := map[string]any{
 			"testRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
+			"definitionPackage": asJSON(definition),
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
@@ -992,9 +1007,9 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); err != nil {
 		return nil, errs.ErrForbidden
 	}
-	definition, exists := repository.integrationDefinitions[definitionKey]
+	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, input["connection_ref"], definitionKey, definitionVersion, definitionDigest)
 	capability, capabilityExists := definition.Capability(input["capability_key"])
-	if !exists || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
+	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
 		return nil, errs.ErrForbidden
 	}
@@ -1009,21 +1024,37 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
-	intentDigest := sha256.Sum256([]byte(strings.Join([]string{
+	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest,
-	}, "\x00")))
+	}
+	mailboxGate := false
+	if definitionKey == "email" {
+		mailbox, err := repository.readEmailMailbox(ctx, tx, scope, resourceScope["mailbox_id"], 0)
+		if err != nil {
+			return nil, err
+		}
+		if mailbox.ConnectionRef != input["connection_ref"] {
+			return nil, errs.ErrForbidden
+		}
+		intentParts = append(intentParts, mailbox.SourceDigest)
+		mailboxGate, err = emailpolicy.CommandRequiresGate(mailbox, capability.Operation, "", canonicalInput)
+		if err != nil {
+			return nil, err
+		}
+	}
+	intentDigest := sha256.Sum256([]byte(strings.Join(intentParts, "\x00")))
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
 	state := "READY"
-	if risk != "READ" {
+	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var invocationID, resolvedRef, resolvedState string
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
-		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey,
+		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey, mailboxGate,
 	).Scan(&invocationID, &resolvedRef, &resolvedState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
@@ -1148,6 +1179,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
 			continue
 		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("eff")
 		digest := sha256.Sum256([]byte(fence))
@@ -1164,7 +1199,8 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		_ = json.Unmarshal(item.resourceScope, &resourceScope)
 		claim := map[string]any{
 			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
-			"capabilityKey": item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
+			"definitionPackage": asJSON(definition),
+			"capabilityKey":     item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
 			"resourceKind": item.resourceKind, "resourceScope": resourceScope,

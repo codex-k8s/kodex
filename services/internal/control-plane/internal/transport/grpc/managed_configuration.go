@@ -177,7 +177,7 @@ func (server *Server) GetManagedConfigurationImpact(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef())
+	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef(), query.Filter{Query: request.GetQuery(), Page: query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()}})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -222,6 +222,11 @@ func (server *Server) GetSystemSTTConfiguration(ctx context.Context, _ *controlp
 		Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
 		Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
 		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
+		Enabled: configuration.Enabled, MaximumAudioBytes: configuration.MaximumAudioBytes,
+		MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
+		Parameters: &controlplanev1.SystemSTTParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
+			Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
+			Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
 	}}, nil
 }
 
@@ -230,10 +235,29 @@ func castManagedRevision(value *entity.ManagedConfigurationRevision) *controlpla
 		return nil
 	}
 	return &controlplanev1.ManagedConfigurationRevision{Ref: value.Ref, Revision: value.Revision,
-		State:         controlplanev1.ManagedConfigurationState(controlplanev1.ManagedConfigurationState_value["MANAGED_CONFIGURATION_STATE_"+value.State]),
+		State:         managedRevisionStateProto(value.State),
 		ContentFormat: value.ContentFormat, Content: value.Content, Digest: value.Digest,
 		ValidationDiagnostics: append([]string(nil), value.ValidationDiagnostics...), ParentRevisionRef: value.ParentRevisionRef,
 		CreatedAt: timestamp(value.CreatedAt), ValidatedAt: optionalTimestamp(value.ValidatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+}
+
+func managedRevisionStateProto(state string) controlplanev1.ManagedConfigurationState {
+	switch state {
+	case "DRAFT":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT
+	case "VALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_VALID
+	case "INVALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_INVALID
+	case "PUBLISHED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_PUBLISHED
+	case "SUPERSEDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_SUPERSEDED
+	case "DISCARDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
+	default:
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_UNSPECIFIED
+	}
 }
 
 func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlplanev1.ManagedConfigurationSet {
@@ -258,7 +282,7 @@ func castManagedBinding(value entity.ManagedConfigurationBindingSnapshot) *contr
 }
 
 func castManagedImpact(value entity.ManagedConfigurationImpact) *controlplanev1.ManagedConfigurationImpact {
-	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest}
+	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest, Total: value.Total, Page: &controlplanev1.PageInfo{NextPageToken: value.NextPageToken}}
 	for _, item := range value.Consumers {
 		result.Consumers = append(result.Consumers, castManagedConsumer(item))
 	}

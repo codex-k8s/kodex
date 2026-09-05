@@ -314,6 +314,13 @@ func (repository *Repository) validateNewRuntimeSecretOperation(ctx context.Cont
 		}
 	}
 	if input.Kind == "CREATE" || input.Kind == "ROTATE" || input.Kind == "REVOKE" {
+		var publishing bool
+		if tx.QueryRow(ctx, querySecretDraftPublishingActive, pgx.StrictNamedArgs{"secret_id": secret.id}).Scan(&publishing) != nil {
+			return errs.ErrUnavailable
+		}
+		if publishing {
+			return errs.ErrConflict
+		}
 		active, found, err := repository.lockActiveRuntimeSecretMutation(ctx, tx, secret.id)
 		if err != nil {
 			return err
@@ -585,6 +592,9 @@ func (repository *Repository) RecoverRuntimeSecretMaterialization(ctx context.Co
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	locked, err := repository.lockRuntimeSecretOperation(ctx, tx, current.organizationID, input.OperationRef)
+	if errors.Is(err, errs.ErrNotFound) {
+		return repository.recoverDraftFromLegacy(ctx, tx, current, input)
+	}
 	if err != nil {
 		return platformrepo.RuntimeSecretRecoveryResult{}, err
 	}

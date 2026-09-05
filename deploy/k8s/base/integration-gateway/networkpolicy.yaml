@@ -65,6 +65,15 @@ spec:
               kubernetes.io/metadata.name: kodex-system
           podSelector:
             matchLabels:
+              app.kubernetes.io/name: email-bridge
+      ports:
+        - {protocol: TCP, port: 8443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
               app.kubernetes.io/name: integration-synthetic
               app.kubernetes.io/component: integration-fixture
       ports:

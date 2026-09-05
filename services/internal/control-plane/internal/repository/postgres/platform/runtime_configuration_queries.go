@@ -2,13 +2,12 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -19,16 +18,32 @@ import (
 )
 
 func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, principal value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
-	row := repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetAgentView, scope.organizationID, ref, scope.role, scope.actorID)
-	view, err := repository.scanAgentRuntimeConfigurationView(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
-	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "agent.view", "AGENT", ref, "")
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if scope.authorityProjectID != "" && scope.authorityProjectID != target.projectID {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrForbidden
+	}
+	if err := repository.requireAccess(ctx, tx, scope, "agent.view", target); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if tx.Commit(ctx) != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	return view, nil
@@ -153,24 +168,27 @@ func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context
 	return items, next, nil
 }
 
-type templateVariableCursor struct {
-	Version int    `json:"v"`
-	Filter  string `json:"f"`
-	Name    string `json:"n"`
-}
-
 func (repository *Repository) ListTemplateVariables(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.TemplateVariable, int64, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, 0, "", err
+	}
 	if filter.ProjectRef != "" {
 		if _, err := repository.GetProject(ctx, principal, filter.ProjectRef); err != nil {
 			return nil, 0, "", err
 		}
-	} else if _, err := repository.resolveScope(ctx, principal); err != nil {
-		return nil, 0, "", err
 	}
-	if len([]rune(filter.Query)) > 200 {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) {
 		return nil, 0, "", errs.ErrInvalid
 	}
-	cursor, err := decodeTemplateVariableCursor(filter.Page.Token, filter.ProjectRef, filter.Query)
+	cursor, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	availability, materialized, err := repository.templateAvailability(ctx, principal, current, filter)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -178,15 +196,17 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	needle := strings.ToLower(strings.TrimSpace(filter.Query))
 	filtered := make([]entity.TemplateVariable, 0, len(catalog))
 	for _, item := range catalog {
+		item.Available = availability[item.Name]
+		item.Reason = variableAvailabilityReason(item, availability, materialized)
 		if needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle) {
 			filtered = append(filtered, item)
 		}
 	}
 	total := int64(len(filtered))
 	start := 0
-	if cursor.Name != "" {
+	if cursor != "" {
 		for index, item := range filtered {
-			if item.Name == cursor.Name {
+			if item.Name == cursor {
 				start = index + 1
 				break
 			}
@@ -200,37 +220,12 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	end := min(start+limit, len(filtered))
 	items := filtered[start:end]
 	if end < len(filtered) {
-		next = encodeTemplateVariableCursor(filter.ProjectRef, filter.Query, items[len(items)-1].Name)
+		next = encodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter, items[len(items)-1].Name)
 		if next == filter.Page.Token {
 			return nil, 0, "", errs.ErrConflict
 		}
 	}
 	return items, total, next, nil
-}
-
-func templateVariableFilterDigest(projectRef, queryValue string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(projectRef) + "\x00" + strings.TrimSpace(queryValue)))
-	return base64.RawURLEncoding.EncodeToString(sum[:12])
-}
-
-func encodeTemplateVariableCursor(projectRef, queryValue, name string) string {
-	raw, _ := json.Marshal(templateVariableCursor{Version: 1, Filter: templateVariableFilterDigest(projectRef, queryValue), Name: name})
-	return base64.RawURLEncoding.EncodeToString(raw)
-}
-
-func decodeTemplateVariableCursor(token, projectRef, queryValue string) (templateVariableCursor, error) {
-	if strings.TrimSpace(token) == "" {
-		return templateVariableCursor{}, nil
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) > 1024 {
-		return templateVariableCursor{}, errs.ErrInvalid
-	}
-	var cursor templateVariableCursor
-	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Filter != templateVariableFilterDigest(projectRef, queryValue) || cursor.Name == "" {
-		return templateVariableCursor{}, errs.ErrInvalid
-	}
-	return cursor, nil
 }
 
 func templateVariableCatalog() []entity.TemplateVariable {

@@ -6,6 +6,7 @@ WITH source AS (
     JOIN control_plane.managed_configuration_revisions revision ON revision.id = configuration.current_revision_id
     WHERE configuration.organization_id = @organization_id::uuid AND configuration.ref = @configuration_ref
       AND configuration.managed_by = 'GIT' AND configuration.version = @expected_version
+    FOR UPDATE OF configuration
 ), inserted_set AS (
     INSERT INTO control_plane.managed_configuration_sets
         (ref, organization_id, project_id, kind, name, managed_by, source, created_by)
@@ -14,8 +15,8 @@ WITH source AS (
 ), inserted_revision AS (
     INSERT INTO control_plane.managed_configuration_revisions
         (ref, organization_id, configuration_set_id, revision, state, content_format, content, digest, parent_revision_id, created_by)
-    SELECT @revision_ref, source.organization_id, inserted_set.id, 1, 'DRAFT', source.content_format,
-           source.content, source.digest, source.revision_id, @actor_id::uuid
+    SELECT @revision_ref, source.organization_id, inserted_set.id, 1, 'DRAFT', @content_format,
+           @content, @digest, source.revision_id, @actor_id::uuid
     FROM source JOIN inserted_set ON true RETURNING *
 )
 SELECT inserted_set.id::text, inserted_set.ref, COALESCE(inserted_set.project_id::text, ''),
