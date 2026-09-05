@@ -4083,6 +4083,9 @@ message RuntimeEnvironmentDraft {
   string validation_digest = 8;
   repeated string diagnostics = 9;
   string published_environment_ref = 10;
+  string base_version_ref = 11;
+  int64 base_revision = 12;
+  google.protobuf.Timestamp saved_at = 13;
 }
 message GetRuntimeEnvironmentDraftRequest { string draft_ref = 1; }
 message GetRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
