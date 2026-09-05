@@ -150,6 +150,38 @@ func TestReportEmailReceiptInputAndDeadline(t *testing.T) {
 	}
 }
 
+func TestReportRecoveryUsesOriginalExpiredBinding(t *testing.T) {
+	for _, mode := range []string{"stored", "revoked", "unavailable", "live"} {
+		t.Run(mode, func(t *testing.T) {
+			input, response := effectFixture()
+			input.Replay = true
+			if mode != "live" {
+				input.Binding.Lease.ExpiresAt = time.Now().Add(-time.Hour)
+			}
+			calls := 0
+			client := Client{API: effectRuntime{report: func(ctx context.Context, r *cp.ReportEmailEffectReceiptRequest) (*cp.ReportEmailEffectReceiptResponse, error) {
+				calls++
+				deadline, ok := ctx.Deadline()
+				if !ok || !deadline.After(time.Now()) || time.Until(deadline) > effectAuthorityTimeout || !proto.Equal(r.Binding, Binding(input.Binding)) || r.Mutation.IdempotencyKey != input.IdempotencyKey {
+					t.Fatal("recovery replaced the original fence or inherited expired deadline")
+				}
+				if mode == "revoked" {
+					return nil, status.Error(codes.PermissionDenied, "recovery denied")
+				}
+				if mode == "unavailable" {
+					return nil, status.Error(codes.Unavailable, "recovery unavailable")
+				}
+				return &cp.ReportEmailEffectReceiptResponse{Receipt: response}, nil
+			}}}
+			_, err := client.Report(t.Context(), input)
+			want := map[string]error{"stored": nil, "revoked": errs.Denied, "unavailable": errs.Unavailable, "live": errs.Invalid}[mode]
+			if !errors.Is(err, want) || mode == "live" && calls != 0 || mode != "live" && calls != 1 {
+				t.Fatal("recovery bypassed authority or rejected exact stored replay")
+			}
+		})
+	}
+}
+
 func TestReconcileEmailReceiptExactDecision(t *testing.T) {
 	for _, field := range []string{"valid", "no-effect", "nil", "receipt", "digest", "version", "decision", "decision-version", "decision-receipt", "decision-digest", "decision-receipt-version", "invocation", "grant", "actor", "expired", "created", "unknown", "unknown-enum"} {
 		t.Run(field, func(t *testing.T) {

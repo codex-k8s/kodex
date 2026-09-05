@@ -25,7 +25,7 @@ func TestMailboxPolicyProfiles(t *testing.T) {
 			for _, command := range []api.Command{{Operation: api.OperationList, MailboxId: "mailbox"}, send(api.OperationSend, profile)} {
 				needsGate := profile == "all-gate" || (profile == "read-allow-send-gate" && command.Operation == api.OperationSend)
 				before := secrets.reads.Load()
-				_, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", command)
+				_, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", command)
 				if needsGate {
 					if !errors.Is(err, errs.Gate) || secrets.reads.Load() != before {
 						t.Fatal("gate must precede credentials")
@@ -75,7 +75,7 @@ func TestTLSUpgradeRefusalHasNoPlaintextFallback(t *testing.T) {
 	if result := execute(t, s, send(api.OperationSend, "no-upgrade")); result.Status != "unknown" {
 		t.Fatal("unexpected upgrade refusal receipt")
 	}
-	if _, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "uid-one"}); err == nil {
+	if _, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "uid-one"}); err == nil {
 		t.Fatal("POP downgrade accepted")
 	}
 	f.mu.Lock()

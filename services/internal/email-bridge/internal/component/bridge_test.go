@@ -346,6 +346,10 @@ func (m *memory) Remember(context.Context, port.Scope, port.Record, port.OwnerRe
 func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.reserve(s, key, digest, id, resource, audit)
+}
+
+func (m *memory) reserve(s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	k := s.Tenant + "/" + s.Mailbox + "/" + key
 	if r, ok := m.rows[k]; ok {
 		if r.Digest != digest {
@@ -362,6 +366,39 @@ func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id, resou
 	m.rows[k] = r
 	return r, true, nil
 }
+
+func (m *memory) ReserveEffect(_ context.Context, s port.Scope, record port.Record, source port.ReportSource) (port.Record, bool, error) {
+	if !source.Valid() || !source.Binding.Lease.ExpiresAt.After(time.Now()) {
+		return port.Record{}, false, errs.Invalid
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, created, err := m.reserve(s, record.Key, record.Digest, record.ID, record.Resource, record.Audit)
+	if created {
+		r.ReportVersion = 1
+		m.rows[s.Tenant+"/"+s.Mailbox+"/"+r.Key] = r
+	}
+	return r, created, err
+}
+
+func (m *memory) CompleteEffect(_ context.Context, s port.Scope, r port.Record, status string, source port.ReportSource) (port.Record, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := s.Tenant + "/" + s.Mailbox + "/" + r.Key
+	if !source.Valid() || r.ReportVersion < 1 || m.rows[key].ReportVersion != r.ReportVersion {
+		return port.Record{}, errs.Conflict
+	}
+	r.ReportVersion++
+	r.Status = status
+	m.rows[key] = r
+	return r, nil
+}
+
+func (*memory) PendingReports(context.Context, int) ([]port.PendingReport, error) { return nil, nil }
+func (*memory) ClaimReport(context.Context, port.PendingReport, time.Duration) (bool, error) {
+	return false, nil
+}
+func (*memory) AcknowledgeReport(context.Context, port.PendingReport) error { return nil }
 func (m *memory) Complete(_ context.Context, s port.Scope, r port.Record, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -412,15 +449,22 @@ func service(t *testing.T, f *providerFixture, mode string, store port.Repositor
 	if store == nil {
 		store = &memory{rows: map[string]port.Record{}}
 	}
-	s := &mail.Service{Ledger: store.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Effects: effectFixture{}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
+	s := &mail.Service{Reports: store.(port.ReportRepository), Ledger: store.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Effects: effectFixture{}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
 	return s, sec, auth
+}
+
+func executionContext(ctx context.Context) context.Context {
+	if api.ExecutionFromContext(ctx) != nil {
+		return ctx
+	}
+	return api.WithExecutionBinding(ctx, executionFixture())
 }
 func send(op api.Operation, key string) api.Command {
 	return api.Command{Operation: op, MailboxId: "mailbox", EffectKey: key, Message: api.MessageInput{From: "sender@example.test", To: "recipient@example.test", Subject: "Fixture", BodyText: "Message body", Attachments: []api.Attachment{{Filename: "hello.txt", ContentType: "text/plain", ContentBase64: base64.StdEncoding.EncodeToString([]byte("hello"))}}}}
 }
 func execute(t *testing.T, s *mail.Service, c api.Command) api.Result {
 	t.Helper()
-	r, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", c)
+	r, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", c)
 	if e != nil {
 		t.Fatalf("operation %s: %v", c.Operation, e)
 	}
@@ -459,7 +503,7 @@ func TestProtocolOperations(t *testing.T) {
 			if len(execute(t, s, api.Command{Operation: api.OperationDownload, MailboxId: "mailbox", Uid: "uid-one"}).Attachments) != 1 {
 				t.Fatal("download")
 			}
-			if _, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationMark, MailboxId: "mailbox"}); !errors.Is(e, errs.Unsupported) {
+			if _, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationMark, MailboxId: "mailbox"}); !errors.Is(e, errs.Unsupported) {
 				t.Fatal("POP flags invented")
 			}
 			for _, op := range []api.Operation{api.OperationSend, api.OperationReply, api.OperationReplyAll, api.OperationForward} {
@@ -494,7 +538,7 @@ func TestProtocolOperations(t *testing.T) {
 			if execute(t, s, api.Command{Operation: api.OperationDelete, MailboxId: "mailbox", Uid: "uid-one", EffectKey: "delete"}).Status != "deleted" {
 				t.Fatal("delete")
 			}
-			if _, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Cursor: list.NextCursor}); !errors.Is(e, errs.Conflict) {
+			if _, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationList, MailboxId: "mailbox", Cursor: list.NextCursor}); !errors.Is(e, errs.Conflict) {
 				t.Fatal("stale cursor")
 			}
 		})
@@ -532,7 +576,7 @@ func TestAuthorityBeforeCredentials(t *testing.T) {
 				}
 			}
 			a.revoked = name == "revocation"
-			_, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", send(api.OperationSend, name))
+			_, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", send(api.OperationSend, name))
 			if e == nil || sec.reads.Load() != 0 {
 				t.Fatalf("denial before projection: err=%v reads=%d", e, sec.reads.Load())
 			}
@@ -541,7 +585,7 @@ func TestAuthorityBeforeCredentials(t *testing.T) {
 	s, sec, _ := service(t, f, "implicit", nil)
 	cmd := send(api.OperationSend, "scope")
 	cmd.Message.To = "foreign@example.test"
-	if _, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", cmd); e == nil || sec.reads.Load() != 0 {
+	if _, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", cmd); e == nil || sec.reads.Load() != 0 {
 		t.Fatal("recipient scope")
 	}
 	sec.revoked.Store(true)
@@ -585,7 +629,7 @@ func TestUnknownTimeoutTLSAndDuplicate(t *testing.T) {
 				t.Fatal("restart replay")
 			}
 			cmd.Message.Subject = "changed"
-			if _, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", cmd); !errors.Is(e, errs.Conflict) {
+			if _, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", cmd); !errors.Is(e, errs.Conflict) {
 				t.Fatal("input mismatch")
 			}
 			f.mu.Lock()
@@ -652,7 +696,7 @@ func TestPostgresEffects(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, e := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", cmd)
+			_, e := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", cmd)
 			if e != nil {
 				t.Error(e)
 			}

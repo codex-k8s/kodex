@@ -30,7 +30,7 @@ func TestMessageLimitsBeforeCredentials(t *testing.T) {
 			s, secrets, _ := service(t, f, "implicit", nil)
 			command := send(api.OperationSend, name)
 			mutate(&command)
-			_, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", command)
+			_, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", command)
 			if !errors.Is(err, errs.Invalid) || secrets.reads.Load() != 0 {
 				t.Fatal("message limit must precede credentials")
 			}
@@ -63,7 +63,7 @@ func TestPOPBoundsAndSnapshotValidation(t *testing.T) {
 				s.Config.Mailboxes[0].Limits.ScanMessages = 1
 			}
 			f.mu.Unlock()
-			_, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "uid-one"})
+			_, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "token", api.Command{Operation: api.OperationFetch, MailboxId: "mailbox", Uid: "uid-one"})
 			if err == nil {
 				t.Fatal("invalid POP snapshot or size accepted")
 			}
