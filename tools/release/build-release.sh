@@ -129,7 +129,7 @@ while IFS=$'\t' read -r component dockerfile target; do
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in
-    role-image-builder:runtime|image-admission:admission-runtime|*:) ;;
+    role-image-builder:runtime|image-admission:admission-runtime|email-bridge:runtime|email-bridge-migration:migration|*:) ;;
     *) fail "unexpected Dockerfile target for $component" ;;
   esac
 

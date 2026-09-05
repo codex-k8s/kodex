@@ -167,7 +167,8 @@ chmod вместо read-only mount и unsafe fallback запрещены.
 policy: `/workspace/context` read-only. CP consumer этого правила реализован
 в #1046 (`8125c13db`, включён в `98a71da1e`); прежние snapshots с четырьмя
 правилами несовместимы, поэтому требуется совместная поставка producer/runner.
-Код runtime-controller в runner PR не переносится.
+Текущий draft дополнительно содержит exact controller prerequisite для
+согласованного v7 контракта; после слияния #1025 его diff нормализуется.
 
 Readiness больше не выполняет файловые syscall из HTTP handler. Monitor
 запускает `runtime-workspace-canary` с бюджетом 2 секунды, затем 1 секунда

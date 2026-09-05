@@ -232,6 +232,10 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 	}
 	input.EffectiveKubernetesAccess = access
 	input.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, input.EnvironmentImage, nil, policy)
+	snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef,
+		ProjectRef: input.ProjectRef, AgentRef: input.AgentRef, Skills: []runtimecontract.RuntimeSkillBundle{}, Memories: []runtimecontract.RuntimeMemoryRecord{}}
+	snapshot.Digest, _ = snapshot.ComputeDigest()
+	input.ContextSnapshot = &snapshot
 	for _, apply := range configure {
 		apply(&input)
 	}

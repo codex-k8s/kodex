@@ -1,6 +1,6 @@
 # Рабочий registry publisher для полного issuer/verifier/resolver пути.
 version: 1
-source_revision: 6
+source_revision: 7
 targets:
   - workload_id: role-image-builder
     role: AUTHORIZATION_ISSUER
@@ -929,3 +929,66 @@ targets:
       network_policy: stt-tts-service-internal-rpc-authority-exact-paths
       credential_secret_name: internal-rpc-authority-stt-tts-service-verifier-readback-credential
       possession_key_secret_name: internal-rpc-authority-stt-tts-service-verifier-readback-possession
+  - workload_id: email-bridge
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/email-bridge
+    namespace: kodex-system
+    service_account: email-bridge
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-email-bridge-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-email-bridge-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-email-bridge-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_email_bridge_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-email-bridge-issuer-postgresql
+    restore_coordination:
+      role_credential_id: email-bridge-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: email-bridge-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: email-bridge-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-email-bridge-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-email-bridge-issuer-restore-ack
+    readback:
+      readback_id: email-bridge-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: email-bridge-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: email-bridge-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: email-bridge-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-email-bridge-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-email-bridge-issuer-readback-possession

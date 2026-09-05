@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: mattermost
-  version: 2.1.0
+  version: 2.2.0
   origin: SHIPPED
 spec:
   name: Mattermost
@@ -11,7 +11,7 @@ spec:
   adapter: MATTERMOST_INTERACTION
   adapterOwner: interaction-gateway
   executionRoute: INTERACTION
-  readiness: NOT_READY
+  readiness: READY
   credential:
     secretKey: token
     kind: TOKEN
@@ -26,7 +26,7 @@ spec:
       port: 443
       tls: REQUIRED
   healthCheck:
-    operation: mattermost.inbound
+    operation: mattermost.team.read
     timeoutSeconds: 15
     maxAttempts: 2
   capabilities:
@@ -49,10 +49,10 @@ spec:
       approvalPolicy: HUMAN_EACH_EFFECT
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
-        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
       outputFields:
         - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
-      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
     - key: mattermost.result_mirror
       name: Зеркалировать результат
       description: Публикует безопасный итог Run в разрешённый канал после Human Gate.
@@ -61,10 +61,10 @@ spec:
       approvalPolicy: HUMAN_EACH_EFFECT
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
-        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
       outputFields:
         - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
-      execution: {idempotency: PROVIDER_NATIVE, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
     - key: mattermost.gate_decisions
       name: Принимать решения Human Gate
       description: Передаёт решение из разрешённого канала в единый owner lifecycle.
@@ -77,4 +77,210 @@ spec:
         - {key: decision, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32, allowedValues: [APPROVE, REJECT, CANCEL]}
       outputFields:
         - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: mattermost.team.read
+      name: Прочитать команду
+      description: Возвращает метаданные единственной команды подключения.
+      operation: mattermost.team.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields: []
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: name, type: STRING, format: PLAIN, required: true, maximumLength: 100}
+        - {key: display_name, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.channel.read
+      name: Прочитать канал
+      description: Возвращает метаданные единственного разрешённого канала.
+      operation: mattermost.channel.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields: []
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: team_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: name, type: STRING, format: PLAIN, required: true, maximumLength: 100}
+        - {key: display_name, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: purpose, type: STRING, format: PLAIN, required: false, maximumLength: 4096}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.channel.members.list
+      name: Получить участников канала
+      description: Возвращает ограниченную страницу участников разрешённого канала без личных данных профиля.
+      operation: mattermost.channel.members.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: page, type: INTEGER, required: false, minimum: 0, maximum: 10000}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+      outputFields:
+        - {key: members, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: next_page, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.post.list
+      name: Получить сообщения
+      description: Получает страницу сообщений только из разрешённого канала.
+      operation: mattermost.post.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: page, type: INTEGER, required: false, minimum: 0, maximum: 10000}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+      outputFields:
+        - {key: posts, type: STRING, format: PLAIN, required: true, maximumLength: 60000}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: next_page, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.post.read
+      name: Прочитать сообщение
+      description: Читает сообщение после проверки его принадлежности разрешённому каналу.
+      operation: mattermost.post.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: channel_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: user_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: root_id, type: STRING, format: IDENTIFIER, required: false, maximumLength: 26}
+        - {key: message, type: STRING, format: PLAIN, required: false, maximumLength: 16384}
+        - {key: updated_at, type: INTEGER, required: true, minimum: 0, maximum: 9223372036854775807}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.thread.read
+      name: Прочитать обсуждение
+      description: Читает ограниченную страницу ответов одного обсуждения в разрешённом канале.
+      operation: mattermost.thread.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: cursor, type: STRING, format: IDENTIFIER, required: false, maximumLength: 26}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+      outputFields:
+        - {key: posts, type: STRING, format: PLAIN, required: true, maximumLength: 60000}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: next_cursor, type: STRING, format: IDENTIFIER, required: false, maximumLength: 26}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.post.search
+      name: Найти сообщения
+      description: Ищет текст на сервере внутри разрешённой команды и канала, не принимая операторы смены области.
+      operation: mattermost.post.search
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 256}
+        - {key: page, type: INTEGER, required: false, minimum: 0, maximum: 10000}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+      outputFields:
+        - {key: posts, type: STRING, format: PLAIN, required: true, maximumLength: 60000}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: next_page, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.file.list
+      name: Получить вложения сообщения
+      description: Возвращает только вложения проверенного сообщения разрешённого канала.
+      operation: mattermost.file.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+      outputFields:
+        - {key: files, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.file.read
+      name: Прочитать вложение
+      description: Читает ограниченный диапазон байтов вложения проверенного сообщения без публичной ссылки.
+      operation: mattermost.file.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: file_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: offset, type: INTEGER, required: false, minimum: 0, maximum: 1073741824}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 32768}
+      outputFields:
+        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: name, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: content, type: STRING, format: PLAIN, required: false, maximumLength: 43692}
+        - {key: encoding, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [base64]}
+        - {key: offset, type: INTEGER, required: true, minimum: 0, maximum: 1073741824}
+        - {key: total_bytes, type: INTEGER, required: true, minimum: 0, maximum: 1073741824}
+        - {key: next_offset, type: INTEGER, required: false, minimum: 1, maximum: 1073741824}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.reaction.list
+      name: Получить реакции
+      description: Читает реакции только на проверенное сообщение разрешённого канала.
+      operation: mattermost.reaction.list
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+      outputFields:
+        - {key: reactions, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 1000}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}
+    - key: mattermost.post.send
+      name: Отправить сообщение
+      description: Отправляет сообщение или ответ только в разрешённый канал после Human Gate.
+      operation: mattermost.post.send
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
+        - {key: root_id, type: STRING, format: IDENTIFIER, required: false, maximumLength: 26}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: mattermost.post.update
+      name: Изменить сообщение
+      description: Изменяет текст собственного сообщения бота в разрешённом канале после Human Gate.
+      operation: mattermost.post.update
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
+      outputFields:
+        - {key: message_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: mattermost.reaction.add
+      name: Добавить реакцию
+      description: Добавляет реакцию от имени бота к сообщению разрешённого канала после Human Gate.
+      operation: mattermost.reaction.add
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: emoji_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [applied]}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+    - key: mattermost.reaction.remove
+      name: Удалить реакцию
+      description: Удаляет только собственную реакцию бота после Human Gate.
+      operation: mattermost.reaction.remove
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
+      inputFields:
+        - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
+        - {key: emoji_name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 64}
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [applied]}
       execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}

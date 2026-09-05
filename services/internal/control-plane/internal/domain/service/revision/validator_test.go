@@ -67,6 +67,8 @@ func TestIntegrationRevisionRequiresExactRegisteredReadyPackage(t *testing.T) {
 		definition := definitions[key]
 		if key == "github" {
 			definition.Metadata.Version = "99.0.0"
+		} else {
+			definition.Spec.Readiness = "NOT_READY"
 		}
 		raw, _ := json.Marshal(definition)
 		if _, _, err := Validate(KindIntegrationDefinition, "JSON", string(raw)); !errors.Is(err, ErrInvalid) {
