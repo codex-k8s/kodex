@@ -1111,6 +1111,49 @@ export type RuntimeSecretRebindResult = {
     bindings: Array<AgentRuntimeEnvironmentBinding>;
 };
 
+export type EmailEffectOutcome = 'UNKNOWN_OUTCOME' | 'EFFECT_CONFIRMED' | 'NO_EFFECT_CONFIRMED';
+
+export type EmailReconciliationOutcome = 'EFFECT_CONFIRMED' | 'NO_EFFECT_CONFIRMED';
+
+export type EmailEffectReceipt = {
+    ref: OpaqueRef;
+    version: number;
+    invocationRef: OpaqueRef;
+    externalReceiptDigest: string;
+    semanticInputDigest: string;
+    outcome: EmailEffectOutcome;
+    mailboxRef: string;
+    configurationRevision: number;
+    connectionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type EmailReconciliationDecision = {
+    ref: OpaqueRef;
+    version: number;
+    receiptRef: OpaqueRef;
+    receiptVersion: number;
+    receiptDigest: string;
+    invocationRef: OpaqueRef;
+    outcome: EmailReconciliationOutcome;
+    actorRef: OpaqueRef;
+    createdAt: string;
+    expiresAt: string;
+};
+
+export type EmailEffectReceiptView = {
+    receipt: EmailEffectReceipt;
+    decision?: EmailReconciliationDecision;
+};
+
+export type EmailReconciliationInput = {
+    expectedReceiptDigest: string;
+    outcome: EmailReconciliationOutcome;
+    note?: string;
+};
+
 export type InteractionIdentityBindInput = {
     externalTeamRef: string;
     externalChannelRef: string;
@@ -2427,6 +2470,10 @@ export type RuntimeEnvironmentDraftRef = OpaqueRef;
 export type RuntimeEnvironmentVersionRef = OpaqueRef;
 
 export type RuntimeSecretRevision = number;
+
+export type IntegrationInvocationRef = OpaqueRef;
+
+export type EmailEffectReceiptRef = OpaqueRef;
 
 export type InteractionIdentityRef = OpaqueRef;
 
@@ -4731,6 +4778,65 @@ export type RebindRuntimeSecretResponses = {
 };
 
 export type RebindRuntimeSecretResponse = RebindRuntimeSecretResponses[keyof RebindRuntimeSecretResponses];
+
+export type GetEmailEffectReceiptData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/email-effect-receipt';
+};
+
+export type GetEmailEffectReceiptErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetEmailEffectReceiptError = GetEmailEffectReceiptErrors[keyof GetEmailEffectReceiptErrors];
+
+export type GetEmailEffectReceiptResponses = {
+    /**
+     * Безопасная квитанция без тела письма, адресатов и credentials
+     */
+    200: EmailEffectReceiptView;
+};
+
+export type GetEmailEffectReceiptResponse = GetEmailEffectReceiptResponses[keyof GetEmailEffectReceiptResponses];
+
+export type ReconcileEmailEffectData = {
+    body: EmailReconciliationInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        receiptRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-effect-receipts/{receiptRef}/reconciliation';
+};
+
+export type ReconcileEmailEffectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReconcileEmailEffectError = ReconcileEmailEffectErrors[keyof ReconcileEmailEffectErrors];
+
+export type ReconcileEmailEffectResponses = {
+    /**
+     * Отдельное решение владельца; ETag содержит версию решения, не квитанции
+     */
+    200: EmailReconciliationDecision;
+};
+
+export type ReconcileEmailEffectResponse = ReconcileEmailEffectResponses[keyof ReconcileEmailEffectResponses];
 
 export type ListInteractionIdentitiesData = {
     body?: never;
