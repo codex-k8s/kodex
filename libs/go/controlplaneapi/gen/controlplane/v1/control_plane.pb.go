@@ -29833,6 +29833,7 @@ type IntegrationConnectionTestClaim struct {
 	CredentialRevision           *IntegrationCredentialRevision `protobuf:"bytes,7,opt,name=credential_revision,json=credentialRevision,proto3" json:"credential_revision,omitempty"`
 	DefinitionVersion            string                         `protobuf:"bytes,8,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
 	DefinitionDigest             string                         `protobuf:"bytes,9,opt,name=definition_digest,json=definitionDigest,proto3" json:"definition_digest,omitempty"`
+	DefinitionPackage            []byte                         `protobuf:"bytes,10,opt,name=definition_package,json=definitionPackage,proto3" json:"definition_package,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -29928,6 +29929,13 @@ func (x *IntegrationConnectionTestClaim) GetDefinitionDigest() string {
 		return x.DefinitionDigest
 	}
 	return ""
+}
+
+func (x *IntegrationConnectionTestClaim) GetDefinitionPackage() []byte {
+	if x != nil {
+		return x.DefinitionPackage
+	}
+	return nil
 }
 
 type ClaimIntegrationConnectionTestsRequest struct {
@@ -30365,6 +30373,7 @@ type IntegrationInvocationClaim struct {
 	ResourceScope                *IntegrationResourceScope      `protobuf:"bytes,15,opt,name=resource_scope,json=resourceScope,proto3" json:"resource_scope,omitempty"`
 	EffectKey                    string                         `protobuf:"bytes,16,opt,name=effect_key,json=effectKey,proto3" json:"effect_key,omitempty"`
 	InputDigest                  string                         `protobuf:"bytes,17,opt,name=input_digest,json=inputDigest,proto3" json:"input_digest,omitempty"`
+	DefinitionPackage            []byte                         `protobuf:"bytes,18,opt,name=definition_package,json=definitionPackage,proto3" json:"definition_package,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -30516,6 +30525,13 @@ func (x *IntegrationInvocationClaim) GetInputDigest() string {
 		return x.InputDigest
 	}
 	return ""
+}
+
+func (x *IntegrationInvocationClaim) GetDefinitionPackage() []byte {
+	if x != nil {
+		return x.DefinitionPackage
+	}
+	return nil
 }
 
 type ClaimIntegrationInvocationsRequest struct {
@@ -59126,6 +59142,7 @@ type ManagedConfigurationSourceWork struct {
 	ContentFormat       string                           `protobuf:"bytes,16,opt,name=content_format,json=contentFormat,proto3" json:"content_format,omitempty"`
 	MaximumContentBytes int32                            `protobuf:"varint,17,opt,name=maximum_content_bytes,json=maximumContentBytes,proto3" json:"maximum_content_bytes,omitempty"`
 	Deadline            *timestamppb.Timestamp           `protobuf:"bytes,18,opt,name=deadline,proto3" json:"deadline,omitempty"`
+	DefinitionPackage   []byte                           `protobuf:"bytes,19,opt,name=definition_package,json=definitionPackage,proto3" json:"definition_package,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -59282,6 +59299,13 @@ func (x *ManagedConfigurationSourceWork) GetMaximumContentBytes() int32 {
 func (x *ManagedConfigurationSourceWork) GetDeadline() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Deadline
+	}
+	return nil
+}
+
+func (x *ManagedConfigurationSourceWork) GetDefinitionPackage() []byte {
+	if x != nil {
+		return x.DefinitionPackage
 	}
 	return nil
 }
@@ -61928,7 +61952,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0edst_gap_policy\x18\x03 \x01(\tR\fdstGapPolicy\x12&\n" +
 	"\x0fdst_fold_policy\x18\x04 \x01(\tR\rdstFoldPolicy\x12%\n" +
 	"\x0emisfire_policy\x18\x05 \x01(\tR\rmisfirePolicy\x12%\n" +
-	"\x0eoverlap_policy\x18\x06 \x01(\tR\roverlapPolicy\"\x8a\x04\n" +
+	"\x0eoverlap_policy\x18\x06 \x01(\tR\roverlapPolicy\"\xb9\x04\n" +
 	"\x1eIntegrationConnectionTestClaim\x12\x19\n" +
 	"\btest_ref\x18\x01 \x01(\tR\atestRef\x12%\n" +
 	"\x0econnection_ref\x18\x02 \x01(\tR\rconnectionRef\x12%\n" +
@@ -61938,7 +61962,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05lease\x18\x06 \x01(\v2\x1a.controlplane.v1.WorkLeaseR\x05lease\x12_\n" +
 	"\x13credential_revision\x18\a \x01(\v2..controlplane.v1.IntegrationCredentialRevisionR\x12credentialRevision\x12-\n" +
 	"\x12definition_version\x18\b \x01(\tR\x11definitionVersion\x12+\n" +
-	"\x11definition_digest\x18\t \x01(\tR\x10definitionDigest\"k\n" +
+	"\x11definition_digest\x18\t \x01(\tR\x10definitionDigest\x12-\n" +
+	"\x12definition_package\x18\n" +
+	" \x01(\fR\x11definitionPackage\"k\n" +
 	"&ClaimIntegrationConnectionTestsRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"r\n" +
@@ -61973,7 +61999,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x19\n" +
 	"\bgate_ref\x18\x05 \x01(\tR\agateRef\x124\n" +
 	"\x04risk\x18\x06 \x01(\x0e2 .controlplane.v1.IntegrationRiskR\x04risk\x12P\n" +
-	"\x0eresource_scope\x18\a \x01(\v2).controlplane.v1.IntegrationResourceScopeR\rresourceScope\"\xb4\a\n" +
+	"\x0eresource_scope\x18\a \x01(\v2).controlplane.v1.IntegrationResourceScopeR\rresourceScope\"\xe3\a\n" +
 	"\x1aIntegrationInvocationClaim\x12%\n" +
 	"\x0einvocation_ref\x18\x01 \x01(\tR\rinvocationRef\x12%\n" +
 	"\x0edefinition_key\x18\x02 \x01(\tR\rdefinitionKey\x12%\n" +
@@ -61993,7 +62019,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eresource_scope\x18\x0f \x01(\v2).controlplane.v1.IntegrationResourceScopeR\rresourceScope\x12\x1d\n" +
 	"\n" +
 	"effect_key\x18\x10 \x01(\tR\teffectKey\x12!\n" +
-	"\finput_digest\x18\x11 \x01(\tR\vinputDigest\"g\n" +
+	"\finput_digest\x18\x11 \x01(\tR\vinputDigest\x12-\n" +
+	"\x12definition_package\x18\x12 \x01(\fR\x11definitionPackage\"g\n" +
 	"\"ClaimIntegrationInvocationsRequest\x12+\n" +
 	"\x11workload_instance\x18\x01 \x01(\tR\x10workloadInstance\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"j\n" +
@@ -64315,7 +64342,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bclaimant\x18\x05 \x01(\tR\bclaimant\x12\x14\n" +
 	"\x05fence\x18\x06 \x01(\tR\x05fence\x129\n" +
 	"\n" +
-	"expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x92\a\n" +
+	"expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xc1\a\n" +
 	"\x1eManagedConfigurationSourceWork\x12F\n" +
 	"\x05lease\x18\x01 \x01(\v20.controlplane.v1.ManagedConfigurationSourceLeaseR\x05lease\x12\x1d\n" +
 	"\n" +
@@ -64336,7 +64363,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x13previous_commit_sha\x18\x0f \x01(\tR\x11previousCommitSha\x12%\n" +
 	"\x0econtent_format\x18\x10 \x01(\tR\rcontentFormat\x122\n" +
 	"\x15maximum_content_bytes\x18\x11 \x01(\x05R\x13maximumContentBytes\x126\n" +
-	"\bdeadline\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\"^\n" +
+	"\bdeadline\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12-\n" +
+	"\x12definition_package\x18\x13 \x01(\fR\x11definitionPackage\"^\n" +
 	"*ClaimManagedConfigurationSourceWorkRequest\x12\x1a\n" +
 	"\bclaimant\x18\x01 \x01(\tR\bclaimant\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"r\n" +

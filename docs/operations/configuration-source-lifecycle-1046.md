@@ -100,6 +100,14 @@ adapter/operation/schema pins. UI/GIT origin не расширяет registry п
 adapter effects и не выдаёт дополнительных permissions. Consumers читают
 нормализованную published projection с exact version/digest.
 
+Private `IntegrationConnectionTestClaim.definition_package`,
+`IntegrationInvocationClaim.definition_package` и
+`ManagedConfigurationSourceWork.definition_package` передают canonical package
+в пределах существующего лимита 256 KiB. Consumer строго разбирает документ,
+сверяет key/version/digest и поддерживаемые adapter/operations. Несовпадение либо
+отсутствие обязательного package закрыто отклоняется; fallback на shipped digest
+не подменяет выбранную UI/GIT revision. Public DTO не содержит эти bytes.
+
 Полная проверка включает creator → HTTP → specialized CP command → durable
 work → protected integration-gateway claim → provider exact commit read → CP
 atomic accept/effect → published readback, а также все строки матрицы, consumer
