@@ -44,6 +44,15 @@ updated: 2026-09-05
 reason и отклоняет неизвестный текст вместо его выдачи пользователю. Это не
 вычисление account/model compatibility или effective permission в gateway.
 
+MVP-UI-39–42: verified actor → integration definitions/connections → CP registry
+и owner grants → HTTP/SDK selectors. Proto IntegrationRisk/ApprovalPolicy/
+ResourceKind/DefinitionOrigin преобразуются только как typed enum; неизвестное
+значение и противоречие legacy risk/typedRisk закрыто отклоняются. `typedRisk`
+не дублирует публичный `risk`. Флаги hasMinimum/hasMaximum превращаются в
+optional numeric bounds, включая явный 0. Safe canonical inputSchema из
+registry передаётся вместе с проверенным SHA256 и лимитом 256 KiB; HTTP не
+вычисляет из этой схемы authority и не исполняет arbitrary provider calls.
+
 ## Exact Secret pin при редактировании Environment
 
 MVP-UI-46/47: verified actor → create/publish Environment либо create/save draft

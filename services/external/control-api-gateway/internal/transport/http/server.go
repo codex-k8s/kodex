@@ -253,7 +253,7 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
-		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicIntegrationShape) {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -377,7 +377,7 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		}
 		value[field.JSONName()] = normalized
 	}
-	return nil
+	return normalizeIntegrationShape(value, descriptor)
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
@@ -402,6 +402,20 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
+	}
+	if field.Kind() == protoreflect.BoolKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationCapability":
+			return false, field.JSONName() == "approvalRequired"
+		case "controlplane.v1.IntegrationConfigurationField":
+			return false, field.JSONName() == "required"
+		case "controlplane.v1.IntegrationGrant":
+			return false, field.JSONName() == "enabled"
+		case "controlplane.v1.IntegrationDefinition":
+			return false, field.JSONName() == "builtIn" || field.JSONName() == "available"
+		case "controlplane.v1.IntegrationConnection":
+			return false, field.JSONName() == "credentialsConfigured"
+		}
 	}
 	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "available" || field.JSONName() == "ready"
@@ -437,6 +451,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		return item, normalizeProtoJSONShape(item, field.Message())
 	}
 	switch field.Kind() {
+	case protoreflect.EnumKind:
+		return normalizeIntegrationEnum(value, field.Enum())
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
 		text, ok := value.(string)
 		if !ok {

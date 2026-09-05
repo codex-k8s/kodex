@@ -7105,6 +7105,8 @@ components:
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConfigurationField:
       type: object
       additionalProperties: false
@@ -7357,6 +7359,8 @@ components:
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConnection:
       type: object
       additionalProperties: false

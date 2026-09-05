@@ -2299,6 +2299,8 @@ export type IntegrationCapability = {
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
     resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
     inputFields: Array<IntegrationConfigurationField>;
+    inputSchema?: string;
+    inputSchemaSha256?: string;
 };
 
 export type IntegrationConfigurationField = {
@@ -2512,6 +2514,8 @@ export type IntegrationGrant = {
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
     resourceScope: IntegrationResourceScope;
+    inputSchema?: string;
+    inputSchemaSha256?: string;
 };
 
 export type IntegrationConnection = {
