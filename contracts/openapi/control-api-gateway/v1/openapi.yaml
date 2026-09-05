@@ -1717,7 +1717,21 @@ paths:
     get:
       tags: [Runs]
       operationId: listRuns
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: states
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 7
+            uniqueItems: true
+            items: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
       responses:
         '200':
           description: Доступные запуски
@@ -1831,7 +1845,13 @@ paths:
     get:
       tags: [Decisions]
       operationId: listOwnerGates
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
       responses:
         '200':
           description: Human Gates
