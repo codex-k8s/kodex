@@ -1150,7 +1150,7 @@ paths:
     post:
       tags: [Integrations]
       operationId: reconcileEmailEffect
-      description: Подтверждённое решение владельца для точной квитанции. CP проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
+      description: Подтверждённое решение владельца для точной квитанции. Требуется одноразовая session purpose EMAIL_EFFECT_RECONCILIATION с совпадающими receiptRef, receiptVersion и receiptDigest, расходуемая до RPC. CP повторно проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
       parameters: [{ $ref: '#/components/parameters/EmailEffectReceiptRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody:
         required: true
@@ -3901,15 +3901,20 @@ components:
     OwnerSessionPurpose:
       type: object
       additionalProperties: false
-      required: [kind, projectRef]
+      required: [kind]
       properties:
         kind:
           type: string
-          enum: [RUNTIME_SECRET_CREATE, RUNTIME_SECRET_ROTATE, RUNTIME_SECRET_REVOKE, RUNTIME_SECRET_REVEAL]
+          enum: [RUNTIME_SECRET_CREATE, RUNTIME_SECRET_ROTATE, RUNTIME_SECRET_REVOKE, RUNTIME_SECRET_REVEAL, EMAIL_EFFECT_RECONCILIATION]
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         secretRef:
           allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
           description: Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
+        receiptRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
+        receiptVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
     Timestamp:
       type: string
       format: date-time

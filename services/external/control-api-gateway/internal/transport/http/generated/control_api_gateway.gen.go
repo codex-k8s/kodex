@@ -1967,15 +1967,18 @@ func (e OwnerGateDecisionConsequenceDecision) Valid() bool {
 
 // Defines values for OwnerSessionPurposeKind.
 const (
-	RUNTIMESECRETCREATE OwnerSessionPurposeKind = "RUNTIME_SECRET_CREATE"
-	RUNTIMESECRETREVEAL OwnerSessionPurposeKind = "RUNTIME_SECRET_REVEAL"
-	RUNTIMESECRETREVOKE OwnerSessionPurposeKind = "RUNTIME_SECRET_REVOKE"
-	RUNTIMESECRETROTATE OwnerSessionPurposeKind = "RUNTIME_SECRET_ROTATE"
+	EMAILEFFECTRECONCILIATION OwnerSessionPurposeKind = "EMAIL_EFFECT_RECONCILIATION"
+	RUNTIMESECRETCREATE       OwnerSessionPurposeKind = "RUNTIME_SECRET_CREATE"
+	RUNTIMESECRETREVEAL       OwnerSessionPurposeKind = "RUNTIME_SECRET_REVEAL"
+	RUNTIMESECRETREVOKE       OwnerSessionPurposeKind = "RUNTIME_SECRET_REVOKE"
+	RUNTIMESECRETROTATE       OwnerSessionPurposeKind = "RUNTIME_SECRET_ROTATE"
 )
 
 // Valid indicates whether the value is a known member of the OwnerSessionPurposeKind enum.
 func (e OwnerSessionPurposeKind) Valid() bool {
 	switch e {
+	case EMAILEFFECTRECONCILIATION:
+		return true
 	case RUNTIMESECRETCREATE:
 		return true
 	case RUNTIMESECRETREVEAL:
@@ -6317,8 +6320,13 @@ type OwnerSessionCreateInput struct {
 
 // OwnerSessionPurpose defines model for OwnerSessionPurpose.
 type OwnerSessionPurpose struct {
-	Kind       OwnerSessionPurposeKind `json:"kind"`
-	ProjectRef OpaqueRef               `json:"projectRef"`
+	Kind          OwnerSessionPurposeKind `json:"kind"`
+	ProjectRef    *OpaqueRef              `json:"projectRef,omitempty"`
+	ReceiptDigest *string                 `json:"receiptDigest,omitempty"`
+
+	// ReceiptRef Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
+	ReceiptRef     *OpaqueRef `json:"receiptRef,omitempty"`
+	ReceiptVersion *int64     `json:"receiptVersion,omitempty"`
 
 	// SecretRef Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
 	SecretRef *OpaqueRef `json:"secretRef,omitempty"`

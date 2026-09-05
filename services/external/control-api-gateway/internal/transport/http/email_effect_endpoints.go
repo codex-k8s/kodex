@@ -1,12 +1,14 @@
 package httptransport
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
@@ -53,6 +55,18 @@ func (server *Server) ReconcileEmailEffect(w http.ResponseWriter, r *http.Reques
 	}
 	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
+		return
+	}
+	if server.boundary == nil {
+		writeLocalProblem(w, http.StatusServiceUnavailable, "UNAVAILABLE", false)
+		return
+	}
+	if err := server.boundary.ConsumeEmailReconciliation(r.Context(), w, ref, mutation.GetExpectedVersion(), body.ExpectedReceiptDigest); err != nil {
+		if errors.Is(err, boundary.ErrElevationUnavailable) {
+			writeLocalProblem(w, http.StatusServiceUnavailable, "UNAVAILABLE", false)
+		} else {
+			writeLocalProblem(w, http.StatusForbidden, "FRESH_AUTHENTICATION_REQUIRED", false)
+		}
 		return
 	}
 	response, err := server.control.Command.ReconcileEmailEffect(r.Context(), &controlplanev1.ReconcileEmailEffectRequest{

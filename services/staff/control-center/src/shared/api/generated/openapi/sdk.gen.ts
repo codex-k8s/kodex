@@ -884,7 +884,7 @@ export const getEmailEffectReceipt = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Подтверждённое решение владельца для точной квитанции. CP проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
+ * Подтверждённое решение владельца для точной квитанции. Требуется одноразовая session purpose EMAIL_EFFECT_RECONCILIATION с совпадающими receiptRef, receiptVersion и receiptDigest, расходуемая до RPC. CP повторно проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
  */
 export const reconcileEmailEffect = <ThrowOnError extends boolean = false>(options: Options<ReconcileEmailEffectData, ThrowOnError>): RequestResult<ReconcileEmailEffectResponses, ReconcileEmailEffectErrors, ThrowOnError> => (options.client ?? client).post<ReconcileEmailEffectResponses, ReconcileEmailEffectErrors, ThrowOnError>({
     security: [{
