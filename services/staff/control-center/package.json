@@ -51,6 +51,7 @@
     "js-yaml": "4.3.1",
     "oidc-client-ts": "3.3.0",
     "pinia": "3.0.4",
+    "smol-toml": "1.8.0",
     "vue": "3.5.41",
     "vue-i18n": "11.4.8",
     "vue-router": "4.6.3"

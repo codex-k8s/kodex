@@ -472,8 +472,8 @@ state, Playwright route mocking/viewports и CodeMirror dynamic configuration
   draft/validate/publish и отдельный bind с delivery readback. Реальная
   consumer delivery/READY и protocol-specific SMTP/IMAP/POP3 readiness ещё
   не подтверждены; latest publication READY не заменяет protocol readiness.
-- D2: model-specific validation опубликованного reasoning effort и catalog pin
-  на mutation; сохранение TOML через overlay уже доступно. D4: exact
+- D2: mutation catalog pins и schema-driven reasoning effort подключены по
+  HTTP `5d09619a`; реальный runtime путь ещё NOT RUN. D4: exact
   AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT preview. D6 UI lifecycle подключён выше;
   его реальная сквозная приёмка проводится после общего integration gate.
 - Остальные контрактные пробелы таблицы выше сохраняются: VFS lifecycle,
@@ -516,8 +516,8 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 
 | Требования     | Существующий consumer/API                                                                   | Незавершённая producer/сквозная часть                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 17–19          | ProviderModelSelector, AgentRuntimePanel; `/model-capabilities`, config-overlay publication | Exact catalog pin на mutation и model-specific effort validation. Read pagination pins уже подключены; safeStatusReason показан как серверная причина.                |
-| 21             | Runtime editor; config-overlay draft/validation/publication                                 | Versioned allowed-field TOML schema, completion/hover и безопасные diagnostics.                                                                                       |
+| 17–19          | ProviderModelSelector, AgentRuntimePanel; `/model-capabilities`, config-overlay publication | Account catalog status/expiry и exact mutation pins подключены по HTTP5d; output default не возвращается в mutation. Реальная model/effort/runtime приёмка NOT RUN.   |
+| 21             | Runtime editor; config-overlay draft/validation/publication                                 | Owner schema управляет effort, completion/hover и diagnostics; history/rollback selection ожидает стабильный защищённый SDK. Реальная приёмка NOT RUN.                |
 | 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                         |
 | 31, 40         | Workflow capability/grant selectors; `/platform-capabilities`                               | Effective user∩agent projection. availableWithoutIntegration/readiness не являются пользовательскими полномочиями.                                                    |
 | 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner. |
@@ -657,9 +657,35 @@ HTTP `5717e7cf4` добавил обязательные `catalogRevision/catalo
 закрепляет эти поля на следующей странице и в exact ID lookup; несовпадение
 снимка закрыто останавливает выбор. Смена query/account начинает новое чтение.
 `model-catalog.test.ts` и `models.synthetic.spec.ts` проверяют pinning,
-pagination и исчезнувшую модель на 1440/390. Сохранение reasoning через
-опубликованный TOML overlay не заменяет отсутствующую server-side проверку
-модель/effort/catalog при публикации; эта producer-зависимость остаётся открытой.
+pagination и исчезнувшую модель на 1440/390.
+
+После HTTP `5d09619a4535319662fe04d1a380b1fc38c6ce51` exact lookup сохраняет
+отдельные revision/digest/status для каждого account. READY без действующего
+expiresAt не разрешает выбор; смена scope и истечение срока отзывают прежний
+выбор. Mutation строится явным whitelist `accountRef/weight` и тремя pins,
+без возвращения серверного `defaultReasoningEffort`. Сервер остаётся владельцем
+проверки модели, полномочий и совместимости опубликованного overlay.
+
+`overlay-editor.ts` использует owner `overlaySchema` для allowed values,
+completion и hover. Селектор reasoning меняет TOML через `smol-toml`, сохраняя
+семантические значения остальных допустимых полей; форматирование и комментарии
+могут измениться. Неизвестные поля, неверные типы, повреждённый UTF-8 и превышение
+owner byte limit закрывают преобразование. Типизированные diagnostics имеют
+1-based UTF-8 byte column, преобразуемый в UTF-16 позицию CodeMirror; нулевые
+и повреждённые позиции показываются в списке без выдуманного inline marker.
+Публикация требует VALID с текущими schema revision/digest. При несовместимой
+смене модели UI поясняет порядок: убрать explicit effort, проверить и
+опубликовать overlay, сохранить модель, затем выбрать effort новой схемы.
+Атомарная публикация модели и overlay не предполагается.
+
+Context7 проверен для CodeMirror completion/hover и позиций документа.
+Точный пакет smol-toml не найден в Context7: прочитан официальный
+`https://github.com/squirrelchat/smol-toml` README версии 1.8.0.
+Через openai-docs прочитан `https://developers.openai.com/codex/config-reference`;
+статический перечень effort не используется вместо серверного каталога.
+Unit проверяют pins, expiry, whitelist, TOML scope и Unicode diagnostics;
+runtime synthetic проверяет effort save и readonly на 390/1440/2900.
+Это локальные fixtures, реальная PWA→HTTP→CP→provider приёмка NOT RUN.
 
 Уточнение после `261b577ce`: typed Skill/Memory HTTP и STT parameters уже
 получены. `src/features/context-resources` подключает отдельные каталоги,

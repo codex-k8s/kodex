@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { overlaySchemaFixture } from "../../src/test-utils/runtime-catalog-fixture";
 import type {
   Agent,
   AgentContextBinding,
@@ -32,6 +33,7 @@ export async function installContextBindingFixture(
     nextActions: [],
   };
   const view: AgentRuntimeConfigurationView = {
+    overlaySchema: overlaySchemaFixture,
     agentVersion: agent.version,
     skillBindings: [],
     memoryBindings: [],
@@ -46,7 +48,13 @@ export async function installContextBindingFixture(
         ref: "provider_policy",
         version: 1,
         mode: "FIXED",
-        accountCandidates: [{ accountRef: "account_synthetic", weight: 1 }],
+        accountCandidates: [
+          {
+            accountRef: "account_synthetic",
+            weight: 1,
+            defaultReasoningEffort: "medium",
+          },
+        ],
         digest,
         createdAt: now,
       },

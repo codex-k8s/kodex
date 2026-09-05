@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { catalogStatusFixture } from "../src/test-utils/runtime-catalog-fixture";
 import type { ModelCapability } from "../src/shared/api/generated/openapi/types.gen";
 for (const width of [1440, 390]) {
   test(`synthetic: каталог моделей ${String(width)}px`, async ({
@@ -97,6 +98,7 @@ for (const width of [1440, 390]) {
             nextPageToken: query || cursor ? "" : "models_next",
             catalogRevision: `mcat_${"a".repeat(64)}`,
             catalogDigest: "a".repeat(64),
+            catalogStatus: catalogStatusFixture,
           },
         });
         return;

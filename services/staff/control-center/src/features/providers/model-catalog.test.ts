@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelCapability } from "@/shared/api/generated/openapi/types.gen";
+import { catalogStatusFixture } from "@/test-utils/runtime-catalog-fixture";
 const sdk = vi.hoisted(() => ({
   listModelCapabilities:
     vi.fn<
@@ -32,6 +33,7 @@ const response = (items: ModelCapability[], nextPageToken = "") => ({
     total: items.length,
     catalogRevision: `mcat_${"a".repeat(64)}`,
     catalogDigest: "a".repeat(64),
+    catalogStatus: catalogStatusFixture,
   },
   response: new Response(null, { status: 200 }),
 });
@@ -121,7 +123,13 @@ describe("model catalog", () => {
         model.id,
         new AbortController().signal,
       ),
-    ).toEqual(model);
+    ).toMatchObject({
+      model,
+      accountRef: "pacc_primary",
+      catalogRevision: response([]).data.catalogRevision,
+      catalogDigest: response([]).data.catalogDigest,
+      catalogStatus: catalogStatusFixture,
+    });
     expect(sdk.listModelCapabilities.mock.lastCall?.[0]).toHaveProperty(
       "query.query",
       model.id,
@@ -142,7 +150,7 @@ describe("model catalog", () => {
         model.id,
         new AbortController().signal,
       ),
-    ).toBeUndefined();
+    ).toMatchObject({ model: undefined, catalogStatus: catalogStatusFixture });
   });
   it("отклоняет чужой provider и повторяющийся cursor", async () => {
     sdk.listModelCapabilities.mockResolvedValue(

@@ -19,7 +19,10 @@ export type ProviderAccount = ApiProviderAccount;
 export type ProviderAccountState = ProviderAccount["state"];
 export type ProviderAccountPage = ApiProviderAccountPage;
 export type ProviderAccountCreateInput = ApiProviderAccountCreateInput;
-export type ProviderAccountCandidate = ApiProviderAccountCandidate;
+export type ProviderAccountCandidate = Pick<
+  ApiProviderAccountCandidate,
+  "accountRef" | "weight"
+>;
 export type ProviderAccountAction = NextAction;
 export type ProviderPolicyMode = "FIXED" | "LEAST_USED" | "WEIGHTED";
 

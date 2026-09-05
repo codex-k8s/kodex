@@ -3,6 +3,26 @@ import { createI18n } from "vue-i18n";
 import { currentLocale } from "@/shared/locale";
 
 const ru = {
+  runtimeOverlay: {
+    effort: "Степень рассуждения",
+    defaultEffort: "По умолчанию из каталога: {value}",
+    effortHelp:
+      "Применяется через overlay к сохранённой модели {model}. Для несовместимой смены модели сначала уберите explicit effort, сохраните, проверьте и опубликуйте overlay; затем сохраните модель и выберите новую степень.",
+    effortCost:
+      "Более высокая степень обычно требует больше времени и ресурсов; эффект зависит от модели и задачи.",
+    repairBeforeEffort:
+      "Сначала исправьте синтаксис и недопустимые поля TOML. Изменение селектора форматирует документ; сервер повторно проверяет его.",
+    allowedFields: "Допустимые поля и версия схемы",
+    invalid: "Overlay содержит ошибку или защищённый ключ.",
+    location: "Строка {line}, столбец {column} (байты UTF-8)",
+    diagnostics: {
+      CONFIG_OVERLAY_SYNTAX_INVALID: "Некорректный синтаксис TOML",
+      CONFIG_OVERLAY_KEY_FORBIDDEN: "Поле не разрешено в overlay",
+      CONFIG_OVERLAY_VALUE_INVALID: "Значение поля недопустимо",
+      CONFIG_OVERLAY_EFFORT_UNSUPPORTED:
+        "Степень рассуждения не поддерживается выбранной моделью",
+    },
+  },
   serverMessages: {
     INTERACTION_AUTHORITY_CHANGED:
       "Подключение или разрешения изменены. Отправка отменена.",
@@ -2426,6 +2446,8 @@ const ru = {
     },
   },
   providers: {
+    catalogObserved: "Проверено",
+    catalogExpires: "Действует до",
     reasons: {
       AUTHORIZED: "Авторизация подтверждена",
       ACCOUNT_DISABLED: "Учётная запись отключена",
@@ -2792,6 +2814,26 @@ const ru = {
 
 const en = {
   ...ru,
+  runtimeOverlay: {
+    effort: "Reasoning effort",
+    defaultEffort: "Catalog default: {value}",
+    effortHelp:
+      "Applied through the overlay to saved model {model}. For an incompatible model change, first remove explicit effort and save, validate and publish the overlay; then save the model and select its effort.",
+    effortCost:
+      "Higher effort usually takes more time and resources; the effect depends on the model and task.",
+    repairBeforeEffort:
+      "First fix TOML syntax and unsupported fields. Changing this selector formats the document; the server validates it again.",
+    allowedFields: "Allowed fields and schema version",
+    invalid: "The overlay contains an invalid or protected field.",
+    location: "Line {line}, column {column} (UTF-8 bytes)",
+    diagnostics: {
+      CONFIG_OVERLAY_SYNTAX_INVALID: "Invalid TOML syntax",
+      CONFIG_OVERLAY_KEY_FORBIDDEN: "Field is not allowed in the overlay",
+      CONFIG_OVERLAY_VALUE_INVALID: "Invalid field value",
+      CONFIG_OVERLAY_EFFORT_UNSUPPORTED:
+        "Reasoning effort is not supported by the selected model",
+    },
+  },
   serverMessages: {
     INTERACTION_AUTHORITY_CHANGED:
       "The connection or permissions changed. Delivery was cancelled.",
@@ -5208,6 +5250,8 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    catalogObserved: "Observed",
+    catalogExpires: "Expires",
     reasons: {
       AUTHORIZED: "Authorization confirmed",
       ACCOUNT_DISABLED: "Account disabled",

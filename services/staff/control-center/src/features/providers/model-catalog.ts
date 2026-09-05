@@ -3,6 +3,7 @@ import { listModelCapabilities } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   ModelCapability,
   ModelCapabilityPage,
+  ProviderModelCatalogStatus,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
 
@@ -10,6 +11,28 @@ export type ModelCatalogSnapshot = Pick<
   ModelCapabilityPage,
   "catalogRevision" | "catalogDigest"
 >;
+export interface AccountModelSnapshot extends ModelCatalogSnapshot {
+  accountRef: string;
+  providerDefinitionKey: string;
+  model?: ModelCapability;
+  catalogStatus: ProviderModelCatalogStatus;
+}
+export interface ModelSelection {
+  model: string;
+  providerDefinitionKey: string;
+  accounts: AccountModelSnapshot[];
+}
+export function accountSnapshotAvailable(
+  snapshot: AccountModelSnapshot,
+  now = Date.now(),
+): boolean {
+  return (
+    snapshot.catalogStatus.state === "READY" &&
+    Number.isFinite(Date.parse(snapshot.catalogStatus.expiresAt ?? "")) &&
+    Date.parse(snapshot.catalogStatus.expiresAt ?? "") > now &&
+    accountModelAvailable(snapshot.model, snapshot.accountRef)
+  );
+}
 
 export async function loadModelCatalog(
   providerDefinitionKey: string,
@@ -63,7 +86,7 @@ export async function resolveAccountModel(
   providerAccountRef: string,
   modelId: string,
   signal: AbortSignal,
-): Promise<ModelCapability | undefined> {
+): Promise<AccountModelSnapshot> {
   let cursor: string | undefined;
   let snapshot: ModelCatalogSnapshot | undefined;
   const seen = new Set<string>();
@@ -80,8 +103,17 @@ export async function resolveAccountModel(
     signal.throwIfAborted();
     snapshot = page;
     const model = page.items.find((item) => item.id === modelId);
-    if (model) return model;
-    if (!page.nextPageToken) return undefined;
+    if (!page.catalogStatus)
+      throw new Error("Account model catalog status is missing");
+    if (model || !page.nextPageToken)
+      return {
+        accountRef: providerAccountRef,
+        providerDefinitionKey,
+        model,
+        catalogRevision: page.catalogRevision,
+        catalogDigest: page.catalogDigest,
+        catalogStatus: page.catalogStatus,
+      };
     if (seen.has(page.nextPageToken))
       throw new Error("Model catalog cursor repeated");
     seen.add(page.nextPageToken);

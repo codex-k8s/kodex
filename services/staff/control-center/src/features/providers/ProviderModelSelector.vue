@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import type { ModelCapability } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -10,10 +9,12 @@ import type {
   AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import {
-  accountModelAvailable,
+  accountSnapshotAvailable,
   loadModelCatalog,
   resolveAccountModel,
   type ModelCatalogSnapshot,
+  type AccountModelSnapshot,
+  type ModelSelection,
 } from "./model-catalog";
 
 const props = defineProps<{
@@ -25,9 +26,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   "availability-change": [available: boolean];
+  "selection-change": [selection: ModelSelection | undefined];
 }>();
 const { t } = useI18n();
-const models = ref<ModelCapability[]>([]);
+const models = ref<AccountModelSnapshot[]>([]);
+const expired = ref(false);
+let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(expiryTimer));
 const resolving = ref(false);
 const problem = ref<AppProblem>();
 const accounts = computed(() => [...new Set(props.accountRefs)].sort());
@@ -37,9 +42,12 @@ const scopeKey = computed(() =>
 const available = computed(
   () =>
     accounts.value.length > 0 &&
+    !expired.value &&
     models.value.length === accounts.value.length &&
-    models.value.every((model, index) =>
-      accountModelAvailable(model, accounts.value[index] ?? ""),
+    models.value.every(
+      (model, index) =>
+        model.accountRef === accounts.value[index] &&
+        accountSnapshotAvailable(model),
     ),
 );
 const selected = computed<AsyncEntityOption | undefined>(() =>
@@ -50,7 +58,7 @@ const selected = computed<AsyncEntityOption | undefined>(() =>
         description: resolving.value
           ? t("common.loading")
           : available.value
-            ? models.value[0]?.reasoningEfforts.join(" · ")
+            ? models.value[0]?.model?.reasoningEfforts.join(" · ")
             : t("providers.modelUnavailable"),
         disabled: !available.value,
       }
@@ -62,8 +70,11 @@ watch(
     const controller = new AbortController();
     cleanup(() => controller.abort());
     models.value = [];
+    clearTimeout(expiryTimer);
+    expired.value = false;
     problem.value = undefined;
     emit("availability-change", false);
+    emit("selection-change", undefined);
     if (!props.modelValue || !props.definitionKey || !accounts.value.length) {
       resolving.value = false;
       return;
@@ -79,10 +90,29 @@ watch(
         ),
       );
       if (controller.signal.aborted) return;
-      models.value = values.filter(
-        (value): value is ModelCapability => !!value,
-      );
+      models.value = values;
       emit("availability-change", available.value);
+      emit(
+        "selection-change",
+        available.value
+          ? { model: id, providerDefinitionKey: key, accounts: values }
+          : undefined,
+      );
+      if (available.value) {
+        const deadline = Math.min(
+          ...values.map((value) =>
+            Date.parse(value.catalogStatus.expiresAt ?? ""),
+          ),
+        );
+        expiryTimer = setTimeout(
+          () => {
+            expired.value = true;
+            emit("availability-change", false);
+            emit("selection-change", undefined);
+          },
+          Math.min(2_147_483_647, Math.max(0, deadline - Date.now())),
+        );
+      }
     } catch (error) {
       if (!controller.signal.aborted) problem.value = asProblem(error);
     } finally {
@@ -121,7 +151,16 @@ async function loadPage(
       title: model.id,
       description: model.reasoningEfforts.join(" · "),
       meta: model.readinessBlockers.join(" · "),
-      disabled: !accountModelAvailable(model, accounts.value[0] ?? ""),
+      disabled:
+        !page.catalogStatus ||
+        !accountSnapshotAvailable({
+          accountRef: accounts.value[0] ?? "",
+          providerDefinitionKey: props.definitionKey,
+          model,
+          catalogStatus: page.catalogStatus,
+          catalogRevision: page.catalogRevision,
+          catalogDigest: page.catalogDigest,
+        }),
       disabledReason:
         model.readinessBlockers.join(" · ") || t("providers.modelUnavailable"),
     })),
@@ -147,7 +186,30 @@ function choose(value: string | null | readonly string[]): void {
       @update:model-value="choose"
     />
     <ProblemNotice v-if="problem" :problem="problem" />
-    <small v-else-if="modelValue && !resolving && !available">{{
+    <small v-for="snapshot in models" :key="snapshot.accountRef">
+      {{ snapshot.accountRef }} ·
+      {{ expired ? "EXPIRED" : snapshot.catalogStatus.state }}
+      <span v-if="snapshot.catalogStatus.observedAt">
+        · {{ $t("providers.catalogObserved") }}
+        {{ snapshot.catalogStatus.observedAt }}</span
+      >
+      <span v-if="snapshot.catalogStatus.expiresAt">
+        · {{ $t("providers.catalogExpires") }}
+        {{ snapshot.catalogStatus.expiresAt }}</span
+      >
+      <span v-if="snapshot.catalogStatus.source">
+        · {{ snapshot.catalogStatus.source }}</span
+      >
+      <span
+        v-if="
+          snapshot.catalogStatus.failure &&
+          snapshot.catalogStatus.failure !== 'NONE'
+        "
+      >
+        · {{ snapshot.catalogStatus.failure }}</span
+      >
+    </small>
+    <small v-if="!problem && modelValue && !resolving && !available">{{
       $t("providers.modelUnavailable")
     }}</small>
   </div>

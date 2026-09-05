@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { overlaySchemaFixture } from "../src/test-utils/runtime-catalog-fixture";
 import type {
   AgentRuntimeConfigurationView,
   RuntimeRevisionDiff,
 } from "../src/shared/api/generated/openapi/types.gen";
-for (const width of [1440, 390]) {
+for (const width of [1440, 390, 2900]) {
   test(`synthetic: runtime editor и revision diff ${String(width)}px`, async ({
     page,
   }, testInfo) => {
@@ -31,6 +32,7 @@ for (const width of [1440, 390]) {
     let saves = 0;
     let diffReads = 0;
     const view: AgentRuntimeConfigurationView = {
+      overlaySchema: overlaySchemaFixture,
       agentVersion: 3,
       skillBindings: [],
       memoryBindings: [],
@@ -243,6 +245,14 @@ for (const width of [1440, 390]) {
     const editor = page.locator(".overlay-panel > .code-editor .cm-content");
     await expect(editor).toBeVisible();
     await editor.fill('personality = "friendly"');
+    const effort = page.getByRole("combobox", {
+      name: "Степень рассуждения",
+      exact: true,
+    });
+    await expect(effort.locator("option")).toHaveCount(3);
+    await effort.selectOption("low");
+    await expect(editor).toContainText('model_reasoning_effort = "low"');
+    await expect(editor).toContainText('personality = "friendly"');
     const voice = page
       .locator(".overlay-panel")
       .getByRole("button", { name: "Голосовой ввод", exact: true });
@@ -255,7 +265,9 @@ for (const width of [1440, 390]) {
     await expect(voice).toHaveCount(0);
     finishSave?.();
     await expect(editor).toHaveAttribute("contenteditable", "true");
-    await expect(editor).toHaveText('personality = "friendly"');
+    await expect(editor).toContainText('personality = "friendly"');
+    await expect(editor).toContainText('model_reasoning_effort = "low"');
+    expect(content).toContain('model_reasoning_effort = "low"');
     await page
       .getByRole("button", { name: "Новая ревизия", exact: true })
       .click();
