@@ -39,6 +39,7 @@ const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 type health struct {
 	live, ready atomic.Bool
 	input       model.Input
+	workspace   atomic.Pointer[workspaceHealth]
 }
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
@@ -46,7 +47,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" {
+	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
 		return errors.New("agent-runner mode is invalid")
 	}
 	if err := security.VerifyInvocation(args, mode); err != nil {
@@ -59,6 +60,15 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	if err != nil {
 		return err
 	}
+	if mode == workspaceCanaryMode {
+		err := workspacepolicy.RunCanary(lifecycleContext, input.WorkspaceRoot, input.WorkspacePolicy)
+		result := "OK"
+		if err != nil {
+			result = workspacepolicy.DenialReason(err)
+		}
+		_, writeErr := io.WriteString(os.Stdout, result)
+		return writeErr
+	}
 	if mode == "runtime-provider-credential-relay" {
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
@@ -67,7 +77,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		if err != nil {
 			return err
 		}
-		if err := materializeWorkspace(input); err != nil {
+		if err := materializeWorkspace(lifecycleContext, input); err != nil {
 			return err
 		}
 		if input.Mode == runtimecontract.RunnerModeWarm {
@@ -112,6 +122,8 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}()
 	state := &health{input: input}
 	state.live.Store(true)
+	stopWorkspaceMonitor := startWorkspaceMonitor(lifecycleContext, state, checkWorkspaceProcess)
+	defer stopWorkspaceMonitor()
 	server, serverErrors := startHealthServer(lifecycleContext, state)
 	defer func() {
 		state.ready.Store(false)
@@ -167,7 +179,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
-	if err := materializeWorkspace(input); err != nil {
+	if err := materializeWorkspace(ctx, input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
 	if err := verifyInputArtifacts(input); err != nil {
@@ -202,7 +214,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if err != nil {
 		return completeFailure(ctx, input, client, runtimeExecutionFailureCode(err))
 	}
-	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+	if err := checkWorkspaceProcess(ctx); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
 	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
@@ -337,13 +349,13 @@ func runtimeExecutionFailureCode(err error) string {
 	}
 }
 
-func materializeWorkspace(input model.Input) error {
+func materializeWorkspace(ctx context.Context, input model.Input) error {
 	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
 	}
-	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+	if err := checkWorkspaceProcess(ctx); err != nil {
 		return err
 	}
 	if err := validateMaterializedInstructions(input); err != nil {
@@ -915,7 +927,7 @@ func healthHandler(state *health) http.Handler {
 			http.Error(writer, "runtime is not ready", http.StatusServiceUnavailable)
 			return
 		}
-		if err := workspacepolicy.RunCanary(state.input.WorkspaceRoot, state.input.WorkspacePolicy); err != nil {
+		if err := state.workspaceStatus(time.Now()); err != nil {
 			http.Error(writer, err.Error(), http.StatusServiceUnavailable)
 			return
 		}

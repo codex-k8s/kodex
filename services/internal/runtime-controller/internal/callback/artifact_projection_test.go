@@ -20,11 +20,12 @@ type artifactProjectionClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	response *controlplanev1.ReadExecutionArtifactResponse
 	requests []*controlplanev1.ReadExecutionArtifactRequest
+	err      error
 }
 
 func (client *artifactProjectionClient) ReadExecutionArtifact(_ context.Context, request *controlplanev1.ReadExecutionArtifactRequest, _ ...grpc.CallOption) (*controlplanev1.ReadExecutionArtifactResponse, error) {
 	client.requests = append(client.requests, request)
-	return client.response, nil
+	return client.response, client.err
 }
 
 func TestArtifactProjectionChecksExactOwnerResponseBeforeExposingBytes(t *testing.T) {

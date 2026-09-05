@@ -37,6 +37,13 @@ policy, signature, promotion и runtime ABI. Controller допускает то�
 
 ## Runtime contract
 
+Typed Skills/Memory materialization и карта owner→controller→runner описаны в
+[`OPS-RUNTIME-1025`](../../../docs/operations/runtime-context-1025.md).
+`skills.json` содержит только `RuntimeSkillBundle`, `memories.json` только
+`RuntimeMemoryRecord`; environment tools и knowledge artifacts не подменяют
+эти виды. Исполняемый input требует явный `context_snapshot`, даже для пустого
+контекста. Changed pins меняют RuntimeRevision и warm compatibility digests.
+
 Канонический input — `kodex.agent-runner-input.v6`, схема находится в
 `contracts/runtime-controller/v6/agent-runner-input.schema.json`, типы — в
 `libs/go/runtimecontract`. Input связывает organization/project/agent/session/
