@@ -302,6 +302,7 @@ func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testi
 	t.Parallel()
 
 	value, err := messageMap(&controlplanev1.AgentRuntimeConfigurationView{
+		OverlaySchema: runtimeOverlayFixture(),
 		PublishedOverlay: &controlplanev1.ConfigOverlayVersion{
 			Ref: "cov-example", Version: 1, Revision: 1, State: "PUBLISHED",
 		},

@@ -32,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 61 and .policy.authority_abi_version == 2 and
+	.policy_revision == 62 and .policy.authority_abi_version == 2 and
 	(.policy.authority_proof_producers | length) == 15 and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==
     ["platform.email.authorization.resolve", "platform.email.configuration.report", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and

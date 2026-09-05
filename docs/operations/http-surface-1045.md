@@ -10,6 +10,38 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## D2/TOML: наблюдаемый каталог и точная публикация
+
+Producer — CP `82d8e1953` с тестовым дополнением `e42851946`; HTTP потребляет
+согласованные additive Proto поля, не переносит controller/runner из временной
+ветки. Verified session → account-scoped `GET /model-capabilities` → CP
+`ListModelCapabilities` возвращает content pin и отдельный `catalogStatus`.
+PENDING/READY/FAILED/EXPIRED, observedAt/expiresAt, source и failure относятся
+к наблюдению adapter. READY с пустым models[] допустим и не означает runtime
+readiness. Глобальный каталог не содержит account-scoped status.
+
+Публикация runtime configuration передаёт для каждого account точные
+`catalogRevision`, `catalogDigest`, `providerDefinitionKey`; version и
+idempotency остаются исходными. Default effort назначает CP, отдельный input
+DTO не принимает это поле. Старый bootstrap readback может не иметь pin, но
+такой candidate нельзя повторно опубликовать без свежего каталога. Override
+задаётся только TOML. CP проверяет fresh credential observation и capability
+compatibility при публикации, turn/continuation и warm materialization;
+HTTP не выбирает запасную учётку и не подменяет Session affinity.
+
+`GetAgentRuntimeConfiguration` и ответы mutation возвращают versioned
+`overlaySchema` с allowed fields, completion/hover и проверяемым digest.
+ConfigOverlay diagnostics сохраняют закрытые code/key/message и line/column;
+raw parser error не выдаётся. Ошибочный schema digest, неизвестный diagnostic
+или status даёт 502. CP OCC/hidden/permission/conflict ошибки используют
+существующие 412/404/403/409 mappings; mutation receipt не заменяется latest GET.
+
+CFG public operation profiles62 потреблены из `dfd0621c5`; прежний structural
+FAIL четырёх Configure/Refresh RPC устранён без исключения проверки. Owner
+SourceWork/deploy и браузерная приёмка учитываются отдельно от HTTP fixtures.
+Context7: `/protocolbuffers/protobuf-go`, `protoreflect.Message.Range` и
+protojson presence/zero values проверены при добавлении нормализации новых DTO.
+
 ## CFG: Git source для RoleImage и IntegrationDefinition
 
 Источник требования — принятый backlog #1018, UI/GIT управление образами и
@@ -53,8 +85,8 @@ HTTP отклоняет неизвестные input поля, некоррек�
 Канонические owner отказы сохраняются: hidden 404, permission 403, OCC 412,
 state/idempotency conflict 409, unavailable 503; private error details не выдаются.
 Успешный fixture mapping не доказывает исполняемый source worker, publication,
-readiness или deploy. На момент подготовки HTTP owner hydration/queue/publication
-и authority profiles62 ещё завершаются в #1046; общий structural test не исключается.
+readiness или deploy. Owner hydration/queue/publication и authority profiles62
+имеют checkpoint `dfd0621c5`; общий structural test не исключается.
 
 ## Сверка принятого backlog MVP-UI-01–61 и CFG
 

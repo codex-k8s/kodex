@@ -24,6 +24,7 @@ func modelCatalogFixture() *cp.ListModelCapabilitiesResponse {
 
 func TestModelCapabilitiesExactTypedRoute(t *testing.T) {
 	response := modelCatalogFixture()
+	response.CatalogStatus = runtimeCatalogStatusFixture()
 	response.Total, response.Page = 7, &cp.PageInfo{NextPageToken: "opaque-next"}
 	client := &catalogRPCRecorder{response: response}
 	w := httptest.NewRecorder()

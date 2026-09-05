@@ -46,6 +46,12 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	result := generated.ModelCapabilityPage{Items: make([]generated.ModelCapability, 0, len(response.Models)), Total: response.Total, NextPageToken: response.GetPage().GetNextPageToken(), CatalogRevision: response.GetCatalogRevision(), CatalogDigest: response.GetCatalogDigest()}
+	status, validStatus := modelCatalogStatusView(response.GetCatalogStatus(), account != "")
+	if !validStatus {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	result.CatalogStatus = status
 	seen := map[string]bool{}
 	for _, model := range response.Models {
 		item, valid := modelCapabilityView(model)
@@ -58,6 +64,76 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 		result.Items = append(result.Items, item)
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func modelCatalogStatusView(status *cp.ProviderModelCatalogStatus, accountScoped bool) (*generated.ProviderModelCatalogStatus, bool) {
+	if !accountScoped {
+		return nil, status == nil
+	}
+	if status == nil {
+		return nil, false
+	}
+	result := &generated.ProviderModelCatalogStatus{}
+	switch status.State {
+	case cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_PENDING:
+		result.State = "PENDING"
+	case cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY:
+		result.State = "READY"
+	case cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_FAILED:
+		result.State = "FAILED"
+	case cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_EXPIRED:
+		result.State = "EXPIRED"
+	default:
+		return nil, false
+	}
+	switch status.Source {
+	case cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED:
+	case cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API:
+		value := generated.ProviderModelCatalogStatusSource("REMOTE_API")
+		result.Source = &value
+	case cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX:
+		value := generated.ProviderModelCatalogStatusSource("REMOTE_CODEX")
+		result.Source = &value
+	default:
+		return nil, false
+	}
+	switch status.Failure {
+	case cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_UNSPECIFIED:
+	case cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE:
+		value := generated.ProviderModelCatalogStatusFailure("NONE")
+		result.Failure = &value
+	case cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_UNAVAILABLE:
+		value := generated.ProviderModelCatalogStatusFailure("UNAVAILABLE")
+		result.Failure = &value
+	case cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_UNVERIFIED_SOURCE:
+		value := generated.ProviderModelCatalogStatusFailure("UNVERIFIED_SOURCE")
+		result.Failure = &value
+	case cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_AUTHORIZATION_REJECTED:
+		value := generated.ProviderModelCatalogStatusFailure("AUTHORIZATION_REJECTED")
+		result.Failure = &value
+	default:
+		return nil, false
+	}
+	if status.ObservedAt != nil || status.ExpiresAt != nil {
+		observed, ok := contextTimestamp(status.ObservedAt)
+		expires, valid := contextTimestamp(status.ExpiresAt)
+		if !ok || !valid || !expires.After(observed) {
+			return nil, false
+		}
+		result.ObservedAt, result.ExpiresAt = &observed, &expires
+	}
+	if result.State != "PENDING" && (result.ObservedAt == nil || result.Failure == nil) {
+		return nil, false
+	}
+	if result.State == "READY" || result.State == "EXPIRED" {
+		if result.Source == nil || *result.Failure != "NONE" {
+			return nil, false
+		}
+	}
+	if result.State == "FAILED" && (result.Source != nil || *result.Failure == "NONE") {
+		return nil, false
+	}
+	return result, true
 }
 
 func modelCapabilityView(model *cp.ModelCapability) (generated.ModelCapability, bool) {

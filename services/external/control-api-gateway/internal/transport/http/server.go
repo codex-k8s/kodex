@@ -253,7 +253,7 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
-		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicIntegrationShape) {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicIntegrationShape) || errors.Is(err, errRuntimeCatalogView) {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -305,6 +305,9 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 }
 
 func messageMap(message proto.Message) (map[string]any, error) {
+	if err := validateRuntimeCatalogMessage(message.ProtoReflect(), 0); err != nil {
+		return nil, err
+	}
 	raw, err := (protojson.MarshalOptions{UseProtoNames: false}).Marshal(message)
 	if err != nil {
 		return nil, err
@@ -388,6 +391,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.ProviderAccountCandidate":
+			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.ConfigOverlayField":
+			return "", field.JSONName() == "defaultValue"
+		case "controlplane.v1.ConfigOverlayDiagnostic":
+			return "", field.JSONName() == "key"
 		case "controlplane.v1.ConfigOverlayVersion":
 			return "", field.JSONName() == "content"
 		case "controlplane.v1.AgentRuntimeConfigurationView":
@@ -399,6 +408,9 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 		case "controlplane.v1.ProviderDefinition":
 			return "", field.JSONName() == "description" || field.JSONName() == "defaultModelId"
 		}
+	}
+	if descriptor.FullName() == "controlplane.v1.ConfigOverlayDiagnostic" && field.Kind() == protoreflect.Int32Kind {
+		return float64(0), field.JSONName() == "line" || field.JSONName() == "column"
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"

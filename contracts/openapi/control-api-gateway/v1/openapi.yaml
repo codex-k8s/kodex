@@ -5517,10 +5517,24 @@ components:
     ProviderAccountCandidate:
       type: object
       additionalProperties: false
-      required: [accountRef, weight]
+      required: [accountRef, weight, defaultReasoningEffort]
       properties:
         accountRef: { $ref: '#/components/schemas/OpaqueRef' }
         weight: { type: integer, minimum: 1, maximum: 100 }
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerDefinitionKey: { type: string, pattern: '^[a-z][a-z0-9_-]{0,79}$' }
+        defaultReasoningEffort: { type: string, maxLength: 64 }
+    ProviderAccountCandidateInput:
+      type: object
+      additionalProperties: false
+      required: [accountRef, weight, catalogRevision, catalogDigest, providerDefinitionKey]
+      properties:
+        accountRef: { $ref: '#/components/schemas/OpaqueRef' }
+        weight: { type: integer, minimum: 1, maximum: 100 }
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerDefinitionKey: { type: string, pattern: '^[a-z][a-z0-9_-]{0,79}$' }
     ProviderAccountPolicyVersion:
       type: object
       additionalProperties: false
@@ -5554,7 +5568,7 @@ components:
         runtimeProfileRef: { $ref: '#/components/schemas/OpaqueRef' }
         model: { type: string, minLength: 1, maxLength: 160 }
         providerPolicyMode: { type: string, enum: [FIXED, LEAST_USED, WEIGHTED] }
-        providerAccounts: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/ProviderAccountCandidate' } }
+        providerAccounts: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/ProviderAccountCandidateInput' } }
     ConfigOverlayVersion:
       type: object
       additionalProperties: false
@@ -5567,8 +5581,42 @@ components:
         content: { type: string, maxLength: 65536 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         validationMessages: { type: array, maxItems: 100, items: { type: string, maxLength: 300 } }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/ConfigOverlayDiagnostic' } }
+        schemaRevision: { type: string, pattern: '^cos_[a-f0-9]{64}$' }
+        schemaDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    ConfigOverlayDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [code, key, line, column, message]
+      properties:
+        code: { type: string, enum: [CONFIG_OVERLAY_SYNTAX_INVALID, CONFIG_OVERLAY_KEY_FORBIDDEN, CONFIG_OVERLAY_VALUE_INVALID, CONFIG_OVERLAY_EFFORT_UNSUPPORTED] }
+        key: { type: string, maxLength: 128 }
+        line: { type: integer, minimum: 0, maximum: 65537 }
+        column: { type: integer, minimum: 0, maximum: 65537 }
+        message: { type: string, maxLength: 256 }
+    ConfigOverlayField:
+      type: object
+      additionalProperties: false
+      required: [key, valueType, allowedValues, defaultValue, description, completion, hover]
+      properties:
+        key: { type: string, enum: [model_reasoning_effort, personality, allow_login_shell, history.persistence] }
+        valueType: { type: string, enum: [string, boolean] }
+        allowedValues: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, maxLength: 64 } }
+        defaultValue: { type: string, maxLength: 64 }
+        description: { type: string, maxLength: 512 }
+        completion: { type: string, maxLength: 256 }
+        hover: { type: string, maxLength: 1024 }
+    ConfigOverlaySchema:
+      type: object
+      additionalProperties: false
+      required: [revision, digest, fields, maximumBytes]
+      properties:
+        revision: { type: string, pattern: '^cos_[a-f0-9]{64}$' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        maximumBytes: { type: integer, enum: [65536] }
+        fields: { type: array, minItems: 4, maxItems: 4, items: { $ref: '#/components/schemas/ConfigOverlayField' } }
     ConfigOverlayDraftInput:
       type: object
       additionalProperties: false
@@ -6147,7 +6195,7 @@ components:
     AgentRuntimeConfigurationView:
       type: object
       additionalProperties: false
-      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion, skillBindings, memoryBindings]
+      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion, skillBindings, memoryBindings, overlaySchema]
       properties:
         configuration: { $ref: '#/components/schemas/AgentRuntimeConfiguration' }
         publishedOverlay: { $ref: '#/components/schemas/ConfigOverlayVersion' }
@@ -6155,6 +6203,7 @@ components:
         environmentBinding: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' }
         environment: { $ref: '#/components/schemas/RuntimeEnvironmentSet' }
         safeEffectiveConfig: { type: string, maxLength: 262144 }
+        overlaySchema: { $ref: '#/components/schemas/ConfigOverlaySchema' }
         agentVersion: { type: integer, format: int64, minimum: 1 }
         skillBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
         memoryBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
@@ -6233,9 +6282,20 @@ components:
       properties:
         catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
         catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        catalogStatus: { $ref: '#/components/schemas/ProviderModelCatalogStatus' }
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ModelCapability' } }
         total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string, maxLength: 512 }
+    ProviderModelCatalogStatus:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: { type: string, enum: [PENDING, READY, FAILED, EXPIRED] }
+        observedAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        source: { type: string, enum: [REMOTE_API, REMOTE_CODEX] }
+        failure: { type: string, enum: [NONE, UNAVAILABLE, UNVERIFIED_SOURCE, AUTHORIZATION_REJECTED] }
     ProviderDefinition:
       type: object
       additionalProperties: false

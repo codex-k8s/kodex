@@ -931,6 +931,18 @@ export type AgentPage = {
 export type ProviderAccountCandidate = {
     accountRef: OpaqueRef;
     weight: number;
+    catalogRevision?: string;
+    catalogDigest?: string;
+    providerDefinitionKey?: string;
+    defaultReasoningEffort: string;
+};
+
+export type ProviderAccountCandidateInput = {
+    accountRef: OpaqueRef;
+    weight: number;
+    catalogRevision: string;
+    catalogDigest: string;
+    providerDefinitionKey: string;
 };
 
 export type ProviderAccountPolicyVersion = {
@@ -958,7 +970,7 @@ export type AgentRuntimeConfigurationInput = {
     runtimeProfileRef: OpaqueRef;
     model: string;
     providerPolicyMode: 'FIXED' | 'LEAST_USED' | 'WEIGHTED';
-    providerAccounts: Array<ProviderAccountCandidate>;
+    providerAccounts: Array<ProviderAccountCandidateInput>;
 };
 
 export type ConfigOverlayVersion = {
@@ -969,8 +981,41 @@ export type ConfigOverlayVersion = {
     content: string;
     digest: string;
     validationMessages: Array<string>;
+    diagnostics?: Array<ConfigOverlayDiagnostic>;
+    schemaRevision?: string;
+    schemaDigest?: string;
     createdAt: Timestamp;
     publishedAt?: Timestamp;
+};
+
+export type ConfigOverlayDiagnostic = {
+    code: 'CONFIG_OVERLAY_SYNTAX_INVALID' | 'CONFIG_OVERLAY_KEY_FORBIDDEN' | 'CONFIG_OVERLAY_VALUE_INVALID' | 'CONFIG_OVERLAY_EFFORT_UNSUPPORTED';
+    key: string;
+    line: number;
+    column: number;
+    message: string;
+};
+
+export type ConfigOverlayField = {
+    key: 'model_reasoning_effort' | 'personality' | 'allow_login_shell' | 'history.persistence';
+    valueType: 'string' | 'boolean';
+    allowedValues: Array<string>;
+    defaultValue: string;
+    description: string;
+    completion: string;
+    hover: string;
+};
+
+export type ConfigOverlaySchema = {
+    revision: string;
+    digest: string;
+    maximumBytes: 65536;
+    fields: [
+        ConfigOverlayField,
+        ConfigOverlayField,
+        ConfigOverlayField,
+        ConfigOverlayField
+    ];
 };
 
 export type ConfigOverlayDraftInput = {
@@ -1443,6 +1488,7 @@ export type AgentRuntimeConfigurationView = {
     environmentBinding: AgentRuntimeEnvironmentBinding;
     environment: RuntimeEnvironmentSet;
     safeEffectiveConfig: string;
+    overlaySchema: ConfigOverlaySchema;
     agentVersion: number;
     skillBindings: Array<AgentContextBinding>;
     memoryBindings: Array<AgentContextBinding>;
@@ -1504,9 +1550,18 @@ export type ModelCapability = {
 export type ModelCapabilityPage = {
     catalogRevision: string;
     catalogDigest: string;
+    catalogStatus?: ProviderModelCatalogStatus;
     items: Array<ModelCapability>;
     total: number;
     nextPageToken: string;
+};
+
+export type ProviderModelCatalogStatus = {
+    state: 'PENDING' | 'READY' | 'FAILED' | 'EXPIRED';
+    observedAt?: Timestamp;
+    expiresAt?: Timestamp;
+    source?: 'REMOTE_API' | 'REMOTE_CODEX';
+    failure?: 'NONE' | 'UNAVAILABLE' | 'UNVERIFIED_SOURCE' | 'AUTHORIZATION_REJECTED';
 };
 
 export type ProviderDefinition = {

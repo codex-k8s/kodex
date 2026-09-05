@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
@@ -40,9 +41,14 @@ func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWrite
 	if !ok {
 		return
 	}
+	candidates, valid := providerAccountCandidates(body.ProviderAccounts)
+	if !valid {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Command.PublishAgentRuntimeConfiguration(request.Context(), &controlplanev1.PublishAgentRuntimeConfigurationRequest{
 		Mutation: mutation, AgentRef: agentRef, RuntimeProfileRef: body.RuntimeProfileRef, Model: body.Model,
-		ProviderPolicyMode: string(body.ProviderPolicyMode), ProviderAccounts: providerAccountCandidates(body.ProviderAccounts),
+		ProviderPolicyMode: string(body.ProviderPolicyMode), ProviderAccounts: candidates,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -258,12 +264,17 @@ func (server *Server) ListTemplateVariables(writer http.ResponseWriter, request 
 	server.listTemplateVariables(writer, request, projectRef, stringValue(parameters.AgentRef), stringValue(parameters.RuntimeRevisionRef), stringValue(parameters.Query), parameters.PageSize, parameters.PageToken)
 }
 
-func providerAccountCandidates(input []generated.ProviderAccountCandidate) []*controlplanev1.ProviderAccountCandidate {
+func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) ([]*controlplanev1.ProviderAccountCandidate, bool) {
 	result := make([]*controlplanev1.ProviderAccountCandidate, 0, len(input))
+	seen := map[string]bool{}
 	for _, item := range input {
-		result = append(result, &controlplanev1.ProviderAccountCandidate{AccountRef: item.AccountRef, Weight: int32(item.Weight)})
+		if seen[item.AccountRef] || !opaqueHTTPReference.MatchString(item.AccountRef) || !strings.HasPrefix(item.AccountRef, "pacc_") || len(item.AccountRef) > 96 || item.Weight < 1 || item.Weight > 100 || !modelProviderKey.MatchString(item.ProviderDefinitionKey) || !modelCatalogDigest.MatchString(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest {
+			return nil, false
+		}
+		seen[item.AccountRef] = true
+		result = append(result, &controlplanev1.ProviderAccountCandidate{AccountRef: item.AccountRef, Weight: int32(item.Weight), CatalogRevision: item.CatalogRevision, CatalogDigest: item.CatalogDigest, ProviderDefinitionKey: item.ProviderDefinitionKey})
 	}
-	return result
+	return result, len(input) > 0 && len(input) <= 32
 }
 
 func runtimeEnvironmentValues(input []generated.RuntimeEnvironmentValue) []*controlplanev1.RuntimeEnvironmentValue {
