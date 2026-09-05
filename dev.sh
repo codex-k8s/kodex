@@ -755,7 +755,9 @@ api_endpoint_port=$(jq -er '
   unique |
   if length != 1 then error("one Kubernetes API TCP port is required") else .[0] end
 ' <<<"$api_endpoint_slices") || fail 'Kubernetes API endpoint port is ambiguous'
+bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_directory/mail-source.json"
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
+  --mail-configuration "$state_directory/mail-source.json" \
   --profile "$deployment_profile" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \
   --public-host "$public_host" --oidc-host "$oidc_host" \

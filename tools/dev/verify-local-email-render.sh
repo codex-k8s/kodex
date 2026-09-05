@@ -15,7 +15,11 @@ policies=$(yq -o=json -I=0 'select(.kind == "NetworkPolicy")' \
   "$root"/deploy/k8s/base/email-bridge/*.yaml \
   "$root"/deploy/k8s/base/email-bridge-data/*.yaml \
   "$root"/deploy/k8s/base/email-bridge-migration/*.yaml | jq -s '.')
+mail_digest=$(yq -o=json -I=0 'select(.kind == "ConfigMap" and .data."mail-policy.json" != null)' "$render" |
+  jq -sj 'if length == 1 then .[0].data["mail-policy.json"] else error("mail policy count is invalid") end' |
+  sha256sum | awk '{print $1}')
 yq -o=json -I=0 '.' "$render" | jq -s -e \
+  --arg mailDigest "$mail_digest" \
   --argjson targets "${targets:-[]}" --argjson policies "$policies" \
   -f "$root/tools/dev/verify-local-email-render.jq" >/dev/null || {
     printf 'Local EMAIL runtime, migration, TLS or authority render is incomplete\n' >&2

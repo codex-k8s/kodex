@@ -31,6 +31,11 @@ for mutation in \
   'select(.kind != "Secret" or .metadata.name != "email-bridge-mailbox-projection")' \
   '(select(.kind == "Role" and .metadata.name == "control-plane-email-projection-writer") | .rules[0].resourceNames) = ["foreign-projection"]' \
   '(select(.kind == "RoleBinding" and .metadata.name == "control-plane-email-projection-writer") | .subjects[0].name) = "email-bridge"' \
+  '(select(.kind == "ConfigMap" and .metadata.name == "email-bridge-runtime") | .data.EMAIL_BRIDGE_EGRESS_POLICY_DIGEST) = "stale"' \
+  '(select(.kind == "Deployment" and .metadata.name == "email-bridge") | .spec.template.metadata.annotations."kodex.dev/mail-policy-digest") = "stale"' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-mail-destinations") | .spec.egress) = [{}]' \
+  '(select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .spec.template.spec.volumes[] | select(.name == "mail-policy") | .configMap.name) = "foreign"' \
+  '(select(.kind == "ConfigMap" and .data."mail-policy.json" != null) | .data."mail-policy.json") = "{}"' \
   '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "email-bridge")) | to_yaml)' \
   '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge") | .spec.egress) = [{}]' \
   '(select(.kind == "Ingress") | .spec.rules[].http.paths[].backend.service.name) = "email-bridge"'; do

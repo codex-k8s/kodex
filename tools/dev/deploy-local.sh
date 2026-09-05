@@ -322,6 +322,16 @@ wait_job() {
   fail "local Job timed out: $name"
 }
 
+verify_email_projection_generation() {
+  local source_file="$temporary_directory/mail-current.json" expected actual
+  expected=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-dev-source-provenance") |
+    .data.mailSourceSHA256' "$render")
+  [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || fail 'mail source provenance is missing'
+  bash "$script_directory/read-local-mail-configuration.sh" "$source_file" || fail 'mail source readback failed'
+  actual=$(jq -cS '.' "$source_file" | sha256sum | awk '{print $1}')
+  [[ "$actual" == "$expected" ]] || fail 'mail source changed; regenerate the exact local render'
+}
+
 ensure_email_projection_secret() {
   local name=email-bridge-mailbox-projection state output
   output="$temporary_directory/email-projection-bootstrap.yaml"
@@ -1095,6 +1105,7 @@ readback_local_image_supply_chain() {
 }
 
 if [[ "$mode" == apply ]]; then
+  verify_email_projection_generation
   ensure_local_object_storage_secret
   ensure_local_backup_controller_secret
   ensure_seed_secrets

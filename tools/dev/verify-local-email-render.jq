@@ -19,6 +19,28 @@ def go_cache:
   any(.env[]; .name == "GOWORK" and .value == "off");
 
 . as $all |
+($all | resource("Deployment"; "egress-gateway") | .spec.template.spec.containers |
+  named("egress-gateway") | [.env[] | select(.name == "EGRESS_GATEWAY_MAIL_POLICY_DIGEST")]) as $mailEnv |
+($mailEnv | length == 1) and ($mailEnv[0].value | test("^[a-f0-9]{64}$")) and
+($mailEnv[0].value == $mailDigest) and
+any(.[] | select(.kind == "ConfigMap" and .data["mail-policy.json"] != null);
+  (.data["mail-policy.json"] | fromjson) as $policy |
+  .immutable == true and .metadata.name == ("egress-gateway-mail-" + $mailDigest[:24]) and
+  ($all | resource("Deployment"; "egress-gateway") | .spec.template.spec |
+    any(.volumes[]; .name == "mail-policy" and .configMap.name == ("egress-gateway-mail-" + $mailDigest[:24]))) and
+  ($all | resource("NetworkPolicy"; "egress-gateway-mail-destinations") | .spec |
+    .policyTypes == ["Egress"] and
+    .podSelector.matchLabels == {"app.kubernetes.io/name":"egress-gateway","app.kubernetes.io/component":"platform-egress"} and
+    .egress == [$policy.destinations[] | {to:[.addresses[] | {ipBlock:{cidr:(. + (if contains(":") then "/128" else "/32" end))}}],ports:[{protocol:"TCP",port:.port}]}]) and
+  all($all | resource("Deployment"; "email-bridge"), resource("Deployment"; "egress-gateway");
+    .spec.template.metadata.annotations["kodex.dev/mail-configuration-digest"] == $policy.configurationDigest) and
+  ($all | resource("ConfigMap"; "kodex-dev-source-provenance") |
+    .data.mailConfigurationDigest == $policy.configurationDigest and .data.mailConfigurationRevision == ($policy.configurationRevision | tostring))) and
+any(resource("ConfigMap"; "email-bridge-runtime"); .data.EMAIL_BRIDGE_EGRESS_POLICY_DIGEST == $mailEnv[0].value) and
+all(resource("Deployment"; "email-bridge"), resource("Deployment"; "egress-gateway");
+  .spec.template.metadata.annotations["kodex.dev/mail-policy-digest"] == $mailEnv[0].value) and
+any(resource("ConfigMap"; "kodex-dev-source-provenance");
+  .data.mailPolicyDigest == $mailEnv[0].value and (.data.mailSourceSHA256 | test("^[a-f0-9]{64}$"))) and
 ([resource("Deployment"; "email-bridge")] | length == 1) and
 any(resource("Deployment"; "email-bridge");
   .spec.replicas == 1 and

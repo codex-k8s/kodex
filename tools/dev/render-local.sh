@@ -28,6 +28,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  [--profile web-only|web-with-mattermost]' \
+    '  [--mail-configuration <exact-snapshot>] [--mail-resolv-conf <trusted-resolver-file>]' \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
@@ -50,6 +51,8 @@ usage() {
 source_root=""
 cache_root=""
 output=""
+mail_configuration=""
+mail_resolv_conf=/etc/resolv.conf
 deployment_profile=web-only
 public_host=""
 oidc_host=""
@@ -78,6 +81,8 @@ while (($# > 0)); do
     --source-root) source_root=${2:-}; shift 2 ;;
     --cache-root) cache_root=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
+    --mail-configuration) mail_configuration=${2:-}; shift 2 ;;
+    --mail-resolv-conf) mail_resolv_conf=${2:-}; shift 2 ;;
     --profile) deployment_profile=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
@@ -1158,6 +1163,13 @@ yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
   unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])[]
 ' | yq -p=json -P >"$output"
+
+if [[ -z "$mail_configuration" ]]; then
+  mail_configuration="$temporary_directory/mail-bootstrap.json"
+  yq -r 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection") |
+    .stringData."mailboxes.json"' "$output" >"$mail_configuration"
+fi
+bash "$repository_root/tools/dev/render-local-mail.sh" "$output" "$mail_configuration" "$mail_resolv_conf" "$output"
 
 # Local workloads use disposable telemetry settings. Apply this only after all
 # generated init containers have been materialized into the final manifest.

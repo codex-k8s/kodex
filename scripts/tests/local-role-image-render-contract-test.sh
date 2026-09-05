@@ -330,7 +330,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e \
     (first($resources[] | select(.kind == "ConfigMap" and
       .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-dev-source-provenance")) | .data) as $provenance |
-    $provenance == {
+    ($provenance | del(.mailSourceSHA256, .mailConfigurationRevision, .mailConfigurationDigest, .mailPolicyDigest)) == {
       sourceRevision:$source_revision,
       deploymentProfile:$profile,
       sourceContentSHA256:$source_digest,

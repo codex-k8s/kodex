@@ -101,6 +101,8 @@ issuer 29001, grant agent 29004. Writable grant volume остаётся дост
 | Разрешённая установка оператором | Существующий installer материализует отдельные runtime/migration DB descriptors и сертификаты; `deploy-local.sh` ждёт Certificates, PostgreSQL StatefulSet, затем запускает точный migration Job и ждёт completion до application Deployments. |
 | Повторная установка | Точное имя migration Job пересоздаётся bounded-командой; goose использует собственную таблицу версий EMAIL. Ошибка миграции прерывает установку. Итоговый readback включает EMAIL PostgreSQL и migration Job. |
 | Bootstrap mailbox projection | До запуска CP/EMAIL installer создаёт отсутствующий canonical Secret ровно один раз. Существующий Secret проверяется по точным имени, namespace, UID, типу и owner label; его данные не перезаписываются. Гонка create завершается повторным readback, чужой owner и ошибка API прерывают установку. |
+| Повторный render текущего source | Разрешённый `dev.sh up` читает только mailbox document из принадлежащего CP Secret; ошибка API не становится bootstrap fallback. `render-local.sh --mail-configuration` передаёт exact snapshot в реальный typed mail producer. Из одного результата берутся immutable ConfigMap, exact CNI NetworkPolicy, оба policy digest и annotations обоих Pod templates. Secret с credentials не копируется в render. |
+| Source изменился до apply | Installer повторно читает документ и сравнивает canonical source hash с provenance до foundation apply. Несовпадение требует нового render; текущие данные CP не откатываются. После этой проверки возможен новый CP transition: runtime source/readback mismatch остаётся закрытым отказом до следующей согласованной доставки. |
 | Hot reload | Air наблюдает модуль EMAIL и `libs/go`; не переписывает authority, TLS, Secret descriptors или immutable runner pins. Почтовые effects и unknown-outcome остаются ответственностью EMAIL owner. |
 | Обновление mailbox projection | CP publisher обновляет целый `email-bridge-mailbox-projection` через exact `get/update` RBAC. EMAIL получает обязательный read-only Secret volume без `items`, `subPath` и `subPathExpr`; loader проверяет единое AtomicWriter поколение документа и credential keys. Пустой release bootstrap не выдаёт mailbox authority. |
 | Недоступный producer | Ошибка CP publisher или недоступные credentials не заменяются allowlist. Нет фиктивных mailbox credentials или обхода readiness. |
@@ -130,7 +132,7 @@ timeout 450s bash scripts/tests/local-email-process-contract-test.sh \
   /tmp/kodex-1031-email-render-cache
 ```
 
-Оба renderer запускают EMAIL positive и 25 negative cases. Process fixture
+Оба renderer запускают EMAIL positive и 30 negative cases. Process fixture
 требует заранее доступный закреплённый Go image и primed cache: Docker
 `--network none`, non-root, read-only root/source/modules, отдельные tmpfs.
 Она выполняет настоящий socket init, отказ CLI без DSN и сборку через Air;
@@ -143,8 +145,17 @@ timeout 450s bash scripts/tests/local-email-process-contract-test.sh \
 [Secret volumes](https://kubernetes.io/docs/concepts/configuration/secret/):
 обновление eventually consistent, `subPath` не получает обновления,
 immutable Secret нельзя использовать как обновляемую проекцию.
-Остаются отдельные зависимости полного прототипа: CP D2–D6, PWA и следующий
-EMAIL source-header checkpoint владельца. Локальный render не заменяет
+Потреблён EMAIL source-header `ae24f4bc7`: runtime сравнивает policy и source
+readback до TLS/provider bytes. `EMAIL_BRIDGE_EGRESS_POLICY_DIGEST` больше не
+закрепляется старым bootstrap значением в локальном render: он пересчитывается
+вместе с `EGRESS_GATEWAY_MAIL_POLICY_DIGEST` из актуального snapshot и DNS pins.
+Локальные fixtures используют только пустые поколения, не обращаются к живым
+mail hosts и не назначают owner allowlist. Для непустого source требуется
+разрешённый оператором resolver и hosts; `--mail-resolv-conf` задаёт точный файл.
+Остаются отдельные зависимости полного прототипа: CP D2–D6, HTTP/PWA и
+автоматическая owner-доставка mail policy после UI transition D5. Повторный
+разрешённый `up` реализует локальную доставку, но не является фоновым reconciler.
+Локальный render не заменяет
 общий gate на точном интегрированном SHA.
 До разрешения владельца `up`, import в k3s, apply/deploy, SSH, live provider
 и live E2E остаются **NOT RUN**.

@@ -85,6 +85,7 @@ test-full-local-e2e-entrypoint:
 	@./scripts/tests/integration-deployed-e2e-contract-test.sh
 	@./scripts/tests/local-kubernetes-e2e-diagnostics-contract-test.sh
 	@./scripts/tests/local-statefulset-rollout-contract-test.sh
+	@bash scripts/tests/local-mail-projection-contract-test.sh
 
 test-local-e2e-oidc-group-fixture-contract:
 	@./scripts/tests/local-e2e-oidc-group-fixture-test.sh
