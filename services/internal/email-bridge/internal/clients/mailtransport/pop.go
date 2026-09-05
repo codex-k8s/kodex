@@ -123,6 +123,7 @@ func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (ap
 		if e != nil {
 			return api.Result{}, e
 		}
+		parsed.Uid, parsed.Folder = cmd.Uid, cmd.Folder
 		if cmd.Operation == api.OperationDownload {
 			if cmd.AttachmentIndex < 0 || cmd.AttachmentIndex >= len(parsed.Attachments) {
 				return api.Result{}, errs.NotFound
