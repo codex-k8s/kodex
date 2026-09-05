@@ -1636,6 +1636,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if !ok || promptSnapshot.Variables["agent.name"] != agent.Name || promptSnapshot.Variables["project.name"] != project.Project.Name {
 		t.Fatalf("claim does not carry server-owned contextual names: %#v", lease["promptSnapshot"])
 	}
+	testTemplateVariableContext(t, ctx, repository, service, owner, agent.ProjectRef, agent.Ref, stringMap(lease, "runtimeRevisionRef"))
 	preview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", launched.Run.Ref, true)
 	if err != nil || preview.Digest != stringMap(lease, "promptMaterializationDigest") ||
 		preview.Prompt != stringMap(lease, "instructions") || strings.Contains(preview.SafePrompt, "immutable provider account affinity") {

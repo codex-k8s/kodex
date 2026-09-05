@@ -169,6 +169,8 @@ type AgentRuntimeConfigurationView struct {
 }
 
 type TemplateVariable struct {
+	Available                                bool
+	Reason                                   string
 	Name, Type, Description, Example, Source string
 	Collection                               bool
 	ItemType, RangeExample                   string
