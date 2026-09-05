@@ -1,6 +1,8 @@
 package integrationpackage
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -72,12 +74,15 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 }
 
 func canonicalPackage(value Package) bool {
-	raw, err := json.Marshal(value)
-	if err != nil {
+	if validate(&value) != nil {
 		return false
 	}
-	parsed, err := Parse(raw)
-	return err == nil && parsed.Digest == value.Digest
+	raw, err := json.Marshal(value)
+	if err != nil || len(raw) == 0 || len(raw) > maxBytes {
+		return false
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]) == value.Digest
 }
 
 // Набор полей сохраняется: adapter может читать даже необязательное поле.
