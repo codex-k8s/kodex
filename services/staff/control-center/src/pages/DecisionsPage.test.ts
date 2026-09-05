@@ -3,7 +3,9 @@ import { createSSRApp } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+import { i18n as applicationI18n } from "@/app/i18n";
 
 import { usePlatformStore } from "@/features/platform/store";
 import DecisionsPage from "@/pages/DecisionsPage.vue";
@@ -154,6 +156,7 @@ describe("DecisionsPage", () => {
             attempt: "Попытка {attempt}",
           },
           decisions: {
+            ...applicationI18n.global.getLocaleMessage("ru").decisions,
             title: "Решения",
             subtitle: "Вопросы, ожидающие ответа",
             pending: "Ожидают",

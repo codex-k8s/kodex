@@ -33,6 +33,15 @@
               h(
                 "button",
                 {
+                  onClick: () => {
+                    i18n.global.locale.value = "en";
+                  },
+                },
+                "English",
+              ),
+              h(
+                "button",
+                {
                   onClick: () => router.push("/decisions?gateRef=gate_history"),
                 },
                 "Открыть адресованную историю",

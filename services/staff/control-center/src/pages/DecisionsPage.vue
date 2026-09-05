@@ -293,11 +293,9 @@ function decisionConsequence(
     return (
       gate.consequencesSummary.trim() || t("decisions.consequencesUnavailable")
     );
-  if (decision === "REQUEST_CHANGES")
-    return "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.";
-  if (decision === "REJECT")
-    return "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.";
-  return "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesConsequence");
+  if (decision === "REJECT") return t("decisions.rejectConsequence");
+  return t("decisions.cancelConsequence");
 }
 
 function requiresDecisionComment(decision?: DecisionAction): boolean {
@@ -305,17 +303,15 @@ function requiresDecisionComment(decision?: DecisionAction): boolean {
 }
 
 function decisionCommentLabel(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES") return "Что нужно изменить";
-  if (decision === "REJECT") return "Причина отклонения";
-  if (decision === "CANCEL") return "Причина отмены";
-  return "Комментарий к одобрению";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesComment");
+  if (decision === "REJECT") return t("decisions.rejectComment");
+  if (decision === "CANCEL") return t("decisions.cancelComment");
+  return t("decisions.approveComment");
 }
 
 function decisionCommentPlaceholder(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES")
-    return "Перечислите проверяемые изменения, необходимые для повторного решения";
-  if (decision === "REJECT")
-    return "Укажите причину, которая будет записана в аудит";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesPlaceholder");
+  if (decision === "REJECT") return t("decisions.rejectPlaceholder");
   return t("decisions.commentPlaceholder");
 }
 
@@ -341,13 +337,12 @@ async function decide(gate: OwnerGate): Promise<void> {
   if (requiresDecisionComment(decision) && !comment) {
     validationMessages.value[gate.ref] =
       decision === "REQUEST_CHANGES"
-        ? "Опишите необходимые изменения."
-        : "Укажите причину отклонения.";
+        ? t("decisions.changesRequired")
+        : t("decisions.rejectionRequired");
     return;
   }
   if (!attachmentsReady(gate.ref)) {
-    validationMessages.value[gate.ref] =
-      "Дождитесь загрузки вложений или исправьте ошибку файла.";
+    validationMessages.value[gate.ref] = t("decisions.attachmentsPending");
     return;
   }
   busyRef.value = gate.ref;
@@ -362,7 +357,10 @@ async function decide(gate: OwnerGate): Promise<void> {
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     selectedAttachmentComposer.value?.clear();
-    successMessage.value = `${decisionLabel(decision)}: решение «${gate.title}» применено.`;
+    successMessage.value = t("decisions.applied", {
+      decision: decisionLabel(decision),
+      title: gate.title,
+    });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(decisionDrafts.value, gate.ref);
     Reflect.deleteProperty(validationMessages.value, gate.ref);
@@ -557,13 +555,22 @@ onMounted(() => {
                     v-if="item.hasConsequences"
                     class="decision-row__impact"
                   >
-                    Последствия: {{ item.gate.consequencesSummary }}
+                    {{
+                      $t("decisions.consequenceSummary", {
+                        summary: item.gate.consequencesSummary,
+                      })
+                    }}
                   </small>
                   <small>
                     {{ item.gate.requestedBy.displayName }} ·
                     {{ formatDate(item.gate.openedAt) }}
                     <template v-if="item.gate.expiresAt">
-                      · срок {{ formatDate(item.gate.expiresAt) }}
+                      ·
+                      {{
+                        $t("decisions.dueAt", {
+                          date: formatDate(item.gate.expiresAt),
+                        })
+                      }}
                     </template>
                   </small>
                   <small class="decision-row__route">
@@ -645,9 +652,16 @@ onMounted(() => {
               <dd>{{ selected.gate.requestedBy.displayName }}</dd>
             </div>
             <div>
-              <dt><UserRound :size="15" aria-hidden="true" />Инициатор Run</dt>
+              <dt>
+                <UserRound :size="15" aria-hidden="true" />{{
+                  $t("decisions.runInitiator")
+                }}
+              </dt>
               <dd>
-                {{ selected.run?.initiator.displayName ?? "не представлен" }}
+                {{
+                  selected.run?.initiator.displayName ??
+                  $t("decisions.notProvided")
+                }}
               </dd>
             </div>
             <div>
@@ -685,8 +699,8 @@ onMounted(() => {
               <dt>
                 <FileStack :size="15" aria-hidden="true" />{{
                   view === "HISTORY"
-                    ? "Вложения к решению"
-                    : "Вложения к запросу"
+                    ? $t("decisions.resolutionAttachments")
+                    : $t("decisions.requestAttachments")
                 }}
               </dt>
               <dd>
@@ -766,9 +780,12 @@ onMounted(() => {
           >
             <header>
               <h3 id="decision-audit-title">
-                <History :size="16" aria-hidden="true" /> Аудит
+                <History :size="16" aria-hidden="true" />
+                {{ $t("decisions.auditTitle") }}
               </h3>
-              <span v-if="platform.loading.audit">Загружаем…</span>
+              <span v-if="platform.loading.audit">{{
+                $t("common.loading")
+              }}</span>
               <span v-else>{{ selectedAuditEvents.length }}</span>
             </header>
             <ProblemNotice
@@ -787,7 +804,7 @@ onMounted(() => {
               </li>
             </ol>
             <p v-else-if="!platform.loading.audit" class="audit-unavailable">
-              События аудита для этого решения не найдены.
+              {{ $t("decisions.auditEmpty") }}
             </p>
           </section>
 
@@ -812,7 +829,7 @@ onMounted(() => {
               class="decision-options"
               :disabled="busyRef === selected.gate.ref"
             >
-              <legend>Разрешённые варианты и последствия</legend>
+              <legend>{{ $t("decisions.allowedOptions") }}</legend>
               <label
                 v-for="decision in selected.gate.allowedDecisions"
                 :key="decision"
@@ -836,7 +853,7 @@ onMounted(() => {
                     decisionConsequence(selected.gate, decision)
                   }}</span>
                   <small v-if="requiresDecisionComment(decision)">
-                    Комментарий обязателен
+                    {{ $t("decisions.commentRequired") }}
                   </small>
                 </span>
                 <StatusBadge :state="decisionOutcomeState(decision)" />
@@ -846,7 +863,7 @@ onMounted(() => {
               <span>
                 {{ decisionCommentLabel(selectedDecision) }}
                 <strong v-if="requiresDecisionComment(selectedDecision)">
-                  обязательно
+                  {{ $t("common.required") }}
                 </strong>
               </span>
               <VoiceTextarea
@@ -895,13 +912,16 @@ onMounted(() => {
                 />
                 {{
                   busyRef === selected.gate.ref
-                    ? "Применяем решение…"
+                    ? $t("decisions.applying")
                     : decisionLabel(selectedDecision)
                 }}
               </button>
               <span>
-                Решение применится с версией {{ selected.gate.version }} и будет
-                записано в аудит.
+                {{
+                  $t("decisions.versionNotice", {
+                    version: selected.gate.version,
+                  })
+                }}
               </span>
             </div>
           </template>

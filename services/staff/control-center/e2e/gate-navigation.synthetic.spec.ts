@@ -147,6 +147,26 @@ for (const width of [390, 2900]) {
       path: testInfo.outputPath(`gate-navigation-${String(width)}.png`),
       fullPage: true,
     });
+    await page.getByRole("button", { name: "English", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Audit", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".decision-detail")).toContainText(
+      "Run initiator",
+    );
+    await expect(page.locator(".decision-detail")).toContainText(
+      "Decision attachments",
+    );
+    await expect(page.locator(".audit-unavailable")).toHaveText(
+      "No audit events were found for this decision.",
+    );
+    await expect(
+      page.getByRole("button", { name: "Decisions awaiting your answer" }),
+    ).toHaveText("Pending");
+    await page.screenshot({
+      path: testInfo.outputPath(`gate-navigation-en-${String(width)}.png`),
+      fullPage: true,
+    });
     await page
       .getByRole("button", { name: "Открыть скрытое решение", exact: true })
       .click();

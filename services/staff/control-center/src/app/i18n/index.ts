@@ -1818,6 +1818,37 @@ const ru = {
     openRun: "Открыть запуск",
     openNode: "Открыть точный узел запуска",
     outcome: "Принятое решение",
+    changesConsequence:
+      "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.",
+    rejectConsequence:
+      "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.",
+    cancelConsequence:
+      "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.",
+    changesComment: "Что нужно изменить",
+    rejectComment: "Причина отклонения",
+    cancelComment: "Причина отмены",
+    approveComment: "Комментарий к одобрению",
+    changesPlaceholder:
+      "Перечислите проверяемые изменения, необходимые для повторного решения",
+    rejectPlaceholder: "Укажите причину, которая будет записана в аудит",
+    changesRequired: "Опишите необходимые изменения.",
+    rejectionRequired: "Укажите причину отклонения.",
+    attachmentsPending:
+      "Дождитесь загрузки вложений или исправьте ошибку файла.",
+    applied: "{decision}: решение «{title}» применено.",
+    consequenceSummary: "Последствия: {summary}",
+    dueAt: "срок {date}",
+    runInitiator: "Инициатор Run",
+    notProvided: "не представлен",
+    resolutionAttachments: "Вложения к решению",
+    requestAttachments: "Вложения к запросу",
+    auditTitle: "Аудит",
+    auditEmpty: "События аудита для этого решения не найдены.",
+    allowedOptions: "Разрешённые варианты и последствия",
+    commentRequired: "Комментарий обязателен",
+    applying: "Применяем решение…",
+    versionNotice:
+      "Решение применится с версией {version} и будет записано в аудит.",
   },
   access: {
     title: "Участники и доступ",
@@ -4547,6 +4578,37 @@ const en = {
     openRun: "Open run",
     openNode: "Open the exact run node",
     outcome: "Recorded decision",
+    changesConsequence:
+      "Gate will change to CHANGES_REQUESTED. The current projection does not provide the next Run transition.",
+    rejectConsequence:
+      "Gate will change to REJECTED. The current projection does not specify whether the Run closes or continues.",
+    cancelConsequence:
+      "Gate will change to CANCELLED. The current projection does not provide the subsequent Run lifecycle.",
+    changesComment: "Required changes",
+    rejectComment: "Reason for rejection",
+    cancelComment: "Reason for cancellation",
+    approveComment: "Approval comment",
+    changesPlaceholder:
+      "List verifiable changes required before another decision",
+    rejectPlaceholder: "Enter the reason to record in the audit trail",
+    changesRequired: "Describe the required changes.",
+    rejectionRequired: "Enter a reason for rejection.",
+    attachmentsPending:
+      "Wait for attachments to upload or resolve the file error.",
+    applied: "{decision}: decision “{title}” was applied.",
+    consequenceSummary: "Consequences: {summary}",
+    dueAt: "due {date}",
+    runInitiator: "Run initiator",
+    notProvided: "not provided",
+    resolutionAttachments: "Decision attachments",
+    requestAttachments: "Request attachments",
+    auditTitle: "Audit",
+    auditEmpty: "No audit events were found for this decision.",
+    allowedOptions: "Allowed options and consequences",
+    commentRequired: "Comment required",
+    applying: "Applying decision…",
+    versionNotice:
+      "The decision will use version {version} and be recorded in the audit trail.",
   },
   access: {
     ...ru.access,
