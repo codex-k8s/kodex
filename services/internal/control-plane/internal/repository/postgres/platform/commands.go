@@ -2061,6 +2061,9 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	nested := input
 	nested.Kind = command.LaunchRun
 	nested.Payload = launch
+	if err := repository.authorizeCommand(ctx, tx, scope, nested); err != nil {
+		return commandOutcome{}, err
+	}
 	outcome, err := repository.launchRun(ctx, tx, scope, nested)
 	if err != nil {
 		return commandOutcome{}, err

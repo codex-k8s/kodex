@@ -2035,6 +2035,9 @@ message ListRunsRequest {
   PageRequest page = 2;
   repeated RunState states = 3;
   string query = 4;
+  bool resumable_sessions_only = 5;
+  string target_type = 6;
+  string target_ref = 7;
 }
 message ListRunsResponse {
   repeated Run runs = 1;
@@ -5027,6 +5030,7 @@ message PromptTemplateDiagnostic {
   string message = 3;
   int32 line = 4;
   int32 column = 5;
+  string variable_name = 6;
 }
 message ValidatePromptTemplateRequest {
   string template = 1;
@@ -5122,6 +5126,7 @@ message PreviewPromptTemplateResponse {
   repeated PromptSlotProvenance slots = 12;
   repeated PromptPreviewSection sections = 13;
   PromptContextPin context_pin = 14;
+  bool complete = 15;
 }
 
 enum ManagedConfigurationKind {

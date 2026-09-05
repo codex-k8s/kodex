@@ -549,10 +549,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			targetKind = promptservice.TargetAutomation
 			automation = task
 		}
-		if candidate.turnNumber > 1 {
-			targetKind = promptservice.TargetSessionContinuation
-			continuation = string(rawSessionContext)
-		}
 		initiatorCapabilityScope := scope
 		initiatorCapabilityScope.actorRef = candidate.initiatorRef
 		userCapabilities, permittedIntegrationGrants, err := repository.agentCapabilityAuthority(ctx, tx, initiatorCapabilityScope, projectRef, agentRef, capabilities)
@@ -614,18 +610,17 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			WorkflowStage:         workflowStage, Automation: automation,
 			SessionContinuation: continuation,
 		}
-		materializedPrompt, err := promptservice.Materialize(instructions, promptservice.Snapshot{
-			TargetKind: promptSnapshot.TargetKind, TargetRef: promptSnapshot.TargetRef,
-			ProjectRef: promptSnapshot.ProjectRef, RunRef: promptSnapshot.RunRef, SessionRef: promptSnapshot.SessionRef,
-			TemplateRef: promptSnapshot.TemplateRef, TemplateDigest: promptSnapshot.TemplateDigest,
-			Variables: promptSnapshot.Variables, StructuredVariables: promptSnapshot.StructuredVariables,
-			UserCapabilities:  promptSnapshot.UserCapabilities,
-			AgentCapabilities: promptSnapshot.AgentCapabilities, WorkflowCapabilities: promptSnapshot.WorkflowCapabilities,
-			ConnectionCapabilities: promptSnapshot.ConnectionCapabilities, HumanGateCapabilities: promptSnapshot.HumanGateCapabilities,
-			WorkflowStage: promptSnapshot.WorkflowStage, Automation: promptSnapshot.Automation,
-			SessionContinuation: promptSnapshot.SessionContinuation,
-		})
-		if err != nil {
+		if err := repository.hydrateRuntimePromptContext(ctx, tx, scope, nodeRef, &promptSnapshot); err != nil {
+			return commandOutcome{}, err
+		}
+		targetKind = promptSnapshot.TargetKind
+		promptSnapshot.ContextPin.RuntimeConfigurationRef, promptSnapshot.ContextPin.RuntimeConfigurationDigest = runtimeConfigRef, runtimeConfigDigest
+		promptSnapshot.ContextPin.EnvironmentVersionRef, promptSnapshot.ContextPin.EnvironmentDigest = runtimeEnvironmentRef, runtimeEnvironmentDigest
+		promptSnapshot.ContextPin.EnvironmentBindingRef, promptSnapshot.ContextPin.EnvironmentBindingVersion = environmentBindingRef, environmentBindingVersion
+		promptSnapshot.StructuredVariables["input"].(map[string]any)["values"] = inputMap
+		promptSnapshot.StructuredVariables["integrations"] = promptIntegrationScope(integrationGrants, promptservice.Intersection(userCapabilities, promptservice.Union(capabilities, connectionCapabilities), workflowCapabilities, humanGateCapabilities))
+		materializedPrompt, err := promptservice.Materialize(instructions, promptservice.FromSnapshot(promptSnapshot))
+		if err != nil || !materializedPrompt.Complete {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		instructions = materializedPrompt.Prompt
@@ -670,11 +665,15 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"providerSecretResourceVersion":    providerSecretResourceVersion,
 			"providerCredentialSHA256":         providerCredentialSHA256,
 			"instructionDigest":                instructionDigest, "instructions": instructions,
-			"promptTemplateRef":           materializedPrompt.TemplateRef,
-			"promptTemplateDigest":        materializedPrompt.TemplateDigest,
-			"promptMaterializationDigest": materializedPrompt.Digest,
-			"promptTargetKind":            targetKind,
-			"promptSnapshot":              promptSnapshot,
+			"promptTemplateRef":             materializedPrompt.TemplateRef,
+			"promptTemplateDigest":          materializedPrompt.TemplateDigest,
+			"promptMaterializationDigest":   materializedPrompt.Digest,
+			"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
+			"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,
+			"promptVariableSnapshotDigest":  materializedPrompt.VariableSnapshotDigest,
+			"promptSlots":                   materializedPrompt.Slots,
+			"promptTargetKind":              targetKind,
+			"promptSnapshot":                promptSnapshot,
 			"promptAuthority": map[string]any{
 				"user": userCapabilities, "agent": promptSnapshot.AgentCapabilities, "workflow": workflowCapabilities,
 				"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
@@ -721,6 +720,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		snapshot["contextSnapshot"] = contextSnapshot
 		snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
+		var continuationNotice *preparedContinuationNotice
+		if candidate.turnNumber > 1 {
+			continuationNotice, err = repository.prepareRuntimeContinuationNotice(ctx, tx, scope, snapshot, promptSnapshot)
+			if err != nil {
+				return commandOutcome{}, fmt.Errorf("prepare continuation notice: %w", err)
+			}
+		}
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
@@ -750,6 +756,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
 			revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
+		}
+		if err := repository.persistRuntimeContinuationNotice(ctx, tx, scope, runtimeRevisionID, continuationNotice); err != nil {
+			return commandOutcome{}, fmt.Errorf("persist continuation notice: %w", err)
 		}
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
 		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,

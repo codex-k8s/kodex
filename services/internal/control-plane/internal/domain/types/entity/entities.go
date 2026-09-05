@@ -235,24 +235,40 @@ type RuntimeWorkspacePolicy struct {
 }
 
 type PromptMaterializationSnapshot struct {
-	TargetKind             string            `json:"targetKind"`
-	TargetRef              string            `json:"targetRef"`
-	ProjectRef             string            `json:"projectRef"`
-	RunRef                 string            `json:"runRef"`
-	SessionRef             string            `json:"sessionRef"`
-	TemplateRef            string            `json:"templateRef"`
-	TemplateDigest         string            `json:"templateDigest"`
-	TemplateContent        string            `json:"templateContent"`
-	Variables              map[string]string `json:"variables"`
-	StructuredVariables    map[string]any    `json:"structuredVariables"`
-	UserCapabilities       []string          `json:"userCapabilities"`
-	AgentCapabilities      []string          `json:"agentCapabilities"`
-	WorkflowCapabilities   []string          `json:"workflowCapabilities"`
-	ConnectionCapabilities []string          `json:"connectionCapabilities"`
-	HumanGateCapabilities  []string          `json:"humanGateCapabilities"`
-	WorkflowStage          string            `json:"workflowStage"`
-	Automation             string            `json:"automation"`
-	SessionContinuation    string            `json:"sessionContinuation"`
+	UnavailableVariables        map[string]string `json:"unavailableVariables,omitempty"`
+	StagePurposeTemplate        string            `json:"stagePurposeTemplate,omitempty"`
+	StageExpectedResultTemplate string            `json:"stageExpectedResultTemplate,omitempty"`
+	ServiceTemplateRevision     string            `json:"serviceTemplateRevision,omitempty"`
+	Locale                      string            `json:"locale,omitempty"`
+	SemanticValues              map[string]string `json:"semanticValues,omitempty"`
+	ContextPin                  PromptContextPin  `json:"contextPin,omitempty"`
+	TargetKind                  string            `json:"targetKind"`
+	TargetRef                   string            `json:"targetRef"`
+	ProjectRef                  string            `json:"projectRef"`
+	RunRef                      string            `json:"runRef"`
+	SessionRef                  string            `json:"sessionRef"`
+	TemplateRef                 string            `json:"templateRef"`
+	TemplateDigest              string            `json:"templateDigest"`
+	TemplateContent             string            `json:"templateContent"`
+	Variables                   map[string]string `json:"variables"`
+	StructuredVariables         map[string]any    `json:"structuredVariables"`
+	UserCapabilities            []string          `json:"userCapabilities"`
+	AgentCapabilities           []string          `json:"agentCapabilities"`
+	WorkflowCapabilities        []string          `json:"workflowCapabilities"`
+	ConnectionCapabilities      []string          `json:"connectionCapabilities"`
+	HumanGateCapabilities       []string          `json:"humanGateCapabilities"`
+	WorkflowStage               string            `json:"workflowStage"`
+	Automation                  string            `json:"automation"`
+	SessionContinuation         string            `json:"sessionContinuation"`
+}
+
+type PromptContextPin struct {
+	Digest, AgentRef, WorkflowRef, WorkflowRevisionRef, WorkflowStageKey   string
+	AgentVersion, WorkflowVersion                                          int64
+	RuntimeConfigurationRef, RuntimeConfigurationDigest                    string
+	EnvironmentBindingRef, EnvironmentVersionRef, EnvironmentDigest        string
+	EnvironmentBindingVersion                                              int64
+	AttachmentSetRef, AttachmentManifestDigest, PreviousRuntimeRevisionRef string
 }
 
 type ManagedConfigurationRevision struct {

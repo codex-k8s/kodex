@@ -81,6 +81,10 @@ func readSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 }
 
 func checkedSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, sessionID, accountRef string, configuration entity.AgentRuntimeConfiguration, overlay string) (entity.ProviderAccountCandidate, *sessionCatalogBinding, error) {
+	return checkedSessionModelCatalogSnapshot(ctx, tx, organizationID, sessionID, accountRef, configuration, overlay, true)
+}
+
+func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organizationID, sessionID, accountRef string, configuration entity.AgentRuntimeConfiguration, overlay string, lock bool) (entity.ProviderAccountCandidate, *sessionCatalogBinding, error) {
 	binding, err := readSessionModelCatalog(ctx, tx, organizationID, sessionID, accountRef)
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
@@ -104,7 +108,7 @@ func checkedSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, 
 	if len(selected) != 1 {
 		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
 	}
-	verified, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, selected, false)
+	verified, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, selected, false, lock)
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
 	}

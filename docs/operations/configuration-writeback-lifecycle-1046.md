@@ -160,3 +160,11 @@ UNKNOWN_OUTCOME до readback, создание следующего PR посл
 реальный отзыв connection после BeginEffect. SQL boundary, Proto lint/build и
 policy65 replay — PASS. Git receive-pack, PR/MR consumer, его environment render,
 HTTP/PWA и live provider сценарий — NOT RUN; этот checkpoint не завершает CFG.
+
+После включения точных вкладов resumable Session `caec19f07`/`f9af1bc52` и
+prompt renderer/owner `eaebcef76`/`34beee012`, а также GitHub package2.3.0,
+полный совмещённый `TestBootstrapComponent` прошёл за 25,400 с. Четыре пакета
+CP с race, полный vet/build, SQL boundary, Proto lint/build и policy65 replay
+также PASS. Source-only prompt tail `f55aadb93` в этот checkpoint не включён;
+context catalog/continuation preview остаются отдельной незавершённой частью
+того же #1046. Внешний Git/PR consumer по-прежнему NOT RUN.

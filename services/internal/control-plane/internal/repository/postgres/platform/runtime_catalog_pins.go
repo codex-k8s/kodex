@@ -19,6 +19,9 @@ var queryRuntimeCatalogReadConfiguration string
 //go:embed sql/runtime_catalog__lock_accounts.sql
 var queryRuntimeCatalogLockAccounts string
 
+//go:embed sql/runtime_catalog__read_accounts.sql
+var queryRuntimeCatalogReadAccounts string
+
 //go:embed sql/runtime_catalog__bootstrap_accounts.sql
 var queryRuntimeCatalogBootstrapAccounts string
 
@@ -65,6 +68,10 @@ func validRuntimeCatalogPin(candidate entity.ProviderAccountCandidate) bool {
 // validateRuntimeCatalogCandidates читает тот же snapshot, что публичный
 // каталог, в caller owner-транзакции. Account locks закрывают TOCTOU с revoke.
 func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current scope, provider, model, overlay string, candidates []entity.ProviderAccountCandidate, input bool) ([]entity.ProviderAccountCandidate, []string, error) {
+	return validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, provider, model, overlay, candidates, input, true)
+}
+
+func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, current scope, provider, model, overlay string, candidates []entity.ProviderAccountCandidate, input, lock bool) ([]entity.ProviderAccountCandidate, []string, error) {
 	if len(candidates) == 0 {
 		return nil, nil, errs.ErrConflict
 	}
@@ -77,7 +84,13 @@ func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current sc
 			return nil, nil, errs.ErrInvalid
 		}
 		var ref string
-		if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAccounts, current.organizationID, candidate.AccountRef, provider).Scan(&ref); err != nil {
+		accountQuery := queryRuntimeCatalogReadAccounts
+		accountArgs := []any{pgx.StrictNamedArgs{"organization_id": current.organizationID, "account_ref": candidate.AccountRef, "provider": provider}}
+		if lock {
+			accountQuery = queryRuntimeCatalogLockAccounts
+			accountArgs = []any{current.organizationID, candidate.AccountRef, provider}
+		}
+		if err := tx.QueryRow(ctx, accountQuery, accountArgs...).Scan(&ref); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, nil, errs.ErrConflict
 			}

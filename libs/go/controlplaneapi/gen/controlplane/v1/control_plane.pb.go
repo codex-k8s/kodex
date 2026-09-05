@@ -17086,13 +17086,16 @@ func (x *ArchiveWorkflowResponse) GetWorkflow() *Workflow {
 }
 
 type ListRunsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectRef    string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
-	States        []RunState             `protobuf:"varint,3,rep,packed,name=states,proto3,enum=controlplane.v1.RunState" json:"states,omitempty"`
-	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ProjectRef            string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	Page                  *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	States                []RunState             `protobuf:"varint,3,rep,packed,name=states,proto3,enum=controlplane.v1.RunState" json:"states,omitempty"`
+	Query                 string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	ResumableSessionsOnly bool                   `protobuf:"varint,5,opt,name=resumable_sessions_only,json=resumableSessionsOnly,proto3" json:"resumable_sessions_only,omitempty"`
+	TargetType            string                 `protobuf:"bytes,6,opt,name=target_type,json=targetType,proto3" json:"target_type,omitempty"`
+	TargetRef             string                 `protobuf:"bytes,7,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ListRunsRequest) Reset() {
@@ -17149,6 +17152,27 @@ func (x *ListRunsRequest) GetStates() []RunState {
 func (x *ListRunsRequest) GetQuery() string {
 	if x != nil {
 		return x.Query
+	}
+	return ""
+}
+
+func (x *ListRunsRequest) GetResumableSessionsOnly() bool {
+	if x != nil {
+		return x.ResumableSessionsOnly
+	}
+	return false
+}
+
+func (x *ListRunsRequest) GetTargetType() string {
+	if x != nil {
+		return x.TargetType
+	}
+	return ""
+}
+
+func (x *ListRunsRequest) GetTargetRef() string {
+	if x != nil {
+		return x.TargetRef
 	}
 	return ""
 }
@@ -47512,6 +47536,7 @@ type PromptTemplateDiagnostic struct {
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	Line          int32                  `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
 	Column        int32                  `protobuf:"varint,5,opt,name=column,proto3" json:"column,omitempty"`
+	VariableName  string                 `protobuf:"bytes,6,opt,name=variable_name,json=variableName,proto3" json:"variable_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -47579,6 +47604,13 @@ func (x *PromptTemplateDiagnostic) GetColumn() int32 {
 		return x.Column
 	}
 	return 0
+}
+
+func (x *PromptTemplateDiagnostic) GetVariableName() string {
+	if x != nil {
+		return x.VariableName
+	}
+	return ""
 }
 
 type ValidatePromptTemplateRequest struct {
@@ -48154,6 +48186,7 @@ type PreviewPromptTemplateResponse struct {
 	Slots                   []*PromptSlotProvenance     `protobuf:"bytes,12,rep,name=slots,proto3" json:"slots,omitempty"`
 	Sections                []*PromptPreviewSection     `protobuf:"bytes,13,rep,name=sections,proto3" json:"sections,omitempty"`
 	ContextPin              *PromptContextPin           `protobuf:"bytes,14,opt,name=context_pin,json=contextPin,proto3" json:"context_pin,omitempty"`
+	Complete                bool                        `protobuf:"varint,15,opt,name=complete,proto3" json:"complete,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -48284,6 +48317,13 @@ func (x *PreviewPromptTemplateResponse) GetContextPin() *PromptContextPin {
 		return x.ContextPin
 	}
 	return nil
+}
+
+func (x *PreviewPromptTemplateResponse) GetComplete() bool {
+	if x != nil {
+		return x.Complete
+	}
+	return false
 }
 
 type ManagedConfigurationRevision struct {
@@ -65316,13 +65356,18 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12!\n" +
 	"\fworkflow_ref\x18\x02 \x01(\tR\vworkflowRef\"P\n" +
 	"\x17ArchiveWorkflowResponse\x125\n" +
-	"\bworkflow\x18\x01 \x01(\v2\x19.controlplane.v1.WorkflowR\bworkflow\"\xad\x01\n" +
+	"\bworkflow\x18\x01 \x01(\v2\x19.controlplane.v1.WorkflowR\bworkflow\"\xa5\x02\n" +
 	"\x0fListRunsRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x120\n" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x121\n" +
 	"\x06states\x18\x03 \x03(\x0e2\x19.controlplane.v1.RunStateR\x06states\x12\x14\n" +
-	"\x05query\x18\x04 \x01(\tR\x05query\"\x81\x01\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\x126\n" +
+	"\x17resumable_sessions_only\x18\x05 \x01(\bR\x15resumableSessionsOnly\x12\x1f\n" +
+	"\vtarget_type\x18\x06 \x01(\tR\n" +
+	"targetType\x12\x1d\n" +
+	"\n" +
+	"target_ref\x18\a \x01(\tR\ttargetRef\"\x81\x01\n" +
 	"\x10ListRunsResponse\x12(\n" +
 	"\x04runs\x18\x01 \x03(\v2\x14.controlplane.v1.RunR\x04runs\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +
@@ -67827,13 +67872,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1b\n" +
 	"\tagent_ref\x18\x02 \x01(\tR\bagentRef\"I\n" +
 	"\x19RemoveAgentAvatarResponse\x12,\n" +
-	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\x90\x01\n" +
+	"\x05agent\x18\x01 \x01(\v2\x16.controlplane.v1.AgentR\x05agent\"\xb5\x01\n" +
 	"\x18PromptTemplateDiagnostic\x12\x1a\n" +
 	"\bseverity\x18\x01 \x01(\tR\bseverity\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x12\n" +
 	"\x04line\x18\x04 \x01(\x05R\x04line\x12\x16\n" +
-	"\x06column\x18\x05 \x01(\x05R\x06column\";\n" +
+	"\x06column\x18\x05 \x01(\x05R\x06column\x12#\n" +
+	"\rvariable_name\x18\x06 \x01(\tR\fvariableName\";\n" +
 	"\x1dValidatePromptTemplateRequest\x12\x1a\n" +
 	"\btemplate\x18\x01 \x01(\tR\btemplate\"\x83\x01\n" +
 	"\x1eValidatePromptTemplateResponse\x12\x14\n" +
@@ -67881,7 +67927,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12environment_digest\x18\r \x01(\tR\x11environmentDigest\x12,\n" +
 	"\x12attachment_set_ref\x18\x0e \x01(\tR\x10attachmentSetRef\x12<\n" +
 	"\x1aattachment_manifest_digest\x18\x0f \x01(\tR\x18attachmentManifestDigest\x12A\n" +
-	"\x1dprevious_runtime_revision_ref\x18\x10 \x01(\tR\x1apreviousRuntimeRevisionRef\"\x8d\x06\n" +
+	"\x1dprevious_runtime_revision_ref\x18\x10 \x01(\tR\x1apreviousRuntimeRevisionRef\"\xa9\x06\n" +
 	"\x1dPreviewPromptTemplateResponse\x12!\n" +
 	"\fsafe_preview\x18\x01 \x01(\tR\vsafePreview\x128\n" +
 	"\x18full_materialized_prompt\x18\x02 \x01(\tR\x16fullMaterializedPrompt\x12K\n" +
@@ -67898,7 +67944,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05slots\x18\f \x03(\v2%.controlplane.v1.PromptSlotProvenanceR\x05slots\x12A\n" +
 	"\bsections\x18\r \x03(\v2%.controlplane.v1.PromptPreviewSectionR\bsections\x12B\n" +
 	"\vcontext_pin\x18\x0e \x01(\v2!.controlplane.v1.PromptContextPinR\n" +
-	"contextPin\"\x87\x04\n" +
+	"contextPin\x12\x1a\n" +
+	"\bcomplete\x18\x0f \x01(\bR\bcomplete\"\x87\x04\n" +
 	"\x1cManagedConfigurationRevision\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12@\n" +

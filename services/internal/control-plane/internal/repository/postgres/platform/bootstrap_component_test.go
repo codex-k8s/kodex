@@ -168,6 +168,7 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
 	t.Run("config overlay published history and rollback", func(t *testing.T) { testConfigOverlayHistory(t, ctx, repository) })
 	t.Run("effective capabilities use current exact authority", func(t *testing.T) { testEffectiveCapabilities(t, ctx, repository) })
+	t.Run("prompt context preview before launch", func(t *testing.T) { testPromptContextPreview(t, ctx, repository) })
 	t.Run("STT catalog requires organization management before configuration", func(t *testing.T) { testSTTCatalogAuthority(t, ctx, repository) })
 	t.Run("authority proof revision keeps platform cursor stable", func(t *testing.T) {
 		var platformBefore, proofBefore int64
@@ -1784,6 +1785,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("launch provider affinity run: run=%#v err=%v", launched.Run, err)
 	}
 	publishFixedPolicy("provider-affinity-policy-secondary", secondaryAccountRef)
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 
 	claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-claim"},
@@ -1853,6 +1855,10 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("managed refresh reused stale observation: %v", err)
 	}
 	seedObservedCatalogFixture(t, ctx, repository)
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, true)
+	testResumableTargetChange(t, ctx, repository, service, owner, *launched.Run)
+	resumableReader := testResumableSessionAuthority(t, ctx, repository, service, owner, *launched.Run)
+	testResumableSessionPagination(t, ctx, repository, service, owner, worker, resumableReader, *launched.Run)
 
 	continued, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-continuation"}, Payload: command.SessionTurnInput{
@@ -1862,6 +1868,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if err != nil || continued.Run == nil {
 		t.Fatalf("continue provider affinity Session: run=%#v err=%v", continued.Run, err)
 	}
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 
 	restored := false
 	defer func() {
@@ -1951,6 +1958,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
 		t.Fatalf("changed capabilities reused Session pin: %v", err)
 	}
+	testResumableSessionCatalog(t, ctx, service, owner, *launched.Run, false)
 	publishFixedPolicy("provider-affinity-republish-default", primaryAccountRef)
 	next, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-new-default-turn"},
@@ -5805,6 +5813,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		t.Fatalf("retry cancelled run: run=%#v graph=%#v err=%v", retried.Run, retried.Graph, err)
 	}
 	completedRetry := claimAndCompleteRun(t, ctx, service, worker, retried.Run.Ref, "lifecycle-retry", false)
+	assertContinuationNoticeReadback(t, ctx, repository, retried.Run.Ref)
 	events, currentSequence, complete, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: completedRetry.Run.Ref, Limit: 100})
 	if err != nil || !complete || len(events) == 0 || currentSequence != events[len(events)-1].Sequence {
 		t.Fatalf("read retry event stream: events=%d sequence=%d complete=%v err=%v", len(events), currentSequence, complete, err)
