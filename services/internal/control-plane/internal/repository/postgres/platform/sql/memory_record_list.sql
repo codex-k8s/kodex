@@ -7,8 +7,9 @@ WITH visible AS MATERIALIZED (
       AND memory.state=@state
       AND (@agent_ref='' OR memory.agent_ref=@agent_ref OR EXISTS (
           SELECT 1 FROM control_plane.agent_context_bindings binding
-          JOIN control_plane.agents agent ON agent.id=binding.agent_id
-          WHERE binding.organization_id=memory.organization_id AND binding.memory_record_id=memory.id AND binding.enabled AND agent.ref=@agent_ref))
+          JOIN control_plane.catalog_access_targets agent ON agent.organization_id=binding.organization_id AND agent.kind='AGENT' AND agent.id=binding.agent_id
+          WHERE binding.organization_id=memory.organization_id AND binding.memory_record_id=memory.id AND binding.enabled AND agent.ref=@agent_ref
+            AND control_plane.catalog_resource_visible(memory.organization_id,@actor_id::uuid,'agent.view','AGENT',agent.id,agent.project_id,agent.owner_id,agent.related_ids,@evaluated_at,false)))
       AND (@query='' OR memory.title ILIKE '%' || @query || '%')
       AND control_plane.memory_record_visible(memory.organization_id,@actor_id::uuid,memory.id,@evaluated_at)
       AND (memory.source_run_id IS NULL OR EXISTS (

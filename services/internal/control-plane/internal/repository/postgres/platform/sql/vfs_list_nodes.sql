@@ -19,6 +19,37 @@ WITH projects AS (
            project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref
     FROM projects AS project CROSS JOIN (VALUES ('entities'),('runs'),('skills'),('memories'),('files')) directory(name)
     UNION ALL
+    SELECT 'skill:' || bundle.ref, '/projects/' || project.ref || '/skills/' || bundle.ref,
+           '/projects/' || project.ref || '/skills', revision.name, 'SKILL', false,
+           project.ref, bundle.ref, '', 0, revision.digest, bundle.updated_at, 'PROJECT', project.ref
+    FROM control_plane.skill_bundles bundle
+    JOIN projects project ON project.id=bundle.project_id
+    JOIN control_plane.skill_bundle_revisions revision ON revision.id=COALESCE(bundle.draft_revision_id,bundle.current_revision_id)
+      AND revision.bundle_id=bundle.id AND revision.organization_id=bundle.organization_id
+    WHERE bundle.state='ACTIVE'
+      AND EXISTS (
+          SELECT 1 FROM control_plane.catalog_access_targets target
+          WHERE target.organization_id=bundle.organization_id AND target.kind='PROJECT' AND target.id=bundle.project_id
+            AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'project.view','PROJECT',
+                target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at,false))
+      AND control_plane.skill_revision_visible(@organization_id::uuid,@actor_id::uuid,bundle.current_revision_id,@evaluated_at)
+      AND control_plane.skill_revision_visible(@organization_id::uuid,@actor_id::uuid,bundle.draft_revision_id,@evaluated_at)
+    UNION ALL
+    SELECT 'memory:' || memory.ref, '/projects/' || project.ref || '/memories/' || memory.ref,
+           '/projects/' || project.ref || '/memories', revision.title, 'MEMORY', false,
+           project.ref, memory.ref, COALESCE(source.ref,''), octet_length(revision.summary)::bigint,
+           revision.digest, memory.updated_at,
+           CASE WHEN memory.agent_id IS NULL THEN 'PROJECT' ELSE 'AGENT' END,
+           COALESCE(agent.ref,project.ref)
+    FROM control_plane.memory_records memory
+    JOIN projects project ON project.id=memory.project_id
+    JOIN control_plane.memory_record_revisions revision ON revision.id=memory.current_revision_id
+      AND revision.record_id=memory.id AND revision.organization_id=memory.organization_id
+    LEFT JOIN control_plane.agents agent ON agent.id=memory.agent_id AND agent.project_id=memory.project_id
+    LEFT JOIN control_plane.runs source ON source.id=revision.source_run_id AND source.organization_id=memory.organization_id
+    WHERE memory.state='ACTIVE' AND revision.retention_until>@evaluated_at
+      AND control_plane.memory_record_visible(@organization_id::uuid,@actor_id::uuid,memory.id,@evaluated_at)
+    UNION ALL
     SELECT 'dir:' || project.ref || ':entities:' || directory.name,
            '/projects/' || project.ref || '/entities/' || directory.name,
            '/projects/' || project.ref || '/entities', directory.name, 'DIRECTORY', true,

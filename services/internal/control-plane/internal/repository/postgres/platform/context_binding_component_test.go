@@ -9,10 +9,11 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-func testContextBinding(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, resourceRef, revisionRef, key string, memory bool) {
+func testContextBinding(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, projectRef, resourceRef, revisionRef, key string, memory bool) {
 	t.Helper()
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef, key+"-agent", "Context consumer")
 	bindKind, unbindKind := command.BindAgentSkillBundle, command.UnbindAgentSkillBundle
@@ -60,4 +61,15 @@ func testContextBinding(t *testing.T, ctx context.Context, service *platformserv
 		t.Fatalf("rebind disabled: %v", err)
 	}
 	read(1, agent.Version+3)
+	if memory {
+		reader := contextProjectReader(t, ctx, repository, service, owner, projectRef, "MEMORY")
+		items, total, _, err := service.ListMemoryRecords(ctx, reader, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 1}})
+		if err != nil || total != 1 || len(items) != 1 {
+			t.Fatalf("project reader memory catalog: count=%d total=%d err=%v", len(items), total, err)
+		}
+		items, total, _, err = service.ListMemoryRecords(ctx, reader, query.Filter{ProjectRef: projectRef, ResourceRef: agent.Ref, Page: query.Page{Size: 1}})
+		if err != nil || total != 0 || len(items) != 0 {
+			t.Fatalf("hidden agent binding disclosed: count=%d total=%d err=%v", len(items), total, err)
+		}
+	}
 }
