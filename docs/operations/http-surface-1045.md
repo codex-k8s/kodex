@@ -10,6 +10,35 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## Дополнение D2/D3, CP 9ad5b58d1
+
+Карта до изменения: проверенная browser session/organization → GET
+`model-capabilities` → generated Query.ListModelCapabilities → CP eligible
+accounts/model catalog → server filtering/pagination → PWA model selector.
+Read-only путь не меняет состояние и не создаёт событие. Exact catalog pin
+не заменяет owner eligibility. CP связывает cursor с tenant, actor, фильтрами
+и снимком; gateway передаёт его без локальной фильтрации. Новые workload,
+Secrets и deploy resources не нужны: используется существующий защищённый
+CP client с application identity, mTLS и signed context.
+
+SDK принимает optional `expectedCatalogRevision/expectedCatalogDigest` только
+парой (`mcat_` + SHA-256 и тот же lowercase digest). Ответ всегда содержит
+обе части, включая пустой eligible catalog. Несовпавший ответ CP отклоняется
+502; stale pin/cursor возвращает ошибку CP, без выбора другой модели.
+При смене фильтра клиент сбрасывает cursor; при refresh явно снимает старый
+pin, затем использует новую пару для следующих страниц.
+
+D3 использует прежнюю owner-context карту ниже. Исправлено преобразование
+producer `string/reference/integer/collection` в HTTP
+`STRING/OPAQUE_REF/INTEGER/COLLECTION`. Сохраняются отдельные
+`FILE_DESCRIPTOR/TOOL_DESCRIPTOR`, имена `artifact_ref/media_type` и источники
+AUTOMATION/GATE/INPUT/RUN/SESSION/WORKFLOW. Неизвестный producer type/source
+закрыто отклоняется; значения переменных не публикуются.
+
+Context7: проверены `/getkin/kin-openapi`, CLI `cmd/validate` и полная
+`Validate` без ослабляющих флагов. Проверки этого дополнения фиксируются
+по exact checkpoint отдельно; наличие схемы не доказывает live acceptance.
+
 Источники: #1045/#1021, #1018, утверждённая матрица #1031
 `docs/operations/mvp-1031-acceptance.md`. Текущий Proto совпадает с CP
 `67aa98d770ddaa24cecf01b188f006f087c7849d`; policy55 и generated client

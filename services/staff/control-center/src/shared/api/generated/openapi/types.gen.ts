@@ -1317,11 +1317,11 @@ export type TemplateVariable = {
     valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'COLLECTION';
     description: string;
     example: string;
-    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES';
+    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'RUN' | 'SESSION' | 'WORKFLOW';
     collection: boolean;
     available: boolean;
     reason: TemplateVariableAvailabilityReason;
-    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT';
+    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'FILE_DESCRIPTOR' | 'TOOL_DESCRIPTOR';
     itemFields: Array<TemplateVariableField>;
     rangeExample?: string;
 };
@@ -1349,6 +1349,8 @@ export type ModelCapability = {
 };
 
 export type ModelCapabilityPage = {
+    catalogRevision: string;
+    catalogDigest: string;
     items: Array<ModelCapability>;
     total: number;
     nextPageToken: string;
@@ -4284,6 +4286,14 @@ export type ListModelCapabilitiesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Точный снимок каталога; задаётся вместе с expectedCatalogDigest.
+         */
+        expectedCatalogRevision?: string;
+        /**
+         * SHA-256 снимка; задаётся вместе с expectedCatalogRevision.
+         */
+        expectedCatalogDigest?: string;
         providerDefinitionKey?: string;
         providerAccountRef?: string;
         query?: string;

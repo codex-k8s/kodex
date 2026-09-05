@@ -39467,8 +39467,11 @@ type ListModelCapabilitiesRequest struct {
 	ProviderAccountRef    string                 `protobuf:"bytes,2,opt,name=provider_account_ref,json=providerAccountRef,proto3" json:"provider_account_ref,omitempty"`
 	Query                 string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	Page                  *PageRequest           `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Exact pin снимка CP; обе части либо заданы вместе, либо отсутствуют.
+	ExpectedCatalogRevision string `protobuf:"bytes,5,opt,name=expected_catalog_revision,json=expectedCatalogRevision,proto3" json:"expected_catalog_revision,omitempty"`
+	ExpectedCatalogDigest   string `protobuf:"bytes,6,opt,name=expected_catalog_digest,json=expectedCatalogDigest,proto3" json:"expected_catalog_digest,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ListModelCapabilitiesRequest) Reset() {
@@ -39529,11 +39532,29 @@ func (x *ListModelCapabilitiesRequest) GetPage() *PageRequest {
 	return nil
 }
 
+func (x *ListModelCapabilitiesRequest) GetExpectedCatalogRevision() string {
+	if x != nil {
+		return x.ExpectedCatalogRevision
+	}
+	return ""
+}
+
+func (x *ListModelCapabilitiesRequest) GetExpectedCatalogDigest() string {
+	if x != nil {
+		return x.ExpectedCatalogDigest
+	}
+	return ""
+}
+
 type ListModelCapabilitiesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Models        []*ModelCapability     `protobuf:"bytes,1,rep,name=models,proto3" json:"models,omitempty"`
-	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Page          *PageInfo              `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Models []*ModelCapability     `protobuf:"bytes,1,rep,name=models,proto3" json:"models,omitempty"`
+	Total  int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Page   *PageInfo              `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Content-addressed revision всего eligible каталога до query/page.
+	CatalogRevision string `protobuf:"bytes,4,opt,name=catalog_revision,json=catalogRevision,proto3" json:"catalog_revision,omitempty"`
+	// SHA-256 канонического снимка, lowercase hex без префикса.
+	CatalogDigest string `protobuf:"bytes,5,opt,name=catalog_digest,json=catalogDigest,proto3" json:"catalog_digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -39587,6 +39608,20 @@ func (x *ListModelCapabilitiesResponse) GetPage() *PageInfo {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *ListModelCapabilitiesResponse) GetCatalogRevision() string {
+	if x != nil {
+		return x.CatalogRevision
+	}
+	return ""
+}
+
+func (x *ListModelCapabilitiesResponse) GetCatalogDigest() string {
+	if x != nil {
+		return x.CatalogDigest
+	}
+	return ""
 }
 
 type RoleImageRecipeRevision struct {
@@ -55668,16 +55703,20 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18default_reasoning_effort\x18\x04 \x01(\tR\x16defaultReasoningEffort\x12\x1c\n" +
 	"\tavailable\x18\x05 \x01(\bR\tavailable\x12C\n" +
 	"\x1eeligible_provider_account_refs\x18\x06 \x03(\tR\x1beligibleProviderAccountRefs\x12-\n" +
-	"\x12readiness_blockers\x18\a \x03(\tR\x11readinessBlockers\"\xd0\x01\n" +
+	"\x12readiness_blockers\x18\a \x03(\tR\x11readinessBlockers\"\xc4\x02\n" +
 	"\x1cListModelCapabilitiesRequest\x126\n" +
 	"\x17provider_definition_key\x18\x01 \x01(\tR\x15providerDefinitionKey\x120\n" +
 	"\x14provider_account_ref\x18\x02 \x01(\tR\x12providerAccountRef\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x120\n" +
-	"\x04page\x18\x04 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\x9e\x01\n" +
+	"\x04page\x18\x04 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12:\n" +
+	"\x19expected_catalog_revision\x18\x05 \x01(\tR\x17expectedCatalogRevision\x126\n" +
+	"\x17expected_catalog_digest\x18\x06 \x01(\tR\x15expectedCatalogDigest\"\xf0\x01\n" +
 	"\x1dListModelCapabilitiesResponse\x128\n" +
 	"\x06models\x18\x01 \x03(\v2 .controlplane.v1.ModelCapabilityR\x06models\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12-\n" +
-	"\x04page\x18\x03 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xde\x04\n" +
+	"\x04page\x18\x03 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12)\n" +
+	"\x10catalog_revision\x18\x04 \x01(\tR\x0fcatalogRevision\x12%\n" +
+	"\x0ecatalog_digest\x18\x05 \x01(\tR\rcatalogDigest\"\xde\x04\n" +
 	"\x17RoleImageRecipeRevision\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1d\n" +
 	"\n" +

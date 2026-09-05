@@ -4262,18 +4262,22 @@ func (e SystemSTTSpecificationPermissionKey) Valid() bool {
 
 // Defines values for TemplateVariableItemValueType.
 const (
-	TemplateVariableItemValueTypeBOOLEAN   TemplateVariableItemValueType = "BOOLEAN"
-	TemplateVariableItemValueTypeINTEGER   TemplateVariableItemValueType = "INTEGER"
-	TemplateVariableItemValueTypeOBJECT    TemplateVariableItemValueType = "OBJECT"
-	TemplateVariableItemValueTypeOPAQUEREF TemplateVariableItemValueType = "OPAQUE_REF"
-	TemplateVariableItemValueTypeSTRING    TemplateVariableItemValueType = "STRING"
-	TemplateVariableItemValueTypeTIMESTAMP TemplateVariableItemValueType = "TIMESTAMP"
+	TemplateVariableItemValueTypeBOOLEAN        TemplateVariableItemValueType = "BOOLEAN"
+	TemplateVariableItemValueTypeFILEDESCRIPTOR TemplateVariableItemValueType = "FILE_DESCRIPTOR"
+	TemplateVariableItemValueTypeINTEGER        TemplateVariableItemValueType = "INTEGER"
+	TemplateVariableItemValueTypeOBJECT         TemplateVariableItemValueType = "OBJECT"
+	TemplateVariableItemValueTypeOPAQUEREF      TemplateVariableItemValueType = "OPAQUE_REF"
+	TemplateVariableItemValueTypeSTRING         TemplateVariableItemValueType = "STRING"
+	TemplateVariableItemValueTypeTIMESTAMP      TemplateVariableItemValueType = "TIMESTAMP"
+	TemplateVariableItemValueTypeTOOLDESCRIPTOR TemplateVariableItemValueType = "TOOL_DESCRIPTOR"
 )
 
 // Valid indicates whether the value is a known member of the TemplateVariableItemValueType enum.
 func (e TemplateVariableItemValueType) Valid() bool {
 	switch e {
 	case TemplateVariableItemValueTypeBOOLEAN:
+		return true
+	case TemplateVariableItemValueTypeFILEDESCRIPTOR:
 		return true
 	case TemplateVariableItemValueTypeINTEGER:
 		return true
@@ -4285,6 +4289,8 @@ func (e TemplateVariableItemValueType) Valid() bool {
 		return true
 	case TemplateVariableItemValueTypeTIMESTAMP:
 		return true
+	case TemplateVariableItemValueTypeTOOLDESCRIPTOR:
+		return true
 	default:
 		return false
 	}
@@ -4293,17 +4299,23 @@ func (e TemplateVariableItemValueType) Valid() bool {
 // Defines values for TemplateVariableSource.
 const (
 	TemplateVariableSourceAGENT         TemplateVariableSource = "AGENT"
+	TemplateVariableSourceAUTOMATION    TemplateVariableSource = "AUTOMATION"
 	TemplateVariableSourceENVIRONMENT   TemplateVariableSource = "ENVIRONMENT"
+	TemplateVariableSourceGATE          TemplateVariableSource = "GATE"
+	TemplateVariableSourceINPUT         TemplateVariableSource = "INPUT"
 	TemplateVariableSourceINPUTFILES    TemplateVariableSource = "INPUT_FILES"
 	TemplateVariableSourceORGANIZATION  TemplateVariableSource = "ORGANIZATION"
 	TemplateVariableSourcePROJECT       TemplateVariableSource = "PROJECT"
 	TemplateVariableSourcePROJECTFILES  TemplateVariableSource = "PROJECT_FILES"
+	TemplateVariableSourceRUN           TemplateVariableSource = "RUN"
 	TemplateVariableSourceRUNFILES      TemplateVariableSource = "RUN_FILES"
 	TemplateVariableSourceRUNTIME       TemplateVariableSource = "RUNTIME"
+	TemplateVariableSourceSESSION       TemplateVariableSource = "SESSION"
 	TemplateVariableSourceSESSIONFILES  TemplateVariableSource = "SESSION_FILES"
 	TemplateVariableSourceSYSTEM        TemplateVariableSource = "SYSTEM"
 	TemplateVariableSourceTOOLS         TemplateVariableSource = "TOOLS"
 	TemplateVariableSourceUSER          TemplateVariableSource = "USER"
+	TemplateVariableSourceWORKFLOW      TemplateVariableSource = "WORKFLOW"
 	TemplateVariableSourceWORKFLOWFILES TemplateVariableSource = "WORKFLOW_FILES"
 )
 
@@ -4312,7 +4324,13 @@ func (e TemplateVariableSource) Valid() bool {
 	switch e {
 	case TemplateVariableSourceAGENT:
 		return true
+	case TemplateVariableSourceAUTOMATION:
+		return true
 	case TemplateVariableSourceENVIRONMENT:
+		return true
+	case TemplateVariableSourceGATE:
+		return true
+	case TemplateVariableSourceINPUT:
 		return true
 	case TemplateVariableSourceINPUTFILES:
 		return true
@@ -4322,9 +4340,13 @@ func (e TemplateVariableSource) Valid() bool {
 		return true
 	case TemplateVariableSourcePROJECTFILES:
 		return true
+	case TemplateVariableSourceRUN:
+		return true
 	case TemplateVariableSourceRUNFILES:
 		return true
 	case TemplateVariableSourceRUNTIME:
+		return true
+	case TemplateVariableSourceSESSION:
 		return true
 	case TemplateVariableSourceSESSIONFILES:
 		return true
@@ -4333,6 +4355,8 @@ func (e TemplateVariableSource) Valid() bool {
 	case TemplateVariableSourceTOOLS:
 		return true
 	case TemplateVariableSourceUSER:
+		return true
+	case TemplateVariableSourceWORKFLOW:
 		return true
 	case TemplateVariableSourceWORKFLOWFILES:
 		return true
@@ -6338,9 +6362,11 @@ type ModelCapability struct {
 
 // ModelCapabilityPage defines model for ModelCapabilityPage.
 type ModelCapabilityPage struct {
-	Items         []ModelCapability `json:"items"`
-	NextPageToken string            `json:"nextPageToken"`
-	Total         int64             `json:"total"`
+	CatalogDigest   string            `json:"catalogDigest"`
+	CatalogRevision string            `json:"catalogRevision"`
+	Items           []ModelCapability `json:"items"`
+	NextPageToken   string            `json:"nextPageToken"`
+	Total           int64             `json:"total"`
 }
 
 // NextAction defines model for NextAction.
@@ -9077,6 +9103,11 @@ type ReviseMemoryRecordParams struct {
 
 // ListModelCapabilitiesParams defines parameters for ListModelCapabilities.
 type ListModelCapabilitiesParams struct {
+	// ExpectedCatalogRevision Точный снимок каталога; задаётся вместе с expectedCatalogDigest.
+	ExpectedCatalogRevision *string `form:"expectedCatalogRevision,omitempty" json:"expectedCatalogRevision,omitempty"`
+
+	// ExpectedCatalogDigest SHA-256 снимка; задаётся вместе с expectedCatalogRevision.
+	ExpectedCatalogDigest *string    `form:"expectedCatalogDigest,omitempty" json:"expectedCatalogDigest,omitempty"`
 	ProviderDefinitionKey *string    `form:"providerDefinitionKey,omitempty" json:"providerDefinitionKey,omitempty"`
 	ProviderAccountRef    *string    `form:"providerAccountRef,omitempty" json:"providerAccountRef,omitempty"`
 	Query                 *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -19822,6 +19853,32 @@ func (siw *ServerInterfaceWrapper) ListModelCapabilities(w http.ResponseWriter, 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListModelCapabilitiesParams
+
+	// ------------- Optional query parameter "expectedCatalogRevision" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedCatalogRevision", r.URL.Query(), &params.ExpectedCatalogRevision, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedCatalogRevision"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedCatalogRevision", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedCatalogDigest" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedCatalogDigest", r.URL.Query(), &params.ExpectedCatalogDigest, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedCatalogDigest"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedCatalogDigest", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "providerDefinitionKey" -------------
 
