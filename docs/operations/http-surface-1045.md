@@ -12,8 +12,9 @@ updated: 2026-09-05
 
 Источники: #1045/#1021, #1018, утверждённая матрица #1031
 `docs/operations/mvp-1031-acceptance.md`. Текущий Proto совпадает с CP
-`a241b73e19be249a1119c578ce61cf19efb0d1ae`; policy54 и generated client
-потреблены из этого exact checkpoint. D7 перенесён commit `88f4331ff` целиком.
+`c3446af76e9269f2637e699f7746c0f4ae71d8a8`; policy54 и generated client
+потреблены из `a241b73e1`, D3 Proto/generated из `c3446af76`.
+D7 перенесён commit `88f4331ff` целиком.
 CP SQL/handlers вручную не редактировались. PWA handwritten остаётся у Newton.
 
 В таблице указана HTTP поддержка, а не PASS пользовательского сценария.
@@ -36,6 +37,7 @@ CSRF/idempotency/If-Match правила существующих специал
 | История D1 | Проверенная browser session → GET assistant-conversations query/state/page → ListAssistantConversations | CP creator + organization/project eligibility до LIMIT; cursor связан с фильтрами; ACTIVE по умолчанию |
 | Архив D1 | Session + CSRF → POST assistant-conversations/{ref}/archive → ArchiveAssistantConversation, policy54 | Owner до If-Match/idempotency; ACTIVE/CLOSED → ARCHIVED без busy run; CP атомарно сохраняет receipt/audit/SYSTEM_ASSISTANT_CHANGED и отклоняет pending plans |
 | Impact D7 | Проверенная session → GET managed-configurations/{ref}/revisions/{revisionRef}/impact query/page → GetManagedConfigurationImpact | CP eligibility/search до SQL LIMIT; точный revision/digest, total/cursor; чтение без события и без изменения bindings |
+| Variables D3 | Session → project template-variables либо global prompt-templates/catalog с optional agentRef/runtimeRevisionRef → ListTemplateVariables (c3446af76) | Owner agent.view/run.view и exact sealed context; query/context-bound cursor; только available/reason, не значения; чтение без события |
 
 Producer D7 переносится exact commit `88f4331ff`; D1 потребляет exact
 Proto/generated client/policy54 из `a241b73e1`, без ручного изменения CP
@@ -73,7 +75,7 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 | 27 | Organization catalogs, optional project filters, typed VFS project roots. |
 | 28 | Agent readiness/run refs; итоговый badge у PWA. |
 | 29 | Atomic UploadAgentAvatar, size/type checks; scan/admission/cleanup у CP. |
-| 30 | TemplateVariable catalog сохранён; отдельные available/reason требуют D3. |
+| 30 | Оба TemplateVariable route передают agent/runtime context и обязательные available/reason/total из CP c3446af76. |
 | 31 | Agent capability/integration grants и workflow commands; delegation intersection у CP. |
 | 32 | Workflow typed views, aggregate counts и launch commands. |
 | 33 | CreateRun/LaunchRun form mapping, ошибки publication/permission/readiness без auto retry. |
@@ -115,7 +117,7 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 | --- | --- | --- |
 | D1 | Закрыт в HTTP/SDK: exact contracts a241b73e1, query/state и ArchiveAssistantConversation. | При общей интеграции нужен исполняемый CP a241b73e1 с SQL/handlers, а не только перенесённые contracts. |
 | D2 | ModelCapability/ListModelCapabilitiesResponse не содержат catalog revision/digest. | Account/effort selection доступен; version-bound catalog readback нельзя выдумать. |
-| D3 | TemplateVariable содержит описание/type/source, но не available/disabled reason; ListTemplateVariablesRequest не задаёт agent/runtime context. | Невозможно показать authoritative disabled reason по target, не подменяя CP policy. |
+| D3 | Закрыт в HTTP/SDK: c3446af76, agentRef/runtimeRevisionRef и available/reason/total в обоих каталогах. | При общей интеграции обязателен исполняемый CP c3446af76; availability переменной не означает readiness запуска. |
 | D4 | RuntimeRevisionSnapshot относится к worker execution; публичный previous/current typed diff перед continuation отсутствует. | Нельзя выдавать worker snapshot либо вычислять безопасный diff из неподтверждённых UI данных. |
 | D5 | Публичный typed EMAIL safe mailbox configuration отсутствует; worker Resolve/Report/Projection не UI API. | HTTP receipt/reconcile готов, но UI/YAML EMAIL configuration требует согласованного producer. |
 | D6 | RuntimeSecret публично имеет PrepareCreate/Rotate/Reveal/Revoke, но не отдельные save/validate/publish/discard staged encrypted draft commands. | Не заявляется staged Secret acceptance по immediate create/rotate. |
@@ -137,12 +139,37 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 первую страницу полным набором consumers. Выборочный rebind остаётся отдельной
 командой с exact binding versions и digest; новая query не выполняет rebind.
 
-На чистом CP WT a241b73e1 фактически повторно сверены все D1–D7. D2 остаётся
+Историческая сверка на CP a241b73e1 (D3 и EMAIL обновлены ниже): D2 остаётся
 без catalog revision/digest; D3 без target agent/runtime context и
 available/disabled reason; D4 без публичного previous/current runtime diff;
 D5 без UI mailbox commands, write-only credential lifecycle и dynamic
 projection readback; D6 без staged encrypted Secret save/validate/publish/
 discard. Worker EMAIL APIs и immediate PrepareCreate/Rotate их не заменяют.
+
+### Передача D3, CP c3446af76
+
+`listTemplateVariables` и `listPromptTemplateVariables` принимают optional
+`agentRef/runtimeRevisionRef`, сохраняют query/page и project context.
+Каждый item содержит обязательные `available` (включая false) и `reason`:
+AVAILABLE, PROJECT_CONTEXT_REQUIRED, AGENT_CONTEXT_REQUIRED,
+RUNTIME_CONTEXT_REQUIRED, NOT_MATERIALIZED. Ответ содержит `total` и cursor.
+При смене target/query cursor сбрасывается; CP mismatch возвращает 400.
+HTTP не подменяет exact RuntimeRevision текущей и не вычисляет eligibility.
+Неизвестный reason, противоречивый bool, oversized page/cursor или total
+закрыто отклоняются 502. Значения переменных не добавлены в API.
+
+Локально на изменённом дереве D3 PASS: focused race HTTP/boundary/app,
+vet затронутых пакетов, gateway build, строгая OpenAPI validation,
+Go/TS generation, strict SDK typecheck, Proto codegen replay. Проверены оба
+HTTP route, все пять reasons, отсутствие project, malformed input до RPC,
+некорректный upstream и owner errors. Полные неизменённые suites/Docker/PWA
+не повторялись; live CP и browser NOT RUN.
+
+Сверка следующего чистого CP `67aa98d77`: D2/D4/D6 остаются открытыми.
+Для D5 snapshot delivery уже реализован в af74fc7dc; write-only credential
+RPC появился в 67aa98d77 и требует HTTP consumer. Typed safe mailbox
+configuration lifecycle пока не появился. Старые записи об отсутствии всей
+projection/credential реализации ниже относятся к прежним checkpoint.
 
 Попытка cherry-pick D1 целиком остановилась на отсутствующих CP EMAIL
 command/permissions dependencies и была отменена. CP owner-файлы не разрешались

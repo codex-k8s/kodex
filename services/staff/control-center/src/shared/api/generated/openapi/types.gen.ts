@@ -1310,6 +1310,8 @@ export type RuntimeEnvironmentVersionPage = {
     nextPageToken?: string;
 };
 
+export type TemplateVariableAvailabilityReason = 'AVAILABLE' | 'PROJECT_CONTEXT_REQUIRED' | 'AGENT_CONTEXT_REQUIRED' | 'RUNTIME_CONTEXT_REQUIRED' | 'NOT_MATERIALIZED';
+
 export type TemplateVariable = {
     name: string;
     valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'COLLECTION';
@@ -1317,6 +1319,8 @@ export type TemplateVariable = {
     example: string;
     source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES';
     collection: boolean;
+    available: boolean;
+    reason: TemplateVariableAvailabilityReason;
     itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT';
     itemFields: Array<TemplateVariableField>;
     rangeExample?: string;
@@ -1330,6 +1334,7 @@ export type TemplateVariableField = {
 
 export type TemplateVariablePage = {
     items: Array<TemplateVariable>;
+    total: number;
     nextPageToken?: string;
 };
 
@@ -2557,6 +2562,10 @@ export type ConversationRef = OpaqueRef;
 export type PlanRef = OpaqueRef;
 
 export type Query = string;
+
+export type TemplateAgentRef = OpaqueRef;
+
+export type TemplateRuntimeRevisionRef = OpaqueRef;
 
 export type PageSize = number;
 
@@ -4196,6 +4205,8 @@ export type ListTemplateVariablesData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
+        agentRef?: OpaqueRef;
+        runtimeRevisionRef?: OpaqueRef;
     };
     url: '/api/v1/projects/{projectRef}/template-variables';
 };
@@ -4704,6 +4715,8 @@ export type ListPromptTemplateVariablesData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
+        agentRef?: OpaqueRef;
+        runtimeRevisionRef?: OpaqueRef;
     };
     url: '/api/v1/prompt-templates/catalog';
 };
