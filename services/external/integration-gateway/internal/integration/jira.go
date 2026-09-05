@@ -58,7 +58,10 @@ func (adapter *Adapter) executeJira(ctx context.Context, request Request, capabi
 		if input.Limit == 0 {
 			input.Limit = 20
 		}
-		jql := fmt.Sprintf(`project = "%s" AND (%s)`, strings.ReplaceAll(projectKey, `"`, `\"`), input.Query)
+		jql, valid := scopedJiraQuery(projectKey, input.Query)
+		if !valid {
+			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
 		query := url.Values{"jql": {jql}, "maxResults": {strconv.FormatInt(input.Limit, 10)}, "fields": {"summary,status"}}
 		if input.Cursor != "" {
 			query.Set("nextPageToken", input.Cursor)
@@ -118,7 +121,7 @@ func (adapter *Adapter) executeJira(ctx context.Context, request Request, capabi
 	case "jira.issue.link.write":
 		return adapter.linkJiraIssues(ctx, request, capability, configuration, canonicalInput)
 	default:
-		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return adapter.executeJiraCatalog(ctx, request, capability, configuration, canonicalInput)
 	}
 }
 

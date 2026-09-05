@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: internal-rpc-authority-stt-key-delivery
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, update]
+    resourceNames:
+      - internal-rpc-authority-stt-tts-service-issuer-key
+      - internal-rpc-authority-stt-tts-service-issuer-readback-credential
+      - internal-rpc-authority-stt-tts-service-issuer-readback-possession
+      - internal-rpc-authority-stt-tts-service-issuer-restore-ack
+      - internal-rpc-authority-stt-tts-service-issuer-restore-credential
+      - internal-rpc-authority-stt-tts-service-manifest-trust
+      - internal-rpc-authority-stt-tts-service-proof-trust
+      - internal-rpc-authority-stt-tts-service-verifier-readback-credential
+      - internal-rpc-authority-stt-tts-service-verifier-readback-possession
+      - internal-rpc-authority-stt-tts-service-verifier-restore-ack
+      - internal-rpc-authority-stt-tts-service-verifier-restore-credential
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: internal-rpc-authority-stt-key-delivery
+subjects:
+  - kind: ServiceAccount
+    name: internal-rpc-authority-publisher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: internal-rpc-authority-stt-key-delivery
