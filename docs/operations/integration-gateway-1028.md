@@ -14,6 +14,45 @@ updated: 2026-09-04
 `contracts/integrations/v1`. Владельцем состояния является control-plane.
 Финальные проверки относятся к локальному SHA в отчёте исполнителя, не к CI.
 
+## Передача root: EMAIL consumer, 2026-09-05
+
+Код и тесты: `7c517b77aa73256a4dc8148798c3d09e37b01b52`.
+Зависимости потреблены без merge: rebase на CP `88f4331ff` (уже содержит
+main #1057 и исходный typed EMAIL consumer), cherry-pick EMAIL `07cd3ee69`
+как `370967468` и `a67f200623` как `712618521`. Повторный catalog commit
+`c5d02f280` автоматически исключён rebase как уже применённый через #1057.
+Vendor contracts/adapters, CP Proto/generated и EMAIL API после потребления
+зависимостей не изменены. Handwritten HTTP/PWA не менялись.
+
+| Acceptance | Локальный результат |
+| --- | --- |
+| Все advertised операции, включая 21 EMAIL | PASS: `timeout 180s go test -race ./... -count=1 -timeout=120s` в gateway на code SHA; `TestEveryAdvertisedOperation` использует реальный HTTP fixture и generated command, проверяет exact endpoint/header/body |
+| Unknown response без повторного эффекта | PASS: все 12 EMAIL mutations × unknown/malformed/oversize/503/403/failed; ровно один HTTP call, UNKNOWN не превращается в success; отдельный claimed status read сохранён |
+| Authority/lease/fence/TLS | PASS: claim mapping, запрет mutation через test binding, expiry/cancel HTTP, exact IMAP/thread readback, completion с исходным fence; actual mTLS, wrong CA/SNI/client и redirect negatives |
+| Остальные vendors | PASS: полный gateway race-suite, включая catalog/pagination/rate-limit/scope/UNKNOWN; vendor implementations не изменялись |
+| Статика/сборка | PASS: `timeout 120s go vet ./...`, `timeout 120s go build ./...`, `git diff --check` |
+| Generated clients/catalog | PASS: `timeout 120s make check-email-bridge-codegen check-integration-package-codegen test-integration-gateway-render`; EMAIL source и generated совпадают |
+| Оба deploy profiles | PASS: web-only/web-with-mattermost, exact gateway → EMAIL 8443, Service443 → workload8443; внешние mail ports не добавлялись |
+| SQL authority/lifecycle | PASS: targeted disposable PostgreSQL `(integration|email)`, migration up/status/up до 20260904000620; gate/cardinality, workload/replay, immutable projection, Report/reconciliation и watermark |
+| Runtime Docker | PASS: `timeout 300s docker build --target runtime --build-arg VERSION=7c517b77a -f services/external/integration-gateway/Dockerfile -t kodex-integration-gateway:1028-7c517b77a .` |
+
+Локальный OCI manifest list:
+`sha256:46f48c50c87165d49bf2723d1a1a37c0de61850cd302df91f39912d366e7a25e`.
+SQL/codegen/render выполнялись на том же содержимом соответствующих файлов
+до commit; полный gateway race и Docker выполнены после commit на code SHA.
+Последующий документальный commit не меняет проверенный runtime/test tree.
+
+Первый новый TLS-тест: FAIL из-за fixture mode0600; исправлен только fixture
+на read-only0400, затем targeted TLS и полный gateway race PASS. Production
+securefile boundary не ослаблялась. Незакрытых локальных FAIL нет.
+
+NOT RUN: live SMTP/IMAP/POP, staging/production, общий browser UI, общий
+репозиторный baseline и отдельные review. Их не подменяют fake HTTP или
+disposable PG. Push/PR/merge/deploy не выполнялись. Listener8082/config остаются
+у #1029/root; отсутствие разрешённого live mail не выдаётся за готовность
+производственного почтового контура. Вопрос POP UID ниже передан через этот
+файл, поскольку инструмент прямой межагентной отправки недоступен.
+
 ## Карта сценариев
 
 | Сценарий | Инициатор и полномочия | Контракт и владелец | Результат и потребитель |
