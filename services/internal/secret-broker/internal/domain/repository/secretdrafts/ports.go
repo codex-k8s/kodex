@@ -44,3 +44,9 @@ type RuntimeStore interface {
 }
 
 type Checker interface{ Check(context.Context) error }
+
+type Observer interface {
+	EncryptedDeleted()
+	RuntimeDeleted()
+	RecoveryCompleted(bool)
+}

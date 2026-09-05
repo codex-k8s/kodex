@@ -14,7 +14,7 @@ const (
 // SecretDraft содержит только публичную metadata владельца.
 type SecretDraft struct {
 	Ref, ProjectRef, SecretRef, Name, Description, ValueType, State string
-	Version, Generation, PublishedRevision                          int64
+	Version, Generation, PublishedRevision, SecretVersion           int64
 	CreatedAt, UpdatedAt, ExpiresAt                                 time.Time
 }
 

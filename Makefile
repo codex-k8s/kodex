@@ -220,6 +220,10 @@ gen-openapi-ts:
 lint-proto: check-proto-toolchain
 	buf lint
 
+.PHONY: test-secret-broker-drafts
+test-secret-broker-drafts:
+	bash scripts/tests/secret-broker-drafts-test.sh
+
 .PHONY: test-automation-scheduler
 test-automation-scheduler:
 	bash scripts/tests/automation-scheduler-test.sh

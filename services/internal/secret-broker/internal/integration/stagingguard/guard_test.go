@@ -244,6 +244,39 @@ func TestGuardCASConflictCancellationAndUnknownOutcome(t *testing.T) {
 	}
 }
 
+func TestGuardReadinessUsesDurableBudgetWithoutReservation(t *testing.T) {
+	ctx := context.Background()
+	store := newStore()
+	guard := fixtureGuard(t, store)
+	if guard.CheckCurrent(ctx, key(1)) == nil {
+		t.Fatal("genesis became ready")
+	}
+	if err := guard.Observe(ctx, manifest(1, key(1))); err != nil {
+		t.Fatal(err)
+	}
+	before := store.updates
+	for range 3 {
+		if err := guard.CheckCurrent(ctx, key(1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if store.updates != before || readState(t, store).Uses[0].Encryptions != 0 {
+		t.Fatal("readiness consumed encryption budget")
+	}
+	state := readState(t, store)
+	state.Uses[0].Encryptions = MaximumEncryptions
+	store.object.Data[StateKey] = encodeState(t, state)
+	if fixtureGuard(t, store).CheckCurrent(ctx, key(1)) == nil {
+		t.Fatal("exhausted key remained ready")
+	}
+	if err := guard.Observe(ctx, manifest(2, key(1), key(2))); err != nil {
+		t.Fatal(err)
+	}
+	if guard.CheckCurrent(ctx, key(1)) == nil || guard.CheckCurrent(ctx, key(2)) != nil {
+		t.Fatal("readiness ignored current key rotation")
+	}
+}
+
 func TestGuardRejectsCorruptOrWrongObject(t *testing.T) {
 	for name, mutate := range map[string]func(*corev1.ConfigMap){
 		"namespace": func(v *corev1.ConfigMap) { v.Namespace = "foreign" }, "name": func(v *corev1.ConfigMap) { v.Name = "foreign" }, "uid": func(v *corev1.ConfigMap) { v.UID = "" }, "resource version": func(v *corev1.ConfigMap) { v.ResourceVersion = "" },

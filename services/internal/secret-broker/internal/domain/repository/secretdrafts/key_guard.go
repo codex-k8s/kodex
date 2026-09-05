@@ -11,4 +11,5 @@ import (
 type KeyGuard interface {
 	Observe(context.Context, value.DraftKeyManifest) error
 	Reserve(context.Context, value.DraftEncryptionKey) error
+	CheckCurrent(context.Context, value.DraftEncryptionKey) error
 }

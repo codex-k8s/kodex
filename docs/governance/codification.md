@@ -138,6 +138,8 @@ updated: 2026-07-28
 | `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
 | `OPS-INT-1028`     | `docs/operations/integration-gateway-1028.md`               |
 | `OPS-EMAIL-1037`   | `docs/operations/email-bridge-1037.md`                      |
+| `OPS-SECRET-DRAFTS-1068` | `docs/operations/secret-drafts-1068.md`                |
+| `OPS-SECRET-DRAFT-GUARD-1068` | `services/internal/secret-broker/internal/integration/stagingguard/README.md` |
 | `RUN-EMAIL-1037`   | `docs/runbooks/email-bridge.md`                            |
 | `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |

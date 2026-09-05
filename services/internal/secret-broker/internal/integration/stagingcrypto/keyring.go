@@ -80,9 +80,15 @@ func (source *FileKeys) ReserveEncryption(ctx context.Context, key value.DraftEn
 }
 
 func (source *FileKeys) Check(ctx context.Context) error {
-	document, _, err := source.load(ctx)
+	document, manifest, err := source.load(ctx)
 	clearKeyring(&document)
-	return err
+	if err != nil {
+		return err
+	}
+	if source.guard.CheckCurrent(ctx, manifest.Current) != nil {
+		return ErrEncryptionUnavailable
+	}
+	return nil
 }
 
 func (source *FileKeys) load(ctx context.Context) (keyringDocument, value.DraftKeyManifest, error) {

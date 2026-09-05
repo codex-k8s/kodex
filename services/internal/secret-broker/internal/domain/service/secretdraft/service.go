@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -22,19 +23,47 @@ type Service struct {
 	maximumBytes                      int
 	stagedNamespace, runtimeNamespace string
 	now                               func() time.Time
+	observer                          secretdrafts.Observer
+	recoveryMu                        sync.RWMutex
+	recoveryRan, recoveryReady        bool
+}
+
+type Option func(*Service)
+
+func WithObserver(observer secretdrafts.Observer) Option {
+	return func(service *Service) { service.observer = observer }
 }
 
 func New(owner secretdrafts.Owner, cipher secretdrafts.Cipher, keys secretdrafts.Checker, staged secretdrafts.EncryptedStore,
-	runtime secretdrafts.RuntimeStore, maximumBytes int, stagedNamespace, runtimeNamespace string) (*Service, error) {
+	runtime secretdrafts.RuntimeStore, maximumBytes int, stagedNamespace, runtimeNamespace string, options ...Option) (*Service, error) {
 	if owner == nil || cipher == nil || keys == nil || staged == nil || runtime == nil || maximumBytes < 1 ||
 		maximumBytes > value.MaximumDraftValueBytes || stagedNamespace == "" || runtimeNamespace == "" || stagedNamespace == runtimeNamespace {
 		return nil, secretdrafts.ErrInvalid
 	}
-	return &Service{owner: owner, cipher: cipher, keys: keys, staged: staged, runtime: runtime, maximumBytes: maximumBytes,
-		stagedNamespace: stagedNamespace, runtimeNamespace: runtimeNamespace, now: time.Now}, nil
+	service := &Service{owner: owner, cipher: cipher, keys: keys, staged: staged, runtime: runtime, maximumBytes: maximumBytes,
+		stagedNamespace: stagedNamespace, runtimeNamespace: runtimeNamespace, now: time.Now}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service, nil
 }
 
 func (service *Service) Check(ctx context.Context) error {
+	if err := service.CheckDependencies(ctx); err != nil {
+		return err
+	}
+	service.recoveryMu.RLock()
+	ready := service.recoveryRan && service.recoveryReady
+	service.recoveryMu.RUnlock()
+	if !ready {
+		return secretdrafts.ErrUnavailable
+	}
+	return nil
+}
+
+func (service *Service) CheckDependencies(ctx context.Context) error {
 	if err := service.owner.Check(ctx); err != nil {
 		return err
 	}
@@ -67,6 +96,13 @@ func (service *Service) Execute(ctx context.Context, kind value.DraftOperation, 
 		return value.DraftResult{}, err
 	}
 	if err := service.validateWork(work, true); err != nil || work.Kind != kind {
+		return value.DraftResult{}, secretdrafts.ErrConflict
+	}
+	wantedState := map[value.DraftOperation]string{value.DraftSave: "PREPARING", value.DraftPublish: "PUBLISHING", value.DraftDiscard: "DISCARDED"}
+	if state, ok := wantedState[kind]; ok && work.Draft.State != state {
+		return value.DraftResult{}, secretdrafts.ErrConflict
+	}
+	if kind == value.DraftValidate && work.Draft.State != "DRAFT" && work.Draft.State != "VALID" {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
 	// После этой границы внешние действия ограничены точной lease владельца.
@@ -136,11 +172,17 @@ func (service *Service) Execute(ctx context.Context, kind value.DraftOperation, 
 		result.Draft.ProjectRef != work.Draft.ProjectRef || result.Draft.SecretRef != work.Draft.SecretRef {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
+	finalState := map[value.DraftOperation]string{value.DraftSave: "DRAFT", value.DraftValidate: "VALID", value.DraftPublish: "PUBLISHED", value.DraftDiscard: "DISCARDED"}[kind]
+	if result.Draft.State != finalState || kind == value.DraftPublish && (result.Secret == nil ||
+		result.Secret.Ref != work.Draft.SecretRef || result.Secret.ProjectRef != work.Draft.ProjectRef || result.Secret.Revision != work.TargetRevision) {
+		return value.DraftResult{}, secretdrafts.ErrConflict
+	}
 	return result, nil
 }
 
 func (service *Service) validateWork(work value.DraftWork, active bool) error {
-	if work.Binding.Validate() != nil || work.OperationRef == "" || work.ClaimantID == "" || work.ClaimGeneration < 1 ||
+	if work.Binding.Validate() != nil || work.OperationRef == "" || work.ClaimGeneration < 0 ||
+		(work.ClaimantID == "") != (work.ClaimGeneration == 0) || active && work.ClaimGeneration == 0 ||
 		work.Draft.Ref != work.Binding.DraftRef || work.Draft.Generation != work.Binding.DraftGeneration ||
 		work.Draft.SecretRef != work.Binding.SecretRef || work.Draft.ProjectRef != work.Binding.ProjectRef ||
 		work.Draft.ValueType != work.Binding.ValueType || work.StagedNamespace != service.stagedNamespace ||

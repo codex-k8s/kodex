@@ -88,6 +88,10 @@ func castDraft(v *cp.RuntimeSecretDraft) (value.SecretDraft, error) {
 		return value.SecretDraft{}, secretdrafts.ErrConflict
 	}
 	draft := value.SecretDraft{Ref: v.GetRef(), Version: v.GetVersion(), Generation: v.GetGeneration(), ProjectRef: v.GetProjectRef(), SecretRef: v.GetSecretRef(), Name: v.GetName(), Description: v.GetDescription(), ValueType: strings.TrimPrefix(v.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_"), State: strings.TrimPrefix(v.GetState().String(), "RUNTIME_SECRET_DRAFT_STATE_"), PublishedRevision: v.GetPublishedRevision(), CreatedAt: timestamp(v.GetCreatedAt()), UpdatedAt: timestamp(v.GetUpdatedAt()), ExpiresAt: timestamp(v.GetExpiresAt())}
+	draft.SecretVersion = v.GetSecretVersion()
+	if draft.SecretVersion < 1 {
+		return value.SecretDraft{}, secretdrafts.ErrConflict
+	}
 	if !reference(draft.Ref) || !reference(draft.ProjectRef) || !reference(draft.SecretRef) || draft.Version < 1 || draft.Generation < 1 || draft.PublishedRevision < 0 || !boundedText(draft.Name, 128, false) || !boundedText(draft.Description, 4096, true) || draft.CreatedAt.IsZero() || draft.UpdatedAt.Before(draft.CreatedAt) || draft.ExpiresAt.IsZero() {
 		return value.SecretDraft{}, secretdrafts.ErrConflict
 	}
@@ -141,7 +145,7 @@ func castResult(d *cp.RuntimeSecretDraft, s *cp.RuntimeSecret, work value.DraftW
 		}
 		return result, nil
 	}
-	if s == nil || s.GetRef() != work.Draft.SecretRef || s.GetProjectRef() != work.Draft.ProjectRef || s.GetName() != work.Draft.Name || s.GetDescription() != work.Draft.Description || s.GetCurrentRevision() != work.TargetRevision || draft.PublishedRevision != work.TargetRevision || s.GetVersion() < 1 || s.GetState() != "ACTIVE" || strings.TrimPrefix(s.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_") != work.Draft.ValueType || timestamp(s.GetCreatedAt()).IsZero() || timestamp(s.GetUpdatedAt()).Before(timestamp(s.GetCreatedAt())) {
+	if s == nil || s.GetRef() != work.Draft.SecretRef || s.GetProjectRef() != work.Draft.ProjectRef || s.GetName() != work.Draft.Name || s.GetDescription() != work.Draft.Description || s.GetCurrentRevision() != work.TargetRevision || draft.PublishedRevision != work.TargetRevision || s.GetVersion() != draft.SecretVersion || s.GetState() != "ACTIVE" || strings.TrimPrefix(s.GetValueType().String(), "RUNTIME_SECRET_VALUE_TYPE_") != work.Draft.ValueType || timestamp(s.GetCreatedAt()).IsZero() || timestamp(s.GetUpdatedAt()).Before(timestamp(s.GetCreatedAt())) {
 		return value.DraftResult{}, secretdrafts.ErrConflict
 	}
 	result.Secret = &value.PublishedSecret{Ref: s.GetRef(), ProjectRef: s.GetProjectRef(), Name: s.GetName(), Description: s.GetDescription(), ValueType: work.Draft.ValueType, Status: s.GetState(), Version: s.GetVersion(), Revision: s.GetCurrentRevision(), CreatedAt: timestamp(s.GetCreatedAt()), UpdatedAt: timestamp(s.GetUpdatedAt())}

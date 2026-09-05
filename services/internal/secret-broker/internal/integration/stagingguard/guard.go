@@ -135,6 +135,25 @@ func (guard *Guard) Reserve(ctx context.Context, key value.DraftEncryptionKey) e
 	})
 }
 
+// CheckCurrent проверяет тот же устойчивый лимит, не расходуя nonce budget
+// на readiness. Исчерпание write key не запрещает Resolve retained read key.
+func (guard *Guard) CheckCurrent(ctx context.Context, key value.DraftEncryptionKey) error {
+	if !validKey(key) {
+		return ErrUnavailable
+	}
+	return guard.change(ctx, func(state *guardState) (bool, error) {
+		if state.Manifest == nil || state.Manifest.Current != key {
+			return false, ErrUnavailable
+		}
+		for _, used := range state.Uses {
+			if used.ID == key.ID && used.Generation == key.Generation && used.Encryptions < MaximumEncryptions {
+				return false, nil
+			}
+		}
+		return false, ErrUnavailable
+	})
+}
+
 func (guard *Guard) change(ctx context.Context, mutate func(*guardState) (bool, error)) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()

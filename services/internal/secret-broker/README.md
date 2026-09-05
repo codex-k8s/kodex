@@ -4,21 +4,25 @@ title: Сервис secret-broker
 type: repository-readme
 status: approved
 owner: backend
-version: 1.0.0
-updated: 2026-09-04
+version: 1.1.0
+updated: 2026-09-05
 ---
 
 # Сервис secret-broker
 
 `secret-broker` является единственной plaintext boundary для Runtime Secrets и
 provider credentials. Авторитетное состояние, ownership, lease, revision,
-generation и config binding принадлежат `control-plane`; Kubernetes хранит
-только immutable materialization в namespace `kodex-runtime`.
+generation и config binding принадлежат `control-plane`; опубликованные
+immutable значения находятся в `kodex-runtime`, зашифрованные черновики — в
+отдельном `kodex-secret-drafts`. Keyring проецируется только в broker из
+`kodex-system` и не входит в execution projection.
 
 ## Интерфейсы
 
 - `SecretBrokerService` выполняет create/rotate/reveal/revoke по одноразовой
   operation grant;
+- его save/validate/publish/discard draft команды используют полный protected
+  путь с one-time grant и безопасным owner readback без plaintext в metadata;
 - `RuntimeCredentialProjectionService` материализует exact provider и
   RuntimeSecret sources для одной execution lease;
 - `TranscriptionCredentialProjectionService` возвращает API key только для
@@ -33,8 +37,7 @@ reconciler; STT response не содержит provider JSON и ограниче
 ## Локальная проверка
 
 ```bash
-cd services/internal/secret-broker
-GOWORK=off go test ./internal/...
+make test-secret-broker-drafts
 ```
 
 Contract/codegen и authority policy проверяются из корня:
@@ -46,3 +49,6 @@ make test-authority-policy-codegen
 
 Диагностика и безопасное восстановление описаны в
 [`docs/runbooks/secret-broker.md`](../../../docs/runbooks/secret-broker.md).
+
+Жизненный цикл черновика, bootstrap/rotation и ограничения checkpoint — в
+[`secret-drafts-1068.md`](../../../docs/operations/secret-drafts-1068.md).

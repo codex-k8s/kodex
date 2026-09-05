@@ -24,6 +24,7 @@ import (
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	controlowner "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/controlplane"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
+	businessobservability "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/observability"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/recovery"
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/transport/grpc"
@@ -61,6 +62,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		secretbrokerv1.SecretBrokerService_RevealSecret_FullMethodName:                                                   "reveal",
 		secretbrokerv1.SecretBrokerService_RevokeSecret_FullMethodName:                                                   "revoke",
 		secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName:                                                 "readiness",
+		secretbrokerv1.SecretBrokerService_SaveSecretDraft_FullMethodName:                                                "draft_save",
+		secretbrokerv1.SecretBrokerService_ValidateSecretDraft_FullMethodName:                                            "draft_validate",
+		secretbrokerv1.SecretBrokerService_PublishSecretDraft_FullMethodName:                                             "draft_publish",
+		secretbrokerv1.SecretBrokerService_DiscardSecretDraft_FullMethodName:                                             "draft_discard",
+		secretbrokerv1.SecretBrokerService_CheckSecretDraftReadiness_FullMethodName:                                      "draft_readiness",
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName:                   "runtime_credentials_materialize",
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName:           "assistant_credentials_materialize",
 		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName:       "runtime_credentials_readiness",
@@ -74,8 +80,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, methods)
 	recoveryMetrics := recovery.NewMetrics()
+	draftMetrics := businessobservability.NewSecretDrafts()
 	if err := metrics.Register(recoveryMetrics.Collectors()...); err != nil {
 		return errors.New("register secret broker recovery metrics")
+	}
+	if err := metrics.Register(draftMetrics.Collectors()...); err != nil {
+		return errors.New("register secret draft recovery metrics")
 	}
 	defer func() {
 		trace, cancelTrace := context.WithTimeout(shutdownBase, 5*time.Second)
@@ -101,6 +111,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	store, err := kubernetesstore.InCluster(config.RuntimeNamespace)
+	if err != nil {
+		return err
+	}
+	drafts, err := newSecretDrafts(config, control.RuntimeSecretDrafts, store, draftMetrics)
 	if err != nil {
 		return err
 	}
@@ -132,7 +146,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
 	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
-		transportgrpc.WithProviderCredentialMaterializer(providerCredentials))
+		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts))
 	if err != nil {
 		return err
 	}
@@ -176,17 +190,26 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technical := technicalServer(lifecycle, config, readiness, metrics)
 	verifierReadiness := providerVerifierReadiness{client: verifier.Verifier()}
 	if err := errors.Join(owner.Check(startup), store.Check(startup), reconciler.ReconcileOnce(startup),
-		providerCredentials.Check(startup), verifierReadiness.Check(startup)); err != nil {
+		providerCredentials.Check(startup), verifierReadiness.Check(startup), drafts.CheckDependencies(startup)); err != nil {
 		_ = listener.Close()
 		return errors.Join(errors.New("secret broker startup barrier failed"), err)
+	}
+	if err := drafts.ReconcileOnce(startup); err != nil {
+		_ = listener.Close()
+		return errors.New("secret draft startup reconciliation failed")
 	}
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, owner, store, reconciler, providerCredentials, verifierReadiness),
+		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, owner, store, reconciler, providerCredentials, verifierReadiness, drafts),
 		reconciler.Worker(),
+		drafts.Worker(config.RecoveryInterval, config.RecoveryTimeout, func(err error) {
+			if err != nil {
+				logger.Warn("secret draft recovery cycle failed", "error_class", "recovery")
+			}
+		}),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
@@ -213,6 +236,11 @@ func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServer
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
 		case controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
+			secretbrokerv1.SecretBrokerService_SaveSecretDraft_FullMethodName,
+			secretbrokerv1.SecretBrokerService_ValidateSecretDraft_FullMethodName,
+			secretbrokerv1.SecretBrokerService_PublishSecretDraft_FullMethodName,
+			secretbrokerv1.SecretBrokerService_DiscardSecretDraft_FullMethodName,
+			secretbrokerv1.SecretBrokerService_CheckSecretDraftReadiness_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName,

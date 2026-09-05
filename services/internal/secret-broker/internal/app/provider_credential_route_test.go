@@ -29,6 +29,11 @@ func TestRouteProtectedUnaryProtectsExactServices(t *testing.T) {
 		return "handler", nil
 	}
 	protectedMethods := []string{
+		secretbrokerv1.SecretBrokerService_SaveSecretDraft_FullMethodName,
+		secretbrokerv1.SecretBrokerService_ValidateSecretDraft_FullMethodName,
+		secretbrokerv1.SecretBrokerService_PublishSecretDraft_FullMethodName,
+		secretbrokerv1.SecretBrokerService_DiscardSecretDraft_FullMethodName,
+		secretbrokerv1.SecretBrokerService_CheckSecretDraftReadiness_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
 		controlplanev1.ProviderCredentialMaterializerService_ObserveDeviceAuthorization_FullMethodName,
