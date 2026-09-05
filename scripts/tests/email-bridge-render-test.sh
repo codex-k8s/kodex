@@ -77,7 +77,10 @@ assert authority['transport'] == 'grpc'
 assert authority['endpoint'] == runtime['EMAIL_BRIDGE_AUTHORITY_TARGET']
 assert authority['application_grant_env'] in runtime
 assert authority['issuer_proof'] == 'local-internal-rpc-authority'
-methods = ['ResolveEmailAuthorization', 'ReportEmailEffectReceipt', 'ResolveEmailReconciliation']
+assert runtime['EMAIL_BRIDGE_CONFIGURATION_MODE'] == 'bootstrap'
+assert not runtime.get('EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION')
+assert not runtime.get('EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST')
+methods = ['ReportEmailConfigurationReadback', 'ResolveEmailAuthorization', 'ReportEmailEffectReceipt', 'ResolveEmailReconciliation']
 assert authority['methods'] == ['/controlplane.v1.RuntimeWorkService/' + name for name in methods]
 generated = (root / 'libs/go/controlplaneapi/gen/controlplane/v1/control_plane_grpc.pb.go').read_text()
 assert all('"' + method + '"' in generated for method in authority['methods'])

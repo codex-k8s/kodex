@@ -8945,6 +8945,7 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName                = "/controlplane.v1.RuntimeWorkService/ReportEmailConfigurationReadback"
 	RuntimeWorkService_ResolveEmailAuthorization_FullMethodName                       = "/controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization"
 	RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt"
 	RuntimeWorkService_ResolveEmailReconciliation_FullMethodName                      = "/controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation"
@@ -8979,6 +8980,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RuntimeWorkServiceClient interface {
+	ReportEmailConfigurationReadback(ctx context.Context, in *ReportEmailConfigurationReadbackRequest, opts ...grpc.CallOption) (*ReportEmailConfigurationReadbackResponse, error)
 	ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error)
 	ReportEmailEffectReceipt(ctx context.Context, in *ReportEmailEffectReceiptRequest, opts ...grpc.CallOption) (*ReportEmailEffectReceiptResponse, error)
 	ResolveEmailReconciliation(ctx context.Context, in *ResolveEmailReconciliationRequest, opts ...grpc.CallOption) (*ResolveEmailReconciliationResponse, error)
@@ -9019,6 +9021,16 @@ type runtimeWorkServiceClient struct {
 
 func NewRuntimeWorkServiceClient(cc grpc.ClientConnInterface) RuntimeWorkServiceClient {
 	return &runtimeWorkServiceClient{cc}
+}
+
+func (c *runtimeWorkServiceClient) ReportEmailConfigurationReadback(ctx context.Context, in *ReportEmailConfigurationReadbackRequest, opts ...grpc.CallOption) (*ReportEmailConfigurationReadbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportEmailConfigurationReadbackResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *runtimeWorkServiceClient) ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error) {
@@ -9305,6 +9317,7 @@ func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Con
 // All implementations must embed UnimplementedRuntimeWorkServiceServer
 // for forward compatibility.
 type RuntimeWorkServiceServer interface {
+	ReportEmailConfigurationReadback(context.Context, *ReportEmailConfigurationReadbackRequest) (*ReportEmailConfigurationReadbackResponse, error)
 	ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error)
 	ReportEmailEffectReceipt(context.Context, *ReportEmailEffectReceiptRequest) (*ReportEmailEffectReceiptResponse, error)
 	ResolveEmailReconciliation(context.Context, *ResolveEmailReconciliationRequest) (*ResolveEmailReconciliationResponse, error)
@@ -9347,6 +9360,9 @@ type RuntimeWorkServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRuntimeWorkServiceServer struct{}
 
+func (UnimplementedRuntimeWorkServiceServer) ReportEmailConfigurationReadback(context.Context, *ReportEmailConfigurationReadbackRequest) (*ReportEmailConfigurationReadbackResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportEmailConfigurationReadback not implemented")
+}
 func (UnimplementedRuntimeWorkServiceServer) ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveEmailAuthorization not implemented")
 }
@@ -9450,6 +9466,24 @@ func RegisterRuntimeWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeWorkSe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&RuntimeWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeWorkService_ReportEmailConfigurationReadback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportEmailConfigurationReadbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReportEmailConfigurationReadback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReportEmailConfigurationReadback(ctx, req.(*ReportEmailConfigurationReadbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RuntimeWorkService_ResolveEmailAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -9963,6 +9997,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.RuntimeWorkService",
 	HandlerType: (*RuntimeWorkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ReportEmailConfigurationReadback",
+			Handler:    _RuntimeWorkService_ReportEmailConfigurationReadback_Handler,
+		},
 		{
 			MethodName: "ResolveEmailAuthorization",
 			Handler:    _RuntimeWorkService_ResolveEmailAuthorization_Handler,

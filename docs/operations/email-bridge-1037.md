@@ -4,11 +4,38 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.1.1
+version: 1.2.0
 updated: 2026-09-05
 ---
 
 # Сценарии #1037
+
+## Приём UI-публикации mailbox
+
+Требование MVP-UI-41 и #1046 связывается с consumer #1037:
+проверенный UI actor → HTTP mailbox publish → CP owner-транзакция и immutable
+publication → Secret/egress/Deployment projection → EMAIL durable watermark →
+`ReportEmailConfigurationReadback(revision,digest)` → CP authoritative publication
+read. Callback использует workload `email-bridge`, mTLS, application bearer и
+signed operation `platform.email.configuration.report`; body связывается с
+UNARY_PROTO_SHA256. Пользовательские resource/version/attempt/idempotency hints
+запрещены. Revision/digest вычисляются из прочитанного snapshot, а не из запроса
+пользователя или ответа provider.
+
+| Переход | Условие и effect | Авторитетное подтверждение |
+| --- | --- | --- |
+| Bootstrap → пустой сервис | Только seed revision 1, git/release-bootstrap, без mailbox и managed pins | Local readiness; owner callback не вызывается |
+| Managed startup/refresh → принятый snapshot | Exact Deployment pins, pinned AtomicWriter `..data`, все credentials, durable PostgreSQL watermark, построенный сервис | CP ACK exact revision/digest до выдачи нового сервиса |
+| Owner PENDING → ACK | CP уже применил exact publication; service consumer принял snapshot | Идемпотентный callback допустим до общего READY, без ожидания rollout внутри callback |
+| ACK → READY публикации | CP дополнительно проверяет template pins, observedGeneration и все updated/available replicas | CP publication read; ACK одного pod не заменяет проверку всего Deployment |
+| Callback timeout/rejection/cancel | Новый snapshot не допускается к запросам; readiness закрыта | Следующий bounded refresh повторяет только подтверждение; нет provider effect или скрытой отправки |
+| Новый Secret при прежнем Deployment | Revision/digest mismatch до watermark | Новые запросы закрыты до rollout; уже начатый запрос удерживает прежний snapshot |
+| Rollback/restart | Монотонный watermark хранится в PostgreSQL | Прежнее поколение отвергается после замены pod |
+
+Consumer не публикует domain event: source of truth — CP publication read и
+локальный durable watermark. Provider health по-прежнему требует отдельный
+авторизованный HEALTH. Локальные tests подтверждают consumer boundary;
+готовность реального owner delivery и staging доказывается в #1031.
 
 | Сценарий | Actor и authority | HTTPS/owner | Idempotency, state и effect | Readiness/read |
 | --- | --- | --- | --- | --- |
@@ -69,15 +96,14 @@ grant/effect после решения владельца, прежняя receip
   Текущий общий package validator требует `HUMAN_EACH_EFFECT` для mutations:
   #1046 должен применить mailbox-policy при выдаче grant, включая all-allow,
   а не интерпретировать этот default как безусловный запрос Human Gate.
-- #1029: сетевое решение ожидает владельца. GUIDE-DOC-003 запрещает mail mode
-  существующего egress. Варианты владельца: отдельный controlled exact-destination
-  маршрут bridge либо явное изменение утверждённой границы egress. Текущий
-  CONNECT-клиент не доказывает готовность production mail route; прямого dial
-  fallback нет. IMAP/SMTP/POP transport и локальные фейки от этого не зависят.
+- #1029: отдельный mail listener 8082, exact DNS/TLS/destination pins и семь
+  response headers до provider bytes. CP применяет согласованные network policy
+  и deployment pins. Прямого dial и fallback на general/STT listener нет;
+  готовность CNI/provider требует сквозной проверки #1031.
 
 ### Exact dial для #1029
 
-TCP connection открывается только к `egress-gateway.kodex-system.svc:8080`.
+TCP connection открывается только к `egress-gateway.kodex-system.svc:8082`.
 Запрос без body: `CONNECT <fqdn>:<port> HTTP/1.1`, `Host: <fqdn>:<port>`.
 Proxy до external dial проверяет exact policy/DNS/destination; bridge после
 upgrade проверяет exact SNI/hostname и доверенную CA. Buffered greeting,

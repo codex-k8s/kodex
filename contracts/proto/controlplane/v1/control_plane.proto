@@ -261,6 +261,7 @@ service SystemAssistantService {
 }
 
 service RuntimeWorkService {
+  rpc ReportEmailConfigurationReadback(ReportEmailConfigurationReadbackRequest) returns (ReportEmailConfigurationReadbackResponse);
   rpc ResolveEmailAuthorization(ResolveEmailAuthorizationRequest) returns (ResolveEmailAuthorizationResponse);
   rpc ReportEmailEffectReceipt(ReportEmailEffectReceiptRequest) returns (ReportEmailEffectReceiptResponse);
   rpc ResolveEmailReconciliation(ResolveEmailReconciliationRequest) returns (ResolveEmailReconciliationResponse);
@@ -4953,6 +4954,16 @@ enum EmailEffectOutcome {
   EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED = 2;
   EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED = 3;
 }
+// Подтверждает только фактически принятый EMAIL snapshot; не provider health.
+message ReportEmailConfigurationReadbackRequest {
+  int64 revision = 1;
+  string digest = 2;
+}
+
+message ReportEmailConfigurationReadbackResponse {
+  bool accepted = 1;
+}
+
 message EmailExecutionBinding {
   oneof source {
     string invocation_ref = 1;

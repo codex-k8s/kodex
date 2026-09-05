@@ -6,12 +6,91 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/configuration"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 )
+
+func TestConfigurationDeploymentPins(t *testing.T) {
+	seed := api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "release-bootstrap", Mailboxes: []api.Mailbox{}}
+	for _, name := range []string{"bootstrap", "managed", "unknown", "unpinned", "negative-revision", "uppercase-digest", "bootstrap-pin", "bootstrap-source", "bootstrap-revision", "bootstrap-owner", "bootstrap-mailbox", "managed-revision", "managed-digest"} {
+		t.Run(name, func(t *testing.T) {
+			value := seed
+			pins := configurationPins{mode: configurationBootstrap}
+			switch name {
+			case "managed":
+				pins = configurationPins{mode: configurationManaged, revision: 1, digest: api.Digest(value)}
+			case "unknown":
+				pins.mode = ""
+			case "unpinned":
+				pins.mode = configurationManaged
+			case "negative-revision":
+				pins = configurationPins{mode: configurationManaged, revision: -1, digest: api.Digest(value)}
+			case "uppercase-digest":
+				pins = configurationPins{mode: configurationManaged, revision: 1, digest: strings.Repeat("A", 64)}
+			case "bootstrap-pin":
+				pins.revision = 1
+			case "bootstrap-source":
+				value.Source = "ui"
+			case "bootstrap-revision":
+				value.Revision = 2
+			case "bootstrap-owner":
+				value.ManagedBy = "ui"
+			case "bootstrap-mailbox":
+				value.Mailboxes = []api.Mailbox{{}}
+			case "managed-revision":
+				pins = configurationPins{mode: configurationManaged, revision: 2, digest: api.Digest(value)}
+			case "managed-digest":
+				pins = configurationPins{mode: configurationManaged, revision: 1, digest: strings.Repeat("a", 64)}
+			}
+			if (pins.check(value, api.Digest(value)) == nil) != (name == "bootstrap" || name == "managed") {
+				t.Fatal("deployment pin validation mismatch")
+			}
+		})
+	}
+}
+
+func TestManagedReadbackBeforeServingAndRecovery(t *testing.T) {
+	root := t.TempDir()
+	mountConfiguration(t, root, "..first", 7)
+	value := api.Configuration{Version: "email-bridge/v1", Revision: 7, ManagedBy: "git", Source: "fixture", Mailboxes: []api.Mailbox{}}
+	pins := configurationPins{mode: configurationManaged, revision: value.Revision, digest: api.Digest(value)}
+	accepted, built, reports := false, false, 0
+	failure := true
+	runtime := &configurationRuntime{root: root, check: pins.check, accept: func(context.Context, api.Configuration, string) error {
+		accepted = true
+		return nil
+	}, build: func(snapshot *configuration.Snapshot) *mail.Service {
+		built = true
+		return &mail.Service{Config: snapshot.Configuration}
+	}}
+	runtime.report = func(_ context.Context, revision int64, digest string) error {
+		reports++
+		if !accepted || !built || revision != pins.revision || digest != pins.digest {
+			t.Fatal("unaccepted or unpinned snapshot reported")
+		}
+		if failure {
+			return errors.New("owner unavailable")
+		}
+		return nil
+	}
+	if runtime.Refresh(t.Context()) == nil || runtime.Service() != nil || reports != 1 {
+		t.Fatal("missing owner acknowledgement allowed requests")
+	}
+	failure = false
+	if err := runtime.Refresh(t.Context()); err != nil || runtime.Service() == nil || reports != 2 {
+		t.Fatal("idempotent readback did not recover")
+	}
+	old := runtime.Service()
+	mountConfiguration(t, root, "..unapproved", 8)
+	accepted, built = false, false
+	if runtime.Refresh(t.Context()) == nil || runtime.Service() != nil || accepted || built || reports != 2 || old.Config.Revision != 7 {
+		t.Fatal("unapproved projection passed watermark or replaced in-flight snapshot")
+	}
+}
 
 func mountConfiguration(t *testing.T, root, name string, revision int64) {
 	t.Helper()

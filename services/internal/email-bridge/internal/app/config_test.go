@@ -22,6 +22,9 @@ func TestDatabaseTransport(t *testing.T) {
 }
 
 func TestMailEgressDestination(t *testing.T) {
+	t.Setenv("EMAIL_BRIDGE_CONFIGURATION_MODE", configurationBootstrap)
+	t.Setenv("EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION", "0")
+	t.Setenv("EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST", "")
 	t.Setenv("EMAIL_BRIDGE_EGRESS_POLICY_DIGEST", strings.Repeat("a", 64))
 	for _, key := range []string{"EMAIL_BRIDGE_SECRETS_ROOT", "EMAIL_BRIDGE_DSN_FILE", "EMAIL_BRIDGE_CERTIFICATE_FILE", "EMAIL_BRIDGE_PRIVATE_KEY_FILE", "EMAIL_BRIDGE_CA_FILE", "EMAIL_BRIDGE_APPLICATION_GRANT_FILE", "OTEL_EXPORTER_OTLP_CA_FILE"} {
 		t.Setenv(key, "/fixture/"+key)
@@ -47,6 +50,28 @@ func TestMailEgressDestination(t *testing.T) {
 		t.Setenv("EMAIL_BRIDGE_EGRESS_POLICY_DIGEST", digest)
 		if _, err := loadConfig(); err == nil {
 			t.Fatal("invalid egress digest accepted")
+		}
+	}
+	t.Setenv("EMAIL_BRIDGE_EGRESS_POLICY_DIGEST", strings.Repeat("a", 64))
+	for _, item := range []struct {
+		mode, revision, digest string
+		valid                  bool
+	}{
+		{configurationBootstrap, "0", "", true},
+		{configurationManaged, "7", strings.Repeat("b", 64), true},
+		{"", "0", "", false},
+		{"other", "0", "", false},
+		{configurationManaged, "0", strings.Repeat("b", 64), false},
+		{configurationManaged, "7", "", false},
+		{configurationManaged, "-1", strings.Repeat("b", 64), false},
+		{configurationManaged, "9223372036854775808", strings.Repeat("b", 64), false},
+		{configurationBootstrap, "7", strings.Repeat("b", 64), false},
+	} {
+		t.Setenv("EMAIL_BRIDGE_CONFIGURATION_MODE", item.mode)
+		t.Setenv("EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION", item.revision)
+		t.Setenv("EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST", item.digest)
+		if _, err := loadConfig(); (err == nil) != item.valid {
+			t.Fatal("configuration deployment environment validation mismatch")
 		}
 	}
 }
