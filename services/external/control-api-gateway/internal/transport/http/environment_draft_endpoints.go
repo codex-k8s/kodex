@@ -126,8 +126,12 @@ func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.R
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return nil, false
 	}
+	bindings, ok := runtimeSecretBindings(w, input.SecretBindings)
+	if !ok {
+		return nil, false
+	}
 	result := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: input.Name, Description: input.Description, ImageArtifactRef: input.ImageArtifactRef,
-		Values: runtimeEnvironmentValues(input.Values), SecretBindings: runtimeSecretBindings(input.SecretBindings), Tools: runtimeEnvironmentTools(input.Tools)}
+		Values: runtimeEnvironmentValues(input.Values), SecretBindings: bindings, Tools: runtimeEnvironmentTools(input.Tools)}
 	if input.Policy != nil {
 		result.Policy = runtimeEnvironmentPolicyInput(*input.Policy)
 	}
@@ -173,11 +177,12 @@ func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *control
 		result.Specification.Values = append(result.Specification.Values, generated.RuntimeEnvironmentValue{Name: value.GetName(), Value: value.GetValue()})
 	}
 	for _, binding := range spec.GetSecretBindings() {
-		if binding == nil {
+		if binding == nil || binding.GetRevision() < 0 || binding.GetRevision() > maximumSafeJSONInteger {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
-		result.Specification.SecretBindings = append(result.Specification.SecretBindings, generated.RuntimeSecretBinding{Name: binding.GetName(), SecretRef: binding.GetSecretRef()})
+		revision := binding.GetRevision()
+		result.Specification.SecretBindings = append(result.Specification.SecretBindings, generated.RuntimeSecretBinding{Name: binding.GetName(), SecretRef: binding.GetSecretRef(), Revision: &revision})
 	}
 	for _, tool := range spec.GetTools() {
 		if tool == nil {

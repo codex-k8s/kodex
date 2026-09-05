@@ -22,10 +22,11 @@ const draftSpecBody = `{"name":"TYPE_Черновик","description":"i18n:ис�
 
 type environmentDraftRecorder struct {
 	grpc.ClientConnInterface
-	method  string
-	request proto.Message
-	failure error
-	empty   bool
+	method   string
+	request  proto.Message
+	failure  error
+	empty    bool
+	bindings []*controlplanev1.RuntimeSecretBinding
 }
 
 func (client *environmentDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -38,7 +39,8 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 	}
 	draft := &controlplanev1.RuntimeEnvironmentDraft{Ref: "renvd_fixture01", ProjectRef: "prj_fixture01", Version: 4, State: "DRAFT",
 		Specification: &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: "TYPE_Черновик", Description: "i18n:исходный текст",
-			Values: []*controlplanev1.RuntimeEnvironmentValue{{Name: "TEST", Value: "TYPE_не преобразовывать"}},
+			Values:         []*controlplanev1.RuntimeEnvironmentValue{{Name: "TEST", Value: "TYPE_не преобразовывать"}},
+			SecretBindings: client.bindings,
 		}}
 	if strings.HasSuffix(method, "/ValidateRuntimeEnvironmentDraft") {
 		draft.State, draft.Diagnostics = "INVALID", []string{"ENVIRONMENT_VALIDATION_FAILED"}
@@ -54,6 +56,63 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 	}
 	target.Set(target.Descriptor().Fields().ByName("draft"), protoreflect.ValueOfMessage(draft.ProtoReflect()))
 	return nil
+}
+
+func TestEnvironmentSecretRevisionSurvivesHTTPRoundTrip(t *testing.T) {
+	for _, revision := range []int64{0, 7, maximumSafeJSONInteger} {
+		client := &environmentDraftRecorder{bindings: []*controlplanev1.RuntimeSecretBinding{{Name: "API_TOKEN", SecretRef: "sec_fixture01", Revision: revision}}}
+		read := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(read, managedTestRequest("GET", "/api/v1/runtime-environment-drafts/renvd_fixture01", ""))
+		var draft generated.RuntimeEnvironmentDraft
+		if read.Code != 200 || json.Unmarshal(read.Body.Bytes(), &draft) != nil || len(draft.Specification.SecretBindings) != 1 || draft.Specification.SecretBindings[0].Revision == nil || *draft.Specification.SecretBindings[0].Revision != revision {
+			t.Fatalf("draft lost exact Secret pin: %d", read.Code)
+		}
+		body, err := json.Marshal(draft.Specification)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, create := range []bool{false, true} {
+			path, method, content := "/api/v1/runtime-environment-drafts/renvd_fixture01", "PUT", string(body)
+			if create {
+				path, method, content = "/api/v1/projects/prj_fixture01/runtime-environment-drafts", "POST", `{"specification":`+content+`}`
+			}
+			write := httptest.NewRecorder()
+			draftTestHandler(client).ServeHTTP(write, managedTestRequest(method, path, content))
+			request, ok := client.request.(interface {
+				GetSpecification() *controlplanev1.RuntimeEnvironmentDraftSpecification
+			})
+			if write.Code != 200 && write.Code != 201 || !ok || request.GetSpecification().GetSecretBindings()[0].GetRevision() != revision {
+				t.Fatal("saving another field replaced exact Secret revision")
+			}
+		}
+	}
+}
+
+func TestEnvironmentSecretRevisionRejectsInvalidNumbersBeforeRPC(t *testing.T) {
+	for _, revision := range []string{"-1", "9007199254740992", "1.5"} {
+		spec := strings.Replace(draftSpecBody, `"secretBindings":[]`, `"secretBindings":[{"name":"API_TOKEN","secretRef":"sec_fixture01","revision":`+revision+`}]`, 1)
+		for _, route := range []struct{ method, path, body string }{
+			{"PUT", "/api/v1/runtime-environment-drafts/renvd_fixture01", spec},
+			{"POST", "/api/v1/projects/prj_fixture01/runtime-environment-drafts", `{"specification":` + spec + `}`},
+			{"POST", "/api/v1/projects/prj_fixture01/runtime-environments", spec},
+			{"POST", "/api/v1/runtime-environments/renv_fixture01/versions", spec},
+		} {
+			client := &environmentDraftRecorder{}
+			w := httptest.NewRecorder()
+			draftTestHandler(client).ServeHTTP(w, managedTestRequest(route.method, route.path, route.body))
+			if w.Code != 400 || client.request != nil {
+				t.Fatalf("bad pin reached owner: %s %s status=%d", route.method, route.path, w.Code)
+			}
+		}
+	}
+	for _, revision := range []int64{-1, maximumSafeJSONInteger + 1} {
+		client := &environmentDraftRecorder{bindings: []*controlplanev1.RuntimeSecretBinding{{Name: "API_TOKEN", SecretRef: "sec_fixture01", Revision: revision}}}
+		w := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(w, managedTestRequest("GET", "/api/v1/runtime-environment-drafts/renvd_fixture01", ""))
+		if w.Code != 502 {
+			t.Fatal("corrupt owner revision returned")
+		}
+	}
 }
 
 func draftTestHandler(client *environmentDraftRecorder) http.Handler {

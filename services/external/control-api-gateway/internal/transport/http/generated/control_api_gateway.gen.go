@@ -8033,7 +8033,10 @@ type RuntimeSecretState string
 
 // RuntimeSecretBinding defines model for RuntimeSecretBinding.
 type RuntimeSecretBinding struct {
-	Name      string    `json:"name"`
+	Name string `json:"name"`
+
+	// Revision Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
+	Revision  *int64    `json:"revision,omitempty"`
 	SecretRef OpaqueRef `json:"secretRef"`
 }
 

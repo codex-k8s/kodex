@@ -190,6 +190,10 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	if !ok {
 		return
 	}
+	bindings, ok := runtimeSecretBindings(writer, body.SecretBindings)
+	if !ok {
+		return
+	}
 	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, "")
 	if !ok {
 		return
@@ -197,7 +201,7 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	response, err := server.control.Command.CreateRuntimeEnvironmentSet(request.Context(), &controlplanev1.CreateRuntimeEnvironmentSetRequest{
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
-		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
+		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
 		Policy: runtimeEnvironmentPolicyInput(body.Policy),
 	})
 	if err != nil {
@@ -212,6 +216,10 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	if !ok {
 		return
 	}
+	bindings, ok := runtimeSecretBindings(writer, body.SecretBindings)
+	if !ok {
+		return
+	}
 	mutation, ok := requireMutation(writer, parameters.IdempotencyKey, parameters.IfMatch)
 	if !ok {
 		return
@@ -219,7 +227,7 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	response, err := server.control.Command.PublishRuntimeEnvironmentVersion(request.Context(), &controlplanev1.PublishRuntimeEnvironmentVersionRequest{
 		Mutation: mutation, EnvironmentRef: environmentRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
-		SecretBindings: runtimeSecretBindings(body.SecretBindings), Tools: runtimeEnvironmentTools(body.Tools),
+		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
 		Policy: runtimeEnvironmentPolicyInput(body.Policy),
 	})
 	if err != nil {
@@ -266,12 +274,20 @@ func runtimeEnvironmentValues(input []generated.RuntimeEnvironmentValue) []*cont
 	return result
 }
 
-func runtimeSecretBindings(input []generated.RuntimeSecretBinding) []*controlplanev1.RuntimeSecretBinding {
+func runtimeSecretBindings(w http.ResponseWriter, input []generated.RuntimeSecretBinding) ([]*controlplanev1.RuntimeSecretBinding, bool) {
 	result := make([]*controlplanev1.RuntimeSecretBinding, 0, len(input))
 	for _, item := range input {
-		result = append(result, &controlplanev1.RuntimeSecretBinding{Name: item.Name, SecretRef: item.SecretRef})
+		revision := int64(0)
+		if item.Revision != nil {
+			revision = *item.Revision
+		}
+		if revision < 0 || revision > maximumSafeJSONInteger {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return nil, false
+		}
+		result = append(result, &controlplanev1.RuntimeSecretBinding{Name: item.Name, SecretRef: item.SecretRef, Revision: revision})
 	}
-	return result
+	return result, true
 }
 
 func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*controlplanev1.RuntimeEnvironmentTool {
