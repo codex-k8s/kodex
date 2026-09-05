@@ -1725,6 +1725,18 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatalf("restored Session did not retain provider account: claims=%#v err=%v", recovered.RuntimeItems, err)
 	}
 	originalRunPreview, err := service.PreviewPromptTemplate(ctx, owner, "", "RUN", launched.Run.Ref, false)
+	diff, diffErr := service.GetRuntimeRevisionDiff(ctx, owner, continued.Run.Ref, stringMap(recovered.RuntimeItems[0], "runtimeRevisionRef"))
+	if diffErr != nil || diff.Previous == nil || diff.Previous.Ref != stringMap(lease, "runtimeRevisionRef") ||
+		diff.Current.SessionRef != diff.Previous.SessionRef || diff.Current.RunRef != continued.Run.Ref {
+		t.Fatalf("runtime revision diff lost exact session predecessor: diff=%+v err=%v", diff, diffErr)
+	}
+	if _, err := service.GetRuntimeRevisionDiff(ctx, owner, launched.Run.Ref, diff.Current.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("runtime revision diff accepted current revision of another run: %v", err)
+	}
+	firstDiff, firstDiffErr := service.GetRuntimeRevisionDiff(ctx, owner, launched.Run.Ref, "")
+	if firstDiffErr != nil || firstDiff.Previous != nil || firstDiff.Current.Ref != stringMap(lease, "runtimeRevisionRef") {
+		t.Fatalf("first runtime revision has unexpected predecessor: diff=%+v err=%v", firstDiff, firstDiffErr)
+	}
 	if err != nil || originalRunPreview.Digest != preview.Digest {
 		t.Fatalf("exact original Run preview selected another root revision: preview=%#v err=%v", originalRunPreview, err)
 	}

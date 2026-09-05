@@ -10,6 +10,34 @@ updated: 2026-09-05
 
 # Граница вклада
 
+## Реализованный D4 producer
+
+`GetRuntimeRevisionDiff(run_ref, current_revision_ref?)` выбирает latest внутри
+Run либо exact pin. Predecessor выбирается по `(created_at, ref)` строго раньше
+current и в той же organization/project/Session. Обе Run проходят `run.view`
+в одной read-only REPEATABLE READ transaction; скрытая ревизия и несовпадающий
+Run pin дают `NotFound`. Отсутствующий predecessor не подменяется current.
+
+SQL читает закрытый список столбцов, не `safe_snapshot`. Public identity:
+ref/version/run/session/turn/attempt/revision digest/time. Change value содержит
+только ref/version/digest/revision: PROVIDER и MODEL используют ref, RUNTIME_PROFILE
+использует ref и текстовую revision; остальные компоненты используют exact refs,
+числовые версии и digests. IMAGE выдаёт только manifest digest, без registry
+locator. Credentials, значения, инструкции, файлы и private worker snapshot
+в публичную модель не входят. Первый snapshot имеет только current changes.
+
+Authority operation `platform.query.runtime-revisions.diff`: OIDC producer,
+resource=run_ref required, unary Proto digest, без mutation/version/attempt
+metadata. Policy revision 56. HTTP/PWA реализуют отдельные unit; новый
+deployable/порт/ключ не добавляется.
+
+Локальные проверки D4: domain/transport race, CP vet/build, Proto lint/build/
+codegen и authority-policy codegen PASS. Disposable PG — PASS для prerequisite
+`runtime_configuration_publish` и `session_provider_affinity` с exact predecessor,
+foreign Run pin и first revision. Первый PG запуск без prerequisite — FAIL
+(отсутствовал secondary provider fixture); повтор с обоими сценариями PASS.
+Журнал `/tmp/kodex-1046-d4-pg.log`. Полный baseline, HTTP/PWA/live NOT RUN.
+
 Вклад в единый #1046, база 67aa98d77. Только CP producer D2/D4;
 HTTP/PWA, EMAIL configuration и staged Secret lifecycle не изменяются.
 Источники: #1046/#1018, MVP-UI-17/18/36, GUIDE-DOC-003/004/006.

@@ -215,6 +215,7 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetRuntimeRevisionPublicPair(context.Context, value.Principal, string, string) (entity.RuntimeRevisionPublicProjection, *entity.RuntimeRevisionPublicProjection, error)
 	GetEmailEffectReceipt(context.Context, value.Principal, string) (entity.EmailEffectReceiptView, error)
 	ResolveEmailAuthorization(context.Context, value.Principal, query.EmailAuthorization) (entity.EmailAuthorization, error)
 	ResolveEmailReconciliation(context.Context, value.Principal, string, string, string, string) (entity.EmailEffectReceiptView, error)
