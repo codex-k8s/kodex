@@ -12,6 +12,7 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
   rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
   rpc GetSkillBundle(GetSkillBundleRequest) returns (GetSkillBundleResponse);
   rpc ListSkillBundleRevisions(ListSkillBundleRevisionsRequest) returns (ListSkillBundleRevisionsResponse);
@@ -87,6 +88,7 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc ReconcileEmailEffect(ReconcileEmailEffectRequest) returns (ReconcileEmailEffectResponse);
   rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
   rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
   rpc ValidateSkillBundleDraft(ValidateSkillBundleDraftRequest) returns (ValidateSkillBundleDraftResponse);
@@ -250,6 +252,9 @@ service SystemAssistantService {
 }
 
 service RuntimeWorkService {
+  rpc ResolveEmailAuthorization(ResolveEmailAuthorizationRequest) returns (ResolveEmailAuthorizationResponse);
+  rpc ReportEmailEffectReceipt(ReportEmailEffectReceiptRequest) returns (ReportEmailEffectReceiptResponse);
+  rpc ResolveEmailReconciliation(ResolveEmailReconciliationRequest) returns (ResolveEmailReconciliationResponse);
   rpc ClaimExecution(ClaimExecutionRequest) returns (ClaimExecutionResponse);
   // GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
   // immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -4760,6 +4765,158 @@ message SkillBundle {
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
 }
+enum EmailOperation {
+  EMAIL_OPERATION_UNSPECIFIED = 0;
+  EMAIL_OPERATION_HEALTH = 1;
+  EMAIL_OPERATION_MAILBOXES = 2;
+  EMAIL_OPERATION_LIST = 3;
+  EMAIL_OPERATION_SEARCH = 4;
+  EMAIL_OPERATION_FETCH = 5;
+  EMAIL_OPERATION_DOWNLOAD = 6;
+  EMAIL_OPERATION_SEND = 7;
+  EMAIL_OPERATION_REPLY = 8;
+  EMAIL_OPERATION_REPLY_ALL = 9;
+  EMAIL_OPERATION_FORWARD = 10;
+  EMAIL_OPERATION_DELETE = 11;
+  EMAIL_OPERATION_RECEIPT = 12;
+  EMAIL_OPERATION_THREAD = 13;
+  EMAIL_OPERATION_ATTACHMENTS = 14;
+  EMAIL_OPERATION_MARK_READ = 15;
+  EMAIL_OPERATION_MARK_UNREAD = 16;
+  EMAIL_OPERATION_MOVE = 17;
+  EMAIL_OPERATION_ARCHIVE = 18;
+  EMAIL_OPERATION_DRAFT_CREATE = 19;
+  EMAIL_OPERATION_DRAFT_UPDATE = 20;
+  EMAIL_OPERATION_DRAFT_DELETE = 21;
+}
+enum EmailApprovalPolicy {
+  EMAIL_APPROVAL_POLICY_UNSPECIFIED = 0;
+  EMAIL_APPROVAL_POLICY_DENY = 1;
+  EMAIL_APPROVAL_POLICY_ALLOW = 2;
+  EMAIL_APPROVAL_POLICY_HUMAN_GATE = 3;
+}
+enum EmailEffectOutcome {
+  EMAIL_EFFECT_OUTCOME_UNSPECIFIED = 0;
+  EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME = 1;
+  EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED = 2;
+  EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED = 3;
+}
+message EmailExecutionBinding {
+  oneof source {
+    string invocation_ref = 1;
+    string connection_test_ref = 2;
+  }
+  WorkLease lease = 3;
+}
+message EmailAuthorizationScope {
+  string mailbox_ref = 1;
+  string sender = 2;
+  repeated EmailOperation operations = 3;
+  repeated string folders = 4;
+  repeated string recipients = 5;
+}
+message ResolveEmailAuthorizationRequest {
+  EmailExecutionBinding binding = 1;
+  string mailbox_ref = 2;
+  int64 configuration_revision = 3;
+  EmailOperation operation = 4;
+  string semantic_input_digest = 5;
+  string effect_key = 6;
+  string sender = 7;
+  string folder = 8;
+  string destination_folder = 9;
+}
+message ResolveEmailAuthorizationResponse {
+  bool allowed = 1;
+  string actor_ref = 2;
+  string agent_ref = 3;
+  string organization_ref = 4;
+  string project_ref = 5;
+  string connection_ref = 6;
+  string mailbox_ref = 7;
+  string grant_ref = 8;
+  EmailOperation operation = 9;
+  string semantic_input_digest = 10;
+  string effect_key = 11;
+  int64 configuration_revision = 12;
+  int64 credential_generation = 13;
+  EmailApprovalPolicy policy = 14;
+  bool gate_approved = 15;
+  EmailAuthorizationScope user_scope = 16;
+  EmailAuthorizationScope agent_scope = 17;
+  EmailAuthorizationScope connection_scope = 18;
+  EmailAuthorizationScope resource_scope = 19;
+  google.protobuf.Timestamp expires_at = 20;
+  EmailExecutionBinding binding = 21;
+}
+message EmailEffectReceipt {
+  string ref = 1;
+  int64 version = 2;
+  string invocation_ref = 3;
+  string external_receipt_ref = 4;
+  string external_receipt_digest = 5;
+  string semantic_input_digest = 6;
+  string effect_key = 7;
+  EmailEffectOutcome outcome = 8;
+  string mailbox_ref = 9;
+  int64 configuration_revision = 10;
+  string connection_ref = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  string project_ref = 14;
+}
+message ReportEmailEffectReceiptRequest {
+  MutationContext mutation = 1;
+  EmailExecutionBinding binding = 2;
+  string external_receipt_ref = 3;
+  string external_receipt_digest = 4;
+  EmailEffectOutcome outcome = 5;
+  string semantic_input_digest = 6;
+}
+message ReportEmailEffectReceiptResponse {
+  EmailEffectReceipt receipt = 1;
+}
+message EmailReconciliationDecision {
+  string ref = 1;
+  int64 version = 2;
+  string receipt_ref = 3;
+  int64 receipt_version = 4;
+  string receipt_digest = 5;
+  string invocation_ref = 6;
+  EmailEffectOutcome outcome = 7;
+  string grant_ref = 8;
+  string actor_ref = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+message ReconcileEmailEffectRequest {
+  MutationContext mutation = 1;
+  string receipt_ref = 2;
+  string expected_receipt_digest = 3;
+  EmailEffectOutcome outcome = 4;
+  string note = 5;
+}
+message ReconcileEmailEffectResponse {
+  EmailReconciliationDecision decision = 1;
+}
+message ResolveEmailReconciliationRequest {
+  string receipt_ref = 1;
+  string decision_ref = 2;
+  string external_receipt_ref = 3;
+  string external_receipt_digest = 4;
+}
+message ResolveEmailReconciliationResponse {
+  EmailReconciliationDecision decision = 1;
+  EmailEffectReceipt receipt = 2;
+}
+message GetEmailEffectReceiptRequest {
+  string invocation_ref = 1;
+}
+message GetEmailEffectReceiptResponse {
+  EmailEffectReceipt receipt = 1;
+  EmailReconciliationDecision decision = 2;
+}
+
 message AgentContextBinding {
   string ref = 1;
   int64 version = 2;

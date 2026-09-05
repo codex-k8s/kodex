@@ -2,6 +2,14 @@ package controlplaneclient
 
 import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 
+func EmailBridgeOperations() map[string]string {
+	return map[string]string{
+		"platform.email.authorization.resolve":  controlplanev1.RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
+		"platform.email.effect-receipts.report": controlplanev1.RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
+		"platform.email.reconciliation.resolve": controlplanev1.RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
+	}
+}
+
 func STTGatewayOperations() map[string]string {
 	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
 }
@@ -13,6 +21,8 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.query.email-effect-receipts.get":                 controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
+		"platform.command.email-effects.reconcile":                 controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
 		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
 		"platform.query.skill-bundles.get":                         controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName,
 		"platform.query.skill-bundle-revisions.list":               controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName,

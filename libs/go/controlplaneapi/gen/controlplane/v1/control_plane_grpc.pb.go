@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
 	PlatformQueryService_ListSkillBundles_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
 	PlatformQueryService_GetSkillBundle_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetSkillBundle"
 	PlatformQueryService_ListSkillBundleRevisions_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListSkillBundleRevisions"
@@ -95,6 +96,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
+	GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error)
 	GetSkillBundle(ctx context.Context, in *GetSkillBundleRequest, opts ...grpc.CallOption) (*GetSkillBundleResponse, error)
 	ListSkillBundleRevisions(ctx context.Context, in *ListSkillBundleRevisionsRequest, opts ...grpc.CallOption) (*ListSkillBundleRevisionsResponse, error)
@@ -175,6 +177,16 @@ type platformQueryServiceClient struct {
 
 func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
 	return &platformQueryServiceClient{cc}
+}
+
+func (c *platformQueryServiceClient) GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEmailEffectReceiptResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetEmailEffectReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformQueryServiceClient) ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error) {
@@ -881,6 +893,7 @@ func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Conte
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
+	GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error)
 	GetSkillBundle(context.Context, *GetSkillBundleRequest) (*GetSkillBundleResponse, error)
 	ListSkillBundleRevisions(context.Context, *ListSkillBundleRevisionsRequest) (*ListSkillBundleRevisionsResponse, error)
@@ -963,6 +976,9 @@ type PlatformQueryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformQueryServiceServer struct{}
 
+func (UnimplementedPlatformQueryServiceServer) GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEmailEffectReceipt not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSkillBundles not implemented")
 }
@@ -1192,6 +1208,24 @@ func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQue
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
+}
+
+func _PlatformQueryService_GetEmailEffectReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEmailEffectReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetEmailEffectReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetEmailEffectReceipt(ctx, req.(*GetEmailEffectReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformQueryService_ListSkillBundles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2462,6 +2496,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetEmailEffectReceipt",
+			Handler:    _PlatformQueryService_GetEmailEffectReceipt_Handler,
+		},
+		{
 			MethodName: "ListSkillBundles",
 			Handler:    _PlatformQueryService_ListSkillBundles_Handler,
 		},
@@ -2747,6 +2785,7 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
 	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
 	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
 	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
@@ -2879,6 +2918,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error)
 	CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(ctx context.Context, in *ValidateSkillBundleDraftRequest, opts ...grpc.CallOption) (*ValidateSkillBundleDraftResponse, error)
@@ -3018,6 +3058,16 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReconcileEmailEffectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ReconcileEmailEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error) {
@@ -4302,6 +4352,7 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error)
 	CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(context.Context, *ValidateSkillBundleDraftRequest) (*ValidateSkillBundleDraftResponse, error)
@@ -4443,6 +4494,9 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReconcileEmailEffect not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSkillBundleDraft not implemented")
 }
@@ -4841,6 +4895,24 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_ReconcileEmailEffect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReconcileEmailEffectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ReconcileEmailEffect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, req.(*ReconcileEmailEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_CreateSkillBundleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -7079,6 +7151,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ReconcileEmailEffect",
+			Handler:    _PlatformCommandService_ReconcileEmailEffect_Handler,
+		},
+		{
 			MethodName: "CreateSkillBundleDraft",
 			Handler:    _PlatformCommandService_CreateSkillBundleDraft_Handler,
 		},
@@ -8527,6 +8603,9 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeWorkService_ResolveEmailAuthorization_FullMethodName                       = "/controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization"
+	RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt"
+	RuntimeWorkService_ResolveEmailReconciliation_FullMethodName                      = "/controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation"
 	RuntimeWorkService_ClaimExecution_FullMethodName                                  = "/controlplane.v1.RuntimeWorkService/ClaimExecution"
 	RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName     = "/controlplane.v1.RuntimeWorkService/GetRuntimeEnvironmentRoleImageConfiguration"
 	RuntimeWorkService_ReadExecutionArtifact_FullMethodName                           = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
@@ -8558,6 +8637,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RuntimeWorkServiceClient interface {
+	ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error)
+	ReportEmailEffectReceipt(ctx context.Context, in *ReportEmailEffectReceiptRequest, opts ...grpc.CallOption) (*ReportEmailEffectReceiptResponse, error)
+	ResolveEmailReconciliation(ctx context.Context, in *ResolveEmailReconciliationRequest, opts ...grpc.CallOption) (*ResolveEmailReconciliationResponse, error)
 	ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error)
 	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
 	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -8595,6 +8677,36 @@ type runtimeWorkServiceClient struct {
 
 func NewRuntimeWorkServiceClient(cc grpc.ClientConnInterface) RuntimeWorkServiceClient {
 	return &runtimeWorkServiceClient{cc}
+}
+
+func (c *runtimeWorkServiceClient) ResolveEmailAuthorization(ctx context.Context, in *ResolveEmailAuthorizationRequest, opts ...grpc.CallOption) (*ResolveEmailAuthorizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveEmailAuthorizationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ResolveEmailAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ReportEmailEffectReceipt(ctx context.Context, in *ReportEmailEffectReceiptRequest, opts ...grpc.CallOption) (*ReportEmailEffectReceiptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportEmailEffectReceiptResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) ResolveEmailReconciliation(ctx context.Context, in *ResolveEmailReconciliationRequest, opts ...grpc.CallOption) (*ResolveEmailReconciliationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveEmailReconciliationResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_ResolveEmailReconciliation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *runtimeWorkServiceClient) ClaimExecution(ctx context.Context, in *ClaimExecutionRequest, opts ...grpc.CallOption) (*ClaimExecutionResponse, error) {
@@ -8851,6 +8963,9 @@ func (c *runtimeWorkServiceClient) CompleteIntegrationInvocation(ctx context.Con
 // All implementations must embed UnimplementedRuntimeWorkServiceServer
 // for forward compatibility.
 type RuntimeWorkServiceServer interface {
+	ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error)
+	ReportEmailEffectReceipt(context.Context, *ReportEmailEffectReceiptRequest) (*ReportEmailEffectReceiptResponse, error)
+	ResolveEmailReconciliation(context.Context, *ResolveEmailReconciliationRequest) (*ResolveEmailReconciliationResponse, error)
 	ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error)
 	// GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
 	// immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -8890,6 +9005,15 @@ type RuntimeWorkServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRuntimeWorkServiceServer struct{}
 
+func (UnimplementedRuntimeWorkServiceServer) ResolveEmailAuthorization(context.Context, *ResolveEmailAuthorizationRequest) (*ResolveEmailAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveEmailAuthorization not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ReportEmailEffectReceipt(context.Context, *ReportEmailEffectReceiptRequest) (*ReportEmailEffectReceiptResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportEmailEffectReceipt not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) ResolveEmailReconciliation(context.Context, *ResolveEmailReconciliationRequest) (*ResolveEmailReconciliationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveEmailReconciliation not implemented")
+}
 func (UnimplementedRuntimeWorkServiceServer) ClaimExecution(context.Context, *ClaimExecutionRequest) (*ClaimExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimExecution not implemented")
 }
@@ -8984,6 +9108,60 @@ func RegisterRuntimeWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeWorkSe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&RuntimeWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeWorkService_ResolveEmailAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveEmailAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailAuthorization(ctx, req.(*ResolveEmailAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ReportEmailEffectReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportEmailEffectReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ReportEmailEffectReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ReportEmailEffectReceipt(ctx, req.(*ReportEmailEffectReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_ResolveEmailReconciliation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveEmailReconciliationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailReconciliation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).ResolveEmailReconciliation(ctx, req.(*ResolveEmailReconciliationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RuntimeWorkService_ClaimExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -9443,6 +9621,18 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.RuntimeWorkService",
 	HandlerType: (*RuntimeWorkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ResolveEmailAuthorization",
+			Handler:    _RuntimeWorkService_ResolveEmailAuthorization_Handler,
+		},
+		{
+			MethodName: "ReportEmailEffectReceipt",
+			Handler:    _RuntimeWorkService_ReportEmailEffectReceipt_Handler,
+		},
+		{
+			MethodName: "ResolveEmailReconciliation",
+			Handler:    _RuntimeWorkService_ResolveEmailReconciliation_Handler,
+		},
 		{
 			MethodName: "ClaimExecution",
 			Handler:    _RuntimeWorkService_ClaimExecution_Handler,
