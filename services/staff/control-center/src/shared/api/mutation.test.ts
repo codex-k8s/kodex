@@ -6,6 +6,7 @@ import {
   type MutationHeaders,
 } from "@/shared/api/mutation";
 import { AppProblem } from "@/shared/api/problem";
+import { resetOwnerRequests } from "./owner-lifetime";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -13,6 +14,49 @@ afterEach(() => {
 });
 
 describe("mutate HTTP boundary", () => {
+  it("не отдаёт старую mutation receipt новому owner контексту", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    let complete!: (value: {
+      data: { ref: string };
+      response: Response;
+    }) => void;
+    const pending = mutate(
+      () =>
+        new Promise<{ data: { ref: string }; response: Response }>(
+          (resolve) => {
+            complete = resolve;
+          },
+        ),
+    );
+    const rejection = expect(pending).rejects.toMatchObject({
+      code: "OWNER_CONTEXT_CHANGED",
+      retryable: false,
+    });
+    resetOwnerRequests();
+    complete({
+      data: { ref: "old_owner_resource" },
+      response: new Response(null, { status: 200 }),
+    });
+    await rejection;
+  });
+  it("не переносит retry прежней команды в новую сессию", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    vi.useFakeTimers();
+    const request = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const pending = mutateWithRetry(request);
+    const rejection = expect(pending).rejects.toMatchObject({
+      name: "OwnerContextChangedError",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    resetOwnerRequests();
+    await vi.runAllTimersAsync();
+    await rejection;
+    expect(request).toHaveBeenCalledOnce();
+  });
   it("отправляет команду с CSRF, idempotency и ожидаемой версией", async () => {
     vi.stubGlobal("document", {
       cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,

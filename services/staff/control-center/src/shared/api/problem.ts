@@ -1,4 +1,9 @@
 import type { Problem } from "@/shared/api/generated/openapi/types.gen";
+import {
+  assertOwnerRequest,
+  ownerRequestSignal,
+  OwnerContextChangedError,
+} from "./owner-lifetime";
 
 export type ProblemKind =
   | "unauthorized"
@@ -154,7 +159,15 @@ export interface ApiReadback<T> {
 export async function unwrap<T>(
   request: Promise<GeneratedResponse<T>>,
 ): Promise<ApiReadback<NonNullable<T>>> {
-  const result = await request;
+  const scope = ownerRequestSignal();
+  let result: GeneratedResponse<T>;
+  try {
+    result = await request;
+  } catch (error) {
+    assertOwnerRequest(scope);
+    throw error;
+  }
+  assertOwnerRequest(scope);
   if (!result.response) {
     const problem = normalizeProblem(result.error);
     notifyUnauthorized(problem);
@@ -177,5 +190,12 @@ export async function unwrap<T>(
 
 export function asProblem(error: unknown): AppProblem {
   if (error instanceof AppProblem) return error;
+  if (error instanceof OwnerContextChangedError)
+    return new AppProblem({
+      status: 0,
+      code: "OWNER_CONTEXT_CHANGED",
+      retryable: false,
+      kind: "unknown",
+    });
   return normalizeProblem(error);
 }

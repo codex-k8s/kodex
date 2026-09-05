@@ -146,6 +146,10 @@ import {
 } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 import {
+  ownerRequestSignal,
+  resetOwnerRequests,
+} from "@/shared/api/owner-lifetime";
+import {
   mergeRunGraph,
   reduceRunEvent,
   type RunEventOutcome,
@@ -254,18 +258,21 @@ export const usePlatformStore = defineStore("platform", () => {
     request: () => Promise<T>,
     apply: (value: T) => void,
   ): Promise<void> {
+    const ownerScope = ownerRequestSignal();
     const current = (generation.get(key) ?? 0) + 1;
     generation.set(key, current);
     loading[key] = true;
     Reflect.deleteProperty(problems, key);
     try {
       const value = await readWithRetry(request);
-      if (generation.get(key) !== current) return;
+      if (ownerScope.aborted || generation.get(key) !== current) return;
       apply(value);
     } catch (error) {
-      if (generation.get(key) === current) problems[key] = asProblem(error);
+      if (!ownerScope.aborted && generation.get(key) === current)
+        problems[key] = asProblem(error);
     } finally {
-      if (generation.get(key) === current) loading[key] = false;
+      if (!ownerScope.aborted && generation.get(key) === current)
+        loading[key] = false;
     }
   }
 
@@ -1849,6 +1856,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function clearOwnerState(): void {
+    resetOwnerRequests();
     cancelSearch();
     platformReloadPromise = undefined;
     generation.clear();

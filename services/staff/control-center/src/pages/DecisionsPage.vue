@@ -12,7 +12,11 @@ import {
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  gateSelection,
+  readAddressedGate,
+} from "@/features/workboard/gate-navigation";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -64,6 +68,57 @@ const busyRef = ref("");
 const problem = ref<AppProblem>();
 const successMessage = ref("");
 let pageMounted = false;
+let routingProject = false;
+const addressedGateLoading = ref(false);
+const addressedGateProblem = ref<AppProblem>();
+let addressedGateController: AbortController | undefined;
+
+async function loadAddressedGate(): Promise<void> {
+  addressedGateController?.abort();
+  if (!preferredGateRef) return;
+  const reference = preferredGateRef;
+  const controller = new AbortController();
+  addressedGateController = controller;
+  addressedGateLoading.value = true;
+  addressedGateProblem.value = undefined;
+  try {
+    const gate = await readAddressedGate(
+      reference,
+      projectFilter.value || undefined,
+      controller.signal,
+    );
+    if (
+      controller.signal.aborted ||
+      !pageMounted ||
+      reference !== preferredGateRef
+    )
+      return;
+    const current = platform.gates[gate.ref];
+    if (current && current.version > gate.version)
+      throw new Error("Owner gate readback is outdated");
+    view.value = gate.state === "OPEN" ? "PENDING" : "HISTORY";
+    platform.gates[gate.ref] = gate;
+    selectedRef.value = gate.ref;
+    preferredGateRef = "";
+  } catch (error) {
+    if (!controller.signal.aborted && pageMounted) {
+      addressedGateProblem.value = asProblem(error);
+      selectedRef.value = "";
+      if ([403, 404].includes(addressedGateProblem.value.status))
+        Reflect.deleteProperty(platform.gates, reference);
+    }
+  } finally {
+    if (addressedGateController === controller)
+      addressedGateLoading.value = false;
+  }
+}
+function selectGate(reference: string): void {
+  addressedGateController?.abort();
+  addressedGateLoading.value = false;
+  addressedGateProblem.value = undefined;
+  preferredGateRef = "";
+  selectedRef.value = reference;
+}
 
 const inbox = computed(() =>
   decisionInbox(
@@ -121,19 +176,54 @@ const projectsWithGates = computed(() => {
 watch(
   visibleItems,
   (items) => {
-    if (items.some((item) => item.gate.ref === selectedRef.value)) return;
-    const preferred = items.find((item) => item.gate.ref === preferredGateRef);
-    selectedRef.value = preferred?.gate.ref ?? items[0]?.gate.ref ?? "";
-    if (items.length) preferredGateRef = "";
+    selectedRef.value = gateSelection(
+      items.map((item) => item.gate.ref),
+      selectedRef.value,
+      preferredGateRef,
+    );
   },
   { immediate: true },
 );
 
-watch(projectFilter, (value) => {
-  if (!pageMounted) return;
-  preferredGateRef = "";
-  selectedRef.value = "";
-  void platform.loadGates(value || undefined);
+watch(
+  projectFilter,
+  (value) => {
+    if (!pageMounted || routingProject) return;
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    preferredGateRef = "";
+    selectedRef.value = "";
+    void platform.loadGates(value || undefined);
+  },
+  { flush: "sync" },
+);
+watch(
+  () => [route.query.gateRef, route.query.projectRef],
+  ([gateRef, projectRef]) => {
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    const project = typeof projectRef === "string" ? projectRef : "";
+    const changedProject = project !== projectFilter.value;
+    routingProject = true;
+    projectFilter.value = project;
+    routingProject = false;
+    preferredGateRef = typeof gateRef === "string" ? gateRef : "";
+    selectedRef.value = "";
+    if (!pageMounted) return;
+    if (changedProject)
+      void platform.loadGates(project || undefined).then(() => {
+        if (pageMounted) return loadAddressedGate();
+      });
+    else if (preferredGateRef) void loadAddressedGate();
+    else selectedRef.value = visibleItems.value[0]?.gate.ref ?? "";
+  },
+);
+onBeforeUnmount(() => {
+  pageMounted = false;
+  addressedGateController?.abort();
+  attachmentLoadGeneration += 1;
 });
 
 function formatDate(value?: string): string {
@@ -324,7 +414,12 @@ onMounted(() => {
     platform.loadGates(projectFilter.value || undefined),
     platform.loadProjects(),
     platform.loadRuns(),
-  ]).then(() => loadGateAudit(selected.value?.gate));
+  ]).then(async () => {
+    if (!pageMounted) return;
+    await loadAddressedGate();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.
+    if (pageMounted) await loadGateAudit(selected.value?.gate);
+  });
 });
 </script>
 
@@ -340,6 +435,7 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'PENDING'"
+            :disabled="addressedGateLoading"
             @click="view = 'PENDING'"
           >
             {{ $t("decisions.pending") }}
@@ -348,6 +444,7 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'HISTORY'"
+            :disabled="addressedGateLoading"
             @click="view = 'HISTORY'"
           >
             {{ $t("decisions.history") }}
@@ -380,6 +477,12 @@ onMounted(() => {
     </div>
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
+    <ProblemNotice
+      v-if="addressedGateProblem"
+      :problem="addressedGateProblem"
+      compact
+      @retry="loadAddressedGate"
+    />
     <div v-if="successMessage" class="decision-success" role="status">
       <CheckCircle2 :size="18" aria-hidden="true" />
       <span>{{ successMessage }}</span>
@@ -436,7 +539,7 @@ onMounted(() => {
                 }"
                 type="button"
                 role="listitem"
-                @click="selectedRef = item.gate.ref"
+                @click="selectGate(item.gate.ref)"
               >
                 <span class="decision-row__icon">
                   <ShieldQuestion :size="18" aria-hidden="true" />
@@ -800,7 +903,11 @@ onMounted(() => {
               </span>
             </div>
           </template>
-          <div v-else class="decision-unavailable" role="status">
+          <div
+            v-else-if="view === 'PENDING'"
+            class="decision-unavailable"
+            role="status"
+          >
             <strong>{{ $t("decisions.actionsUnavailable") }}</strong>
             <p>{{ $t("decisions.actionsUnavailableText") }}</p>
           </div>
