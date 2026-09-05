@@ -514,19 +514,19 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 Следующий список относится ко всему исходному scope 01–61 и CFG, а не к наличию
 компонентов или числу synthetic-тестов:
 
-| Требования     | Существующий consumer/API                                                                   | Незавершённая producer/сквозная часть                                                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 17–19          | ProviderModelSelector, AgentRuntimePanel; `/model-capabilities`, config-overlay publication | Account catalog status/expiry и exact mutation pins подключены по HTTP5d; output default не возвращается в mutation. Реальная model/effort/runtime приёмка NOT RUN.   |
-| 21             | Runtime editor; config-overlay draft/validation/publication                                 | Owner schema управляет effort, completion/hover и diagnostics; history/rollback selection ожидает стабильный защищённый SDK. Реальная приёмка NOT RUN.                |
-| 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                         |
-| 31, 40         | Workflow capability/grant selectors; `/platform-capabilities`                               | Effective user∩agent projection. availableWithoutIntegration/readiness не являются пользовательскими полномочиями.                                                    |
-| 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner. |
-| 04–06          | HomePage, platform store; `/runs`, `/owner-gates`                                           | Общая полная сводка: Run/global Artifact totals ещё требуют producer. Owner-gate query/total/states подключены по HTTP358; runtime приёмка NOT RUN.                   |
-| CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state, managed ref/revision/source association, исполняемый UI/GIT package/build путь.                                                                   |
-| Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                              |
-| 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference. Точный Secret revision уже сохраняется при edit/reauth.                                                                    |
-| 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                          |
-| 56             | ConfigurationFields; `/system-stt/model-catalog`, speech bootstrap и transcriptions         | Каталог подключён к выбору модели и параметрам. Реальная bootstrap authority/adapter readiness проверяется владельцами STT/HTTP; каталог не означает READY.           |
+| Требования     | Существующий consumer/API                                                                   | Незавершённая producer/сквозная часть                                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 17–19          | ProviderModelSelector, AgentRuntimePanel; `/model-capabilities`, config-overlay publication | Account catalog status/expiry и exact mutation pins подключены по HTTP5d; output default не возвращается в mutation. Реальная model/effort/runtime приёмка NOT RUN.           |
+| 21             | Runtime editor; config-overlay draft/validation/publication/history/rollback                | Owner schema и protected published history подключены по HTTP6e3; реальная приёмка NOT RUN.                                                                                   |
+| 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                                 |
+| 31, 40         | Workflow capability/grant selectors; `/platform-capabilities`                               | Effective user∩agent projection. availableWithoutIntegration/readiness не являются пользовательскими полномочиями.                                                            |
+| 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner.         |
+| 04–06          | HomePage; `/runs`, `/owner-gates`, global/project artifacts                                 | Run/global Artifact totals и expanded server catalogs подключены. Distinct resumable Session catalog с ADD_TURN eligibility ещё требует owner query; runtime приёмка NOT RUN. |
+| CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state, managed ref/revision/source association, исполняемый UI/GIT package/build путь.                                                                           |
+| Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                                      |
+| 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference подключены по HTTP6e3; неизвестная legacy база не выводится из current set. Реальная приёмка NOT RUN.                               |
+| 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                                  |
+| 56             | ConfigurationFields; `/system-stt/model-catalog`, speech bootstrap и transcriptions         | Каталог подключён к выбору модели и параметрам. Реальная bootstrap authority/adapter readiness проверяется владельцами STT/HTTP; каталог не означает READY.                   |
 
 Остальные строки исходной матрицы выше требуют общей интеграционной и ручной
 приёмки; локальный unit/browser PASS не превращает их в выполненные business
@@ -686,6 +686,34 @@ Context7 проверен для CodeMirror completion/hover и позиций �
 Unit проверяют pins, expiry, whitelist, TOML scope и Unicode diagnostics;
 runtime synthetic проверяет effort save и readonly на 390/1440/2900.
 Это локальные fixtures, реальная PWA→HTTP→CP→provider приёмка NOT RUN.
+
+HTTP `6e3adbca9e7d194641d912beb83712548ecfe2aa` подключает следующие read paths:
+
+- `OverlayHistoryPanel` читает server-side search/cursor/total опубликованных
+  immutable revisions; перед preview выполняет protected exact GET. Readonly
+  TOML и ref/digest показываются перед rollback. Команда отправляет выбранный
+  published ref и текущий agent OCC, сервер повторно проверяет модель/схему и
+  создаёт новую публикацию. Закрытие/смена агента отбрасывают поздние ответы.
+- Environment показывает `baseVersionRef/baseRevision` отдельно от draft/set
+  version, а `savedAt` — отдельно от validation/update. Отсутствующая legacy
+  база остаётся неизвестной; историческая квитанция без savedAt требует GET
+  черновика. Обычные create/save/validate fixtures закрепляют время сохранения.
+- Home получает Runs, failed Runs и файлы через авторитетные страницы по 30.
+  Compact и expanded view разделяют scope/query/cursor, высота ограничена
+  шестью строками, нижняя граница догружает страницу. Server total не заменяется
+  длиной items. Общие файлы читаются одним `listOrganizationArtifacts`, без
+  обхода проектов; project filter использует существующий `listArtifacts`.
+  Личный файл открывает exact protected metadata и доступное owner download,
+  а не ошибочный переход в `/projects`. Logout/unmount не завершают позднее
+  скачивание в новом контексте.
+
+Новый rollback synthetic обнаружил общий popover defect на 390 px: уже сжатая
+высота панели заставляла выбирать недостаточное место снизу, и search/footer
+перекрывали option. `dismissible-popover.ts` выбирает сторону по доступному
+viewport независимо от текущего сжатия. Unit закрепляет повторные измерения,
+runtime synthetic проверяет реальный pointer selection на 390/1440/2900.
+Home synthetic на 390/2900 проверяет разные page length/total, cursor, поиск,
+modal и private-file exact read. Реальная сквозная приёмка остаётся NOT RUN.
 
 Уточнение после `261b577ce`: typed Skill/Memory HTTP и STT parameters уже
 получены. `src/features/context-resources` подключает отдельные каталоги,

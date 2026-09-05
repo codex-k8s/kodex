@@ -4,6 +4,8 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
+import OverlayHistoryPanel from "./OverlayHistoryPanel.vue";
+import { restoreOverlayRevision } from "./overlay-history";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import { ProviderAccountSelector } from "@/features/providers";
 import ProviderModelSelector from "@/features/providers/ProviderModelSelector.vue";
@@ -472,6 +474,16 @@ async function changeOverlay(action: "VALIDATE" | "PUBLISH"): Promise<void> {
   );
 }
 
+async function restoreOverlay(revisionRef: string): Promise<void> {
+  const current = view.value;
+  if (!current || overlayDirty.value || !props.canEdit) return;
+  await execute(
+    () =>
+      restoreOverlayRevision(props.agentRef, revisionRef, current.agentVersion),
+    "OVERLAY",
+  );
+}
+
 function reset(): void {
   generation++;
   readController?.abort();
@@ -754,6 +766,13 @@ onBeforeUnmount(reset);
             {{ $t("runtime.publishOverlay") }}
           </button>
         </div>
+        <OverlayHistoryPanel
+          :agent-ref="agentRef"
+          :agent-version="view.agentVersion"
+          :disabled="busy || overlayDirty"
+          :can-edit="canEdit"
+          @restore="restoreOverlay"
+        />
         <section class="overlay-panel__effective">
           <div>
             <h3>{{ $t("runtime.effectiveConfig") }}</h3>

@@ -63,6 +63,7 @@ onBeforeUnmount(() => {
         type="button"
         class="button button--ghost"
         :aria-label="$t('common.expand')"
+        :title="$t('common.expand')"
         @click="expanded = true"
       >
         <Maximize2 :size="16" />
@@ -107,6 +108,12 @@ onBeforeUnmount(() => {
         :problem="catalog.problem.value"
         @retry="load()"
       />
+      <p v-if="catalog.loading.value" role="status">
+        {{ $t("common.loading") }}
+      </p>
+      <p v-else-if="catalog.total.value === 0">
+        {{ $t("decisions.emptyTitle") }}
+      </p>
       <HomeGateRows
         :items="catalog.items.value"
         :more="catalog.pageToken.value"

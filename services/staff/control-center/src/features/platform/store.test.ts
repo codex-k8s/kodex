@@ -398,7 +398,7 @@ describe("platform store", () => {
     const runResponse = (
       items: Run[],
     ): { data: RunPage; response: Response } => ({
-      data: { items },
+      data: { items, total: items.length },
       response: new Response(null, { status: 200 }),
     });
     listRunsMock

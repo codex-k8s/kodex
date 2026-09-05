@@ -31,6 +31,7 @@ for (const width of [1440, 390, 2900]) {
     let finishSave: (() => void) | undefined;
     let saves = 0;
     let diffReads = 0;
+    let rollbacks = 0;
     const view: AgentRuntimeConfigurationView = {
       overlaySchema: overlaySchemaFixture,
       agentVersion: 3,
@@ -155,6 +156,49 @@ for (const width of [1440, 390, 2900]) {
         });
         return;
       }
+      const historyPath =
+        "/api/v1/agents/agent_synthetic/config-overlay/revisions";
+      const oldOverlay = {
+        ...view.publishedOverlay,
+        ref: "overlay_old",
+        revision: 7,
+        state: "SUPERSEDED",
+        content: 'personality = "pragmatic"',
+        digest: "b".repeat(64),
+      };
+      if (url.pathname === historyPath) {
+        expect(url.searchParams.get("pageSize")).toBe("30");
+        await route.fulfill({ json: { items: [oldOverlay], total: 1 } });
+        return;
+      }
+      if (url.pathname === `${historyPath}/overlay_old`) {
+        await route.fulfill({ json: oldOverlay });
+        return;
+      }
+      if (
+        url.pathname ===
+        "/api/v1/agents/agent_synthetic/config-overlay-rollbacks"
+      ) {
+        expect(route.request().headers()["if-match"]).toBe('"4"');
+        expect(route.request().postDataJSON()).toEqual({
+          publishedOverlayRef: "overlay_old",
+        });
+        rollbacks++;
+        await route.fulfill({
+          json: {
+            ...view,
+            agentVersion: 5,
+            publishedOverlay: {
+              ...oldOverlay,
+              ref: "overlay_restored",
+              revision: 8,
+              state: "PUBLISHED",
+            },
+            safeEffectiveConfig: oldOverlay.content,
+          },
+        });
+        return;
+      }
       if (url.pathname === "/api/v1/runtime-selections") {
         await route.fulfill({ json: { items: [] } });
         return;
@@ -268,6 +312,29 @@ for (const width of [1440, 390, 2900]) {
     await expect(editor).toContainText('personality = "friendly"');
     await expect(editor).toContainText('model_reasoning_effort = "low"');
     expect(content).toContain('model_reasoning_effort = "low"');
+    await page
+      .getByRole("button", { name: "История overlay", exact: true })
+      .click();
+    const history = page.getByRole("dialog", { name: "История overlay" });
+    await history
+      .getByRole("button", { name: "Выберите опубликованную ревизию" })
+      .click();
+    await page.getByRole("option").filter({ hasText: "7" }).click();
+    await expect(history.locator(".cm-content")).toHaveAttribute(
+      "contenteditable",
+      "false",
+    );
+    await expect(history.locator(".cm-content")).toContainText(
+      'personality = "pragmatic"',
+    );
+    await history
+      .getByRole("button", {
+        name: "Восстановить выбранную ревизию",
+        exact: true,
+      })
+      .click();
+    await expect.poll(() => rollbacks).toBe(1);
+    await expect(editor).toContainText('personality = "pragmatic"');
     await page
       .getByRole("button", { name: "Новая ревизия", exact: true })
       .click();
