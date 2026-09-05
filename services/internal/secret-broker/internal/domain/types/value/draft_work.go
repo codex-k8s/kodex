@@ -34,6 +34,8 @@ type DraftWork struct {
 	TargetRevision                                           int64
 	LeaseDeadline, ExpiresAt                                 time.Time
 	Encrypted                                                *DraftEncryptedDescriptor
+	RecoveryEncrypted                                        *DraftEncryptedDescriptor
+	RecoveryMaterialization                                  *DraftMaterialization
 }
 
 type DraftMaterialization struct {
