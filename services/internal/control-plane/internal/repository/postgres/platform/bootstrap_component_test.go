@@ -3580,8 +3580,8 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || runResult.Run == nil {
 		t.Fatalf("create action readback run: run=%#v err=%v", runResult.Run, err)
 	}
-	runs, _, err := service.ListRuns(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
-	if err != nil || len(runs) != 1 || len(runs[0].NextActions) != 1 || runs[0].NextActions[0] != "OPEN" {
+	runs, runTotal, _, err := service.ListRuns(ctx, candidate, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil || runTotal != 1 || len(runs) != 1 || len(runs[0].NextActions) != 1 || runs[0].NextActions[0] != "OPEN" {
 		t.Fatalf("read-only run actions are not authoritative: runs=%#v err=%v", runs, err)
 	}
 	runVersion := runResult.Run.Version
@@ -3619,6 +3619,7 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if err != nil || len(hiddenAuditEvents) != 0 {
 		t.Fatalf("audit readback ignored VIEW_AUDIT eligibility: events=%#v err=%v", hiddenAuditEvents, err)
 	}
+	testRunCatalogTotals(t, ctx, service, owner, candidate, projectRef, actionAgent.Ref)
 	remaining, _, err := service.ListMembershipCandidates(ctx, owner, query.Filter{ProjectRef: projectRef, Query: "Alex", Page: query.Page{Size: 20}})
 	if err != nil || len(remaining) != 0 {
 		t.Fatalf("assigned member remained a candidate: candidates=%#v err=%v", remaining, err)
@@ -5580,30 +5581,30 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || quarantined.ScanState != "QUARANTINED" {
 		t.Fatalf("quarantine executable artifact: artifact=%#v err=%v", quarantined, err)
 	}
-	cleanArtifacts, cleanNext, err := service.ListArtifacts(ctx, owner, query.Filter{
+	cleanArtifacts, cleanTotal, cleanNext, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Query: "support-policy", ArtifactType: "TEXT", ScanState: "CLEAN",
 		SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 1},
 	})
-	if err != nil || cleanNext != "" || len(cleanArtifacts) != 1 || cleanArtifacts[0].Ref != uploaded.Ref {
+	if err != nil || cleanTotal != 1 || cleanNext != "" || len(cleanArtifacts) != 1 || cleanArtifacts[0].Ref != uploaded.Ref {
 		t.Fatalf("server-side artifact filters were not applied before limit: artifacts=%#v next=%q err=%v", cleanArtifacts, cleanNext, err)
 	}
-	firstPage, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+	firstPage, firstTotal, nextPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
 	firstRef, secondRef := quarantined.Ref, uploaded.Ref
 	if firstRef > secondRef {
 		firstRef, secondRef = secondRef, firstRef
 	}
-	if err != nil || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
+	if err != nil || firstTotal != 2 || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
 	}
-	secondPage, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
+	secondPage, secondTotal, finalPageToken, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1, Token: nextPageToken},
 	})
-	if err != nil || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
+	if err != nil || secondTotal != 2 || len(secondPage) != 1 || secondPage[0].Ref != secondRef || finalPageToken != "" {
 		t.Fatalf("second artifact cursor page is unstable: artifacts=%#v next=%q err=%v", secondPage, finalPageToken, err)
 	}
-	if _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+	if _, _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
 		ProjectRef: project.Project.Ref, ArtifactType: "EXECUTABLE", Page: query.Page{Size: 1},
 	}); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("unknown artifact type was accepted: %v", err)
@@ -5611,6 +5612,7 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if _, err := service.DownloadArtifact(ctx, owner, quarantined.Ref, "DOWNLOAD"); !errors.Is(err, domainerrs.ErrForbidden) {
 		t.Fatalf("download quarantined artifact must be forbidden: %v", err)
 	}
+	testArtifactCatalogTotals(t, ctx, service, owner, project.Project.Ref)
 	uploadedVersion := uploaded.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeArtifactBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "artifact-binding-without-capability", ExpectedVersion: &uploadedVersion},
@@ -5920,7 +5922,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	assistantAttachmentSetRef := finalizedAttachmentSetRef(t, ctx, service, owner, "",
 		"ASSISTANT_MESSAGE", "assistant-attachment-set", assistantInput.Ref)
-	organizationArtifacts, _, err := service.ListArtifacts(ctx, owner, query.Filter{
+	organizationArtifacts, _, _, err := service.ListArtifacts(ctx, owner, query.Filter{
 		Query: "organization-policy", ArtifactType: "TEXT", ScanState: "CLEAN", SourceKind: "CONTROL_CENTER", Page: query.Page{Size: 10},
 	})
 	if err != nil || len(organizationArtifacts) != 1 || organizationArtifacts[0].Ref != assistantInput.Ref || organizationArtifacts[0].ProjectRef != "" {

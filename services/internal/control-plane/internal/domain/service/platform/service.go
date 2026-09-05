@@ -607,10 +607,10 @@ func (service *Service) GetWorkflow(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetWorkflow(ctx, p, ref)
 }
-func (service *Service) ListRuns(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Run, string, error) {
+func (service *Service) ListRuns(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Run, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	return service.repository.ListRuns(ctx, p, filter)
 }
@@ -649,10 +649,10 @@ func (service *Service) GetOwnerGate(ctx context.Context, p value.Principal, ref
 	}
 	return service.repository.GetOwnerGate(ctx, p, ref)
 }
-func (service *Service) ListArtifacts(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Artifact, string, error) {
+func (service *Service) ListArtifacts(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.Artifact, int64, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	return service.repository.ListArtifacts(ctx, p, filter)
 }

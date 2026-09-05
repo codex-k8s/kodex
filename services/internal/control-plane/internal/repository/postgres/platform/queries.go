@@ -77,7 +77,7 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 		return platformrepo.Overview{}, err
 	}
 	filter := query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}}
-	runs, _, err := repository.ListRuns(ctx, principal, filter)
+	runs, _, _, err := repository.ListRuns(ctx, principal, filter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -85,7 +85,7 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	artifacts, _, err := repository.ListArtifacts(ctx, principal, filter)
+	artifacts, _, _, err := repository.ListArtifacts(ctx, principal, filter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -821,12 +821,21 @@ func (repository *Repository) GetWorkflow(ctx context.Context, principal value.P
 	return scanWorkflow(row, true)
 }
 
-func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, string, error) {
+func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, int64, string, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
+	filter.States = append([]string{}, filter.States...)
+	sort.Strings(filter.States)
+	for i, state := range filter.States {
+		if !slices.Contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING", "SUCCEEDED", "FAILED", "CANCELLED"}, state) || (i > 0 && state == filter.States[i-1]) {
+			return nil, 0, "", errs.ErrInvalid
+		}
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
-	return authorizedCatalog(ctx, repository, scope, "RUN", filter,
+	return authorizedCatalogWithTotal(ctx, repository, scope, "RUN", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Run, error) {
 			rows, err := tx.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef,
 				scope.role, scope.actorID, strings.TrimSpace(filter.Query), limit, cursor, append([]string{}, filter.States...), scope.authorityProjectID)
@@ -848,6 +857,13 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 		}, func(_ pgx.Tx, item *entity.Run, allowed func(string) bool) error {
 			item.NextActions = runActions(item.State, allowed("run.cancel") || allowed("run.cancel.own"), false)
 			return nil
+		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
+			var total int64
+			err := tx.QueryRow(ctx, queryCatalogRunsCount, scope.organizationID, filter.ProjectRef, scope.actorID, filter.Query, filter.States, scope.authorityProjectID).Scan(&total)
+			if err != nil {
+				return 0, errs.ErrUnavailable
+			}
+			return total, nil
 		})
 }
 
@@ -1278,31 +1294,35 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	return scanGate(repository.pool.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 }
 
-func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, string, error) {
+func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, int64, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	lifecycleState := strings.TrimSpace(filter.State)
 	if lifecycleState == "" {
 		lifecycleState = "ACTIVE"
 	}
 	if !contains([]string{"ACTIVE", "DELETED", "PURGE_PENDING", "PURGED"}, lifecycleState) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	artifactType := strings.TrimSpace(filter.ArtifactType)
 	if artifactType != "" && !contains([]string{"TEXT", "DOCUMENT", "IMAGE"}, artifactType) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	scanState := strings.TrimSpace(filter.ScanState)
 	if scanState != "" && !contains([]string{"PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"}, scanState) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	sourceKind := strings.TrimSpace(filter.SourceKind)
 	if sourceKind != "" && !contains([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, sourceKind) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
-	return authorizedCatalog(ctx, repository, scope, "ARTIFACT", filter,
+	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
+	filter.ResourceRef = strings.TrimSpace(filter.ResourceRef)
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.State, filter.ArtifactType, filter.ScanState, filter.SourceKind = lifecycleState, artifactType, scanState, sourceKind
+	return authorizedCatalogWithTotal(ctx, repository, scope, "ARTIFACT", filter,
 		func(ctx context.Context, tx pgx.Tx, cursorRef string, limit int32) ([]entity.Artifact, error) {
 			rows, err := tx.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
 				"authority_project": scope.authorityProjectID,
@@ -1360,6 +1380,18 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 				}
 			}
 			return nil
+		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
+			var total int64
+			err := tx.QueryRow(ctx, queryCatalogArtifactsCount, pgx.StrictNamedArgs{
+				"authority_project": scope.authorityProjectID, "organization_id": scope.organizationID,
+				"project_ref": filter.ProjectRef, "run_ref": filter.ResourceRef, "actor_id": scope.actorID,
+				"query": filter.Query, "lifecycle_state": lifecycleState, "artifact_type": artifactType,
+				"scan_state": scanState, "source_kind": sourceKind,
+			}).Scan(&total)
+			if err != nil {
+				return 0, errs.ErrUnavailable
+			}
+			return total, nil
 		})
 }
 

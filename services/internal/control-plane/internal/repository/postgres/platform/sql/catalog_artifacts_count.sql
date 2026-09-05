@@ -1,15 +1,5 @@
--- name: queries_listartifacts_select_artifact_bindings_artifact_id_id_organization_id :many
-SELECT ar.ref,COALESCE(p.ref,''),COALESCE(r.ref,''),COALESCE(s.ref,''),COALESCE(n.ref,''),ar.file_name,ar.media_type,ar.digest,ar.scan_state,ar.preview_state,
-       ar.source,
-       ar.size_bytes,ar.revision,ar.version,ar.lifecycle_state,ar.created_at,ar.deleted_at,ar.purge_after,
-       COALESCE((SELECT array_agg(b.target_ref ORDER BY b.created_at) FROM control_plane.artifact_bindings b WHERE b.artifact_id=ar.id AND b.target_kind='KNOWLEDGE'),'{}'),
-       (@role IN ('OWNER','ADMINISTRATOR') OR (ar.project_id IS NULL AND ar.created_by=@actor_id::uuid) OR EXISTS(
-         SELECT 1 FROM control_plane.memberships manage_membership
-         WHERE manage_membership.project_id=ar.project_id
-           AND manage_membership.subject_id=@actor_id::uuid
-           AND manage_membership.active
-           AND 'MANAGE_ARTIFACTS'=ANY(manage_membership.permissions)
-       ))
+-- name: catalog_artifacts_count :one
+SELECT count(*)
 FROM control_plane.artifacts ar
 LEFT JOIN control_plane.projects p ON p.id=ar.project_id
 LEFT JOIN control_plane.runs r ON r.id=ar.run_id
@@ -37,11 +27,8 @@ WHERE ar.organization_id=@organization_id::uuid
       OR lower(ar.file_name) ~ '\.(doc|docx|odt|ppt|pptx|csv|ods|xls|xlsx)$'
     ))
   )
-  AND (@cursor_ref = '' OR ar.ref > @cursor_ref)
   AND (@authority_project = '' OR ar.project_id = NULLIF(@authority_project,'')::uuid)
   AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
       WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
         AND control_plane.catalog_resource_visible(ar.organization_id, @actor_id::uuid, 'artifact.view', target.kind,
             target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp()))
-ORDER BY ar.ref
-LIMIT @limit

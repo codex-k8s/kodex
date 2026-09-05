@@ -71,6 +71,8 @@ service PlatformQueryService {
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc ListConfigOverlayRevisions(ListConfigOverlayRevisionsRequest) returns (ListConfigOverlayRevisionsResponse);
+  rpc GetConfigOverlayRevision(GetConfigOverlayRevisionRequest) returns (GetConfigOverlayRevisionResponse);
   rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
   rpc ListRuntimeEnvironmentSets(ListRuntimeEnvironmentSetsRequest) returns (ListRuntimeEnvironmentSetsResponse);
   rpc GetRuntimeEnvironmentSet(GetRuntimeEnvironmentSetRequest) returns (GetRuntimeEnvironmentSetResponse);
@@ -2020,6 +2022,7 @@ message ListRunsRequest {
 message ListRunsResponse {
   repeated Run runs = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 message GetRunRequest {
   string run_ref = 1;
@@ -2140,6 +2143,7 @@ message ListArtifactsRequest {
 message ListArtifactsResponse {
   repeated Artifact artifacts = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 message GetArtifactRequest {
   string artifact_ref = 1;
@@ -3584,6 +3588,23 @@ message GetAgentRuntimeConfigurationRequest {
 }
 message GetAgentRuntimeConfigurationResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message ListConfigOverlayRevisionsRequest {
+  string agent_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message ListConfigOverlayRevisionsResponse {
+  repeated ConfigOverlayVersion revisions = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message GetConfigOverlayRevisionRequest {
+  string agent_ref = 1;
+  string revision_ref = 2;
+}
+message GetConfigOverlayRevisionResponse {
+  ConfigOverlayVersion revision = 1;
 }
 message ListAgentRuntimeConfigurationVersionsRequest {
   string agent_ref = 1;
