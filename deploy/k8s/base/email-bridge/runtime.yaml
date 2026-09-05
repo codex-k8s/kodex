@@ -19,7 +19,7 @@
     "EMAIL_BRIDGE_CA_FILE": "/var/run/email/tls/ca.crt",
     "EMAIL_BRIDGE_APPLICATION_GRANT_FILE": "/var/run/secrets/kodex/email-bridge/application-grant/application-grant.jws",
     "EMAIL_BRIDGE_AUTHORITY_TARGET": "control-plane.kodex-system.svc.cluster.local:8443",
-    "EMAIL_BRIDGE_EGRESS_ADDRESS": "egress-gateway.kodex-system.svc:8080",
+    "EMAIL_BRIDGE_EGRESS_ADDRESS": "egress-gateway.kodex-system.svc:8082",
     "DEPLOYMENT_ENVIRONMENT": "staging",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "otel-collector.observability.svc:4317",
     "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME": "otel-collector.observability.svc.cluster.local",

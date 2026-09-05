@@ -60,6 +60,7 @@ for rule in get('NetworkPolicy', 'email-bridge')['spec']['egress']:
         if name:
             destinations[name] = (destination['namespaceSelector']['matchLabels']['kubernetes.io/metadata.name'], rule['ports'][0]['port'])
 assert destinations['control-plane'] == ('kodex-system', 8443)
+assert destinations['egress-gateway'] == ('kodex-system', 8082)
 assert destinations['email-bridge-postgresql'] == ('kodex-system', 5432)
 assert destinations['opentelemetry-collector'] == ('observability', 4317)
 root = pathlib.Path(sys.argv[3])
@@ -77,6 +78,7 @@ assert all('"' + method + '"' in generated for method in authority['methods'])
 migrations = root / 'services/internal/email-bridge/cmd/cli/migrations'
 assert int(descriptor['migration_version']) == max(int(path.name.split('_')[0]) for path in migrations.glob('*.sql'))
 assert descriptor['egress']['endpoint'] == runtime['EMAIL_BRIDGE_EGRESS_ADDRESS']
+assert runtime['EMAIL_BRIDGE_EGRESS_ADDRESS'] == 'egress-gateway.kodex-system.svc:8082'
 assert 'owner-authorization' not in descriptor['readiness']['local_requires']
 assert get('Job', 'email-bridge-migration')['spec']['activeDeadlineSeconds'] == 120
 database = get('StatefulSet', 'email-bridge-postgresql')['spec']
