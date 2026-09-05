@@ -36,13 +36,6 @@ spec:
               value: /run/kodex/internal-rpc-authority/issuer.sock
             - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
               value: issuer
-          readinessProbe:
-            exec:
-              command:
-                - /run/kodex/internal-rpc-authority/local-readiness
-            timeoutSeconds: 3
-            periodSeconds: 5
-            failureThreshold: 3
           volumeMounts:
             - name: authority-sockets
               mountPath: /run/kodex
