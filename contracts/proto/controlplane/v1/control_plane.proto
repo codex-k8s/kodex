@@ -12,6 +12,11 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc ListEmailMailboxConfigurations(ListEmailMailboxConfigurationsRequest) returns (ListEmailMailboxConfigurationsResponse);
+  rpc GetEmailMailboxConfiguration(GetEmailMailboxConfigurationRequest) returns (GetEmailMailboxConfigurationResponse);
+  rpc ListEmailMailboxCredentials(ListEmailMailboxCredentialsRequest) returns (ListEmailMailboxCredentialsResponse);
+  rpc GetEmailMailboxCredentialReceipt(GetEmailMailboxCredentialReceiptRequest) returns (GetEmailMailboxCredentialReceiptResponse);
+  rpc PreviewEmailMailboxConfiguration(PreviewEmailMailboxConfigurationRequest) returns (PreviewEmailMailboxConfigurationResponse);
   rpc GetRuntimeSecretDraftImpact(GetRuntimeSecretDraftImpactRequest) returns (GetRuntimeSecretDraftImpactResponse);
   rpc GetRuntimeSecretDraft(GetRuntimeSecretDraftRequest) returns (GetRuntimeSecretDraftResponse);
   rpc GetRuntimeRevisionDiff(GetRuntimeRevisionDiffRequest) returns (GetRuntimeRevisionDiffResponse);
@@ -91,6 +96,13 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc CreateEmailMailboxDraft(CreateEmailMailboxDraftRequest) returns (CreateEmailMailboxDraftResponse);
+  rpc SaveEmailMailboxDraft(SaveEmailMailboxDraftRequest) returns (SaveEmailMailboxDraftResponse);
+  rpc ValidateEmailMailboxDraft(ValidateEmailMailboxDraftRequest) returns (ValidateEmailMailboxDraftResponse);
+  rpc PublishEmailMailboxDraft(PublishEmailMailboxDraftRequest) returns (PublishEmailMailboxDraftResponse);
+  rpc DiscardEmailMailboxDraft(DiscardEmailMailboxDraftRequest) returns (DiscardEmailMailboxDraftResponse);
+  rpc BindEmailMailboxConfiguration(BindEmailMailboxConfigurationRequest) returns (BindEmailMailboxConfigurationResponse);
+  rpc UnbindEmailMailboxConfiguration(UnbindEmailMailboxConfigurationRequest) returns (UnbindEmailMailboxConfigurationResponse);
   rpc PrepareRuntimeSecretDraftImpact(PrepareRuntimeSecretDraftImpactRequest) returns (PrepareRuntimeSecretDraftImpactResponse);
   rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
   rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
@@ -281,6 +293,7 @@ service SystemAssistantService {
 }
 
 service RuntimeWorkService {
+  rpc ReportEmailConfigurationReadback(ReportEmailConfigurationReadbackRequest) returns (ReportEmailConfigurationReadbackResponse);
   rpc ResolveEmailAuthorization(ResolveEmailAuthorizationRequest) returns (ResolveEmailAuthorizationResponse);
   rpc ReportEmailEffectReceipt(ReportEmailEffectReceiptRequest) returns (ReportEmailEffectReceiptResponse);
   rpc ResolveEmailReconciliation(ResolveEmailReconciliationRequest) returns (ResolveEmailReconciliationResponse);
@@ -4869,6 +4882,7 @@ enum ManagedConfigurationKind {
   MANAGED_CONFIGURATION_KIND_ROLE_IMAGE = 2;
   MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION = 3;
   MANAGED_CONFIGURATION_KIND_SYSTEM_STT = 4;
+  MANAGED_CONFIGURATION_KIND_EMAIL_MAILBOX = 5;
 }
 enum ManagedConfigurationState {
   MANAGED_CONFIGURATION_STATE_UNSPECIFIED = 0;
@@ -5253,6 +5267,133 @@ enum EmailOperation {
   EMAIL_OPERATION_DRAFT_UPDATE = 20;
   EMAIL_OPERATION_DRAFT_DELETE = 21;
 }
+
+enum EmailMailboxReceiveProtocol {
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_IMAP = 1;
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_POP3 = 2;
+}
+enum EmailMailboxTLSMode {
+  EMAIL_MAILBOX_TLS_MODE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_TLS_MODE_IMPLICIT = 1;
+  EMAIL_MAILBOX_TLS_MODE_STARTTLS = 2;
+}
+enum EmailMailboxAuthMethod {
+  EMAIL_MAILBOX_AUTH_METHOD_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_AUTH_METHOD_PASSWORD = 1;
+  EMAIL_MAILBOX_AUTH_METHOD_OAUTHBEARER = 2;
+}
+message EmailMailboxCredentialReference { string name = 1; int64 generation = 2; }
+message EmailMailboxEndpoint {
+  string host = 1;
+  int32 port = 2;
+  string server_name = 3;
+  EmailMailboxTLSMode tls_mode = 4;
+  EmailMailboxAuthMethod auth_method = 5;
+  EmailMailboxCredentialReference ca = 6;
+  EmailMailboxCredentialReference username = 7;
+  EmailMailboxCredentialReference secret = 8;
+}
+message EmailMailboxLimits {
+  int64 attachment_bytes = 1;
+  int32 max_attachments = 2;
+  int32 max_recipients = 3;
+  int64 message_bytes = 4;
+  int32 page_size = 5;
+  int32 scan_messages = 6;
+  int32 timeout_seconds = 7;
+}
+message EmailMailboxOperationPolicy {
+  EmailOperation operation = 1;
+  EmailApprovalPolicy policy = 2;
+  repeated string folders = 3;
+}
+// Только редактируемые поля; tenant/connection/lineage назначает owner.
+message EmailMailboxSpecification {
+  bool enabled = 1;
+  EmailMailboxReceiveProtocol receive_protocol = 2;
+  repeated string allowed_folders = 3;
+  string archive_folder = 4;
+  string drafts_folder = 5;
+  string folder = 6;
+  string sender = 7;
+  string reply_to = 8;
+  repeated string recipients = 9;
+  string hello_name = 10;
+  EmailMailboxEndpoint smtp = 11;
+  EmailMailboxEndpoint imap = 12;
+  EmailMailboxEndpoint pop = 13;
+  EmailMailboxLimits limits = 14;
+  repeated EmailMailboxOperationPolicy policies = 15;
+}
+message EmailMailboxDraftContent {
+  oneof content {
+    EmailMailboxSpecification specification = 1;
+    string yaml = 2;
+  }
+}
+message EmailMailboxDiagnostic {
+  string code = 1;
+  string path = 2;
+  string message = 3;
+  int32 line = 4;
+  int32 column = 5;
+}
+enum EmailMailboxPublicationState {
+  EMAIL_MAILBOX_PUBLICATION_STATE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_PUBLICATION_STATE_PENDING = 1;
+  EMAIL_MAILBOX_PUBLICATION_STATE_READY = 2;
+  EMAIL_MAILBOX_PUBLICATION_STATE_FAILED = 3;
+  EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED = 4;
+}
+message EmailMailboxPublication {
+  string ref = 1;
+  int64 revision = 2;
+  string digest = 3;
+  EmailMailboxPublicationState state = 4;
+  string configuration_revision_ref = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp ready_at = 7;
+  string failure_code = 8;
+}
+message EmailMailboxConfigurationView {
+  string connection_ref = 1;
+  int64 connection_version = 2;
+  string mailbox_ref = 3;
+  ManagedConfigurationSet configuration = 4;
+  ManagedConfigurationRevision revision = 5;
+  EmailMailboxSpecification specification = 6;
+  EmailMailboxPublication publication = 7;
+  string bound_revision_ref = 8;
+  repeated EmailMailboxDiagnostic diagnostics = 9;
+}
+message ListEmailMailboxConfigurationsRequest { string connection_ref = 1; string query = 2; PageRequest page = 3; }
+message ListEmailMailboxConfigurationsResponse { repeated EmailMailboxConfigurationView items = 1; int64 total = 2; PageInfo page = 3; }
+message GetEmailMailboxConfigurationRequest { string connection_ref = 1; string configuration_ref = 2; string revision_ref = 3; }
+message GetEmailMailboxConfigurationResponse { EmailMailboxConfigurationView configuration = 1; }
+message ListEmailMailboxCredentialsRequest { string connection_ref = 1; EmailMailboxCredentialKind kind = 2; PageRequest page = 3; }
+message ListEmailMailboxCredentialsResponse { repeated EmailMailboxCredential items = 1; int64 total = 2; PageInfo page = 3; }
+message GetEmailMailboxCredentialReceiptRequest { string connection_ref = 1; string idempotency_key = 2; }
+message GetEmailMailboxCredentialReceiptResponse { EmailMailboxCredential credential = 1; }
+message PreviewEmailMailboxConfigurationRequest { string connection_ref = 1; EmailMailboxDraftContent content = 2; }
+message PreviewEmailMailboxConfigurationResponse { EmailMailboxSpecification specification = 1; string canonical_yaml = 2; repeated EmailMailboxDiagnostic diagnostics = 3; bool valid = 4; }
+message CreateEmailMailboxDraftRequest { MutationContext mutation = 1; string connection_ref = 2; string configuration_ref = 3; string name = 4; EmailMailboxDraftContent content = 5; }
+message CreateEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message SaveEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; EmailMailboxDraftContent content = 4; }
+message SaveEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message ValidateEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message ValidateEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message PublishEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message PublishEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message DiscardEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message DiscardEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message BindEmailMailboxConfigurationRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; string connection_ref = 4; int64 expected_connection_version = 5; }
+message BindEmailMailboxConfigurationResponse { EmailMailboxConfigurationView configuration = 1; }
+message UnbindEmailMailboxConfigurationRequest { MutationContext mutation = 1; string connection_ref = 2; }
+message UnbindEmailMailboxConfigurationResponse { EmailMailboxPublication publication = 1; int64 connection_version = 2; }
+// Подтверждает только фактически принятый EMAIL snapshot; не provider health.
+message ReportEmailConfigurationReadbackRequest { int64 revision = 1; string digest = 2; }
+message ReportEmailConfigurationReadbackResponse { bool accepted = 1; }
 
 enum EmailMailboxCredentialKind {
   EMAIL_MAILBOX_CREDENTIAL_KIND_UNSPECIFIED = 0;
