@@ -10,10 +10,13 @@ resources:
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
+  - mail/mail-configmap.json
+  - mail/mail-networkpolicy.json
 configMapGenerator:
   - name: egress-gateway-policy
     files:
       - policy.json=policy.json
     options:
       immutable: true
-patches: null
+patches:
+  - path: mail/mail-deployment-patch.json

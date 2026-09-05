@@ -404,6 +404,9 @@ func rejectDuplicateFields(value []byte) error {
 	return requireJSONEOF(decoder)
 }
 
+// RejectDuplicateFields применяет общий строгий JSON parser к отдельной mail projection.
+func RejectDuplicateFields(value []byte) error { return rejectDuplicateFields(value) }
+
 func inspectJSONValue(decoder *json.Decoder) error {
 	token, err := decoder.Token()
 	if err != nil {
