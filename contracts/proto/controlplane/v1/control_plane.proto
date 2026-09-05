@@ -5024,7 +5024,73 @@ message PreviewPromptTemplateRequest {
   string target_kind = 2;
   string target_ref = 3;
   bool include_full_materialization = 4;
+  PromptPreviewContext context = 5;
+  string expected_context_digest = 6;
 }
+
+// Все ссылки разрешает owner; значения служат только выбором и OCC pin.
+message PromptPreviewContext {
+  string agent_ref = 1;
+  string workflow_revision_ref = 2;
+  string workflow_stage_key = 3;
+  int64 expected_agent_version = 4;
+  int64 expected_workflow_version = 5;
+  google.protobuf.Struct input = 6;
+  string attachment_set_ref = 7;
+}
+
+enum PromptSemanticSlot {
+  PROMPT_SEMANTIC_SLOT_UNSPECIFIED = 0;
+  PROMPT_SEMANTIC_SLOT_WORKFLOW = 1;
+  PROMPT_SEMANTIC_SLOT_STAGE = 2;
+  PROMPT_SEMANTIC_SLOT_PURPOSE = 3;
+  PROMPT_SEMANTIC_SLOT_EXPECTED_RESULT = 4;
+  PROMPT_SEMANTIC_SLOT_INPUT = 5;
+  PROMPT_SEMANTIC_SLOT_CONSTRAINTS = 6;
+  PROMPT_SEMANTIC_SLOT_EFFECTIVE_CAPABILITIES = 7;
+  PROMPT_SEMANTIC_SLOT_FILES = 8;
+  PROMPT_SEMANTIC_SLOT_TOOLS = 9;
+  PROMPT_SEMANTIC_SLOT_INTEGRATIONS = 10;
+  PROMPT_SEMANTIC_SLOT_RUNTIME_CHANGES = 11;
+}
+
+enum PromptSectionSource {
+  PROMPT_SECTION_SOURCE_UNSPECIFIED = 0;
+  PROMPT_SECTION_SOURCE_USER_TEMPLATE = 1;
+  PROMPT_SECTION_SOURCE_PLATFORM = 2;
+}
+
+message PromptSlotProvenance {
+  PromptSemanticSlot slot = 1;
+  PromptSectionSource source = 2;
+  int32 position = 3;
+}
+
+message PromptPreviewSection {
+  PromptSectionSource source = 1;
+  PromptSemanticSlot slot = 2;
+  string content = 3;
+}
+
+message PromptContextPin {
+  string digest = 1;
+  string agent_ref = 2;
+  int64 agent_version = 3;
+  string workflow_ref = 4;
+  int64 workflow_version = 5;
+  string workflow_revision_ref = 6;
+  string workflow_stage_key = 7;
+  string runtime_configuration_ref = 8;
+  string runtime_configuration_digest = 9;
+  string environment_binding_ref = 10;
+  int64 environment_binding_version = 11;
+  string environment_version_ref = 12;
+  string environment_digest = 13;
+  string attachment_set_ref = 14;
+  string attachment_manifest_digest = 15;
+  string previous_runtime_revision_ref = 16;
+}
+
 message PreviewPromptTemplateResponse {
   string safe_preview = 1;
   string full_materialized_prompt = 2;
@@ -5033,6 +5099,13 @@ message PreviewPromptTemplateResponse {
   string template_digest = 5;
   string materialization_digest = 6;
   repeated string effective_capabilities = 7;
+  string service_template_revision = 8;
+  string service_template_digest = 9;
+  string variable_snapshot_digest = 10;
+  string locale = 11;
+  repeated PromptSlotProvenance slots = 12;
+  repeated PromptPreviewSection sections = 13;
+  PromptContextPin context_pin = 14;
 }
 
 enum ManagedConfigurationKind {
