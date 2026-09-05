@@ -83,7 +83,7 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 	definition, found := repository.integrationDefinitions["email"]
 	capability, capabilityFound := definition.Capability(source.operation)
 	if !found || !capabilityFound || !capability.CallableByAgent() || definition.Metadata.Version != source.definitionVersion ||
-		definition.Digest != source.definitionDigest || capability.Risk != source.risk || source.risk != "READ" && !source.gateApproved {
+		definition.Digest != source.definitionDigest || capability.Risk != source.risk {
 		return entity.EmailAuthorization{}, source, errs.ErrForbidden
 	}
 	var configuration, resourceScope map[string]string
@@ -104,9 +104,6 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 	exact, policy, err := emailpolicy.AuthorizeCommand(mailbox, source.operation, source.effectKey, source.boundedInput, input, source.gateApproved)
 	if err != nil {
 		return entity.EmailAuthorization{}, source, err
-	}
-	if source.risk != "READ" {
-		policy = "human_gate"
 	}
 	expires := time.Now().UTC().Add(emailpolicy.AuthorizationMaximumAge)
 	if input.Binding.ExpiresAt.Before(expires) {

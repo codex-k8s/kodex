@@ -166,17 +166,8 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	invocation, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"), "connection_ref": connection.Ref,
 		"capability_key": "email.message.send", "idempotency_key": "email-producer-send"}, bounded)
-	if err != nil || stringMap(invocation, "state") != "WAITING_APPROVAL" {
-		t.Fatalf("resolve email gate: %v", err)
-	}
-	if claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-gateway", 32); err != nil || len(claims) != 0 {
-		t.Fatalf("claimed before gate: %d %v", len(claims), err)
-	}
-	version := int64(1)
-	if _, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "email-producer-approve", ExpectedVersion: &version},
-		Payload:  command.GateResolutionInput{GateRef: stringMap(invocation, "gateRef"), Decision: "APPROVE", Comment: "Exact fixture"}}); err != nil {
-		t.Fatal(err)
+	if err != nil || stringMap(invocation, "state") != "READY" || stringMap(invocation, "gateRef") != "" {
+		t.Fatalf("mailbox ALLOW unexpectedly required gate: %v", err)
 	}
 	claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-gateway", 32)
 	if err != nil || len(claims) != 1 {
@@ -193,8 +184,8 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	input = query.EmailAuthorization{Binding: binding, MailboxRef: mailbox.Id, ConfigurationRevision: mailbox.Revision,
 		Operation: "send", Sender: mailbox.Sender, Folder: mailbox.Folder, SemanticInputDigest: api.Digest(semantic), EffectKey: semantic.EffectKey}
 	decision, err = service.ResolveEmailAuthorization(ctx, email, input)
-	if err != nil || !decision.Allowed || !decision.GateApproved || decision.Policy != "human_gate" || decision.AgentRef != agent.Ref || decision.ProjectRef != project.Project.Ref {
-		t.Fatalf("authorize approved send: %v", err)
+	if err != nil || !decision.Allowed || decision.GateApproved || decision.Policy != "allow" || decision.AgentRef != agent.Ref || decision.ProjectRef != project.Project.Ref {
+		t.Fatalf("authorize mailbox ALLOW send without gate: %v", err)
 	}
 	report := command.Command{Kind: command.ReportEmailEffect, Principal: worker("email-bridge", "platform.email.effect-receipts.report"),
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-unknown"}, Payload: command.EmailEffectReportInput{

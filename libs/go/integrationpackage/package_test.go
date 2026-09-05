@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, original := range definitions {
+		for index, capability := range original.Spec.Capabilities {
+			if capability.Risk == "READ" {
+				continue
+			}
+			changed := original
+			changed.Spec.Capabilities = append(changed.Spec.Capabilities[:0:0], original.Spec.Capabilities...)
+			changed.Spec.Capabilities[index].ApprovalPolicy = "NONE"
+			err := validate(&changed)
+			if (err == nil) != (key == "email") {
+				t.Fatalf("NONE approval boundary for %s: %v", capability.Operation, err)
+			}
+		}
+	}
+	email := definitions["email"]
+	for index := range email.Spec.Capabilities {
+		if email.Spec.Capabilities[index].Risk != "READ" {
+			email.Spec.Capabilities[index].Operation = "email.unregistered.effect"
+			if validate(&email) == nil {
+				t.Fatal("unregistered email operation inherited mailbox exception")
+			}
+			break
+		}
+	}
+}
+
 func TestLoadShippedDefinitions(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -88,14 +119,15 @@ func TestTypedOutput(t *testing.T) {
 	if !ok {
 		t.Fatal("email.message.send capability is missing")
 	}
-	canonical, err := capability.ValidateOutput([]byte(`{"status":"accepted","message_id":"msg-7"}`))
-	if err != nil || string(canonical) != `{"message_id":"msg-7","status":"accepted"}` {
+	canonical, err := capability.ValidateOutput([]byte(`{"status":"accepted","message_id":"msg-7","result_json":"{}"}`))
+	if err != nil || string(canonical) != `{"message_id":"msg-7","result_json":"{}","status":"accepted"}` {
 		t.Fatalf("ValidateOutput() = %s, %v", canonical, err)
 	}
 	for _, invalid := range []string{
 		`{"status":"accepted"}`,
-		`{"message_id":"msg-7","status":"accepted","token":"secret"}`,
-		`{"message_id":"msg-7","status":"accepted\nunsafe"}`,
+		`{"message_id":"msg-7","status":"accepted"}`,
+		`{"message_id":"msg-7","status":"accepted","result_json":"{}","token":"secret"}`,
+		`{"message_id":"msg-7","status":"accepted\nunsafe","result_json":"{}"}`,
 	} {
 		if _, err := capability.ValidateOutput([]byte(invalid)); err == nil {
 			t.Fatalf("ValidateOutput() accepted %s", invalid)

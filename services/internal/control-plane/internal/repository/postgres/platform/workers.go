@@ -1038,7 +1038,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
 	state := "READY"
-	if risk != "READ" || mailboxGate {
+	if (definitionKey != "email" && risk != "READ") || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var invocationID, resolvedRef, resolvedState string

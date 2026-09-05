@@ -72,6 +72,21 @@ func TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate(t *test
 			if err != nil || policy != string(api.HumanGate) || len(scope.Operations) != 1 || scope.Operations[0] != input.Operation {
 				t.Fatalf("exact operation: %v", err)
 			}
+			for _, configured := range []api.Policy{api.Allow, api.Deny} {
+				configuredMailbox := mailbox
+				configuredMailbox.Policies = append(configuredMailbox.Policies[:0:0], mailbox.Policies...)
+				for index := range configuredMailbox.Policies {
+					configuredMailbox.Policies[index].Policy = configured
+				}
+				gate, gateErr := CommandRequiresGate(configuredMailbox, capability.Operation, "opaque:effect", bounded)
+				_, effective, authorizationErr := AuthorizeCommand(configuredMailbox, capability.Operation, "opaque:effect", bounded, input, false)
+				if configured == api.Allow && (gateErr != nil || gate || authorizationErr != nil || effective != string(api.Allow)) {
+					t.Fatalf("explicit mailbox ALLOW required approval: gate=%v err=%v authorization=%v", gate, gateErr, authorizationErr)
+				}
+				if configured == api.Deny && (!errors.Is(gateErr, errs.ErrForbidden) || !errors.Is(authorizationErr, errs.ErrForbidden)) {
+					t.Fatalf("mailbox DENY accepted: gate=%v authorization=%v", gateErr, authorizationErr)
+				}
+			}
 			for _, field := range []string{"digest", "sender", "folder", "effect", "destination"} {
 				bad := input
 				switch field {

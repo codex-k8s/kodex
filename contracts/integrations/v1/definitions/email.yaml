@@ -3,7 +3,7 @@
   "kind": "IntegrationPackage",
   "metadata": {
     "key": "email",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "origin": "SHIPPED"
   },
   "spec": {
@@ -360,7 +360,7 @@
         "description": "Отправить письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
         "operation": "email.message.send",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -456,7 +456,7 @@
         "description": "Ответить отправителю в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
         "operation": "email.message.reply",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -566,7 +566,7 @@
         "description": "Ответить всем в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
         "operation": "email.message.reply_all",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -676,7 +676,7 @@
         "description": "Переслать письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
         "operation": "email.message.forward",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -786,7 +786,7 @@
         "description": "Удалить письмо в exact mailbox; policy и gate проверяет owner. Массивы представлены JSON-строками закрытой схемы, не raw proxy.",
         "operation": "email.message.delete",
         "risk": "DESTRUCTIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1023,7 +1023,7 @@
         "description": "Отметить прочитанным в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.message.mark_read",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1091,7 +1091,7 @@
         "description": "Отметить непрочитанным в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.message.mark_unread",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1159,7 +1159,7 @@
         "description": "Переместить письмо в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.message.move",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1234,7 +1234,7 @@
         "description": "Архивировать письмо в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.message.archive",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1302,7 +1302,7 @@
         "description": "Создать черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.draft.create",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1398,7 +1398,7 @@
         "description": "Обновить черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.draft.update",
         "risk": "SENSITIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [
@@ -1515,7 +1515,7 @@
         "description": "Удалить черновик в разрешенной IMAP папке; exact UIDVALIDITY и policy проверяет owner.",
         "operation": "email.draft.delete",
         "risk": "DESTRUCTIVE",
-        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "approvalPolicy": "NONE",
         "resourceScope": {
           "kind": "EMAIL_SENDER",
           "connectionFields": [

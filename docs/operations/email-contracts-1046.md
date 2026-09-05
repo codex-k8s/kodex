@@ -198,9 +198,12 @@ project/agent view, точный agent grant/version в последнем Runti
 shipped definition version/digest, connection/resource scope, lease и mailbox
 revision. Semantic digest вычисляется общим `emailbridgeapi.CommandForIntegration`,
 не принимается на доверии. Scopes сужаются до конкретной операции, folder,
-destination и recipients неизменяемой команды. Политика mailbox может только
-усилить package minimum; WRITE сохраняет effective HUMAN_GATE даже при mailbox
-ALLOW. READ с mailbox HUMAN_GATE получает owner gate и не claim-ится до approve.
+destination и recipients неизменяемой команды. Только EMAIL использует
+авторитетную mailbox policy вместо общего package minimum: ALLOW исполняется
+без запроса, HUMAN_GATE требует owner gate для READ и WRITE, DENY закрывает
+операцию. Shipped EMAIL 1.4.0 объявляет minimum NONE; это не заменяет проверку
+mailbox policy и пересечения actor, agent grant, connection и exact action.
+Остальные интеграции сохраняют HUMAN_EACH_EFFECT для изменяющих операций.
 Mailbox source digest входит в invocation intent digest.
 
 Connection test допускает только health, с actor исходного Test command,
@@ -235,6 +238,14 @@ configuration + integration read regression. PG проходит реальны�
 Create/credential/Test/claim, health authorization, agent grant/run/gate,
 send authorization, UNKNOWN Report, replay, confirmed observation, revoke и
 re-enable denial. Реальный issuer→CP protected SQL→SMTP: NOT RUN.
+
+Корректировка mailbox approval (миграция 00620): локально PASS
+`TestEmailAllExecutableOperationsUseExactSemanticScopeAndMailboxGate` с матрицей
+ALLOW/HUMAN_GATE/DENY для 21 операции; registry/race проверяет закрытое исключение
+только для 12 EMAIL mutations и запрещает NONE для остальных shipped mutations.
+Targeted PG `email_configuration|integration_read` подтверждает SEND без gate
+при ALLOW, READ с gate при HUMAN_GATE, Report/replay/revoke и неизменённый
+synthetic Human Gate. Targeted integration-gateway EMAIL/catalog race: PASS.
 
 ## Оставшийся Producer
 
