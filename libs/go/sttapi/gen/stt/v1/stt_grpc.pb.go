@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	SpeechToTextService_GetModelCatalog_FullMethodName    = "/stt.v1.SpeechToTextService/GetModelCatalog"
 	SpeechToTextService_Transcribe_FullMethodName         = "/stt.v1.SpeechToTextService/Transcribe"
 	SpeechToTextService_CheckReadiness_FullMethodName     = "/stt.v1.SpeechToTextService/CheckReadiness"
 	SpeechToTextService_CheckProtectedPath_FullMethodName = "/stt.v1.SpeechToTextService/CheckProtectedPath"
@@ -31,6 +32,10 @@ const (
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
 // в текущую версию контракта.
 type SpeechToTextServiceClient interface {
+	// GetModelCatalog возвращает только возможности adapter по отдельному
+	// org-scoped system.configuration.manage authority. Доступен до первой
+	// конфигурации/credential и не подтверждает готовность распознавания.
+	GetModelCatalog(ctx context.Context, in *GetModelCatalogRequest, opts ...grpc.CallOption) (*GetModelCatalogResponse, error)
 	// Transcribe принимает metadata первым сообщением, ограниченные chunks и
 	// commit последним сообщением. Полномочия и конфигурация задаются сервером.
 	Transcribe(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TranscribeRequest, TranscribeResponse], error)
@@ -48,6 +53,16 @@ type speechToTextServiceClient struct {
 
 func NewSpeechToTextServiceClient(cc grpc.ClientConnInterface) SpeechToTextServiceClient {
 	return &speechToTextServiceClient{cc}
+}
+
+func (c *speechToTextServiceClient) GetModelCatalog(ctx context.Context, in *GetModelCatalogRequest, opts ...grpc.CallOption) (*GetModelCatalogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetModelCatalogResponse)
+	err := c.cc.Invoke(ctx, SpeechToTextService_GetModelCatalog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *speechToTextServiceClient) Transcribe(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TranscribeRequest, TranscribeResponse], error) {
@@ -90,6 +105,10 @@ func (c *speechToTextServiceClient) CheckProtectedPath(ctx context.Context, in *
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
 // в текущую версию контракта.
 type SpeechToTextServiceServer interface {
+	// GetModelCatalog возвращает только возможности adapter по отдельному
+	// org-scoped system.configuration.manage authority. Доступен до первой
+	// конфигурации/credential и не подтверждает готовность распознавания.
+	GetModelCatalog(context.Context, *GetModelCatalogRequest) (*GetModelCatalogResponse, error)
 	// Transcribe принимает metadata первым сообщением, ограниченные chunks и
 	// commit последним сообщением. Полномочия и конфигурация задаются сервером.
 	Transcribe(grpc.ClientStreamingServer[TranscribeRequest, TranscribeResponse]) error
@@ -109,6 +128,9 @@ type SpeechToTextServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedSpeechToTextServiceServer struct{}
 
+func (UnimplementedSpeechToTextServiceServer) GetModelCatalog(context.Context, *GetModelCatalogRequest) (*GetModelCatalogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetModelCatalog not implemented")
+}
 func (UnimplementedSpeechToTextServiceServer) Transcribe(grpc.ClientStreamingServer[TranscribeRequest, TranscribeResponse]) error {
 	return status.Error(codes.Unimplemented, "method Transcribe not implemented")
 }
@@ -137,6 +159,24 @@ func RegisterSpeechToTextServiceServer(s grpc.ServiceRegistrar, srv SpeechToText
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&SpeechToTextService_ServiceDesc, srv)
+}
+
+func _SpeechToTextService_GetModelCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetModelCatalogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SpeechToTextServiceServer).GetModelCatalog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SpeechToTextService_GetModelCatalog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SpeechToTextServiceServer).GetModelCatalog(ctx, req.(*GetModelCatalogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _SpeechToTextService_Transcribe_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -189,6 +229,10 @@ var SpeechToTextService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "stt.v1.SpeechToTextService",
 	HandlerType: (*SpeechToTextServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetModelCatalog",
+			Handler:    _SpeechToTextService_GetModelCatalog_Handler,
+		},
 		{
 			MethodName: "CheckReadiness",
 			Handler:    _SpeechToTextService_CheckReadiness_Handler,

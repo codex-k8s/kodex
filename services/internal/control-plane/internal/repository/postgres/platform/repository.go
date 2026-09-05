@@ -659,7 +659,7 @@ func (repository *Repository) ResolvePrincipal(ctx context.Context, principal va
 	return principal, nil
 }
 
-func (repository *Repository) ResolveProofAuthority(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+func (repository *Repository) resolveProofIdentity(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
 	if input.CallerWorkload == "" || input.Operation == "" {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
