@@ -4,7 +4,7 @@ import "time"
 
 type RuntimeSecretDraft struct {
 	Ref, ProjectRef, SecretRef, Name, Description, ValueType, State string
-	Version, Generation, PublishedRevision                          int64
+	Version, Generation, PublishedRevision, SecretVersion           int64
 	CreatedAt, UpdatedAt, ExpiresAt                                 time.Time
 }
 

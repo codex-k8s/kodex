@@ -202,6 +202,7 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 			}
 			result.Secret, err = r.publishSecretDraft(ctx, tx, s, d, o, input.Materialization)
 			if err == nil {
+				d.public.SecretVersion = result.Secret.Version
 				err = r.updateSecretDraft(ctx, tx, &d, "PUBLISHED", nil, o.targetRevision)
 			}
 		case "DISCARD":
