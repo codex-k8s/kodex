@@ -6,6 +6,8 @@ import (
 )
 
 type RuntimeSecretDraftPrepareInput struct {
+	ImpactPlanRef                                                                              string
+	SelectedItemRefs                                                                           []string
 	Kind, DraftRef, SecretRef, ProjectRef, Name, Description, ValueType, ExpectedContentSHA256 string
 	ExpectedSecretVersion                                                                      int64
 	Mutation                                                                                   value.Mutation

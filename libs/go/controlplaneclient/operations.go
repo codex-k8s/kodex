@@ -32,6 +32,8 @@ func STTPolicyProjectionOperations() map[string]string {
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
 		"platform.command.runtime-secret-drafts.save":              controlplanev1.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.impact.prepare":    controlplanev1.PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName,
+		"platform.query.runtime-secret-drafts.impact.get":          controlplanev1.PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName,
 		"platform.command.runtime-secret-drafts.validate":          controlplanev1.PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
 		"platform.command.runtime-secret-drafts.publish":           controlplanev1.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
 		"platform.command.runtime-secret-drafts.discard":           controlplanev1.PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,

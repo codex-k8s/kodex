@@ -76,7 +76,7 @@ EMAIL_EFFECT_RECONCILIATION. Public ingress/listener и новый deployable CP
 CP хранит назначенный сервером staging namespace `kodex-secret-drafts` отдельно
 от runtime namespace `kodex-runtime`; encrypted data key — `ciphertext`,
 published data key — `value`. Readiness проверяет таблицы, sequence и уникальный
-индекс активной операции. Policy revision 57 включает отдельный OIDC producer
+индекс активной операции. Policy revision 58 включает отдельный OIDC producer
 для вызовов Secret Broker с точным target workload. Все D6 work tuples связаны
 через `UNARY_PROTO_SHA256`; их resource/version/attempt metadata запрещены.
 
@@ -101,5 +101,13 @@ Impact prepare/read не создают event; immutable plan и per-item receip
 неверный encrypted descriptor, stale completion, потерю cleanup ACK,
 монотонный target revision после orphan, discard, expiry всех active grants,
 fresh authentication и общий legacy/D6 recovery после revoke.
+Prepublish impact ограничен 1000 items, каждый принадлежит server plan.
+Plan.total — immutable исходное число; paged response.total учитывает текущую
+eligibility и поиск. Cursor связывает actor, plan digest/state и query; terminal
+переход требует новой первой страницы. APPLIED item содержит новую Environment
+revision, а для Agent также тот же binding ref с большей version. Остальные
+outcomes не содержат result refs. Публикация без выбранных items сохраняет
+bindings и отмечает их NOT_SELECTED. Legacy и D6 используют общий монотонный
+диапазон target revisions, включая неубранные orphan attempts.
 Broker apply/readback, HTTP/PWA и live подтверждаются только соответствующими
 unit checkpoints. Это не completion #1046/#1068.

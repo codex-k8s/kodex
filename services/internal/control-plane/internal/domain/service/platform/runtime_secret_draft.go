@@ -60,6 +60,9 @@ func (service *Service) PrepareRuntimeSecretDraft(ctx context.Context, p value.P
 	} else if !runtimeDiffReference.MatchString(input.DraftRef) || input.Mutation.ExpectedVersion == nil || input.Kind == "PUBLISH" && input.ExpectedSecretVersion < 1 {
 		return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
 	}
+	if input.Kind == "PUBLISH" && (!runtimeDiffReference.MatchString(input.ImpactPlanRef) || len(input.SelectedItemRefs) > 1000) {
+		return entity.RuntimeSecretDraftOperationReceipt{}, errs.ErrInvalid
+	}
 	return service.repository.PrepareRuntimeSecretDraft(ctx, p, input)
 }
 
@@ -90,4 +93,36 @@ func (service *Service) CheckRuntimeSecretDraftWork(ctx context.Context, p value
 		return err
 	}
 	return service.repository.CheckRuntimeSecretDraftWork(ctx, p)
+}
+
+func (service *Service) PrepareRuntimeSecretDraftImpact(ctx context.Context, p value.Principal, ref string, mutation value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecretDraftImpactPlan{}, err
+	}
+	if p.CallerWorkload != "control-api-gateway" {
+		return entity.RuntimeSecretDraftImpactPlan{}, errs.ErrForbidden
+	}
+	if !p.InteractiveAuthenticationIsFresh(time.Now().UTC(), 5*time.Minute) {
+		return entity.RuntimeSecretDraftImpactPlan{}, errs.ErrFreshAuthenticationRequired
+	}
+	mutation.Operation = "runtime-secret-draft.impact.prepare"
+	mutation.IntentDigest = digest(struct {
+		Ref     string
+		Version *int64
+	}{ref, mutation.ExpectedVersion})
+	if !runtimeDiffReference.MatchString(ref) || mutation.ExpectedVersion == nil || mutation.Validate() != nil {
+		return entity.RuntimeSecretDraftImpactPlan{}, errs.ErrInvalid
+	}
+	return service.repository.PrepareRuntimeSecretDraftImpact(ctx, p, ref, mutation)
+}
+func (service *Service) GetRuntimeSecretDraftImpact(ctx context.Context, p value.Principal, ref, search string, page query.Page) (entity.RuntimeSecretDraftImpactPage, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.RuntimeSecretDraftImpactPage{}, err
+	}
+	if !runtimeDiffReference.MatchString(ref) || len(search) > 800 || strings.ContainsRune(search, 0) {
+		return entity.RuntimeSecretDraftImpactPage{}, errs.ErrInvalid
+	}
+	return service.repository.GetRuntimeSecretDraftImpact(ctx, p, ref, search, page)
 }
