@@ -35,6 +35,7 @@ node - "$root/tools/dev/deploy-local.sh" <<'JS'
 const fs = require('fs');
 const source = fs.readFileSync(process.argv[2], 'utf8');
 const ordered = [
+  '  ensure_email_projection_secret\n',
   '  wait_certificates\n',
   '  apply_render statefulsets ',
   '  for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do',
@@ -54,3 +55,41 @@ if (!source.includes('email-bridge-migration kodex-postgresql-runtime-credential
 }
 JS
 printf 'Local EMAIL entrypoint contract passed: exact migration, failure and DB/startup ordering\n'
+
+# Изолированный create/readback fixture не вызывает настоящий Kubernetes API.
+# shellcheck disable=SC1090
+source <(awk '
+  /^ensure_email_projection_secret\(\) \{/ { capture=1 }
+  capture { print }
+  capture && /^}$/ { exit }
+' "$root/tools/dev/deploy-local.sh")
+yq 'select(.kind == "Secret") | .metadata.namespace = "kodex-system"' \
+  "$root/deploy/k8s/base/control-plane/email-projection.yaml" >"$render"
+state_file="$temporary_directory/secret-state.json"
+create_log="$temporary_directory/creates"
+kubectl() {
+  if [[ "$*" == *' create '* ]]; then
+    printf 'create\n' >>"$create_log"
+    [[ "${deny_create:-false}" != true ]] || return 1
+    jq -n '{kind:"Secret",type:"Opaque",metadata:{name:"email-bridge-mailbox-projection",namespace:"kodex-system",uid:"fixture-uid",labels:{"app.kubernetes.io/managed-by":"control-plane"}},data:{"mailboxes.json":"fixture-published-generation"}}' >"$state_file"
+    [[ "${create_race:-false}" != true ]] || return 1
+  elif [[ "$*" == *' get secret/email-bridge-mailbox-projection '* ]]; then
+    if [[ -f "$state_file" ]]; then cat "$state_file"; elif [[ "$*" != *'--ignore-not-found'* ]]; then return 1; fi
+  else
+    fail 'unexpected Kubernetes fixture operation'
+  fi
+}
+ensure_email_projection_secret
+before=$(sha256sum "$state_file")
+ensure_email_projection_secret
+[[ $(wc -l <"$create_log") == 1 && "$(sha256sum "$state_file")" == "$before" ]] || fail 'repeat bootstrap overwrote CP generation'
+jq '.metadata.labels["app.kubernetes.io/managed-by"] = "foreign"' "$state_file" >"$temporary_directory/foreign.json"
+mv "$temporary_directory/foreign.json" "$state_file"
+if (ensure_email_projection_secret) >/dev/null 2>&1; then fail 'foreign Secret owner accepted'; fi
+rm "$state_file"
+create_race=true
+ensure_email_projection_secret
+rm "$state_file"
+deny_create=true
+if (ensure_email_projection_secret) >/dev/null 2>&1; then fail 'failed bootstrap accepted'; fi
+printf 'Local EMAIL Secret bootstrap contract passed: create once, preserve generation, race readback and closed denial\n'

@@ -23,6 +23,14 @@ for mutation in \
   '(select(.kind == "Job" and .metadata.name == "email-bridge-migration") | .spec.template.spec.containers[].args) = ["services/internal/email-bridge", "./cmd/cli"]' \
   '(select(.kind == "Job" and .metadata.name == "email-bridge-migration") | .spec.template.spec.volumes[] | select(.name == "database") | .secret.secretName) = "email-bridge-runtime-database"' \
   '(select(.kind == "ConfigMap" and .metadata.name == "email-bridge-runtime") | .data.EMAIL_BRIDGE_AUTHORITY_TARGET) = "control-plane:80"' \
+  '(select(.kind == "ConfigMap" and .metadata.name == "email-bridge-runtime") | .data.EMAIL_BRIDGE_EGRESS_ADDRESS) = "egress-gateway.kodex-system.svc:8080"' \
+  '(select(.kind == "ConfigMap" and .metadata.name == "email-bridge-runtime") | .data.EMAIL_BRIDGE_EGRESS_ADDRESS) = "egress-gateway.kodex-system.svc:8081"' \
+  '(select(.kind == "Deployment" and .metadata.name == "email-bridge") | .spec.template.spec.volumes[] | select(.name == "mail") | .secret.optional) = true' \
+  '(select(.kind == "Deployment" and .metadata.name == "email-bridge") | .spec.template.spec.volumes[] | select(.name == "mail") | .secret.items) = [{"key":"mailboxes.json","path":"mailboxes.json"}]' \
+  '(select(.kind == "Deployment" and .metadata.name == "email-bridge") | .spec.template.spec.containers[] | select(.name == "email-bridge") | .volumeMounts[] | select(.name == "mail") | .subPath) = "mailboxes.json"' \
+  'select(.kind != "Secret" or .metadata.name != "email-bridge-mailbox-projection")' \
+  '(select(.kind == "Role" and .metadata.name == "control-plane-email-projection-writer") | .rules[0].resourceNames) = ["foreign-projection"]' \
+  '(select(.kind == "RoleBinding" and .metadata.name == "control-plane-email-projection-writer") | .subjects[0].name) = "email-bridge"' \
   '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "email-bridge")) | to_yaml)' \
   '(select(.kind == "NetworkPolicy" and .metadata.name == "email-bridge") | .spec.egress) = [{}]' \
   '(select(.kind == "Ingress") | .spec.rules[].http.paths[].backend.service.name) = "email-bridge"'; do

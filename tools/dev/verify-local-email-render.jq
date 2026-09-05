@@ -37,8 +37,8 @@ any(resource("Deployment"; "email-bridge");
       .readinessProbe.httpGet == {path:"/readyz", port:"metrics"} and
       mount("tls"; "/var/run/email/tls"; true) and
       mount("database"; "/var/run/email/database"; true) and
-      mount("configuration"; "/var/run/email/config"; true) and
       mount("mail"; "/var/run/email/mail"; true) and
+      all(.volumeMounts[]; (.subPath // "") == "" and (.subPathExpr // "") == "") and
       mount("application-grant"; "/var/run/secrets/kodex/email-bridge/application-grant"; true)) and
     any(.containers | named("internal-rpc-authority-issuer"); .args[1] == "./cmd/internal-rpc-authority-issuer" and .securityContext.runAsUser == 29001) and
     any(.containers | named("platform-worker-grant-agent");
@@ -52,7 +52,9 @@ any(resource("Deployment"; "email-bridge");
       mount("dev-email-init-bin"; "/usr/local/bin"; false) and
       mount("dev-email-init-tmp"; "/tmp"; false)) and
     any(.volumes[]; .name == "database" and .secret.secretName == "email-bridge-runtime-database") and
-    any(.volumes[]; .name == "mail" and .secret.secretName == "email-bridge-mailbox-projection") and
+    any(.volumes[]; .name == "mail" and .secret.secretName == "email-bridge-mailbox-projection" and
+      (.secret.optional // false) == false and (.secret | has("items") | not)) and
+    all(.volumes[]; .name != "configuration") and
     any(.volumes[]; .name == "tls" and .secret.secretName == "email-bridge-tls") and
     any(.volumes[]; .name == "platform-worker-grant-signer" and .secret.secretName == "email-bridge-platform-worker-grant-signer") and
     all(.volumes[] | select(.name | startswith("dev-email-tmp-")); .emptyDir == {sizeLimit:"128Mi"}))) and
@@ -70,7 +72,18 @@ any(resource("StatefulSet"; "email-bridge-postgresql") | .spec.template.spec;
   any(.containers | named("postgresql"); (.args | index("ssl=on")) != null)) and
 any(resource("ConfigMap"; "email-bridge-runtime");
   .data.EMAIL_BRIDGE_AUTHORITY_TARGET == "control-plane.kodex-system.svc.cluster.local:8443" and
-  .data.EMAIL_BRIDGE_EGRESS_ADDRESS == "egress-gateway.kodex-system.svc:8080") and
+  .data.EMAIL_BRIDGE_EGRESS_ADDRESS == "egress-gateway.kodex-system.svc:8082" and
+  .data.EMAIL_BRIDGE_SECRETS_ROOT == "/var/run/email/mail" and
+  (.data | has("EMAIL_BRIDGE_CONFIGURATION_FILE") | not)) and
+any(resource("Secret"; "email-bridge-mailbox-projection");
+  .metadata.labels["app.kubernetes.io/managed-by"] == "control-plane" and
+  .type == "Opaque" and .immutable != true and
+  (.stringData["mailboxes.json"] | fromjson | .version == "email-bridge/v1")) and
+any(resource("Role"; "control-plane-email-projection-writer");
+  .rules == [{apiGroups:[""],resources:["secrets"],resourceNames:["email-bridge-mailbox-projection"],verbs:["get","update"]}]) and
+any(resource("RoleBinding"; "control-plane-email-projection-writer");
+  .roleRef == {apiGroup:"rbac.authorization.k8s.io",kind:"Role",name:"control-plane-email-projection-writer"} and
+  .subjects == [{kind:"ServiceAccount",name:"control-plane",namespace:"kodex-system"}]) and
 any(resource("Service"; "email-bridge");
   .spec.selector["app.kubernetes.io/name"] == "email-bridge" and
   any(.spec.ports[]; .name == "https" and .port == 443 and .targetPort == "https")) and

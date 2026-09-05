@@ -77,9 +77,13 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 ## Локальная подготовка EMAIL
 
 Зависимость: EMAIL #1037, [PR #1062](https://github.com/codex-k8s/kodex/pull/1062),
-`4813c147ad97dfe45f7987c901e8b350b073611c` поверх `8026633a9`.
+`2d66e9d67` с CP publisher `af74fc7dc` поверх `8026633a9`.
 Она включена вместе с сохранённым #1056: optional session-archive,
 backup-controller и точное назначение archive issuer не удаляются.
+Локальная интеграционная ветка также потребляет egress `f8da405af`, controller
+`9aaf738a3`, runner `731f2a7c3`, integration `7253f43b8`, interaction
+`1ab0d09f1`, authority `0765f3dad` и HTTP D1/D7 `03564b5f4`.
+Это зависимости отдельных unit PR, а не завершённый `main` или допуск стенда.
 
 В обоих локальных профилях исполняются email-bridge, authority issuer и
 platform-worker-grant-agent через закреплённые Go/Air, а CLI миграции через
@@ -96,11 +100,15 @@ issuer 29001, grant agent 29004. Writable grant volume остаётся дост
 | Подготовка без API | `render-local.sh` использует локальный Kustomize и сохраняет profile, source SHA и content digest. Новые credentials не выдаются. |
 | Разрешённая установка оператором | Существующий installer материализует отдельные runtime/migration DB descriptors и сертификаты; `deploy-local.sh` ждёт Certificates, PostgreSQL StatefulSet, затем запускает точный migration Job и ждёт completion до application Deployments. |
 | Повторная установка | Точное имя migration Job пересоздаётся bounded-командой; goose использует собственную таблицу версий EMAIL. Ошибка миграции прерывает установку. Итоговый readback включает EMAIL PostgreSQL и migration Job. |
+| Bootstrap mailbox projection | До запуска CP/EMAIL installer создаёт отсутствующий canonical Secret ровно один раз. Существующий Secret проверяется по точным имени, namespace, UID, типу и owner label; его данные не перезаписываются. Гонка create завершается повторным readback, чужой owner и ошибка API прерывают установку. |
 | Hot reload | Air наблюдает модуль EMAIL и `libs/go`; не переписывает authority, TLS, Secret descriptors или immutable runner pins. Почтовые effects и unknown-outcome остаются ответственностью EMAIL owner. |
-| Недоступный producer | `COMMON_EMAIL` / `email-bridge-mailbox-projection` не синтезируется из allowlist. Нет фиктивных mailbox credentials или обхода readiness. |
+| Обновление mailbox projection | CP publisher обновляет целый `email-bridge-mailbox-projection` через exact `get/update` RBAC. EMAIL получает обязательный read-only Secret volume без `items`, `subPath` и `subPathExpr`; loader проверяет единое AtomicWriter поколение документа и credential keys. Пустой release bootstrap не выдаёт mailbox authority. |
+| Недоступный producer | Ошибка CP publisher или недоступные credentials не заменяются allowlist. Нет фиктивных mailbox credentials или обхода readiness. |
 
 Service остаётся внутренним HTTPS `443 -> https/8443`, CP authority идёт по
-точному gRPC target с TLS, egress и NetworkPolicy сохраняются из EMAIL dependency.
+точному gRPC target с TLS. Mail CONNECT использует только отдельный
+`egress-gateway.kodex-system.svc:8082`; general `8080` и STT `8081`
+отклоняются render-проверкой. NetworkPolicy сохраняются из EMAIL dependency.
 Новый Ingress для EMAIL не создаётся. Проверка сравнивает полные canonical
 NetworkPolicy specs, issuer binding и имена Secret descriptors, не их значения.
 Локальная замена Go image не меняет runtime-controller schema/policy и
@@ -113,6 +121,7 @@ assertions остаются обязательными.
 make test-full-local-e2e-entrypoint test-local-go-cache-contract \
   test-local-image-cache-import-contract test-local-material-contract-revision \
   test-local-backup-controller-credentials-contract
+make test-automation-scheduler
 timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
   --profile web-only --cache-root /tmp/kodex-1031-email-render-cache
 timeout 300s bash scripts/tests/local-role-image-render-contract-test.sh \
@@ -121,18 +130,22 @@ timeout 450s bash scripts/tests/local-email-process-contract-test.sh \
   /tmp/kodex-1031-email-render-cache
 ```
 
-Оба renderer запускают EMAIL positive и 17 negative cases. Process fixture
+Оба renderer запускают EMAIL positive и 25 negative cases. Process fixture
 требует заранее доступный закреплённый Go image и primed cache: Docker
 `--network none`, non-root, read-only root/source/modules, отдельные tmpfs.
 Она выполняет настоящий socket init, отказ CLI без DSN и сборку через Air;
 не подключается к PostgreSQL, mailbox или Kubernetes и не заменяет live E2E.
 
-На исходном EMAIL SHA root подтвердил install/TLS bootstrap, оба production
-render, protocol/PG race и codegen/Go checks. Эти проверки здесь не дублируются.
-Сообщённый root результат полного `test-web-only-release` остаётся **FAIL**:
-отсутствует producer `email-bridge-mailbox-projection` у CP #1046. Локальный
-render PASS означает только готовность подготовки, не устранение этого FAIL.
-После интеграции producer нужен новый общий gate на точном интегрированном SHA.
+Прежняя причина `test-web-only-release` FAIL, отсутствующий CP publisher,
+устранена потреблением owner checkpoint `af74fc7dc`; новый результат определяется
+запуском на интегрированном дереве, а не результатами отдельных PR.
+Дополнительно через Context7 проверены официальные правила
+[Secret volumes](https://kubernetes.io/docs/concepts/configuration/secret/):
+обновление eventually consistent, `subPath` не получает обновления,
+immutable Secret нельзя использовать как обновляемую проекцию.
+Остаются отдельные зависимости полного прототипа: CP D2–D6, PWA и следующий
+EMAIL source-header checkpoint владельца. Локальный render не заменяет
+общий gate на точном интегрированном SHA.
 До разрешения владельца `up`, import в k3s, apply/deploy, SSH, live provider
 и live E2E остаются **NOT RUN**.
 

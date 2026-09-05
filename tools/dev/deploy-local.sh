@@ -322,6 +322,37 @@ wait_job() {
   fail "local Job timed out: $name"
 }
 
+ensure_email_projection_secret() {
+  local name=email-bridge-mailbox-projection state output
+  output="$temporary_directory/email-projection-bootstrap.yaml"
+  state=$(kubectl -n "$namespace" get "secret/$name" --ignore-not-found --request-timeout=20s -o json) ||
+    fail 'email projection Secret discovery failed'
+  if [[ -z "$state" ]]; then
+    yq 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection")' "$render" >"$output"
+    yq -o=json -I=0 '.' "$output" | jq -s -e '
+      length == 1 and .[0].metadata.namespace == "kodex-system" and
+      .[0].metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
+      .[0].type == "Opaque" and .[0].immutable != true and
+      (.[0].stringData."mailboxes.json" | fromjson | .version == "email-bridge/v1")
+    ' >/dev/null || fail 'canonical email projection bootstrap is invalid'
+    # Не применяем пустой bootstrap повторно поверх опубликованного CP поколения.
+    if ! kubectl -n "$namespace" create --field-manager=kodex-local-dev --request-timeout=20s -f "$output" >/dev/null 2>&1; then
+      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
+        fail 'email projection Secret creation failed'
+    else
+      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
+        fail 'email projection Secret readback failed'
+    fi
+  fi
+  jq -e '
+    .kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection" and
+    .metadata.namespace == "kodex-system" and
+    .metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
+    (.metadata.uid | type == "string" and length > 0) and
+    .type == "Opaque" and .immutable != true
+  ' <<<"$state" >/dev/null || fail 'email projection Secret ownership readback failed'
+}
+
 apply_job() {
   local name=$1 output
   output="$temporary_directory/job-$name.yaml"
@@ -1077,6 +1108,7 @@ if [[ "$mode" == apply ]]; then
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
   cleanup_local_frontend_transport
+  ensure_email_projection_secret
   ensure_session_archive_worker_secret
   cleanup_legacy_session_archive_worker_resources
   wait_certificates
