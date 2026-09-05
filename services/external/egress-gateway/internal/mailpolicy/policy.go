@@ -2,8 +2,6 @@ package mailpolicy
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,34 +9,20 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 const (
-	MailSchema       = "egress-mail/v1"
-	MailProfileName  = "email-mail"
-	MailWorkload     = "email-bridge"
-	MailOperation    = "email.transport"
-	MaximumFileBytes = policy.MaximumFileBytes
+	MailSchema       = shared.MailSchema
+	MailProfileName  = shared.MailProfileName
+	MailWorkload     = shared.MailWorkload
+	MailOperation    = shared.MailOperation
+	MaximumFileBytes = shared.MaximumFileBytes
 )
 
-// MailDocument содержит только произведённые endpoint pins, не mailbox credentials.
-type MailDocument struct {
-	Schema                string            `json:"schema"`
-	ConfigurationRevision int64             `json:"configurationRevision"`
-	ConfigurationDigest   string            `json:"configurationDigest"`
-	GatewayPolicyDigest   string            `json:"gatewayPolicyDigest"`
-	Destinations          []MailDestination `json:"destinations"`
-}
-
-type MailDestination struct {
-	Hostname  string   `json:"hostname"`
-	Port      int      `json:"port"`
-	Protocol  string   `json:"protocol"`
-	TLSMode   string   `json:"tlsMode"`
-	Addresses []string `json:"addresses"`
-}
+type MailDocument = shared.MailDocument
+type MailDestination = shared.MailDestination
 
 type MailActive struct {
 	document MailDocument
@@ -47,16 +31,7 @@ type MailActive struct {
 }
 
 func MailEndpointValid(protocol string, port int, mode string) bool {
-	switch protocol {
-	case "smtp":
-		return port == 465 && mode == "implicit" || port == 587 && mode == "starttls"
-	case "pop3":
-		return port == 995 && mode == "implicit" || port == 110 && mode == "starttls"
-	case "imap":
-		return port == 993 && mode == "implicit" || port == 143 && mode == "starttls"
-	default:
-		return false
-	}
+	return shared.MailEndpointValid(protocol, port, mode)
 }
 
 func LoadMailFile(path, expectedDigest string, base *policy.Active) (*MailActive, error) {
@@ -87,47 +62,6 @@ func LoadMail(raw []byte, expectedDigest string, base *policy.Active) (*MailActi
 		return nil, errors.New("mail policy digest mismatch")
 	}
 	return &MailActive{document: document, digest: digest, limits: base.Limits()}, nil
-}
-
-func (d MailDocument) Validate() error {
-	invalid := errors.New("mail destination projection is invalid")
-	if d.Schema != MailSchema || d.ConfigurationRevision < 1 || !mailDigest(d.ConfigurationDigest) || !mailDigest(d.GatewayPolicyDigest) || d.Destinations == nil || len(d.Destinations) > 64 {
-		return invalid
-	}
-	seen := map[string]bool{}
-	for _, destination := range d.Destinations {
-		if _, err := policy.NormalizeHostname(destination.Hostname); err != nil || !MailEndpointValid(destination.Protocol, destination.Port, destination.TLSMode) || len(destination.Addresses) == 0 || len(destination.Addresses) > 32 {
-			return invalid
-		}
-		key := destination.Hostname + ":" + strconv.Itoa(destination.Port)
-		if seen[key] {
-			return invalid
-		}
-		seen[key] = true
-		addresses := []netip.Addr{}
-		for _, raw := range destination.Addresses {
-			address, err := netip.ParseAddr(raw)
-			if err != nil || address.String() != raw {
-				return invalid
-			}
-			addresses = append(addresses, address)
-		}
-		if dnsresolver.ValidateAddresses(addresses) != nil {
-			return invalid
-		}
-	}
-	return nil
-}
-
-func mailDigest(value string) bool {
-	decoded, err := hex.DecodeString(value)
-	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
-}
-
-func (d MailDocument) Digest() string {
-	raw, _ := json.Marshal(d)
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:])
 }
 
 func (a *MailActive) Revision() string {

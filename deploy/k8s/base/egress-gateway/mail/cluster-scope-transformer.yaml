@@ -1,0 +1,14 @@
+apiVersion: builtin
+kind: PatchTransformer
+metadata:
+  name: egress-mail-admission-cluster-scope
+patch: |-
+  - op: add
+    path: /metadata/namespace
+    value: ""
+  - op: remove
+    path: /metadata/namespace
+target:
+  group: admissionregistration.k8s.io
+  version: v1
+  kind: ValidatingAdmissionPolicy(Binding)?

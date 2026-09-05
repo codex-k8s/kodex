@@ -4,7 +4,7 @@ title: Почтовый CONNECT профиль
 type: runbook
 status: approved
 owner: security
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -43,6 +43,25 @@ EMAIL сравнивает эти значения со своим immutable doc
 revision/digest из request не являются источником полномочий.
 
 ## Проекция и смена конфигурации
+
+`libs/go/mailpolicy` содержит единственный typed producer, wire validation и
+render для CP #1046 и egress. API принимает `emailbridgeapi.Configuration`,
+точный gateway digest и owner resolver со свежим полным `Snapshot`.
+Сервисный CLI адаптирует raw source к этому API; runtime adapter сохраняет
+gateway limits, строгий loader и readiness. Shared hostname/address validation
+используется также общим DNS resolver. Извлечение не меняет wire schema,
+канонический digest или bootstrap bytes и не публикует ничего в Kubernetes.
+
+Право CP создавать digest-named ConfigMap ограничивается
+`egress-mail-configmap-publication` VAP/Binding. Их source —
+`mailpolicy.PublicationAdmissionResources()`, generated deploy JSON обновляется
+`bash tools/generate-mail-admission.sh`. Admission действует на CP CREATE во
+всех namespaces и разрешает только exact immutable `kodex-system` mail resource.
+Другие identities сохраняют прежний RBAC, что допускает установку пустого seed
+по owner-approved installation path. CP publication обязан читать actual
+VAP/Binding spec и готовность перед create; namespaceSelector не может скрыть
+запрос к чужому namespace от проверки. JSON семантика/digest дополнительно
+проверяются producer и consumer. Широкого права update/delete этих ConfigMap у CP нет.
 
 `tools/render-egress-mail.sh staging|production <image-digest> <registry-fqdn>
 <mailboxes.yaml> <trusted-resolv.conf>` выполняет только локальную генерацию.
