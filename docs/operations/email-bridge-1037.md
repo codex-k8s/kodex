@@ -401,8 +401,11 @@ FORCE RLS receipt строке закрытый `report_source`, его digest, 
 idempotency key. Повтор начинается после исходного lease + completion budget.
 Adapter снимает только локальный запрет истёкшего lease для этого replay;
 generated client по-прежнему получает свежие transport/worker полномочия.
-CP должен вернуть именно ранее сохранённое наблюдение. Replay не разрешает
-новую запись после expiry и никогда не обращается к mail Provider.
+CP возвращает ранее сохранённое наблюдение либо принимает поздний UNKNOWN
+по прежде выданной immutable authorization с теми же organization/source/
+lease/fence/generation/semantic digest. Поздний terminal требует прежний UNKNOWN
+и не может противоречить решению владельца. Этот путь не продлевает grant,
+не открывает invocation повторно и никогда не обращается к mail Provider.
 
 Точное подтверждение сначала сохраняет CP ref/version, затем закрывает
 pending report. Сбой между этими шагами приводит к идемпотентному повтору.
@@ -417,8 +420,17 @@ atomic validation, удаление fence и отказ при поврежде�
 проверяют original expired Binding в gRPC mapping, deny/error readback,
 частичный прогресс и cancel/join на barrier/PG/RPC/remember/ACK.
 
-Оставшаяся граница: если Report не был сохранён в CP до expiry, exact replay
-не имеет права создать первое наблюдение. Local receipt остаётся закрытым;
-авторитетный путь разрешения такого случая относится к #1046. Эти тесты
-покрывают потерю ответа уже сохранённого наблюдения и не доказывают этот
-отдельный сценарий. Полный issuer → CP SQL → EMAIL и staging: NOT RUN.
+В интеграции `25b10c8bf` потреблён CP `bc146c2c7` с поздней записью наблюдения:
+если первый Report не дошёл до CP до expiry, worker сохраняет UNKNOWN по
+прежней authorization. CP атомарно закрывает истёкший RUNNING источник в
+UNKNOWN_OUTCOME; owner reconciliation доступна также для FAILED/CANCELLED,
+но новый claim и provider retry запрещены. Terminal без начального UNKNOWN
+отклоняется. Источник SUCCEEDED не получает новое UNKNOWN наблюдение.
+
+На этом SHA локально PASS: EMAIL race/vet/build, integrationpackage race,
+EMAIL codegen и render обоих профилей. Настоящий CP PostgreSQL contour
+`email_configuration|email_receipt` проверил выдачу authorization до expiry,
+первый Report после expiry, поздний terminal, owner decision/Resolve,
+FAILED/CANCELLED, подмену fence и отсутствие повторного claim. Это отдельные
+owner/consumer контуры, не доказательство полной защищённой цепочки.
+Полный issuer → CP SQL → EMAIL, доставка mailbox projection и staging: NOT RUN.
