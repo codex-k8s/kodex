@@ -137,6 +137,8 @@ updated: 2026-07-28
 | `RUN-MC-007`       | `docs/runbooks/control-plane.md`                            |
 | `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
 | `OPS-INT-1028`     | `docs/operations/integration-gateway-1028.md`               |
+| `OPS-EMAIL-1037`   | `docs/operations/email-bridge-1037.md`                      |
+| `RUN-EMAIL-1037`   | `docs/runbooks/email-bridge.md`                            |
 | `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
 | `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |
