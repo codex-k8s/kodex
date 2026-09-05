@@ -1,0 +1,14 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "email-bridge-configuration",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge-configuration"
+    }
+  },
+  "data": {
+    "mailboxes.yaml": "version: email-bridge/v1\nrevision: 1\nmanaged_by: git\nsource: release-bootstrap\nmailboxes: []\n"
+  }
+}

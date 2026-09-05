@@ -150,12 +150,28 @@ func writeFallbackAvatar(w http.ResponseWriter, ref string) error {
 }
 
 func (server *Server) ListProviderDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListProviderDefinitionsParams) {
+	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListProviderDefinitions(r.Context(), &controlplanev1.ListProviderDefinitionsRequest{
 		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
+	}
+	for _, definition := range response.GetDefinitions() {
+		if definition == nil {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+		for _, model := range definition.Models {
+			if _, valid := modelCapabilityView(model); !valid || model.ProviderDefinitionKey != definition.Key {
+				writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+				return
+			}
+		}
 	}
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
@@ -322,14 +338,7 @@ func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.R
 }
 
 func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
-	response, err := server.control.Query.ListTemplateVariables(r.Context(), &controlplanev1.ListTemplateVariablesRequest{
-		ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
-	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "variables")
+	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), p.PageSize, p.PageToken)
 }
 
 func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.ValidatePromptTemplateParams) {

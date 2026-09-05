@@ -26,6 +26,7 @@ func main() {
 		{"platform-worker/session-archive", "session-archive-platform-worker-g1"},
 		{"platform-worker/integration-gateway", "integration-gateway-platform-worker-g1"},
 		{"platform-worker/interaction-gateway", "interaction-gateway-platform-worker-g1"},
+		{"platform-worker/email-bridge", "email-bridge-platform-worker-g1"},
 		{"platform-worker/runtime-controller", "runtime-controller-platform-worker-g1"},
 		{"platform-worker/role-image-builder", "role-image-builder-platform-worker-g1"},
 		{"platform-worker/image-admission", "image-admission-platform-worker-g1"},

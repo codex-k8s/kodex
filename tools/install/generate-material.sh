@@ -180,7 +180,7 @@ for role in \
   ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 \
   ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 \
   ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 \
-  ira_interaction_gateway_issuer_g1 ira_runtime_controller_issuer_g1 \
+  ira_interaction_gateway_issuer_g1 ira_email_bridge_issuer_g1 ira_runtime_controller_issuer_g1 \
   ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1; do
   openssl rand -hex 32 >"$output_directory/postgresql/roles/$role"
 done
@@ -220,6 +220,20 @@ put_material kodex/artifact-retention/postgres-runtime dsn \
   "$output_directory/database/artifact_retention_runtime_g1/dsn"
 put_material internal-rpc-authority/postgres-migration dsn \
   "$output_directory/database/internal_rpc_authority_migrator/dsn"
+
+# Почтовая БД изолирована от PostgreSQL control-plane и authority.
+for role in admin runtime migration; do
+  write_value "$output_directory/material/kodex/email-bridge/postgres-bootstrap/$role-password" \
+    "$(openssl rand -hex 32)"
+done
+for role in runtime migration; do
+  username=email_bridge_runtime
+  [[ "$role" != migration ]] || username=email_bridge_migrator
+  password=$(<"$output_directory/material/kodex/email-bridge/postgres-bootstrap/$role-password")
+  write_value "$output_directory/material/kodex/email-bridge/postgres-$role/dsn" \
+    "postgresql://$username:$password@email-bridge-postgresql.kodex-system.svc.cluster.local:5432/email_bridge?sslmode=verify-full&sslrootcert=/var/run/email/tls/ca.crt"
+done
+unset username password
 
 openssl rand -hex 32 >"$output_directory/control-api/session-current.hex"
 openssl rand -hex 32 >"$output_directory/control-api/session-previous.hex"
@@ -361,7 +375,7 @@ put_material kodex/image-admission/signing public_key "$output_directory/registr
     --output "$output_directory/crypto/authority-bootstrap"
 )
 
-for worker in automation-scheduler session-archive integration-gateway interaction-gateway runtime-controller role-image-builder image-admission image-promotion secret-broker control-plane; do
+for worker in automation-scheduler session-archive integration-gateway interaction-gateway email-bridge runtime-controller role-image-builder image-admission image-promotion secret-broker control-plane; do
   put_material "kodex/platform-worker-grants/$worker" private.jwk \
     "$output_directory/crypto/platform-worker/$worker/private.jwk"
   put_material "kodex/platform-worker-grants/$worker" public-jwk \

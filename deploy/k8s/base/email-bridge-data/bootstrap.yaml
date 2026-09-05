@@ -1,0 +1,16 @@
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "email-bridge-postgresql-bootstrap",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge-postgresql-bootstrap"
+    }
+  },
+  "data": {
+    "bootstrap.sql": "\\getenv runtime_password EMAIL_RUNTIME_PASSWORD\n\\getenv migration_password EMAIL_MIGRATION_PASSWORD\nCREATE ROLE email_bridge_runtime LOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT PASSWORD :'runtime_password';\nCREATE ROLE email_bridge_migrator LOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT PASSWORD :'migration_password';\nCREATE DATABASE email_bridge OWNER email_bridge_migrator;\nREVOKE ALL ON DATABASE email_bridge FROM PUBLIC;\nGRANT CONNECT ON DATABASE email_bridge TO email_bridge_runtime,email_bridge_migrator;",
+    "bootstrap.sh": "#!/bin/sh\nset -eu\nexport EMAIL_RUNTIME_PASSWORD=\"$(cat /var/run/email-bootstrap/runtime-password)\"\nexport EMAIL_MIGRATION_PASSWORD=\"$(cat /var/run/email-bootstrap/migration-password)\"\nif ! psql --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file /bootstrap/bootstrap.sql >/dev/null 2>&1; then\n  echo 'Email database bootstrap failed' >&2\n  exit 1\nfi\nunset EMAIL_RUNTIME_PASSWORD EMAIL_MIGRATION_PASSWORD",
+    "pg_hba.conf": "local all all trust\nhostssl email_bridge email_bridge_runtime all scram-sha-256\nhostssl email_bridge email_bridge_migrator all scram-sha-256\nhost all all all reject"
+  }
+}

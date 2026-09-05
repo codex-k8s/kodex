@@ -40,6 +40,10 @@ JOIN control_plane.integration_connections connection
   ON connection.id = integration_grant.connection_id
  AND connection.definition_key = 'mattermost'
  AND connection.enabled
+ AND connection.organization_id = integration_grant.organization_id
+ AND connection.lifecycle_state = 'ACTIVE'
+ AND connection.definition_version = integration_grant.definition_version
+ AND connection.definition_digest = integration_grant.definition_digest
  AND connection.state IN ('CONNECTED', 'DEGRADED')
 WHERE gate.id = @gate_id::uuid
 ON CONFLICT DO NOTHING

@@ -17,7 +17,7 @@ service AuthorizationIssuerService {
   // IssueContinuationAuthorizationContext выпускает child context только из
   // уже принятого локальным verifier parent context. Actor/tenant/project и
   // provenance наследуются; request не может их переопределить.
-  rpc IssueContinuationAuthorizationContext(IssueContinuationAuthorizationContextRequest) returns (IssueAuthorizationContextResponse);
+  rpc IssueContinuationAuthorizationContext(IssueContinuationAuthorizationContextRequest) returns (IssueContinuationAuthorizationContextResponse);
 
   // CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
   // signing/policy snapshot, которые использует рабочий выпуск.
@@ -208,6 +208,17 @@ message IssueAuthorizationContextResponse {
   google.protobuf.Timestamp expires_at = 2;
   // Все revision/generation ограничены JSON safe integer:
   // 1..9007199254740991.
+  uint64 source_revision = 3;
+  string source_digest_sha256 = 4;
+  uint64 key_set_revision = 5;
+  uint64 policy_revision = 6;
+  uint64 signer_generation = 7;
+  uint32 authority_abi_version = 8;
+}
+
+message IssueContinuationAuthorizationContextResponse {
+  string compact_jws = 1;
+  google.protobuf.Timestamp expires_at = 2;
   uint64 source_revision = 3;
   string source_digest_sha256 = 4;
   uint64 key_set_revision = 5;

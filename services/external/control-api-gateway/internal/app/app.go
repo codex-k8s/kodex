@@ -80,6 +80,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
 		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
 		DialTimeout: config.RPCTimeout, RequestTimeout: config.RPCTimeout,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, Proofs: control,
 	})
 	if err != nil {
 		return err
@@ -119,6 +120,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := api.AttachSecretBroker(secrets.SecretBroker); err != nil {
+		return err
+	}
+	if err := api.AttachSecretDraftBroker(secrets.Drafts); err != nil {
 		return err
 	}
 	if err := api.AttachSpeechToText(speech.Speech); err != nil {
@@ -257,15 +261,12 @@ func methodOperations() map[string]string {
 func authorityProofOperations() map[string]string {
 	result := controlplaneclient.ControlAPIGatewayOperations()
 	maps.Copy(result, controlplaneclient.STTGatewayOperations())
+	maps.Copy(result, controlplaneclient.SecretDraftGatewayOperations())
 	return result
 }
 
 func authorityProjectRequiredOperations() map[string]struct{} {
-	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
-	for operation := range controlplaneclient.STTGatewayOperations() {
-		result[operation] = struct{}{}
-	}
-	return result
+	return controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
 }
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

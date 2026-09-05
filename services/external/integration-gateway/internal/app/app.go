@@ -64,6 +64,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	adapter, err := integration.New(integration.Config{
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
 		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
+		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 	})
 	if err != nil {
 		return err

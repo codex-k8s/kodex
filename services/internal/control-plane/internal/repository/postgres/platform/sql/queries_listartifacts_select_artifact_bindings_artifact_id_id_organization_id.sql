@@ -16,13 +16,9 @@ LEFT JOIN control_plane.runs r ON r.id=ar.run_id
 LEFT JOIN control_plane.sessions s ON s.id=r.session_id
 LEFT JOIN control_plane.run_nodes n ON n.id=ar.node_id
 WHERE ar.organization_id=@organization_id::uuid
-  AND ((@project_ref='' AND ar.project_id IS NULL) OR (@project_ref<>'' AND p.ref=@project_ref))
+  AND (@project_ref='' OR p.ref=@project_ref)
   AND (@run_ref='' OR r.ref=@run_ref)
-  AND (@role IN ('OWNER','ADMINISTRATOR') OR (ar.project_id IS NULL AND ar.created_by=@actor_id::uuid) OR EXISTS(
-    SELECT 1 FROM control_plane.memberships m
-    WHERE m.project_id=ar.project_id AND m.subject_id=@actor_id::uuid AND m.active AND 'VIEW'=ANY(m.permissions)
-  ))
-  AND (@query='' OR ar.file_name ILIKE '%'||@query||'%')
+  AND (@query='' OR strpos(lower(ar.file_name),lower(@query)) > 0)
   AND ar.lifecycle_state=@lifecycle_state
   AND (@scan_state='' OR ar.scan_state=@scan_state)
   AND (@source_kind='' OR ar.source=@source_kind)
@@ -41,7 +37,11 @@ WHERE ar.organization_id=@organization_id::uuid
       OR lower(ar.file_name) ~ '\.(doc|docx|odt|ppt|pptx|csv|ods|xls|xlsx)$'
     ))
   )
-  AND (@cursor_created::timestamptz IS NULL OR ar.created_at < @cursor_created::timestamptz OR
-       (ar.created_at = @cursor_created::timestamptz AND ar.ref < @cursor_ref))
-ORDER BY ar.created_at DESC,ar.ref DESC
+  AND (@cursor_ref = '' OR ar.ref > @cursor_ref)
+  AND (@authority_project = '' OR ar.project_id = NULLIF(@authority_project,'')::uuid)
+  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
+        AND control_plane.catalog_resource_visible(ar.organization_id, @actor_id::uuid, 'artifact.view', target.kind,
+            target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp()))
+ORDER BY ar.ref
 LIMIT @limit

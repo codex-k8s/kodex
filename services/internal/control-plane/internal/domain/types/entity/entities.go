@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 type Project struct {
@@ -57,8 +58,12 @@ type RuntimeSelection struct {
 }
 
 type ProviderAccountCandidate struct {
-	AccountRef string `json:"accountRef"`
-	Weight     int32  `json:"weight"`
+	AccountRef             string `json:"accountRef"`
+	Weight                 int32  `json:"weight"`
+	CatalogRevision        string `json:"catalogRevision,omitempty"`
+	CatalogDigest          string `json:"catalogDigest,omitempty"`
+	ProviderDefinitionKey  string `json:"providerDefinitionKey,omitempty"`
+	DefaultReasoningEffort string `json:"defaultReasoningEffort,omitempty"`
 }
 
 type ProviderAccountPolicyVersion struct {
@@ -76,11 +81,13 @@ type AgentRuntimeConfiguration struct {
 }
 
 type ConfigOverlayVersion struct {
-	Ref, State, Content, Digest string
-	Version, Revision           int64
-	ValidationMessages          []string
-	CreatedAt                   time.Time
-	PublishedAt                 *time.Time
+	Ref, State, Content, Digest  string
+	Version, Revision            int64
+	ValidationMessages           []string
+	CreatedAt                    time.Time
+	PublishedAt                  *time.Time
+	Diagnostics                  []runtimecontract.ConfigOverlayDiagnostic
+	SchemaRevision, SchemaDigest string
 }
 
 type RuntimeEnvironmentValue struct {
@@ -103,6 +110,7 @@ type RuntimeSecretDescriptor struct {
 type RuntimeSecretBinding struct {
 	Name      string
 	SecretRef string
+	Revision  int64
 }
 
 type RuntimeEnvironmentTool struct {
@@ -151,21 +159,25 @@ type RuntimeEnvironmentReadiness struct {
 }
 
 type AgentRuntimeEnvironmentBinding struct {
-	Ref, AgentRef, EnvironmentRef, Digest string
-	Version                               int64
+	Ref, AgentRef, EnvironmentRef, Digest, VersionRef string
+	Version                                           int64
 }
 
 type AgentRuntimeConfigurationView struct {
-	Configuration       AgentRuntimeConfiguration
-	PublishedOverlay    ConfigOverlayVersion
-	DraftOverlay        *ConfigOverlayVersion
-	EnvironmentBinding  AgentRuntimeEnvironmentBinding
-	Environment         RuntimeEnvironmentSet
-	SafeEffectiveConfig string
-	AgentVersion        int64
+	OverlaySchema                 runtimecontract.ConfigOverlaySchema
+	SkillBindings, MemoryBindings []AgentContextBinding
+	Configuration                 AgentRuntimeConfiguration
+	PublishedOverlay              ConfigOverlayVersion
+	DraftOverlay                  *ConfigOverlayVersion
+	EnvironmentBinding            AgentRuntimeEnvironmentBinding
+	Environment                   RuntimeEnvironmentSet
+	SafeEffectiveConfig           string
+	AgentVersion                  int64
 }
 
 type TemplateVariable struct {
+	Available                                bool
+	Reason                                   string
 	Name, Type, Description, Example, Source string
 	Collection                               bool
 	ItemType, RangeExample                   string
@@ -173,6 +185,12 @@ type TemplateVariable struct {
 }
 
 type TemplateVariableField struct{ Name, Type, Description string }
+
+type EmailMailboxCredential struct {
+	Name, Kind, ConnectionRef                                  string
+	Generation, ConnectionVersion                              int64
+	ContentSHA256, SecretRef, SecretUID, SecretResourceVersion string
+}
 
 type ProviderDefinition struct {
 	Key, Name, Description, DefaultModelID string
@@ -187,6 +205,18 @@ type ModelCapability struct {
 	ReasoningEfforts                                  []string
 	EligibleProviderAccountRefs, ReadinessBlockers    []string
 	Available                                         bool
+}
+
+type ModelCatalog struct {
+	Models                          []ModelCapability
+	Total                           int64
+	NextPageToken, Revision, Digest string
+	Status                          *ModelCatalogStatus
+}
+
+type ModelCatalogStatus struct {
+	State, Source, Failure string
+	ObservedAt, ExpiresAt  *time.Time
 }
 
 type RuntimeWorkspacePathRule struct {
@@ -238,6 +268,7 @@ type ManagedConfigurationSet struct {
 	Version                                                        int64
 	CurrentRevision                                                *ManagedConfigurationRevision
 	UpdatedAt                                                      time.Time
+	GitSource                                                      *ManagedConfigurationGitSource
 }
 
 type ManagedConfigurationConsumer struct {
@@ -248,6 +279,8 @@ type ManagedConfigurationConsumer struct {
 type ManagedConfigurationImpact struct {
 	ConfigurationRef, TargetRevisionRef, Digest string
 	Consumers                                   []ManagedConfigurationConsumer
+	Total                                       int64
+	NextPageToken                               string
 }
 
 type ManagedConfigurationBindingSnapshot struct {
@@ -258,12 +291,20 @@ type ManagedConfigurationBindingSnapshot struct {
 }
 
 type SystemSTTConfiguration struct {
-	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef string
-	Model, Language, PermissionKey                            string
-	Revision                                                  int64
-	ProviderCredentialGeneration                              uint64
-	Ready                                                     bool
-	ReadinessBlockers                                         []string
+	Parameters                                                                       value.STTParameters
+	Enabled                                                                          bool
+	MaximumAudioBytes, MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds uint64
+	ConfigurationRef, RevisionRef, Digest, ProviderAccountRef                        string
+	Model, Language, PermissionKey                                                   string
+	Revision                                                                         int64
+	ProviderCredentialGeneration                                                     uint64
+	Ready                                                                            bool
+	ReadinessBlockers                                                                []string
+}
+
+type SpeechTranscriptionAvailability struct {
+	Eligible bool
+	Reason   string
 }
 
 type ProviderAuthorization struct {
@@ -589,6 +630,7 @@ type IntegrationGrant struct {
 }
 
 type IntegrationConnection struct {
+	TestRequiresApproval                                                    bool
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
 	CredentialSecretKey                                                     string
 	DefinitionVersion, DefinitionDigest                                     string

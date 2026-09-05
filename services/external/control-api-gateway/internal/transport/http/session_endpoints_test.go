@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,6 +72,7 @@ func ownerSessionClaims(now time.Time, elevation *session.Elevation) session.Cla
 
 func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
+	emailPurpose := `{"purpose":{"kind":"EMAIL_EFFECT_RECONCILIATION","receiptRef":"erc_fixture01","receiptVersion":3,"receiptDigest":"` + strings.Repeat("a", 64) + `"}}`
 	for _, test := range []struct {
 		name            string
 		body            string
@@ -81,6 +83,13 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 	}{
 		{name: "normal login", wantStatus: http.StatusNoContent, wantNormal: 1},
 		{name: "fresh reveal", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-30 * time.Second), wantStatus: http.StatusNoContent, wantElevated: 1},
+		{name: "fresh email", body: emailPurpose, authenticatedAt: now.Add(-4 * time.Minute), wantStatus: http.StatusNoContent, wantElevated: 1},
+		{name: "stale email", body: emailPurpose, authenticatedAt: now.Add(-5 * time.Minute), wantStatus: http.StatusForbidden},
+		{name: "mixed email project", body: strings.Replace(emailPurpose, `"receiptRef":`, `"projectRef":"prj_fixture01","receiptRef":`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
+		{name: "mixed email secret", body: strings.Replace(emailPurpose, `"receiptRef":`, `"secretRef":"sec_fixture01","receiptRef":`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
+		{name: "missing email version", body: strings.Replace(emailPurpose, `"receiptVersion":3,`, "", 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
+		{name: "null email version", body: strings.Replace(emailPurpose, `"receiptVersion":3`, `"receiptVersion":null`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
+		{name: "unsafe email version", body: strings.Replace(emailPurpose, `"receiptVersion":3`, `"receiptVersion":9007199254740992`, 1), authenticatedAt: now, wantStatus: http.StatusBadRequest},
 		{name: "stale auth_time", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main"}}`, authenticatedAt: now.Add(-3 * time.Minute), wantStatus: http.StatusForbidden},
 		{name: "unknown purpose field", body: `{"purpose":{"kind":"RUNTIME_SECRET_REVEAL","projectRef":"project_sales","secretRef":"secret_main","extra":true}}`, authenticatedAt: now, wantStatus: http.StatusBadRequest},
 	} {
@@ -88,7 +97,7 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 			store := &ownerSessionStoreStub{now: now}
 			principal := oidcauth.Principal{
 				Subject: uuid.NewString(), OrganizationID: uuid.NewString(), SessionID: uuid.NewString(), SessionRevision: 5,
-				AuthenticatedAt: test.authenticatedAt, ExpiresAt: now.Add(time.Hour),
+				AuthenticatedAt: test.authenticatedAt, ExpiresAt: now.Add(time.Hour), ACR: "1", AMR: []string{"pwd"},
 			}
 			security, err := boundary.New(boundary.Config{
 				Origins: []string{"https://control.example.test"}, Verifier: ownerSessionOIDCStub{principal: principal},
@@ -112,8 +121,15 @@ func TestCreateOwnerSessionAcceptsOnlyTypedFreshPurpose(t *testing.T) {
 			if response.Code != test.wantStatus || store.normalCalls != test.wantNormal || store.elevatedCalls != test.wantElevated {
 				t.Fatalf("session result = status %d normal %d elevated %d", response.Code, store.normalCalls, store.elevatedCalls)
 			}
-			if test.wantElevated == 1 && (store.elevation == nil || store.elevation.ProjectRef != "project_sales" || store.elevation.SecretRef != "secret_main") {
-				t.Fatalf("elevation is not exact: %#v", store.elevation)
+			if test.wantElevated == 1 {
+				e := store.elevation
+				if strings.Contains(test.body, session.ElevationKindEmailReconciliation) {
+					if e == nil || e.Kind != session.ElevationKindEmailReconciliation || e.ReceiptRef != "erc_fixture01" || e.ReceiptVersion != 3 || e.ReceiptDigest != strings.Repeat("a", 64) || e.ProjectRef != "" || e.SecretRef != "" {
+						t.Fatalf("email elevation is not exact: %#v", e)
+					}
+				} else if e == nil || e.Kind != session.ElevationKindRuntimeSecretReveal || e.ProjectRef != "project_sales" || e.SecretRef != "secret_main" || e.ReceiptRef != "" || e.ReceiptVersion != 0 || e.ReceiptDigest != "" {
+					t.Fatalf("secret elevation is not exact: %#v", e)
+				}
 			}
 		})
 	}

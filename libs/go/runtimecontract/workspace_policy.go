@@ -48,6 +48,7 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 		Rules: []RuntimeWorkspacePathRule{
 			{Path: RuntimeWorkspaceRoot + "/input", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot + "/knowledge", Access: RuntimeWorkspaceReadOnly},
+			{Path: RuntimeContextRoot, Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable},
 		},
@@ -62,12 +63,13 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 func (policy RuntimeWorkspacePolicy) Validate() error {
 	if policy.Revision != 1 || policy.Root != RuntimeWorkspaceRoot ||
 		policy.MaximumWritableBytes != RuntimeWorkspaceWritableBytes ||
-		policy.MaximumFileCount != RuntimeWorkspaceMaximumFiles || len(policy.Rules) != 4 {
+		policy.MaximumFileCount != RuntimeWorkspaceMaximumFiles || len(policy.Rules) != 5 {
 		return errors.New("runtime workspace policy is invalid")
 	}
 	expectedRules := map[string]string{
 		RuntimeWorkspaceRoot + "/input":                             RuntimeWorkspaceReadOnly,
 		RuntimeWorkspaceRoot + "/knowledge":                         RuntimeWorkspaceReadOnly,
+		RuntimeContextRoot:                                          RuntimeWorkspaceReadOnly,
 		RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json": RuntimeWorkspaceReadOnly,
 		RuntimeWorkspaceRoot:                                        RuntimeWorkspaceWritable,
 	}
