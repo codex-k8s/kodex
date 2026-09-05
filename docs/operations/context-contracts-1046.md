@@ -112,7 +112,12 @@ visibility проверяются в SQL до LIMIT. Списки Memory по ag
 требуют видимость самого агента, иначе не раскрывают наличие binding.
 Targeted PostgreSQL `memory_records|skill_bundle` проверяет tree/global search,
 archive/restore/purge и отрицательные project-only reader сценарии.
-Runtime pins, физический retention GC и VFS отдельных binding/file узлов
+Внутри `/projects/{project}/entities/agents/{agent}` разделы `skills` и
+`memories` создаются только при наличии видимых активных bindings. Строка
+`context-binding:{binding_ref}` содержит resource ref и exact bound revision
+digest, а не digest более новой revision из каталога. Unbind убирает пустой
+раздел; скрытый агент не раскрывает раздел даже через global search.
+Runtime pins, физический retention GC и VFS отдельных Skill file узлов
 остаются незавершёнными; эта проекция не материализует runtime content.
 STT parameters уже реализованы checkpoint `a88caf7f2`;
 upgrade существующих системных ролей находится в `9911ddb38`.

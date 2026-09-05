@@ -5,7 +5,53 @@ WITH projects AS (
     WHERE project.organization_id = @organization_id::uuid
       AND project.lifecycle <> 'ARCHIVED'
       AND (@project_ref = '' OR project.ref = @project_ref)
+), context_bindings AS (
+    SELECT binding.ref,agent.ref AS agent_ref,project.ref AS project_ref,bundle.ref AS entity_ref,
+           revision.name,'SKILL'::text AS kind,'skills'::text AS folder,revision.digest,0::bigint AS size_bytes,binding.updated_at
+    FROM control_plane.agent_context_bindings binding
+    JOIN projects project ON project.id=binding.project_id
+    JOIN control_plane.agents agent ON agent.id=binding.agent_id AND agent.project_id=binding.project_id
+    JOIN control_plane.skill_bundles bundle ON bundle.id=binding.skill_bundle_id AND bundle.project_id=binding.project_id
+    JOIN control_plane.skill_bundle_revisions revision ON revision.id=binding.skill_revision_id AND revision.bundle_id=bundle.id
+    JOIN control_plane.catalog_access_targets target ON target.organization_id=binding.organization_id AND target.kind='PROJECT' AND target.id=binding.project_id
+    WHERE binding.organization_id=@organization_id::uuid AND binding.enabled
+      AND agent.system_key IS NULL AND agent.state<>'ARCHIVED' AND bundle.state='ACTIVE'
+      AND revision.state='PUBLISHED' AND revision.scan_state='CLEAN'
+      AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'project.view','PROJECT',
+          target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at,false)
+      AND control_plane.skill_revision_visible(@organization_id::uuid,@actor_id::uuid,revision.id,@evaluated_at)
+    UNION ALL
+    SELECT binding.ref,agent.ref,project.ref,memory.ref,revision.title,'MEMORY','memories',revision.digest,
+           octet_length(revision.summary)::bigint,binding.updated_at
+    FROM control_plane.agent_context_bindings binding
+    JOIN projects project ON project.id=binding.project_id
+    JOIN control_plane.agents agent ON agent.id=binding.agent_id AND agent.project_id=binding.project_id
+    JOIN control_plane.memory_records memory ON memory.id=binding.memory_record_id AND memory.project_id=binding.project_id
+    JOIN control_plane.memory_record_revisions revision ON revision.id=binding.memory_revision_id AND revision.record_id=memory.id
+    JOIN control_plane.memory_record_revisions current ON current.id=memory.current_revision_id
+    WHERE binding.organization_id=@organization_id::uuid AND binding.enabled
+      AND agent.system_key IS NULL AND agent.state<>'ARCHIVED' AND memory.state='ACTIVE'
+      AND revision.retention_until>@evaluated_at AND current.retention_until>@evaluated_at
+      AND control_plane.memory_record_visible(@organization_id::uuid,@actor_id::uuid,memory.id,@evaluated_at)
+      AND (revision.source_run_id IS NULL OR EXISTS (
+          SELECT 1 FROM control_plane.catalog_access_targets source
+          WHERE source.organization_id=binding.organization_id AND source.kind='RUN' AND source.id=revision.source_run_id
+            AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'run.view','RUN',
+                source.id,source.project_id,source.owner_id,source.related_ids,@evaluated_at,false)))
 ), nodes AS (
+    SELECT 'context-binding:' || binding.ref AS ref,
+           '/projects/' || binding.project_ref || '/entities/agents/' || binding.agent_ref || '/' || binding.folder || '/' || binding.ref AS path,
+           '/projects/' || binding.project_ref || '/entities/agents/' || binding.agent_ref || '/' || binding.folder AS parent_path,
+           binding.name,binding.kind,false AS directory,binding.project_ref,binding.entity_ref,''::text AS run_ref,
+           binding.size_bytes,binding.digest,binding.updated_at AS modified_at,'AGENT'::text AS access_kind,binding.agent_ref AS access_ref
+    FROM context_bindings binding
+    UNION ALL
+    SELECT 'dir:' || binding.agent_ref || ':' || binding.folder,
+           '/projects/' || binding.project_ref || '/entities/agents/' || binding.agent_ref || '/' || binding.folder,
+           '/projects/' || binding.project_ref || '/entities/agents/' || binding.agent_ref,
+           binding.folder,'DIRECTORY',true,binding.project_ref,'','',0,'',max(binding.updated_at),'AGENT',binding.agent_ref
+    FROM context_bindings binding GROUP BY binding.project_ref,binding.agent_ref,binding.folder
+    UNION ALL
     SELECT 'project:' || project.ref AS ref, '/projects/' || project.ref AS path,
            '/projects' AS parent_path, project.name AS name, 'PROJECT' AS kind, true AS directory,
            project.ref AS project_ref, project.ref AS entity_ref, '' AS run_ref,
