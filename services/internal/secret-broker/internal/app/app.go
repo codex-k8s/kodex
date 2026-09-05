@@ -62,6 +62,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		secretbrokerv1.SecretBrokerService_RevokeSecret_FullMethodName:                                                   "revoke",
 		secretbrokerv1.SecretBrokerService_CheckReadiness_FullMethodName:                                                 "readiness",
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName:                   "runtime_credentials_materialize",
+		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName:           "assistant_credentials_materialize",
 		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName:       "runtime_credentials_readiness",
 		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName:                     "stt_credential_project",
 		controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName: "provider_readiness",
@@ -218,6 +219,7 @@ func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServer
 			controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName,
 			secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName,
+			secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName,
 			secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName,
 			sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName:
 			return protected(ctx, request, info, handler)

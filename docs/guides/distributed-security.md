@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.9
-updated: 2026-09-03
+version: 1.4.11
+updated: 2026-09-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -197,6 +197,15 @@ grant. Идентификаторы из полезной нагрузки RPC �
 доверенного ключа, остаётся неизменным при таком обновлении и связывает claim,
 renew и complete одной работы. Ротация ключа меняет поколение и закрыто
 отклоняет продолжение работы, заявленной предыдущим credential.
+
+Локальный signer связывает полный key ID с точными workload и поколением,
+а не только с совпавшим префиксом. Его readback проверяет подпись и весь
+назначенный сервером набор identity claims. Добавление workload одновременно
+охватывает закрытый signer registry, индивидуальные ключи fresh install,
+публичный trust потребителя, issuer profile, PostgreSQL LOGIN/CONNECT/SET,
+реестр доставки, точные Secrets/RBAC и оба направления сетевого пути.
+Проверки итоговых профилей сохраняют изоляцию optional consumer; наличие
+только декларации операции либо Secret mount не доказывает рабочую выдачу.
 
 Ресурс, который выдаёт полномочия либо управляет исполнением, не изменяется
 универсальным CRUD. Специализированная команда назначает owner и начальное
@@ -563,6 +572,22 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- DNS snapshot не живёт дольше минимального авторитетного TTL всей A/AAAA/CNAME
+  цепочки. Нижний cache TTL не продлевает этот срок: короткий snapshot не
+  кэшируется. Отмена или истечение TTL во время resolution закрывает выдачу;
+  producer и consumer используют один resolver и проверку публичных адресов.
+- Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
+  Он не получает direct outbound: producer из того же version-pinned typed
+  mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.
+  Runtime policy и CNI `/32`/`/128` pins создаются вместе; destination-less
+  mail egress запрещён. Закрытый набор: SMTP `465/implicit`, `587/starttls`,
+  POP3 `995/implicit`, `110/starttls`, IMAP `993/implicit`, `143/starttls`.
+  Implicit TLS сохраняет проверку ClientHello до dial. Для STARTTLS greeting
+  предшествует TLS, поэтому gateway после exact policy/DNS проверки создаёт
+  opaque tunnel без TLS termination или разбора почтовых команд. Обязательные
+  TLS upgrade, exact hostname/CA и запрет credentials до TLS принадлежат
+  email-bridge. Изменение DNS вне pins закрывает доступ до новой согласованной
+  проекции; фильтрация небезопасной части ответа и fallback запрещены.
 - Отдельный сетевой профиль связывает immutable workload/operation/destination
   с принадлежащим серверу listener и точными CNI selectors; caller header не
   назначает профиль. Readiness и CONNECT возвращают фактически обслуживаемые

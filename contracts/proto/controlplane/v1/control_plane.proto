@@ -12,6 +12,13 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
+  rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
+  rpc GetSkillBundle(GetSkillBundleRequest) returns (GetSkillBundleResponse);
+  rpc ListSkillBundleRevisions(ListSkillBundleRevisionsRequest) returns (ListSkillBundleRevisionsResponse);
+  rpc ListMemoryRecords(ListMemoryRecordsRequest) returns (ListMemoryRecordsResponse);
+  rpc GetMemoryRecord(GetMemoryRecordRequest) returns (GetMemoryRecordResponse);
+  rpc ListMemoryRecordRevisions(ListMemoryRecordRevisionsRequest) returns (ListMemoryRecordRevisionsResponse);
   rpc GetBootstrapState(GetBootstrapStateRequest) returns (GetBootstrapStateResponse);
   rpc GetPlatformEventCursor(GetPlatformEventCursorRequest) returns (GetPlatformEventCursorResponse);
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
@@ -71,11 +78,52 @@ service PlatformQueryService {
   rpc ListRuntimeSecrets(ListRuntimeSecretsRequest) returns (ListRuntimeSecretsResponse);
   rpc GetRuntimeSecret(GetRuntimeSecretRequest) returns (GetRuntimeSecretResponse);
   rpc ListManagedConfigurationHistory(ListManagedConfigurationHistoryRequest) returns (ListManagedConfigurationHistoryResponse);
+  rpc ListManagedConfigurations(ListManagedConfigurationsRequest) returns (ListManagedConfigurationsResponse);
   rpc GetManagedConfigurationImpact(GetManagedConfigurationImpactRequest) returns (GetManagedConfigurationImpactResponse);
   rpc GetSystemSTTConfiguration(GetSystemSTTConfigurationRequest) returns (GetSystemSTTConfigurationResponse);
+  rpc GetRuntimeEnvironmentDraft(GetRuntimeEnvironmentDraftRequest) returns (GetRuntimeEnvironmentDraftResponse);
+  rpc GetRuntimeEnvironmentImpact(GetRuntimeEnvironmentImpactRequest) returns (GetRuntimeEnvironmentImpactResponse);
+  rpc GetRuntimeSecretImpact(GetRuntimeSecretImpactRequest) returns (GetRuntimeSecretImpactResponse);
+  rpc ListInteractionIdentities(ListInteractionIdentitiesRequest) returns (ListInteractionIdentitiesResponse);
 }
 
 service PlatformCommandService {
+  rpc SavePromptTemplateDraft(SavePromptTemplateDraftRequest) returns (SavePromptTemplateDraftResponse);
+  rpc DiscardPromptTemplateDraft(DiscardPromptTemplateDraftRequest) returns (DiscardPromptTemplateDraftResponse);
+  rpc SaveRoleImageRevisionDraft(SaveRoleImageRevisionDraftRequest) returns (SaveRoleImageRevisionDraftResponse);
+  rpc DiscardRoleImageRevisionDraft(DiscardRoleImageRevisionDraftRequest) returns (DiscardRoleImageRevisionDraftResponse);
+  rpc SaveIntegrationDefinitionDraft(SaveIntegrationDefinitionDraftRequest) returns (SaveIntegrationDefinitionDraftResponse);
+  rpc DiscardIntegrationDefinitionDraft(DiscardIntegrationDefinitionDraftRequest) returns (DiscardIntegrationDefinitionDraftResponse);
+  rpc SaveSystemSTTConfigurationDraft(SaveSystemSTTConfigurationDraftRequest) returns (SaveSystemSTTConfigurationDraftResponse);
+  rpc DiscardSystemSTTConfigurationDraft(DiscardSystemSTTConfigurationDraftRequest) returns (DiscardSystemSTTConfigurationDraftResponse);
+  rpc ReconcileEmailEffect(ReconcileEmailEffectRequest) returns (ReconcileEmailEffectResponse);
+  rpc CreateSkillBundleDraft(CreateSkillBundleDraftRequest) returns (CreateSkillBundleDraftResponse);
+  rpc SaveSkillBundleDraft(SaveSkillBundleDraftRequest) returns (SaveSkillBundleDraftResponse);
+  rpc ValidateSkillBundleDraft(ValidateSkillBundleDraftRequest) returns (ValidateSkillBundleDraftResponse);
+  rpc ReviewSkillBundleDraft(ReviewSkillBundleDraftRequest) returns (ReviewSkillBundleDraftResponse);
+  rpc PublishSkillBundleDraft(PublishSkillBundleDraftRequest) returns (PublishSkillBundleDraftResponse);
+  rpc DiscardSkillBundleDraft(DiscardSkillBundleDraftRequest) returns (DiscardSkillBundleDraftResponse);
+  rpc ArchiveSkillBundle(ArchiveSkillBundleRequest) returns (ArchiveSkillBundleResponse);
+  rpc RestoreSkillBundle(RestoreSkillBundleRequest) returns (RestoreSkillBundleResponse);
+  rpc PurgeSkillBundle(PurgeSkillBundleRequest) returns (PurgeSkillBundleResponse);
+  rpc BindAgentSkillBundle(BindAgentSkillBundleRequest) returns (BindAgentSkillBundleResponse);
+  rpc UnbindAgentSkillBundle(UnbindAgentSkillBundleRequest) returns (UnbindAgentSkillBundleResponse);
+  rpc CreateMemoryRecord(CreateMemoryRecordRequest) returns (CreateMemoryRecordResponse);
+  rpc ReviseMemoryRecord(ReviseMemoryRecordRequest) returns (ReviseMemoryRecordResponse);
+  rpc ArchiveMemoryRecord(ArchiveMemoryRecordRequest) returns (ArchiveMemoryRecordResponse);
+  rpc RestoreMemoryRecord(RestoreMemoryRecordRequest) returns (RestoreMemoryRecordResponse);
+  rpc PurgeMemoryRecord(PurgeMemoryRecordRequest) returns (PurgeMemoryRecordResponse);
+  rpc BindAgentMemoryRecord(BindAgentMemoryRecordRequest) returns (BindAgentMemoryRecordResponse);
+  rpc UnbindAgentMemoryRecord(UnbindAgentMemoryRecordRequest) returns (UnbindAgentMemoryRecordResponse);
+  rpc CreateRuntimeEnvironmentDraft(CreateRuntimeEnvironmentDraftRequest) returns (CreateRuntimeEnvironmentDraftResponse);
+  rpc SaveRuntimeEnvironmentDraft(SaveRuntimeEnvironmentDraftRequest) returns (SaveRuntimeEnvironmentDraftResponse);
+  rpc ValidateRuntimeEnvironmentDraft(ValidateRuntimeEnvironmentDraftRequest) returns (ValidateRuntimeEnvironmentDraftResponse);
+  rpc PublishRuntimeEnvironmentDraft(PublishRuntimeEnvironmentDraftRequest) returns (PublishRuntimeEnvironmentDraftResponse);
+  rpc DiscardRuntimeEnvironmentDraft(DiscardRuntimeEnvironmentDraftRequest) returns (DiscardRuntimeEnvironmentDraftResponse);
+  rpc RebindRuntimeEnvironment(RebindRuntimeEnvironmentRequest) returns (RebindRuntimeEnvironmentResponse);
+  rpc RebindRuntimeSecret(RebindRuntimeSecretRequest) returns (RebindRuntimeSecretResponse);
+  rpc BindInteractionIdentity(BindInteractionIdentityRequest) returns (BindInteractionIdentityResponse);
+  rpc RevokeInteractionIdentity(RevokeInteractionIdentityRequest) returns (RevokeInteractionIdentityResponse);
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
@@ -212,6 +260,9 @@ service SystemAssistantService {
 }
 
 service RuntimeWorkService {
+  rpc ResolveEmailAuthorization(ResolveEmailAuthorizationRequest) returns (ResolveEmailAuthorizationResponse);
+  rpc ReportEmailEffectReceipt(ReportEmailEffectReceiptRequest) returns (ReportEmailEffectReceiptResponse);
+  rpc ResolveEmailReconciliation(ResolveEmailReconciliationRequest) returns (ResolveEmailReconciliationResponse);
   rpc ClaimExecution(ClaimExecutionRequest) returns (ClaimExecutionResponse);
   // GetRuntimeEnvironmentRoleImageConfiguration возвращает только server-owned
   // immutable revision, выбранную binding конкретного RuntimeEnvironment.
@@ -645,6 +696,7 @@ message Membership {
   bool active = 6;
   google.protobuf.Timestamp updated_at = 7;
   repeated NextAction next_actions = 8;
+  string project_ref = 9;
 }
 
 message Project {
@@ -1447,6 +1499,14 @@ message BootstrapState {
   UserSummary current_user = 5;
   repeated NextAction next_actions = 6;
   PlatformRole platform_role = 7;
+  SpeechTranscriptionAvailability speech_transcription = 8;
+}
+
+message SpeechTranscriptionAvailability {
+  bool eligible = 1;
+  // available вычисляет gateway после проверки живого STT пути; owner не заявляет готовность сервиса.
+  bool available = 2;
+  string reason = 3;
 }
 
 message Overview {
@@ -1535,6 +1595,9 @@ enum VFSNodeKind {
   VFS_NODE_KIND_RESULT = 7;
   VFS_NODE_KIND_SKILL = 8;
   VFS_NODE_KIND_MEMORY = 9;
+  VFS_NODE_KIND_AUTOMATION = 10;
+  VFS_NODE_KIND_ENVIRONMENT = 11;
+  VFS_NODE_KIND_AVATAR = 12;
 }
 
 message VFSNode {
@@ -1682,6 +1745,7 @@ message RemovePlatformMembershipResponse {
 message ListProjectMembershipsRequest {
   string project_ref = 1;
   PageRequest page = 2;
+  string query = 3;
 }
 message ListProjectMembershipsResponse {
   repeated Membership memberships = 1;
@@ -2514,6 +2578,125 @@ message RuntimeRevisionSnapshot {
   string system_stt_configuration_digest = 66;
   string system_stt_configuration_revision_ref = 67;
   string organization_ref = 68;
+  repeated RuntimeSkillBundleSnapshot skill_bundles = 69;
+  repeated RuntimeMemoryRecordSnapshot memory_records = 70;
+}
+
+message SavePromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SavePromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardPromptTemplateDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardPromptTemplateDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardRoleImageRevisionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardRoleImageRevisionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardIntegrationDefinitionDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardIntegrationDefinitionDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message SaveSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  string content_format = 4;
+  string content = 5;
+}
+message SaveSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message DiscardSystemSTTConfigurationDraftRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+}
+message DiscardSystemSTTConfigurationDraftResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+
+message RuntimeSkillBundleSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string scan_engine = 7;
+  string scan_digest = 8;
+  google.protobuf.Timestamp scanned_at = 9;
+  repeated SkillBundleFile files = 10;
+  ContextProvenance provenance = 11;
+  string name = 12;
+  string description = 13;
+}
+
+message RuntimeMemoryRecordSnapshot {
+  string binding_ref = 1;
+  int64 binding_version = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 revision = 5;
+  string digest = 6;
+  string title = 7;
+  string summary = 8;
+  google.protobuf.Timestamp retention_until = 9;
+  ContextProvenance provenance = 10;
 }
 
 enum RuntimeWorkspaceAccess {
@@ -3109,6 +3292,10 @@ message InteractionSource {
   string channel_name = 5;
   string locale = 6;
   repeated string enabled_capabilities = 7;
+  int64 connection_version = 8;
+  string credential_revision_ref = 9;
+  int64 credential_revision = 10;
+  IntegrationCredentialRevision credential_descriptor = 11;
 }
 message ListInteractionSourcesRequest {}
 message ListInteractionSourcesResponse {
@@ -3127,6 +3314,14 @@ message InteractionDeliveryClaim {
   string message_key = 9;
   google.protobuf.Struct template_data = 10;
   WorkLease lease = 11;
+  string gate_ref = 12;
+  int64 gate_version = 13;
+  string run_ref = 14;
+  string external_team_ref = 15;
+  string external_channel_ref = 16;
+  string external_root_post_ref = 17;
+  string acceptance_receipt_ref = 18;
+  IntegrationCredentialRevision credential_descriptor = 19;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;
@@ -3145,6 +3340,10 @@ message CompleteInteractionDeliveryRequest {
   string external_post_ref = 7;
   string external_thread_ref = 8;
   string safe_error_code = 9;
+  bool unknown_outcome = 10;
+  bool confirmed_no_effect = 11;
+  string external_team_ref = 12;
+  string external_channel_ref = 13;
 }
 message CompleteInteractionDeliveryResponse {
   string delivery_ref = 1;
@@ -3170,6 +3369,44 @@ message AcceptInteractionMessageRequest {
   string external_user_digest = 7;
   string message = 8;
   OwnerGateDecision decision = 9;
+  string external_team_ref = 10;
+  string gate_ref = 11;
+  int64 expected_gate_version = 12;
+  string run_ref = 13;
+}
+
+message InteractionIdentity {
+  string ref = 1;
+  int64 version = 2;
+  string connection_ref = 3;
+  int64 connection_version = 4;
+  string external_team_ref = 5;
+  string external_channel_ref = 6;
+  string external_user_digest = 7;
+  string subject_ref = 8;
+  string state = 9;
+}
+message BindInteractionIdentityRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string external_team_ref = 3;
+  string external_channel_ref = 4;
+  string external_user_digest = 5;
+  string subject_ref = 6;
+}
+message BindInteractionIdentityResponse { InteractionIdentity identity = 1; }
+message RevokeInteractionIdentityRequest {
+  MutationContext mutation = 1;
+  string identity_ref = 2;
+}
+message RevokeInteractionIdentityResponse { InteractionIdentity identity = 1; }
+message ListInteractionIdentitiesRequest {
+  string connection_ref = 1;
+  PageRequest page = 2;
+}
+message ListInteractionIdentitiesResponse {
+  repeated InteractionIdentity identities = 1;
+  PageInfo page = 2;
 }
 message AcceptInteractionMessageResponse {
   InteractionMessageOutcome outcome = 1;
@@ -3525,6 +3762,62 @@ message CreateRuntimeEnvironmentSetRequest {
   repeated RuntimeEnvironmentTool tools = 8;
   RuntimeEnvironmentPolicyInput policy = 9;
 }
+
+message RuntimeEnvironmentDraftSpecification {
+  string name = 1;
+  string description = 2;
+  repeated RuntimeEnvironmentValue values = 3;
+  repeated RuntimeSecretBinding secret_bindings = 4;
+  string image_artifact_ref = 5;
+  repeated RuntimeEnvironmentTool tools = 6;
+  RuntimeEnvironmentPolicyInput policy = 7;
+}
+message RuntimeEnvironmentDraft {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string environment_ref = 4;
+  int64 expected_environment_version = 5;
+  string state = 6;
+  RuntimeEnvironmentDraftSpecification specification = 7;
+  string validation_digest = 8;
+  repeated string diagnostics = 9;
+  string published_environment_ref = 10;
+}
+message GetRuntimeEnvironmentDraftRequest { string draft_ref = 1; }
+message GetRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message CreateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string environment_ref = 3;
+  int64 expected_environment_version = 4;
+  RuntimeEnvironmentDraftSpecification specification = 5;
+}
+message CreateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message SaveRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+  RuntimeEnvironmentDraftSpecification specification = 3;
+}
+message SaveRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message ValidateRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message ValidateRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
+message PublishRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PublishRuntimeEnvironmentDraftResponse {
+  RuntimeEnvironmentDraft draft = 1;
+  RuntimeEnvironmentSet environment = 2;
+}
+message DiscardRuntimeEnvironmentDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message DiscardRuntimeEnvironmentDraftResponse { RuntimeEnvironmentDraft draft = 1; }
 message CreateRuntimeEnvironmentSetResponse {
   RuntimeEnvironmentSet environment = 1;
 }
@@ -3554,9 +3847,43 @@ message BindAgentRuntimeEnvironmentRequest {
   MutationContext mutation = 1;
   string agent_ref = 2;
   string environment_ref = 3;
+  string version_ref = 4;
 }
 message BindAgentRuntimeEnvironmentResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+
+message RuntimeEnvironmentConsumer {
+  string agent_ref = 1;
+  int64 agent_version = 2;
+  string binding_ref = 3;
+  int64 binding_version = 4;
+  string version_ref = 5;
+  string project_ref = 6;
+}
+message GetRuntimeEnvironmentImpactRequest {
+  string environment_ref = 1;
+  string version_ref = 2;
+  PageRequest page = 3;
+  string query = 4;
+}
+message GetRuntimeEnvironmentImpactResponse {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string target_version_ref = 3;
+  string target_digest = 4;
+  repeated RuntimeEnvironmentConsumer consumers = 5;
+  int64 total = 6;
+  PageInfo page = 7;
+}
+message RebindRuntimeEnvironmentRequest {
+  MutationContext mutation = 1;
+  string environment_ref = 2;
+  string version_ref = 3;
+  repeated RuntimeEnvironmentConsumer consumers = 4;
+}
+message RebindRuntimeEnvironmentResponse {
+  repeated AgentRuntimeEnvironmentBinding bindings = 1;
 }
 
 message ProviderAccountCandidate {
@@ -3602,11 +3929,50 @@ message RuntimeEnvironmentValue {
   string value = 2;
 }
 
+message RuntimeSecretImpactConsumer {
+  string environment_ref = 1;
+  int64 environment_version = 2;
+  string environment_version_ref = 3;
+  repeated int64 secret_revisions = 4;
+  RuntimeEnvironmentConsumer consumer = 5;
+}
+message GetRuntimeSecretImpactRequest {
+  string secret_ref = 1;
+  int64 revision = 2;
+  PageRequest page = 3;
+  string query = 4;
+}
+message GetRuntimeSecretImpactResponse {
+  string secret_ref = 1;
+  int64 secret_version = 2;
+  int64 target_revision = 3;
+  repeated RuntimeSecretImpactConsumer consumers = 4;
+  int64 total = 5;
+  PageInfo page = 6;
+}
+message RuntimeSecretRebindSelection {
+  string environment_ref = 1;
+  int64 expected_environment_version = 2;
+  string source_version_ref = 3;
+  repeated RuntimeEnvironmentConsumer consumers = 4;
+}
+message RebindRuntimeSecretRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  int64 revision = 3;
+  repeated RuntimeSecretRebindSelection selections = 4;
+}
+message RebindRuntimeSecretResponse {
+  repeated RuntimeEnvironmentSet environments = 1;
+  repeated AgentRuntimeEnvironmentBinding bindings = 2;
+}
+
 // RuntimeSecretBinding является единственным browser-facing input для
 // привязки активной Runtime Secret revision к имени переменной окружения.
 message RuntimeSecretBinding {
   string name = 1;
   string secret_ref = 2;
+  int64 revision = 3;
 }
 
 // RuntimeSecretDescriptor содержит только immutable Secret identity и digest.
@@ -3809,6 +4175,7 @@ message AgentRuntimeEnvironmentBinding {
   string agent_ref = 3;
   string environment_ref = 4;
   string digest = 5;
+  string version_ref = 6;
 }
 
 message AgentRuntimeConfigurationView {
@@ -3819,6 +4186,8 @@ message AgentRuntimeConfigurationView {
   RuntimeEnvironmentSet environment = 5;
   string safe_effective_config = 6;
   int64 agent_version = 7;
+  repeated AgentContextBinding skill_bindings = 8;
+  repeated AgentContextBinding memory_bindings = 9;
 }
 
 message TemplateVariable {
@@ -4178,6 +4547,7 @@ enum ManagedConfigurationState {
   MANAGED_CONFIGURATION_STATE_INVALID = 3;
   MANAGED_CONFIGURATION_STATE_PUBLISHED = 4;
   MANAGED_CONFIGURATION_STATE_SUPERSEDED = 5;
+  MANAGED_CONFIGURATION_STATE_DISCARDED = 6;
 }
 enum ManagedConfigurationOwner {
   MANAGED_CONFIGURATION_OWNER_UNSPECIFIED = 0;
@@ -4220,6 +4590,8 @@ message ManagedConfigurationImpact {
   string target_revision_ref = 2;
   repeated ManagedConfigurationConsumer consumers = 3;
   string digest = 4;
+  int64 total = 5;
+  PageInfo page = 6;
 }
 message ManagedConfigurationBindingSnapshot {
   string binding_ref = 1;
@@ -4418,6 +4790,17 @@ message ListManagedConfigurationHistoryRequest {
   string configuration_ref = 1;
   PageRequest page = 2;
 }
+message ListManagedConfigurationsRequest {
+  string project_ref = 1;
+  ManagedConfigurationKind kind = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+message ListManagedConfigurationsResponse {
+  repeated ManagedConfigurationSet configurations = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
 message ListManagedConfigurationHistoryResponse {
   ManagedConfigurationSet configuration = 1;
   repeated ManagedConfigurationRevision revisions = 2;
@@ -4427,8 +4810,442 @@ message ListManagedConfigurationHistoryResponse {
 message GetManagedConfigurationImpactRequest {
   string configuration_ref = 1;
   string revision_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
 }
 message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
+
+// Typed context отделяет Skill и Kodex memory от instructions и обычных artifacts.
+enum ContextResourceState {
+  CONTEXT_RESOURCE_STATE_UNSPECIFIED = 0;
+  CONTEXT_RESOURCE_STATE_ACTIVE = 1;
+  CONTEXT_RESOURCE_STATE_ARCHIVED = 2;
+  CONTEXT_RESOURCE_STATE_EXPIRED = 3;
+  CONTEXT_RESOURCE_STATE_PURGED = 4;
+}
+enum SkillRevisionState {
+  SKILL_REVISION_STATE_UNSPECIFIED = 0;
+  SKILL_REVISION_STATE_DRAFT = 1;
+  SKILL_REVISION_STATE_INVALID = 2;
+  SKILL_REVISION_STATE_VALIDATED = 3;
+  SKILL_REVISION_STATE_APPROVED = 4;
+  SKILL_REVISION_STATE_REJECTED = 5;
+  SKILL_REVISION_STATE_PUBLISHED = 6;
+  SKILL_REVISION_STATE_DISCARDED = 7;
+}
+enum SkillScanState {
+  SKILL_SCAN_STATE_UNSPECIFIED = 0;
+  SKILL_SCAN_STATE_PENDING = 1;
+  SKILL_SCAN_STATE_CLEAN = 2;
+  SKILL_SCAN_STATE_INFECTED = 3;
+  SKILL_SCAN_STATE_ERROR = 4;
+}
+enum SkillReviewDecision {
+  SKILL_REVIEW_DECISION_UNSPECIFIED = 0;
+  SKILL_REVIEW_DECISION_APPROVE = 1;
+  SKILL_REVIEW_DECISION_REJECT = 2;
+}
+// Provenance выводится из transport identity и проверенных owner records.
+message ContextProvenance {
+  string actor_ref = 1;
+  string source_kind = 2;
+  string source_ref = 3;
+  string source_revision = 4;
+  string digest = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+message SkillBundleFile {
+  string path = 1;
+  string artifact_ref = 2;
+  int64 artifact_revision = 3;
+  string digest = 4;
+  int64 size_bytes = 5;
+}
+message SkillBundleFileInput {
+  string path = 1;
+  string artifact_ref = 2;
+  int64 artifact_revision = 3;
+}
+message SkillBundleSpecification {
+  string name = 1;
+  string description = 2;
+  repeated SkillBundleFileInput files = 3;
+}
+message SkillBundleRevision {
+  string ref = 1;
+  int64 revision = 2;
+  SkillRevisionState state = 3;
+  string name = 4;
+  string description = 5;
+  repeated SkillBundleFile files = 6;
+  string digest = 7;
+  string parent_revision_ref = 8;
+  ContextProvenance provenance = 9;
+  SkillScanState scan_state = 10;
+  string scan_engine = 11;
+  string scan_digest = 12;
+  google.protobuf.Timestamp scanned_at = 13;
+  string reviewed_by = 14;
+  google.protobuf.Timestamp reviewed_at = 15;
+  repeated string diagnostics = 16;
+}
+message SkillBundle {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  ContextResourceState state = 4;
+  SkillBundleRevision current_revision = 5;
+  SkillBundleRevision draft_revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+enum EmailOperation {
+  EMAIL_OPERATION_UNSPECIFIED = 0;
+  EMAIL_OPERATION_HEALTH = 1;
+  EMAIL_OPERATION_MAILBOXES = 2;
+  EMAIL_OPERATION_LIST = 3;
+  EMAIL_OPERATION_SEARCH = 4;
+  EMAIL_OPERATION_FETCH = 5;
+  EMAIL_OPERATION_DOWNLOAD = 6;
+  EMAIL_OPERATION_SEND = 7;
+  EMAIL_OPERATION_REPLY = 8;
+  EMAIL_OPERATION_REPLY_ALL = 9;
+  EMAIL_OPERATION_FORWARD = 10;
+  EMAIL_OPERATION_DELETE = 11;
+  EMAIL_OPERATION_RECEIPT = 12;
+  EMAIL_OPERATION_THREAD = 13;
+  EMAIL_OPERATION_ATTACHMENTS = 14;
+  EMAIL_OPERATION_MARK_READ = 15;
+  EMAIL_OPERATION_MARK_UNREAD = 16;
+  EMAIL_OPERATION_MOVE = 17;
+  EMAIL_OPERATION_ARCHIVE = 18;
+  EMAIL_OPERATION_DRAFT_CREATE = 19;
+  EMAIL_OPERATION_DRAFT_UPDATE = 20;
+  EMAIL_OPERATION_DRAFT_DELETE = 21;
+}
+enum EmailApprovalPolicy {
+  EMAIL_APPROVAL_POLICY_UNSPECIFIED = 0;
+  EMAIL_APPROVAL_POLICY_DENY = 1;
+  EMAIL_APPROVAL_POLICY_ALLOW = 2;
+  EMAIL_APPROVAL_POLICY_HUMAN_GATE = 3;
+}
+enum EmailEffectOutcome {
+  EMAIL_EFFECT_OUTCOME_UNSPECIFIED = 0;
+  EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME = 1;
+  EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED = 2;
+  EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED = 3;
+}
+message EmailExecutionBinding {
+  oneof source {
+    string invocation_ref = 1;
+    string connection_test_ref = 2;
+  }
+  WorkLease lease = 3;
+}
+message EmailAuthorizationScope {
+  string mailbox_ref = 1;
+  string sender = 2;
+  repeated EmailOperation operations = 3;
+  repeated string folders = 4;
+  repeated string recipients = 5;
+}
+message ResolveEmailAuthorizationRequest {
+  EmailExecutionBinding binding = 1;
+  string mailbox_ref = 2;
+  int64 configuration_revision = 3;
+  EmailOperation operation = 4;
+  string semantic_input_digest = 5;
+  string effect_key = 6;
+  string sender = 7;
+  string folder = 8;
+  string destination_folder = 9;
+}
+message ResolveEmailAuthorizationResponse {
+  bool allowed = 1;
+  string actor_ref = 2;
+  string agent_ref = 3;
+  string organization_ref = 4;
+  string project_ref = 5;
+  string connection_ref = 6;
+  string mailbox_ref = 7;
+  string grant_ref = 8;
+  EmailOperation operation = 9;
+  string semantic_input_digest = 10;
+  string effect_key = 11;
+  int64 configuration_revision = 12;
+  int64 credential_generation = 13;
+  EmailApprovalPolicy policy = 14;
+  bool gate_approved = 15;
+  EmailAuthorizationScope user_scope = 16;
+  EmailAuthorizationScope agent_scope = 17;
+  EmailAuthorizationScope connection_scope = 18;
+  EmailAuthorizationScope resource_scope = 19;
+  google.protobuf.Timestamp expires_at = 20;
+  EmailExecutionBinding binding = 21;
+}
+message EmailEffectReceipt {
+  string ref = 1;
+  int64 version = 2;
+  string invocation_ref = 3;
+  string external_receipt_ref = 4;
+  string external_receipt_digest = 5;
+  string semantic_input_digest = 6;
+  string effect_key = 7;
+  EmailEffectOutcome outcome = 8;
+  string mailbox_ref = 9;
+  int64 configuration_revision = 10;
+  string connection_ref = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  string project_ref = 14;
+}
+message ReportEmailEffectReceiptRequest {
+  MutationContext mutation = 1;
+  EmailExecutionBinding binding = 2;
+  string external_receipt_ref = 3;
+  string external_receipt_digest = 4;
+  EmailEffectOutcome outcome = 5;
+  string semantic_input_digest = 6;
+}
+message ReportEmailEffectReceiptResponse {
+  EmailEffectReceipt receipt = 1;
+}
+message EmailReconciliationDecision {
+  string ref = 1;
+  int64 version = 2;
+  string receipt_ref = 3;
+  int64 receipt_version = 4;
+  string receipt_digest = 5;
+  string invocation_ref = 6;
+  EmailEffectOutcome outcome = 7;
+  string grant_ref = 8;
+  string actor_ref = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+}
+message ReconcileEmailEffectRequest {
+  MutationContext mutation = 1;
+  string receipt_ref = 2;
+  string expected_receipt_digest = 3;
+  EmailEffectOutcome outcome = 4;
+  string note = 5;
+}
+message ReconcileEmailEffectResponse {
+  EmailReconciliationDecision decision = 1;
+}
+message ResolveEmailReconciliationRequest {
+  string receipt_ref = 1;
+  string decision_ref = 2;
+  string external_receipt_ref = 3;
+  string external_receipt_digest = 4;
+}
+message ResolveEmailReconciliationResponse {
+  EmailReconciliationDecision decision = 1;
+  EmailEffectReceipt receipt = 2;
+}
+message GetEmailEffectReceiptRequest {
+  string invocation_ref = 1;
+}
+message GetEmailEffectReceiptResponse {
+  EmailEffectReceipt receipt = 1;
+  EmailReconciliationDecision decision = 2;
+}
+
+message AgentContextBinding {
+  string ref = 1;
+  int64 version = 2;
+  string agent_ref = 3;
+  string resource_ref = 4;
+  string revision_ref = 5;
+  string digest = 6;
+}
+message MemoryRecordSpecification {
+  string title = 1;
+  string summary = 2;
+  string source_run_ref = 3;
+  google.protobuf.Timestamp retention_until = 4;
+}
+message MemoryRecordRevision {
+  string ref = 1;
+  int64 revision = 2;
+  string title = 3;
+  string summary = 4;
+  string digest = 5;
+  string parent_revision_ref = 6;
+  ContextProvenance provenance = 7;
+  google.protobuf.Timestamp retention_until = 8;
+  bool redacted = 9;
+}
+message KodexMemoryRecord {
+  string ref = 1;
+  int64 version = 2;
+  string project_ref = 3;
+  string agent_ref = 4;
+  ContextResourceState state = 5;
+  MemoryRecordRevision current_revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListSkillBundlesRequest {
+  string project_ref = 1;
+  string agent_ref = 2;
+  string query = 3;
+  ContextResourceState state = 4;
+  PageRequest page = 5;
+}
+message ListSkillBundlesResponse {
+  repeated SkillBundle bundles = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+message GetSkillBundleRequest { string bundle_ref = 1; }
+message GetSkillBundleResponse { SkillBundle bundle = 1; }
+message ListSkillBundleRevisionsRequest {
+  string bundle_ref = 1;
+  PageRequest page = 2;
+}
+message ListSkillBundleRevisionsResponse {
+  repeated SkillBundleRevision revisions = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+
+message ListMemoryRecordsRequest {
+  string project_ref = 1;
+  string agent_ref = 2;
+  string query = 3;
+  ContextResourceState state = 4;
+  PageRequest page = 5;
+}
+message ListMemoryRecordsResponse {
+  repeated KodexMemoryRecord records = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+message GetMemoryRecordRequest { string record_ref = 1; }
+message GetMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ListMemoryRecordRevisionsRequest {
+  string record_ref = 1;
+  PageRequest page = 2;
+}
+message ListMemoryRecordRevisionsResponse {
+  repeated MemoryRecordRevision revisions = 1;
+  int64 total = 2;
+  PageInfo page = 3;
+}
+
+message CreateSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string bundle_ref = 3;
+  SkillBundleSpecification specification = 4;
+}
+message SaveSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  SkillBundleSpecification specification = 4;
+}
+message ReviewSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+  SkillReviewDecision decision = 5;
+  string comment = 6;
+}
+message CreateMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string agent_ref = 3;
+  MemoryRecordSpecification specification = 4;
+}
+message ReviseMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string record_ref = 2;
+  MemoryRecordSpecification specification = 3;
+}
+message ValidateSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message PublishSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message DiscardSkillBundleDraftRequest {
+  MutationContext mutation = 1;
+  string bundle_ref = 2;
+  string revision_ref = 3;
+  string expected_digest = 4;
+}
+message ArchiveSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message RestoreSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message PurgeSkillBundleRequest { MutationContext mutation = 1; string bundle_ref = 2; }
+message BindAgentSkillBundleRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message BindAgentSkillBundleResponse { AgentContextBinding binding = 1; }
+message UnbindAgentSkillBundleRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string bundle_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message UnbindAgentSkillBundleResponse { AgentContextBinding binding = 1; }
+message ArchiveMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message RestoreMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message PurgeMemoryRecordRequest { MutationContext mutation = 1; string record_ref = 2; }
+message BindAgentMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message BindAgentMemoryRecordResponse { AgentContextBinding binding = 1; }
+message UnbindAgentMemoryRecordRequest {
+  MutationContext mutation = 1;
+  string agent_ref = 2;
+  string record_ref = 3;
+  string revision_ref = 4;
+  int64 expected_binding_version = 5;
+}
+message UnbindAgentMemoryRecordResponse { AgentContextBinding binding = 1; }
+message CreateSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message SaveSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ValidateSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ReviewSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message PublishSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message DiscardSkillBundleDraftResponse { SkillBundle bundle = 1; }
+message ArchiveSkillBundleResponse { SkillBundle bundle = 1; }
+message RestoreSkillBundleResponse { SkillBundle bundle = 1; }
+message PurgeSkillBundleResponse { SkillBundle bundle = 1; }
+message CreateMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ReviseMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message ArchiveMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message RestoreMemoryRecordResponse { KodexMemoryRecord record = 1; }
+message PurgeMemoryRecordResponse { KodexMemoryRecord record = 1; }
+
+message SystemSTTParameters {
+  repeated string languages = 1;
+  repeated string keywords = 2;
+  string prompt = 3;
+  double temperature = 4;
+  string chunking_strategy = 5;
+  bool stream = 6;
+}
+
 message SystemSTTConfiguration {
   string configuration_ref = 1;
   string revision_ref = 2;
@@ -4441,6 +5258,11 @@ message SystemSTTConfiguration {
   bool ready = 9;
   repeated string readiness_blockers = 10;
   uint64 provider_credential_generation = 11;
+  bool enabled = 12;
+  SystemSTTParameters parameters = 13;
+  uint64 maximum_audio_bytes = 14;
+  uint64 maximum_audio_duration_milliseconds = 15;
+  uint64 provider_timeout_milliseconds = 16;
 }
 message GetSystemSTTConfigurationRequest {}
 message GetSystemSTTConfigurationResponse { SystemSTTConfiguration configuration = 1; }

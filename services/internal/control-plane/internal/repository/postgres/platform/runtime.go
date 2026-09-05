@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -297,7 +297,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
+	codexSessionID, previousContextDigest                                                        string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -362,7 +362,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -452,7 +452,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
-		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
+		if err := jsonUnmarshal(rawIntegrationGrants, &integrationGrants); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		integrationGrants = callableIntegrationGrants(integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var attachmentSets []map[string]string
@@ -607,22 +610,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
 		sttConfiguration := entity.SystemSTTConfiguration{}
 		if capabilityEnabled(capabilities, "platform.stt.use") {
-			var eligible, providerEnabled bool
-			var rawProviderCapabilities []byte
-			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
-				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
-				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
-				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
-				&rawProviderCapabilities); err != nil {
+			actorScope := scope
+			if err := tx.QueryRow(ctx, querySTTRuntimeActor, scope.organizationID, runRef).Scan(
+				&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.organizationRef); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			var providerCapabilities map[string]any
-			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
-				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
-				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+			sttConfiguration, err = repository.getSystemSTTConfigurationTx(ctx, tx, actorScope)
+			if err != nil || !sttConfiguration.Ready {
 				return commandOutcome{}, errs.ErrConflict
 			}
 		}
@@ -690,13 +684,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
 		}
+		contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot["contextSnapshot"] = contextSnapshot
+		snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		snapshot["revisionDigest"] = revisionDigestHex
 		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil || len(rawSnapshot) > 256<<10 {
+		if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var runtimeRevisionID string
@@ -912,13 +912,23 @@ func promptUserCapabilities(platformRole string, projectPermissions, agentCapabi
 	return result
 }
 
+func callableIntegrationGrants(grants []map[string]string) []map[string]string {
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if (integrationpackage.Capability{Operation: grant["operation"]}).CallableByAgent() {
+			result = append(result, grant)
+		}
+	}
+	return result
+}
+
 func filterIntegrationGrants(grants []map[string]string, capabilities []string) []map[string]string {
 	allowed := make(map[string]struct{}, len(capabilities))
 	for _, capability := range capabilities {
 		allowed[capability] = struct{}{}
 	}
 	result := make([]map[string]string, 0, len(grants))
-	for _, grant := range grants {
+	for _, grant := range callableIntegrationGrants(grants) {
 		if _, ok := allowed[grant["capabilityKey"]]; ok {
 			result = append(result, grant)
 		}
@@ -936,19 +946,16 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
 	policy := entity.RuntimeWorkspacePolicy{
-		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
-		Rules: []entity.RuntimeWorkspacePathRule{
-			{Path: "/workspace/input", Access: "READ_ONLY"},
-			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
-			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
-			{Path: "/workspace", Access: "WRITABLE"},
-		},
-		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
+		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
+		Rules:         make([]entity.RuntimeWorkspacePathRule, 0, len(shared.Rules)),
+		DenialReasons: append([]string(nil), shared.DenialReasons...),
 	}
-	raw, _ := json.Marshal(policy)
-	digest := sha256.Sum256(raw)
-	policy.Digest = hex.EncodeToString(digest[:])
+	for _, rule := range shared.Rules {
+		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
 	return policy
 }
 
@@ -1026,6 +1033,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
 	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if raw, ok := values["contextSnapshot"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var snapshot runtimecontract.RuntimeContextSnapshot
+		if json.Unmarshal(encoded, &snapshot) != nil {
+			return "", errs.ErrConflict
+		}
+		input.ContextSnapshot = &snapshot
+	}
 	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
 		context := &runtimecontract.RunnerAssistantContext{
 			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),

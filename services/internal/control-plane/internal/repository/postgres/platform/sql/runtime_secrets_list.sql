@@ -12,9 +12,12 @@ JOIN control_plane.projects project ON project.id = secret.project_id
 LEFT JOIN control_plane.runtime_secret_revisions revision
   ON revision.secret_id = secret.id AND revision.revision = secret.current_revision
 WHERE secret.organization_id = @organization_id::uuid
-  AND project.ref = @project_ref
+  AND (@project_ref = '' OR project.ref = @project_ref)
   AND secret.state <> 'PROVISIONING'
   AND (@query = '' OR secret.name ILIKE '%' || @query || '%' OR secret.description ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR secret.ref > @cursor_ref)
+  AND (@authority_project = '' OR secret.project_id = NULLIF(@authority_project,'')::uuid)
+  AND control_plane.catalog_resource_visible(secret.organization_id, @actor_id::uuid, 'secret.view', 'SECRET',
+      secret.id, secret.project_id, secret.created_by, jsonb_build_object('PROJECT',secret.project_id::text), statement_timestamp())
 ORDER BY secret.ref
 LIMIT @page_size;

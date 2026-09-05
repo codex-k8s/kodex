@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -173,6 +174,7 @@ type RunnerInput struct {
 	AttachmentContext                 string                    `json:"attachment_context,omitempty"`
 	AttachmentSets                    []RunnerAttachmentSet     `json:"attachment_sets,omitempty"`
 	InputArtifacts                    []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
+	ContextSnapshot                   *RuntimeContextSnapshot   `json:"context_snapshot,omitempty"`
 	Capabilities                      []string                  `json:"capabilities,omitempty"`
 	Provider                          string                    `json:"provider"`
 	Model                             string                    `json:"model"`
@@ -238,6 +240,9 @@ func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 }
 
 func (input RunnerInput) Validate() error {
+	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
+		return ErrRuntimeContext
+	}
 	if input.Schema != RunnerInputSchemaV6 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 || !opaqueReferencePattern.MatchString(input.OrganizationRef) ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
@@ -538,6 +543,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		SecretProjections           []RuntimeSecretProjection
 		EnvironmentPolicy           RuntimeEnvironmentPolicy
 		WorkspacePolicy             RuntimeWorkspacePolicy
+		ContextSnapshot             *RuntimeContextSnapshot
 		KubernetesAccessProfile     RuntimeKubernetesAccessProfile
 	}{
 		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
@@ -565,6 +571,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
 		EnvironmentPolicy: input.EnvironmentPolicy, WorkspacePolicy: input.WorkspacePolicy,
+		ContextSnapshot:         input.ContextSnapshot,
 		KubernetesAccessProfile: input.EffectiveKubernetesAccess.Profile,
 	}
 	raw, err := json.Marshal(payload)

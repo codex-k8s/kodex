@@ -5,6 +5,8 @@
     {"component":"control-plane","dockerfile":"services/internal/control-plane/Dockerfile"},
     {"component":"secret-broker","dockerfile":"services/internal/secret-broker/Dockerfile"},
     {"component":"stt-tts-service","dockerfile":"services/internal/stt-tts-service/Dockerfile"},
+    {"component":"email-bridge","dockerfile":"services/internal/email-bridge/Dockerfile","target":"runtime"},
+    {"component":"email-bridge-migration","dockerfile":"services/internal/email-bridge/Dockerfile","target":"migration"},
     {"component":"internal-rpc-authority","dockerfile":"services/internal/internal-rpc-authority/Dockerfile"},
     {"component":"runtime-controller","dockerfile":"services/internal/runtime-controller/Dockerfile"},
     {"component":"integration-gateway","dockerfile":"services/external/integration-gateway/Dockerfile"},

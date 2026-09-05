@@ -13,6 +13,7 @@ spec:
   ports:
     - {name: connect, port: 8080, targetPort: connect, protocol: TCP}
     - {name: stt-connect, port: 8081, targetPort: stt-connect, protocol: TCP}
+    - {name: mail-connect, port: 8082, targetPort: mail-connect, protocol: TCP}
 ---
 apiVersion: v1
 kind: Service

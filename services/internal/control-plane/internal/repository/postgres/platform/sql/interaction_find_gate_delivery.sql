@@ -25,6 +25,7 @@ WHERE d.organization_id = @organization_id::uuid
   AND g.capability_key = 'mattermost.gate_decisions'
   AND d.capability_key = 'mattermost.gate_decisions'
   AND d.state = 'SUCCEEDED'
+  AND d.external_team_ref = @external_team_ref AND d.external_channel_ref = @external_channel_ref
   AND d.external_post_ref = COALESCE(NULLIF(@external_root_post_ref, ''), @external_post_ref)
 LIMIT 1
 FOR UPDATE OF gate

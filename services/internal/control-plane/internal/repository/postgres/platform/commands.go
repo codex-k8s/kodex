@@ -72,6 +72,12 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if json.Unmarshal(storedPayload, &result) != nil {
 			return command.Result{}, errs.ErrConflict
 		}
+		if err := repository.refreshMemoryReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
+		if err := repository.refreshSkillReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
 			if err := repository.applyResultActionPermissions(ctx, tx, scope, &result, ""); err != nil {
 				return command.Result{}, err
@@ -124,7 +130,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, err
 		}
 	}
-	encoded, err := json.Marshal(outcome.result)
+	encoded, err := json.Marshal(memoryReceiptMetadata(outcome.result))
 	if err != nil {
 		return command.Result{}, errs.ErrConflict
 	}
@@ -221,6 +227,16 @@ func exposesActorActions(workload string) bool {
 
 func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	switch input.Kind {
+	case command.CreateMemoryRecord, command.ReviseMemoryRecord, command.ArchiveMemoryRecord, command.RestoreMemoryRecord, command.PurgeMemoryRecord:
+		return repository.changeMemoryRecord(ctx, tx, scope, input)
+	case command.CreateSkillBundleDraft, command.SaveSkillBundleDraft:
+		return repository.saveSkillDraft(ctx, tx, scope, input)
+	case command.ValidateSkillBundleDraft:
+		return repository.validateSkillDraft(ctx, tx, scope, input)
+	case command.BindAgentMemoryRecord, command.UnbindAgentMemoryRecord, command.BindAgentSkillBundle, command.UnbindAgentSkillBundle:
+		return repository.changeContextBinding(ctx, tx, scope, input)
+	case command.ReviewSkillBundleDraft, command.PublishSkillBundleDraft, command.DiscardSkillBundleDraft, command.ArchiveSkillBundle, command.RestoreSkillBundle, command.PurgeSkillBundle:
+		return repository.transitionSkillBundle(ctx, tx, scope, input)
 	case command.CompleteOnboarding:
 		return repository.completeOnboarding(ctx, tx, scope)
 	case command.CreateProject:
@@ -235,6 +251,19 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createAgent(ctx, tx, scope, input.Payload)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
+	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
+		command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft:
+		return repository.changeRuntimeEnvironmentDraft(ctx, tx, scope, input)
+	case command.RebindRuntimeEnvironment:
+		return repository.rebindRuntimeEnvironment(ctx, tx, scope, input)
+	case command.RebindRuntimeSecret:
+		return repository.rebindRuntimeSecret(ctx, tx, scope, input)
+	case command.BindInteractionIdentity, command.RevokeInteractionIdentity:
+		return repository.changeInteractionIdentity(ctx, tx, scope, input)
+	case command.ReconcileEmailEffect:
+		return repository.reconcileEmailEffect(ctx, tx, scope, input)
+	case command.ReportEmailEffect:
+		return repository.reportEmailEffect(ctx, tx, scope, input)
 	case command.SetAgentAvatar, command.RemoveAgentAvatar:
 		return repository.changeAgentAvatar(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
@@ -299,6 +328,14 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.applyAccessCommand(ctx, tx, scope, input)
 	case command.CreatePromptTemplateDraft, command.ValidatePromptTemplateDraft,
 		command.PublishPromptTemplateDraft, command.RebindPromptTemplate,
+		command.SavePromptTemplateDraft,
+		command.DiscardPromptTemplateDraft,
+		command.SaveRoleImageRevisionDraft,
+		command.DiscardRoleImageRevisionDraft,
+		command.SaveIntegrationDefinitionDraft,
+		command.DiscardIntegrationDefinitionDraft,
+		command.SaveSystemSTTConfigurationDraft,
+		command.DiscardSystemSTTConfigurationDraft,
 		command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
 		command.PublishRoleImageRevision, command.RebindRoleImage,
 		command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,

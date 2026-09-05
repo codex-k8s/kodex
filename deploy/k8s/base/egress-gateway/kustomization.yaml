@@ -1,6 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: kodex-system
+transformers:
+  - mail/cluster-scope-transformer.yaml
 resources:
   - serviceaccount.yaml
   - deployment.yaml
@@ -10,10 +12,14 @@ resources:
   - servicemonitor.yaml
   - prometheusrule.yaml
   - dashboard.yaml
+  - mail/mail-configmap.json
+  - mail/mail-networkpolicy.json
+  - mail/publication-admission.json
 configMapGenerator:
   - name: egress-gateway-policy
     files:
       - policy.json=policy.json
     options:
       immutable: true
-patches: null
+patches:
+  - path: mail/mail-deployment-patch.json

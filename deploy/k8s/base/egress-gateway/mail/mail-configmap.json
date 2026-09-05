@@ -1,0 +1,16 @@
+{
+  "apiVersion": "v1",
+  "data": {
+    "mail-policy.json": "{\"schema\":\"egress-mail/v1\",\"configurationRevision\":1,\"configurationDigest\":\"020a47e29b1059a44323a60625cf50343843e63b066d1ff6f5626d283156797c\",\"gatewayPolicyDigest\":\"8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218\",\"destinations\":[]}"
+  },
+  "immutable": true,
+  "kind": "ConfigMap",
+  "metadata": {
+    "labels": {
+      "app.kubernetes.io/component": "platform-egress",
+      "app.kubernetes.io/name": "egress-gateway"
+    },
+    "name": "egress-gateway-mail-c6762097fc4eb495637172a3",
+    "namespace": "kodex-system"
+  }
+}
