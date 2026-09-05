@@ -515,12 +515,23 @@ Context7 проверен для `/authts/oidc-client-ts`; дополнител�
 установленной версии и `security-headers.conf`. Popup не используется: текущий
 COOP `same-origin` сохранён без ослабления защитных headers.
 
-`listRuns` в текущем SDK принимает только `projectRef/query/pageSize/pageToken`.
-Каталог использует настоящие страницы по 40 записей и общий cursor; scroll
-любой колонки догружает следующую общую страницу. Независимая server-side
-пагинация колонок и полные ACTIVE/TERMINAL фильтры требуют state/lane filter
-в producer и HTTP. До него фильтры отражают только загруженные записи;
-локальные lane counts не выдаются за серверные totals. Контракт не имитируется.
+После HTTP `9c1231ab7` каталог запусков передаёт серверу точные `states[]`
+для ACTIVE/TERMINAL. `features/workboard/run-catalog.ts` хранит страницы по 40
+записей, отменяет старый запрос и сбрасывает cursor при смене проекта, поиска
+или фильтра. Ответ с чужим проектом, состоянием вне запроса, дублем либо
+повторным cursor отклоняется. Scroll любой колонки догружает следующую общую
+страницу; локальные lane counts не выдаются за серверные totals.
+Unit проверяет scope, смену фильтра и поздний ответ; synthetic каталог запусков
+проверяет network states, сброс cursor и отображение нового набора.
+
+HTTP `5717e7cf4` добавил обязательные `catalogRevision/catalogDigest` и
+ожидаемый снимок для страниц моделей. `features/providers/model-catalog.ts`
+закрепляет эти поля на следующей странице и в exact ID lookup; несовпадение
+снимка закрыто останавливает выбор. Смена query/account начинает новое чтение.
+`model-catalog.test.ts` и `models.synthetic.spec.ts` проверяют pinning,
+pagination и исчезнувшую модель на 1440/390. Сохранение reasoning через
+опубликованный TOML overlay не заменяет отсутствующую server-side проверку
+модель/effort/catalog при публикации; эта producer-зависимость остаётся открытой.
 
 Уточнение после `261b577ce`: typed Skill/Memory HTTP и STT parameters уже
 получены. `src/features/context-resources` подключает отдельные каталоги,

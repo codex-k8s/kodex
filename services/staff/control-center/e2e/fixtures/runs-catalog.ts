@@ -46,22 +46,27 @@ export async function checkRunsCatalog(
       nextActions: [],
     };
   }
-  const queries: { query: string; cursor: string | null }[] = [];
+  const queries: { query: string; cursor: string | null; states: string[] }[] =
+    [];
   await page.route("**/api/v1/runs?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
     expect(params.get("projectRef")).toBe(projectRef);
     expect(params.get("pageSize")).toBe("40");
     const query = params.get("query") ?? "";
     const cursor = params.get("pageToken");
-    queries.push({ query, cursor });
+    const states = params.getAll("states");
+    queries.push({ query, cursor, states });
     await route.fulfill({
       json: {
-        items: query
-          ? []
-          : cursor
-            ? [run(9)]
-            : Array.from({ length: 8 }, (_, index) => run(index)),
-        nextPageToken: query || cursor ? "" : "runs_next",
+        items: states.includes("FAILED")
+          ? [{ ...run(20), state: "FAILED" }]
+          : query
+            ? []
+            : cursor
+              ? [run(9)]
+              : Array.from({ length: 8 }, (_, index) => run(index)),
+        nextPageToken:
+          states.includes("FAILED") || query || cursor ? "" : "runs_next",
       },
     });
   });
@@ -98,6 +103,24 @@ export async function checkRunsCatalog(
     await lane.locator(".run-work-item h3").first().getAttribute("title"),
   ).toBe(run(0).title);
   await capture();
+  await page.getByRole("button", { name: "Завершённые", exact: true }).click();
+  await expect
+    .poll(() =>
+      queries.some(
+        (entry) => entry.states.includes("FAILED") && entry.cursor === null,
+      ),
+    )
+    .toBe(true);
+  await expect(page.locator(".run-work-item")).toHaveCount(1);
+  await page.getByRole("button", { name: "Активные", exact: true }).click();
+  await expect
+    .poll(() =>
+      queries.some(
+        (entry) => entry.states.includes("CANCELLING") && entry.cursor === null,
+      ),
+    )
+    .toBe(true);
+  await expect(lane.locator(".run-work-item")).toHaveCount(8);
   await page
     .getByRole("textbox", { name: "Поиск запусков", exact: true })
     .fill("No synthetic match");

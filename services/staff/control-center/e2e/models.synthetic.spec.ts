@@ -7,6 +7,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
     const failures: string[] = [];
     const queries: string[] = [];
+    const cursors: string[] = [];
     page.on("pageerror", (error) => failures.push(error.message));
     page.on("console", (message) => {
       if (["warning", "error"].includes(message.type()))
@@ -56,6 +57,18 @@ for (const width of [1440, 390]) {
         const account = url.searchParams.get("providerAccountRef");
         expect(["pacc_primary", "pacc_secondary"]).toContain(account);
         const query = url.searchParams.get("query") ?? "";
+        const cursor = url.searchParams.get("pageToken") ?? "";
+        if (cursor) {
+          cursors.push(cursor);
+          expect(url.searchParams.get("expectedCatalogRevision")).toBe(
+            `mcat_${"a".repeat(64)}`,
+          );
+          expect(url.searchParams.get("expectedCatalogDigest")).toBe(
+            "a".repeat(64),
+          );
+        } else {
+          expect(url.searchParams.has("expectedCatalogRevision")).toBe(false);
+        }
         queries.push(query);
         const permitted = !revoked && account === "pacc_primary";
         const item = {
@@ -64,11 +77,27 @@ for (const width of [1440, 390]) {
           eligibleProviderAccountRefs: permitted ? ["pacc_primary"] : [],
           readinessBlockers: permitted ? [] : ["MODEL_UNAVAILABLE"],
         };
-        const items = [item, { ...item, id: "model-alternative" }].filter(
-          (model) => !query || model.id.includes(query),
-        );
+        const items = query
+          ? [item, { ...item, id: "model-alternative" }].filter((model) =>
+              model.id.includes(query),
+            )
+          : cursor
+            ? [{ ...item, id: "model-alternative" }]
+            : [
+                item,
+                ...Array.from({ length: 8 }, (_, index) => ({
+                  ...item,
+                  id: `model-other-${String(index)}`,
+                })),
+              ];
         await route.fulfill({
-          json: { items, total: items.length, nextPageToken: "" },
+          json: {
+            items,
+            total: items.length,
+            nextPageToken: query || cursor ? "" : "models_next",
+            catalogRevision: `mcat_${"a".repeat(64)}`,
+            catalogDigest: "a".repeat(64),
+          },
         });
         return;
       }
@@ -87,6 +116,11 @@ for (const width of [1440, 390]) {
       page.getByRole("button", { name: "Сохранить", exact: true }),
     ).toBeEnabled();
     await page.locator(".async-picker__trigger").click();
+    await page.locator(".async-picker__options").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+    });
+    await expect.poll(() => cursors.includes("models_next")).toBe(true);
     await page.getByRole("option", { name: /^model-alternative/ }).click();
     await expect(page.getByTestId("model")).toHaveText("model-alternative");
     await expect(

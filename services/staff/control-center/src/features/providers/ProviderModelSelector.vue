@@ -13,6 +13,7 @@ import {
   accountModelAvailable,
   loadModelCatalog,
   resolveAccountModel,
+  type ModelCatalogSnapshot,
 } from "./model-catalog";
 
 const props = defineProps<{
@@ -91,18 +92,29 @@ watch(
   { immediate: true, flush: "sync" },
 );
 
+let catalogSnapshot: ModelCatalogSnapshot | undefined;
+let catalogScope = "";
 async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
 ): Promise<AsyncEntityOptionPage> {
+  const scope = JSON.stringify([scopeKey.value, query.trim()]);
+  if (cursor && catalogScope !== scope)
+    throw new Error("Model catalog cursor scope mismatch");
   const page = await loadModelCatalog(
     props.definitionKey,
     accounts.value[0],
     query,
     cursor,
     signal,
+    cursor ? catalogSnapshot : undefined,
   );
+  signal.throwIfAborted();
+  if (scope !== JSON.stringify([scopeKey.value, query.trim()]))
+    throw new Error("Model catalog scope changed");
+  catalogSnapshot = page;
+  catalogScope = scope;
   return {
     items: page.items.map((model) => ({
       ref: model.id,
