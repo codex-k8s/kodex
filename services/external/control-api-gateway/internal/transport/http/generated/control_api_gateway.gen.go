@@ -6556,15 +6556,17 @@ type InstructionVersionPage struct {
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
-	ApprovalPolicy   IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
-	ApprovalRequired bool                                `json:"approvalRequired"`
-	Description      string                              `json:"description"`
-	InputFields      []IntegrationConfigurationField     `json:"inputFields"`
-	Key              string                              `json:"key"`
-	Name             string                              `json:"name"`
-	Operation        string                              `json:"operation"`
-	ResourceKind     IntegrationCapabilityResourceKind   `json:"resourceKind"`
-	Risk             IntegrationCapabilityRisk           `json:"risk"`
+	ApprovalPolicy    IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
+	ApprovalRequired  bool                                `json:"approvalRequired"`
+	Description       string                              `json:"description"`
+	InputFields       []IntegrationConfigurationField     `json:"inputFields"`
+	InputSchema       *string                             `json:"inputSchema,omitempty"`
+	InputSchemaSha256 *string                             `json:"inputSchemaSha256,omitempty"`
+	Key               string                              `json:"key"`
+	Name              string                              `json:"name"`
+	Operation         string                              `json:"operation"`
+	ResourceKind      IntegrationCapabilityResourceKind   `json:"resourceKind"`
+	Risk              IntegrationCapabilityRisk           `json:"risk"`
 }
 
 // IntegrationCapabilityApprovalPolicy defines model for IntegrationCapability.ApprovalPolicy.
@@ -6682,16 +6684,18 @@ type IntegrationDefinitionOrigin string
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
-	AgentRef       *OpaqueRef                     `json:"agentRef,omitempty"`
-	ApprovalPolicy IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
-	CapabilityKey  string                         `json:"capabilityKey"`
-	Enabled        bool                           `json:"enabled"`
-	Ref            OpaqueRef                      `json:"ref"`
-	ResourceScope  IntegrationResourceScope       `json:"resourceScope"`
-	Risk           IntegrationGrantRisk           `json:"risk"`
-	TargetName     string                         `json:"targetName"`
-	Version        int64                          `json:"version"`
-	WorkflowRef    *OpaqueRef                     `json:"workflowRef,omitempty"`
+	AgentRef          *OpaqueRef                     `json:"agentRef,omitempty"`
+	ApprovalPolicy    IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
+	CapabilityKey     string                         `json:"capabilityKey"`
+	Enabled           bool                           `json:"enabled"`
+	InputSchema       *string                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256 *string                        `json:"inputSchemaSha256,omitempty"`
+	Ref               OpaqueRef                      `json:"ref"`
+	ResourceScope     IntegrationResourceScope       `json:"resourceScope"`
+	Risk              IntegrationGrantRisk           `json:"risk"`
+	TargetName        string                         `json:"targetName"`
+	Version           int64                          `json:"version"`
+	WorkflowRef       *OpaqueRef                     `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantApprovalPolicy defines model for IntegrationGrant.ApprovalPolicy.
