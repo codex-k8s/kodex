@@ -2261,6 +2261,10 @@ export type ProviderAccount = {
     definitionKey: 'openai-codex';
     name: string;
     externalAccountMasked: string;
+    /**
+     * Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+     */
+    safeStatusReason?: 'AUTHORIZED' | 'ACCOUNT_DISABLED' | 'ACCOUNT_REVOKED' | 'REAUTHORIZATION_REQUIRED' | 'DEVICE_AUTHORIZATION_PENDING' | 'CREDENTIAL_CONFIGURATION_REQUIRED' | 'ACCOUNT_STATE_UNKNOWN' | 'DEVICE_AUTHORIZATION_EXPIRED' | 'DEVICE_AUTHORIZATION_FAILED' | 'CREDENTIAL_MATERIALIZATION_FAILED';
     state: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED';
     enabled: boolean;
     ready: boolean;

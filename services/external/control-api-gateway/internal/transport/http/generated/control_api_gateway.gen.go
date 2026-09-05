@@ -2541,6 +2541,48 @@ func (e ProviderAccountDefinitionKey) Valid() bool {
 	}
 }
 
+// Defines values for ProviderAccountSafeStatusReason.
+const (
+	ProviderAccountSafeStatusReasonACCOUNTDISABLED                 ProviderAccountSafeStatusReason = "ACCOUNT_DISABLED"
+	ProviderAccountSafeStatusReasonACCOUNTREVOKED                  ProviderAccountSafeStatusReason = "ACCOUNT_REVOKED"
+	ProviderAccountSafeStatusReasonACCOUNTSTATEUNKNOWN             ProviderAccountSafeStatusReason = "ACCOUNT_STATE_UNKNOWN"
+	ProviderAccountSafeStatusReasonAUTHORIZED                      ProviderAccountSafeStatusReason = "AUTHORIZED"
+	ProviderAccountSafeStatusReasonCREDENTIALCONFIGURATIONREQUIRED ProviderAccountSafeStatusReason = "CREDENTIAL_CONFIGURATION_REQUIRED"
+	ProviderAccountSafeStatusReasonCREDENTIALMATERIALIZATIONFAILED ProviderAccountSafeStatusReason = "CREDENTIAL_MATERIALIZATION_FAILED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONEXPIRED      ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_EXPIRED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONFAILED       ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_FAILED"
+	ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONPENDING      ProviderAccountSafeStatusReason = "DEVICE_AUTHORIZATION_PENDING"
+	ProviderAccountSafeStatusReasonREAUTHORIZATIONREQUIRED         ProviderAccountSafeStatusReason = "REAUTHORIZATION_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the ProviderAccountSafeStatusReason enum.
+func (e ProviderAccountSafeStatusReason) Valid() bool {
+	switch e {
+	case ProviderAccountSafeStatusReasonACCOUNTDISABLED:
+		return true
+	case ProviderAccountSafeStatusReasonACCOUNTREVOKED:
+		return true
+	case ProviderAccountSafeStatusReasonACCOUNTSTATEUNKNOWN:
+		return true
+	case ProviderAccountSafeStatusReasonAUTHORIZED:
+		return true
+	case ProviderAccountSafeStatusReasonCREDENTIALCONFIGURATIONREQUIRED:
+		return true
+	case ProviderAccountSafeStatusReasonCREDENTIALMATERIALIZATIONFAILED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONEXPIRED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONFAILED:
+		return true
+	case ProviderAccountSafeStatusReasonDEVICEAUTHORIZATIONPENDING:
+		return true
+	case ProviderAccountSafeStatusReasonREAUTHORIZATIONREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProviderAccountState.
 const (
 	ProviderAccountStateAUTHORIZED              ProviderAccountState = "AUTHORIZED"
@@ -5303,22 +5345,22 @@ func (e ListOwnerGatesParamsState) Valid() bool {
 
 // Defines values for ListArtifactsParamsLifecycleState.
 const (
-	ListArtifactsParamsLifecycleStateACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
-	ListArtifactsParamsLifecycleStateDELETED      ListArtifactsParamsLifecycleState = "DELETED"
-	ListArtifactsParamsLifecycleStatePURGED       ListArtifactsParamsLifecycleState = "PURGED"
-	ListArtifactsParamsLifecycleStatePURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
+	ACTIVE       ListArtifactsParamsLifecycleState = "ACTIVE"
+	DELETED      ListArtifactsParamsLifecycleState = "DELETED"
+	PURGED       ListArtifactsParamsLifecycleState = "PURGED"
+	PURGEPENDING ListArtifactsParamsLifecycleState = "PURGE_PENDING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsLifecycleState enum.
 func (e ListArtifactsParamsLifecycleState) Valid() bool {
 	switch e {
-	case ListArtifactsParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case ListArtifactsParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGED:
+	case PURGED:
 		return true
-	case ListArtifactsParamsLifecycleStatePURGEPENDING:
+	case PURGEPENDING:
 		return true
 	default:
 		return false
@@ -7235,13 +7277,19 @@ type ProviderAccount struct {
 	NextActions           []NextAction                 `json:"nextActions"`
 	Ready                 bool                         `json:"ready"`
 	Ref                   OpaqueRef                    `json:"ref"`
-	State                 ProviderAccountState         `json:"state"`
-	UpdatedAt             Timestamp                    `json:"updatedAt"`
-	Version               int64                        `json:"version"`
+
+	// SafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+	SafeStatusReason *ProviderAccountSafeStatusReason `json:"safeStatusReason,omitempty"`
+	State            ProviderAccountState             `json:"state"`
+	UpdatedAt        Timestamp                        `json:"updatedAt"`
+	Version          int64                            `json:"version"`
 }
 
 // ProviderAccountDefinitionKey defines model for ProviderAccount.DefinitionKey.
 type ProviderAccountDefinitionKey string
+
+// ProviderAccountSafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
+type ProviderAccountSafeStatusReason string
 
 // ProviderAccountState defines model for ProviderAccount.State.
 type ProviderAccountState string
