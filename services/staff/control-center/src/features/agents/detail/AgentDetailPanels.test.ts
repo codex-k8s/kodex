@@ -172,7 +172,7 @@ describe("agent detail panels", () => {
 
     expect(html).toContain("{{ .run.ref }}");
     expect(html).toContain("{{ .project.ref }}");
-    expect(html).toContain("Template variables");
+    expect(html).toContain("Переменные шаблона");
     expect(html).toContain("Авторитетный каталог");
     expect(html).toContain('role="combobox"');
   });

@@ -177,7 +177,12 @@ onBeforeUnmount(() => {
       :title="$t('agents.new')"
       :busy="busy"
       @close="dialog = false"
-      ><form id="agent-form" class="form-grid" @submit.prevent="submit">
+      ><form
+        id="agent-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="120" /></label
