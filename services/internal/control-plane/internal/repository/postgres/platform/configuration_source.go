@@ -115,6 +115,9 @@ func (repository *Repository) configurationSourceAuthority(ctx context.Context, 
 	if kind == "ROLE_IMAGE" && repository.requireAccess(ctx, tx, current, "image.build", target) != nil {
 		return managedSet{}, errs.ErrForbidden
 	}
+	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, set); err != nil {
+		return managedSet{}, err
+	}
 	connectionRef := payload.ConnectionRef
 	if !configure {
 		source, err := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)

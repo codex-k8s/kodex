@@ -11,6 +11,7 @@ import (
 
 type Filter struct {
 	ProjectRef, RoleDefinitionRef string
+	Query, State                  string
 	Page                          query.Page
 }
 
@@ -92,7 +93,7 @@ type PromotionRequestInput struct {
 
 type Repository interface {
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
-	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, error)
+	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)
 	Get(context.Context, value.Principal, string) (Detail, error)
 	Manage(context.Context, ManageInput) (ManageResult, error)
 	ClaimBuild(context.Context, value.Principal, string) (entity.ImageBuildClaim, error)

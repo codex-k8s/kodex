@@ -76,13 +76,13 @@ func (service *Service) ListEnvironments(ctx context.Context, principal value.Pr
 	return service.catalog.List(), nil
 }
 
-func (service *Service) List(ctx context.Context, principal value.Principal, filter repository.Filter) ([]entity.RoleImageRecipe, string, error) {
+func (service *Service) List(ctx context.Context, principal value.Principal, filter repository.Filter) ([]entity.RoleImageRecipe, string, int64, error) {
 	principal, err := service.resolvePrincipal(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, "", 0, err
 	}
 	if err := authorize(principal, permissionListRecipes, "control-api-gateway"); err != nil || !validRef(filter.ProjectRef, "prj") {
-		return nil, "", firstError(err, errs.ErrInvalid)
+		return nil, "", 0, firstError(err, errs.ErrInvalid)
 	}
 	return service.repository.List(ctx, principal, filter)
 }
