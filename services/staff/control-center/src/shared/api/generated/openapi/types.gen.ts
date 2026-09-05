@@ -1502,6 +1502,41 @@ export type RuntimeEnvironmentBindingInput = {
     environmentRef: OpaqueRef;
 };
 
+export type AgentEffectiveCapability = {
+    key: string;
+    name: string;
+    description: string;
+    source: 'PLATFORM' | 'INTEGRATION' | 'WORKFLOW';
+    reason: 'AVAILABLE' | 'ACTOR_PERMISSION_REQUIRED' | 'AGENT_CAPABILITY_REQUIRED' | 'RUNTIME_NOT_READY' | 'WORKFLOW_CAPABILITY_NOT_REQUIRED' | 'INTEGRATION_GRANT_UNAVAILABLE' | 'INTEGRATION_REVISION_UNAVAILABLE';
+    requested: boolean;
+    required: boolean;
+    effective: boolean;
+    grantable: boolean;
+    connectionRef?: OpaqueRef;
+    connectionVersion?: number;
+    grantRef?: OpaqueRef;
+    grantVersion?: number;
+    definitionDigest?: string;
+};
+
+export type AgentEffectiveCapabilityPage = {
+    agentRef: OpaqueRef;
+    projectRef?: OpaqueRef;
+    agentVersion: number;
+    runtimeConfigurationRef: OpaqueRef;
+    runtimeConfigurationVersion: number;
+    environmentVersionRef: OpaqueRef;
+    workflowRef?: OpaqueRef;
+    workflowVersionRef?: OpaqueRef;
+    stepKey?: string;
+    digest: string;
+    evaluatedAt: string;
+    runtimeReady: boolean;
+    items: Array<AgentEffectiveCapability>;
+    total: number;
+    nextPageToken?: string;
+};
+
 export type AgentRuntimeConfigurationView = {
     configuration: AgentRuntimeConfiguration;
     publishedOverlay: ConfigOverlayVersion;
@@ -4342,6 +4377,39 @@ export type CommandAgentInstructionsResponses = {
 };
 
 export type CommandAgentInstructionsResponse = CommandAgentInstructionsResponses[keyof CommandAgentInstructionsResponses];
+
+export type GetAgentEffectiveCapabilitiesData = {
+    body?: never;
+    path: {
+        agentRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        workflowRef?: OpaqueRef;
+        stepKey?: string;
+    };
+    url: '/api/v1/agents/{agentRef}/effective-capabilities';
+};
+
+export type GetAgentEffectiveCapabilitiesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetAgentEffectiveCapabilitiesError = GetAgentEffectiveCapabilitiesErrors[keyof GetAgentEffectiveCapabilitiesErrors];
+
+export type GetAgentEffectiveCapabilitiesResponses = {
+    /**
+     * Безопасная проекция текущих возможностей и стабильных причин отказа
+     */
+    200: AgentEffectiveCapabilityPage;
+};
+
+export type GetAgentEffectiveCapabilitiesResponse = GetAgentEffectiveCapabilitiesResponses[keyof GetAgentEffectiveCapabilitiesResponses];
 
 export type GetAgentRuntimeConfigurationData = {
     body?: never;

@@ -703,6 +703,31 @@ paths:
               schema: { $ref: '#/components/schemas/Agent' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/agents/{agentRef}/effective-capabilities:
+    get:
+      tags: [Agents]
+      operationId: getAgentEffectiveCapabilities
+      description: Текущие полномочия actor пересекаются с Agent, exact integration grants и необязательным опубликованным этапом Workflow. WorkflowRef и stepKey передаются вместе; cursor закреплён за actor и digest проекции.
+      parameters:
+        - { $ref: '#/components/parameters/AgentRef' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - name: pageToken
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 2048 }
+        - name: workflowRef
+          in: query
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+        - name: stepKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 96 }
+      responses:
+        '200':
+          description: Безопасная проекция текущих возможностей и стабильных причин отказа
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEffectiveCapabilityPage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/runtime-configuration:
     parameters: [{ $ref: '#/components/parameters/AgentRef' }]
     get:
@@ -6233,6 +6258,45 @@ components:
       required: [environmentRef]
       properties:
         environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+    AgentEffectiveCapability:
+      type: object
+      additionalProperties: false
+      required: [key, name, description, source, reason, requested, required, effective, grantable]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z][a-z0-9_.-]+$' }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 4000 }
+        source: { type: string, enum: [PLATFORM, INTEGRATION, WORKFLOW] }
+        reason: { type: string, enum: [AVAILABLE, ACTOR_PERMISSION_REQUIRED, AGENT_CAPABILITY_REQUIRED, RUNTIME_NOT_READY, WORKFLOW_CAPABILITY_NOT_REQUIRED, INTEGRATION_GRANT_UNAVAILABLE, INTEGRATION_REVISION_UNAVAILABLE] }
+        requested: { type: boolean }
+        required: { type: boolean }
+        effective: { type: boolean }
+        grantable: { type: boolean }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        grantRef: { $ref: '#/components/schemas/OpaqueRef' }
+        grantVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        definitionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    AgentEffectiveCapabilityPage:
+      type: object
+      additionalProperties: false
+      required: [agentRef, agentVersion, runtimeConfigurationRef, runtimeConfigurationVersion, environmentVersionRef, digest, evaluatedAt, runtimeReady, items, total]
+      properties:
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        runtimeConfigurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runtimeConfigurationVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        environmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
+        workflowVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        stepKey: { type: string, minLength: 1, maxLength: 96 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        evaluatedAt: { type: string, format: date-time }
+        runtimeReady: { type: boolean }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentEffectiveCapability' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, minLength: 1, maxLength: 2048 }
     AgentRuntimeConfigurationView:
       type: object
       additionalProperties: false

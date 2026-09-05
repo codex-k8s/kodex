@@ -318,6 +318,60 @@ func (e AgentCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for AgentEffectiveCapabilityReason.
+const (
+	AgentEffectiveCapabilityReasonACTORPERMISSIONREQUIRED        AgentEffectiveCapabilityReason = "ACTOR_PERMISSION_REQUIRED"
+	AgentEffectiveCapabilityReasonAGENTCAPABILITYREQUIRED        AgentEffectiveCapabilityReason = "AGENT_CAPABILITY_REQUIRED"
+	AgentEffectiveCapabilityReasonAVAILABLE                      AgentEffectiveCapabilityReason = "AVAILABLE"
+	AgentEffectiveCapabilityReasonINTEGRATIONGRANTUNAVAILABLE    AgentEffectiveCapabilityReason = "INTEGRATION_GRANT_UNAVAILABLE"
+	AgentEffectiveCapabilityReasonINTEGRATIONREVISIONUNAVAILABLE AgentEffectiveCapabilityReason = "INTEGRATION_REVISION_UNAVAILABLE"
+	AgentEffectiveCapabilityReasonRUNTIMENOTREADY                AgentEffectiveCapabilityReason = "RUNTIME_NOT_READY"
+	AgentEffectiveCapabilityReasonWORKFLOWCAPABILITYNOTREQUIRED  AgentEffectiveCapabilityReason = "WORKFLOW_CAPABILITY_NOT_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the AgentEffectiveCapabilityReason enum.
+func (e AgentEffectiveCapabilityReason) Valid() bool {
+	switch e {
+	case AgentEffectiveCapabilityReasonACTORPERMISSIONREQUIRED:
+		return true
+	case AgentEffectiveCapabilityReasonAGENTCAPABILITYREQUIRED:
+		return true
+	case AgentEffectiveCapabilityReasonAVAILABLE:
+		return true
+	case AgentEffectiveCapabilityReasonINTEGRATIONGRANTUNAVAILABLE:
+		return true
+	case AgentEffectiveCapabilityReasonINTEGRATIONREVISIONUNAVAILABLE:
+		return true
+	case AgentEffectiveCapabilityReasonRUNTIMENOTREADY:
+		return true
+	case AgentEffectiveCapabilityReasonWORKFLOWCAPABILITYNOTREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEffectiveCapabilitySource.
+const (
+	AgentEffectiveCapabilitySourceINTEGRATION AgentEffectiveCapabilitySource = "INTEGRATION"
+	AgentEffectiveCapabilitySourcePLATFORM    AgentEffectiveCapabilitySource = "PLATFORM"
+	AgentEffectiveCapabilitySourceWORKFLOW    AgentEffectiveCapabilitySource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the AgentEffectiveCapabilitySource enum.
+func (e AgentEffectiveCapabilitySource) Valid() bool {
+	switch e {
+	case AgentEffectiveCapabilitySourceINTEGRATION:
+		return true
+	case AgentEffectiveCapabilitySourcePLATFORM:
+		return true
+	case AgentEffectiveCapabilitySourceWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentRuntimeConfigurationInputProviderPolicyMode.
 const (
 	AgentRuntimeConfigurationInputProviderPolicyModeFIXED     AgentRuntimeConfigurationInputProviderPolicyMode = "FIXED"
@@ -5129,25 +5183,25 @@ func (e TemplateVariableValueType) Valid() bool {
 
 // Defines values for TemplateVariableAvailabilityReason.
 const (
-	AGENTCONTEXTREQUIRED   TemplateVariableAvailabilityReason = "AGENT_CONTEXT_REQUIRED"
-	AVAILABLE              TemplateVariableAvailabilityReason = "AVAILABLE"
-	NOTMATERIALIZED        TemplateVariableAvailabilityReason = "NOT_MATERIALIZED"
-	PROJECTCONTEXTREQUIRED TemplateVariableAvailabilityReason = "PROJECT_CONTEXT_REQUIRED"
-	RUNTIMECONTEXTREQUIRED TemplateVariableAvailabilityReason = "RUNTIME_CONTEXT_REQUIRED"
+	TemplateVariableAvailabilityReasonAGENTCONTEXTREQUIRED   TemplateVariableAvailabilityReason = "AGENT_CONTEXT_REQUIRED"
+	TemplateVariableAvailabilityReasonAVAILABLE              TemplateVariableAvailabilityReason = "AVAILABLE"
+	TemplateVariableAvailabilityReasonNOTMATERIALIZED        TemplateVariableAvailabilityReason = "NOT_MATERIALIZED"
+	TemplateVariableAvailabilityReasonPROJECTCONTEXTREQUIRED TemplateVariableAvailabilityReason = "PROJECT_CONTEXT_REQUIRED"
+	TemplateVariableAvailabilityReasonRUNTIMECONTEXTREQUIRED TemplateVariableAvailabilityReason = "RUNTIME_CONTEXT_REQUIRED"
 )
 
 // Valid indicates whether the value is a known member of the TemplateVariableAvailabilityReason enum.
 func (e TemplateVariableAvailabilityReason) Valid() bool {
 	switch e {
-	case AGENTCONTEXTREQUIRED:
+	case TemplateVariableAvailabilityReasonAGENTCONTEXTREQUIRED:
 		return true
-	case AVAILABLE:
+	case TemplateVariableAvailabilityReasonAVAILABLE:
 		return true
-	case NOTMATERIALIZED:
+	case TemplateVariableAvailabilityReasonNOTMATERIALIZED:
 		return true
-	case PROJECTCONTEXTREQUIRED:
+	case TemplateVariableAvailabilityReasonPROJECTCONTEXTREQUIRED:
 		return true
-	case RUNTIMECONTEXTREQUIRED:
+	case TemplateVariableAvailabilityReasonRUNTIMECONTEXTREQUIRED:
 		return true
 	default:
 		return false
@@ -5183,46 +5237,46 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 
 // Defines values for VFSNodeKind.
 const (
-	VFSNodeKindAGENT       VFSNodeKind = "AGENT"
-	VFSNodeKindAUTOMATION  VFSNodeKind = "AUTOMATION"
-	VFSNodeKindAVATAR      VFSNodeKind = "AVATAR"
-	VFSNodeKindDIRECTORY   VFSNodeKind = "DIRECTORY"
-	VFSNodeKindENVIRONMENT VFSNodeKind = "ENVIRONMENT"
-	VFSNodeKindINPUT       VFSNodeKind = "INPUT"
-	VFSNodeKindMEMORY      VFSNodeKind = "MEMORY"
-	VFSNodeKindPROJECT     VFSNodeKind = "PROJECT"
-	VFSNodeKindRESULT      VFSNodeKind = "RESULT"
-	VFSNodeKindRUN         VFSNodeKind = "RUN"
-	VFSNodeKindSKILL       VFSNodeKind = "SKILL"
-	VFSNodeKindWORKFLOW    VFSNodeKind = "WORKFLOW"
+	AGENT       VFSNodeKind = "AGENT"
+	AUTOMATION  VFSNodeKind = "AUTOMATION"
+	AVATAR      VFSNodeKind = "AVATAR"
+	DIRECTORY   VFSNodeKind = "DIRECTORY"
+	ENVIRONMENT VFSNodeKind = "ENVIRONMENT"
+	INPUT       VFSNodeKind = "INPUT"
+	MEMORY      VFSNodeKind = "MEMORY"
+	PROJECT     VFSNodeKind = "PROJECT"
+	RESULT      VFSNodeKind = "RESULT"
+	RUN         VFSNodeKind = "RUN"
+	SKILL       VFSNodeKind = "SKILL"
+	WORKFLOW    VFSNodeKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeKind enum.
 func (e VFSNodeKind) Valid() bool {
 	switch e {
-	case VFSNodeKindAGENT:
+	case AGENT:
 		return true
-	case VFSNodeKindAUTOMATION:
+	case AUTOMATION:
 		return true
-	case VFSNodeKindAVATAR:
+	case AVATAR:
 		return true
-	case VFSNodeKindDIRECTORY:
+	case DIRECTORY:
 		return true
-	case VFSNodeKindENVIRONMENT:
+	case ENVIRONMENT:
 		return true
-	case VFSNodeKindINPUT:
+	case INPUT:
 		return true
-	case VFSNodeKindMEMORY:
+	case MEMORY:
 		return true
-	case VFSNodeKindPROJECT:
+	case PROJECT:
 		return true
-	case VFSNodeKindRESULT:
+	case RESULT:
 		return true
-	case VFSNodeKindRUN:
+	case RUN:
 		return true
-	case VFSNodeKindSKILL:
+	case SKILL:
 		return true
-	case VFSNodeKindWORKFLOW:
+	case WORKFLOW:
 		return true
 	default:
 		return false
@@ -6114,6 +6168,49 @@ type AgentContextBinding struct {
 type AgentContextBindingInput struct {
 	ExpectedBindingVersion int64     `json:"expectedBindingVersion"`
 	RevisionRef            OpaqueRef `json:"revisionRef"`
+}
+
+// AgentEffectiveCapability defines model for AgentEffectiveCapability.
+type AgentEffectiveCapability struct {
+	ConnectionRef     *OpaqueRef                     `json:"connectionRef,omitempty"`
+	ConnectionVersion *int64                         `json:"connectionVersion,omitempty"`
+	DefinitionDigest  *string                        `json:"definitionDigest,omitempty"`
+	Description       string                         `json:"description"`
+	Effective         bool                           `json:"effective"`
+	GrantRef          *OpaqueRef                     `json:"grantRef,omitempty"`
+	GrantVersion      *int64                         `json:"grantVersion,omitempty"`
+	Grantable         bool                           `json:"grantable"`
+	Key               string                         `json:"key"`
+	Name              string                         `json:"name"`
+	Reason            AgentEffectiveCapabilityReason `json:"reason"`
+	Requested         bool                           `json:"requested"`
+	Required          bool                           `json:"required"`
+	Source            AgentEffectiveCapabilitySource `json:"source"`
+}
+
+// AgentEffectiveCapabilityReason defines model for AgentEffectiveCapability.Reason.
+type AgentEffectiveCapabilityReason string
+
+// AgentEffectiveCapabilitySource defines model for AgentEffectiveCapability.Source.
+type AgentEffectiveCapabilitySource string
+
+// AgentEffectiveCapabilityPage defines model for AgentEffectiveCapabilityPage.
+type AgentEffectiveCapabilityPage struct {
+	AgentRef                    OpaqueRef                  `json:"agentRef"`
+	AgentVersion                int64                      `json:"agentVersion"`
+	Digest                      string                     `json:"digest"`
+	EnvironmentVersionRef       OpaqueRef                  `json:"environmentVersionRef"`
+	EvaluatedAt                 time.Time                  `json:"evaluatedAt"`
+	Items                       []AgentEffectiveCapability `json:"items"`
+	NextPageToken               *string                    `json:"nextPageToken,omitempty"`
+	ProjectRef                  *OpaqueRef                 `json:"projectRef,omitempty"`
+	RuntimeConfigurationRef     OpaqueRef                  `json:"runtimeConfigurationRef"`
+	RuntimeConfigurationVersion int64                      `json:"runtimeConfigurationVersion"`
+	RuntimeReady                bool                       `json:"runtimeReady"`
+	StepKey                     *string                    `json:"stepKey,omitempty"`
+	Total                       int64                      `json:"total"`
+	WorkflowRef                 *OpaqueRef                 `json:"workflowRef,omitempty"`
+	WorkflowVersionRef          *OpaqueRef                 `json:"workflowVersionRef,omitempty"`
 }
 
 // AgentInput defines model for AgentInput.
@@ -9937,6 +10034,15 @@ type ListConfigOverlayRevisionsParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// GetAgentEffectiveCapabilitiesParams defines parameters for GetAgentEffectiveCapabilities.
+type GetAgentEffectiveCapabilitiesParams struct {
+	Query       *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize    *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken   *string    `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	WorkflowRef *OpaqueRef `form:"workflowRef,omitempty" json:"workflowRef,omitempty"`
+	StepKey     *string    `form:"stepKey,omitempty" json:"stepKey,omitempty"`
+}
+
 // CommandAgentInstructionsParams defines parameters for CommandAgentInstructions.
 type CommandAgentInstructionsParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -11979,6 +12085,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef})
 	GetConfigOverlayRevision(w http.ResponseWriter, r *http.Request, agentRef AgentRef, revisionRef OpaqueRef)
+
+	// (GET /api/v1/agents/{agentRef}/effective-capabilities)
+	GetAgentEffectiveCapabilities(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params GetAgentEffectiveCapabilitiesParams)
 
 	// (POST /api/v1/agents/{agentRef}/instruction-commands)
 	CommandAgentInstructions(w http.ResponseWriter, r *http.Request, agentRef AgentRef, params CommandAgentInstructionsParams)
@@ -15261,6 +15370,106 @@ func (siw *ServerInterfaceWrapper) GetConfigOverlayRevision(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetConfigOverlayRevision(w, r, agentRef, revisionRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentEffectiveCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentEffectiveCapabilities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agentRef" -------------
+	var agentRef AgentRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agentRef", r.PathValue("agentRef"), &agentRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentEffectiveCapabilitiesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "workflowRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "workflowRef", r.URL.Query(), &params.WorkflowRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "workflowRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workflowRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "stepKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stepKey", r.URL.Query(), &params.StepKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stepKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stepKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentEffectiveCapabilities(w, r, agentRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -36319,6 +36528,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay-rollbacks", wrapper.RollbackConfigOverlay)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay/revisions", wrapper.ListConfigOverlayRevisions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef}", wrapper.GetConfigOverlayRevision)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/effective-capabilities", wrapper.GetAgentEffectiveCapabilities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-commands", wrapper.CommandAgentInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-drafts", wrapper.CreateInstructionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/agents/{agentRef}/instruction-versions", wrapper.ListAgentInstructionVersions)
