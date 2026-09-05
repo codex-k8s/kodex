@@ -22,7 +22,7 @@ func TestConfigOverlayStrictAllowlist(t *testing.T) {
 		"sandbox":    `sandbox_mode = "danger-full-access"`,
 		"mcp":        `[mcp_servers.attacker]\nurl = "https://example.invalid"`,
 		"login":      `allow_login_shell = true`,
-		"reasoning":  `model_reasoning_effort = "minimal"`,
+		"reasoning":  `model_reasoning_effort = "invalid effort!"`,
 		"syntax":     `history = [`,
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -1,39 +1,9 @@
 -- name: runtime_configuration__bootstrap_agent :one
-WITH eligible_accounts AS (
-    SELECT provider_account.ref
-    FROM control_plane.provider_accounts provider_account
-    WHERE provider_account.organization_id = @organization_id::uuid
-      AND provider_account.definition_key = @provider
-      AND provider_account.enabled
-      AND provider_account.state = 'AUTHORIZED'
-      AND provider_account.current_credential_revision_id IS NOT NULL
-    ORDER BY provider_account.ref
-    LIMIT 32
-), account_pool AS (
-    SELECT jsonb_agg(
-               jsonb_build_object('accountRef', eligible_accounts.ref, 'weight', 1)
-               ORDER BY eligible_accounts.ref
-           ) AS candidates,
-           '[' || string_agg(
-               format('{"accountRef":"%s","weight":1}', eligible_accounts.ref),
-               ',' ORDER BY eligible_accounts.ref
-           ) || ']' AS canonical_candidates,
-           count(*) AS account_count
-    FROM eligible_accounts
-), policy AS (
+WITH policy AS (
     INSERT INTO control_plane.provider_account_policy_versions
         (ref, organization_id, agent_id, version_number, mode, account_candidates, digest, created_by)
-    SELECT @policy_ref, @organization_id::uuid, @agent_id::uuid, 1,
-           CASE WHEN account_pool.account_count = 1 THEN 'FIXED' ELSE 'LEAST_USED' END,
-           account_pool.candidates,
-           encode(digest(
-               convert_to(CASE WHEN account_pool.account_count = 1 THEN 'FIXED' ELSE 'LEAST_USED' END, 'UTF8') ||
-               decode('00', 'hex') || convert_to(account_pool.canonical_candidates, 'UTF8') || decode('00', 'hex'),
-               'sha256'
-           ), 'hex'),
-           @created_by::uuid
-    FROM account_pool
-    WHERE account_pool.account_count > 0
+    VALUES (@policy_ref, @organization_id::uuid, @agent_id::uuid, 1,
+            @policy_mode, @account_candidates::jsonb, @policy_digest, @created_by::uuid)
     RETURNING id, ref, digest
 ), config AS (
     INSERT INTO control_plane.agent_runtime_config_versions

@@ -105,9 +105,9 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 	case command.AgentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.AgentRuntimeConfigurationInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.ConfigOverlayInput:
-		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
+		return repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", payload.AgentRef)
 	case command.RuntimeEnvironmentBindingInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "agent.manage", "AGENT", payload.AgentRef, "")
 	case command.RuntimeEnvironmentRebindInput:

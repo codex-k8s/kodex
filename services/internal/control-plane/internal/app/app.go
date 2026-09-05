@@ -31,6 +31,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providermodelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/skillscanclient"
@@ -269,6 +270,11 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct provider credential cleanup worker: %w", err)
 	}
+	catalogHealth := serviceruntime.NewReadiness()
+	catalogWorker, catalogErr := providermodelcatalog.New(repository, providerMaterializer, service.Ready, config.InstanceID, catalogHealth, slog.Default())
+	if catalogErr != nil {
+		return fmt.Errorf("construct provider model catalog worker: %w", catalogErr)
+	}
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
@@ -278,11 +284,12 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config, catalogHealth),
 		emailProjection.Run,
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
+		catalogWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
 	)
 	workerDone := make(chan error, 1)
@@ -484,7 +491,7 @@ type readinessCondition interface {
 	Ready() (bool, string)
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, emailProjection *emailProjection, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, emailProjection *emailProjection, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config, catalogConditions ...readinessCondition) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -497,6 +504,15 @@ func monitorReadiness(service *platformservice.Service, store readinessStore, pu
 				err = errors.New("provider credential cleanup claim is unavailable")
 				reason = "provider_credential_cleanup_claim_unavailable"
 				errorClass = "provider_credential_cleanup_claim"
+			}
+			if err == nil {
+				for _, condition := range catalogConditions {
+					if ready, _ := condition.Ready(); !ready {
+						err = errors.New("provider model catalog observer is unavailable")
+						reason, errorClass = "provider_model_catalog_observer_unavailable", "provider_model_catalog_observer"
+						break
+					}
+				}
 			}
 			if err == nil {
 				if readiness.Set(true, "ready") {

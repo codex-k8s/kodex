@@ -45,7 +45,20 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	environmentVersionRef, _ := newRef("renvv")
 	bindingRef, _ := newRef("aenv")
 	var updatedAgentID, runtimeEnvironmentID, runtimeEnvironmentVersionID string
+	candidates, err := captureRuntimeCatalogPins(ctx, tx, scope{organizationID: organizationID}, runtime.Provider, runtime.Model, nil)
+	if errors.Is(err, errs.ErrConflict) {
+		candidates, err = bootstrapUnpinnedCatalogCandidates(ctx, tx, organizationID, runtime.Provider)
+	}
+	if err != nil {
+		return err
+	}
+	rawCandidates, _ := json.Marshal(candidates)
+	mode := "LEAST_USED"
+	if len(candidates) == 1 {
+		mode = "FIXED"
+	}
 	err = tx.QueryRow(ctx, queryRuntimeConfigurationBootstrapAgent, pgx.StrictNamedArgs{
+		"account_candidates": rawCandidates, "policy_mode": mode, "policy_digest": digestBytes([]byte(mode), rawCandidates),
 		"organization_id": organizationID, "agent_id": agentID, "project_id": projectID,
 		"policy_ref": policyRef, "config_ref": configRef, "overlay_ref": overlayRef,
 		"environment_ref": environmentRef, "environment_version_ref": environmentVersionRef,
@@ -176,6 +189,10 @@ func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (
 }
 
 func (repository *Repository) selectProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
+	var lockedAgentID string
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAgent, organizationID, agentRef).Scan(&lockedAgentID); err != nil {
+		return "", errs.ErrConflict
+	}
 	var accountID, accountRef, configRef, configDigest, policyRef, policyDigest string
 	var configVersion, policyVersion int64
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef).Scan(
@@ -320,6 +337,14 @@ func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Conte
 	if err != nil || defaultModel == "" || runtimeRevision == "" {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	_, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	policyRef, _ := newRef("ppol")
 	configRef, _ := newRef("rconf")
 	rawAccounts, _ := json.Marshal(accounts)
@@ -385,7 +410,15 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		}
 		state := "VALID"
 		problems := []string{}
-		if _, _, parseErr := runtimecontract.CanonicalConfigOverlay(content); parseErr != nil {
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		_, efforts, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, "", configuration.ProviderPolicy.AccountCandidates, false)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if len(runtimecontract.DiagnoseConfigOverlay(content, efforts)) != 0 {
 			state = "INVALID"
 			problems = []string{"i18n:CONFIG_OVERLAY_INVALID_OR_PROTECTED"}
 		}
@@ -403,6 +436,13 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		canonical, digest, err := runtimecontract.CanonicalConfigOverlay(content)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
+		}
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedePublishedOverlay, agent.id); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -445,6 +485,14 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, payload.AgentRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if input.Kind == command.RollbackConfigOverlay {
+		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if err := saveRuntimeOverlayDiagnostics(ctx, tx, scope, &view, input.Kind == command.CreateConfigOverlayDraft || input.Kind == command.ValidateConfigOverlayDraft); err != nil {
 		return commandOutcome{}, err
 	}
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_CONFIG_OVERLAY_CHANGED"), nil
@@ -703,6 +751,9 @@ func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context,
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	if err := repository.populateContextBindings(ctx, tx, scope, ref, &view); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if err := populateRuntimeOverlaySchema(ctx, tx, scope, &view); err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	return view, nil

@@ -1503,8 +1503,14 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunInsertSessionsRefProjectIdTargetRef, sessionRef, scope.organizationID, projectID, payload.Target.Type, payload.Target.Ref, providerAccountID, scope.actorID).Scan(&sessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("insert run session: %w", errs.ErrUnavailable)
 		}
+		if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0]); err != nil {
+			return commandOutcome{}, err
+		}
 	} else if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectSessionsOrganizationIdProjectIdRef, scope.organizationID, projectID, sessionRef, payload.Target.Type, payload.Target.Ref).Scan(&sessionID); err != nil {
 		return commandOutcome{}, fmt.Errorf("resolve continuation session: %w", errs.ErrConflict)
+	}
+	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, targetAgentRefs[0]); err != nil {
+		return commandOutcome{}, err
 	}
 	runRef, _ := newRef("run")
 	title := strings.TrimSpace(payload.Title)
