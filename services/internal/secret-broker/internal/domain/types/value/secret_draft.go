@@ -7,7 +7,8 @@ import (
 	"strings"
 )
 
-const MaximumDraftValueBytes = 1 << 20
+// Kubernetes ограничивает весь data payload одним MiB, включая nonce/tag.
+const MaximumDraftValueBytes = (1 << 20) - 28
 
 var ErrDraftBindingInvalid = errors.New("secret draft binding is invalid")
 
