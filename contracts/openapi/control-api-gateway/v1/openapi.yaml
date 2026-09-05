@@ -1579,6 +1579,170 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPage' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configurations:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxConfigurations
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configuration:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: configurationRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }, { name: revisionRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credentials:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxCredentials
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: kind, in: query, schema: { $ref: '#/components/schemas/EmailMailboxCredentialKind' } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredentialPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxCredentialReceipt
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: idempotencyKey, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredential' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/preview:
+    post:
+      tags: [EmailMailbox]
+      operationId: previewEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxPreview' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/drafts:
+    post:
+      tags: [EmailMailbox]
+      operationId: createEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { name: If-Match, in: header, schema: { type: string, maxLength: 24 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftInput' }
+      responses:
+        '201':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [EmailMailbox]
+      operationId: saveEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [EmailMailbox]
+      operationId: validateEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [EmailMailbox]
+      operationId: publishEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [EmailMailbox]
+      operationId: discardEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding:
+    post:
+      tags: [EmailMailbox]
+      operationId: bindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxBindingInput' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/binding:
+    delete:
+      tags: [EmailMailbox]
+      operationId: unbindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxUnbinding' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/runtime-secret-drafts/{draftRef}/validate:
     post:
       tags: [RuntimeSecrets]
@@ -3459,7 +3623,7 @@ paths:
         - { $ref: '#/components/parameters/PageToken' }
         - name: kind
           in: query
-          schema: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+          schema: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
       responses:
         '200':
           description: Каталог доступных конфигураций без содержимого ревизий
@@ -4583,7 +4747,7 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
         name: { type: string, minLength: 1, maxLength: 160 }
         managedBy: { type: string, enum: [UI, GIT] }
         source: { type: string, maxLength: 2000 }
@@ -4598,7 +4762,7 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
         name: { type: string, minLength: 1, maxLength: 160 }
         managedBy: { type: string, enum: [UI, GIT] }
         source: { type: string, maxLength: 2000 }
@@ -6979,6 +7143,160 @@ components:
           maxProperties: 8
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
+    EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
+    EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }
+    EmailMailboxOperation: { type: string, enum: [HEALTH, MAILBOXES, LIST, SEARCH, FETCH, DOWNLOAD, SEND, REPLY, REPLY_ALL, FORWARD, DELETE, RECEIPT, THREAD, ATTACHMENTS, MARK_READ, MARK_UNREAD, MOVE, ARCHIVE, DRAFT_CREATE, DRAFT_UPDATE, DRAFT_DELETE] }
+    EmailMailboxApprovalPolicy: { type: string, enum: [DENY, ALLOW, HUMAN_GATE] }
+    EmailMailboxCredentialReference:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 262144 }
+        generation: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    EmailMailboxEndpoint:
+      type: object
+      additionalProperties: false
+      properties:
+        host: { type: string, maxLength: 262144 }
+        port: { type: integer, format: int32 }
+        serverName: { type: string, maxLength: 262144 }
+        tlsMode: { $ref: '#/components/schemas/EmailMailboxTLSMode' }
+        authMethod: { $ref: '#/components/schemas/EmailMailboxAuthMethod' }
+        ca: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        username: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        secret: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+    EmailMailboxLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        attachmentBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        maxAttachments: { type: integer, format: int32 }
+        maxRecipients: { type: integer, format: int32 }
+        messageBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        pageSize: { type: integer, format: int32 }
+        scanMessages: { type: integer, format: int32 }
+        timeoutSeconds: { type: integer, format: int32 }
+    EmailMailboxOperationPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        operation: { $ref: '#/components/schemas/EmailMailboxOperation' }
+        policy: { $ref: '#/components/schemas/EmailMailboxApprovalPolicy' }
+        folders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+    EmailMailboxSpecification:
+      type: object
+      additionalProperties: false
+      description: Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+      properties:
+        enabled: { type: boolean }
+        receiveProtocol: { $ref: '#/components/schemas/EmailMailboxReceiveProtocol' }
+        allowedFolders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+        archiveFolder: { type: string, maxLength: 262144 }
+        draftsFolder: { type: string, maxLength: 262144 }
+        folder: { type: string, maxLength: 262144 }
+        sender: { type: string, maxLength: 262144 }
+        replyTo: { type: string, maxLength: 262144 }
+        recipients: { type: array, maxItems: 1000, items: { type: string, maxLength: 262144 } }
+        helloName: { type: string, maxLength: 262144 }
+        smtp: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        imap: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        pop: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        limits: { $ref: '#/components/schemas/EmailMailboxLimits' }
+        policies: { type: array, maxItems: 21, items: { $ref: '#/components/schemas/EmailMailboxOperationPolicy' } }
+    EmailMailboxDraftContent:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      description: Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        yaml: { type: string, maxLength: 262144 }
+    EmailMailboxDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, content]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        content: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+    EmailMailboxBindingInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    EmailMailboxDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [code, path, message, line, column]
+      properties:
+        code: { type: string, enum: [EMAIL_MAILBOX_SYNTAX_INVALID, EMAIL_MAILBOX_CONFIGURATION_INVALID, EMAIL_MAILBOX_CREDENTIAL_MISMATCH] }
+        path: { type: string, maxLength: 128 }
+        message: { type: string, maxLength: 256 }
+        line: { type: integer, format: int32, minimum: 0 }
+        column: { type: integer, format: int32, minimum: 0 }
+    EmailMailboxPublication:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, digest, state, configurationRevisionRef, createdAt, failureCode]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        state: { type: string, enum: [PENDING, READY, FAILED, SUPERSEDED] }
+        configurationRevisionRef: { type: string, maxLength: 96 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        readyAt: { $ref: '#/components/schemas/Timestamp' }
+        failureCode: { type: string, maxLength: 64 }
+    EmailMailboxConfigurationView:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        mailboxRef: { $ref: '#/components/schemas/OpaqueRef' }
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        revision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        boundRevisionRef: { type: string, maxLength: 96 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+    EmailMailboxConfigurationPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxConfigurationView' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxCredentialPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxCredential' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxPreview:
+      type: object
+      additionalProperties: false
+      required: [canonicalYaml, diagnostics, valid]
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        canonicalYaml: { type: string, maxLength: 262144 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        valid: { type: boolean }
+    EmailMailboxUnbinding:
+      type: object
+      additionalProperties: false
+      required: [publication, connectionVersion]
+      properties:
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     EmailMailboxCredentialKind:
       type: string
       enum: [CA_CERTIFICATE, USERNAME, AUTH_SECRET]

@@ -93,7 +93,8 @@ func managedConfigurationMetadataView(value *controlplanev1.ManagedConfiguration
 	case controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE,
 		controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE,
 		controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION,
-		controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT:
+		controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT,
+		controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_EMAIL_MAILBOX:
 	default:
 		return generated.ManagedConfiguration{}, errManagedConfigurationShape
 	}
