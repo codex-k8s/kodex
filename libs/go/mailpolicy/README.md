@@ -35,6 +35,22 @@ rollout/readback, telemetry и lifecycle остаются у владельце�
 Изменение wire schema/digest требует согласованного producer/consumer migration;
 извлечение сохраняет совместимость с существующим `egress-mail/v1`.
 
+`PublicationAdmissionResources()` возвращает exact source VAP/Binding для
+генератора deploy artifact и CP authoritative readback. `bash
+tools/generate-mail-admission.sh` обновляет только generated JSON в egress base.
+Admission ограничивает CP CREATE ConfigMap точными namespace/name/labels,
+immutable mode и единственным bounded `mail-policy.json`. Иные identities
+остаются под своим RBAC; первоначальный shipped seed может установить installer.
+CEL проверяет эту структурную границу. Семантику JSON и digest проверяют
+общий producer и strict egress loader. CP должен подтвердить actual spec,
+готовность VAP и Binding до использования выданного права create.
+
+Tests исполняют source CEL для положительного render и 16 отрицательных
+вариантов, сверяют generated artifact и оба environment renders.
+Kubernetes admission enforcement и CNI live остаются отдельной приёмкой.
+Проверены Context7 `/cel-expr/cel-go` (Compile/Program/Eval) и
+`/websites/kubernetes_io` (ValidatingAdmissionPolicy, failurePolicy и Binding).
+
 Локальная проверка: `go test -race ./...`, `go vet ./...`; egress suite дополнительно
 проверяет shared producer на настоящем source fixture, точный byte-for-byte
 bootstrap render, consumer readiness, CNI и TLS/DNS negative paths. Живой DNS,

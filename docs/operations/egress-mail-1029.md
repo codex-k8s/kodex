@@ -52,6 +52,17 @@ gateway limits, строгий loader и readiness. Shared hostname/address vali
 используется также общим DNS resolver. Извлечение не меняет wire schema,
 канонический digest или bootstrap bytes и не публикует ничего в Kubernetes.
 
+Право CP создавать digest-named ConfigMap ограничивается
+`egress-mail-configmap-publication` VAP/Binding. Их source —
+`mailpolicy.PublicationAdmissionResources()`, generated deploy JSON обновляется
+`bash tools/generate-mail-admission.sh`. Admission действует на CP CREATE во
+всех namespaces и разрешает только exact immutable `kodex-system` mail resource.
+Другие identities сохраняют прежний RBAC, что допускает установку пустого seed
+по owner-approved installation path. CP publication обязан читать actual
+VAP/Binding spec и готовность перед create; namespaceSelector не может скрыть
+запрос к чужому namespace от проверки. JSON семантика/digest дополнительно
+проверяются producer и consumer. Широкого права update/delete этих ConfigMap у CP нет.
+
 `tools/render-egress-mail.sh staging|production <image-digest> <registry-fqdn>
 <mailboxes.yaml> <trusted-resolv.conf>` выполняет только локальную генерацию.
 Непустой source требует DNS-разрешения его утверждённых hosts; команда не

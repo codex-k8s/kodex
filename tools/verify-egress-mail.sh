@@ -4,6 +4,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
+(cd "$root/libs/go/mailpolicy" && go test -race ./...)
 jq -r '.data["mailboxes.yaml"]' "$root/deploy/k8s/base/email-bridge/configuration.yaml" >"$temporary/mailboxes.yaml"
 for environment in staging production; do
   "$root/tools/render-egress-mail.sh" "$environment" \
@@ -22,6 +23,14 @@ for environment in staging production; do
   [[ "$configmap" =~ ^egress-gateway-mail-[a-f0-9]{24}$ && "$reference" == "$configmap" ]] || {
     echo "mail policy content-addressed mount mismatch" >&2; exit 1;
   }
+  yq -o=json 'select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == "egress-mail-configmap-publication")' "$temporary/render.yaml" |
+    jq -e '.metadata.namespace == null and .spec.failurePolicy == "Fail" and
+      .spec.matchConstraints.resourceRules[0].resources == ["configmaps"] and
+      .spec.matchConstraints.resourceRules[0].operations == ["CREATE"] and
+      (.spec.validations | length == 4)' >/dev/null
+  yq -o=json 'select(.kind == "ValidatingAdmissionPolicyBinding" and .metadata.name == "egress-mail-configmap-publication")' "$temporary/render.yaml" |
+    jq -e '.metadata.namespace == null and .spec.policyName == "egress-mail-configmap-publication" and
+      .spec.validationActions == ["Deny"] and .spec.matchResources.namespaceSelector == {}' >/dev/null
   yq -e 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
     ([.spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_MAIL_CONNECT_LISTEN" and .value == ":8082")] | length == 1) and
     ([.spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_MAIL_POLICY_DIGEST" and (.value | length == 64))] | length == 1) and
