@@ -41,4 +41,15 @@ base, а не ссылка на текущую версию. Существую�
 
 New fields допускают legacy unknown base, но запрещают частичную пару ref/number.
 Input не принимает эти owner поля. Namespace/credential/secret locator не добавляются.
-До owner/migration/PG checkpoint исполняемая проверка новых полей — NOT RUN.
+Исторический immutable idempotency receipt, созданный до migration638, может
+не содержать savedAt. Caster оставляет поле отсутствующим; recovery читает
+защищённый Get, а не назначает историческому receipt вымышленное время.
+
+Owner migration638, SQL read/write, domain entity и caster подключены.
+На дереве поверх `8675ad7d02ba98f73e96736ca72afc551efb0144` полный
+`TestBootstrapComponent` — PASS (18.654 s): новый draft без base, точная base
+существующего environment, save time, Validate/Publish/replay и неизменность
+base после конкурентной публикации/Discard. Repository/transport race,
+полный control-plane vet/build и SQL boundary — PASS. Изолированный draft
+subtest без preceding image fixture первоначально FAIL; полный Bootstrap
+предоставляет обязательный setup и проходит. Browser/live — NOT RUN.
