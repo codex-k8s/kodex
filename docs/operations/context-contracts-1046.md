@@ -17,6 +17,34 @@ owner SQL/domain. Skill lifecycle, list/get/history и agent bindings также
 подключены. Реальный scanner deploy и
 runtime materialization нельзя считать PASS по codegen или PostgreSQL fixture.
 
+## Передача runtime consumer
+
+Внутренний `RuntimeRevisionSnapshot` получает `skill_bundles=69` и
+`memory_records=70`. Это отдельный Proto checkpoint: пока CP claim не
+наполняет новые поля. Shared `libs/go/runtimecontract` и agent-runner меняет
+Beauvoir, controller mapping принадлежит root; CP SQL/pins остаются в #1046.
+
+`RuntimeSkillBundleSnapshot`: binding_ref/version, bundle_ref, revision_ref,
+revision, digest, scan_engine/digest/scanned_at, files, provenance, name,
+description. File использует существующий `SkillBundleFile`: path,
+artifact_ref/revision, digest с `sha256:` и size_bytes. В runtime допускается
+только exact PUBLISHED/CLEAN revision с серверным binding, не текущая draft.
+
+`RuntimeMemoryRecordSnapshot`: binding_ref/version, record_ref, revision_ref,
+revision, digest, title, summary, retention_until и provenance. Tenant,
+project, agent, root/run/attempt назначаются из owner execution lineage.
+Оба вида входят в immutable RuntimeRevision digest, не environment_tools,
+knowledgeArtifactRefs или пользовательский filesystem path.
+
+File bytes должен выдавать существующий fenced ReadExecutionArtifact после
+проверки exact Skill pin. Materializer назначает read-only mount paths и
+проверяет content digest. Дополнительный произвольный download URL или
+object-store authority контрактом не вводится.
+
+Текущий owner budget всего safe_snapshot равен 256 KiB; отдельная Memory
+summary допускает 64 KiB. Общий budget materialization согласуется со shared
+ABI; превышение нельзя скрывать truncation или молчаливым пропуском binding.
+
 ## Общие правила
 
 - Создание требует проверенный project context. Остальные команды разрешают
