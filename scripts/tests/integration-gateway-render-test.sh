@@ -14,7 +14,16 @@ for profile in web-only web-with-mattermost; do
       any(.spec.template.spec.containers[]; .name == "integration-gateway" and
         .readinessProbe.httpGet.path == "/readyz" and .livenessProbe.httpGet.path == "/healthz")) and
     any(.[]; .kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths" and
-      all(.spec.egress[]; (.to | length) > 0)) and
+      all(.spec.egress[]; (.to | length) > 0) and
+      any(.spec.egress[];
+        .ports == [{"protocol":"TCP","port":8443}] and
+        .to == [{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kodex-system"}},
+          "podSelector":{"matchLabels":{"app.kubernetes.io/name":"email-bridge"}}}])) and
+    any(.[]; .kind == "Service" and .metadata.name == "email-bridge" and
+      any(.spec.ports[]; .name == "https" and .port == 443 and .targetPort == "https")) and
+    any(.[]; .kind == "Deployment" and .metadata.name == "email-bridge" and
+      any(.spec.template.spec.containers[]; .name == "email-bridge" and
+        any(.ports[]; .name == "https" and .containerPort == 8443))) and
     any(.[]; .kind == "PrometheusRule" and .metadata.name == "integration-gateway" and
       any(.spec.groups[].rules[]; .alert == "IntegrationGatewayUnknownOutcome" and
         (.annotations.runbook_url | startswith("https://"))))
