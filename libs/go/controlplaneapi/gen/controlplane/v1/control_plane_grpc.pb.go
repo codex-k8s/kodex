@@ -76,6 +76,7 @@ const (
 	PlatformQueryService_GetAdministration_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetAdministration"
 	PlatformQueryService_ListAuditEvents_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName          = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
+	PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetAgentEffectiveCapabilities"
 	PlatformQueryService_ListConfigOverlayRevisions_FullMethodName            = "/controlplane.v1.PlatformQueryService/ListConfigOverlayRevisions"
 	PlatformQueryService_GetConfigOverlayRevision_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetConfigOverlayRevision"
 	PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName = "/controlplane.v1.PlatformQueryService/ListAgentRuntimeConfigurationVersions"
@@ -165,6 +166,7 @@ type PlatformQueryServiceClient interface {
 	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(ctx context.Context, in *GetAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*GetAgentRuntimeConfigurationResponse, error)
+	GetAgentEffectiveCapabilities(ctx context.Context, in *GetAgentEffectiveCapabilitiesRequest, opts ...grpc.CallOption) (*GetAgentEffectiveCapabilitiesResponse, error)
 	ListConfigOverlayRevisions(ctx context.Context, in *ListConfigOverlayRevisionsRequest, opts ...grpc.CallOption) (*ListConfigOverlayRevisionsResponse, error)
 	GetConfigOverlayRevision(ctx context.Context, in *GetConfigOverlayRevisionRequest, opts ...grpc.CallOption) (*GetConfigOverlayRevisionResponse, error)
 	ListAgentRuntimeConfigurationVersions(ctx context.Context, in *ListAgentRuntimeConfigurationVersionsRequest, opts ...grpc.CallOption) (*ListAgentRuntimeConfigurationVersionsResponse, error)
@@ -769,6 +771,16 @@ func (c *platformQueryServiceClient) GetAgentRuntimeConfiguration(ctx context.Co
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetAgentEffectiveCapabilities(ctx context.Context, in *GetAgentEffectiveCapabilitiesRequest, opts ...grpc.CallOption) (*GetAgentEffectiveCapabilitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentEffectiveCapabilitiesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListConfigOverlayRevisions(ctx context.Context, in *ListConfigOverlayRevisionsRequest, opts ...grpc.CallOption) (*ListConfigOverlayRevisionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListConfigOverlayRevisionsResponse)
@@ -1072,6 +1084,7 @@ type PlatformQueryServiceServer interface {
 	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error)
+	GetAgentEffectiveCapabilities(context.Context, *GetAgentEffectiveCapabilitiesRequest) (*GetAgentEffectiveCapabilitiesResponse, error)
 	ListConfigOverlayRevisions(context.Context, *ListConfigOverlayRevisionsRequest) (*ListConfigOverlayRevisionsResponse, error)
 	GetConfigOverlayRevision(context.Context, *GetConfigOverlayRevisionRequest) (*GetConfigOverlayRevisionResponse, error)
 	ListAgentRuntimeConfigurationVersions(context.Context, *ListAgentRuntimeConfigurationVersionsRequest) (*ListAgentRuntimeConfigurationVersionsResponse, error)
@@ -1276,6 +1289,9 @@ func (UnimplementedPlatformQueryServiceServer) ListAuditEvents(context.Context, 
 }
 func (UnimplementedPlatformQueryServiceServer) GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentRuntimeConfiguration not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetAgentEffectiveCapabilities(context.Context, *GetAgentEffectiveCapabilitiesRequest) (*GetAgentEffectiveCapabilitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentEffectiveCapabilities not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListConfigOverlayRevisions(context.Context, *ListConfigOverlayRevisionsRequest) (*ListConfigOverlayRevisionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListConfigOverlayRevisions not implemented")
@@ -2396,6 +2412,24 @@ func _PlatformQueryService_GetAgentRuntimeConfiguration_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetAgentEffectiveCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentEffectiveCapabilitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetAgentEffectiveCapabilities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetAgentEffectiveCapabilities(ctx, req.(*GetAgentEffectiveCapabilitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListConfigOverlayRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListConfigOverlayRevisionsRequest)
 	if err := dec(in); err != nil {
@@ -3062,6 +3096,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgentRuntimeConfiguration",
 			Handler:    _PlatformQueryService_GetAgentRuntimeConfiguration_Handler,
+		},
+		{
+			MethodName: "GetAgentEffectiveCapabilities",
+			Handler:    _PlatformQueryService_GetAgentEffectiveCapabilities_Handler,
 		},
 		{
 			MethodName: "ListConfigOverlayRevisions",

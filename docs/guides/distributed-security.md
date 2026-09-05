@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.10
+version: 1.4.11
 updated: 2026-09-05
 ---
 
@@ -76,6 +76,15 @@ Gateway не восполняет отсутствующую доменную п
 Разные оси состояния не объединяются молча. Например, публикация, качество,
 модерация и полнота могут образовывать eligibility rule только после явного
 решения и должны одинаково трактоваться всеми read/event paths.
+
+Проекция возможностей, preview и новая runtime materialization используют
+текущие direct/group access bindings с их сроками и exact resource scope.
+Историческая platform role или membership не подменяет прикладные permissions.
+Запрошенная capability агента не расширяет полномочия root initiator. Для
+интеграции проверяются конкретные connection/grant/version/digest и фактически
+закреплённый immutable package; совпадение capability key у двух подключений
+не переносит разрешение между ними. Shipped schema не заменяет более узкую
+UI/Git revision. Выдача capability проверяет полномочия до OCC и receipt replay.
 
 ## Browser SSO и API session
 

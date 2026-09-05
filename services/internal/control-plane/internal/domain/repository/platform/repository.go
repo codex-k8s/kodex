@@ -253,6 +253,7 @@ type Repository interface {
 	GetPlatformEventCursor(context.Context, value.Principal) (string, int64, error)
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
+	GetAgentEffectiveCapabilities(context.Context, value.Principal, string, string, string, query.Filter) (entity.AgentEffectiveCapabilities, error)
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
 	Search(context.Context, value.Principal, query.Filter) ([]entity.SearchResult, int64, string, error)
 	ListVFSNodes(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)

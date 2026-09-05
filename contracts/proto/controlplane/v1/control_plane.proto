@@ -71,6 +71,7 @@ service PlatformQueryService {
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
+  rpc GetAgentEffectiveCapabilities(GetAgentEffectiveCapabilitiesRequest) returns (GetAgentEffectiveCapabilitiesResponse);
   rpc ListConfigOverlayRevisions(ListConfigOverlayRevisionsRequest) returns (ListConfigOverlayRevisionsResponse);
   rpc GetConfigOverlayRevision(GetConfigOverlayRevisionRequest) returns (GetConfigOverlayRevisionResponse);
   rpc ListAgentRuntimeConfigurationVersions(ListAgentRuntimeConfigurationVersionsRequest) returns (ListAgentRuntimeConfigurationVersionsResponse);
@@ -3588,6 +3589,46 @@ message GetAgentRuntimeConfigurationRequest {
 }
 message GetAgentRuntimeConfigurationResponse {
   AgentRuntimeConfigurationView runtime_configuration = 1;
+}
+message GetAgentEffectiveCapabilitiesRequest {
+  string agent_ref = 1;
+  string workflow_ref = 2;
+  string step_key = 3;
+  string query = 4;
+  PageRequest page = 5;
+}
+message EffectiveCapability {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+  string source = 4;
+  string reason = 5;
+  bool requested = 6;
+  bool required = 7;
+  bool effective = 8;
+  bool grantable = 9;
+  string connection_ref = 10;
+  string grant_ref = 11;
+  string definition_digest = 12;
+  int64 connection_version = 13;
+  int64 grant_version = 14;
+}
+message GetAgentEffectiveCapabilitiesResponse {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 agent_version = 3;
+  string runtime_configuration_ref = 4;
+  int64 runtime_configuration_version = 5;
+  string environment_version_ref = 6;
+  string workflow_ref = 7;
+  string workflow_version_ref = 8;
+  string step_key = 9;
+  string digest = 10;
+  bool runtime_ready = 11;
+  google.protobuf.Timestamp evaluated_at = 12;
+  repeated EffectiveCapability capabilities = 13;
+  int64 total = 14;
+  PageInfo page = 15;
 }
 message ListConfigOverlayRevisionsRequest {
   string agent_ref = 1;
