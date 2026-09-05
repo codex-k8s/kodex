@@ -7918,7 +7918,7 @@ type SystemSTTSpecification struct {
 	MaximumAudioBytes                int64  `json:"maximumAudioBytes"`
 	MaximumAudioDurationMilliseconds int64  `json:"maximumAudioDurationMilliseconds"`
 
-	// Model Проверяется общим исполняемым modelprofile
+	// Model Проверяется общим исполняемым modelprofile, не произвольным LLM catalog.
 	Model                       string                              `json:"model"`
 	Parameters                  SystemSTTParameters                 `json:"parameters"`
 	PermissionKey               SystemSTTSpecificationPermissionKey `json:"permissionKey"`

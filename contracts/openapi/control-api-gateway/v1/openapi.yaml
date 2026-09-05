@@ -4634,7 +4634,7 @@ components:
       properties:
         enabled: { type: boolean }
         providerAccountRef: { $ref: '#/components/schemas/OpaqueRef' }
-        model: { type: string, minLength: 1, maxLength: 160, description: Проверяется общим исполняемым modelprofile, не произвольным LLM catalog. }
+        model: { type: string, minLength: 1, maxLength: 160, description: 'Проверяется общим исполняемым modelprofile, не произвольным LLM catalog.' }
         language: { type: string, maxLength: 2 }
         permissionKey: { type: string, enum: [platform.stt.use] }
         parameters: { $ref: '#/components/schemas/SystemSTTParameters' }

@@ -133,6 +133,44 @@ focused vet, `go build ./...` gateway и strict generated SDK typecheck: PASS.
 Матрица всех 61 строк проверена по QA источнику; это карта ownership/evidence,
 не 61 успешный E2E. D1..D7 блокируют полное продуктовое acceptance.
 
+## Полная Независимая Проверка Gateway
+
+На чистом `11401f0acadefd139e0b61616405e4d353d6b7ca` выполнены локально:
+
+- `go test -race ./... -count=1 -timeout=180s`: PASS по всему gateway, включая
+  session, revocation boundary, ratelimit, websocket, observability и usertext.
+  Пакеты без tests отмечены Go отдельно, не считаются проверенными сценариями.
+- `timeout 120s go vet ./...` и `timeout 120s go build ./...`: PASS.
+- `timeout 600s docker build --target runtime --build-arg VERSION=11401f0acadefd139e0b61616405e4d353d6b7ca -f services/external/control-api-gateway/Dockerfile -t kodex-control-api-gateway:1045-11401f0ac .`:
+  PASS. Existing Dockerfile, UID/GID `10001:10001`, canonical binary entrypoint;
+  локальный image digest `sha256:18ee5b52db51d39e362f907540780c1f42fd0db50c26df92043b6f4835865078`.
+  Это local build, не registry push либо deploy.
+- `timeout 120s make gen-control-api-gateway-openapi-go gen-openapi-ts`, затем
+  `git diff --exit-code`: PASS, повторная генерация не меняет tracked files.
+- Из PWA каталога только generated SDK:
+  `timeout 120s ./node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --lib ES2022,DOM src/shared/api/generated/openapi/index.ts`:
+  PASS; handwritten PWA не проверялся и не редактировался.
+
+Отдельная строгая validation:
+
+```sh
+timeout 120s go run github.com/getkin/kin-openapi/cmd/validate@v0.135.0 \
+  contracts/openapi/control-api-gateway/v1/openapi.yaml
+```
+
+Первый запуск: FAIL, `SystemSTTConfigurationDraftInput` содержал лишнее YAML
+поле `не произвольным LLM catalog.`. Причина: запятая внутри некавыченного
+description в flow mapping. Исправлены кавычки в исходном OpenAPI, Go/TS
+описания регенерированы. Повтор строгой validation: PASS; flags, отключающие
+defaults/examples/patterns, не использовались. Runtime schema bounds и STT
+policy не менялись. Проверены Context7 `/getkin/kin-openapi` (CLI и
+`Validate`) и фактический source `cmd/validate` закреплённой версии 0.135.0,
+совпадающей с dependency установленного oapi-codegen 2.7.1.
+
+NOT RUN: real CP protected integration по незавершённым D1..D7, browser E2E,
+live provider, staging/cluster. Никаких новых acceptance-требований эта
+проверка не вводит; код CP, handwritten PWA и Dockerfile не изменялись.
+
 ## Текст PR Для Root
 
 Связь: #1045, #1021, #1018. Полная HTTP интеграция доступных CP Query/Command/
