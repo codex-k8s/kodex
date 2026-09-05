@@ -45,6 +45,8 @@ type CredentialRevision struct {
 }
 
 type Request struct {
+	healthCheck                                                       bool
+	DefinitionPackage                                                 []byte
 	EmailExecution                                                    *emailapi.ExecutionBinding
 	DefinitionKey, DefinitionVersion, DefinitionDigest, ConnectionRef string
 	CapabilityKey, Operation, Risk, ApprovalPolicy                    string
@@ -150,8 +152,9 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 		configuration = claim.GetPublicConfiguration().AsMap()
 	}
 	return Request{
-		EmailExecution: emailExecutionBinding("", claim.GetTestRef(), claim.GetLease()),
-		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		DefinitionPackage: append([]byte(nil), claim.GetDefinitionPackage()...),
+		EmailExecution:    emailExecutionBinding("", claim.GetTestRef(), claim.GetLease()),
+		DefinitionKey:     claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		Configuration: configuration, Credential: credentialFromProto(claim.GetCredentialRevision()),
 	}
@@ -173,8 +176,9 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		resourceScopeDigest = scope.GetDigest()
 	}
 	return Request{
-		EmailExecution: emailExecutionBinding(claim.GetInvocationRef(), "", claim.GetLease()),
-		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		DefinitionPackage: append([]byte(nil), claim.GetDefinitionPackage()...),
+		EmailExecution:    emailExecutionBinding(claim.GetInvocationRef(), "", claim.GetLease()),
+		DefinitionKey:     claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		CapabilityKey: claim.GetCapabilityKey(), Operation: claim.GetOperation(),
 		Risk:           strings.TrimPrefix(claim.GetRisk().String(), "INTEGRATION_RISK_"),
@@ -220,9 +224,12 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	capability, ok := definition.Capability(definition.Spec.HealthCheck.Operation)
-	if !ok {
+	if !ok || capability.ApprovalPolicy != "NONE" {
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(definition.Spec.HealthCheck.TimeoutSeconds)*time.Second)
+	defer cancel()
+	request.healthCheck = true
 	request.CapabilityKey, request.Operation = capability.Key, capability.Operation
 	request.Risk, request.ApprovalPolicy = capability.Risk, capability.ApprovalPolicy
 	request.ResourceKind = capability.ResourceScope.Kind
@@ -243,6 +250,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+	defer cancel()
 	var result Result
 	switch definition.Spec.Adapter {
 	case "SYNTHETIC_HTTP":
@@ -290,8 +299,12 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 }
 
 func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.Package, error) {
-	definition, exists := adapter.definitions[request.DefinitionKey]
-	if !exists || definition.Metadata.Version != request.DefinitionVersion || definition.Digest != request.DefinitionDigest {
+	shipped, exists := adapter.definitions[request.DefinitionKey]
+	if !exists || len(request.DefinitionPackage) == 0 || len(request.DefinitionPackage) > 256<<10 {
+		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	definition, err := integrationpackage.Parse(request.DefinitionPackage)
+	if err != nil || integrationpackage.ValidateExecutableRevision(definition, shipped) != nil || definition.Metadata.Key != request.DefinitionKey || definition.Metadata.Version != request.DefinitionVersion || definition.Digest != request.DefinitionDigest {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
@@ -353,6 +366,10 @@ func (adapter *Adapter) validateInvocation(request Request) (
 				return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
 			}
 		}
+	}
+	if request.healthCheck {
+		capability.Execution.TimeoutSeconds = min(capability.Execution.TimeoutSeconds, definition.Spec.HealthCheck.TimeoutSeconds)
+		capability.Execution.MaxAttempts = min(capability.Execution.MaxAttempts, definition.Spec.HealthCheck.MaxAttempts)
 	}
 	return definition, capability, canonicalInput, configuration, nil
 }
