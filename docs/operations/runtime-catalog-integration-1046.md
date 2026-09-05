@@ -37,6 +37,12 @@ Schema/diagnostic readback принадлежит фактическому runti
 worker/client race, полный CP vet/build, shared runtimecontract race, SQL
 boundary, Proto lint/build/codegen replay, policy codegen и authority ABI render.
 До объединения source lifecycle PG PASS 2.367s на dfd tree; contribution full
-Bootstrap PG PASS 18.425s на e428 tree. Полный PG объединённого дерева ещё
-NOT RUN; эти два результата не подменяют его. Live provider, deployment и
-общий triple review остаются NOT RUN.
+Bootstrap PG PASS 18.425s на e428 tree. Полный PG объединённого дерева после
+устранения загрязнения mailbox fixture: PASS 19.803s. Предыдущий полный запуск
+FAIL 18.422s показывал legacy example mailbox без owner credential rows;
+forward-only cleanup теста сохраняет fail-closed проверку настоящего Bind.
+Live provider, deployment и общий triple review остаются NOT RUN.
+
+Source UNCHANGED повторно проверяет типизированную совместимость документа с
+текущим compiled package/catalog; совпадение старого content digest само по себе
+не выдаёт READY после изменения поддерживаемого executable contract.

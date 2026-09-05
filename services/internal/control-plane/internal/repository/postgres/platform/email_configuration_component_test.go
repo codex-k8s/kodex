@@ -17,6 +17,26 @@ import (
 
 func testEmailConfiguration(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
+	// Старый watermark/protocol fixture использует descriptor из примера без
+	// owner credential rows. После проверки закрываем его forward-only, чтобы
+	// следующий полноценный mailbox lifecycle не наследовал чужую fixture.
+	t.Cleanup(func() {
+		current, err := repository.EmailConfiguration(ctx)
+		if err != nil {
+			t.Errorf("read email fixture cleanup: %v", err)
+			return
+		}
+		current.Revision++
+		current.Mailboxes = []api.Mailbox{}
+		raw, err := json.Marshal(current)
+		if err != nil {
+			t.Errorf("encode email fixture cleanup: %v", err)
+			return
+		}
+		if err := repository.ConfigureEmail(ctx, raw); err != nil {
+			t.Errorf("retire email fixture forward-only: %v", err)
+		}
+	})
 	raw, err := os.ReadFile("../../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {
 		t.Fatal(err)
