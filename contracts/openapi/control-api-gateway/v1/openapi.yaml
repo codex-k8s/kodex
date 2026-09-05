@@ -5552,6 +5552,12 @@ components:
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false

@@ -10,6 +10,49 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## Сверка принятого backlog MVP-UI-01–61 и CFG
+
+Сверка относится к поверхности #1045, а не к приёмке UI, producer или
+развёрнутого контура. Чисто визуальные требования реализует #1022.
+Наличие операции ниже означает HTTP mapping существующего Proto; readiness
+зависимого сервиса этим не подтверждается.
+
+| Требования | Существующая HTTP/SDK поверхность | Оставшаяся граница |
+| --- | --- | --- |
+| CFG, RoleImage и IntegrationDefinition | Managed list/get/revisions/impact, специализированные create/save/validate/publish/discard/rebind, Git import/copy/detach/write-back, recipe build/promotion | Полная build/package execution и доставка exact published revision принадлежат producer; общий prepublication plan ещё отсутствует |
+| 02–06, 10, 12–13 | Projects query/page, Runs states/page и Owner Gates state/page | Home и project projection должны давать server total/aggregates; Owner Gates query/total ожидает CP |
+| 05, 19–23, 39–40 | Общие query/page для каталогов, provider accounts/readiness и integration definitions/connections/grants | Selector eligibility для конкретной operation/recipient не заменяется локальной фильтрацией; effective authority projection ожидает CP |
+| 09 | Assistant conversations query/page/title/archive, context и plan lifecycle | Геометрия и browser lifecycle — PWA; server context остаётся authority |
+| 11 | Same-origin session refresh и одноразовые realtime tickets | Длительная multi-tab/reconnect проверка принадлежит PWA/integrated baseline |
+| 17–18, 21 | Model capability catalog с exact revision/digest; runtime config и canonical TOML draft/validate/publish/rollback | CP должен связать selected account/model catalog pins и effort из TOML, дать versioned allowed-fields schema и безопасные line/column/key diagnostics |
+| 01, 07–08, 16, 48, 53–54 | Typed problems, prompt validate/preview diagnostics, environment readiness/agents, public search kind/ref/projectRef | Manifest/auth-proxy и browser routing проверяются в deploy/PWA; generic 404 не считается readiness |
+| 24–29, 32–33, 38 | Runs states, organization catalogs с project filter, agent avatar command, workflow projection/launch | Layout — PWA; aggregate counts и avatar lifecycle доказываются producer, а не наличием route |
+| 30–36 | Owner-scoped typed variables, prompt preview/service blocks и persisted RuntimeRevision diff | Requested/effective/unavailable authority projection и полный continuation notice/preview требуют CP; исторический diff не заменяет их |
+| 37, 61 | VFS list/search, typed Skills/Memory lifecycle, exact revision bindings и artifacts | VFSNode пока без revision/lifecycle/scan/selection eligibility; запросы без active/trash/kind фильтров. MCP runtime и writable workspace — отдельные consumers |
+| 41–42 | Typed mailbox draft/preview/validate/publish/discard/bind/unbind/read и credential receipt/list; остальные typed integrations через существующий registry | D5 owner/policy59 и exact delivery/readiness пока не завершены; universal proxy не добавляется |
+| 43–45 | Schedule specification/preview/revisions и prompt preview, Environment read/readiness/agents | Cron materialization/continuation и eligibility принадлежат scheduler/CP; inspector — PWA |
+| 46–50 | Environment draft lifecycle; Secret encrypted draft и immutable prepublication impact plan/per-item outcomes; exact Secret pin в Environment | Prepublication plan для Environment/Prompt/Instructions/RoleImage ещё нужен в CP. Postpublication impact/rebind не закрывает это требование |
+| 51–52 | Provider delete/revoke/verify/reauthorize/device challenge и typed provider errors | Durable cleanup, blockers и real provider path требуют producer integration |
+| 14, 55–60 | Typed STT settings/catalog/availability и bounded multipart transcription через protected client | Реальный provider smoke и итоговая readiness требуют разрешённого контура; локальные fixtures не заменяют его |
+
+Недостающие CP контракты переданы владельцу #1046. Gateway не добавляет
+самостоятельно новые RPC, eligibility, authorizations или успешные состояния
+для закрытия этих строк.
+
+## Exact Secret pin при редактировании Environment
+
+MVP-UI-46/47: verified actor → create/publish Environment либо create/save draft
+→ HTTP `secretBindings[].revision` → существующий Proto
+`RuntimeSecretBinding.revision` → owner SQL `runtime_secret_resolve_binding`.
+Владелец повторно разрешает tenant/project и ACTIVE Secret/revision; 0 либо
+отсутствие означает current на момент materialization, положительное значение
+сохраняет выбранную immutable revision. Draft readback возвращает тот же pin,
+поэтому последующее сохранение других полей не переводит Secret на latest.
+OCC/idempotency и события сохраняют существующий lifecycle Environment;
+потребители получают exact descriptors из published RuntimeEnvironment, а
+активный attempt продолжает прежнюю RuntimeRevision. Недопустимое число
+отклоняется до RPC; повреждённый pin ответа — 502.
+
 ## D5: typed mailbox, schema 056547091
 
 Источники: #1045/#1046/#1018, MVP-UI-41, CFG и

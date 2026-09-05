@@ -1024,6 +1024,10 @@ export type RuntimeSecretDescriptor = {
 export type RuntimeSecretBinding = {
     name: string;
     secretRef: OpaqueRef;
+    /**
+     * Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
+     */
+    revision?: number;
 };
 
 export type RuntimeEnvironmentVersion = {
