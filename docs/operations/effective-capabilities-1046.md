@@ -4,7 +4,7 @@ title: Авторитетная проекция возможностей сот
 type: operational-contract
 status: approved
 owner: platform
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -49,11 +49,24 @@ principal); регрессия кода ошибки неизвестной capa
 последующим полным PostgreSQL запуском. Начальный transport compile FAIL по
 имени repeated Proto поля также исправлен до race/build.
 
-HTTP/SDK/PWA consumer, новый browser сценарий, actual narrowed package/runtime
-с двумя connection в одном PostgreSQL сценарии, общий baseline, live runtime и
-staging — NOT RUN в этом checkpoint. Unit-тест exact connection не заменяет
-эту дополнительную owner component проверку. Временная вклад-ветка относится
-к #1046 и не получает отдельный PR.
+Дополнительный PostgreSQL сценарий подтверждает два active connection с одним
+`synthetic.journal.write`, exact actor binding только к одному из них и
+назначенную через UI immutable схему с `value.maximumLength=16` вместо shipped
+4096. Публичная проекция сохраняет отдельные причины для обеих связей, runtime
+получает ровно разрешённый grant и actual schema. Полный Bootstrap с этой
+проверкой PASS 20,802 s; неудачный первоначальный focused запуск требовал
+существующий Runtime lifecycle fixture и не считался PASS.
+
+`authorizeCommand` повторно проверяет право выдачи до idempotency receipt.
+Новый negative сценарий отзывает launch binding после успешной выдачи и
+подтверждает запрет exact receipt replay; runtime query также исключает
+отозванное право. Полный Bootstrap после этой проверки PASS 21,044 s, race
+трёх пакетов и полный CP vet/build PASS. Предыдущая ошибка теста с повторной
+выдачей уже назначенной capability исправлена; conflict не скрывался.
+
+HTTP/SDK/PWA consumer, новый browser сценарий, общий baseline, live runtime и
+staging — NOT RUN в этом CP checkpoint. Временная вклад-ветка относится к
+#1046 и не получает отдельный PR.
 
 ## Включение в основной unit
 

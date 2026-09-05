@@ -702,7 +702,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		"managed-integration-definition", command.CreateIntegrationDefinition, command.ValidateIntegrationDefinition,
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.ManagedConfigurationInput{Name: "Synthetic managed definition",
-			ContentFormat: "JSON", Content: string(asJSON(repository.integrationDefinitions["synthetic"]))},
+			ContentFormat: "JSON", Content: narrowedSyntheticPackageFixture(t, repository)},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref})
 	testIntegrationDefinitionRebindAuthority(t, ctx, repository, service, owner, integrationDefinition, *connection.Connection)
 	integrationReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
