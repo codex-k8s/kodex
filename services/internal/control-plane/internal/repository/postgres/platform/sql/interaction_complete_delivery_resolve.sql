@@ -8,7 +8,8 @@ SELECT
     COALESCE(d.gate_id::text, ''),
     d.capability_key,
     d.attempt,
-    d.created_at
+    d.created_at,
+    d.external_team_ref,d.external_channel_ref,d.target_root_post_ref
 FROM control_plane.interaction_deliveries d
 JOIN control_plane.projects project ON project.id = d.project_id
 JOIN control_plane.runs run ON run.id = d.root_run_id

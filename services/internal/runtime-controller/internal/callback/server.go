@@ -182,11 +182,11 @@ func (server *Server) Shutdown(ctx context.Context) error { return server.http.S
 
 func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
-	if request.URL.RawQuery != "" || request.URL.Fragment != "" {
+	if request.URL.Fragment != "" {
 		http.NotFound(writer, request)
 		return
 	}
-	if request.Method == http.MethodGet && request.URL.Path == "/v1/warm/next" {
+	if request.Method == http.MethodGet && request.URL.Path == "/v1/warm/next" && request.URL.RawQuery == "" {
 		server.nextWarm(writer, request)
 		return
 	}
@@ -197,6 +197,10 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		server.artifact(writer, request, parts[2], parts[4])
+		return
+	}
+	if request.URL.RawQuery != "" {
+		http.NotFound(writer, request)
 		return
 	}
 	if len(parts) != 4 || parts[0] != "v1" || parts[1] != "executions" || parts[2] == "" {
@@ -372,6 +376,10 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 	input, ok := server.authorize(request, leaseRef)
 	if !ok {
 		http.NotFound(writer, request)
+		return
+	}
+	if request.URL.RawQuery != "" {
+		server.contextArtifact(writer, request, input, artifactRef)
 		return
 	}
 	var expected *runtimecontract.RunnerInputArtifact

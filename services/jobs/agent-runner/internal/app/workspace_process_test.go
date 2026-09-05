@@ -25,6 +25,19 @@ func TestWorkspaceAgentProcess(t *testing.T) {
 	if mode == "" {
 		return
 	}
+	if mode == "canary" {
+		if os.Geteuid() == 0 {
+			t.Fatal("workspace canary fixture must run as non-root")
+		}
+		if err := workspace.RunCanary(t.Context(), "/workspace", runtimecontract.RuntimeWorkspacePolicyV1()); err != nil {
+			t.Fatal(err)
+		}
+		entries, err := os.ReadDir("/workspace/.kodex/outbox")
+		if err != nil || len(entries) != 0 {
+			t.Fatal("non-root canary did not clean temporary files")
+		}
+		return
+	}
 	if mode != "positive" {
 		path := map[string]string{
 			"immutable":  "/workspace/input/immutable.txt",
@@ -113,6 +126,11 @@ func TestWorkspaceSubprocessWriteAndCompletionProvenance(t *testing.T) {
 	if err := completion.Validate(); err != nil {
 		t.Fatalf("published completion violates the consumer contract: %v", err)
 	}
+}
+
+func TestWorkspaceCanaryWithNonRootProcess(t *testing.T) {
+	root := workspaceProcessFixture(t)
+	runWorkspaceProcess(t, root, "canary")
 }
 
 func TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink(t *testing.T) {

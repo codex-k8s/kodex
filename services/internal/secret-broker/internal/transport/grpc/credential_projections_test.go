@@ -5,6 +5,7 @@ import (
 	"time"
 
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -48,6 +49,32 @@ func TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding(t *testing.T) {
 		mutate(candidate)
 		if sameDelegatedAuthorityLocator(candidate, verified) {
 			t.Fatalf("changed delegated locator was accepted: %#v", candidate)
+		}
+	}
+}
+
+func TestOrganizationProjectionScopeIsMethodSpecific(t *testing.T) {
+	verified, locator := projectionAuthorityFixtures()
+	project := verified.Authority.Project
+	verified.Authority.Project = nil
+	locator.ProjectId, locator.Project = "", nil
+	if !sameDelegatedAuthorityLocator(locator, verified) {
+		t.Fatal("organization locator rejected")
+	}
+	locator.Project = projectionLocatorProvenance(project)
+	if sameDelegatedAuthorityLocator(locator, verified) {
+		t.Fatal("project provenance without project accepted")
+	}
+	for _, test := range []struct {
+		method          string
+		absent, present bool
+	}{
+		{secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, false, true},
+		{secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName, true, false},
+		{sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName, true, true},
+	} {
+		if validProjectionProject(test.method, nil) != test.absent || validProjectionProject(test.method, project) != test.present {
+			t.Fatalf("projection scope matrix mismatch: %s", test.method)
 		}
 	}
 }

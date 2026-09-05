@@ -72,7 +72,7 @@ func (server *IssuerServer) IssueAuthorizationContext(
 func (server *IssuerServer) IssueContinuationAuthorizationContext(
 	ctx context.Context,
 	request *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest,
-) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
+) (*internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse, error) {
 	correlationID := ""
 	if request != nil {
 		correlationID = request.GetCorrelationId()
@@ -89,7 +89,7 @@ func (server *IssuerServer) IssueContinuationAuthorizationContext(
 	if err != nil {
 		return nil, mapError(err, correlationID)
 	}
-	return &internalrpcauthorityv1.IssueAuthorizationContextResponse{
+	return &internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse{
 		CompactJws: result.Compact, ExpiresAt: timestamppb.New(result.Claims.ExpiryTime()),
 		SourceRevision: result.Claims.SourceRevision, SourceDigestSha256: result.Claims.SourceDigestSHA256,
 		KeySetRevision: result.Claims.KeySetRevision, PolicyRevision: result.Claims.PolicyRevision,

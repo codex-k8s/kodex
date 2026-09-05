@@ -78,5 +78,6 @@ SELECT artifact.id::text,
                ORDER BY created_at DESC, ref DESC
                LIMIT 21
            ) bounded
-       ), '[]'::jsonb)
+       ), '[]'::jsonb),
+       control_plane.skill_artifact_reference_count(@organization_id::uuid,artifact.ref,artifact.revision,artifact.digest)
 FROM target_artifact artifact;

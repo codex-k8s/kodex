@@ -70,12 +70,21 @@ type runtimeConfig struct {
 	History                historyConfig                `toml:"history"`
 	ShellEnvironmentPolicy shellEnvironmentPolicy       `toml:"shell_environment_policy"`
 	Features               runtimeFeatures              `toml:"features"`
+	Memories               runtimeMemories              `toml:"memories"`
 	MCPServers             map[string]mcpServerConfig   `toml:"mcp_servers"`
 	Permissions            map[string]permissionProfile `toml:"permissions"`
 }
 
 type runtimeFeatures struct {
 	CodeMode runtimeCodeModeConfig `toml:"code_mode"`
+	Memories bool                  `toml:"memories"`
+}
+
+// Память поступает только из Kodex-owned records; локальная генерация Codex
+// не может стать вторым источником контекста или записывать readonly projection.
+type runtimeMemories struct {
+	GenerateMemories bool `toml:"generate_memories"`
+	UseMemories      bool `toml:"use_memories"`
 }
 
 type runtimeCodeModeConfig struct {

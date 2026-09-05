@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -11,6 +12,58 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
+
+type cancelAfterCanaryWrite struct {
+	context.Context
+	root     string
+	observed bool
+}
+
+func (ctx *cancelAfterCanaryWrite) Err() error {
+	paths, _ := filepath.Glob(filepath.Join(ctx.root, ".kodex/outbox/.readiness-*/current.txt"))
+	if len(paths) != 0 {
+		ctx.observed = true
+		return context.Canceled
+	}
+	return ctx.Context.Err()
+}
+
+func TestCanaryCancellationAfterWriteCleansTemporaryFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx := &cancelAfterCanaryWrite{Context: t.Context(), root: root}
+	if err := RunCanary(ctx, root, testPolicy()); err == nil || !ctx.observed {
+		t.Fatal("cancellation did not interrupt the written canary")
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".kodex/outbox"))
+	if err != nil || len(entries) != 0 {
+		t.Fatal("cancelled canary left files")
+	}
+}
+
+func TestCanaryDoesNotCountImmutableContextAgainstWritableQuota(t *testing.T) {
+	root := t.TempDir()
+	for _, path := range []string{".kodex/outbox", "context/skills"} {
+		if err := os.MkdirAll(filepath.Join(root, path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file, err := os.Create(filepath.Join(root, "context/skills/sparse"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(runtimecontract.RuntimeWorkspaceWritableBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunCanary(t.Context(), root, testPolicy()); err != nil {
+		t.Fatalf("immutable context consumed writable quota: %v", err)
+	}
+}
 
 func testPolicy() runtimecontract.RuntimeWorkspacePolicy {
 	return runtimecontract.RuntimeWorkspacePolicyV1()
@@ -23,7 +76,7 @@ func TestRunCanaryExercisesAtomicWritablePathAndCleansUp(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := RunCanary(root, testPolicy()); err != nil {
+	if err := RunCanary(t.Context(), root, testPolicy()); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(filepath.Join(root, ".kodex/outbox"))
@@ -37,7 +90,7 @@ func TestWorkspaceWriteAcceptanceCreatesReplacesDeletesAndPublishesExactResult(t
 	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
 		t.Fatal(err)
 	}
-	if err := RunCanary(root, testPolicy()); err != nil {
+	if err := RunCanary(t.Context(), root, testPolicy()); err != nil {
 		t.Fatalf("positive create/read/replace/read/delete path failed: %v", err)
 	}
 	provenance := ResultProvenance{Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: "rrev_abcdefgh",
@@ -90,7 +143,7 @@ func TestRunCanaryRejectsSymlinkEscape(t *testing.T) {
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, ".kodex/outbox")); err != nil {
 		t.Fatal(err)
 	}
-	err := RunCanary(root, testPolicy())
+	err := RunCanary(t.Context(), root, testPolicy())
 	if DenialReason(err) != runtimecontract.RuntimeWorkspacePathOutsideWorkspace {
 		t.Fatalf("reason=%q err=%v", DenialReason(err), err)
 	}

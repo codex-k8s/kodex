@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestRunnerInputSchemaV6MatchesRuntimePayload(t *testing.T) {
+func TestRunnerInputSchemaV7MatchesRuntimePayload(t *testing.T) {
 	compiled, properties, required := loadRunnerInputSchema(t)
 	assertRunnerInputShape(t, properties, required)
 
@@ -38,7 +38,7 @@ func TestRunnerInputSchemaV6MatchesRuntimePayload(t *testing.T) {
 	validateRunnerInputSchema(t, compiled, warm)
 }
 
-func TestRunnerInputSchemaV6CarriesOnlySecretDescriptors(t *testing.T) {
+func TestRunnerInputSchemaV7CarriesOnlySecretDescriptors(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	secretValue := []byte("runner-schema-secret-fixture")
 	digest := sha256.Sum256(secretValue)
@@ -76,23 +76,23 @@ func TestRunnerInputSchemaV6CarriesOnlySecretDescriptors(t *testing.T) {
 	}
 	instance := decodeJSONInstance(t, raw)
 	if err := compiled.Validate(instance); err != nil {
-		t.Fatalf("runner input with an exact Secret descriptor does not match v6 schema: %v", err)
+		t.Fatalf("runner input with an exact Secret descriptor does not match v7 schema: %v", err)
 	}
 
 	object := instance.(map[string]any)
 	secret := object["secret_projections"].([]any)[0].(map[string]any)
 	secret["value"] = string(secretValue)
 	if err := compiled.Validate(object); err == nil {
-		t.Fatal("v6 schema accepted a Secret value inside runner input")
+		t.Fatal("v7 schema accepted a Secret value inside runner input")
 	}
 	delete(secret, "value")
 	object["unexpected"] = true
 	if err := compiled.Validate(object); err == nil {
-		t.Fatal("v6 schema accepted an unknown top-level field")
+		t.Fatal("v7 schema accepted an unknown top-level field")
 	}
 }
 
-func TestRunnerInputSchemaV6RejectsDetachedAttachmentLineage(t *testing.T) {
+func TestRunnerInputSchemaV7RejectsDetachedAttachmentLineage(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(testExecution(false))
@@ -120,7 +120,7 @@ func TestRunnerInputSchemaV6RejectsDetachedAttachmentLineage(t *testing.T) {
 			object := decodeJSONInstance(t, raw).(map[string]any)
 			mutate(object)
 			if err := compiled.Validate(object); err == nil {
-				t.Fatal("v6 schema accepted detached attachment provenance")
+				t.Fatal("v7 schema accepted detached attachment provenance")
 			}
 		})
 	}
@@ -129,7 +129,7 @@ func TestRunnerInputSchemaV6RejectsDetachedAttachmentLineage(t *testing.T) {
 func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.RawMessage, []string) {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")
-	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v6", "agent-runner-input.schema.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v7", "agent-runner-input.schema.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func validateRunnerInputSchema(t *testing.T, schema *jsonschema.Resolved, input 
 		t.Fatalf("EncodeRunnerInput() error = %v", err)
 	}
 	if err := schema.Validate(decodeJSONInstance(t, raw)); err != nil {
-		t.Fatalf("actual %s runner input does not match v6 schema: %v", input.Mode, err)
+		t.Fatalf("actual %s runner input does not match v7 schema: %v", input.Mode, err)
 	}
 }
 

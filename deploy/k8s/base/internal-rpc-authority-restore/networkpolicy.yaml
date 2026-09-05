@@ -35,6 +35,7 @@ spec:
                   - session-archive
                   - control-api-gateway
                   - integration-gateway
+                  - email-bridge
                   - interaction-gateway
                   - control-plane
                   - internal-rpc-authority-restore-operator
