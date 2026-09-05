@@ -55,6 +55,11 @@ render для CP #1046 и egress. API принимает `emailbridgeapi.Configu
 gateway limits, строгий loader и readiness. Shared hostname/address validation
 используется также общим DNS resolver. Извлечение не меняет wire schema,
 канонический digest или bootstrap bytes и не публикует ничего в Kubernetes.
+После owner disable общий producer сохраняет source identity, но исключает
+выключенные mailbox из DNS и network destinations. Новая публикация убирает
+их прежние pins; общий endpoint остаётся только при другом активном mailbox.
+Это проверяется `TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority` вместе
+с пустым CNI render и mixed enabled/disabled source.
 
 Право CP создавать digest-named ConfigMap ограничивается
 `egress-mail-configmap-publication` VAP/Binding. Их source —
