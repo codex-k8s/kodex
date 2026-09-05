@@ -1134,6 +1134,33 @@ paths:
           description: Безопасные квитанции публикации; полное окружение читается через getRuntimeEnvironmentSet
           content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretRebindResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-invocations/{invocationRef}/email-effect-receipt:
+    get:
+      tags: [Integrations]
+      operationId: getEmailEffectReceipt
+      description: Авторитетная квитанция почтовой операции и решение владельца. CP проверяет видимость invocation; чтение не разрешает повторную отправку. ETag содержит версию квитанции.
+      parameters: [{ $ref: '#/components/parameters/IntegrationInvocationRef' }]
+      responses:
+        '200':
+          description: Безопасная квитанция без тела письма, адресатов и credentials
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/EmailEffectReceiptView' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-effect-receipts/{receiptRef}/reconciliation:
+    post:
+      tags: [Integrations]
+      operationId: reconcileEmailEffect
+      description: Подтверждённое решение владельца для точной квитанции. CP проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
+      parameters: [{ $ref: '#/components/parameters/EmailEffectReceiptRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EmailReconciliationInput' } } }
+      responses:
+        '200':
+          description: Отдельное решение владельца; ETag содержит версию решения, не квитанции
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/EmailReconciliationDecision' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections/{connectionRef}/interaction-identities:
     get:
       tags: [Integrations]
@@ -3599,6 +3626,16 @@ components:
       in: path
       required: true
       schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    IntegrationInvocationRef:
+      name: invocationRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    EmailEffectReceiptRef:
+      name: receiptRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     InteractionIdentityRef:
       name: identityRef
       in: path
@@ -5123,6 +5160,59 @@ components:
       properties:
         environments: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/RuntimeSecretReboundEnvironment' } }
         bindings: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' } }
+    EmailEffectOutcome:
+      type: string
+      enum: [UNKNOWN_OUTCOME, EFFECT_CONFIRMED, NO_EFFECT_CONFIRMED]
+    EmailReconciliationOutcome:
+      type: string
+      enum: [EFFECT_CONFIRMED, NO_EFFECT_CONFIRMED]
+    EmailEffectReceipt:
+      type: object
+      additionalProperties: false
+      required: [ref, version, invocationRef, externalReceiptDigest, semanticInputDigest, outcome, mailboxRef, configurationRevision, connectionRef, projectRef, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        invocationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        externalReceiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        semanticInputDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        outcome: { $ref: '#/components/schemas/EmailEffectOutcome' }
+        mailboxRef: { type: string, minLength: 1, maxLength: 128 }
+        configurationRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EmailReconciliationDecision:
+      type: object
+      additionalProperties: false
+      required: [ref, version, receiptRef, receiptVersion, receiptDigest, invocationRef, outcome, actorRef, createdAt, expiresAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptRef: { $ref: '#/components/schemas/OpaqueRef' }
+        receiptVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        invocationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        outcome: { $ref: '#/components/schemas/EmailReconciliationOutcome' }
+        actorRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    EmailEffectReceiptView:
+      type: object
+      additionalProperties: false
+      required: [receipt]
+      properties:
+        receipt: { $ref: '#/components/schemas/EmailEffectReceipt' }
+        decision: { $ref: '#/components/schemas/EmailReconciliationDecision' }
+    EmailReconciliationInput:
+      type: object
+      additionalProperties: false
+      required: [expectedReceiptDigest, outcome]
+      properties:
+        expectedReceiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        outcome: { $ref: '#/components/schemas/EmailReconciliationOutcome' }
+        note: { type: string, maxLength: 2000 }
     InteractionIdentityBindInput:
       type: object
       additionalProperties: false

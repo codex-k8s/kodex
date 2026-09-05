@@ -112,6 +112,7 @@ PWA Schedule и IntegrationDefinition fixtures/editor, которые ещё н�
 | STT bootstrap | `stt_availability.go` + tests: eligibility CP и authenticated protected check, stage READY + fresh validUntil <=31s, TTL30s; условие не ослаблялось |
 | Environment draft | `environment_draft_endpoints.go` + tests: create/save/validate/publish/discard/get |
 | Identity, environment/secret impact/rebind | Новые typed endpoints и `TestIdentityEnvironment*`, `TestSecretImpact*`, `TestSecretRebind*`, exact app authority method tests |
+| Email receipt / owner reconciliation | `email_effect_endpoints.go`, `TestEmailEffect*`; два typed RPC, separate receipt/decision versions, строгий safe readback; карта и producer dependencies в `email-http-1045.md` |
 
 Текущий producer не содержит отдельного поля reasoning в
 `PublishAgentRuntimeConfigurationRequest`: расширять HTTP вымышленным полем

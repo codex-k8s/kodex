@@ -885,6 +885,45 @@ func (e ContextResourceState) Valid() bool {
 	}
 }
 
+// Defines values for EmailEffectOutcome.
+const (
+	EmailEffectOutcomeEFFECTCONFIRMED   EmailEffectOutcome = "EFFECT_CONFIRMED"
+	EmailEffectOutcomeNOEFFECTCONFIRMED EmailEffectOutcome = "NO_EFFECT_CONFIRMED"
+	EmailEffectOutcomeUNKNOWNOUTCOME    EmailEffectOutcome = "UNKNOWN_OUTCOME"
+)
+
+// Valid indicates whether the value is a known member of the EmailEffectOutcome enum.
+func (e EmailEffectOutcome) Valid() bool {
+	switch e {
+	case EmailEffectOutcomeEFFECTCONFIRMED:
+		return true
+	case EmailEffectOutcomeNOEFFECTCONFIRMED:
+		return true
+	case EmailEffectOutcomeUNKNOWNOUTCOME:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailReconciliationOutcome.
+const (
+	EmailReconciliationOutcomeEFFECTCONFIRMED   EmailReconciliationOutcome = "EFFECT_CONFIRMED"
+	EmailReconciliationOutcomeNOEFFECTCONFIRMED EmailReconciliationOutcome = "NO_EFFECT_CONFIRMED"
+)
+
+// Valid indicates whether the value is a known member of the EmailReconciliationOutcome enum.
+func (e EmailReconciliationOutcome) Valid() bool {
+	switch e {
+	case EmailReconciliationOutcomeEFFECTCONFIRMED:
+		return true
+	case EmailReconciliationOutcomeNOEFFECTCONFIRMED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GateResolutionDecision.
 const (
 	GateResolutionDecisionAPPROVE        GateResolutionDecision = "APPROVE"
@@ -5596,6 +5635,55 @@ type EffectiveAccessQuery struct {
 	Target         AccessScope `json:"target"`
 }
 
+// EmailEffectOutcome defines model for EmailEffectOutcome.
+type EmailEffectOutcome string
+
+// EmailEffectReceipt defines model for EmailEffectReceipt.
+type EmailEffectReceipt struct {
+	ConfigurationRevision int64              `json:"configurationRevision"`
+	ConnectionRef         OpaqueRef          `json:"connectionRef"`
+	CreatedAt             time.Time          `json:"createdAt"`
+	ExternalReceiptDigest string             `json:"externalReceiptDigest"`
+	InvocationRef         OpaqueRef          `json:"invocationRef"`
+	MailboxRef            string             `json:"mailboxRef"`
+	Outcome               EmailEffectOutcome `json:"outcome"`
+	ProjectRef            OpaqueRef          `json:"projectRef"`
+	Ref                   OpaqueRef          `json:"ref"`
+	SemanticInputDigest   string             `json:"semanticInputDigest"`
+	UpdatedAt             time.Time          `json:"updatedAt"`
+	Version               int64              `json:"version"`
+}
+
+// EmailEffectReceiptView defines model for EmailEffectReceiptView.
+type EmailEffectReceiptView struct {
+	Decision *EmailReconciliationDecision `json:"decision,omitempty"`
+	Receipt  EmailEffectReceipt           `json:"receipt"`
+}
+
+// EmailReconciliationDecision defines model for EmailReconciliationDecision.
+type EmailReconciliationDecision struct {
+	ActorRef       OpaqueRef                  `json:"actorRef"`
+	CreatedAt      time.Time                  `json:"createdAt"`
+	ExpiresAt      time.Time                  `json:"expiresAt"`
+	InvocationRef  OpaqueRef                  `json:"invocationRef"`
+	Outcome        EmailReconciliationOutcome `json:"outcome"`
+	ReceiptDigest  string                     `json:"receiptDigest"`
+	ReceiptRef     OpaqueRef                  `json:"receiptRef"`
+	ReceiptVersion int64                      `json:"receiptVersion"`
+	Ref            OpaqueRef                  `json:"ref"`
+	Version        int64                      `json:"version"`
+}
+
+// EmailReconciliationInput defines model for EmailReconciliationInput.
+type EmailReconciliationInput struct {
+	ExpectedReceiptDigest string                     `json:"expectedReceiptDigest"`
+	Note                  *string                    `json:"note,omitempty"`
+	Outcome               EmailReconciliationOutcome `json:"outcome"`
+}
+
+// EmailReconciliationOutcome defines model for EmailReconciliationOutcome.
+type EmailReconciliationOutcome string
+
 // EnabledInput defines model for EnabledInput.
 type EnabledInput struct {
 	Enabled bool `json:"enabled"`
@@ -8030,6 +8118,9 @@ type ConversationRef = OpaqueRef
 // CsrfToken defines model for CsrfToken.
 type CsrfToken = string
 
+// EmailEffectReceiptRef defines model for EmailEffectReceiptRef.
+type EmailEffectReceiptRef = OpaqueRef
+
 // GateRef defines model for GateRef.
 type GateRef = OpaqueRef
 
@@ -8044,6 +8135,9 @@ type IfMatchOptional = string
 
 // ImpactDigest defines model for ImpactDigest.
 type ImpactDigest = string
+
+// IntegrationInvocationRef defines model for IntegrationInvocationRef.
+type IntegrationInvocationRef = OpaqueRef
 
 // InteractionIdentityRef defines model for InteractionIdentityRef.
 type InteractionIdentityRef = OpaqueRef
@@ -8579,6 +8673,13 @@ type ListAuditEventsParams struct {
 	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
 	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ReconcileEmailEffectParams defines parameters for ReconcileEmailEffect.
+type ReconcileEmailEffectParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ListIntegrationConnectionsParams defines parameters for ListIntegrationConnections.
@@ -9711,6 +9812,9 @@ type AddAttachmentSetItemsJSONRequestBody = AttachmentSetAddItemsInput
 // RemoveAttachmentSetItemsJSONRequestBody defines body for RemoveAttachmentSetItems for application/json ContentType.
 type RemoveAttachmentSetItemsJSONRequestBody = AttachmentSetRemoveItemsInput
 
+// ReconcileEmailEffectJSONRequestBody defines body for ReconcileEmailEffect for application/json ContentType.
+type ReconcileEmailEffectJSONRequestBody = EmailReconciliationInput
+
 // CreateIntegrationConnectionJSONRequestBody defines body for CreateIntegrationConnection for application/json ContentType.
 type CreateIntegrationConnectionJSONRequestBody = IntegrationConnectionInput
 
@@ -10110,6 +10214,9 @@ type ServerInterface interface {
 	// (GET /api/v1/bootstrap)
 	GetBootstrapState(w http.ResponseWriter, r *http.Request)
 
+	// (POST /api/v1/email-effect-receipts/{receiptRef}/reconciliation)
+	ReconcileEmailEffect(w http.ResponseWriter, r *http.Request, receiptRef EmailEffectReceiptRef, params ReconcileEmailEffectParams)
+
 	// (GET /api/v1/integration-connections)
 	ListIntegrationConnections(w http.ResponseWriter, r *http.Request, params ListIntegrationConnectionsParams)
 
@@ -10154,6 +10261,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/integration-definitions)
 	ListIntegrationDefinitions(w http.ResponseWriter, r *http.Request, params ListIntegrationDefinitionsParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/email-effect-receipt)
+	GetEmailEffectReceipt(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef)
 
 	// (DELETE /api/v1/interaction-identities/{identityRef})
 	RevokeInteractionIdentity(w http.ResponseWriter, r *http.Request, identityRef InteractionIdentityRef, params RevokeInteractionIdentityParams)
@@ -16190,6 +16300,112 @@ func (siw *ServerInterfaceWrapper) GetBootstrapState(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ReconcileEmailEffect operation middleware
+func (siw *ServerInterfaceWrapper) ReconcileEmailEffect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "receiptRef" -------------
+	var receiptRef EmailEffectReceiptRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "receiptRef", r.PathValue("receiptRef"), &receiptRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "receiptRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReconcileEmailEffectParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReconcileEmailEffect(w, r, receiptRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListIntegrationConnections operation middleware
 func (siw *ServerInterfaceWrapper) ListIntegrationConnections(w http.ResponseWriter, r *http.Request) {
 
@@ -17565,6 +17781,38 @@ func (siw *ServerInterfaceWrapper) ListIntegrationDefinitions(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIntegrationDefinitions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailEffectReceipt operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailEffectReceipt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailEffectReceipt(w, r, invocationRef)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -30223,6 +30471,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/attachment-sets/{attachmentSetRef}/items/removals", wrapper.RemoveAttachmentSetItems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/audit-events", wrapper.ListAuditEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/bootstrap", wrapper.GetBootstrapState)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/email-effect-receipts/{receiptRef}/reconciliation", wrapper.ReconcileEmailEffect)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.ListIntegrationConnections)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections", wrapper.CreateIntegrationConnection)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.DeleteIntegrationConnection)
@@ -30238,6 +30487,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication", wrapper.PublishIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation", wrapper.ValidateIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-definitions", wrapper.ListIntegrationDefinitions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/email-effect-receipt", wrapper.GetEmailEffectReceipt)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/interaction-identities/{identityRef}", wrapper.RevokeInteractionIdentity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configurations", wrapper.ListManagedConfigurations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configurations/{configurationRef}/copies", wrapper.CopyGitManagedConfiguration)
