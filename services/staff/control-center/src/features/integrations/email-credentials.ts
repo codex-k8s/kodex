@@ -1,4 +1,7 @@
-import { configureEmailMailboxCredential } from "@/shared/api/generated/openapi/sdk.gen";
+import {
+  configureEmailMailboxCredential,
+  getEmailMailboxCredentialReceipt,
+} from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   EmailMailboxCredential,
   EmailMailboxCredentialKind,
@@ -6,6 +9,9 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { etag, idempotencyKey, mutate } from "@/shared/api/mutation";
 import { requestSignal } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/problem";
+import type { MailboxCredentialAttempt } from "./email-credential-recovery";
+export type { MailboxCredentialAttempt } from "./email-credential-recovery";
 
 export const mailboxCredentialLimits: Record<
   EmailMailboxCredentialKind,
@@ -32,14 +38,6 @@ export function validMailboxCredential(
   );
 }
 
-export interface MailboxCredentialAttempt {
-  connectionRef: string;
-  connectionVersion: number;
-  kind: EmailMailboxCredentialKind;
-  key: string;
-  inputDigest: string;
-}
-
 export class MailboxCredentialMismatch extends Error {
   constructor() {
     super("Mailbox credential differs from the pending attempt");
@@ -59,21 +57,10 @@ export async function prepareMailboxCredential(
   )
     throw new Error("Mailbox credential input is invalid");
   etag(connection.version);
-  const inputDigest = Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(JSON.stringify({ kind, value })),
-      ),
-    ),
-    (byte) => byte.toString(16).padStart(2, "0"),
-  ).join("");
+  // Сохраняем асинхронную границу для очистки ввода до отправки команды.
+  await Promise.resolve();
   if (pending) {
-    if (
-      pending.connectionRef !== connection.ref ||
-      pending.kind !== kind ||
-      pending.inputDigest !== inputDigest
-    )
+    if (pending.connectionRef !== connection.ref || pending.kind !== kind)
       throw new MailboxCredentialMismatch();
     return pending;
   }
@@ -81,7 +68,6 @@ export async function prepareMailboxCredential(
     connectionRef: connection.ref,
     connectionVersion: connection.version,
     kind,
-    inputDigest,
     key: idempotencyKey(),
   };
 }
@@ -105,6 +91,30 @@ export async function saveMailboxCredential(
     attempt.key,
   );
   const item = result.data;
+  if (result.etag !== etag(item.connectionVersion))
+    throw new Error("Invalid mailbox credential receipt ETag");
+  return checkedMailboxCredential(item, attempt);
+}
+
+export async function recoverMailboxCredential(
+  attempt: MailboxCredentialAttempt,
+  signal: AbortSignal,
+): Promise<EmailMailboxCredential> {
+  const result = await unwrap(
+    getEmailMailboxCredentialReceipt({
+      path: { connectionRef: attempt.connectionRef },
+      query: { idempotencyKey: attempt.key },
+      signal: requestSignal(signal),
+      cache: "no-store",
+    }),
+  );
+  return checkedMailboxCredential(result.data, attempt);
+}
+
+function checkedMailboxCredential(
+  item: EmailMailboxCredential,
+  attempt: MailboxCredentialAttempt,
+): EmailMailboxCredential {
   if (
     item.connectionRef !== attempt.connectionRef ||
     item.kind !== attempt.kind ||
@@ -113,8 +123,7 @@ export async function saveMailboxCredential(
     !Number.isSafeInteger(item.generation) ||
     item.generation < 1 ||
     typeof item.name !== "string" ||
-    !/^[A-Za-z0-9_-]{1,128}$/.test(item.name) ||
-    result.etag !== etag(item.connectionVersion)
+    !/^[A-Za-z0-9_-]{1,128}$/.test(item.name)
   )
     throw new Error("Invalid mailbox credential receipt");
   return {

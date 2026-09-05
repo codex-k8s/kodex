@@ -7,6 +7,7 @@ import {
 import { computed, onScopeDispose, ref } from "vue";
 import { environmentDraftReauthKey } from "@/features/runtime/environment-draft-reauth";
 import { emailAttemptStorageKey } from "@/features/integrations/email-attempt";
+import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-credential-recovery";
 
 import {
   consumeOidcIntent,
@@ -172,6 +173,7 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(sessionRevisionKey);
     window.sessionStorage.removeItem(environmentDraftReauthKey);
     window.sessionStorage.removeItem(emailAttemptStorageKey);
+    window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
     window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
     window.sessionStorage.removeItem(
       runtimeEnvironmentPolicyReauthCompletionStorageKey,

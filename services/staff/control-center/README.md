@@ -707,6 +707,34 @@ Service Worker в этом
 (`/websites/codemirror_net`), MediaRecorder (`/mdn/content`), oidc-client-ts
 (`/authts/oidc-client-ts`), js-yaml (`/nodeca/js-yaml`) и Vite (`/vitejs/vite/v8.0.10`).
 
+## Промежуточная совместимость D5 и точных Secret revision, 2026-09-05
+
+Новый HTTP SDK включает типизированный mailbox lifecycle, безопасную квитанцию
+credential и точную опубликованную `RuntimeSecretDescriptor.revision`.
+Редактирование остальных полей Environment сохраняет этот pin, включая
+восстановление несекретного черновика после повторной авторизации. Явный выбор
+другого Secret назначает `revision=0` для серверного выбора текущей revision.
+Generic managed configuration dispatcher отклоняет `EMAIL_MAILBOX`: его
+команды принадлежат специализированному API.
+
+Незавершённая credential попытка сохраняет в sessionStorage только
+connectionRef/version, kind и исходный idempotency key. После закрытия формы и
+reload результат восстанавливается авторитетным GET receipt без plaintext
+или value digest. Неизвестный исход остаётся неизвестным до readback; logout
+удаляет локальные указатели попыток.
+
+Добавлены типизированные mailbox API wrappers и поля SMTP/IMAP/POP3; подключение
+полного редактора к странице и authoritative action projection ещё в работе.
+Это промежуточная совместимость, а не завершение D5 или MVP-UI-41. Реальная
+доставка mailbox и переход READY, CP/broker/browser lifecycle, staging и live
+остаются NOT RUN. Полная синтетическая проверка этой новой области ещё NOT RUN;
+24/24 предыдущего checkpoint относятся к D6 и прежнему интерфейсу.
+
+Генератор integration schema закрыто завершает работу на strictTypes и иных
+предупреждениях Ajv/esbuild до записи generated validator. Проверка на отдельной
+временной схеме без object type подтверждает этот отказ; исправленный исходный
+контракт проходит генерацию.
+
 ## Deploy ownership
 
 `deploy/k8s/base/staff-control-center` содержит Deployment, Service, Ingress,

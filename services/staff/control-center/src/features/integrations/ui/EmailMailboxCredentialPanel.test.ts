@@ -1,12 +1,13 @@
 import { defineComponent, type Ref, type SetupContext } from "vue";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import { AppProblem } from "@/shared/api/problem";
 import type { IntegrationConnection } from "@/shared/api/generated/openapi/types.gen";
-const dependencies = vi.hoisted(() => ({ save: vi.fn() }));
+const dependencies = vi.hoisted(() => ({ save: vi.fn(), recover: vi.fn() }));
 vi.mock("../email-credentials", async (original) => ({
   ...(await original<typeof import("../email-credentials")>()),
   saveMailboxCredential: dependencies.save,
+  recoverMailboxCredential: dependencies.recover,
 }));
 import EmailMailboxCredentialPanel from "./EmailMailboxCredentialPanel.vue";
 const connection: IntegrationConnection = {
@@ -27,6 +28,8 @@ const connection: IntegrationConnection = {
 interface State {
   save(): Promise<void>;
   clear(): void;
+  restore(): void;
+  recover(): Promise<void>;
   value: Ref<string>;
   busy: Ref<boolean>;
   pending: Ref<unknown>;
@@ -51,8 +54,43 @@ async function panel(): Promise<State> {
     }),
   )) as unknown as State;
 }
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  const values = new Map<string, string>();
+  vi.stubGlobal("window", {
+    sessionStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    },
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
 describe("EMAIL credential: очистка и неопределённость", () => {
+  it("после закрытия проверяет owner receipt без value и повторного POST", async () => {
+    dependencies.save.mockRejectedValue(new TypeError("Lost ACK"));
+    const initial = await panel();
+    initial.value.value = "synthetic private value";
+    await initial.save();
+    const attempt = initial.pending.value;
+    initial.clear();
+    const reopened = await panel();
+    reopened.restore();
+    expect(reopened.pending.value).toEqual(attempt);
+    expect(reopened.value.value).toBe("");
+    dependencies.recover.mockResolvedValue({
+      name: "credential_synthetic",
+      generation: 1,
+      kind: "AUTH_SECRET",
+      connectionRef: connection.ref,
+      connectionVersion: 4,
+    });
+    await reopened.recover();
+    expect(dependencies.save).toHaveBeenCalledOnce();
+    expect(dependencies.recover.mock.calls[0]?.[0]).toEqual(attempt);
+    expect(reopened.pending.value).toBeUndefined();
+    expect(reopened.receipt.value).toMatchObject({ generation: 1 });
+  });
   it("очищает ввод до ответа; timeout не повторяет команду и требует точное значение", async () => {
     dependencies.save.mockRejectedValue(new TypeError("Synthetic timeout"));
     const state = await panel();
@@ -66,10 +104,6 @@ describe("EMAIL credential: очистка и неопределённость",
       "synthetic credential",
     );
     await state.save();
-    expect(dependencies.save).toHaveBeenCalledOnce();
-    state.value.value = "different";
-    await state.save();
-    expect(state.mismatch.value).toBe(true);
     expect(dependencies.save).toHaveBeenCalledOnce();
     state.value.value = "synthetic credential";
     await state.save();

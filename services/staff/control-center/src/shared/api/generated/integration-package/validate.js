@@ -83,7 +83,7 @@ var require_equal = __commonJS({
 // integration-package.js
 var validate = validate20;
 var integration_package_default = validate20;
-var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "const": "SHIPPED" } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 65536 }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } } }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "properties": { "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT"] }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" } } } } };
+var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "const": "SHIPPED" } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field", "type": "object", "properties": { "allowEmpty": { "const": false } } } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 65536 }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } } }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "properties": { "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT"] }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" } } } } };
 var func1 = require_ucs2length().default;
 var func3 = Object.prototype.hasOwnProperty;
 var pattern4 = new RegExp("^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "u");
@@ -2166,55 +2166,77 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
             }
             const len0 = data15.length;
             for (let i0 = 0; i0 < len0; i0++) {
-              if (!validate23(data15[i0], { instancePath: instancePath + "/spec/configurationFields/" + i0, parentData: data15, parentDataProperty: i0, rootData, dynamicAnchors })) {
+              let data16 = data15[i0];
+              if (!validate23(data16, { instancePath: instancePath + "/spec/configurationFields/" + i0, parentData: data15, parentDataProperty: i0, rootData, dynamicAnchors })) {
                 vErrors = vErrors === null ? validate23.errors : vErrors.concat(validate23.errors);
                 errors = vErrors.length;
               }
+              if (data16 && typeof data16 == "object" && !Array.isArray(data16)) {
+                if (data16.allowEmpty !== void 0) {
+                  if (false !== data16.allowEmpty) {
+                    const err45 = { instancePath: instancePath + "/spec/configurationFields/" + i0 + "/allowEmpty", schemaPath: "#/properties/spec/properties/configurationFields/items/properties/allowEmpty/const", keyword: "const", params: { allowedValue: false }, message: "must be equal to constant" };
+                    if (vErrors === null) {
+                      vErrors = [err45];
+                    } else {
+                      vErrors.push(err45);
+                    }
+                    errors++;
+                  }
+                }
+              } else {
+                const err46 = { instancePath: instancePath + "/spec/configurationFields/" + i0, schemaPath: "#/properties/spec/properties/configurationFields/items/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                if (vErrors === null) {
+                  vErrors = [err46];
+                } else {
+                  vErrors.push(err46);
+                }
+                errors++;
+              }
             }
           } else {
-            const err45 = { instancePath: instancePath + "/spec/configurationFields", schemaPath: "#/properties/spec/properties/configurationFields/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            const err47 = { instancePath: instancePath + "/spec/configurationFields", schemaPath: "#/properties/spec/properties/configurationFields/type", keyword: "type", params: { type: "array" }, message: "must be array" };
             if (vErrors === null) {
-              vErrors = [err45];
+              vErrors = [err47];
             } else {
-              vErrors.push(err45);
+              vErrors.push(err47);
             }
             errors++;
           }
         }
         if (data6.networkDestinations !== void 0) {
-          let data17 = data6.networkDestinations;
-          if (Array.isArray(data17)) {
-            if (data17.length > 16) {
-              const err46 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/maxItems", keyword: "maxItems", params: { limit: 16 }, message: "must NOT have more than 16 items" };
+          let data18 = data6.networkDestinations;
+          if (Array.isArray(data18)) {
+            if (data18.length > 16) {
+              const err48 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/maxItems", keyword: "maxItems", params: { limit: 16 }, message: "must NOT have more than 16 items" };
               if (vErrors === null) {
-                vErrors = [err46];
+                vErrors = [err48];
               } else {
-                vErrors.push(err46);
+                vErrors.push(err48);
               }
               errors++;
             }
-            if (data17.length < 1) {
-              const err47 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+            if (data18.length < 1) {
+              const err49 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
               if (vErrors === null) {
-                vErrors = [err47];
+                vErrors = [err49];
               } else {
-                vErrors.push(err47);
+                vErrors.push(err49);
               }
               errors++;
             }
-            const len1 = data17.length;
+            const len1 = data18.length;
             for (let i1 = 0; i1 < len1; i1++) {
-              if (!validate25(data17[i1], { instancePath: instancePath + "/spec/networkDestinations/" + i1, parentData: data17, parentDataProperty: i1, rootData, dynamicAnchors })) {
+              if (!validate25(data18[i1], { instancePath: instancePath + "/spec/networkDestinations/" + i1, parentData: data18, parentDataProperty: i1, rootData, dynamicAnchors })) {
                 vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
                 errors = vErrors.length;
               }
             }
           } else {
-            const err48 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            const err50 = { instancePath: instancePath + "/spec/networkDestinations", schemaPath: "#/properties/spec/properties/networkDestinations/type", keyword: "type", params: { type: "array" }, message: "must be array" };
             if (vErrors === null) {
-              vErrors = [err48];
+              vErrors = [err50];
             } else {
-              vErrors.push(err48);
+              vErrors.push(err50);
             }
             errors++;
           }
@@ -2226,59 +2248,59 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         if (data6.capabilities !== void 0) {
-          let data20 = data6.capabilities;
-          if (Array.isArray(data20)) {
-            if (data20.length > 48) {
-              const err49 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/maxItems", keyword: "maxItems", params: { limit: 48 }, message: "must NOT have more than 48 items" };
+          let data21 = data6.capabilities;
+          if (Array.isArray(data21)) {
+            if (data21.length > 48) {
+              const err51 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/maxItems", keyword: "maxItems", params: { limit: 48 }, message: "must NOT have more than 48 items" };
               if (vErrors === null) {
-                vErrors = [err49];
+                vErrors = [err51];
               } else {
-                vErrors.push(err49);
+                vErrors.push(err51);
               }
               errors++;
             }
-            if (data20.length < 1) {
-              const err50 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+            if (data21.length < 1) {
+              const err52 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
               if (vErrors === null) {
-                vErrors = [err50];
+                vErrors = [err52];
               } else {
-                vErrors.push(err50);
+                vErrors.push(err52);
               }
               errors++;
             }
-            const len2 = data20.length;
+            const len2 = data21.length;
             for (let i2 = 0; i2 < len2; i2++) {
-              if (!validate29(data20[i2], { instancePath: instancePath + "/spec/capabilities/" + i2, parentData: data20, parentDataProperty: i2, rootData, dynamicAnchors })) {
+              if (!validate29(data21[i2], { instancePath: instancePath + "/spec/capabilities/" + i2, parentData: data21, parentDataProperty: i2, rootData, dynamicAnchors })) {
                 vErrors = vErrors === null ? validate29.errors : vErrors.concat(validate29.errors);
                 errors = vErrors.length;
               }
             }
           } else {
-            const err51 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            const err53 = { instancePath: instancePath + "/spec/capabilities", schemaPath: "#/properties/spec/properties/capabilities/type", keyword: "type", params: { type: "array" }, message: "must be array" };
             if (vErrors === null) {
-              vErrors = [err51];
+              vErrors = [err53];
             } else {
-              vErrors.push(err51);
+              vErrors.push(err53);
             }
             errors++;
           }
         }
       } else {
-        const err52 = { instancePath: instancePath + "/spec", schemaPath: "#/properties/spec/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err54 = { instancePath: instancePath + "/spec", schemaPath: "#/properties/spec/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err52];
+          vErrors = [err54];
         } else {
-          vErrors.push(err52);
+          vErrors.push(err54);
         }
         errors++;
       }
     }
   } else {
-    const err53 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err55 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err53];
+      vErrors = [err55];
     } else {
-      vErrors.push(err53);
+      vErrors.push(err55);
     }
     errors++;
   }
