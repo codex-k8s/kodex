@@ -4265,7 +4265,7 @@ components:
       additionalProperties: false
       required: [path, artifactRef, artifactRevision]
       properties:
-        path: { type: string, maxLength: 512 }
+        path: { type: string, minLength: 1, maxLength: 240, description: 'Относительный canonical manifest path, не более 240 UTF-8 bytes; ограничения структуры проверяет сервер.' }
         artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
         artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     SkillBundleFile:
@@ -4273,19 +4273,19 @@ components:
       additionalProperties: false
       required: [path, artifactRef, artifactRevision, digest, sizeBytes]
       properties:
-        path: { type: string, maxLength: 512 }
+        path: { type: string, minLength: 1, maxLength: 240, description: 'Относительный canonical manifest path, не более 240 UTF-8 bytes.' }
         artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
         artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
-        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
-        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 33554432 }
     SkillBundleSpecification:
       type: object
       additionalProperties: false
       required: [name, description, files]
       properties:
-        name: { type: string, maxLength: 160 }
-        description: { type: string, maxLength: 4000 }
-        files: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFileInput' } }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        files: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFileInput' } }
     SkillBundleDraftCreateInput:
       type: object
       additionalProperties: false
@@ -4316,7 +4316,7 @@ components:
         revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         state: { type: string, enum: [DRAFT, INVALID, VALIDATED, APPROVED, REJECTED, PUBLISHED, DISCARDED] }
         name: { type: string, maxLength: 160 }
-        description: { type: string, maxLength: 4000 }
+        description: { type: string, maxLength: 2000 }
         files: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFile' } }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -5264,7 +5264,7 @@ components:
     AgentRuntimeConfigurationView:
       type: object
       additionalProperties: false
-      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion]
+      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion, skillBindings, memoryBindings]
       properties:
         configuration: { $ref: '#/components/schemas/AgentRuntimeConfiguration' }
         publishedOverlay: { $ref: '#/components/schemas/ConfigOverlayVersion' }
@@ -5273,6 +5273,8 @@ components:
         environment: { $ref: '#/components/schemas/RuntimeEnvironmentSet' }
         safeEffectiveConfig: { type: string, maxLength: 262144 }
         agentVersion: { type: integer, format: int64, minimum: 1 }
+        skillBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
+        memoryBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
     AgentRuntimeConfigurationPage:
       type: object
       additionalProperties: false

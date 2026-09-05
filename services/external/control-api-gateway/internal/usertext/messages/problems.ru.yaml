@@ -742,3 +742,11 @@ RUNTIME_SECRET_SELECTED_REBOUND:
   other: Выбранные окружения переведены на новую ревизию секрета
 SCHEDULE_OCCURRENCE_FAILED:
   other: Не удалось выполнить запуск по расписанию
+AGENT_CONTEXT_BINDING_CHANGED:
+  other: Привязка контекста сотрудника изменена
+MEMORY_RECORD_CHANGED:
+  other: Запись памяти изменена
+SKILL_BUNDLE_CHANGED:
+  other: Набор навыков изменён
+SYSTEM_ROLE_STT_PERMISSION:
+  other: Системное разрешение на голосовой ввод

@@ -129,9 +129,11 @@ PWA Schedule и IntegrationDefinition fixtures/editor, которые ещё н�
   проверяет общий modelprofile; далее используется тот же CP draft/validate/
   publish lifecycle. Raw JSON/YAML/TOML редактор сохранён. Это не upload override
   и не подтверждение доступности provider. Focused HTTP race/SDK: PASS.
-- HTTP SkillBundle/MemoryRecord потребляет `d97753154`: все 24 typed
+- HTTP SkillBundle/MemoryRecord потребляет `bd674280e`: все 24 typed
   operations реализованы и покрыты focused fake tests. Точные paths, OCC,
-  redaction и ограничения — в `context-http-1045.md`. CP owner SQL/runtime
-  пока не реализован в этом checkpoint; full acceptance не заявляется.
+  redaction и ограничения — в `context-http-1045.md`. CP owner SQL для CRUD,
+  history и bindings подключён; runtime materialization и scanner deployment
+  ещё не готовы. Runtime configuration readback/command responses содержат
+  оба массива exact bindings и agentVersion. Full acceptance не заявляется.
 - Полный PR body и итоговая матрица criterion/evidence оформляются после
   полного HTTP scope. Live provider, staging и deploy не запускались.

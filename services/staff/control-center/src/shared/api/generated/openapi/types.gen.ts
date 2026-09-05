@@ -408,12 +408,18 @@ export type ContextProvenance = {
 };
 
 export type SkillBundleFileInput = {
+    /**
+     * Относительный canonical manifest path, не более 240 UTF-8 bytes; ограничения структуры проверяет сервер.
+     */
     path: string;
     artifactRef: OpaqueRef;
     artifactRevision: number;
 };
 
 export type SkillBundleFile = {
+    /**
+     * Относительный canonical manifest path, не более 240 UTF-8 bytes.
+     */
     path: string;
     artifactRef: OpaqueRef;
     artifactRevision: number;
@@ -1226,6 +1232,8 @@ export type AgentRuntimeConfigurationView = {
     environment: RuntimeEnvironmentSet;
     safeEffectiveConfig: string;
     agentVersion: number;
+    skillBindings: Array<AgentContextBinding>;
+    memoryBindings: Array<AgentContextBinding>;
 };
 
 export type AgentRuntimeConfigurationPage = {

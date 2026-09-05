@@ -8,12 +8,16 @@ import (
 )
 
 func (server *Server) GetAgentRuntimeConfiguration(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef) {
+	if !opaqueHTTPReference.MatchString(agentRef) {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Query.GetAgentRuntimeConfiguration(request.Context(), &controlplanev1.GetAgentRuntimeConfigurationRequest{AgentRef: agentRef})
 	if err != nil {
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) ListAgentRuntimeConfigurationVersions(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.ListAgentRuntimeConfigurationVersionsParams) {
@@ -44,7 +48,7 @@ func (server *Server) PublishAgentRuntimeConfiguration(writer http.ResponseWrite
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) CreateConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.CreateConfigOverlayDraftParams) {
@@ -61,7 +65,7 @@ func (server *Server) CreateConfigOverlayDraft(writer http.ResponseWriter, reque
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusCreated, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusCreated, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) ValidateConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.ValidateConfigOverlayDraftParams) {
@@ -74,7 +78,7 @@ func (server *Server) ValidateConfigOverlayDraft(writer http.ResponseWriter, req
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) PublishConfigOverlayDraft(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.PublishConfigOverlayDraftParams) {
@@ -87,7 +91,7 @@ func (server *Server) PublishConfigOverlayDraft(writer http.ResponseWriter, requ
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) RollbackConfigOverlay(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.RollbackConfigOverlayParams) {
@@ -104,7 +108,7 @@ func (server *Server) RollbackConfigOverlay(writer http.ResponseWriter, request 
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
 }
 
 func (server *Server) BindAgentRuntimeEnvironment(writer http.ResponseWriter, request *http.Request, agentRef generated.AgentRef, parameters generated.BindAgentRuntimeEnvironmentParams) {
@@ -121,7 +125,25 @@ func (server *Server) BindAgentRuntimeEnvironment(writer http.ResponseWriter, re
 		writeRPCProblem(writer, err)
 		return
 	}
-	writeMessage(writer, http.StatusOK, response, "runtimeConfiguration", "")
+	writeAgentRuntimeConfiguration(writer, http.StatusOK, response.GetRuntimeConfiguration(), agentRef)
+}
+
+func writeAgentRuntimeConfiguration(writer http.ResponseWriter, statusCode int, view *controlplanev1.AgentRuntimeConfigurationView, agentRef string) {
+	if view == nil || !validManagedVersion(view.GetAgentVersion()) || view.GetConfiguration().GetAgentRef() != agentRef || len(view.GetSkillBindings())+len(view.GetMemoryBindings()) > 128 {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	seenRefs, seenResources := make(map[string]bool), make(map[string]bool)
+	for _, bindings := range [][]*controlplanev1.AgentContextBinding{view.GetSkillBindings(), view.GetMemoryBindings()} {
+		for _, binding := range bindings {
+			if !validAgentContextBinding(binding, agentRef) || seenRefs[binding.GetRef()] || seenResources[binding.GetResourceRef()] {
+				writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+				return
+			}
+			seenRefs[binding.GetRef()], seenResources[binding.GetResourceRef()] = true, true
+		}
+	}
+	writeMessage(writer, statusCode, view, "", "")
 }
 
 func (server *Server) ListRuntimeEnvironmentSets(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListRuntimeEnvironmentSetsParams) {
