@@ -1118,7 +1118,11 @@ onBeforeUnmount(() => {
               </label>
               <label class="field">
                 <span>{{ $t("common.description") }}</span>
-                <VoiceTextarea v-model="input.description" maxlength="1000" />
+                <VoiceTextarea
+                  v-model="input.description"
+                  :disabled="busy || !draftEditable || !canPublish"
+                  maxlength="1000"
+                />
               </label>
               <div class="safe-summary">
                 <div>
@@ -1250,6 +1254,7 @@ onBeforeUnmount(() => {
                     <label class="field field--wide">
                       <span>{{ $t("common.description") }}</span>
                       <VoiceTextarea
+                        :disabled="busy || !draftEditable || !canPublish"
                         :value="
                           input.tools.find((item) => item.command === tool.name)
                             ?.description
@@ -1264,6 +1269,7 @@ onBeforeUnmount(() => {
                     <label class="field field--wide">
                       <span>{{ $t("runtime.toolUsageHint") }}</span>
                       <VoiceTextarea
+                        :disabled="busy || !draftEditable || !canPublish"
                         :value="
                           input.tools.find((item) => item.command === tool.name)
                             ?.usageHint

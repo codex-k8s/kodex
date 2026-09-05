@@ -204,6 +204,7 @@ onBeforeUnmount(() => {
           ><span>{{ $t("common.purpose") }}</span
           ><VoiceTextarea
             v-model.trim="form.purpose"
+            :disabled="busy"
             required
             maxlength="1000"
           />

@@ -191,12 +191,14 @@ onBeforeUnmount(() => {
           ><span>{{ $t("agents.role") }}</span
           ><VoiceTextarea
             v-model.trim="form.roleDescription"
+            :disabled="busy"
             required
             maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.instructions") }}</span
           ><VoiceTextarea
             v-model.trim="form.initialInstructions"
+            :disabled="busy"
             required
             maxlength="65536"
           />

@@ -158,6 +158,14 @@ for (const width of [1440, 390]) {
         return;
       }
       if (
+        url.pathname === "/api/v1/projects/project_synthetic/template-variables"
+      ) {
+        await route.fulfill({
+          json: { items: [], total: 0, nextPageToken: "" },
+        });
+        return;
+      }
+      if (
         url.pathname === "/api/v1/agents/agent_synthetic/runtime-configuration"
       ) {
         await route.fulfill({ json: view });
@@ -266,6 +274,30 @@ for (const width of [1440, 390]) {
       path: testInfo.outputPath(`runtime-detail-${String(width)}.png`),
       fullPage: true,
     });
+    await page
+      .getByRole("button", { name: "Проверить редакторы", exact: true })
+      .click();
+    const analogs = page.getByTestId("analog-editors");
+    await expect(analogs.locator(".voice-input button")).toHaveCount(2);
+    await analogs.getByLabel("Выполняется сохранение", { exact: true }).check();
+    await expect(analogs.locator(".voice-input button")).toHaveCount(0);
+    await expect(analogs.locator(".cm-content")).toHaveAttribute(
+      "contenteditable",
+      "false",
+    );
+    await expect(analogs.locator("textarea")).toBeDisabled();
+    await analogs
+      .getByLabel("Выполняется сохранение", { exact: true })
+      .uncheck();
+    await expect(analogs.locator(".voice-input button")).toHaveCount(2);
+    await analogs.screenshot({
+      path: testInfo.outputPath(`analog-editors-${String(width)}.png`),
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
     expect(failures).toEqual([]);
   });
 }
