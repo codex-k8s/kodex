@@ -159,3 +159,26 @@ Runtime ошибки содержат только безопасную маши
 provenance payload или credential. Deploy, live provider и общий baseline
 выполняются только root после отдельного допуска. Ручное исправление snapshot,
 chmod вместо read-only mount и unsafe fallback запрещены.
+
+## Ограниченная проверка записи
+
+Из интеграционного checkpoint controller `2f4619188` перенесены только
+принадлежащие runner изменения и согласованное правило shared workspace
+policy: `/workspace/context` read-only. CP consumer этого правила реализован
+в #1046 (`8125c13db`, включён в `98a71da1e`); прежние snapshots с четырьмя
+правилами несовместимы, поэтому требуется совместная поставка producer/runner.
+Код runtime-controller в runner PR не переносится.
+
+Readiness больше не выполняет файловые syscall из HTTP handler. Monitor
+запускает `runtime-workspace-canary` с бюджетом 2 секунды, затем 1 секунда
+отводится на cleanup после SIGTERM. Процесс ограниченно завершается и
+ожидается; credentials из environment не передаются. Проверка повторяется
+через 5 секунд, результат старше 10 секунд отвергается. Остановка monitor
+отменяет проверку, ожидает её завершения и очищает readiness snapshot.
+
+Canary проверяет create/read/atomic-replace/read/delete в writable дереве,
+исключает immutable context из writable quota, отвергает FIFO/hardlink и
+удаляет временные файлы при кооперативной отмене. Зависший файловый syscall
+не маскируется положительным health. Init и completion используют тот же
+ограниченный helper. Проверки non-root записи, cancellation/cleanup,
+timeout/kill/Wait и отсутствия I/O в readiness входят в runner race suite.
