@@ -4,7 +4,7 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-05
 ---
 
@@ -82,26 +82,44 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 
 ## Текущий состав интеграции
 
-На `b4ef7be2976e528855c2a3f94e7094d28a1d00af` включены следующие
+На `af1e9ece6d37f58f969699b4801248c369a0f094` включены следующие
 проверяемые зависимости. Это промежуточная интеграция полного scope,
 а не завершённый `main` или допуск стенда.
 
 | Unit | Включённый exact SHA | Граница checkpoint |
 | --- | --- | --- |
-| Control-plane #1046 | `a29f9c64000d6180b5e423036e6bd7acfe55d3e5` | D1/D2/D3/D4/D6/impact, policy 60 и исполняемая D5 owner delivery UI/Git до callback, всех реплик и атомарного READY. Остальные producer gaps открыты. |
-| Secret Broker #1068, PR #1069 | `8b958323e6e97213aa62d67fd420d477016c6cb6` | Encrypted staged lifecycle, durable keyring guard, fenced effects/recovery и bootstrap. |
+| Control-plane #1046 | `10caaa4ae6c74bc8cecb9877c5754d87a999608b` | Сохранены D1/D3/D4/D5/D6/impact; добавлены Gate query/total/states, policy 61 exact model task proof и actual managed package publication/connection/claim. SourceWork owner и account catalog/Session producer ещё завершаются. |
+| Secret Broker #1068, PR #1069 | `af227acc60d9ca1bd0207429c6d8088fb9496af7` | Encrypted staged lifecycle и protected account model observer, fresh remote provenance, bounded actual Codex process и отказ refresh под read authority. |
 | EMAIL #1037, PR #1062 | `f977638e10509d83ce1f27c8b386fa9bd7472842` | Managed exact pins и protected callback до публикации нового serving snapshot. |
 | Egress #1029, PR #1065 | `5d8b177054dcf094830e32dceb7f9290d633920b` | Общие mail policy/DNS, admission и отзыв сетевых pins выключенного mailbox без потери общих активных endpoints. |
-| HTTP/SDK #1045, PR #1066 | `185a3e9995b0c234503a0f13b32908ecfd5a00fb` | Полный typed D5/D6, STT admin catalog, exact issuer path и согласованные ограничения policy. |
-| PWA #1022, PR #1067 | `ee685f10a58ebdda59f63eb19f5fd24bc385143a` | D6 и полный D5 UI с девятью server nextActions, UI/YAML, bind/readback, copy/detach и credential recovery. |
+| HTTP/SDK #1045, PR #1066 | `358687bc7b55878225adeba897ada92b820c284e` | Сохранены D5/D6/STT; Home/Decisions query/states/total и server pagination. Четыре Git source HTTP/profile path и D2/TOML consumers ещё открыты. |
+| PWA #1022, PR #1067 | `7567608bbc1d07abc15c347387180255ed097470` | D5/D6/STT catalog, Gate lifetime/deep-link/i18n, Home/Decisions server filters/total/cursor. Unit/synthetic не заменяют runtime acceptance. |
 | STT #1020, PR #1070 | `6c23e653263643912e3e984802448b561a652615` | Administrative adapter catalog до configuration/credentials, policy 60, согласованные limits и актуальная STT model profile revision. |
+| Runtime-controller #1025, PR #1063 | `21425ddbbc2196849c5378f8227bd18e13f2f8fb` | Exact v7 mode/effort/context, Pod/callback, schema/admission/render contract revision 2. |
+| Agent-runner #1026, PR #1058 | `257c2f2c98e001d2422a3c8df20a95389a9b3850` | Server reasoning mode/effort во всех turns, UNSUPPORTED без параметра, сохранён bounded workspace/context lifecycle. |
+| Integration-gateway #1028, PR #1064 | `3d96a255b798ce62038893b7f01bac2eea1951e2` | Request-local managed package, GitHub/GitLab exact commit/regular blob reader и SourceWork consumer; полный SourceWork owner/profile и write-back ещё открыты. |
 
-Сохранены включённые ранее controller `9aaf738a3`, runner `731f2a7c3`,
-integration `7253f43b8`, interaction `1ab0d09f1`, authority `0765f3dad`
+Сохранены включённые ранее interaction `1ab0d09f1`, authority `0765f3dad`
 и исправление #1056. Исходные Proto/OpenAPI/policy объединены по семантике,
 generated Go/SDK/PWA validator получены повторной генерацией.
 
-На exact `b4ef7be2976e528855c2a3f94e7094d28a1d00af` локально **PASS**:
+На exact `af1e9ece6d37f58f969699b4801248c369a0f094` локально **PASS**:
+PWA production build с typecheck. На source checkpoint `968cc3301` OpenAPI
+Go/TS regeneration оставила чистое дерево; два следующих merge закрепили
+exact controller/runner ancestry без изменения tree. На `c90efe6ca` **PASS**:
+Proto lint/build/clean replay, policy/ABI, EMAIL staging/оба профиля/projection
+и web-only release. Позднее изменились PWA Home/Decisions; этот набор ещё не
+объявлен полным baseline итогового SHA. Логи:
+`integrated-v7-home-pwa-build.log`, `integrated-v7-home-openapi.log`,
+`c90ef-integrated-contracts.log` в приватном evidence-каталоге.
+
+При merge сохранены managed EMAIL callback, exact configuration/policy pins и
+проверки CONNECT до provider bytes; старая prerequisite history их не откатила.
+SourceWork owner пока отсутствует: наличие reader, Proto и диагностической
+метрики не выдаётся за положительный protected runtime path. Account catalog
+producer/fresh Session affinity и Git write-back остаются обязательной работой.
+
+На предыдущем exact `b4ef7be2976e528855c2a3f94e7094d28a1d00af` локально **PASS**:
 PWA `npm run build` с typecheck, Proto lint/build/clean replay,
 authority policy codegen, gateway AsyncAPI clean replay,
 internal RPC authority ABI render, web-only release и оба EMAIL projection
