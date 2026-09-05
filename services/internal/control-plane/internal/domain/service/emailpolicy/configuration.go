@@ -36,6 +36,9 @@ func DecodeConfiguration(raw []byte) (ConfigurationProjection, error) {
 	}
 	result := ConfigurationProjection{Revision: config.Revision, Digest: api.Digest(config), Mailboxes: []MailboxProjection{}}
 	for _, mailbox := range config.Mailboxes {
+		if !mailboxNetworkShape(mailbox) {
+			return ConfigurationProjection{}, errs.ErrInvalid
+		}
 		result.Mailboxes = append(result.Mailboxes, MailboxProjection{
 			Ref: mailbox.Id, OrganizationRef: mailbox.TenantId, ConnectionRef: mailbox.ConnectionId,
 			Revision: mailbox.Revision, CredentialGeneration: mailbox.CredentialGeneration,
