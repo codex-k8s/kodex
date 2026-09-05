@@ -361,10 +361,17 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 			return "", field.JSONName() == "safeEffectiveConfig"
 		case "controlplane.v1.ProviderAccount":
 			return "", field.JSONName() == "externalAccountMasked"
+		case "controlplane.v1.ModelCapability":
+			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.ProviderDefinition":
+			return "", field.JSONName() == "description" || field.JSONName() == "defaultModelId"
 		}
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
+	}
+	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "available" || field.JSONName() == "ready"
 	}
 	return nil, false
 }

@@ -1331,6 +1331,22 @@ export type TemplateVariablePage = {
     nextPageToken?: string;
 };
 
+export type ModelCapability = {
+    id: string;
+    providerDefinitionKey: string;
+    reasoningEfforts: Array<string>;
+    defaultReasoningEffort: string;
+    available: boolean;
+    eligibleProviderAccountRefs: Array<OpaqueRef>;
+    readinessBlockers: Array<string>;
+};
+
+export type ModelCapabilityPage = {
+    items: Array<ModelCapability>;
+    total: number;
+    nextPageToken: string;
+};
+
 export type ProviderDefinition = {
     key: 'openai-codex';
     name: string;
@@ -1338,6 +1354,7 @@ export type ProviderDefinition = {
     authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
     modelIds: Array<string>;
     defaultModelId: string;
+    models?: Array<ModelCapability>;
     available: boolean;
     ready: boolean;
     readinessBlockers: Array<string>;
@@ -4224,6 +4241,37 @@ export type ListProviderDefinitionsResponses = {
 };
 
 export type ListProviderDefinitionsResponse = ListProviderDefinitionsResponses[keyof ListProviderDefinitionsResponses];
+
+export type ListModelCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        providerDefinitionKey?: string;
+        providerAccountRef?: string;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/model-capabilities';
+};
+
+export type ListModelCapabilitiesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListModelCapabilitiesError = ListModelCapabilitiesErrors[keyof ListModelCapabilitiesErrors];
+
+export type ListModelCapabilitiesResponses = {
+    /**
+     * Авторитетный каталог моделей и reasoning capabilities доступных accounts
+     */
+    200: ModelCapabilityPage;
+};
+
+export type ListModelCapabilitiesResponse = ListModelCapabilitiesResponses[keyof ListModelCapabilitiesResponses];
 
 export type ListProviderAccountsData = {
     body?: never;

@@ -878,6 +878,25 @@ paths:
           description: Безопасный server-owned каталог providers и способов авторизации
           content: { application/json: { schema: { $ref: '#/components/schemas/ProviderDefinitionPage' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/model-capabilities:
+    get:
+      tags: [Agents]
+      operationId: listModelCapabilities
+      parameters:
+        - name: providerDefinitionKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z][a-z0-9_-]*$' }
+        - name: providerAccountRef
+          in: query
+          schema: { type: string, minLength: 8, maxLength: 96, pattern: '^pacc_[A-Za-z0-9_-]+$' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Авторитетный каталог моделей и reasoning capabilities доступных accounts
+          content: { application/json: { schema: { $ref: '#/components/schemas/ModelCapabilityPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/provider-accounts:
     get:
       tags: [Agents]
@@ -5539,6 +5558,26 @@ components:
       properties:
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/TemplateVariable' } }
         nextPageToken: { type: string, maxLength: 512 }
+    ModelCapability:
+      type: object
+      additionalProperties: false
+      required: [id, providerDefinitionKey, reasoningEfforts, defaultReasoningEffort, available, eligibleProviderAccountRefs, readinessBlockers]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 160 }
+        providerDefinitionKey: { type: string, minLength: 1, maxLength: 80 }
+        reasoningEfforts: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 80 } }
+        defaultReasoningEffort: { type: string, maxLength: 80 }
+        available: { type: boolean }
+        eligibleProviderAccountRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        readinessBlockers: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 80, pattern: '^[A-Z0-9_]+$' } }
+    ModelCapabilityPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ModelCapability' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
     ProviderDefinition:
       type: object
       additionalProperties: false
@@ -5550,6 +5589,7 @@ components:
         authorizationMethods: { type: array, uniqueItems: true, items: { type: string, enum: [DEVICE_CODE, API_KEY] } }
         modelIds: { type: array, uniqueItems: true, maxItems: 64, items: { type: string, maxLength: 160 } }
         defaultModelId: { type: string, maxLength: 160 }
+        models: { type: array, items: { $ref: '#/components/schemas/ModelCapability' } }
         available: { type: boolean }
         ready: { type: boolean }
         readinessBlockers: { type: array, maxItems: 16, items: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 } }

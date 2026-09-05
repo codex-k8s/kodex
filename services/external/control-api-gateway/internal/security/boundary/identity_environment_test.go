@@ -15,6 +15,10 @@ import (
 
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
+		{"GET", "/api/v1/model-capabilities"},
+		{"GET", "/api/v1/search"},
+		{"GET", "/api/v1/vfs/nodes"},
+		{"GET", "/api/v1/vfs/search"},
 		{"POST", "/api/v1/prompt-template-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},
 		{"POST", "/api/v1/prompt-template-configurations/mcfg_fixture01/revisions/mrev_fixture01/discard"},
 		{"POST", "/api/v1/role-image-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"},

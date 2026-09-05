@@ -49,6 +49,14 @@ func (server *Server) ListRuntimeSelections(w http.ResponseWriter, r *http.Reque
 	writeMessage(w, http.StatusOK, response, "", "runtimes")
 }
 func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p generated.SearchPlatformParams) {
+	r, ok := catalogRequest(w, r, p.ProjectRef, &p.Query, nil, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchQuery(p.Query) || p.Limit != nil && (*p.Limit < 1 || *p.Limit > 50) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	limit := int32(20)
 	if p.Limit != nil {
 		limit = int32(*p.Limit)
@@ -60,7 +68,7 @@ func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p g
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "results")
+	writeSearchPage(w, response, stringValue(p.ProjectRef), int(limit))
 }
 func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p generated.ListProjectsParams) {
 	response, err := server.control.Query.ListProjects(r.Context(), &controlplanev1.ListProjectsRequest{Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
