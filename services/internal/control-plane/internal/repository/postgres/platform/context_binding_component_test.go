@@ -35,8 +35,25 @@ func testContextBinding(t *testing.T, ctx context.Context, repository *Repositor
 		if len(bindings) != want || view.AgentVersion != version {
 			t.Fatalf("binding readback count/version: %d/%d expected %d/%d", len(bindings), view.AgentVersion, want, version)
 		}
+		folder := "skills"
+		if memory {
+			folder = "memories"
+		}
+		parent := "/projects/" + projectRef + "/entities/agents/" + agent.Ref
+		directories, total, _, err := service.ListVFSNodes(ctx, owner, query.Filter{ResourceRef: parent, Page: query.Page{Size: 1}})
+		if err != nil || total != int64(want) || len(directories) != want {
+			t.Fatalf("context VFS applicable directories: count=%d total=%d err=%v", len(directories), total, err)
+		}
+		nodes, total, _, err := service.ListVFSNodes(ctx, owner, query.Filter{ResourceRef: parent + "/" + folder, Page: query.Page{Size: 1}})
+		if err != nil || total != int64(want) || len(nodes) != want {
+			t.Fatalf("context VFS bindings: count=%d total=%d err=%v", len(nodes), total, err)
+		}
+		if want == 1 && (nodes[0].Ref != "context-binding:"+bindings[0].Ref || nodes[0].EntityRef != resourceRef || nodes[0].Digest != bindings[0].Digest) {
+			t.Fatal("VFS binding did not preserve exact revision digest")
+		}
 		return bindings
 	}
+	read(0, agent.Version)
 	bound, err := invoke(bindKind, "-bind", agent.Version, 0)
 	if err != nil || bound.ContextBinding == nil {
 		t.Fatalf("bind: %v", err)
@@ -70,6 +87,10 @@ func testContextBinding(t *testing.T, ctx context.Context, repository *Repositor
 		items, total, _, err = service.ListMemoryRecords(ctx, reader, query.Filter{ProjectRef: projectRef, ResourceRef: agent.Ref, Page: query.Page{Size: 1}})
 		if err != nil || total != 0 || len(items) != 0 {
 			t.Fatalf("hidden agent binding disclosed: count=%d total=%d err=%v", len(items), total, err)
+		}
+		nodes, total, _, err := service.SearchVFS(ctx, reader, query.Filter{Query: agent.Ref, Page: query.Page{Size: 1}})
+		if err != nil || total != 0 || len(nodes) != 0 {
+			t.Fatalf("hidden agent VFS subtree disclosed: count=%d total=%d err=%v", len(nodes), total, err)
 		}
 	}
 }
