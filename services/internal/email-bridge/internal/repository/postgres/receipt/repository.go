@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,13 +32,20 @@ type Repository struct{ Pool *pgxpool.Pool }
 
 var _ port.Repository = (*Repository)(nil)
 
-func (r *Repository) Reserve(ctx context.Context, s port.Scope, key, digest, id string) (port.Record, bool, error) {
+func (r *Repository) Reserve(ctx context.Context, s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	var result port.Record
-	e := r.Pool.QueryRow(ctx, reserveSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "key": key, "digest": digest, "id": id}).Scan(&result.ID, &result.Key, &result.Digest, &result.Status)
+	if !audit.Valid() {
+		return result, false, errs.Invalid
+	}
+	e := r.Pool.QueryRow(ctx, reserveSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "key": key, "digest": digest, "id": id, "resource": resource, "actor": audit.Actor, "agent": audit.Agent, "grant": audit.Grant, "operation": audit.Operation, "configuration": audit.ConfigurationRevision, "generation": audit.CredentialGeneration, "gate": audit.GateApproved}).Scan(&result.ID, &result.Key, &result.Digest, &result.Status, &result.Resource, &result.UID, &result.UIDValidity, &result.Folder, &result.ContentDigest, &result.Audit.Actor, &result.Audit.Agent, &result.Audit.Grant, &result.Audit.Operation, &result.Audit.ConfigurationRevision, &result.Audit.CredentialGeneration, &result.Audit.GateApproved)
 	if e == nil {
 		return result, true, nil
 	}
 	if !errors.Is(e, pgx.ErrNoRows) {
+		var pgerr *pgconn.PgError
+		if errors.As(e, &pgerr) && pgerr.Code == "23505" {
+			return result, false, errs.Conflict
+		}
 		return result, false, errs.Unavailable
 	}
 	result, e = r.Get(ctx, s, "", key)
@@ -51,7 +59,7 @@ func (r *Repository) Reserve(ctx context.Context, s port.Scope, key, digest, id 
 }
 func (r *Repository) Get(ctx context.Context, s port.Scope, id, key string) (port.Record, error) {
 	var result port.Record
-	e := r.Pool.QueryRow(ctx, getSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "id": id, "key": key}).Scan(&result.ID, &result.Key, &result.Digest, &result.Status)
+	e := r.Pool.QueryRow(ctx, getSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "id": id, "key": key}).Scan(&result.ID, &result.Key, &result.Digest, &result.Status, &result.Resource, &result.UID, &result.UIDValidity, &result.Folder, &result.ContentDigest, &result.Audit.Actor, &result.Audit.Agent, &result.Audit.Grant, &result.Audit.Operation, &result.Audit.ConfigurationRevision, &result.Audit.CredentialGeneration, &result.Audit.GateApproved)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return result, errs.NotFound
 	}
@@ -61,10 +69,10 @@ func (r *Repository) Get(ctx context.Context, s port.Scope, id, key string) (por
 	return result, nil
 }
 func (r *Repository) Complete(ctx context.Context, s port.Scope, record port.Record, status string) error {
-	if status != "accepted" && status != "deleted" && status != "failed" {
+	if status != "unknown" && status != "accepted" && status != "deleted" && status != "failed" {
 		return errs.Invalid
 	}
-	tag, e := r.Pool.Exec(ctx, completeSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "id": record.ID, "digest": record.Digest, "status": status})
+	tag, e := r.Pool.Exec(ctx, completeSQL, pgx.StrictNamedArgs{"tenant": s.Tenant, "mailbox": s.Mailbox, "id": record.ID, "digest": record.Digest, "status": status, "uid": record.UID, "validity": record.UIDValidity, "folder": record.Folder, "content": record.ContentDigest})
 	if e != nil || tag.RowsAffected() != 1 {
 		return errs.Unavailable
 	}

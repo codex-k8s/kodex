@@ -198,31 +198,32 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	}
 }
 
-func TestEmailRetriesHealthAndUsesProviderNativeIdempotency(t *testing.T) {
+func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "email-token")
 	requests := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
-		if request.URL.Host != "email.example.test" || request.Header.Get("Authorization") != "Bearer email-token" {
+		if request.URL.String() != emailOrigin+"/v1/mailbox-operations" || request.Header.Get("Authorization") != "Bearer email-token" || request.Method != http.MethodPost {
 			t.Fatalf("unexpected provider request: %s %q", request.URL, request.Header.Get("Authorization"))
 		}
 		status, body := http.StatusOK, `{"status":"ready"}`
-		if request.Method == http.MethodGet && requests == 1 {
-			status, body = http.StatusServiceUnavailable, `{"error":"temporarily unavailable"}`
+		var command map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&command); err != nil || command["mailbox_id"] != "mailbox" {
+			t.Fatalf("invalid mailbox command: %v", err)
 		}
-		if request.Method == http.MethodPost {
-			if request.Header.Get("Idempotency-Key") == "" {
+		if command["operation"] == "send" {
+			if command["effect_key"] == nil || command["effect_key"] == "" {
 				t.Fatal("email send does not carry the effect key")
 			}
-			body = `{"message_id":"msg-1","status":"accepted","provider_debug":"must-not-leak"}`
+			body = `{"message_id":"msg-1","status":"accepted"}`
 		}
 		return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
 	})}
 
 	health := invocationRequest(t, adapter.definitions["email"], "email.delivery.health.read", map[string]any{}, credential)
-	if result, err := adapter.Execute(t.Context(), health); err != nil || result.Summary != `{"status":"ready"}` || requests != 2 {
+	if result, err := adapter.Execute(t.Context(), health); err != nil || result.Summary != `{"result_json":"{\"status\":\"ready\"}","status":"ready"}` || requests != 1 {
 		t.Fatalf("email health = %#v, %v, requests=%d", result, err, requests)
 	}
 	send := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{
@@ -234,6 +235,27 @@ func TestEmailRetriesHealthAndUsesProviderNativeIdempotency(t *testing.T) {
 	}
 	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("email send policy = %s/%s", send.Risk, send.ApprovalPolicy)
+	}
+}
+
+func TestEmailReceiptReadByEffectKey(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "email-token")
+	calls := 0
+	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		var command map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&command); err != nil || command["operation"] != "receipt" || command["effect_key"] != "original-effect" || command["mailbox_id"] != "mailbox" {
+			t.Fatal("receipt command binding mismatch")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"message_id":"msg-unknown","status":"unknown"}`))}, nil
+	})}
+	invocation := invocationRequest(t, adapter.definitions["email"], "email.message.status.read", map[string]any{"effect_key": "original-effect"}, credential)
+	result, err := adapter.Execute(t.Context(), invocation)
+	var summary map[string]any
+	if err != nil || json.Unmarshal([]byte(result.Summary), &summary) != nil || summary["message_id"] != "msg-unknown" || summary["status"] != "unknown" || summary["result_json"] != `{"message_id":"msg-unknown","status":"unknown"}` || calls != 1 {
+		t.Fatalf("receipt read failed: %v", err)
 	}
 }
 
@@ -293,7 +315,7 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	case "confluence":
 		configuration = map[string]string{"base_url": "https://confluence.example.test", "auth_scheme": "BEARER", "space_id": "42"}
 	case "email":
-		configuration = map[string]string{"base_url": "https://email.example.test", "from_address": "sender@example.test"}
+		configuration = map[string]string{"base_url": emailOrigin, "from_address": "sender@example.test", "mailbox_id": "mailbox"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {

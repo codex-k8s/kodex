@@ -54,7 +54,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if legacy {
 		if cmd.Operation == api.OperationHealth {
-			_ = json.NewEncoder(w).Encode(api.Health{Status: api.Ready})
+			_ = json.NewEncoder(w).Encode(api.Health{Status: api.HealthStatus(result.Status)})
 			return
 		}
 		if cmd.Operation == api.OperationSend {

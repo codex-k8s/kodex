@@ -46,7 +46,7 @@
           {
             "namespaceSelector": {
               "matchLabels": {
-                "kubernetes.io/metadata.name": "monitoring"
+                "kubernetes.io/metadata.name": "observability"
               }
             },
             "podSelector": {
@@ -105,7 +105,7 @@
         "ports": [
           {
             "protocol": "TCP",
-            "port": 8444
+            "port": 8443
           }
         ]
       },
@@ -136,12 +136,12 @@
           {
             "namespaceSelector": {
               "matchLabels": {
-                "kubernetes.io/metadata.name": "kodex-system"
+                "kubernetes.io/metadata.name": "observability"
               }
             },
             "podSelector": {
               "matchLabels": {
-                "app.kubernetes.io/name": "otel-collector"
+                "app.kubernetes.io/name": "opentelemetry-collector"
               }
             }
           }

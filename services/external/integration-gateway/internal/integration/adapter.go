@@ -33,8 +33,9 @@ const (
 )
 
 type Config struct {
-	CredentialDirectory, ProxyURL, SyntheticBaseURL string
-	Timeout                                         time.Duration
+	CredentialDirectory, ProxyURL, SyntheticBaseURL        string
+	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile string
+	Timeout                                                time.Duration
 }
 
 type CredentialRevision struct {
@@ -79,6 +80,7 @@ type Adapter struct {
 	githubHTTPClient   *http.Client
 	githubBaseURL      *url.URL
 	providerHTTPClient *http.Client
+	emailHTTPClient    *http.Client
 	syntheticClient    *http.Client
 	syntheticBaseURL   *url.URL
 	timeout            time.Duration
@@ -114,8 +116,13 @@ func New(config Config) (*Adapter, error) {
 	}
 	providerTransport := githubTransport.Clone()
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+	emailClient, err := newEmailClient(config)
+	if err != nil {
+		return nil, err
+	}
 	return &Adapter{
-		credentials: credentials, definitions: definitions,
+		emailHTTPClient: emailClient,
+		credentials:     credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{

@@ -1,6 +1,32 @@
 package emailbridgeapi
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
+
+func TestConfigurationExample(t *testing.T) {
+	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var configuration Configuration
+	if err = Decode(raw, &configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err = ValidateConfiguration(configuration); err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.Mailboxes) != 1 || len(configuration.Mailboxes[0].Policies) != len(Operations()) || configuration.Mailboxes[0].Imap == nil {
+		t.Fatal("incomplete mailbox example")
+	}
+	configuration.Mailboxes[0].Smtp.Secret.Generation = 2
+	configuration.Mailboxes[0].Imap.Secret.Generation = 3
+	configuration.Mailboxes[0].Imap.Ca.Generation = 4
+	if err = ValidateConfiguration(configuration); err != nil {
+		t.Fatal("independent descriptor rotation rejected")
+	}
+}
 
 func TestConfigurationSchema(t *testing.T) {
 	for _, raw := range []string{`{"version":"email-bridge/v1","revision":1,"managed_by":"git","source":"fixture","mailboxes":[]}`, "version: email-bridge/v1\nrevision: 1\nmanaged_by: ui\nsource: fixture\nmailboxes: []\n"} {

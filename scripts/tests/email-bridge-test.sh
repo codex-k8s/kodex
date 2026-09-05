@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+if (( $# > 1 )); then
+  printf 'Usage: %s [test-regexp]\n' "$0" >&2
+  exit 2
+fi
+test_filter=${1:-.}
+cd -- "$root/services/internal/email-bridge"
+selected=$(env -u GOFLAGS GOENV=off GOWORK=off go test -list "$test_filter" ./internal/component)
+if ! printf '%s\n' "$selected" | rg -q '^Test'; then
+  printf 'No email bridge component tests selected\n' >&2
+  exit 2
+fi
 name="kodex-email-bridge-test-${BASHPID}"
 temporary=$(mktemp -d)
 cleanup() {
@@ -24,11 +35,10 @@ psql "postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable" -v ON_ER
   -c 'CREATE DATABASE email_bridge OWNER email_bridge_migrator;' >/dev/null
 printf 'postgresql://email_bridge_migrator@127.0.0.1:%s/email_bridge?sslmode=disable' "$port" > "$temporary/migration-dsn"
 chmod 0400 "$temporary/migration-dsn"
-cd -- "$root/services/internal/email-bridge"
 export EMAIL_BRIDGE_MIGRATION_DSN_FILE="$temporary/migration-dsn"
 env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli up
 env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli status
 env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli up
 EMAIL_BRIDGE_TEST_DSN="postgresql://email_bridge_runtime@127.0.0.1:${port}/email_bridge?sslmode=disable" \
-  env -u GOFLAGS GOENV=off GOWORK=off go test -race -count=1 -timeout=90s -v ./internal/component
+  env -u GOFLAGS GOENV=off GOWORK=off go test -race -count=1 -timeout=90s -v ./internal/component -run "$test_filter"
 printf 'Email bridge PostgreSQL and protocol component tests passed\n'

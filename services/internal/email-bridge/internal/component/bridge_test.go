@@ -38,15 +38,21 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 	repository "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/repository/postgres/receipt"
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
+	"github.com/emersion/go-sasl"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type providerFixture struct {
+	oauthAuth                atomic.Int32
 	mu                       sync.Mutex
 	raw                      string
+	uidlLines, listLines     string
+	retrievals               atomic.Int32
 	sent                     [][]byte
 	deletes                  int
 	dropSMTP, dropPOP, stall bool
+	rejectUpgrade            atomic.Bool
+	insecureAuth             atomic.Int32
 	cert                     tls.Certificate
 	ca                       []byte
 	smtp, pop                string
@@ -133,12 +139,44 @@ func (f *providerFixture) serveSMTP(c net.Conn) {
 		}
 		switch strings.ToUpper(strings.Fields(line)[0]) {
 		case "EHLO":
-			_ = tp.PrintfLine("250-fixture\r\n250-STARTTLS\r\n250 AUTH PLAIN")
+			_ = tp.PrintfLine("250-fixture\r\n250-STARTTLS\r\n250 AUTH PLAIN OAUTHBEARER")
 		case "STARTTLS":
+			if f.rejectUpgrade.Load() {
+				_ = tp.PrintfLine("454 TLS unavailable")
+				continue
+			}
 			_ = tp.PrintfLine("220 Ready")
 			c = tls.Server(c, &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12})
 			tp = textproto.NewConn(c)
 		case "AUTH":
+			fields := strings.Fields(line)
+			if len(fields) > 1 && fields[1] == "OAUTHBEARER" {
+				if len(fields) != 3 {
+					_ = tp.PrintfLine("535 Authentication failed")
+					continue
+				}
+				raw, err := base64.StdEncoding.DecodeString(fields[2])
+				if err != nil {
+					_ = tp.PrintfLine("535 Authentication failed")
+					continue
+				}
+				valid := false
+				auth := sasl.NewOAuthBearerServer(func(o sasl.OAuthBearerOptions) *sasl.OAuthBearerError {
+					valid = o.Username == "fixture-value" && o.Token == "fixture-value"
+					if !valid {
+						return &sasl.OAuthBearerError{Status: "invalid_token"}
+					}
+					return nil
+				})
+				if _, done, err := auth.Next(raw); err != nil || !done || !valid {
+					_ = tp.PrintfLine("535 Authentication failed")
+					continue
+				}
+				f.oauthAuth.Add(1)
+			}
+			if _, secured := c.(*tls.Conn); !secured {
+				f.insecureAuth.Add(1)
+			}
 			_ = tp.PrintfLine("235 Authenticated")
 		case "MAIL", "RCPT", "RSET", "NOOP":
 			_ = tp.PrintfLine("250 OK")
@@ -183,34 +221,51 @@ func (f *providerFixture) servePOP(c net.Conn) {
 		}
 		f.mu.Lock()
 		gone := f.deletes > 0
+		raw, uidlLines, listLines := f.raw, f.uidlLines, f.listLines
 		f.mu.Unlock()
 		switch parts[0] {
 		case "STLS":
+			if f.rejectUpgrade.Load() {
+				_ = tp.PrintfLine("-ERR TLS unavailable")
+				continue
+			}
 			_ = tp.PrintfLine("+OK TLS")
 			c = tls.Server(c, &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12})
 			tp = textproto.NewConn(c)
 		case "USER", "PASS", "NOOP":
+			if parts[0] != "NOOP" {
+				if _, secured := c.(*tls.Conn); !secured {
+					f.insecureAuth.Add(1)
+				}
+			}
 			_ = tp.PrintfLine("+OK")
 		case "UIDL":
 			_ = tp.PrintfLine("+OK")
 			w := tp.DotWriter()
-			if !gone {
+			if uidlLines != "" {
+				fmt.Fprint(w, uidlLines)
+			} else if !gone {
 				fmt.Fprintln(w, "1 uid-one\r\n2 uid-two")
 			}
 			w.Close()
 		case "LIST":
 			_ = tp.PrintfLine("+OK")
 			w := tp.DotWriter()
-			if !gone {
-				fmt.Fprintf(w, "1 %d\r\n2 %d\r\n", len(f.raw), len(f.raw))
+			if listLines != "" {
+				fmt.Fprint(w, listLines)
+			} else if !gone {
+				fmt.Fprintf(w, "1 %d\r\n2 %d\r\n", len(raw), len(raw))
 			}
 			w.Close()
 		case "TOP", "RETR":
+			if parts[0] == "RETR" {
+				f.retrievals.Add(1)
+			}
 			_ = tp.PrintfLine("+OK")
 			w := tp.DotWriter()
-			value := f.raw
+			value := raw
 			if parts[0] == "TOP" {
-				value = strings.Split(f.raw, "\r\n\r\n")[0] + "\r\n\r\n"
+				value = strings.Split(raw, "\r\n\r\n")[0] + "\r\n\r\n"
 			}
 			io.WriteString(w, value)
 			w.Close()
@@ -239,7 +294,7 @@ type dialFixture struct{ smtp, pop string }
 
 func (d dialFixture) Dial(ctx context.Context, target string) (net.Conn, error) {
 	address := d.pop
-	if strings.HasSuffix(target, ":465") {
+	if strings.HasSuffix(target, ":465") || strings.HasSuffix(target, ":587") {
 		address = d.smtp
 	}
 	return (&net.Dialer{}).DialContext(ctx, "tcp", address)
@@ -271,7 +326,7 @@ func (a *authorityFixture) Resolve(_ context.Context, r api.AuthorizationRequest
 	if a.revoked {
 		return api.AuthorizationDecision{}, errs.Denied
 	}
-	scope := api.Scope{MailboxId: r.MailboxId, Sender: r.Sender, Operations: []api.Operation{r.Operation}, Recipients: []string{"recipient@example.test", "copy@example.test"}}
+	scope := api.Scope{Folders: []string{"INBOX"}, MailboxId: r.MailboxId, Sender: r.Sender, Operations: []api.Operation{r.Operation}, Recipients: []string{"recipient@example.test", "copy@example.test"}}
 	d := api.AuthorizationDecision{Allowed: true, ActorId: "actor", AgentId: "agent", TenantId: "tenant", ConnectionId: "connection", MailboxId: r.MailboxId, Operation: r.Operation, InputSha256: r.InputSha256, EffectKey: r.EffectKey, ConfigurationRevision: r.ConfigurationRevision, CredentialGeneration: 1, GrantId: "grant", ExpiresAt: time.Now().Add(time.Minute).Unix(), Policy: api.Allow, GateApproved: true, UserScope: scope, AgentScope: scope, ConnectionScope: scope, ResourceScope: scope}
 	if a.mutate != nil {
 		a.mutate(&d)
@@ -284,7 +339,7 @@ type memory struct {
 	rows map[string]port.Record
 }
 
-func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id string) (port.Record, bool, error) {
+func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := s.Tenant + "/" + s.Mailbox + "/" + key
@@ -294,7 +349,12 @@ func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id string
 		}
 		return r, false, nil
 	}
-	r := port.Record{ID: id, Key: key, Digest: digest, Status: "unknown"}
+	for rowKey, previous := range m.rows {
+		if resource != "" && previous.Resource == resource && previous.Status == "unknown" && strings.HasPrefix(rowKey, s.Tenant+"/"+s.Mailbox+"/") {
+			return port.Record{}, false, errs.Conflict
+		}
+	}
+	r := port.Record{ID: id, Key: key, Digest: digest, Status: "unknown", Resource: resource, Audit: audit}
 	m.rows[k] = r
 	return r, true, nil
 }
@@ -319,10 +379,14 @@ func (m *memory) Configuration(context.Context, api.Configuration, string) error
 func (m *memory) Ready(context.Context) error                                    { return nil }
 func configuration(mode string) api.Configuration {
 	d := func(name string) api.Descriptor { return api.Descriptor{Name: name, Generation: 1} }
-	endpoint := api.Endpoint{Host: "mail.example.test", ServerName: "mail.example.test", Port: 465, TlsMode: api.EndpointTlsMode(mode), Ca: d("ca"), Username: d("user"), Password: d("password")}
-	box := api.Mailbox{Id: "mailbox", TenantId: "tenant", ConnectionId: "connection", Revision: 1, Enabled: true, Folder: "INBOX", Sender: "sender@example.test", EnvelopeFrom: "sender@example.test", HelloName: "bridge.example.test", Recipients: []string{"recipient@example.test", "copy@example.test"}, Smtp: endpoint, Pop: endpoint, Limits: api.Limits{TimeoutSeconds: 2, MessageBytes: 65536, AttachmentBytes: 32768, MaxAttachments: 5, MaxRecipients: 10, PageSize: 1, ScanMessages: 100}}
+	endpoint := api.Endpoint{Host: "mail.example.test", ServerName: "mail.example.test", Port: 465, TlsMode: api.EndpointTlsMode(mode), Ca: d("ca"), Username: d("user"), AuthMethod: "password", Secret: d("password")}
+	box := api.Mailbox{Id: "mailbox", TenantId: "tenant", ConnectionId: "connection", Revision: 1, CredentialGeneration: 1, Enabled: true, ReceiveProtocol: "pop3", AllowedFolders: []string{"INBOX"}, ReplyTo: "sender@example.test", Folder: "INBOX", Sender: "sender@example.test", EnvelopeFrom: "sender@example.test", HelloName: "bridge.example.test", Recipients: []string{"recipient@example.test", "copy@example.test"}, Smtp: endpoint, Pop: &endpoint, Limits: api.Limits{TimeoutSeconds: 2, MessageBytes: 65536, AttachmentBytes: 32768, MaxAttachments: 5, MaxRecipients: 10, PageSize: 1, ScanMessages: 100}}
 	box.Pop.Port = 995
-	for _, op := range []api.Operation{api.OperationHealth, api.OperationMailboxes, api.OperationList, api.OperationSearch, api.OperationFetch, api.OperationDownload, api.OperationMark, api.OperationDelete, api.OperationSend, api.OperationReply, api.OperationReplyAll, api.OperationForward, api.OperationReceipt} {
+	if mode == "starttls" {
+		box.Smtp.Port = 587
+		box.Pop.Port = 110
+	}
+	for _, op := range api.Operations() {
 		box.Policies = append(box.Policies, api.OperationPolicy{Operation: op, Policy: api.Allow})
 	}
 	return api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "fixture", Mailboxes: []api.Mailbox{box}}
@@ -334,7 +398,7 @@ func service(t *testing.T, f *providerFixture, mode string, store port.Repositor
 	if store == nil {
 		store = &memory{rows: map[string]port.Record{}}
 	}
-	s := &mail.Service{Config: configuration(mode), Authority: auth, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
+	s := &mail.Service{CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
 	return s, sec, auth
 }
 func send(op api.Operation, key string) api.Command {
@@ -608,6 +672,32 @@ func TestPostgresEffects(t *testing.T) {
 	if _, e = store.Get(t.Context(), port.Scope{Tenant: "foreign", Mailbox: "mailbox"}, r.MessageId, ""); !errors.Is(e, errs.NotFound) {
 		t.Fatal("cross tenant receipt")
 	}
+	scope := port.Scope{Tenant: "tenant", Mailbox: "mailbox"}
+	audit := port.Audit{Actor: "actor", Agent: "agent", Grant: "grant", Operation: api.OperationDraftUpdate, ConfigurationRevision: 1, CredentialGeneration: 1, GateApproved: true}
+	reserved, created, e := store.Reserve(t.Context(), scope, "imap-receipt", strings.Repeat("a", 64), "imap-receipt-id", strings.Repeat("b", 64), audit)
+	if e != nil || !created {
+		t.Fatal("IMAP resource reservation")
+	}
+	if _, _, e = store.Reserve(t.Context(), scope, "imap-other", strings.Repeat("c", 64), "imap-other-id", strings.Repeat("b", 64), audit); !errors.Is(e, errs.Conflict) {
+		t.Fatal("unknown source admitted another effect")
+	}
+	reserved.UID = "7"
+	reserved.UIDValidity = 4294967295
+	reserved.Folder = "Drafts"
+	reserved.ContentDigest = strings.Repeat("d", 64)
+	if e = store.Complete(t.Context(), scope, reserved, "unknown"); e != nil {
+		t.Fatal("partial metadata persistence")
+	}
+	persisted, e := (&repository.Repository{Pool: pool}).Get(t.Context(), scope, reserved.ID, "")
+	if e != nil || persisted.UID != reserved.UID || persisted.UIDValidity != reserved.UIDValidity || persisted.Folder != reserved.Folder || persisted.ContentDigest != reserved.ContentDigest || persisted.Status != "unknown" || persisted.Audit != audit {
+		t.Fatal("durable IMAP partial metadata")
+	}
+	if e = store.Complete(t.Context(), scope, persisted, "accepted"); e != nil {
+		t.Fatal("terminal metadata persistence")
+	}
+	if _, created, e = store.Reserve(t.Context(), scope, "imap-other", strings.Repeat("c", 64), "imap-other-id", strings.Repeat("b", 64), audit); e != nil || !created {
+		t.Fatal("known outcome did not release resource")
+	}
 	c := s.Config
 	c.Revision = 2
 	if e = store.Configuration(t.Context(), c, api.Digest(c)); e != nil {
@@ -681,7 +771,7 @@ func TestOwnerHTTPSClient(t *testing.T) {
 	if os.WriteFile(file, []byte("fixture-service"), 0400) != nil {
 		t.Fatal("write fixture")
 	}
-	s := &mail.Service{Config: configuration("implicit"), Authority: &authorityclient.Client{API: client, BearerFile: file}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: &memory{rows: map[string]port.Record{}}}
+	s := &mail.Service{CompletionBase: t.Context(), Config: configuration("implicit"), Authority: &authorityclient.Client{API: client, BearerFile: file}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: &memory{rows: map[string]port.Record{}}}
 	if execute(t, s, send(api.OperationSend, "owner-http")).Status != "accepted" {
 		t.Fatal("owner-authorized send")
 	}
@@ -719,9 +809,9 @@ func TestCONNECTTransport(t *testing.T) {
 					return
 				}
 				address := f.pop
-				if request.Host == "mail.example.test:465" {
+				if request.Host == "mail.example.test:587" {
 					address = f.smtp
-				} else if request.Host != "mail.example.test:995" {
+				} else if request.Host != "mail.example.test:110" {
 					io.WriteString(connection, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
 					return
 				}

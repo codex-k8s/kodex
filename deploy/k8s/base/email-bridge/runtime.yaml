@@ -20,8 +20,8 @@
     "EMAIL_BRIDGE_AUTHORITY_URL": "https://control-plane.kodex-system.svc.cluster.local:8444",
     "EMAIL_BRIDGE_EGRESS_ADDRESS": "egress-gateway.kodex-system.svc:8080",
     "DEPLOYMENT_ENVIRONMENT": "staging",
-    "OTEL_EXPORTER_OTLP_ENDPOINT": "otel-collector.kodex-system.svc:4317",
-    "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME": "otel-collector.kodex-system.svc.cluster.local",
-    "OTEL_EXPORTER_OTLP_CA_FILE": "/var/run/email/tls/ca.crt"
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "otel-collector.observability.svc:4317",
+    "OTEL_EXPORTER_OTLP_TLS_SERVER_NAME": "otel-collector.observability.svc.cluster.local",
+    "OTEL_EXPORTER_OTLP_CA_FILE": "/var/run/email/observability/otel-ca.pem"
   }
 }

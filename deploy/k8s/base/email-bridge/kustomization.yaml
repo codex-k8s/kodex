@@ -12,6 +12,11 @@
     "pdb.yaml",
     "monitor.yaml",
     "alerts.yaml",
-    "networkpolicy.yaml"
-  ]
+    "dashboard.yaml",
+    "networkpolicy.yaml",
+    "consumer-networkpolicy.yaml",
+    "issuer-networkpolicy.yaml",
+    "authority-networkpolicy.yaml"
+  ],
+  "components": ["../../components/internal-rpc-authority-email-bridge-issuer"]
 }

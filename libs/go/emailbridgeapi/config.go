@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/mail"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -39,6 +40,14 @@ func validateDocument(data any, target any) error {
 		name = "AuthorizationDecision"
 	case *AuthorizationRequest:
 		name = "AuthorizationRequest"
+	case *IntegrationInput:
+		name = "IntegrationInput"
+	case *Attachments:
+		name = "Attachments"
+	case *Recipients:
+		name = "Recipients"
+	case *Result:
+		name = "Result"
 	default:
 		return errors.New("unregistered document model")
 	}
@@ -52,7 +61,7 @@ func validateDocument(data any, target any) error {
 			return
 		}
 		schemas = map[string]*jsonschema.Schema{}
-		for _, n := range []string{"Configuration", "Command", "MessageInput", "AuthorizationDecision", "AuthorizationRequest"} {
+		for _, n := range []string{"Configuration", "Command", "MessageInput", "AuthorizationDecision", "AuthorizationRequest", "IntegrationInput", "Attachments", "Recipients", "Result"} {
 			schemas[n], schemasError = compiler.Compile("https://kodex.invalid/email.schema.json#/$defs/" + n)
 			if schemasError != nil {
 				return
@@ -151,6 +160,14 @@ func Host(value string) bool {
 }
 func DescriptorValid(d Descriptor) bool { return namePattern.MatchString(d.Name) && d.Generation > 0 }
 
+func Folder(value string) bool {
+	return value != "" && len(value) <= 255 && !strings.ContainsAny(value, "*%\r\n\x00")
+}
+
+func Operations() []Operation {
+	return []Operation{OperationHealth, OperationMailboxes, OperationList, OperationSearch, OperationFetch, OperationDownload, OperationMark, OperationDelete, OperationSend, OperationReply, OperationReplyAll, OperationForward, OperationReceipt, OperationThread, OperationAttachments, OperationMarkRead, OperationMarkUnread, OperationMove, OperationArchive, OperationDraftCreate, OperationDraftUpdate, OperationDraftDelete}
+}
+
 func ValidateConfiguration(c Configuration) error {
 	bad := errors.New("invalid email configuration")
 	if c.Version != "email-bridge/v1" || c.Revision < 1 || (c.ManagedBy != "ui" && c.ManagedBy != "git") || c.Source == "" || len(c.Source) > 512 || len(c.Mailboxes) > 100 {
@@ -158,7 +175,25 @@ func ValidateConfiguration(c Configuration) error {
 	}
 	seen := map[string]bool{}
 	for _, m := range c.Mailboxes {
-		if !namePattern.MatchString(m.Id) || seen[m.Id] || m.TenantId == "" || m.ConnectionId == "" || m.Revision < 1 || m.Folder != "INBOX" || !Address(m.Sender) || m.EnvelopeFrom != m.Sender || !Host(m.HelloName) {
+		if !namePattern.MatchString(m.Id) || seen[m.Id] || m.TenantId == "" || m.ConnectionId == "" || m.Revision < 1 || m.CredentialGeneration < 1 || !Folder(m.Folder) || !Address(m.Sender) || !Address(m.ReplyTo) || m.EnvelopeFrom != m.Sender || !Host(m.HelloName) {
+			return bad
+		}
+		if len(m.AllowedFolders) == 0 || len(m.AllowedFolders) > 100 || !slices.Contains(m.AllowedFolders, m.Folder) {
+			return bad
+		}
+		folders := map[string]bool{}
+		for _, folder := range m.AllowedFolders {
+			if !Folder(folder) || folders[folder] {
+				return bad
+			}
+			folders[folder] = true
+		}
+		for _, folder := range []string{m.ArchiveFolder, m.DraftsFolder} {
+			if folder != "" && !folders[folder] {
+				return bad
+			}
+		}
+		if (m.ReceiveProtocol != "imap" && m.ReceiveProtocol != "pop3") || (m.ReceiveProtocol == "imap" && m.Imap == nil) || (m.ReceiveProtocol == "pop3" && (m.Pop == nil || m.Folder != "INBOX" || len(m.AllowedFolders) != 1)) {
 			return bad
 		}
 		seen[m.Id] = true
@@ -170,12 +205,16 @@ func ValidateConfiguration(c Configuration) error {
 				return bad
 			}
 		}
-		for _, e := range []Endpoint{m.Pop, m.Smtp} {
-			if !Host(e.Host) || e.ServerName != e.Host || e.Port < 1 || e.Port > 65535 || (e.TlsMode != "implicit" && e.TlsMode != "starttls") || !DescriptorValid(e.Ca) || !DescriptorValid(e.Username) || !DescriptorValid(e.Password) || e.Username.Generation != e.Password.Generation {
+		endpoints := []*Endpoint{&m.Smtp, m.Pop, m.Imap}
+		for _, e := range endpoints {
+			if e == nil {
+				continue
+			}
+			if !Host(e.Host) || e.ServerName != e.Host || e.Port < 1 || e.Port > 65535 || (e.TlsMode != "implicit" && e.TlsMode != "starttls") || (e.AuthMethod != "password" && e.AuthMethod != "oauthbearer") || !DescriptorValid(e.Ca) || !DescriptorValid(e.Username) || !DescriptorValid(e.Secret) {
 				return bad
 			}
 		}
-		if m.Pop.Password.Generation != m.Smtp.Password.Generation {
+		if m.Pop != nil && m.Pop.AuthMethod != "password" {
 			return bad
 		}
 		l := m.Limits
@@ -188,8 +227,13 @@ func ValidateConfiguration(c Configuration) error {
 				return bad
 			}
 			ops[p.Operation] = true
+			for _, folder := range p.Folders {
+				if !folders[folder] {
+					return bad
+				}
+			}
 		}
-		if len(ops) != 13 {
+		if len(ops) != len(Operations()) {
 			return bad
 		}
 	}

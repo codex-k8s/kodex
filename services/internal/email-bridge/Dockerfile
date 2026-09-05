@@ -11,6 +11,7 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY services/internal/email-bridge/ services/internal/email-bridge/
 WORKDIR /workspace/services/internal/email-bridge
+RUN test "$(go env GOVERSION)" = "go1.26.6"
 RUN go mod download
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" -o /out/email-bridge ./cmd/email-bridge

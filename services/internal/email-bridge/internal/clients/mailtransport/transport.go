@@ -49,6 +49,8 @@ func (t Tunnel) Dial(ctx context.Context, target string) (net.Conn, error) {
 	if e != nil {
 		return nil, errs.Unavailable
 	}
+	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stop()
 	deadline := time.Now().Add(10 * time.Second)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d
@@ -60,7 +62,7 @@ func (t Tunnel) Dial(ctx context.Context, target string) (net.Conn, error) {
 	}
 	reader := bufio.NewReader(io.LimitReader(c, 16384))
 	resp, e := http.ReadResponse(reader, &http.Request{Method: http.MethodConnect})
-	if e != nil || resp.StatusCode != 200 {
+	if e != nil || resp.StatusCode != 200 || ctx.Err() != nil {
 		c.Close()
 		return nil, errs.Unavailable
 	}
@@ -89,11 +91,14 @@ func (p *Provider) material(ctx context.Context, e api.Endpoint) (*tls.Config, s
 	if err != nil {
 		return nil, "", "", errs.Unavailable
 	}
-	pw, err := p.Secrets.Read(ctx, e.Password)
+	pw, err := p.Secrets.Read(ctx, e.Secret)
 	if err != nil {
 		return nil, "", "", errs.Unavailable
 	}
 	if len(u) == 0 || len(u) > 320 || len(pw) == 0 || len(pw) > 4096 || strings.ContainsAny(string(u)+string(pw), "\r\n\x00") {
+		return nil, "", "", errs.Unavailable
+	}
+	if e.AuthMethod == "oauthbearer" && (strings.ContainsAny(string(u), ",=\x01") || strings.ContainsRune(string(pw), '\x01')) {
 		return nil, "", "", errs.Unavailable
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS12, ServerName: e.ServerName, RootCAs: roots}, string(u), string(pw), nil

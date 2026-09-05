@@ -21,11 +21,14 @@ type fixedDial struct{ conn net.Conn }
 func (d fixedDial) Dial(_, _ string) (net.Conn, error) { return d.conn, nil }
 
 func (p *Provider) pop(ctx context.Context, m api.Mailbox) (*pop3.Conn, func(), error) {
-	tlsConfig, u, pw, e := p.material(ctx, m.Pop)
+	if m.Pop == nil || m.Pop.AuthMethod != "password" {
+		return nil, nil, errs.Unsupported
+	}
+	tlsConfig, u, pw, e := p.material(ctx, *m.Pop)
 	if e != nil {
 		return nil, nil, e
 	}
-	c, cleanup, e := p.connect(ctx, m.Pop, tlsConfig, 32<<20)
+	c, cleanup, e := p.connect(ctx, *m.Pop, tlsConfig, 32<<20)
 	if e != nil {
 		return nil, nil, e
 	}
@@ -58,20 +61,27 @@ func snapshot(c *pop3.Conn, m api.Mailbox) ([]pop3.MessageID, map[int]int, error
 	}
 	byID := map[int]int{}
 	seen := map[string]bool{}
+	seenIDs := map[int]bool{}
 	for _, v := range sizes {
-		if v.ID < 1 || v.Size < 0 || byID[v.ID] != 0 {
+		if _, duplicate := byID[v.ID]; v.ID < 1 || v.Size < 0 || duplicate {
 			return nil, nil, errs.Unavailable
 		}
 		byID[v.ID] = v.Size
 	}
 	for _, v := range ids {
-		if v.ID < 1 || v.UID == "" || len(v.UID) > 70 || seen[v.UID] {
+		if v.ID < 1 || v.UID == "" || len(v.UID) > 70 || seen[v.UID] || seenIDs[v.ID] {
 			return nil, nil, errs.Unavailable
+		}
+		for _, character := range v.UID {
+			if character < 0x21 || character > 0x7e {
+				return nil, nil, errs.Unavailable
+			}
 		}
 		if _, ok := byID[v.ID]; !ok {
 			return nil, nil, errs.Unavailable
 		}
 		seen[v.UID] = true
+		seenIDs[v.ID] = true
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i].UID < ids[j].UID })
 	return ids, byID, nil
@@ -96,12 +106,15 @@ func readRaw(c *pop3.Conn, m api.Mailbox, uid string) ([]byte, error) {
 	return nil, errs.NotFound
 }
 func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (api.Result, error) {
+	if m.ReceiveProtocol == "imap" {
+		return p.readIMAP(ctx, m, cmd)
+	}
 	c, cleanup, e := p.pop(ctx, m)
 	if e != nil {
 		return api.Result{}, e
 	}
 	defer cleanup()
-	if cmd.Operation == api.OperationFetch || cmd.Operation == api.OperationDownload {
+	if cmd.Operation == api.OperationFetch || cmd.Operation == api.OperationDownload || cmd.Operation == api.OperationAttachments {
 		raw, e := readRaw(c, m, cmd.Uid)
 		if e != nil {
 			return api.Result{}, e
@@ -117,6 +130,12 @@ func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (ap
 			parsed.Attachments = []api.Attachment{parsed.Attachments[cmd.AttachmentIndex]}
 			parsed.BodyText = ""
 		}
+		if cmd.Operation == api.OperationAttachments {
+			parsed.BodyText = ""
+			for i := range parsed.Attachments {
+				parsed.Attachments[i].ContentBase64 = ""
+			}
+		}
 		return parsed, nil
 	}
 	if cmd.Operation != api.OperationList && cmd.Operation != api.OperationSearch {
@@ -127,9 +146,10 @@ func (p *Provider) Read(ctx context.Context, m api.Mailbox, cmd api.Command) (ap
 		return api.Result{}, e
 	}
 	binding := api.Digest(struct {
-		Tenant, Mailbox, Query string
-		IDs                    []pop3.MessageID
-	}{m.TenantId, m.Id, cmd.Query, ids})
+		Tenant, Mailbox, Connection, Query string
+		Revision                           int64
+		IDs                                []pop3.MessageID
+	}{m.TenantId, m.Id, m.ConnectionId, cmd.Query, m.Revision, ids})
 	start := 0
 	if cmd.Cursor != "" {
 		b, e := base64.RawURLEncoding.DecodeString(cmd.Cursor)

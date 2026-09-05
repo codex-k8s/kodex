@@ -53,6 +53,24 @@ func (e ConfigurationVersion) Valid() bool {
 	}
 }
 
+// Defines values for EndpointAuthMethod.
+const (
+	Oauthbearer EndpointAuthMethod = "oauthbearer"
+	Password    EndpointAuthMethod = "password"
+)
+
+// Valid indicates whether the value is a known member of the EndpointAuthMethod enum.
+func (e EndpointAuthMethod) Valid() bool {
+	switch e {
+	case Oauthbearer:
+		return true
+	case Password:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EndpointTlsMode.
 const (
 	Implicit EndpointTlsMode = "implicit"
@@ -106,31 +124,34 @@ func (e ErrorCode) Valid() bool {
 
 // Defines values for HealthStatus.
 const (
-	NotReady HealthStatus = "not_ready"
-	Ready    HealthStatus = "ready"
+	HealthStatusNotReady HealthStatus = "not_ready"
+	HealthStatusReady    HealthStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the HealthStatus enum.
 func (e HealthStatus) Valid() bool {
 	switch e {
-	case NotReady:
+	case HealthStatusNotReady:
 		return true
-	case Ready:
+	case HealthStatusReady:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for MailboxFolder.
+// Defines values for MailboxReceiveProtocol.
 const (
-	INBOX MailboxFolder = "INBOX"
+	Imap MailboxReceiveProtocol = "imap"
+	Pop3 MailboxReceiveProtocol = "pop3"
 )
 
-// Valid indicates whether the value is a known member of the MailboxFolder enum.
-func (e MailboxFolder) Valid() bool {
+// Valid indicates whether the value is a known member of the MailboxReceiveProtocol enum.
+func (e MailboxReceiveProtocol) Valid() bool {
 	switch e {
-	case INBOX:
+	case Imap:
+		return true
+	case Pop3:
 		return true
 	default:
 		return false
@@ -166,27 +187,46 @@ func (e MessageStatusStatus) Valid() bool {
 
 // Defines values for Operation.
 const (
-	OperationDelete    Operation = "delete"
-	OperationDownload  Operation = "download"
-	OperationFetch     Operation = "fetch"
-	OperationForward   Operation = "forward"
-	OperationHealth    Operation = "health"
-	OperationList      Operation = "list"
-	OperationMailboxes Operation = "mailboxes"
-	OperationMark      Operation = "mark"
-	OperationReceipt   Operation = "receipt"
-	OperationReply     Operation = "reply"
-	OperationReplyAll  Operation = "reply_all"
-	OperationSearch    Operation = "search"
-	OperationSend      Operation = "send"
+	OperationArchive     Operation = "archive"
+	OperationAttachments Operation = "attachments"
+	OperationDelete      Operation = "delete"
+	OperationDownload    Operation = "download"
+	OperationDraftCreate Operation = "draft_create"
+	OperationDraftDelete Operation = "draft_delete"
+	OperationDraftUpdate Operation = "draft_update"
+	OperationFetch       Operation = "fetch"
+	OperationForward     Operation = "forward"
+	OperationHealth      Operation = "health"
+	OperationList        Operation = "list"
+	OperationMailboxes   Operation = "mailboxes"
+	OperationMark        Operation = "mark"
+	OperationMarkRead    Operation = "mark_read"
+	OperationMarkUnread  Operation = "mark_unread"
+	OperationMove        Operation = "move"
+	OperationReceipt     Operation = "receipt"
+	OperationReply       Operation = "reply"
+	OperationReplyAll    Operation = "reply_all"
+	OperationSearch      Operation = "search"
+	OperationSend        Operation = "send"
+	OperationThread      Operation = "thread"
 )
 
 // Valid indicates whether the value is a known member of the Operation enum.
 func (e Operation) Valid() bool {
 	switch e {
+	case OperationArchive:
+		return true
+	case OperationAttachments:
+		return true
 	case OperationDelete:
 		return true
 	case OperationDownload:
+		return true
+	case OperationDraftCreate:
+		return true
+	case OperationDraftDelete:
+		return true
+	case OperationDraftUpdate:
 		return true
 	case OperationFetch:
 		return true
@@ -200,6 +240,12 @@ func (e Operation) Valid() bool {
 		return true
 	case OperationMark:
 		return true
+	case OperationMarkRead:
+		return true
+	case OperationMarkUnread:
+		return true
+	case OperationMove:
+		return true
 	case OperationReceipt:
 		return true
 	case OperationReply:
@@ -209,6 +255,8 @@ func (e Operation) Valid() bool {
 	case OperationSearch:
 		return true
 	case OperationSend:
+		return true
+	case OperationThread:
 		return true
 	default:
 		return false
@@ -236,12 +284,78 @@ func (e Policy) Valid() bool {
 	}
 }
 
+// Defines values for ProtocolReadinessImap.
+const (
+	ProtocolReadinessImapNotConfigured ProtocolReadinessImap = "not_configured"
+	ProtocolReadinessImapNotReady      ProtocolReadinessImap = "not_ready"
+	ProtocolReadinessImapReady         ProtocolReadinessImap = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ProtocolReadinessImap enum.
+func (e ProtocolReadinessImap) Valid() bool {
+	switch e {
+	case ProtocolReadinessImapNotConfigured:
+		return true
+	case ProtocolReadinessImapNotReady:
+		return true
+	case ProtocolReadinessImapReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProtocolReadinessPop3.
+const (
+	ProtocolReadinessPop3NotConfigured ProtocolReadinessPop3 = "not_configured"
+	ProtocolReadinessPop3NotReady      ProtocolReadinessPop3 = "not_ready"
+	ProtocolReadinessPop3Ready         ProtocolReadinessPop3 = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ProtocolReadinessPop3 enum.
+func (e ProtocolReadinessPop3) Valid() bool {
+	switch e {
+	case ProtocolReadinessPop3NotConfigured:
+		return true
+	case ProtocolReadinessPop3NotReady:
+		return true
+	case ProtocolReadinessPop3Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProtocolReadinessSmtp.
+const (
+	ProtocolReadinessSmtpNotConfigured ProtocolReadinessSmtp = "not_configured"
+	ProtocolReadinessSmtpNotReady      ProtocolReadinessSmtp = "not_ready"
+	ProtocolReadinessSmtpReady         ProtocolReadinessSmtp = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ProtocolReadinessSmtp enum.
+func (e ProtocolReadinessSmtp) Valid() bool {
+	switch e {
+	case ProtocolReadinessSmtpNotConfigured:
+		return true
+	case ProtocolReadinessSmtpNotReady:
+		return true
+	case ProtocolReadinessSmtpReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Attachment defines model for Attachment.
 type Attachment struct {
 	ContentBase64 string `json:"content_base64"`
 	ContentType   string `json:"content_type"`
 	Filename      string `json:"filename"`
 }
+
+// Attachments defines model for Attachments.
+type Attachments = []Attachment
 
 // AuthorizationDecision defines model for AuthorizationDecision.
 type AuthorizationDecision struct {
@@ -270,7 +384,9 @@ type AuthorizationDecision struct {
 type AuthorizationRequest struct {
 	CallerSpiffeId        string    `json:"caller_spiffe_id"`
 	ConfigurationRevision int64     `json:"configuration_revision"`
+	DestinationFolder     string    `json:"destination_folder,omitempty"`
 	EffectKey             string    `json:"effect_key"`
+	Folder                string    `json:"folder,omitempty"`
 	InputSha256           string    `json:"input_sha256"`
 	InvocationToken       string    `json:"invocation_token"`
 	MailboxId             string    `json:"mailbox_id"`
@@ -280,16 +396,20 @@ type AuthorizationRequest struct {
 
 // Command defines model for Command.
 type Command struct {
-	AttachmentIndex int          `json:"attachment_index,omitempty"`
-	Cursor          string       `json:"cursor,omitempty"`
-	EffectKey       string       `json:"effect_key,omitempty"`
-	Folder          string       `json:"folder,omitempty"`
-	MailboxId       string       `json:"mailbox_id"`
-	Message         MessageInput `json:"message,omitempty"`
-	Operation       Operation    `json:"operation"`
-	Query           string       `json:"query,omitempty"`
-	ReceiptId       string       `json:"receipt_id,omitempty"`
-	Uid             string       `json:"uid,omitempty"`
+	AttachmentIndex   int          `json:"attachment_index,omitempty"`
+	Cursor            string       `json:"cursor,omitempty"`
+	DestinationFolder string       `json:"destination_folder,omitempty"`
+	EffectKey         string       `json:"effect_key,omitempty"`
+	ExpectedDigest    string       `json:"expected_digest,omitempty"`
+	Folder            string       `json:"folder,omitempty"`
+	MailboxId         string       `json:"mailbox_id"`
+	Message           MessageInput `json:"message,omitempty"`
+	Operation         Operation    `json:"operation"`
+	Query             string       `json:"query,omitempty"`
+	ReceiptId         string       `json:"receipt_id,omitempty"`
+	ThreadId          string       `json:"thread_id,omitempty"`
+	Uid               string       `json:"uid,omitempty"`
+	UidValidity       uint32       `json:"uid_validity,omitempty"`
 }
 
 // Configuration defines model for Configuration.
@@ -315,14 +435,19 @@ type Descriptor struct {
 
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
-	Ca         Descriptor      `json:"ca"`
-	Host       string          `json:"host"`
-	Password   Descriptor      `json:"password"`
-	Port       int             `json:"port"`
-	ServerName string          `json:"server_name"`
-	TlsMode    EndpointTlsMode `json:"tls_mode"`
-	Username   Descriptor      `json:"username"`
+	// AuthMethod password: SMTP AUTH PLAIN, IMAP LOGIN, POP USER/PASS; oauthbearer: SASL OAUTHBEARER после TLS.
+	AuthMethod EndpointAuthMethod `json:"auth_method"`
+	Ca         Descriptor         `json:"ca"`
+	Host       string             `json:"host"`
+	Port       int                `json:"port"`
+	Secret     Descriptor         `json:"secret"`
+	ServerName string             `json:"server_name"`
+	TlsMode    EndpointTlsMode    `json:"tls_mode"`
+	Username   Descriptor         `json:"username"`
 }
+
+// EndpointAuthMethod password: SMTP AUTH PLAIN, IMAP LOGIN, POP USER/PASS; oauthbearer: SASL OAUTHBEARER после TLS.
+type EndpointAuthMethod string
 
 // EndpointTlsMode defines model for Endpoint.TlsMode.
 type EndpointTlsMode string
@@ -343,6 +468,29 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// IntegrationInput defines model for IntegrationInput.
+type IntegrationInput struct {
+	AttachmentIndex   int    `json:"attachment_index,omitempty"`
+	Attachments       string `json:"attachments,omitempty"`
+	Bcc               string `json:"bcc,omitempty"`
+	BodyText          string `json:"body_text,omitempty"`
+	Cc                string `json:"cc,omitempty"`
+	Cursor            string `json:"cursor,omitempty"`
+	DestinationFolder string `json:"destination_folder,omitempty"`
+	EffectKey         string `json:"effect_key,omitempty"`
+	ExpectedDigest    string `json:"expected_digest,omitempty"`
+	Folder            string `json:"folder,omitempty"`
+	MessageId         string `json:"message_id,omitempty"`
+	Query             string `json:"query,omitempty"`
+	SourceUid         string `json:"source_uid,omitempty"`
+	SourceUidValidity uint32 `json:"source_uid_validity,omitempty"`
+	Subject           string `json:"subject,omitempty"`
+	ThreadId          string `json:"thread_id,omitempty"`
+	To                string `json:"to,omitempty"`
+	Uid               string `json:"uid,omitempty"`
+	UidValidity       uint32 `json:"uid_validity,omitempty"`
+}
+
 // Limits defines model for Limits.
 type Limits struct {
 	AttachmentBytes int `json:"attachment_bytes"`
@@ -356,44 +504,58 @@ type Limits struct {
 
 // MailHeader defines model for MailHeader.
 type MailHeader struct {
-	From    string `json:"from"`
-	Size    int    `json:"size"`
-	Subject string `json:"subject"`
-	To      string `json:"to"`
-	Uid     string `json:"uid"`
+	Flags       []string `json:"flags,omitempty"`
+	Folder      string   `json:"folder,omitempty"`
+	From        string   `json:"from"`
+	MessageId   string   `json:"message_id,omitempty"`
+	Size        int      `json:"size"`
+	Subject     string   `json:"subject"`
+	To          string   `json:"to"`
+	Uid         string   `json:"uid"`
+	UidValidity uint32   `json:"uid_validity,omitempty"`
 }
 
 // Mailbox defines model for Mailbox.
 type Mailbox struct {
-	ConnectionId string            `json:"connection_id"`
-	Enabled      bool              `json:"enabled"`
-	EnvelopeFrom string            `json:"envelope_from"`
-	Folder       MailboxFolder     `json:"folder"`
-	HelloName    string            `json:"hello_name"`
-	Id           string            `json:"id"`
-	Limits       Limits            `json:"limits"`
-	Policies     []OperationPolicy `json:"policies"`
-	Pop          Endpoint          `json:"pop"`
-	Recipients   []string          `json:"recipients"`
-	Revision     int64             `json:"revision"`
-	Sender       string            `json:"sender"`
-	Smtp         Endpoint          `json:"smtp"`
-	TenantId     string            `json:"tenant_id"`
+	AllowedFolders []string `json:"allowed_folders"`
+	ArchiveFolder  string   `json:"archive_folder,omitempty"`
+	ConnectionId   string   `json:"connection_id"`
+
+	// CredentialGeneration Назначаемое producer поколение credential binding подключения; поколения отдельных descriptors независимы.
+	CredentialGeneration int64                  `json:"credential_generation"`
+	DraftsFolder         string                 `json:"drafts_folder,omitempty"`
+	Enabled              bool                   `json:"enabled"`
+	EnvelopeFrom         string                 `json:"envelope_from"`
+	Folder               string                 `json:"folder"`
+	HelloName            string                 `json:"hello_name"`
+	Id                   string                 `json:"id"`
+	Imap                 *Endpoint              `json:"imap,omitempty"`
+	Limits               Limits                 `json:"limits"`
+	Policies             []OperationPolicy      `json:"policies"`
+	Pop                  *Endpoint              `json:"pop,omitempty"`
+	ReceiveProtocol      MailboxReceiveProtocol `json:"receive_protocol"`
+	Recipients           []string               `json:"recipients"`
+	ReplyTo              string                 `json:"reply_to"`
+	Revision             int64                  `json:"revision"`
+	Sender               string                 `json:"sender"`
+	Smtp                 Endpoint               `json:"smtp"`
+	TenantId             string                 `json:"tenant_id"`
 }
 
-// MailboxFolder defines model for Mailbox.Folder.
-type MailboxFolder string
+// MailboxReceiveProtocol defines model for Mailbox.ReceiveProtocol.
+type MailboxReceiveProtocol string
 
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
-	Attachments []Attachment `json:"attachments,omitempty"`
-	Bcc         []string     `json:"bcc,omitempty"`
-	BodyText    string       `json:"body_text"`
-	Cc          []string     `json:"cc,omitempty"`
-	From        string       `json:"from"`
-	SourceUid   string       `json:"source_uid,omitempty"`
-	Subject     string       `json:"subject"`
-	To          string       `json:"to"`
+	Attachments       []Attachment `json:"attachments,omitempty"`
+	Bcc               []string     `json:"bcc,omitempty"`
+	BodyText          string       `json:"body_text"`
+	Cc                []string     `json:"cc,omitempty"`
+	From              string       `json:"from"`
+	SourceUid         string       `json:"source_uid,omitempty"`
+	SourceUidValidity uint32       `json:"source_uid_validity,omitempty"`
+	Subject           string       `json:"subject"`
+	To                string       `json:"to"`
 }
 
 // MessageStatus defines model for MessageStatus.
@@ -405,11 +567,23 @@ type MessageStatus struct {
 // MessageStatusStatus defines model for MessageStatus.Status.
 type MessageStatusStatus string
 
+// MessageView defines model for MessageView.
+type MessageView struct {
+	Attachments   []Attachment `json:"attachments,omitempty"`
+	BodyText      string       `json:"body_text"`
+	ContentDigest string       `json:"content_digest"`
+	Folder        string       `json:"folder"`
+	Headers       []string     `json:"headers,omitempty"`
+	Uid           string       `json:"uid"`
+	UidValidity   uint32       `json:"uid_validity"`
+}
+
 // Operation defines model for Operation.
 type Operation string
 
 // OperationPolicy defines model for OperationPolicy.
 type OperationPolicy struct {
+	Folders   []string  `json:"folders,omitempty"`
 	Operation Operation `json:"operation"`
 	Policy    Policy    `json:"policy"`
 }
@@ -417,21 +591,48 @@ type OperationPolicy struct {
 // Policy defines model for Policy.
 type Policy string
 
+// ProtocolReadiness defines model for ProtocolReadiness.
+type ProtocolReadiness struct {
+	Imap ProtocolReadinessImap `json:"imap"`
+	Pop3 ProtocolReadinessPop3 `json:"pop3"`
+	Smtp ProtocolReadinessSmtp `json:"smtp"`
+}
+
+// ProtocolReadinessImap defines model for ProtocolReadiness.Imap.
+type ProtocolReadinessImap string
+
+// ProtocolReadinessPop3 defines model for ProtocolReadiness.Pop3.
+type ProtocolReadinessPop3 string
+
+// ProtocolReadinessSmtp defines model for ProtocolReadiness.Smtp.
+type ProtocolReadinessSmtp string
+
+// Recipients defines model for Recipients.
+type Recipients = []string
+
 // Result defines model for Result.
 type Result struct {
-	Attachments        []Attachment `json:"attachments,omitempty"`
-	BodyText           string       `json:"body_text,omitempty"`
-	FolderSupport      bool         `json:"folder_support,omitempty"`
-	Headers            []MailHeader `json:"headers,omitempty"`
-	Mailboxes          []string     `json:"mailboxes,omitempty"`
-	MessageId          string       `json:"message_id,omitempty"`
-	NextCursor         string       `json:"next_cursor,omitempty"`
-	ReadStateSupported bool         `json:"read_state_supported,omitempty"`
-	Status             string       `json:"status"`
+	Attachments        []Attachment       `json:"attachments,omitempty"`
+	BodyText           string             `json:"body_text,omitempty"`
+	ContentDigest      string             `json:"content_digest,omitempty"`
+	Folder             string             `json:"folder,omitempty"`
+	FolderSupport      bool               `json:"folder_support,omitempty"`
+	Headers            []MailHeader       `json:"headers,omitempty"`
+	Mailboxes          []string           `json:"mailboxes,omitempty"`
+	MessageId          string             `json:"message_id,omitempty"`
+	Messages           []MessageView      `json:"messages,omitempty"`
+	NextCursor         string             `json:"next_cursor,omitempty"`
+	ProtocolReadiness  *ProtocolReadiness `json:"protocol_readiness,omitempty"`
+	ReadStateSupported bool               `json:"read_state_supported,omitempty"`
+	Status             string             `json:"status"`
+	ThreadId           string             `json:"thread_id,omitempty"`
+	Uid                string             `json:"uid,omitempty"`
+	UidValidity        uint32             `json:"uid_validity,omitempty"`
 }
 
 // Scope defines model for Scope.
 type Scope struct {
+	Folders    []string    `json:"folders"`
 	MailboxId  string      `json:"mailbox_id"`
 	Operations []Operation `json:"operations"`
 	Recipients []string    `json:"recipients"`

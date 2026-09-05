@@ -4,8 +4,8 @@ title: Эксплуатация email-bridge
 type: runbook
 status: approved
 owner: sre
-version: 1.0.0
-updated: 2026-09-04
+version: 1.1.0
+updated: 2026-09-05
 ---
 
 # Email bridge
@@ -25,7 +25,7 @@ updated: 2026-09-04
 | email-bridge-runtime-database | dsn; email_bridge_runtime, verify-full, exact PostgreSQL hostname, sslrootcert=/var/run/email/tls/ca.crt |
 | email-bridge-migration-database | dsn; отдельный email_bridge_migrator, verify-full и тот же CA path |
 | email-bridge-authority | service-bearer для online owner API; health-token с разрешением только health для workload email-bridge |
-| email-bridge-mailbox-projection | immutable CA/username/password generations, items отображаются на name/generation из Configuration |
+| email-bridge-mailbox-projection | immutable CA/username/secret generations, items отображаются на name/generation из Configuration |
 | email-bridge-tls | cert-manager workload certificate/key/CA, mTLS SPIFFE и exact DNS |
 | email-bridge-postgresql-tls | cert-manager server certificate/key/CA |
 
@@ -39,7 +39,11 @@ watermark, письма не сохраняются. PVC включается в
 ## Проверка готовности
 
 Local /readyz отражает bounded online authority, PostgreSQL role/schema и
-SMTP AUTH/NOOP плюс POP AUTH/UIDL. Health использует отдельный owner-issued token,
+SMTP AUTH/NOOP и IMAP authentication/SELECT разрешённых folders; POP AUTH/UIDL
+проверяется отдельно при наличии compatibility endpoint. Typed health возвращает
+`protocol_readiness.smtp/imap/pop3`: ready, not_ready или not_configured.
+Отказ optional POP не выключает исправный основной SMTP+IMAP профиль.
+Health использует отдельный owner-issued token,
 тот же authorization API и provider transport. Пустая конфигурация, отсутствующий
 credential, TLS mismatch или недоступный owner/egress дают NOT READY.
 Отказ одной mailbox означает NOT READY bridge, остальные вызовы всё равно
@@ -50,17 +54,31 @@ Pending/rejected gate не читает почтовые credentials. Подтв
 к exact operation/input/effect; payload клиента не подтверждает gate.
 Затем проверяет list/search, MIME attachment fetch, send attachment, reply-all,
 повтор того же key и отказы чужой mailbox/revoked credential/TLS mismatch.
+Для IMAP дополнительно проверяются thread, attachment.list, mark_read/unread,
+move/archive/delete и draft.create/update/delete. UID всегда связывается с
+UIDVALIDITY и папкой; старый UID после пересоздания папки не используется.
+Draft update возвращает новый UID и content digest. Thread pagination не
+захватывает новые UID, появившиеся после начала просмотра.
 
 ## UNKNOWN_OUTCOME
 
-1. Остановить исходное намерение у control-plane, не повторять SMTP DATA/POP QUIT.
+1. Остановить исходное намерение у control-plane, не повторять SMTP DATA,
+   IMAP APPEND/MOVE/EXPUNGE или POP QUIT.
 2. Прочитать receipt через authenticated API точной mailbox. Повтор key безопасен
    только как чтение той же durable записи, не как инструкция новой отправки.
-3. Владелец сверяет SMTP logs по Message-ID либо POP UIDL. Bridge не объявляет
+3. Владелец сверяет SMTP logs по Message-ID, IMAP Message-ID/UIDVALIDITY/folders
+   либо POP UIDL. При draft replacement проверяются и новый APPEND, и отсутствие
+   старого UID: это не атомарный replace. Bridge не объявляет
    delivered по одному accepted и не делает вывод «не отправлено» из отсутствия
    записи у провайдера.
 4. Новое намерение возможно только после явного решения владельца с новым grant
    и effect. Не менять receipt через SQL; старый unknown остаётся историей.
+
+Неизвестное IMAP-изменение блокирует другие keys для того же source. До финального
+handoff #1046 должен согласовать typed owner decision/reconciliation, связанный
+с исходной receipt, её digest, outcome и новым owner grant. Статусный GET и новый
+effect key сами по себе не снимают эту блокировку. Отсутствующий authority RPC
+или неутверждённый сетевой маршрут запрещают объявлять unit готовым к deploy.
 
 ## Ротация и остановка
 
@@ -75,3 +93,9 @@ Shutdown отменяет protocol contexts и ждёт HTTP/worker join до з
 Если deadline прервал final response, запись остаётся unknown. Tracing flush
 получает независимый bounded context. Логи содержат только route/status и
 фиксированные сообщения; адреса, headers, body, attachments и secrets запрещены.
+
+После остановки protocol I/O handler имеет отдельный бюджет 3 секунды только
+для completion уже зарезервированной receipt. Подтверждённый final response
+сохраняется даже при отмене HTTP; известные UID частичного IMAP сохраняются
+вместе с unknown. Ошибка completion не разрешает повтор, а оставляет исходную
+unknown receipt. Этот cleanup не продлевает grant и не выполняет mail I/O.

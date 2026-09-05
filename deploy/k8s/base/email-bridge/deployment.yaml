@@ -99,6 +99,16 @@
             },
             "volumeMounts": [
               {
+                "name": "application-grant",
+                "mountPath": "/var/run/secrets/kodex/email-bridge/application-grant",
+                "readOnly": true
+              },
+              {
+                "name": "internal-rpc-authority-observability",
+                "mountPath": "/var/run/email/observability",
+                "readOnly": true
+              },
+              {
                 "name": "configuration",
                 "mountPath": "/var/run/email/config",
                 "readOnly": true
@@ -127,6 +137,10 @@
           }
         ],
         "volumes": [
+          {
+            "name": "application-grant",
+            "emptyDir": {"medium": "Memory", "sizeLimit": "1Mi"}
+          },
           {
             "name": "configuration",
             "configMap": {

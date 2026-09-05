@@ -74,8 +74,18 @@ func databaseDSN(path string) (string, error) {
 		return "", errors.New("database credential unavailable")
 	}
 	u, e := url.Parse(string(raw))
-	if e != nil || u.Scheme != "postgresql" || u.Hostname() != "email-bridge-postgresql.kodex-system.svc.cluster.local" || u.Query().Get("sslmode") != "verify-full" || u.User == nil || u.User.Username() != "email_bridge_runtime" {
+	if e != nil || u.Scheme != "postgresql" || u.Hostname() != "email-bridge-postgresql.kodex-system.svc.cluster.local" || (u.Port() != "" && u.Port() != "5432") || u.Path != "/email_bridge" || u.Fragment != "" || u.Query().Get("sslmode") != "verify-full" || u.User == nil || u.User.Username() != "email_bridge_runtime" {
 		return "", errors.New("database transport invalid")
+	}
+	query, e := url.ParseQuery(u.RawQuery)
+	if e != nil || query.Get("sslrootcert") != "/var/run/email/tls/ca.crt" {
+		return "", errors.New("database transport invalid")
+	}
+	// Параметры pgx не должны переопределять проверенные host/user/TLS из URI.
+	for key, values := range query {
+		if len(values) != 1 || (key != "sslmode" && key != "sslrootcert" && key != "connect_timeout" && key != "application_name") {
+			return "", errors.New("database transport invalid")
+		}
 	}
 	return string(raw), nil
 }

@@ -39,42 +39,66 @@ func (p *Provider) smtp(ctx context.Context, m api.Mailbox) (*smtp.Client, func(
 	}
 	client.CommandTimeout = time.Duration(m.Limits.TimeoutSeconds) * time.Second
 	client.SubmissionTimeout = client.CommandTimeout
-	if client.Hello(m.HelloName) != nil || client.Auth(sasl.NewPlainClient("", u, pw)) != nil {
+	var auth sasl.Client = sasl.NewPlainClient("", u, pw)
+	if m.Smtp.AuthMethod == "oauthbearer" {
+		auth = sasl.NewOAuthBearerClient(&sasl.OAuthBearerOptions{Username: u, Token: pw})
+	}
+	if client.Hello(m.HelloName) != nil || client.Auth(auth) != nil {
 		cleanup()
 		return nil, nil, errs.Unavailable
 	}
 	return client, cleanup, nil
 }
 func (p *Provider) Ready(ctx context.Context, m api.Mailbox) error {
-	c, done, e := p.smtp(ctx, m)
-	if e != nil {
-		return e
-	}
-	e = c.Noop()
-	done()
-	if e != nil {
+	if p.Probe(ctx, m).Status != "ready" {
 		return errs.Unavailable
 	}
-	pc, done, e := p.pop(ctx, m)
-	if e != nil {
-		return e
-	}
-	defer done()
-	if _, _, e = snapshot(pc, m); e != nil {
-		return e
-	}
 	return nil
+}
+func (p *Provider) Probe(ctx context.Context, m api.Mailbox) api.Result {
+	report := &api.ProtocolReadiness{Smtp: api.ProtocolReadinessSmtpNotReady, Imap: api.ProtocolReadinessImapNotConfigured, Pop3: api.ProtocolReadinessPop3NotConfigured}
+	if c, done, err := p.smtp(ctx, m); err == nil {
+		if c.Noop() == nil {
+			report.Smtp = api.ProtocolReadinessSmtpReady
+		}
+		done()
+	}
+	if m.Imap != nil {
+		report.Imap = api.ProtocolReadinessImapNotReady
+		if c, done, err := p.imap(ctx, m); err == nil {
+			ready := true
+			for _, folder := range m.AllowedFolders {
+				if _, err := selectIMAP(c, folder, 0, true); err != nil {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				report.Imap = api.ProtocolReadinessImapReady
+			}
+			done()
+		}
+	}
+	if m.Pop != nil {
+		report.Pop3 = api.ProtocolReadinessPop3NotReady
+		if c, done, err := p.pop(ctx, m); err == nil {
+			if _, _, err := snapshot(c, m); err == nil {
+				report.Pop3 = api.ProtocolReadinessPop3Ready
+			}
+			done()
+		}
+	}
+	status := "not_ready"
+	if report.Smtp == api.ProtocolReadinessSmtpReady && ((m.ReceiveProtocol == "imap" && report.Imap == api.ProtocolReadinessImapReady) || (m.ReceiveProtocol == "pop3" && report.Pop3 == api.ProtocolReadinessPop3Ready)) {
+		status = "ready"
+	}
+	return api.Result{Status: status, ProtocolReadiness: report}
 }
 func (p *Provider) Send(ctx context.Context, m api.Mailbox, cmd api.Command, id string) (string, error) {
 	v := cmd.Message
 	inReplyTo := ""
 	if cmd.Operation != api.OperationSend {
-		pc, done, e := p.pop(ctx, m)
-		if e != nil {
-			return "unknown", e
-		}
-		raw, e := readRaw(pc, m, v.SourceUid)
-		done()
+		raw, e := p.sourceRaw(ctx, m, cmd)
 		if e != nil {
 			return "unknown", e
 		}
@@ -112,10 +136,10 @@ func (p *Provider) Send(ctx context.Context, m api.Mailbox, cmd api.Command, id 
 			}
 			actual := append([]string{v.To}, v.Cc...)
 			actual = append(actual, v.Bcc...)
-			slices.Sort(actual)
-			slices.Sort(expected)
-			if !slices.Equal(actual, expected) {
-				return "unknown", errs.Denied
+			for _, recipient := range expected {
+				if !slices.Contains(actual, recipient) {
+					return "unknown", errs.Denied
+				}
 			}
 			inReplyTo = source.Header.Get("Message-ID")
 			if strings.ContainsAny(inReplyTo, "\r\n\x00") || len(inReplyTo) > 998 {
@@ -201,6 +225,7 @@ func compose(m api.Mailbox, v api.MessageInput, id, inReplyTo string) ([]byte, e
 	if len(v.Cc) > 0 {
 		out.WriteString("Cc: " + strings.Join(v.Cc, ", ") + "\r\n")
 	}
+	out.WriteString("Reply-To: " + m.ReplyTo + "\r\n")
 	if inReplyTo != "" {
 		out.WriteString("In-Reply-To: " + inReplyTo + "\r\nReferences: " + inReplyTo + "\r\n")
 	}
@@ -274,7 +299,7 @@ func parseMessage(raw []byte, m api.Mailbox) (api.Result, error) {
 			if filename == "" {
 				filename = "attachment"
 			}
-			if strings.ContainsAny(filename, "/\\\r\n\x00") {
+			if len(filename) > 255 || strings.ContainsAny(filename, "/\\\r\n\x00") {
 				return errs.Invalid
 			}
 			result.Attachments = append(result.Attachments, api.Attachment{Filename: filename, ContentType: media, ContentBase64: base64.StdEncoding.EncodeToString(b)})

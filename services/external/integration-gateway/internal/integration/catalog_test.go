@@ -39,6 +39,24 @@ func catalogInputs() map[string]string {
 		"confluence.attachment.upload": `{"page_id":"3","file_name":"a.txt","media_type":"text/plain","content_base64":"VGV4dA=="}`,
 		"email.delivery.health.read":   `{}`, "email.message.send": `{"to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
 		"email.message.status.read": `{"message_id":"3"}`,
+		"email.mailbox.list":        `{}`,
+		"email.message.list":        `{"cursor":"cursor-2"}`,
+		"email.message.search":      `{"query":"Title","cursor":"cursor-2"}`,
+		"email.message.read":        `{"uid":"uid-1"}`,
+		"email.attachment.read":     `{"uid":"uid-1","attachment_index":0}`,
+		"email.message.reply":       `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1"}`,
+		"email.message.reply_all":   `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1","cc":"[\"copy@example.test\"]"}`,
+		"email.message.forward":     `{"to":"recipient@example.test","subject":"Title","body_text":"Text","source_uid":"uid-1","attachments":"[{\"filename\":\"a.txt\",\"content_type\":\"text/plain\",\"content_base64\":\"VGV4dA==\"}]"}`,
+		"email.message.delete":      `{"uid":"uid-1"}`,
+		"email.thread.read":         `{"thread_id":"source@example.test"}`,
+		"email.attachment.list":     `{"uid":"1","uid_validity":1}`,
+		"email.message.mark_read":   `{"uid":"1","uid_validity":1}`,
+		"email.message.mark_unread": `{"uid":"1","uid_validity":1}`,
+		"email.message.move":        `{"uid":"1","uid_validity":1,"destination_folder":"Archive"}`,
+		"email.message.archive":     `{"uid":"1","uid_validity":1}`,
+		"email.draft.create":        `{"to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
+		"email.draft.update":        `{"uid":"1","uid_validity":1,"expected_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
+		"email.draft.delete":        `{"uid":"1","uid_validity":1}`,
 		"synthetic.journal.read":    `{}`, "synthetic.journal.write": `{"value":"Text"}`,
 	}
 }
@@ -93,7 +111,11 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 				adapter.syntheticBaseURL = mustParseURL(t, server.URL)
 				adapter.syntheticClient = server.Client()
 				adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-					if r.URL.Scheme != "https" || r.URL.Host != key+".example.test" {
+					expectedHost := key + ".example.test"
+					if key == "email" {
+						expectedHost = "email-bridge.kodex-system.svc.cluster.local"
+					}
+					if r.URL.Scheme != "https" || r.URL.Host != expectedHost {
 						t.Error("provider escaped configured origin")
 					}
 					clone := r.Clone(r.Context())
@@ -103,12 +125,13 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 					clone.URL = &endpoint
 					return server.Client().Transport.RoundTrip(clone)
 				})}
+				adapter.emailHTTPClient = adapter.providerHTTPClient
 				request := invocationRequest(t, definition, capability.Key, input, credential)
 				result, err := adapter.Execute(t.Context(), request)
 				if err != nil || calls == 0 || result.Receipt.EffectKey != request.EffectKey || result.Receipt.InputDigest != request.InputDigest {
 					t.Fatalf("operation result: %v, calls=%d", err, calls)
 				}
-				if strings.HasSuffix(capability.Operation, ".search") || strings.HasSuffix(capability.Operation, ".list") {
+				if capability.Operation != "email.mailbox.list" && capability.Operation != "email.attachment.list" && (strings.HasSuffix(capability.Operation, ".search") || strings.HasSuffix(capability.Operation, ".list")) {
 					if !strings.Contains(result.Summary, "next_cursor") {
 						t.Fatal("pagination cursor lost")
 					}
@@ -230,8 +253,20 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 		}
 		return page
 	case "email":
-		if path == "/v1/health" {
+		if operation == "email.delivery.health.read" {
 			return `{"status":"ready"}`
+		}
+		if operation == "email.message.delete" || operation == "email.draft.delete" {
+			return `{"message_id":"3","status":"deleted"}`
+		}
+		if operation == "email.mailbox.list" {
+			return `{"status":"ok","mailboxes":["mailbox"]}`
+		}
+		if operation == "email.message.list" || operation == "email.message.search" || operation == "email.thread.read" {
+			return `{"status":"ok","headers":[{"uid":"uid-1","from":"sender@example.test","to":"recipient@example.test","subject":"Title","size":10}],"next_cursor":"cursor-3"}`
+		}
+		if operation == "email.message.read" || operation == "email.attachment.read" || operation == "email.attachment.list" {
+			return `{"status":"ok","body_text":"Text","attachments":[{"filename":"a.txt","content_type":"text/plain","content_base64":"VGV4dA=="}]}`
 		}
 		return `{"message_id":"3","status":"accepted"}`
 	}
@@ -267,6 +302,7 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 				}
 				return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(catalogResponse(t, provider, operation, r)))}, nil
 			})}
+			adapter.emailHTTPClient = adapter.providerHTTPClient
 			var input map[string]any
 			_ = json.Unmarshal([]byte(raw), &input)
 			_, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential))
@@ -328,10 +364,17 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				response.Body = io.NopCloser(strings.NewReader(body))
 				return response, nil
 			})}
-			adapter.providerHTTPClient, adapter.githubHTTPClient = client, client
+			adapter.providerHTTPClient, adapter.githubHTTPClient, adapter.emailHTTPClient = client, client, client
 			var input map[string]any
 			_ = json.Unmarshal([]byte(raw), &input)
-			if _, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential)); err != nil || calls != 2 {
+			_, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential))
+			if provider == "email" {
+				if err == nil || calls != 1 {
+					t.Fatal("email rate limit must fail closed without retry")
+				}
+				return
+			}
+			if err != nil || calls != 2 {
 				t.Fatalf("rate retry err=%v calls=%d", err, calls)
 			}
 		})
@@ -342,12 +385,12 @@ func TestEmailNotReadyCannotSend(t *testing.T) {
 	adapter := testAdapter(t)
 	credential := testCredential(t, adapter, "test-token")
 	calls := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.Method != "GET" || r.URL.Query().Get("sender") != "sender@example.test" {
+		if r.Method != "POST" || r.URL.Path != "/v1/mailbox-operations" {
 			t.Fatal("email readiness boundary bypassed")
 		}
-		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"status":"not_ready"}`))}, nil
+		return &http.Response{StatusCode: 503, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"code":"UNAVAILABLE"}`))}, nil
 	})}
 	var input map[string]any
 	_ = json.Unmarshal([]byte(catalogInputs()["email.message.send"]), &input)

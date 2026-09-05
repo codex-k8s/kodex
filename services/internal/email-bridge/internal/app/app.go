@@ -81,7 +81,7 @@ func Run(ctx, background context.Context, version string) error {
 	if e != nil {
 		return errors.New("authority client invalid")
 	}
-	service := &mail.Service{Config: configuration, Authority: &authority.Client{API: client, BearerFile: c.AuthorityBearerFile}, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+	service := &mail.Service{CompletionBase: background, Config: configuration, Authority: &authority.Client{API: client, BearerFile: c.AuthorityBearerFile}, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
 	readiness := serviceruntime.NewReadiness()
 	tech, e := httpserver.New(httpserver.Config{Address: c.Technical, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 16384, MaximumConnections: 64}, readiness, metrics.PrometheusHandler())
 	if e != nil {
@@ -137,7 +137,7 @@ func Run(ctx, background context.Context, version string) error {
 			for _, m := range configuration.Mailboxes {
 				if m.Enabled {
 					active++
-					if _, e = service.Execute(probe, "spiffe://kodex.local/ns/kodex-system/sa/email-bridge", string(token), api.Command{Operation: api.OperationHealth, MailboxId: m.Id}); e != nil {
+					if result, err := service.Execute(probe, "spiffe://kodex.local/ns/kodex-system/sa/email-bridge", string(token), api.Command{Operation: api.OperationHealth, MailboxId: m.Id}); err != nil || result.Status != "ready" {
 						ok = false
 					}
 				}

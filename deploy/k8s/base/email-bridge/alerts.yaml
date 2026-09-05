@@ -26,7 +26,7 @@
           },
           {
             "alert": "EmailBridgeNotReady",
-            "expr": "kodex_email_bridge_readiness{ready=\"true\"} == 0",
+            "expr": "kodex_email_bridge_readiness{ready=\"false\"} == 1",
             "for": "5m",
             "labels": {
               "severity": "warning"
