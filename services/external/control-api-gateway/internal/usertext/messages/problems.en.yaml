@@ -770,3 +770,11 @@ EMAIL_MAILBOX_PUBLICATION_READY:
   other: Mailbox configuration delivery confirmed
 RUNTIME_SECRET_DRAFT_CHANGED:
   other: Secret draft changed
+INTERACTION_AUTHORITY_CHANGED:
+  other: Interaction authority changed
+INTERACTION_DELIVERY_APPROVAL_REQUIRED:
+  other: Result delivery requires approval
+INTERACTION_DELIVERY_GATE_PROMPT:
+  other: Approve sending the result to the external channel
+INTERACTION_DELIVERY_GATE_TITLE:
+  other: Send result to external channel

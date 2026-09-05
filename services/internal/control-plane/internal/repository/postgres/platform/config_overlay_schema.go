@@ -96,6 +96,12 @@ func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope
 	if !draft && len(diagnostics) != 0 {
 		return errs.ErrConflict
 	}
+	if !draft {
+		if target.SchemaRevision != schema.Revision || target.SchemaDigest != schema.Digest || len(target.Diagnostics) != 0 {
+			return errs.ErrUnavailable
+		}
+		return nil
+	}
 	if _, err := tx.Exec(ctx, queryRuntimeCatalogSaveOverlayMetadata, current.organizationID, target.Ref, asJSON(diagnostics), schema.Revision, schema.Digest); err != nil {
 		return errs.ErrUnavailable
 	}

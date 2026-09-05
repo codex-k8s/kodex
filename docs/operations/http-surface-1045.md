@@ -10,6 +10,35 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## Home, Env638 и история ConfigOverlay
+
+Producer: consolidated CP `5e1e78bfb`, включая Home `db2592c51`,
+overlay schema `3d63507d2` / owner `6592c08a4`, Env638 и policy63.
+GET Runs и существующий GET /artifacts (`listOrganizationArtifacts`)
+сохраняют авторитетный total. Последний означает все доступные проекты и
+личную область; browser fanout и локальный подсчёт не нужны. Фильтры идут
+одним запросом в ListArtifacts. Отрицательный/неточный JSON integer count,
+count меньше страницы и oversized cursor закрываются 502.
+
+GET /agents/{agentRef}/config-overlay/revisions[/{revisionRef}] →
+ListConfigOverlayRevisions/GetConfigOverlayRevision использует signed actor,
+agent_ref resource binding и exact unary digest. CP проверяет agent.view,
+для системного помощника — organization.manage. HTTP допускает только
+PUBLISHED/SUPERSEDED, проверяет content digest, version/revision, timestamps,
+порядок и уникальность страницы. Preview не расширяет публикационные права.
+Rollback остаётся existing mutation с Agent If-Match/idempotency и новым
+immutable readback; после него UI перечитывает View/history.
+
+Env draft baseVersionRef/baseRevision — одна output-only пара исходной
+опубликованной версии; expectedEnvironmentVersion остаётся другим OCC pin.
+SavedAt принадлежит create/save. Старый receipt может не иметь времени;
+mutation response не подменяется произвольным latest GET. Для новой операции
+consumer явно читает GET draft. Malformed timestamp и неполная base-пара дают 502.
+
+Owner чтения не создают событий: consumer использует authoritative GET/List.
+Generated Go/TS SDK строятся из OpenAPI. Локальные проверки не подтверждают
+staging, live provider или итоговую продуктовую приёмку.
+
 ## D2/TOML: наблюдаемый каталог и точная публикация
 
 Producer — CP `82d8e1953` с тестовым дополнением `e42851946`; HTTP потребляет

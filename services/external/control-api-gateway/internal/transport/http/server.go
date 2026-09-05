@@ -386,6 +386,12 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
 	// Некоторым proto3 zero values соответствует обязательное поле OpenAPI.
 	// Список явный: другие пустые scalar могут означать отсутствующую ссылку.
+	if field.JSONName() == "total" && field.Kind() == protoreflect.Int64Kind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ListRunsResponse", "controlplane.v1.ListArtifactsResponse", "controlplane.v1.ListConfigOverlayRevisionsResponse":
+			return float64(0), true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
 	}
