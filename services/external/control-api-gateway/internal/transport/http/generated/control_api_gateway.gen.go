@@ -4353,6 +4353,33 @@ func (e TemplateVariableValueType) Valid() bool {
 	}
 }
 
+// Defines values for TemplateVariableAvailabilityReason.
+const (
+	AGENTCONTEXTREQUIRED   TemplateVariableAvailabilityReason = "AGENT_CONTEXT_REQUIRED"
+	AVAILABLE              TemplateVariableAvailabilityReason = "AVAILABLE"
+	NOTMATERIALIZED        TemplateVariableAvailabilityReason = "NOT_MATERIALIZED"
+	PROJECTCONTEXTREQUIRED TemplateVariableAvailabilityReason = "PROJECT_CONTEXT_REQUIRED"
+	RUNTIMECONTEXTREQUIRED TemplateVariableAvailabilityReason = "RUNTIME_CONTEXT_REQUIRED"
+)
+
+// Valid indicates whether the value is a known member of the TemplateVariableAvailabilityReason enum.
+func (e TemplateVariableAvailabilityReason) Valid() bool {
+	switch e {
+	case AGENTCONTEXTREQUIRED:
+		return true
+	case AVAILABLE:
+		return true
+	case NOTMATERIALIZED:
+		return true
+	case PROJECTCONTEXTREQUIRED:
+		return true
+	case RUNTIMECONTEXTREQUIRED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TemplateVariableFieldValueType.
 const (
 	TemplateVariableFieldValueTypeBOOLEAN   TemplateVariableFieldValueType = "BOOLEAN"
@@ -7958,15 +7985,17 @@ type SystemSTTSpecificationPermissionKey string
 
 // TemplateVariable defines model for TemplateVariable.
 type TemplateVariable struct {
-	Collection    bool                           `json:"collection"`
-	Description   string                         `json:"description"`
-	Example       string                         `json:"example"`
-	ItemFields    []TemplateVariableField        `json:"itemFields"`
-	ItemValueType *TemplateVariableItemValueType `json:"itemValueType,omitempty"`
-	Name          string                         `json:"name"`
-	RangeExample  *string                        `json:"rangeExample,omitempty"`
-	Source        TemplateVariableSource         `json:"source"`
-	ValueType     TemplateVariableValueType      `json:"valueType"`
+	Available     bool                               `json:"available"`
+	Collection    bool                               `json:"collection"`
+	Description   string                             `json:"description"`
+	Example       string                             `json:"example"`
+	ItemFields    []TemplateVariableField            `json:"itemFields"`
+	ItemValueType *TemplateVariableItemValueType     `json:"itemValueType,omitempty"`
+	Name          string                             `json:"name"`
+	RangeExample  *string                            `json:"rangeExample,omitempty"`
+	Reason        TemplateVariableAvailabilityReason `json:"reason"`
+	Source        TemplateVariableSource             `json:"source"`
+	ValueType     TemplateVariableValueType          `json:"valueType"`
 }
 
 // TemplateVariableItemValueType defines model for TemplateVariable.ItemValueType.
@@ -7977,6 +8006,9 @@ type TemplateVariableSource string
 
 // TemplateVariableValueType defines model for TemplateVariable.ValueType.
 type TemplateVariableValueType string
+
+// TemplateVariableAvailabilityReason defines model for TemplateVariableAvailabilityReason.
+type TemplateVariableAvailabilityReason string
 
 // TemplateVariableField defines model for TemplateVariableField.
 type TemplateVariableField struct {
@@ -7992,6 +8024,7 @@ type TemplateVariableFieldValueType string
 type TemplateVariablePage struct {
 	Items         []TemplateVariable `json:"items"`
 	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Total         int64              `json:"total"`
 }
 
 // Timestamp defines model for Timestamp.
@@ -8298,6 +8331,12 @@ type SessionRef = OpaqueRef
 
 // SkillBundleRef defines model for SkillBundleRef.
 type SkillBundleRef = OpaqueRef
+
+// TemplateAgentRef defines model for TemplateAgentRef.
+type TemplateAgentRef = OpaqueRef
+
+// TemplateRuntimeRevisionRef defines model for TemplateRuntimeRevisionRef.
+type TemplateRuntimeRevisionRef = OpaqueRef
 
 // VFSPageToken defines model for VFSPageToken.
 type VFSPageToken = string
@@ -9256,9 +9295,11 @@ type TranscribeSpeechParams struct {
 
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
 type ListTemplateVariablesParams struct {
-	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
-	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
 
 // ListWorkflowsParams defines parameters for ListWorkflows.
@@ -9318,10 +9359,12 @@ type ValidatePromptTemplateDraftParams struct {
 
 // ListPromptTemplateVariablesParams defines parameters for ListPromptTemplateVariables.
 type ListPromptTemplateVariablesParams struct {
-	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProjectRef         *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
 
 // PreviewPromptTemplateParams defines parameters for PreviewPromptTemplate.
@@ -22982,6 +23025,32 @@ func (siw *ServerInterfaceWrapper) ListTemplateVariables(w http.ResponseWriter, 
 		return
 	}
 
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtimeRevisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtimeRevisionRef", r.URL.Query(), &params.RuntimeRevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtimeRevisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtimeRevisionRef", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTemplateVariables(w, r, projectRef, params)
 	}))
@@ -23881,6 +23950,32 @@ func (siw *ServerInterfaceWrapper) ListPromptTemplateVariables(w http.ResponseWr
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "agentRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agentRef", r.URL.Query(), &params.AgentRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agentRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agentRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtimeRevisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtimeRevisionRef", r.URL.Query(), &params.RuntimeRevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtimeRevisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtimeRevisionRef", Err: err})
 		}
 		return
 	}

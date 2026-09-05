@@ -3496,6 +3496,8 @@ message ListTemplateVariablesRequest {
   string project_ref = 1;
   string query = 2;
   PageRequest page = 3;
+  string agent_ref = 4;
+  string runtime_revision_ref = 5;
 }
 message ListTemplateVariablesResponse {
   repeated TemplateVariable variables = 1;
@@ -4208,6 +4210,15 @@ message AgentRuntimeConfigurationView {
   repeated AgentContextBinding memory_bindings = 9;
 }
 
+enum TemplateVariableAvailabilityReason {
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_UNSPECIFIED = 0;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_AVAILABLE = 1;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_PROJECT_CONTEXT_REQUIRED = 2;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_AGENT_CONTEXT_REQUIRED = 3;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_RUNTIME_CONTEXT_REQUIRED = 4;
+  TEMPLATE_VARIABLE_AVAILABILITY_REASON_NOT_MATERIALIZED = 5;
+}
+
 message TemplateVariable {
   string name = 1;
   string value_type = 2;
@@ -4218,6 +4229,8 @@ message TemplateVariable {
   string item_value_type = 7;
   repeated TemplateVariableField item_fields = 8;
   string range_example = 9;
+  bool available = 10;
+  TemplateVariableAvailabilityReason reason = 11;
 }
 
 message TemplateVariableField {
