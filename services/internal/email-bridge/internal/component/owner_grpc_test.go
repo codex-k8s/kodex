@@ -79,13 +79,13 @@ func TestOwnerGRPCClient(t *testing.T) {
 	s.Authority, s.Effects = client, client
 	binding := executionFixture()
 	ctx := api.WithExecutionBinding(t.Context(), binding)
-	result, err := s.Execute(ctx, httptransport.CallerSPIFFE, binding.Lease.Fence, send(api.OperationSend, "owner-grpc"))
+	result, err := s.Execute(executionContext(ctx), httptransport.CallerSPIFFE, binding.Lease.Fence, send(api.OperationSend, "owner-grpc"))
 	if err != nil || result.Status != "accepted" {
 		t.Fatalf("gRPC owner send: %v", err)
 	}
 	before := sec.reads.Load()
 	owner.revoked.Store(true)
-	if _, err = s.Execute(ctx, httptransport.CallerSPIFFE, binding.Lease.Fence, send(api.OperationSend, "owner-revoked")); !errors.Is(err, errs.Denied) || sec.reads.Load() != before {
+	if _, err = s.Execute(executionContext(ctx), httptransport.CallerSPIFFE, binding.Lease.Fence, send(api.OperationSend, "owner-revoked")); !errors.Is(err, errs.Denied) || sec.reads.Load() != before {
 		t.Fatal("revocation did not precede projection")
 	}
 }
