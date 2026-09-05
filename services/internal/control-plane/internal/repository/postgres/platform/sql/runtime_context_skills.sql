@@ -1,4 +1,4 @@
--- name: RuntimeContextSkills :many
+-- name: runtime_context_skills :many
 SELECT binding.ref,binding.version,bundle.ref,control_plane.skill_revision_projection(revision.id)
 FROM control_plane.agent_context_bindings binding
 JOIN control_plane.agents agent ON agent.id=binding.agent_id AND agent.project_id=binding.project_id

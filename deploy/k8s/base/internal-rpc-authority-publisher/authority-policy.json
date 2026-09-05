@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 56,
+  "policy_revision": 57,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -424,6 +424,10 @@
           "platform.command.runtime-environments.publish",
           "platform.command.runtime-environments.rebind",
           "platform.command.runtime-environments.rollback",
+          "platform.command.runtime-secret-drafts.discard",
+          "platform.command.runtime-secret-drafts.publish",
+          "platform.command.runtime-secret-drafts.save",
+          "platform.command.runtime-secret-drafts.validate",
           "platform.command.runtime-secrets.create",
           "platform.command.runtime-secrets.rebind",
           "platform.command.runtime-secrets.reveal",
@@ -508,6 +512,7 @@
           "platform.query.runtime-environments.list",
           "platform.query.runtime-environments.readiness.get",
           "platform.query.runtime-revisions.diff",
+          "platform.query.runtime-secret-drafts.get",
           "platform.query.runtime-secrets.get",
           "platform.query.runtime-secrets.impact",
           "platform.query.runtime-secrets.list",
@@ -531,6 +536,50 @@
           "platform.role-images.recipes.get",
           "platform.role-images.recipes.list",
           "platform.role-images.recipes.manage"
+        ],
+        "server_resolved_fields": [
+          "actor",
+          "tenant",
+          "project",
+          "ownership",
+          "provenance"
+        ]
+      },
+      {
+        "producer_id": "control-plane.oidc-secret-draft",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "owner_workload_id": "control-plane",
+        "owner_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "full_method": "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof",
+        "tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "transport_trust_bundle_id": "kodex-internal-ca-g1",
+        "application_credential": "OIDC_BEARER",
+        "application_credential_metadata": "authorization",
+        "application_credential_issuer": "__KODEX_OIDC_ISSUER__",
+        "application_credential_audience": "kodex-control-api",
+        "application_credential_trust_bundle_id": "kodex-oidc-signers-g1",
+        "authority_proof_issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "authority_proof_audience": "urn:kodex:internal-rpc-authority-issuer:control-api-gateway",
+        "authority_proof_trust_bundle_id": "control-plane-authority-proof-g1",
+        "authority_proof_max_age_seconds": 15,
+        "deadline_milliseconds": 2000,
+        "max_attempts": 2,
+        "retryable_grpc_codes": [
+          "UNAVAILABLE",
+          "DEADLINE_EXCEEDED"
+        ],
+        "idempotency_scope": "credential-subject-digest+caller-workload+operation+idempotency-key",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "allowed_operation_ids": [
+          "platform.runtime-secret-drafts.discard",
+          "platform.runtime-secret-drafts.publish",
+          "platform.runtime-secret-drafts.readiness",
+          "platform.runtime-secret-drafts.save",
+          "platform.runtime-secret-drafts.validate"
         ],
         "server_resolved_fields": [
           "actor",
@@ -710,6 +759,13 @@
           "platform.credential-projections.runtime.resolve",
           "platform.credential-projections.runtime.validate",
           "platform.credential-projections.stt.resolve",
+          "platform.runtime-secret-drafts.cleanup.complete",
+          "platform.runtime-secret-drafts.materialization.recover",
+          "platform.runtime-secret-drafts.operations.complete",
+          "platform.runtime-secret-drafts.operations.consume",
+          "platform.runtime-secret-drafts.operations.fail",
+          "platform.runtime-secret-drafts.operations.recover",
+          "platform.runtime-secret-drafts.readiness.check",
           "platform.runtime-secrets.materialization.recover",
           "platform.runtime-secrets.operations.complete",
           "platform.runtime-secrets.operations.consume",
@@ -5612,6 +5668,150 @@
         }
       },
       {
+        "operation_id": "platform.command.runtime-secret-drafts.discard",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.runtime-secret-drafts.discard",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secret-drafts.publish",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.runtime-secret-drafts.publish",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secret-drafts.save",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.runtime-secret-drafts.save",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.runtime-secret-drafts.validate",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.runtime-secret-drafts.validate",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
         "operation_id": "platform.command.runtime-secrets.create",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -9371,6 +9571,42 @@
         }
       },
       {
+        "operation_id": "platform.query.runtime-secret-drafts.get",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.runtime-secret-drafts.get",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.query.runtime-secrets.get",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -10530,6 +10766,431 @@
           "DOMAIN_STATE"
         ],
         "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.cleanup.complete",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftCleanup",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.cleanup.complete",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.discard",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.discard",
+        "authority_proof_producer_id": "control-plane.oidc-secret-draft",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.materialization.recover",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/RecoverRuntimeSecretDraftMaterialization",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.materialization.recover",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.operations.complete",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.operations.complete",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.operations.consume",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/ConsumeRuntimeSecretDraftOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.operations.consume",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.operations.fail",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/FailRuntimeSecretDraftOperation",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.operations.fail",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.operations.recover",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/ListRuntimeSecretDraftRecoveryWork",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.operations.recover",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.publish",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.publish",
+        "authority_proof_producer_id": "control-plane.oidc-secret-draft",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.readiness",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.readiness",
+        "authority_proof_producer_id": "control-plane.oidc-secret-draft",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.readiness.check",
+        "caller_workload_id": "secret-broker",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.RuntimeSecretDraftWorkService/CheckRuntimeSecretDraftWorkReadiness",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.readiness.check",
+        "authority_proof_producer_id": "control-plane.secret-broker",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.save",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.save",
+        "authority_proof_producer_id": "control-plane.oidc-secret-draft",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.runtime-secret-drafts.validate",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "secret-broker",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/secret-broker",
+        "audience": "urn:kodex:internal-rpc:secret-broker",
+        "full_method": "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft",
+        "target_tls_server_name": "secret-broker.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.runtime-secret-drafts.validate",
+        "authority_proof_producer_id": "control-plane.oidc-secret-draft",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,

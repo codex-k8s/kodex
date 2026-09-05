@@ -296,6 +296,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("runtime secret lifecycle is crash consistent", func(t *testing.T) {
 		testRuntimeSecretCrashConsistency(t, ctx, repository)
 	})
+	t.Run("runtime secret drafts preserve staged lifecycle and cleanup fences", func(t *testing.T) {
+		testRuntimeSecretDraftLifecycle(t, ctx, repository)
+	})
 	t.Run("provider auth rejection requires exact credential reauthorization", func(t *testing.T) {
 		testProviderAuthRejectionLifecycle(t, ctx, repository, pool)
 	})

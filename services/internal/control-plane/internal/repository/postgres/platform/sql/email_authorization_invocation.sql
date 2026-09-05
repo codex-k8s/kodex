@@ -1,3 +1,4 @@
+-- name: email_authorization_invocation :one
 SELECT i.id::text,c.ref,actor.ref,a.ref,p.ref,p.id::text,g.ref,i.operation,i.effect_key,
        i.bounded_input,i.resource_scope,c.public_configuration,i.definition_version,i.definition_digest,
        i.risk,EXISTS(SELECT 1 FROM control_plane.owner_gates gate

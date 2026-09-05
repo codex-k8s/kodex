@@ -69,6 +69,30 @@ EMAIL_EFFECT_RECONCILIATION. Public ingress/listener и новый deployable CP
 добавляются. Готовность CP проверяет собственную schema/state; broker проверяет
 собственные ключи/Kubernetes, полный protected path проверяется отдельным smoke.
 
-На контрактном checkpoint: Proto lint/build/codegen применимы. Реализация,
-PG race/recovery, broker apply/readback, HTTP/PWA и live — NOT RUN до
-соответствующих unit checkpoints. Это не completion #1046/#1068.
+CP хранит назначенный сервером staging namespace `kodex-secret-drafts` отдельно
+от runtime namespace `kodex-runtime`; encrypted data key — `ciphertext`,
+published data key — `value`. Readiness проверяет таблицы, sequence и уникальный
+индекс активной операции. Policy revision 57 включает отдельный OIDC producer
+для вызовов Secret Broker с точным target workload. Все D6 work tuples связаны
+через `UNARY_PROTO_SHA256`; их resource/version/attempt metadata запрещены.
+
+Legacy scan опубликованных Kubernetes Secrets разрешает D6 operation через
+тот же CP owner. Exact descriptor сохраняется, пока revision нужна активному
+Secret/environment/binding/Run. После revoke либо освобождения последнего
+потребителя owner разрешает DELETE и retire. Неизвестная operation не считается
+разрешением удалить ресурс. До завершения claim materialization остаётся KEEP;
+после истечения claim без completion она удаляется, а не активируется.
+
+SAVE, VALIDATE, PUBLISH и DISCARD не создают domain event: каждый переход имеет
+атомарные state/receipt/audit и authoritative `GetRuntimeSecretDraft`.
+Опубликованный Secret дополнительно доступен через существующий Secret read.
+FAIL и expiry не создают event; read path — draft и bounded recovery work.
+Cleanup не создаёт event; его exact UID/RV intention и ACK находятся в owner
+operation, повторный read выполняет broker recovery.
+
+Локальный CP checkpoint проверяет save/reissue/consume/validate/publish,
+неверный encrypted descriptor, stale completion, потерю cleanup ACK,
+монотонный target revision после orphan, discard, expiry всех active grants,
+fresh authentication и общий legacy/D6 recovery после revoke.
+Broker apply/readback, HTTP/PWA и live подтверждаются только соответствующими
+unit checkpoints. Это не completion #1046/#1068.

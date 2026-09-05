@@ -81,6 +81,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
+	if err := repository.ConfigureRuntimeSecretStaging(config.RuntimeSecretStagingNamespace); err != nil {
+		return fmt.Errorf("configure runtime secret staging: %w", err)
+	}
 	emailProjection, err := initializeEmailProjection(startup, repository, config)
 	if err != nil {
 		return fmt.Errorf("initialize email projection: %w", err)
@@ -242,6 +245,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRuntimeSecretDraftWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)

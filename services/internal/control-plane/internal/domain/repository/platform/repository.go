@@ -215,6 +215,12 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
+	PrepareRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error)
+	ConsumeRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftWork, error)
+	FinishRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftResult, error)
+	ListRuntimeSecretDraftRecovery(context.Context, value.Principal, query.Page) ([]entity.RuntimeSecretDraftWork, string, error)
+	CheckRuntimeSecretDraftWork(context.Context, value.Principal) error
 	GetRuntimeRevisionPublicPair(context.Context, value.Principal, string, string) (entity.RuntimeRevisionPublicProjection, *entity.RuntimeRevisionPublicProjection, error)
 	GetEmailEffectReceipt(context.Context, value.Principal, string) (entity.EmailEffectReceiptView, error)
 	ResolveEmailAuthorization(context.Context, value.Principal, query.EmailAuthorization) (entity.EmailAuthorization, error)
