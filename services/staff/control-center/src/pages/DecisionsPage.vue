@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   CalendarClock,
@@ -520,6 +521,7 @@ onMounted(() => {
     if (pageMounted) await loadGateAudit(selected.value?.gate);
   });
 });
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -641,7 +643,7 @@ onMounted(() => {
                   <ShieldQuestion :size="18" aria-hidden="true" />
                 </span>
                 <span class="decision-row__copy">
-                  <strong>{{ item.gate.title }}</strong>
+                  <strong>{{ serverMessage(item.gate.title) }}</strong>
                   <span>{{
                     item.hasQuestion
                       ? item.gate.contextSummary
@@ -695,7 +697,7 @@ onMounted(() => {
           <header class="decision-detail__header">
             <div>
               <p class="eyebrow">{{ $t("decisions.question") }}</p>
-              <h2>{{ selected.gate.title }}</h2>
+              <h2>{{ serverMessage(selected.gate.title) }}</h2>
             </div>
             <StatusBadge :state="selected.gate.state" />
           </header>
@@ -850,7 +852,7 @@ onMounted(() => {
             <p>
               {{
                 selected.hasConsequences
-                  ? selected.gate.consequencesSummary
+                  ? serverMessage(selected.gate.consequencesSummary)
                   : $t("decisions.consequencesUnavailable")
               }}
             </p>
@@ -925,7 +927,7 @@ onMounted(() => {
               </template>
             </p>
             <p v-if="selected.gate.decisionComment">
-              {{ selected.gate.decisionComment }}
+              {{ serverMessage(selected.gate.decisionComment) }}
             </p>
           </section>
 

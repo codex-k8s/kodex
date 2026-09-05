@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
 defineProps<{ items: OwnerGate[]; more?: string; loading: boolean }>();
@@ -8,6 +9,7 @@ function scroll(event: Event): void {
   if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
     emit("more");
 }
+const serverMessage = useServerMessage();
 </script>
 <template>
   <div class="home-gate-rows" @scroll="scroll">
@@ -20,7 +22,7 @@ function scroll(event: Event): void {
       }"
       class="home-gate-row"
     >
-      <strong>{{ gate.title }}</strong>
+      <strong>{{ serverMessage(gate.title) }}</strong>
       <SafeSummary :content="gate.contextSummary" />
       <small>{{ gate.requestedBy.displayName }}</small>
     </RouterLink>

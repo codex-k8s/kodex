@@ -851,6 +851,40 @@ Home раскрывает тот же список с поиском и серв
 Это не закрывает MVP-UI-05: Run/global Artifact totals и реальная сквозная приёмка
 остаются обязательными; browser fixtures не доказывают runtime authority.
 
+## Источники Git: CFG-01/02/03
+
+`GitSourcePanel` потребляет четыре специализированных Configure/Refresh команды
+из HTTP `5e59abbea53dbfcfa2188e08343753d4f442add4`. Выбор соединения использует
+серверный поиск и exact GET/version; поддержаны JSON/YAML и закрытые adapter keys
+GitHub/GitLab. Полномочия, состояние соединения, credential и доступ к репозиторию
+проверяет владелец. Configure переводит конфигурацию под Git и закрывает сохранённый
+неопубликованный черновик; прежняя опубликованная ревизия и история сохраняются.
+
+Несекретный исходный intent с двумя OCC и idempotency key сохраняется в sessionStorage
+до подтверждения; закрытие формы и reload не создают новый ключ. Logout удаляет
+указатели. При неопределённом исходе доступны точный повтор и authoritative refresh;
+прекратить повтор можно после чтения более новой версии, без заявления об отмене
+или успехе прежней команды. Пока исход неизвестен, другие изменения заблокированы.
+
+После команды редактор читает `ListManagedConfigurationHistory`; QUEUED/CLAIMED
+опрашиваются каждые две секунды, максимум 150 чтений, с остановкой при закрытии.
+Поколение источника сбрасывает бюджет; изменение только source.version учитывается
+даже при неизменной configuration.version. Принятые commit/content/revision pins
+показываются отдельно; source READY не означает готовность или продвижение образа.
+Отдельного realtime события для SourceWork нет. Detach/copy перечитывают историю,
+чтобы открыть новый UI-черновик, сохраняя исходную опубликованную ревизию.
+
+`git-source.synthetic.spec.ts` проверяет на 390/2900 сохранение intent после потери
+ответа и reload, исходные OCC/key и переход QUEUED→READY через чтение истории.
+Producer checkpoint `dfd0621c52d982459d218973d37fac9ab424a716` сообщает executable
+owner/profile62; локальные browser fixtures не доказывают реальный HTTP→CP→Git
+path. Его приёмка, live/staging, полный write-back и UI recipe projection остаются
+NOT RUN либо незавершённым исходным scope; CFG не объявляется полностью закрытым.
+
+Три закрытых `i18n:INTERACTION_DELIVERY_*` сообщения и `INTERACTION_AUTHORITY_CHANGED`
+переводятся в generic result и решениях. Произвольный owner content не
+интерпретируется как ключ перевода.
+
 ## Deploy ownership
 
 `deploy/k8s/base/staff-control-center` содержит Deployment, Service, Ingress,

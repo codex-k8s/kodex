@@ -27,6 +27,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
 import ConfigurationFields from "./ConfigurationFields.vue";
+import GitSourcePanel from "./GitSourcePanel.vue";
 import {
   normalizedConfigurationDocument,
   parseConfigurationDocument,
@@ -59,6 +60,7 @@ const format = ref<ManagedConfigurationRevision["contentFormat"]>(
   props.kind === "PROMPT_TEMPLATE" ? "TEXT" : "JSON",
 );
 const busy = ref(false);
+const sourceBusy = ref(false);
 const problem = ref<AppProblem>();
 const historyOpen = ref(false);
 const diffOpen = ref(false);
@@ -149,6 +151,7 @@ const localDiagnostics = computed(() => {
 const canSave = computed(
   () =>
     !busy.value &&
+    !sourceBusy.value &&
     dirty.value &&
     !gitOwned.value &&
     name.value.trim() &&
@@ -474,6 +477,7 @@ async function changeSource(): Promise<void> {
     }
     sourceAction.value = undefined;
   });
+  if (!problem.value) await load();
 }
 watch(
   () => props.configurationRef,
@@ -498,7 +502,7 @@ watch(
         class="icon-button"
         :title="$t('common.refresh')"
         :aria-label="$t('common.refresh')"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="load()"
       >
         <RefreshCw :size="18" />
@@ -506,7 +510,7 @@ watch(
       <button
         v-if="configuration"
         class="button"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="historyOpen = true"
       >
         <History :size="18" />{{ $t("managed.history") }}
@@ -514,14 +518,14 @@ watch(
       <template v-if="gitOwned">
         <button
           class="button"
-          :disabled="busy"
+          :disabled="busy || sourceBusy"
           @click="sourceAction = 'detach'"
         >
           <GitFork :size="18" />{{ $t("managed.detach") }}
         </button>
         <button
           class="button"
-          :disabled="busy"
+          :disabled="busy || sourceBusy"
           @click="
             copyName = name;
             sourceAction = 'copy';
@@ -538,6 +542,17 @@ watch(
       <dt>{{ $t("managed.sourceRevision") }}</dt>
       <dd>{{ configuration.sourceRevision }}</dd>
     </dl>
+    <GitSourcePanel
+      v-if="
+        configuration &&
+        (kind === 'ROLE_IMAGE' || kind === 'INTEGRATION_DEFINITION')
+      "
+      :key="configuration.ref"
+      :configuration="configuration"
+      :disabled="busy || dirty"
+      @busy="sourceBusy = $event"
+      @changed="load()"
+    />
     <div class="configuration-editor__fields">
       <label
         >{{ $t("common.name")
@@ -553,6 +568,7 @@ watch(
           @change="changeFormat"
           :disabled="
             busy ||
+            sourceBusy ||
             gitOwned ||
             kind === 'SYSTEM_STT' ||
             kind === 'PROMPT_TEMPLATE'
@@ -595,7 +611,7 @@ watch(
       :kind="kind"
       :name="name"
       :format="format"
-      :disabled="busy || gitOwned"
+      :disabled="busy || sourceBusy || gitOwned"
       :initialize-stt="kind === 'SYSTEM_STT' && !configurationRef"
     />
     <CodeEditor
@@ -604,7 +620,7 @@ watch(
       :label="$t('managed.content')"
       :language="language"
       :readonly="gitOwned"
-      :disabled="busy"
+      :disabled="busy || sourceBusy"
     />
     <ul
       v-if="localDiagnostics.length"
@@ -632,7 +648,7 @@ watch(
       <button
         v-if="revision"
         class="button"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="diffOpen = true"
       >
         <GitCompareArrows :size="18" />{{ $t("managed.diff") }}
@@ -645,7 +661,7 @@ watch(
           configuration && revision && canChangeDraft(configuration, revision)
         "
         class="button"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="discardOpen = true"
       >
         <Trash2 :size="18" />{{ $t("managed.discardDraft") }}
@@ -653,7 +669,9 @@ watch(
       <button
         v-if="configuration && revision"
         class="button"
-        :disabled="busy || dirty || !canValidate(configuration, revision)"
+        :disabled="
+          busy || sourceBusy || dirty || !canValidate(configuration, revision)
+        "
         @click="transition('validate')"
       >
         <CheckCheck :size="18" />{{ $t("managed.validate") }}
@@ -661,7 +679,9 @@ watch(
       <button
         v-if="configuration && revision"
         class="button button--primary"
-        :disabled="busy || dirty || !canPublish(configuration, revision)"
+        :disabled="
+          busy || sourceBusy || dirty || !canPublish(configuration, revision)
+        "
         @click="transition('publish')"
       >
         <Send :size="18" />{{ $t("managed.publish") }}
@@ -669,7 +689,7 @@ watch(
       <button
         v-if="configuration && revision"
         class="button"
-        :disabled="busy || dirty"
+        :disabled="busy || sourceBusy || dirty"
         @click="showImpact()"
       >
         {{ $t("managed.impact") }}
@@ -685,7 +705,11 @@ watch(
       <template #actions
         ><button class="button" @click="discardOpen = false">
           {{ $t("common.cancel") }}</button
-        ><button class="button" :disabled="busy" @click="discardDraft">
+        ><button
+          class="button"
+          :disabled="busy || sourceBusy"
+          @click="discardDraft"
+        >
           {{ $t("managed.discardDraft") }}
         </button></template
       >
@@ -711,7 +735,7 @@ watch(
       <button
         v-if="pageToken"
         class="button"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="load(true)"
       >
         {{ $t("managed.more") }}
@@ -729,7 +753,7 @@ watch(
         type="search"
         :aria-label="$t('common.search')"
         :placeholder="$t('common.search')"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
       />
       <ProblemNotice
         v-if="impactProblem"
@@ -778,6 +802,7 @@ watch(
         class="button button--primary"
         :disabled="
           busy ||
+          sourceBusy ||
           impactLoading ||
           !!impactProblem ||
           !!problem ||
@@ -814,7 +839,7 @@ watch(
       <button
         v-if="pageToken"
         class="button"
-        :disabled="busy"
+        :disabled="busy || sourceBusy"
         @click="load(true)"
       >
         {{ $t("managed.more") }}
@@ -832,7 +857,9 @@ watch(
       <p v-else>{{ $t("managed.detachConfirm") }}</p>
       <button
         class="button button--primary"
-        :disabled="busy || (sourceAction === 'copy' && !copyName.trim())"
+        :disabled="
+          busy || sourceBusy || (sourceAction === 'copy' && !copyName.trim())
+        "
         @click="changeSource"
       >
         {{ $t(`managed.${sourceAction}`) }}

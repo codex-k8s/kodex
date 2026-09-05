@@ -269,12 +269,19 @@ describe("session renewal lifecycle", () => {
   });
 
   test("берёт server revision из bootstrap для новой вкладки и logout", async () => {
+    window.sessionStorage.setItem(
+      "kodex.configuration.git-source-attempts",
+      "synthetic-safe-intent",
+    );
     window.sessionStorage.removeItem("kodex.session.revision");
     api.getBootstrapState.mockResolvedValueOnce({ data: {}, etag: '"11"' });
     const session = useSessionStore();
 
     await session.probe();
     await session.logout();
+    expect(
+      window.sessionStorage.getItem("kodex.configuration.git-source-attempts"),
+    ).toBeNull();
 
     expect(session.canLogout).toBe(false);
     expect(requestHeaders(api.deleteOwnerSession.mock.calls[0] ?? [])).toEqual(

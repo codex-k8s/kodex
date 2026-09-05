@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { AlertTriangle, ShieldQuestion } from "@lucide/vue";
 
 import type { AttentionItem } from "@/features/workboard/model";
@@ -23,6 +24,7 @@ function itemPath(item: AttentionItem): string {
       : undefined;
   return runPath(ref, projectRef);
 }
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -45,7 +47,13 @@ function itemPath(item: AttentionItem): string {
         <AlertTriangle v-else :size="18" aria-hidden="true" />
       </span>
       <div class="attention-item__body">
-        <h3>{{ item.kind === "GATE" ? item.gate.title : item.run.title }}</h3>
+        <h3>
+          {{
+            item.kind === "GATE"
+              ? serverMessage(item.gate.title)
+              : item.run.title
+          }}
+        </h3>
         <SafeSummary
           :content="
             item.kind === 'GATE'

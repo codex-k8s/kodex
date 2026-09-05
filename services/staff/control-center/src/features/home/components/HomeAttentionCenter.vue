@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { AlertTriangle, CalendarClock, ShieldQuestion } from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -52,6 +53,7 @@ function formatDate(value?: string): string {
     timeStyle: "short",
   }).format(new Date(value));
 }
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -113,7 +115,7 @@ function formatDate(value?: string): string {
             class="home-attention__item"
           >
             <div class="home-attention__copy">
-              <h4>{{ gate.title }}</h4>
+              <h4>{{ serverMessage(gate.title) }}</h4>
               <SafeSummary :content="gate.contextSummary" />
               <p>
                 <span>{{ projectName(gate.projectRef) }}</span>
