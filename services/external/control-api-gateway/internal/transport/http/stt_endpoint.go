@@ -128,7 +128,7 @@ func (server *Server) transcribeSpeech(writer http.ResponseWriter, request *http
 	receipt := response.GetReceipt()
 	if receipt == nil || response.GetText() == "" || receipt.GetRequestId() == "" || receipt.GetCorrelationId() == "" ||
 		receipt.GetAuthoritySourceRevision() == 0 || receipt.GetConfigRevision() == 0 || receipt.GetModel() == "" ||
-		receipt.GetLanguage() == "" || receipt.GetCompletedStage() != sttv1.TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED {
+		!validSTTReceiptLanguage(receipt.GetLanguage()) || receipt.GetCompletedStage() != sttv1.TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED {
 		writeLocalProblem(writer, http.StatusBadGateway, "UPSTREAM_RESPONSE_INVALID", false)
 		return
 	}
@@ -143,6 +143,11 @@ func (server *Server) transcribeSpeech(writer http.ResponseWriter, request *http
 			"model": receipt.GetModel(), "language": receipt.GetLanguage(), "completedStage": "PROVIDER_COMPLETED",
 		},
 	})
+}
+
+// Singular hint отсутствует при auto-detect либо model-specific languages.
+func validSTTReceiptLanguage(value string) bool {
+	return value == "" || len(value) == 2 && value[0] >= 'a' && value[0] <= 'z' && value[1] >= 'a' && value[1] <= 'z'
 }
 
 func writeSpeechSendProblem(writer http.ResponseWriter, stream sttv1.SpeechToTextService_TranscribeClient, err error) {

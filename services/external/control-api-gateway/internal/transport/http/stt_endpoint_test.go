@@ -188,6 +188,70 @@ func TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream(t *testing.T) 
 	}
 }
 
+func TestSpeechPreservesEmptySingularHintAndRejectsUploadPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, language, extra string
+		code                  int
+	}{
+		{"model-languages", "", "", 200},
+		{"singular-hint", "ru", "", 200},
+		{"invalid-hint", "detected-private-text", "", 502},
+		{"caller-timeout", "", "providerTimeoutMilliseconds", 400},
+		{"caller-model", "", "model", 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &bytes.Buffer{}
+			form := multipart.NewWriter(body)
+			header := make(textproto.MIMEHeader)
+			header.Set("Content-Disposition", `form-data; name="audio"; filename="recording"`)
+			header.Set("Content-Type", "audio/mp3")
+			part, err := form.CreatePart(header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = part.Write([]byte("audio"))
+			if tc.extra != "" {
+				if err := form.WriteField(tc.extra, "60000"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := form.Close(); err != nil {
+				t.Fatal(err)
+			}
+			client := &speechClientStub{stream: &speechStreamStub{response: &sttv1.TranscribeResponse{Text: "fixture transcript", Receipt: &sttv1.TranscriptionReceipt{
+				RequestId: "00000000-0000-4000-8000-000000000001", CorrelationId: "00000000-0000-4000-8000-000000000002",
+				AuthoritySourceRevision: 2, ConfigRevision: 3, Model: "gpt-transcribe", Language: tc.language,
+				CompletedStage: sttv1.TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED,
+			}}}}
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/speech/transcriptions", body)
+			request.Header.Set("Content-Type", form.FormDataContentType())
+			request.Header.Set("X-Audio-Size", "5")
+			request.Header.Set("X-CSRF-Token", "fixture-csrf")
+			response := httptest.NewRecorder()
+			generated.Handler(&Server{speech: client}).ServeHTTP(response, request)
+			if response.Code != tc.code {
+				t.Fatalf("status=%d", response.Code)
+			}
+			if tc.code == 200 {
+				var result generated.SpeechTranscription
+				if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || result.Receipt.Language != tc.language {
+					t.Fatal("singular hint was inferred or lost")
+				}
+			}
+			if tc.extra != "" {
+				for _, message := range client.stream.messages {
+					if message.GetCommit() != nil {
+						t.Fatal("caller policy reached transcription commit")
+					}
+				}
+				if client.ctx.Err() != context.Canceled {
+					t.Fatal("rejected upload left stream active")
+				}
+			}
+		})
+	}
+}
+
 func TestSpeechAvailabilityUsesProtectedStreamWithoutAudio(t *testing.T) {
 	until := time.Now().Add(20 * time.Second)
 	client := &speechClientStub{stream: &speechStreamStub{response: &sttv1.TranscribeResponse{Availability: &sttv1.CheckProtectedPathResponse{

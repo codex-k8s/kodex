@@ -689,6 +689,9 @@ export type SpeechTranscriptionReceipt = {
     authoritySourceRevision: number;
     configRevision: number;
     model: string;
+    /**
+     * Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.
+     */
     language: string;
     completedStage: 'PROVIDER_COMPLETED';
 };

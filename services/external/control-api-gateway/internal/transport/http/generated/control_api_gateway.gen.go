@@ -8822,9 +8822,11 @@ type SpeechTranscriptionReceipt struct {
 	CompletedStage          SpeechTranscriptionReceiptCompletedStage `json:"completedStage"`
 	ConfigRevision          int64                                    `json:"configRevision"`
 	CorrelationId           openapi_types.UUID                       `json:"correlationId"`
-	Language                string                                   `json:"language"`
-	Model                   string                                   `json:"model"`
-	RequestId               openapi_types.UUID                       `json:"requestId"`
+
+	// Language Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.
+	Language  string             `json:"language"`
+	Model     string             `json:"model"`
+	RequestId openapi_types.UUID `json:"requestId"`
 }
 
 // SpeechTranscriptionReceiptCompletedStage defines model for SpeechTranscriptionReceipt.CompletedStage.
