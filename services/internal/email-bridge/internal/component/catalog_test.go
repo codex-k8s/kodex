@@ -129,6 +129,32 @@ func TestTypedCatalogHTTPS(t *testing.T) {
 	}
 }
 
+func TestPOPReadIdentityHTTPS(t *testing.T) {
+	for _, mode := range []string{"implicit", "starttls"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t, mode)
+			s, _, _ := service(t, f, mode, nil)
+			invoke := httpsInvoker(t, f, s)
+			for _, operation := range []string{"email.message.read", "email.attachment.read", "email.attachment.list"} {
+				for _, uid := range []string{"uid-one", "uid-two"} {
+					for _, folder := range []string{"", "INBOX"} {
+						result := invoke(operation, "", map[string]any{"uid": uid, "folder": folder})
+						if result.Status != "ok" || result.Uid != uid || result.Folder != "INBOX" || result.UidValidity != 0 {
+							t.Fatalf("%s: POP read identity mismatch", operation)
+						}
+						if len(result.Attachments) != 1 {
+							t.Fatalf("%s: attachment metadata missing", operation)
+						}
+						if operation == "email.attachment.list" && result.Attachments[0].ContentBase64 != "" {
+							t.Fatal("attachment listing returned content")
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestTypedIMAPCatalogHTTPS(t *testing.T) {
 	f := newFixture(t, "starttls")
 	_, address := imapFixture(t, f, "starttls")

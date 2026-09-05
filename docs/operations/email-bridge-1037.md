@@ -434,3 +434,14 @@ EMAIL codegen и render обоих профилей. Настоящий CP Postg
 FAILED/CANCELLED, подмену fence и отсутствие повторного claim. Это отдельные
 owner/consumer контуры, не доказательство полной защищённой цепочки.
 Полный issuer → CP SQL → EMAIL, доставка mailbox projection и staging: NOT RUN.
+
+## Идентичность POP readback
+
+Ответы POP fetch, download и attachment list сохраняют точный UID из
+проверенного UIDL snapshot и разрешённую нормализованную папку команды.
+UIDVALIDITY остаётся нулевым: POP не предоставляет IMAP поколения папок.
+Consumer может требовать exact UID без исключения для пустого поля.
+`TestPOPReadIdentityHTTPS` проверяет generated HTTP client → mTLS handler →
+mail service → настоящий локальный POP fixture для implicit TLS и STARTTLS,
+двух UID, явной/default INBOX и всех трёх операций. Listing вложений не
+возвращает их содержимое. Это локальная проверка, не live mail или staging.
