@@ -298,6 +298,30 @@ export type BootstrapState = {
     speechTranscription: SpeechTranscriptionAvailability;
 };
 
+export type SttModelCatalog = {
+    version: string;
+    observedAt: Timestamp;
+    models: Array<SttModelProfile>;
+    recommendedModel: string;
+    recommendedMaximumAudioBytes: number;
+    recommendedMaximumAudioDurationMilliseconds: number;
+    responseFormat: string;
+};
+
+export type SttModelProfile = {
+    model: string;
+    legacy: boolean;
+    parameterNames: Array<string>;
+    chunkingStrategies: Array<string>;
+    fileStreamSupported: boolean;
+    streamEnabled: boolean;
+    maximumPromptBytes: number;
+    maximumKeywords: number;
+    maximumKeywordBytes: number;
+    minimumTemperature: number;
+    maximumTemperature: number;
+};
+
 export type SpeechTranscriptionAvailability = {
     available: boolean;
     reason: 'READY' | 'STT_NOT_CONFIGURED' | 'STT_DISABLED' | 'STT_PERMISSION_DENIED' | 'STT_PERMISSION_INVALID' | 'STT_PROVIDER_ACCOUNT_INELIGIBLE' | 'STT_PROVIDER_CREDENTIAL_UNSUPPORTED' | 'STT_PROVIDER_DISABLED' | 'STT_MODEL_UNSUPPORTED' | 'STT_CONFIGURATION_UNAVAILABLE' | 'STT_SERVICE_UNAVAILABLE' | 'STT_CREDENTIAL_UNAVAILABLE' | 'STT_EGRESS_UNAVAILABLE' | 'STT_PROVIDER_UNAVAILABLE';
@@ -11112,6 +11136,31 @@ export type CreateTypedSystemSttConfigurationDraftResponses = {
 };
 
 export type CreateTypedSystemSttConfigurationDraftResponse = CreateTypedSystemSttConfigurationDraftResponses[keyof CreateTypedSystemSttConfigurationDraftResponses];
+
+export type GetSystemSttModelCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt/model-catalog';
+};
+
+export type GetSystemSttModelCatalogErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemSttModelCatalogError = GetSystemSttModelCatalogErrors[keyof GetSystemSttModelCatalogErrors];
+
+export type GetSystemSttModelCatalogResponses = {
+    /**
+     * Версия и дата проверки adapter catalog, без credential и readiness
+     */
+    200: SttModelCatalog;
+};
+
+export type GetSystemSttModelCatalogResponse = GetSystemSttModelCatalogResponses[keyof GetSystemSttModelCatalogResponses];
 
 export type GetSystemSttConfigurationData = {
     body?: never;

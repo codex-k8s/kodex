@@ -62,6 +62,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	connection, err := grpc.NewClient(
 		config.Target,
 		grpc.WithTransportCredentials(transport),
+		grpc.WithChainUnaryInterceptor(authorityclient.IssuerUnaryClientInterceptor(issuer.Issuer(), operations, config.Proofs)),
 		grpc.WithChainStreamInterceptor(authorityclient.IssuerStreamClientInterceptor(issuer.Issuer(), operations, config.Proofs)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(65<<10), grpc.MaxCallRecvMsgSize(1<<20)),
 	)
