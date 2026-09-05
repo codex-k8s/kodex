@@ -78,6 +78,12 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 	if e != nil || !request.EmailExecution.Lease.ExpiresAt.After(time.Now()) {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
+	if request.EmailExecution.ConnectionTestRef != nil && command.Operation != api.OperationHealth {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	// HTTP не должен пережить срок authority даже при более длинном caller context.
+	ctx, cancel := context.WithDeadline(ctx, request.EmailExecution.Lease.ExpiresAt)
+	defer cancel()
 	client, e := api.NewClient(emailOrigin, api.WithHTTPClient(adapter.emailHTTPClient))
 	if e != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
@@ -144,7 +150,7 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 		}
 		return providerResult(request, "email-message:"+result.MessageId, map[string]any{"message_id": result.MessageId, "status": result.Status, "result_json": string(raw)})
 	}
-	if result.Status != "ok" {
+	if result.Status != "ok" || !validEmailReadback(command, result) {
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	encoded, e := json.Marshal(result)
@@ -152,4 +158,17 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	return providerResult(request, "email-mailbox:"+command.MailboxId, map[string]any{"result_json": string(encoded)})
+}
+
+func validEmailReadback(command api.Command, result api.Result) bool {
+	switch command.Operation {
+	case api.OperationFetch, api.OperationDownload, api.OperationAttachments:
+		return (result.Uid == command.Uid || (command.UidValidity == 0 && result.Uid == "")) &&
+			(command.UidValidity == 0 || result.UidValidity == command.UidValidity) &&
+			(command.Folder == "" || result.Folder == command.Folder)
+	case api.OperationThread:
+		return result.ThreadId == command.ThreadId
+	default:
+		return true
+	}
 }

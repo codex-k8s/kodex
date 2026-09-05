@@ -27,7 +27,37 @@ updated: 2026-09-04
 | Неизвестный outcome | Точный lease/fence/generation | Completion UNKNOWN_OUTCOME или expiry RUNNING mutation | Durable read; новый claim запрещён; MCP сообщает необходимость решения владельца |
 | Read lease expiry | Точная просроченная read lease | READY с новым fence при следующем claim | Повтор только чтения |
 | Mattermost | Catalog metadata | Owner interaction-gateway #1030 | Generic MCP/credential route отклоняет |
-| Email | Connection sender scope и bridge bearer | HTTPS OpenAPI; POP/SMTP owner #1037 | health ready, send/status, GET reconciliation; нет plaintext fallback |
+| Email | Exact CP claim, invocation либо connection test, lease/ref/fence/generation; mailbox/sender из public configuration claim | Generated `emailbridgeapi`, POST `/v1/mailbox-operations`, mTLS и `X-Kodex-Email-Execution`; CP повторно разрешает authority | Все 21 операции; typed result, bounded receipt; SMTP/IMAP/POP принадлежат #1037 |
+
+## EMAIL lifecycle #1037 → #1028
+
+| Переход | Gateway boundary | Авторитетный результат / read path |
+| --- | --- | --- |
+| Connection test | Только test binding из CP claim и HEALTH, без fabricated invocation | CP complete test с исходным fence; readiness не обещает live mail |
+| Claim read | Exact definition/input/scope digest; binding только из claim | EMAIL повторно проверяет CP authorization и mailbox policy |
+| Claim mutation | Тот же binding; effect key из claim, не input | EMAIL durable UNKNOWN и CP Report до provider effect |
+| Lease expiry / cancel | Контекст HTTP ограничен lease и caller; истёкший binding не отправляется | CP закрыто отклоняет stale fence; gateway не продлевает authority самостоятельно |
+| Complete | Typed bounded response; исходные lease/ref/fence/generation | CP complete сохраняет результат и receipt; authoritative invocation read |
+| Unknown / truncated / timeout | Ни повторного POST, ни скрытого status lookup | CP UNKNOWN_OUTCOME; EMAIL immutable receipt и report journal |
+| Receipt read | Отдельный claimed RECEIPT с ровно одним receipt ID либо effect key | Статус unknown остаётся unknown; чтение не разрешает новый эффект |
+| Reconciliation | Gateway не вызывает owner decision от имени пользователя | CP owner decision → EMAIL bounded reconciler; исходный UNKNOWN неизменен |
+
+Зависимости: CP `88f4331ff`, EMAIL `07cd3ee69` и metadata `a67f200623`.
+Каталог остальных vendors сохранён из #1057 без расширения операций.
+
+Контрактное замечание для root #1037: POP fetch/download/attachment list пока
+возвращают parsed payload без `uid`. Текущий consumer допускает отсутствие UID
+только при отсутствии запрошенного UIDVALIDITY; присутствующий UID сверяет,
+для IMAP требует exact UID/UIDVALIDITY/folder. Это не новый authority источник:
+CP authorization и серверный source binding остаются обязательными.
+Новых CP authority fields для 21 операций не требуется. Listener 8082 и live
+mail принадлежат #1029/root и здесь не меняются. Внутренний egress gateway →
+EMAIL открыт только по exact namespace/pod selector на workload port 8443.
+
+Context7 resolve для стандартного `net/http` вернул нерелевантные библиотеки;
+проверена [официальная документация Transport](https://pkg.go.dev/net/http#Transport).
+POST не имеет `GetBody` или idempotency HTTP header; effect key находится в
+typed command, поэтому не включает автоматический replay транспорта.
 
 Неизвестный исход не подтверждает отсутствие эффекта. Нельзя менять ему state
 через SQL, повторять POST или выпускать новый effect key автоматически.
@@ -48,10 +78,12 @@ updated: 2026-09-04
 | Confluence space | `TestConfluenceForeignSpaceCannotMutate` для update, parent create и upload |
 | Human Gate/receipt/revocation | PostgreSQL `testIntegrationEffectLifecycle`: READ, REJECT, APPROVE, exact duplicate, digest mismatch, revoked queued grant |
 | UI registry | `TestValidateTypedIntegrationRegistry`; один package parser, exact зарегистрированный ready digest |
-| Email fail closed | `TestEmailNotReadyCannotSend`; generated модели `emailbridge`, sender query, fake send/status |
+| Email fail closed | `TestEmailNotReadyCannotSend`, `TestEmailEveryMutationHTTPFailureIsNotRetried`; generated `emailbridgeapi`, все 21 typed POST, без legacy sender query |
+| Email authority и TLS | `TestEmailExecutionClaimMapping`, `TestEmailTestBindingCannotAuthorizeMutation`, `TestEmailClaimExpiryBoundsHTTP`, `TestEmailExactTLSAndRedirectBoundary` |
+| Email readback и completion | `TestEmailReadbackExactIdentity`, `TestEmailCompletionPreservesFenceAndUnknown`; exact UID/UIDVALIDITY/folder/thread и исходный CP fence |
 | Synthetic | `make test-integration-synthetic`: race, HTTP CRUD/OCC, replay и local-only render |
 | Contracts | `make check-integration-package-codegen check-email-bridge-codegen check-proto-codegen`; OpenAPI re-generation comparison |
-| Migration и targeted component | `make test-integration-gateway-postgres`: fresh PostgreSQL, up/status/up, версия 20260904000500, integration и managed configuration subtests |
+| Migration и targeted component | `timeout 240s bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$/(integration|email)'`: fresh PostgreSQL, up/status/up до 20260904000620, integration и EMAIL subtests |
 | Targeted render | `make test-integration-gateway-render`: оба profiles, exact egress, probes, ServiceAccount, lease budget и unknown alert |
 
 ## Эксплуатация

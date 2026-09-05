@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
@@ -353,6 +354,24 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 		}
 		return page
 	case "email":
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/mailbox-operations" {
+			t.Error("unexpected email operation endpoint")
+		}
+		binding, err := api.ParseExecutionHeader(r.Header.Get(api.ExecutionHeader))
+		if err != nil || binding.InvocationRef == nil || binding.Lease.Fence != "fixture-fence" {
+			t.Error("email claim binding lost")
+		}
+		raw, err := io.ReadAll(r.Body)
+		var command api.Command
+		if err != nil || api.Decode(raw, &command) != nil {
+			t.Fatal("invalid email command")
+		}
+		expected, err := api.CommandForIntegration(operation, "mailbox", "sender@example.test", command.EffectKey, []byte(catalogInputs()[operation]))
+		actualJSON, _ := json.Marshal(command)
+		expectedJSON, _ := json.Marshal(expected)
+		if err != nil || string(actualJSON) != string(expectedJSON) {
+			t.Error("email command fields lost")
+		}
 		if operation == "email.delivery.health.read" {
 			return `{"status":"ready"}`
 		}
@@ -362,11 +381,16 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 		if operation == "email.mailbox.list" {
 			return `{"status":"ok","mailboxes":["mailbox"]}`
 		}
-		if operation == "email.message.list" || operation == "email.message.search" || operation == "email.thread.read" {
+		if operation == "email.thread.read" {
+			return `{"status":"ok","thread_id":"source@example.test","messages":[]}`
+		}
+		if operation == "email.message.list" || operation == "email.message.search" {
 			return `{"status":"ok","headers":[{"uid":"uid-1","from":"sender@example.test","to":"recipient@example.test","subject":"Title","size":10}],"next_cursor":"cursor-3"}`
 		}
 		if operation == "email.message.read" || operation == "email.attachment.read" || operation == "email.attachment.list" {
-			return `{"status":"ok","body_text":"Text","attachments":[{"filename":"a.txt","content_type":"text/plain","content_base64":"VGV4dA=="}]}`
+			result := api.Result{Status: "ok", Uid: command.Uid, UidValidity: command.UidValidity, BodyText: "Text", Attachments: []api.Attachment{{Filename: "a.txt", ContentType: "text/plain", ContentBase64: "VGV4dA=="}}}
+			encoded, _ := json.Marshal(result)
+			return string(encoded)
 		}
 		return `{"message_id":"3","status":"accepted"}`
 	}
