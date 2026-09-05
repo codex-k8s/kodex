@@ -176,7 +176,7 @@ func (repository *Repository) ResolveEmailReconciliation(ctx context.Context, pr
 	if principal.CallerWorkload != "email-bridge" || principal.ProjectRef != "" {
 		return entity.EmailEffectReceiptView{}, errs.ErrForbidden
 	}
-	if receiptRef == "" || decisionRef == "" || emailpolicy.ValidateExternalReceipt(externalRef, digest) != nil {
+	if receiptRef == "" || emailpolicy.ValidateExternalReceipt(externalRef, digest) != nil {
 		return entity.EmailEffectReceiptView{}, errs.ErrInvalid
 	}
 	current, err := repository.resolveScope(ctx, principal)
@@ -196,7 +196,10 @@ func (repository *Repository) ResolveEmailReconciliation(ctx context.Context, pr
 	if err != nil {
 		return entity.EmailEffectReceiptView{}, err
 	}
-	if decision == nil || decision.Ref != decisionRef || decision.ReceiptVersion != owner.receipt.Version ||
+	if decision == nil || decisionRef == "" && !decision.ExpiresAt.After(time.Now().UTC()) {
+		return entity.EmailEffectReceiptView{}, errs.ErrNotFound
+	}
+	if decisionRef != "" && decision.Ref != decisionRef || decision.ReceiptVersion != owner.receipt.Version ||
 		decision.ReceiptDigest != digest || owner.receipt.ExternalReceiptDigest != digest || owner.receipt.ExternalReceiptRef != externalRef ||
 		owner.receipt.Outcome != emailpolicy.OutcomeUnknown || owner.invocationState != "UNKNOWN_OUTCOME" ||
 		!decision.ExpiresAt.After(time.Now().UTC()) || decision.GrantRef == "" {

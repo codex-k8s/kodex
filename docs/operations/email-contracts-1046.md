@@ -123,6 +123,24 @@ Resolve принимает только email-bridge и последнее ре�
 digest, version, expiry и актуальные права actor. Предыдущий grant после нового
 решения, revoked actor permission и несовпадающая source identity отклоняются.
 
+Для ограниченного bridge reconciler `DecisionRef` может быть пустым: owner
+выбирает последнее действующее решение по exact receipt/ref/digest. Нет решения
+либо последнее истекло — NOT_FOUND без grant. Непустой DecisionRef остаётся
+строгим: нельзя получить другое решение вместо запрошенного. Это read, не consume
+и не отправка письма; bridge атомарно сохраняет своё решение/аудит и снимает
+локальную блокировку без автоматического retry, исходный UNKNOWN сохраняется.
+
+Canonical commitment принят из bridge checkpoint
+`c07e66b20762c843995c94c68b5486ab3cf1116f`; golden
+`6dfdb1521d14b99bec6fac759edeb2a11ce30120cbeb1489ab7baa0d5150e41e`.
+CP не пересчитывает его из ограниченного HTTP safe view.
+
+`CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` подключает отдельный email-bridge public
+worker key к WorkerGrantTrustFiles. Путь по умолчанию пуст: без activation
+credential не принимается; непустой путь должен быть абсолютным и нормализованным.
+Состав остальных worker keys сохраняется. Issuer, application credential и
+доставка ключа принадлежат root; эта регистрация не доказывает их readiness.
+
 Локальные проверки:
 - Go/race domain emailpolicy, platform service и gRPC transport: PASS.
 - Disposable PostgreSQL `^TestBootstrapComponent$/email_receipt`: PASS;

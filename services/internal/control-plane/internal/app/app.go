@@ -152,20 +152,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct role image service: %w", err)
 	}
-	workerGrantTrustFiles := map[string]string{
-		"automation-scheduler": config.AutomationGrantTrustFile,
-		"session-archive":      config.SessionArchiveGrantTrustFile,
-		"integration-gateway":  config.IntegrationGrantTrustFile,
-		"runtime-controller":   config.RuntimeGrantTrustFile,
-		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
-		"image-admission":      config.ImageAdmissionGrantTrustFile,
-		"image-promotion":      config.ImagePromotionGrantTrustFile,
-		"secret-broker":        config.SecretBrokerGrantTrustFile,
-		"control-plane":        config.ControlPlaneGrantTrustFile,
-	}
-	if config.InteractionGrantTrustFile != "" {
-		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
-	}
+	workerGrantTrustFiles := workerGrantTrustFilesFor(config)
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
 		SignerTrustFile:          config.ProofSignerTrustFile,

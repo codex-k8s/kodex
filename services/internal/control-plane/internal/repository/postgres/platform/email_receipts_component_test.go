@@ -48,6 +48,27 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	if err != nil || view.Receipt.Ref != "emrc_email_fixture" || view.Receipt.ProjectRef != project.Project.Ref || view.Decision != nil {
 		t.Fatalf("email owner read: %v", err)
 	}
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "email-bridge", Operation: "platform.email.reconciliation.resolve",
+	}, "email-bridge")
+	if _, err := service.ResolveEmailReconciliation(ctx, worker, view.Receipt.Ref, "", view.Receipt.ExternalReceiptRef, view.Receipt.ExternalReceiptDigest); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("missing owner-selected decision: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO control_plane.email_reconciliation_decisions
+        (ref,organization_id,receipt_id,receipt_version,receipt_digest,outcome,grant_ref,actor_id,note,created_at,expires_at)
+        SELECT 'emrd_expired_fixture',e.organization_id,e.id,e.version,e.external_receipt_digest,'NO_EFFECT_CONFIRMED','emrg_expired_fixture',r.initiated_by,'',
+               clock_timestamp()-interval '4 minutes',clock_timestamp()-interval '3 minutes'
+        FROM control_plane.email_effect_receipts e JOIN control_plane.integration_invocations i ON i.id=e.invocation_id
+        JOIN control_plane.runs r ON r.id=i.run_id WHERE e.ref='emrc_email_fixture'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ResolveEmailReconciliation(ctx, worker, view.Receipt.Ref, "", view.Receipt.ExternalReceiptRef, view.Receipt.ExternalReceiptDigest); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("expired owner-selected decision: %v", err)
+	}
+	if _, err := service.ResolveEmailReconciliation(ctx, worker, view.Receipt.Ref, "emrd_expired_fixture", view.Receipt.ExternalReceiptRef, view.Receipt.ExternalReceiptDigest); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("expired explicit decision: %v", err)
+	}
 	version := int64(1)
 	input := command.Command{Kind: command.ReconcileEmailEffect, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-reconcile", ExpectedVersion: &version},
@@ -142,10 +163,6 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	if _, err := service.Execute(ctx, candidateCommand); err != nil {
 		t.Fatalf("intersection reconciliation: %v", err)
 	}
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "email-bridge", Operation: "platform.email.reconciliation.resolve",
-	}, "email-bridge")
 	latest, err := service.GetEmailEffectReceipt(ctx, owner, "email_receipt_invocation")
 	if err != nil || latest.Decision == nil {
 		t.Fatalf("read latest email decision: %v", err)
@@ -156,6 +173,9 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	}
 	if err := resolve(worker, latest.Decision.Ref, latest.Receipt.ExternalReceiptRef, latest.Receipt.ExternalReceiptDigest); err != nil {
 		t.Fatalf("resolve exact email decision: %v", err)
+	}
+	if err := resolve(worker, "", latest.Receipt.ExternalReceiptRef, latest.Receipt.ExternalReceiptDigest); err != nil {
+		t.Fatalf("resolve owner-selected email decision: %v", err)
 	}
 	for _, kind := range []string{"worker", "decision", "external-ref", "digest"} {
 		p, decision, externalRef, digest := worker, latest.Decision.Ref, latest.Receipt.ExternalReceiptRef, latest.Receipt.ExternalReceiptDigest
