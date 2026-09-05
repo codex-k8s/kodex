@@ -6,7 +6,7 @@ import (
 	"net/netip"
 )
 
-// RenderFiles материализует согласованные immutable policy, CNI pins и Deployment patch.
+// RenderFiles материализует общий immutable policy, CNI pins и Deployment patch.
 // Результат содержит только endpoint metadata, исходные descriptor values не копируются.
 func RenderFiles(document MailDocument) (map[string][]byte, error) {
 	if err := document.Validate(); err != nil {

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/miekg/dns"
 )
@@ -39,10 +40,7 @@ type Error struct{ Reason Reason }
 func (err *Error) Error() string { return "DNS resolution rejected: " + string(err.Reason) }
 
 // Snapshot — полный проверенный набор literal addresses с bounded expiry.
-type Snapshot struct {
-	Addresses []netip.Addr
-	ExpiresAt time.Time
-}
+type Snapshot = shared.Snapshot
 
 // Exchanger выполняет ровно один DNS exchange к literal resolver address.
 type Exchanger interface {

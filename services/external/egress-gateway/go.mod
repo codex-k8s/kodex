@@ -14,6 +14,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/jsonschema-go v0.3.0
@@ -24,6 +25,8 @@ require (
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
 
 replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/emailbridgeapi
+
+replace github.com/codex-k8s/kodex/libs/go/mailpolicy => ../../../libs/go/mailpolicy
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect

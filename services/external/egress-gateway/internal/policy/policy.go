@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
+
+	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
 const (
@@ -230,30 +230,7 @@ func (active *Active) Allows(hostname string, port int) bool {
 
 // NormalizeHostname принимает только уже canonical lowercase ASCII FQDN.
 func NormalizeHostname(value string) (string, error) {
-	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "*@/\\[]:%") || len(value) > 254 {
-		return "", errors.New("hostname is invalid")
-	}
-	if value != strings.ToLower(value) || strings.HasSuffix(value, ".") || len(value) > 253 {
-		return "", errors.New("hostname is invalid")
-	}
-	if _, err := netip.ParseAddr(value); err == nil {
-		return "", errors.New("IP literal is prohibited")
-	}
-	labels := strings.Split(value, ".")
-	if len(labels) < 2 {
-		return "", errors.New("hostname must be a FQDN")
-	}
-	for _, label := range labels {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return "", errors.New("hostname label is invalid")
-		}
-		for _, character := range label {
-			if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
-				return "", errors.New("hostname must use ASCII LDH labels")
-			}
-		}
-	}
-	return value, nil
+	return shared.NormalizeHostname(value)
 }
 
 func validate(document *Document) error {
