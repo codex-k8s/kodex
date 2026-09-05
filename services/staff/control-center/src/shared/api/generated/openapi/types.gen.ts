@@ -584,7 +584,7 @@ export type SystemSttSpecification = {
     enabled: boolean;
     providerAccountRef: OpaqueRef;
     /**
-     * Проверяется общим исполняемым modelprofile
+     * Проверяется общим исполняемым modelprofile, не произвольным LLM catalog.
      */
     model: string;
     language: string;
