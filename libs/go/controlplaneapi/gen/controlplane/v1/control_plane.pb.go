@@ -35660,6 +35660,7 @@ type GetRuntimeEnvironmentImpactRequest struct {
 	EnvironmentRef string                 `protobuf:"bytes,1,opt,name=environment_ref,json=environmentRef,proto3" json:"environment_ref,omitempty"`
 	VersionRef     string                 `protobuf:"bytes,2,opt,name=version_ref,json=versionRef,proto3" json:"version_ref,omitempty"`
 	Page           *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	Query          string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -35713,6 +35714,13 @@ func (x *GetRuntimeEnvironmentImpactRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *GetRuntimeEnvironmentImpactRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
 }
 
 type GetRuntimeEnvironmentImpactResponse struct {
@@ -36404,6 +36412,7 @@ type GetRuntimeSecretImpactRequest struct {
 	SecretRef     string                 `protobuf:"bytes,1,opt,name=secret_ref,json=secretRef,proto3" json:"secret_ref,omitempty"`
 	Revision      int64                  `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 	Page          *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -36457,6 +36466,13 @@ func (x *GetRuntimeSecretImpactRequest) GetPage() *PageRequest {
 		return x.Page
 	}
 	return nil
+}
+
+func (x *GetRuntimeSecretImpactRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
 }
 
 type GetRuntimeSecretImpactResponse struct {
@@ -54803,12 +54819,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vversion_ref\x18\x05 \x01(\tR\n" +
 	"versionRef\x12\x1f\n" +
 	"\vproject_ref\x18\x06 \x01(\tR\n" +
-	"projectRef\"\xa0\x01\n" +
+	"projectRef\"\xb6\x01\n" +
 	"\"GetRuntimeEnvironmentImpactRequest\x12'\n" +
 	"\x0fenvironment_ref\x18\x01 \x01(\tR\x0eenvironmentRef\x12\x1f\n" +
 	"\vversion_ref\x18\x02 \x01(\tR\n" +
 	"versionRef\x120\n" +
-	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\xe2\x02\n" +
+	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\"\xe2\x02\n" +
 	"#GetRuntimeEnvironmentImpactResponse\x12'\n" +
 	"\x0fenvironment_ref\x18\x01 \x01(\tR\x0eenvironmentRef\x12/\n" +
 	"\x13environment_version\x18\x02 \x01(\x03R\x12environmentVersion\x12,\n" +
@@ -54867,12 +54884,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x13environment_version\x18\x02 \x01(\x03R\x12environmentVersion\x126\n" +
 	"\x17environment_version_ref\x18\x03 \x01(\tR\x15environmentVersionRef\x12)\n" +
 	"\x10secret_revisions\x18\x04 \x03(\x03R\x0fsecretRevisions\x12G\n" +
-	"\bconsumer\x18\x05 \x01(\v2+.controlplane.v1.RuntimeEnvironmentConsumerR\bconsumer\"\x8c\x01\n" +
+	"\bconsumer\x18\x05 \x01(\v2+.controlplane.v1.RuntimeEnvironmentConsumerR\bconsumer\"\xa2\x01\n" +
 	"\x1dGetRuntimeSecretImpactRequest\x12\x1d\n" +
 	"\n" +
 	"secret_ref\x18\x01 \x01(\tR\tsecretRef\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x120\n" +
-	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\xa0\x02\n" +
+	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\"\xa0\x02\n" +
 	"\x1eGetRuntimeSecretImpactResponse\x12\x1d\n" +
 	"\n" +
 	"secret_ref\x18\x01 \x01(\tR\tsecretRef\x12%\n" +

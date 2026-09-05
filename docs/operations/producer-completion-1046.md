@@ -320,6 +320,21 @@ PostgreSQL `^TestBootstrapComponent$/(role_image_promotion|runtime_environment_l
 и promoted-image fixtures; assertions не ослаблялись, зависимости включены явно.
 Один `managed_draft` subtest самодостаточен. Git import/writeback этим не реализованы.
 
+## Поиск Impact D7
+
+`GetRuntimeEnvironmentImpactRequest.query = 4` и
+`GetRuntimeSecretImpactRequest.query = 4`: строка до 200 Unicode символов,
+без NUL; пробелы по краям удаляются. Поиск без учёта регистра по именам и refs
+consumer/environment/project выполняется литеральной подстрокой в SQL до LIMIT.
+Eligibility остаётся до LIMIT; total относится к доступным найденным строкам.
+Cursor связан с organization/actor/authority project, ресурсом, target revision
+и поиском. Изменённый поиск с прежним cursor возвращает InvalidArgument.
+
+Локально PASS: Proto lint/codegen, `TestImpactSearchRejectsInvalidInput`/race,
+targeted PG `role_image_promotion|runtime_environment_draft|secret_revision_impact`.
+Первый запуск без image fixture: FAIL (no rows), исправление assertions не
+требовалось. Managed impact query/cursor остаётся отдельной незавершённой частью D7.
+
 ## Оставшаяся реализация
 
 SkillBundle/Memory CRUD, bindings и реальные VFS context узлы реализованы:
