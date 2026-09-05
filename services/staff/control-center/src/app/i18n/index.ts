@@ -356,6 +356,21 @@ const ru = {
     },
     diff: "Изменения",
     sttEnabled: "Распознавание речи включено",
+    sttCatalog: {
+      recommended: "Рекомендованная модель",
+      recommendations:
+        "Рекомендации: {model}, {bytes} байт, {milliseconds} мс. Они не заменяют предельные значения и не меняют документ автоматически.",
+      keywordBounds: "До {count} ключевых слов, до {bytes} байт UTF-8 каждое.",
+      legacy: "Прежнее поколение",
+      metadata:
+        "Каталог {version}; дата проверки адаптера: {observedAt}. Это не проверка доступности провайдера.",
+      failed: "Каталог моделей недоступен. Сохранённые значения не изменены.",
+      unconfirmed:
+        "Сохранённая модель пока не подтверждена каталогом. Выберите модель из доступного каталога; итоговую конфигурацию проверяет сервер.",
+      parameterUnconfirmed:
+        "Параметр не подтверждён текущим профилем. Сохранённое значение доступно для исправления; сервер выполняет окончательную проверку.",
+      promptBytes: "Ограничение профиля: {count} байт UTF-8.",
+    },
     sttParameters: {
       languages: "Языки (коды, по одному на строку)",
       keywords: "Ключевые слова (по одному на строку)",
@@ -2838,6 +2853,21 @@ const en = {
   managed: {
     diff: "Changes",
     sttEnabled: "Speech transcription enabled",
+    sttCatalog: {
+      recommended: "Recommended model",
+      recommendations:
+        "Recommendations: {model}, {bytes} bytes, {milliseconds} ms. They do not replace limits or change the document automatically.",
+      keywordBounds: "Up to {count} keywords, up to {bytes} UTF-8 bytes each.",
+      legacy: "Legacy model",
+      metadata:
+        "Catalog {version}; adapter verification date: {observedAt}. This is not a provider availability check.",
+      failed: "Model catalog unavailable. Saved values are unchanged.",
+      unconfirmed:
+        "The saved model is not confirmed by the catalog yet. Select a catalog model; the server validates the final configuration.",
+      parameterUnconfirmed:
+        "The current profile does not confirm this parameter. Saved values remain editable; the server performs final validation.",
+      promptBytes: "Profile limit: {count} UTF-8 bytes.",
+    },
     form: "Form",
     editMode: "Editor mode",
     invalidDocument: "Fix the source document syntax before editing the form.",

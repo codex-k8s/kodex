@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка каталога STT</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import ConfigurationFields from "../../src/features/managed-configurations/ConfigurationFields.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      createApp({
+        setup() {
+          const document = ref(
+            JSON.stringify({
+              stt: {
+                model: "saved-unlisted",
+                language: "",
+                parameters: {
+                  languages: ["ru"],
+                  keywords: ["Сохранённое слово"],
+                  prompt: "Сохранённый контекст",
+                  temperature: 0.4,
+                  chunkingStrategy: "auto",
+                  stream: false,
+                },
+                maximumAudioBytes: 10485760,
+                maximumAudioDurationMilliseconds: 120000,
+                providerTimeoutMilliseconds: 15000,
+              },
+            }),
+          );
+          return () =>
+            h(
+              "main",
+              { style: "max-width: 1000px; margin: auto; padding: 16px" },
+              [
+                h(ConfigurationFields, {
+                  kind: "SYSTEM_STT",
+                  name: "Распознавание",
+                  format: "JSON",
+                  modelValue: document.value,
+                  "onUpdate:modelValue": (value) => (document.value = value),
+                }),
+                h(
+                  "output",
+                  {
+                    "data-testid": "document",
+                    style: "display:block; overflow-wrap:anywhere",
+                  },
+                  document.value,
+                ),
+              ],
+            );
+        },
+      })
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

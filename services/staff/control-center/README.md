@@ -526,7 +526,7 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 | Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                              |
 | 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference. Точный Secret revision уже сохраняется при edit/reauth.                                                                    |
 | 41             | Mailbox panel; typed email-mailbox endpoints                                                | Интеграционная проверка COPY/DETACH, реальная delivery и protocol readiness.                                                                                          |
-| 56             | Speech settings/voice; speech bootstrap и transcriptions                                    | STT producer catalog существует в #1053; сквозная HTTP/SDK eligibility/model/parameter projection проверяется владельцами STT/HTTP.                                   |
+| 56             | ConfigurationFields; `/system-stt/model-catalog`, speech bootstrap и transcriptions         | Каталог подключён к выбору модели и параметрам. Реальная bootstrap authority/adapter readiness проверяется владельцами STT/HTTP; каталог не означает READY.           |
 
 Остальные строки исходной матрицы выше требуют общей интеграционной и ручной
 приёмки; локальный unit/browser PASS не превращает их в выполненные business
@@ -788,6 +788,25 @@ reload результат восстанавливается авторитет�
 предупреждениях Ajv/esbuild до записи generated validator. Проверка на отдельной
 временной схеме без object type подтверждает этот отказ; исправленный исходный
 контракт проходит генерацию.
+
+## Каталог STT в форме
+
+`ConfigurationFields` читает типизированный `/system-stt/model-catalog` до
+создания первой конфигурации. Общий AsyncEntityPicker ищет в полном ограниченном
+каталоге; версия и дата относятся к проверке адаптера, а не к живому provider probe.
+Идентификаторы моделей не зашиты в форму. Сохранённая отсутствующая модель и
+параметры не теряются при чтении, ошибке каталога или выборе другой модели.
+Не подтверждённые профилем значения остаются видимыми для исправления и
+окончательной серверной проверки. `chunking_strategy` явно связывается с DTO
+`chunkingStrategy`; будущие значения не расширяют текущую OpenAPI enum.
+
+Именованные границы формы взяты из принятого OpenAPI: размер 1024..26214400 байт,
+длительность 1000..1800000 мс, timeout 1000..15000 мс. Рекомендации каталога
+показаны отдельно и не подменяют эти границы. Профиль задаёт ограничения prompt,
+keywords и temperature; текущий публичный API по-прежнему не допускает stream=true.
+Динамическая проекция общей policy min/max отсутствует в текущем каталоге.
+`stt-catalog.synthetic.spec.ts` проверяет сохранение значений, поиск, ошибку
+каталога и геометрию на 390/2900; реальный STT/provider/runtime остаётся NOT RUN.
 
 ## Deploy ownership
 

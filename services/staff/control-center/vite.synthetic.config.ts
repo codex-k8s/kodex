@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        sttCatalog: fileURLToPath(
+          new URL("./e2e/fixtures/stt-catalog.html", import.meta.url),
+        ),
         mailbox: fileURLToPath(
           new URL("./e2e/fixtures/mailbox.html", import.meta.url),
         ),
