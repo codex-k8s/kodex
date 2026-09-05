@@ -159,3 +159,22 @@ credential не принимается; непустой путь должен �
 
 Policy revision 52 сохраняет scheduler/interaction/STT operations и добавляет
 только отдельный email-bridge producer с тремя закрытыми operations.
+
+## Watermark служебного grant
+
+Миграция `20260904000617` добавляет `email-bridge` в закрытый CP registry,
+сохраняя все прежние workloads. `AcceptWorkerGrant` принимает только повышение
+credential generation, повышение revision внутри поколения либо exact replay
+с теми же issued/expires timestamps. Единственный SQL `RETURNING` относится
+к строке под конфликтной блокировкой: fallback на старый statement snapshot
+не используется. Watermark сохраняется в PostgreSQL после замены pod.
+
+Disposable PostgreSQL `^TestBootstrapComponent$/email_worker`: PASS, включая
+конкурентный запрос старого поколения, заведомо заблокированный новой записью,
+rollback revision, старое поколение с большей revision и несовпадение envelope.
+Go/race `TestWorkerGrantHighWatermark`: PASS.
+
+Для профиля с EMAIL требуется env `CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` с
+путём `/var/run/config/kodex/control-plane/application-grants/email-bridge.platform-worker.public.jwk`.
+Отсутствие env не включает EMAIL trust автоматически. Ключи и issuer поставляет
+зависимость #1059; данная проверка SQL не доказывает protected issuer readback.

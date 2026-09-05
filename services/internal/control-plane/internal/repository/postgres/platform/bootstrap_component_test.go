@@ -186,6 +186,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("email receipt reconciliation is fresh exact and non retrying", func(t *testing.T) {
 		testEmailReceiptReconciliation(t, ctx, repository, pool)
 	})
+	t.Run("email worker watermark rejects rollback", func(t *testing.T) {
+		testEmailWorkerWatermark(t, ctx, repository)
+	})
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
 	})
