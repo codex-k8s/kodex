@@ -11,6 +11,7 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -78,10 +79,10 @@ func TestRuntimeRevisionDiffTypedProjection(t *testing.T) {
 
 func TestRuntimeRevisionDiffPreviousAndEmpty(t *testing.T) {
 	response := runtimeDiffFixture()
-	old := *response.Current
+	old := proto.Clone(response.Current).(*cp.PublicRuntimeRevisionIdentity)
 	old.Ref, old.RunRef, old.Version, old.TurnRef = "rrv_previous01", "run_previous01", 1, ""
 	old.CreatedAt = timestamppb.New(old.CreatedAt.AsTime().Add(-time.Minute))
-	response.Previous = &old
+	response.Previous = old
 	response.Changes = []*cp.RuntimeRevisionDiffChange{{Component: cp.RuntimeRevisionDiffComponent_RUNTIME_REVISION_DIFF_COMPONENT_MODEL, Previous: &cp.RuntimeRevisionDiffValue{Ref: "gpt-5.5"}, Current: &cp.RuntimeRevisionDiffValue{Ref: "gpt-6-astra"}}}
 	for _, empty := range []bool{false, true} {
 		if empty {
@@ -121,10 +122,10 @@ func TestRuntimeRevisionDiffRejectMalformed(t *testing.T) {
 			r.Changes[0].Previous = &cp.RuntimeRevisionDiffValue{Ref: "private"}
 		},
 		"foreign session": func(r *cp.GetRuntimeRevisionDiffResponse) {
-			old := *r.Current
+			old := proto.Clone(r.Current).(*cp.PublicRuntimeRevisionIdentity)
 			old.Ref = "rrv_previous01"
 			old.SessionRef = "ses_foreign01"
-			r.Previous = &old
+			r.Previous = old
 		},
 		"profile digest":     func(r *cp.GetRuntimeRevisionDiffResponse) { r.Changes[2].Current.Digest = strings.Repeat("a", 64) },
 		"incomplete binding": func(r *cp.GetRuntimeRevisionDiffResponse) { r.Changes[7].Current.Version = 0 },
