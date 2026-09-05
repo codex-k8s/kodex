@@ -923,6 +923,35 @@ export type RuntimeSecret = {
     updatedAt: Timestamp;
 };
 
+export type RuntimeSecretDraft = {
+    ref: OpaqueRef;
+    version: number;
+    generation: number;
+    projectRef: OpaqueRef;
+    secretRef: OpaqueRef;
+    /**
+     * Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft.
+     */
+    secretVersion: number;
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    state: 'PREPARING' | 'DRAFT' | 'VALID' | 'PUBLISHING' | 'PUBLISHED' | 'DISCARDED' | 'EXPIRED' | 'FAILED';
+    publishedRevision: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    expiresAt: Timestamp;
+};
+
+export type RuntimeSecretDraftPublishInput = {
+    expectedSecretVersion: number;
+};
+
+export type RuntimeSecretDraftPublication = {
+    draft: RuntimeSecretDraft;
+    secret: RuntimeSecret;
+};
+
 export type RuntimeSecretPage = {
     items: Array<RuntimeSecret>;
     nextPageToken: string;
@@ -2562,6 +2591,8 @@ export type AccessBindingRef = OpaqueRef;
 export type AgentRef = OpaqueRef;
 
 export type RuntimeEnvironmentRef = OpaqueRef;
+
+export type RuntimeSecretDraftRef = OpaqueRef;
 
 export type RuntimeEnvironmentDraftRef = OpaqueRef;
 
@@ -5724,6 +5755,192 @@ export type RotateRuntimeSecretResponses = {
 };
 
 export type RotateRuntimeSecretResponse = RotateRuntimeSecretResponses[keyof RotateRuntimeSecretResponses];
+
+export type CreateRuntimeSecretDraftData = {
+    body: RuntimeSecretCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-secret-drafts';
+};
+
+export type CreateRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeSecretDraftError = CreateRuntimeSecretDraftErrors[keyof CreateRuntimeSecretDraftErrors];
+
+export type CreateRuntimeSecretDraftResponses = {
+    /**
+     * Черновик сохранён без активации Secret
+     */
+    201: RuntimeSecretDraft;
+};
+
+export type CreateRuntimeSecretDraftResponse = CreateRuntimeSecretDraftResponses[keyof CreateRuntimeSecretDraftResponses];
+
+export type SaveRuntimeSecretDraftData = {
+    body: RuntimeSecretRotateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/drafts';
+};
+
+export type SaveRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRuntimeSecretDraftError = SaveRuntimeSecretDraftErrors[keyof SaveRuntimeSecretDraftErrors];
+
+export type SaveRuntimeSecretDraftResponses = {
+    /**
+     * Черновик сохранён без изменения активной revision
+     */
+    201: RuntimeSecretDraft;
+};
+
+export type SaveRuntimeSecretDraftResponse = SaveRuntimeSecretDraftResponses[keyof SaveRuntimeSecretDraftResponses];
+
+export type GetRuntimeSecretDraftData = {
+    body?: never;
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}';
+};
+
+export type GetRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretDraftError = GetRuntimeSecretDraftErrors[keyof GetRuntimeSecretDraftErrors];
+
+export type GetRuntimeSecretDraftResponses = {
+    /**
+     * Авторитетное состояние черновика без значений и storage descriptors
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type GetRuntimeSecretDraftResponse = GetRuntimeSecretDraftResponses[keyof GetRuntimeSecretDraftResponses];
+
+export type ValidateRuntimeSecretDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/validate';
+};
+
+export type ValidateRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRuntimeSecretDraftError = ValidateRuntimeSecretDraftErrors[keyof ValidateRuntimeSecretDraftErrors];
+
+export type ValidateRuntimeSecretDraftResponses = {
+    /**
+     * Сохранённое значение расшифровано и проверено broker
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type ValidateRuntimeSecretDraftResponse = ValidateRuntimeSecretDraftResponses[keyof ValidateRuntimeSecretDraftResponses];
+
+export type PublishRuntimeSecretDraftData = {
+    body: RuntimeSecretDraftPublishInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/publish';
+};
+
+export type PublishRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeSecretDraftError = PublishRuntimeSecretDraftErrors[keyof PublishRuntimeSecretDraftErrors];
+
+export type PublishRuntimeSecretDraftResponses = {
+    /**
+     * Immutable revision активирована владельцем после exact readback
+     */
+    200: RuntimeSecretDraftPublication;
+};
+
+export type PublishRuntimeSecretDraftResponse = PublishRuntimeSecretDraftResponses[keyof PublishRuntimeSecretDraftResponses];
+
+export type DiscardRuntimeSecretDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/discard';
+};
+
+export type DiscardRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRuntimeSecretDraftError = DiscardRuntimeSecretDraftErrors[keyof DiscardRuntimeSecretDraftErrors];
+
+export type DiscardRuntimeSecretDraftResponses = {
+    /**
+     * Черновик закрыт, ciphertext удалён с exact preconditions
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type DiscardRuntimeSecretDraftResponse = DiscardRuntimeSecretDraftResponses[keyof DiscardRuntimeSecretDraftResponses];
 
 export type RevealRuntimeSecretData = {
     body?: never;

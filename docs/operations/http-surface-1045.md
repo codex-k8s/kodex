@@ -10,6 +10,63 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## D6: зашифрованный черновик Secret
+
+Зависимости: полный CP `8b4ac92f` принят merge; `78b812699` добавляет
+authoritative `secret_version`, broker `d11a1e0d9` передаёт тот же pin.
+Источники: #1045/#1046/#1068, MVP-UI-47, CFG-03 и
+`runtime-secret-draft-lifecycle-1046.md`. Это промежуточный SDK checkpoint:
+prepublication impact plan и выбор заменяемых потребителей ещё готовит CP;
+существующий postpublication impact/rebind не заменяет требование UI-47.
+
+| Инициатор и HTTP | RPC и полномочия | Fence, переход и результат |
+| --- | --- | --- |
+| Session actor → POST projects/{projectRef}/runtime-secret-drafts | PrepareSaveRuntimeSecretDraft, secret.create/fresh auth; project только locator | Idempotency-Key и exact value commitment; server refs → PREPARING → SaveSecretDraft → DRAFT |
+| Session actor → POST runtime-secrets/{secretRef}/drafts | тот же PrepareSave, secret.rotate/fresh auth; existing owner разрешает CP | If-Match Secret, immutable отдельный draft; активная revision не меняется |
+| Session actor → POST runtime-secret-drafts/{draftRef}/validate | PrepareValidate → ValidateSecretDraft, exact owner/fresh auth | If-Match Draft, idempotency; broker decrypt/validate → VALID |
+| Session actor → POST runtime-secret-drafts/{draftRef}/publish | PreparePublish → PublishSecretDraft, exact owner/fresh auth | If-Match Draft и expectedSecretVersion из owner read; fenced activation → PUBLISHED + safe Secret |
+| Session actor → POST runtime-secret-drafts/{draftRef}/discard | PrepareDiscard → DiscardSecretDraft | If-Match Draft, idempotency; owner закрывает grants до exact ciphertext cleanup → DISCARDED |
+| Session actor → GET runtime-secret-drafts/{draftRef} | GetRuntimeSecretDraft; owner eligibility до чтения | Safe current state + version/secretVersion, без изменений или event |
+
+Все mutations проходят session/tenant/revocation/CSRF middleware. CP prepare
+SAVE использует policy57 UNARY_PROTO_SHA256, metadata resource/version/attempt
+FORBIDDEN, idempotency REQUIRED; остальные prepare привязаны к draft_ref и
+mutation.expected_version. Idempotency не заменяет свежую owner проверку.
+Владелец CP атомарно фиксирует state/receipt/audit; отдельного event нет,
+authoritative public read — GetDraft/GetSecret, worker rejoin принадлежит broker.
+
+Пять broker D6 RPC используют отдельное protected connection: exact mTLS
+hostname/CA + OIDC proof control-plane.oidc-secret-draft + local issuer context,
+digest фактического protobuf request. Эти RPC не маршрутизируются в CP.
+Resource/version/attempt/idempotency metadata запрещены; одноразовый grant
+остаётся внутри protobuf gateway→broker и никогда не выдаётся браузеру.
+Перед effect gateway вызывает CheckSecretDraftReadiness через тот же protected
+client с пользовательским OIDC context. Background gateway readiness не
+подменяет пользователя; broker владеет своим storage/keyring/owner readiness.
+Используются существующие gateway identity/mount/network destination; delivery
+policy57 и broker encrypted namespace/keyring принадлежат #1068 и owner profile.
+
+HTTP не сохраняет значение; plaintext byte buffer очищается после broker call,
+в том числе ошибки. Ответы no-store и ETag Draft. Safe draft не содержит value,
+display hint, digest, grant, key ID или storage locator. Unknown enum, чужой
+ref/tenant/Secret, неверный generation/version, неполный terminal receipt и
+неверный published pin отклоняются 502. Ошибки CP/broker сохраняют строгий
+Problem mapping, без upstream diagnostics или синтетического успеха.
+
+При потерянном SAVE ответе повторяют exact body и Idempotency-Key: CP возвращает
+сохранённый terminal snapshot без нового broker effect либо fresh fenced grant.
+CLAIMED/несовпавший intent дают Conflict. После terminal replay перед следующей
+операцией выполняют GetDraft; secretVersion snapshot не подменяется latest.
+При DISCARD completion версия может совпасть с prepare: owner уже закрыл draft
+в prepare, broker только подтвердил cleanup. Отмена/timeout не доказывают откат
+зафиксированного owner intent; recovery принадлежит CP/broker, UI читает owner.
+
+Ручная проверка: сохранить значение, перечитать draft после reload, проверить
+VALID, опубликовать с обоими pins, перечитать Secret; отдельно отменить draft.
+Повторить запрос с прежним ключом, чужим ref, stale If-Match и revoked session;
+проверить отсутствие значений/grants в responses. Prepublication impact требует
+следующего согласованного producer checkpoint, текущий SDK не завершает UI-47.
+
 ## D4, CP 8e532589e
 
 Session actor → GET `runs/{runRef}/runtime-revision-diff` с optional

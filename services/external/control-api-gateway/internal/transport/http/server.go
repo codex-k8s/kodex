@@ -25,13 +25,14 @@ import (
 const maximumJSONBody = 1 << 20
 
 type Server struct {
-	control  *controlplaneclient.Client
-	secrets  secretbrokerv1.SecretBrokerServiceClient
-	speech   speechToTextClient
-	boundary *boundary.Boundary
-	logger   *slog.Logger
-	realtime http.Handler
-	texts    *texti18n.Localizer
+	control      *controlplaneclient.Client
+	secrets      secretbrokerv1.SecretBrokerServiceClient
+	secretDrafts secretbrokerv1.SecretBrokerServiceClient
+	speech       speechToTextClient
+	boundary     *boundary.Boundary
+	logger       *slog.Logger
+	realtime     http.Handler
+	texts        *texti18n.Localizer
 }
 
 func New(control *controlplaneclient.Client, security *boundary.Boundary, logger *slog.Logger, texts *texti18n.Localizer) (*Server, error) {
@@ -46,6 +47,14 @@ func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServi
 		return errors.New("secret broker attachment is invalid")
 	}
 	server.secrets = client
+	return nil
+}
+
+func (server *Server) AttachSecretDraftBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
+	if client == nil || server.secretDrafts != nil {
+		return errors.New("secret draft broker attachment is invalid")
+	}
+	server.secretDrafts = client
 	return nil
 }
 
