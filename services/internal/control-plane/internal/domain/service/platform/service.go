@@ -27,6 +27,7 @@ import (
 type Service struct {
 	repository                     repository.Repository
 	credentialMaterializer         CredentialMaterializer
+	emailCredentialMaterializer    CredentialMaterializer
 	providerCredentialMaterializer ProviderCredentialMaterializer
 }
 
@@ -36,6 +37,10 @@ type Option func(*Service)
 
 func WithCredentialMaterializer(materializer CredentialMaterializer) Option {
 	return func(service *Service) { service.credentialMaterializer = materializer }
+}
+
+func WithEmailCredentialMaterializer(materializer CredentialMaterializer) Option {
+	return func(service *Service) { service.emailCredentialMaterializer = materializer }
 }
 
 func New(repo repository.Repository, options ...Option) (*Service, error) {
@@ -453,9 +458,14 @@ func organizationTargetForPreview(ref string) entity.AccessScope {
 	return entity.AccessScope{Kind: "ORGANIZATION", ResourceKind: "ORGANIZATION", ResourceRef: ref}
 }
 func (service *Service) ListModelCapabilities(ctx context.Context, p value.Principal, definitionKey, accountRef string, filter query.Filter) ([]entity.ModelCapability, int64, string, error) {
+	result, err := service.ListModelCatalog(ctx, p, definitionKey, accountRef, filter)
+	return result.Models, result.Total, result.NextPageToken, err
+}
+
+func (service *Service) ListModelCatalog(ctx context.Context, p value.Principal, definitionKey, accountRef string, filter query.Filter) (entity.ModelCatalog, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
 	return service.repository.ListModelCapabilities(ctx, p, strings.TrimSpace(definitionKey), strings.TrimSpace(accountRef), filter)
@@ -961,6 +971,18 @@ func (service *Service) executeResolved(ctx context.Context, input command.Comma
 	}
 	input.Mutation.Operation = "controlplane." + strings.ToLower(string(input.Kind))
 	intentPayload := input.Payload
+	if input.Kind == command.ConfigureEmailCredential {
+		payload, ok := input.Payload.(command.EmailCredentialInput)
+		if !ok {
+			return command.Result{}, errs.ErrInvalid
+		}
+		intentPayload = struct {
+			ConnectionRef, Name, Kind, Digest string
+			Generation                        int64
+		}{
+			payload.ConnectionRef, payload.Credential.Name, payload.Credential.Kind, payload.Credential.ContentSHA256, payload.Credential.Generation,
+		}
+	}
 	if input.Kind == command.ConfigureConnectionCredential {
 		payload, ok := input.Payload.(command.ConnectionInput)
 		if !ok || payload.CredentialRevision == nil {
@@ -1151,6 +1173,8 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 
 func knownCommand(kind command.Kind) bool {
 	switch kind {
+	case command.ReconcileEmailEffect, command.ReportEmailEffect:
+		return true
 	case command.BindAgentMemoryRecord, command.UnbindAgentMemoryRecord, command.BindAgentSkillBundle, command.UnbindAgentSkillBundle:
 		return true
 	case command.CreateSkillBundleDraft, command.SaveSkillBundleDraft, command.ValidateSkillBundleDraft:
@@ -1184,9 +1208,9 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
 		command.RefreshProviderAuthorization, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
-		command.ConfigureConnectionCredential,
+		command.ConfigureConnectionCredential, command.ConfigureEmailCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
-		command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
+		command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,

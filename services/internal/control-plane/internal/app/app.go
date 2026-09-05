@@ -81,6 +81,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
+	if err := repository.ConfigureRuntimeSecretStaging(config.RuntimeSecretStagingNamespace); err != nil {
+		return fmt.Errorf("configure runtime secret staging: %w", err)
+	}
+	emailProjection, err := initializeEmailProjection(startup, repository, config)
+	if err != nil {
+		return fmt.Errorf("initialize email projection: %w", err)
+	}
 	skillScanner, err := skillscanclient.New(config.SkillScannerSocket, config.SkillScannerTimeout)
 	if err != nil {
 		return fmt.Errorf("construct skill scanner: %w", err)
@@ -134,8 +141,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct provider credential materializer adapter: %w", err)
 	}
+	emailCredentials, err := constructEmailCredentialMaterializer(config)
+	if err != nil {
+		return fmt.Errorf("construct email credential materializer: %w", err)
+	}
 	service, err := platformservice.New(repository,
 		platformservice.WithCredentialMaterializer(credentialMaterializer),
+		platformservice.WithEmailCredentialMaterializer(emailCredentials),
 		platformservice.WithProviderCredentialMaterializer(providerMaterializer),
 	)
 	if err != nil {
@@ -152,20 +164,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct role image service: %w", err)
 	}
-	workerGrantTrustFiles := map[string]string{
-		"automation-scheduler": config.AutomationGrantTrustFile,
-		"session-archive":      config.SessionArchiveGrantTrustFile,
-		"integration-gateway":  config.IntegrationGrantTrustFile,
-		"runtime-controller":   config.RuntimeGrantTrustFile,
-		"role-image-builder":   config.RoleImageBuilderGrantTrustFile,
-		"image-admission":      config.ImageAdmissionGrantTrustFile,
-		"image-promotion":      config.ImagePromotionGrantTrustFile,
-		"secret-broker":        config.SecretBrokerGrantTrustFile,
-		"control-plane":        config.ControlPlaneGrantTrustFile,
-	}
-	if config.InteractionGrantTrustFile != "" {
-		workerGrantTrustFiles["interaction-gateway"] = config.InteractionGrantTrustFile
-	}
+	workerGrantTrustFiles := workerGrantTrustFilesFor(config)
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
 		SignerTrustFile:          config.ProofSignerTrustFile,
@@ -246,6 +245,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterRuntimeSecretDraftWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
@@ -276,7 +276,8 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, cleanupClaimHealth, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
+		emailProjection.Run,
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
@@ -356,17 +357,21 @@ func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger
 }
 
 func readBoundedFile(path string) ([]byte, error) {
+	return readBoundedFileLimit(path, maximumSecretFileBytes)
+}
+
+func readBoundedFileLimit(path string, maximum int64) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, errors.New("open protected file")
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximumSecretFileBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximum {
 		return nil, errors.New("protected file is invalid")
 	}
-	value, err := io.ReadAll(io.LimitReader(file, maximumSecretFileBytes+1))
-	if err != nil || len(value) == 0 || len(value) > maximumSecretFileBytes {
+	value, err := io.ReadAll(io.LimitReader(file, maximum+1))
+	if err != nil || len(value) == 0 || int64(len(value)) > maximum {
 		return nil, errors.New("read protected file")
 	}
 	return value, nil
@@ -477,13 +482,13 @@ type readinessCondition interface {
 	Ready() (bool, string)
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, emailProjection *emailProjection, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
+			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check), emailProjection.Check(check))
 			cancel()
 			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
 			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {

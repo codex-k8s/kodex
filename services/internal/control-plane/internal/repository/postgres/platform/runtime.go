@@ -297,7 +297,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
+	codexSessionID, previousContextDigest                                                        string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -362,7 +362,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -684,13 +684,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
 		}
+		contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot["contextSnapshot"] = contextSnapshot
+		snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		snapshot["revisionDigest"] = revisionDigestHex
 		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil || len(rawSnapshot) > 256<<10 {
+		if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var runtimeRevisionID string
@@ -940,19 +946,16 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
 	policy := entity.RuntimeWorkspacePolicy{
-		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
-		Rules: []entity.RuntimeWorkspacePathRule{
-			{Path: "/workspace/input", Access: "READ_ONLY"},
-			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
-			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
-			{Path: "/workspace", Access: "WRITABLE"},
-		},
-		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
+		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
+		Rules:         make([]entity.RuntimeWorkspacePathRule, 0, len(shared.Rules)),
+		DenialReasons: append([]string(nil), shared.DenialReasons...),
 	}
-	raw, _ := json.Marshal(policy)
-	digest := sha256.Sum256(raw)
-	policy.Digest = hex.EncodeToString(digest[:])
+	for _, rule := range shared.Rules {
+		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
 	return policy
 }
 
@@ -1030,6 +1033,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
 	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if raw, ok := values["contextSnapshot"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var snapshot runtimecontract.RuntimeContextSnapshot
+		if json.Unmarshal(encoded, &snapshot) != nil {
+			return "", errs.ErrConflict
+		}
+		input.ContextSnapshot = &snapshot
+	}
 	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
 		context := &runtimecontract.RunnerAssistantContext{
 			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),

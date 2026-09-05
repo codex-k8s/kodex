@@ -1809,11 +1809,40 @@ func (repository *Repository) GetSystemAssistant(ctx context.Context, principal 
 }
 
 func (repository *Repository) ListAssistantConversations(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AssistantConversation, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.State == "" {
+		filter.State = "ACTIVE"
+	}
+	if len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || (filter.State != "ACTIVE" && filter.State != "CLOSED" && filter.State != "ARCHIVED") {
+		return nil, "", errs.ErrInvalid
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, scope.organizationID, filter.ProjectRef, boundedPage(filter.Page))
+	cursor, err := decodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter)
+	if err != nil {
+		return nil, "", err
+	}
+	var cursorAt time.Time
+	var cursorRef string
+	if cursor != "" {
+		at, ref, ok := strings.Cut(cursor, "|")
+		if !ok {
+			return nil, "", errs.ErrInvalid
+		}
+		cursorAt, err = time.Parse(time.RFC3339Nano, at)
+		if err != nil || ref == "" {
+			return nil, "", errs.ErrInvalid
+		}
+		cursorRef = ref
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID, "project_ref": filter.ProjectRef, "authority_project": scope.authorityProjectID,
+		"query": filter.Query, "state": filter.State, "evaluated_at": time.Now().UTC(), "cursor_at": cursorAt, "cursor_ref": cursorRef, "page_size": limit + 1})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1827,12 +1856,24 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 			&item.Context.AllowedOperations, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
-		if err := repository.attachConversation(ctx, scope, &item); err != nil {
-			return nil, "", err
-		}
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	rows.Close()
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter, last.CreatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
+	}
+	for index := range result {
+		if err := repository.attachConversation(ctx, scope, &result[index]); err != nil {
+			return nil, "", err
+		}
+	}
+	return result, next, nil
 }
 func (repository *Repository) attachConversation(ctx context.Context, scope scope, item *entity.AssistantConversation) error {
 	rows, err := repository.pool.Query(ctx, queryQueriesAttachconversationSelectSessionTurnsOrganizationIdSessionIdRef, scope.organizationID, item.Ref)

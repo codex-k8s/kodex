@@ -177,7 +177,13 @@ func main() {
 		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
 		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
-	value := document{Version: 1, PolicyRevision: 56, Policy: policy{
+	profiles = append(profiles, profile{
+		ProducerID: "control-plane.oidc-secret-draft", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
+		CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
+		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
+		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
+	})
+	value := document{Version: 1, PolicyRevision: 57, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -275,6 +281,12 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	mode := "UNARY_PROTO_SHA256"
+	if strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	}
+	if operationID == "platform.command.runtime-secret-drafts.save" {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	}
 	if fullMethod == sttTranscribeMethod || strings.Contains(fullMethod, "/Upload") || strings.Contains(fullMethod, "/DownloadArtifact") {
 		mode = "STREAM_SESSION"
 	}

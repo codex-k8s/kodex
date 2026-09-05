@@ -260,6 +260,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.rebindRuntimeSecret(ctx, tx, scope, input)
 	case command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return repository.changeInteractionIdentity(ctx, tx, scope, input)
+	case command.ReconcileEmailEffect:
+		return repository.reconcileEmailEffect(ctx, tx, scope, input)
+	case command.ReportEmailEffect:
+		return repository.reportEmailEffect(ctx, tx, scope, input)
 	case command.SetAgentAvatar, command.RemoveAgentAvatar:
 		return repository.changeAgentAvatar(ctx, tx, scope, input)
 	case command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions, command.RollbackInstructions:
@@ -296,7 +300,9 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
 		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.AddAssistantTurn,
+	case command.ConfigureEmailCredential:
+		return repository.configureEmailCredential(ctx, tx, scope, input)
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)

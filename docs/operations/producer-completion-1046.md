@@ -347,6 +347,57 @@ lint/codegen PASS. Промежуточные FAIL новых fixtures (доба
 VFS count; stale configuration version) исправлены порядком fixture и точным
 readback текущей version, без ослабления assertions.
 
+## История Assistant D1
+
+`ListAssistantConversationsRequest.query = 3`, `state = 4`;
+`AssistantConversation.state = 10`. Закрытый enum: ACTIVE, CLOSED, ARCHIVED;
+UNSPECIFIED в запросе означает ACTIVE. Поиск по title/ref ограничен 200 Unicode
+символами. SQL проверяет creator и актуальные project.view/organization.view
+до LIMIT. Keyset по created_at/ref связан с actor, organization, authority
+project и всеми фильтрами. История другого пользователя не выдаётся.
+
+`ArchiveAssistantConversation{mutation, conversation_ref}` возвращает
+`conversation`; операция `platform.assistant.conversations.archive`, policy 54.
+Owner разрешается до OCC/idempotency; чужой conversation возвращает NotFound.
+ACTIVE/CLOSED -> ARCHIVED допускается только без незавершённого run. В одной
+транзакции pending plans переходят в REJECTED, сохраняются command receipt,
+audit и SYSTEM_ASSISTANT_CHANGED. Повтор с исходным Idempotency-Key возвращает
+исходный результат. Новые turns требуют ACTIVE; архив не удаляет историю.
+Миграция: 20260904000622.
+
+Локально PASS: PostgreSQL `system_assistant_proposes|assistant_history` (owner,
+OCC, busy run, archive/replay, поиск, несколько страниц, подмена actor/filter);
+Go assistant transport/repository, controlplaneclient/race, policy codegen,
+Proto lint/codegen. Первые проверки FAIL из-за неподготовленного reader fixture
+и старого ожидаемого номера policy в тесте; исправлены fixture и revision, без
+ослабления проверок доступа. HTTP/browser путь: NOT RUN.
+
+## Доступность Template Variables D3
+
+`ListTemplateVariablesRequest.agent_ref = 4`, `runtime_revision_ref = 5`;
+`TemplateVariable.available = 10`, `reason = 11`. Reason - закрытый enum:
+AVAILABLE, PROJECT_CONTEXT_REQUIRED, AGENT_CONTEXT_REQUIRED,
+RUNTIME_CONTEXT_REQUIRED, NOT_MATERIALIZED. UNSPECIFIED не выдаётся owner-кодом.
+
+Без target доступны organization/user и разрешённый project context. Agent
+разрешается через agent.view, его environment читается из текущего owner view.
+Для exact RuntimeRevision SQL проверяет organization, authority project,
+совпадение optional agent/project и актуальный run.view до чтения snapshot.
+В ответ попадают только наличие переменной и reason, не значения, prompt,
+credential descriptors или файлы. Пустой materialized collection и нулевой
+счётчик доступны; отсутствующая/пустая строковая переменная disabled.
+Доступность переменной не является runtime readiness или разрешением запуска.
+
+Cursor теперь связан с tenant/actor/authority project, query и обоими context
+refs. RuntimeRevision не подменяется последней revision при чтении. Каталог
+замкнут и мал; его страница вычисляется в Go, без загрузки пользовательских
+коллекций. Локально PASS: template variable unit/race, transport compile/vet,
+Proto lint/codegen и PG `role_image_promotion|runtime_configuration_publish|
+session_provider_affinity` с проверками global/agent/sealed context, запрета
+без run.view, wrong agent и смены context в cursor. Первый узкий PG запуск
+FAIL до новых assertions из-за отсутствия secondary provider fixture;
+зависимость включена явно. HTTP/PWA: NOT RUN.
+
 ## Оставшаяся реализация
 
 SkillBundle/Memory CRUD, bindings и реальные VFS context узлы реализованы:

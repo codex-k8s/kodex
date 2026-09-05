@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PlatformQueryService_GetRuntimeSecretDraft_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft"
 	PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeRevisionDiff"
 	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
 	PlatformQueryService_ListSkillBundles_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
@@ -97,6 +98,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformQueryServiceClient interface {
+	GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error)
 	GetRuntimeRevisionDiff(ctx context.Context, in *GetRuntimeRevisionDiffRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(ctx context.Context, in *GetEmailEffectReceiptRequest, opts ...grpc.CallOption) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(ctx context.Context, in *ListSkillBundlesRequest, opts ...grpc.CallOption) (*ListSkillBundlesResponse, error)
@@ -179,6 +181,16 @@ type platformQueryServiceClient struct {
 
 func NewPlatformQueryServiceClient(cc grpc.ClientConnInterface) PlatformQueryServiceClient {
 	return &platformQueryServiceClient{cc}
+}
+
+func (c *platformQueryServiceClient) GetRuntimeSecretDraft(ctx context.Context, in *GetRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*GetRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformQueryServiceClient) GetRuntimeRevisionDiff(ctx context.Context, in *GetRuntimeRevisionDiffRequest, opts ...grpc.CallOption) (*GetRuntimeRevisionDiffResponse, error) {
@@ -905,6 +917,7 @@ func (c *platformQueryServiceClient) ListInteractionIdentities(ctx context.Conte
 // All implementations must embed UnimplementedPlatformQueryServiceServer
 // for forward compatibility.
 type PlatformQueryServiceServer interface {
+	GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error)
 	GetRuntimeRevisionDiff(context.Context, *GetRuntimeRevisionDiffRequest) (*GetRuntimeRevisionDiffResponse, error)
 	GetEmailEffectReceipt(context.Context, *GetEmailEffectReceiptRequest) (*GetEmailEffectReceiptResponse, error)
 	ListSkillBundles(context.Context, *ListSkillBundlesRequest) (*ListSkillBundlesResponse, error)
@@ -989,6 +1002,9 @@ type PlatformQueryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformQueryServiceServer struct{}
 
+func (UnimplementedPlatformQueryServiceServer) GetRuntimeSecretDraft(context.Context, *GetRuntimeSecretDraftRequest) (*GetRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRuntimeSecretDraft not implemented")
+}
 func (UnimplementedPlatformQueryServiceServer) GetRuntimeRevisionDiff(context.Context, *GetRuntimeRevisionDiffRequest) (*GetRuntimeRevisionDiffResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRuntimeRevisionDiff not implemented")
 }
@@ -1224,6 +1240,24 @@ func RegisterPlatformQueryServiceServer(s grpc.ServiceRegistrar, srv PlatformQue
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformQueryService_ServiceDesc, srv)
+}
+
+func _PlatformQueryService_GetRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetRuntimeSecretDraft(ctx, req.(*GetRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformQueryService_GetRuntimeRevisionDiff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2530,6 +2564,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformQueryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetRuntimeSecretDraft",
+			Handler:    _PlatformQueryService_GetRuntimeSecretDraft_Handler,
+		},
+		{
 			MethodName: "GetRuntimeRevisionDiff",
 			Handler:    _PlatformQueryService_GetRuntimeRevisionDiff_Handler,
 		},
@@ -2823,6 +2861,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
+	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
+	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
+	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
 	PlatformCommandService_SavePromptTemplateDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/SavePromptTemplateDraft"
 	PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/DiscardPromptTemplateDraft"
 	PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRoleImageRevisionDraft"
@@ -2965,6 +3007,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformCommandServiceClient interface {
+	PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error)
+	PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error)
+	PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error)
 	SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error)
 	DiscardPromptTemplateDraft(ctx context.Context, in *DiscardPromptTemplateDraftRequest, opts ...grpc.CallOption) (*DiscardPromptTemplateDraftResponse, error)
 	SaveRoleImageRevisionDraft(ctx context.Context, in *SaveRoleImageRevisionDraftRequest, opts ...grpc.CallOption) (*SaveRoleImageRevisionDraftResponse, error)
@@ -3114,6 +3160,46 @@ type platformCommandServiceClient struct {
 
 func NewPlatformCommandServiceClient(cc grpc.ClientConnInterface) PlatformCommandServiceClient {
 	return &platformCommandServiceClient{cc}
+}
+
+func (c *platformCommandServiceClient) PrepareSaveRuntimeSecretDraft(ctx context.Context, in *PrepareSaveRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareSaveRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareSaveRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareValidateRuntimeSecretDraft(ctx context.Context, in *PrepareValidateRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareValidateRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareValidateRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PreparePublishRuntimeSecretDraft(ctx context.Context, in *PreparePublishRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PreparePublishRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreparePublishRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PrepareDiscardRuntimeSecretDraft(ctx context.Context, in *PrepareDiscardRuntimeSecretDraftRequest, opts ...grpc.CallOption) (*PrepareDiscardRuntimeSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareDiscardRuntimeSecretDraftResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *platformCommandServiceClient) SavePromptTemplateDraft(ctx context.Context, in *SavePromptTemplateDraftRequest, opts ...grpc.CallOption) (*SavePromptTemplateDraftResponse, error) {
@@ -4498,6 +4584,10 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 // All implementations must embed UnimplementedPlatformCommandServiceServer
 // for forward compatibility.
 type PlatformCommandServiceServer interface {
+	PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error)
+	PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error)
+	PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error)
+	PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error)
 	SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error)
 	DiscardPromptTemplateDraft(context.Context, *DiscardPromptTemplateDraftRequest) (*DiscardPromptTemplateDraftResponse, error)
 	SaveRoleImageRevisionDraft(context.Context, *SaveRoleImageRevisionDraftRequest) (*SaveRoleImageRevisionDraftResponse, error)
@@ -4649,6 +4739,18 @@ type PlatformCommandServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPlatformCommandServiceServer struct{}
 
+func (UnimplementedPlatformCommandServiceServer) PrepareSaveRuntimeSecretDraft(context.Context, *PrepareSaveRuntimeSecretDraftRequest) (*PrepareSaveRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareSaveRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareValidateRuntimeSecretDraft(context.Context, *PrepareValidateRuntimeSecretDraftRequest) (*PrepareValidateRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareValidateRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PreparePublishRuntimeSecretDraft(context.Context, *PreparePublishRuntimeSecretDraftRequest) (*PreparePublishRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreparePublishRuntimeSecretDraft not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PrepareDiscardRuntimeSecretDraft(context.Context, *PrepareDiscardRuntimeSecretDraftRequest) (*PrepareDiscardRuntimeSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareDiscardRuntimeSecretDraft not implemented")
+}
 func (UnimplementedPlatformCommandServiceServer) SavePromptTemplateDraft(context.Context, *SavePromptTemplateDraftRequest) (*SavePromptTemplateDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SavePromptTemplateDraft not implemented")
 }
@@ -5077,6 +5179,78 @@ func RegisterPlatformCommandServiceServer(s grpc.ServiceRegistrar, srv PlatformC
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&PlatformCommandService_ServiceDesc, srv)
+}
+
+func _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareSaveRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareSaveRuntimeSecretDraft(ctx, req.(*PrepareSaveRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareValidateRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareValidateRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareValidateRuntimeSecretDraft(ctx, req.(*PrepareValidateRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PreparePublishRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreparePublishRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PreparePublishRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PreparePublishRuntimeSecretDraft(ctx, req.(*PreparePublishRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PrepareDiscardRuntimeSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareDiscardRuntimeSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PrepareDiscardRuntimeSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PrepareDiscardRuntimeSecretDraft(ctx, req.(*PrepareDiscardRuntimeSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _PlatformCommandService_SavePromptTemplateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -7495,6 +7669,22 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PlatformCommandServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "PrepareSaveRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareSaveRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PrepareValidateRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareValidateRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PreparePublishRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PreparePublishRuntimeSecretDraft_Handler,
+		},
+		{
+			MethodName: "PrepareDiscardRuntimeSecretDraft",
+			Handler:    _PlatformCommandService_PrepareDiscardRuntimeSecretDraft_Handler,
+		},
+		{
 			MethodName: "SavePromptTemplateDraft",
 			Handler:    _PlatformCommandService_SavePromptTemplateDraft_Handler,
 		},
@@ -8049,6 +8239,345 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName     = "/controlplane.v1.RuntimeSecretDraftWorkService/CheckRuntimeSecretDraftWorkReadiness"
+	RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName       = "/controlplane.v1.RuntimeSecretDraftWorkService/ConsumeRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName      = "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName          = "/controlplane.v1.RuntimeSecretDraftWorkService/FailRuntimeSecretDraftOperation"
+	RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName       = "/controlplane.v1.RuntimeSecretDraftWorkService/ListRuntimeSecretDraftRecoveryWork"
+	RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName = "/controlplane.v1.RuntimeSecretDraftWorkService/RecoverRuntimeSecretDraftMaterialization"
+	RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName        = "/controlplane.v1.RuntimeSecretDraftWorkService/CompleteRuntimeSecretDraftCleanup"
+)
+
+// RuntimeSecretDraftWorkServiceClient is the client API for RuntimeSecretDraftWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+type RuntimeSecretDraftWorkServiceClient interface {
+	CheckRuntimeSecretDraftWorkReadiness(ctx context.Context, in *CheckRuntimeSecretDraftWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretDraftWorkReadinessResponse, error)
+	ConsumeRuntimeSecretDraftOperation(ctx context.Context, in *ConsumeRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretDraftOperationResponse, error)
+	CompleteRuntimeSecretDraftOperation(ctx context.Context, in *CompleteRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftOperationResponse, error)
+	FailRuntimeSecretDraftOperation(ctx context.Context, in *FailRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretDraftOperationResponse, error)
+	ListRuntimeSecretDraftRecoveryWork(ctx context.Context, in *ListRuntimeSecretDraftRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretDraftRecoveryWorkResponse, error)
+	RecoverRuntimeSecretDraftMaterialization(ctx context.Context, in *RecoverRuntimeSecretDraftMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretDraftMaterializationResponse, error)
+	CompleteRuntimeSecretDraftCleanup(ctx context.Context, in *CompleteRuntimeSecretDraftCleanupRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftCleanupResponse, error)
+}
+
+type runtimeSecretDraftWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewRuntimeSecretDraftWorkServiceClient(cc grpc.ClientConnInterface) RuntimeSecretDraftWorkServiceClient {
+	return &runtimeSecretDraftWorkServiceClient{cc}
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CheckRuntimeSecretDraftWorkReadiness(ctx context.Context, in *CheckRuntimeSecretDraftWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretDraftWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckRuntimeSecretDraftWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) ConsumeRuntimeSecretDraftOperation(ctx context.Context, in *ConsumeRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*ConsumeRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConsumeRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CompleteRuntimeSecretDraftOperation(ctx context.Context, in *CompleteRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) FailRuntimeSecretDraftOperation(ctx context.Context, in *FailRuntimeSecretDraftOperationRequest, opts ...grpc.CallOption) (*FailRuntimeSecretDraftOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailRuntimeSecretDraftOperationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) ListRuntimeSecretDraftRecoveryWork(ctx context.Context, in *ListRuntimeSecretDraftRecoveryWorkRequest, opts ...grpc.CallOption) (*ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRuntimeSecretDraftRecoveryWorkResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) RecoverRuntimeSecretDraftMaterialization(ctx context.Context, in *RecoverRuntimeSecretDraftMaterializationRequest, opts ...grpc.CallOption) (*RecoverRuntimeSecretDraftMaterializationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecoverRuntimeSecretDraftMaterializationResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeSecretDraftWorkServiceClient) CompleteRuntimeSecretDraftCleanup(ctx context.Context, in *CompleteRuntimeSecretDraftCleanupRequest, opts ...grpc.CallOption) (*CompleteRuntimeSecretDraftCleanupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteRuntimeSecretDraftCleanupResponse)
+	err := c.cc.Invoke(ctx, RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RuntimeSecretDraftWorkServiceServer is the server API for RuntimeSecretDraftWorkService service.
+// All implementations must embed UnimplementedRuntimeSecretDraftWorkServiceServer
+// for forward compatibility.
+//
+// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
+// grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+type RuntimeSecretDraftWorkServiceServer interface {
+	CheckRuntimeSecretDraftWorkReadiness(context.Context, *CheckRuntimeSecretDraftWorkReadinessRequest) (*CheckRuntimeSecretDraftWorkReadinessResponse, error)
+	ConsumeRuntimeSecretDraftOperation(context.Context, *ConsumeRuntimeSecretDraftOperationRequest) (*ConsumeRuntimeSecretDraftOperationResponse, error)
+	CompleteRuntimeSecretDraftOperation(context.Context, *CompleteRuntimeSecretDraftOperationRequest) (*CompleteRuntimeSecretDraftOperationResponse, error)
+	FailRuntimeSecretDraftOperation(context.Context, *FailRuntimeSecretDraftOperationRequest) (*FailRuntimeSecretDraftOperationResponse, error)
+	ListRuntimeSecretDraftRecoveryWork(context.Context, *ListRuntimeSecretDraftRecoveryWorkRequest) (*ListRuntimeSecretDraftRecoveryWorkResponse, error)
+	RecoverRuntimeSecretDraftMaterialization(context.Context, *RecoverRuntimeSecretDraftMaterializationRequest) (*RecoverRuntimeSecretDraftMaterializationResponse, error)
+	CompleteRuntimeSecretDraftCleanup(context.Context, *CompleteRuntimeSecretDraftCleanupRequest) (*CompleteRuntimeSecretDraftCleanupResponse, error)
+	mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer()
+}
+
+// UnimplementedRuntimeSecretDraftWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedRuntimeSecretDraftWorkServiceServer struct{}
+
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CheckRuntimeSecretDraftWorkReadiness(context.Context, *CheckRuntimeSecretDraftWorkReadinessRequest) (*CheckRuntimeSecretDraftWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckRuntimeSecretDraftWorkReadiness not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) ConsumeRuntimeSecretDraftOperation(context.Context, *ConsumeRuntimeSecretDraftOperationRequest) (*ConsumeRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConsumeRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CompleteRuntimeSecretDraftOperation(context.Context, *CompleteRuntimeSecretDraftOperationRequest) (*CompleteRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) FailRuntimeSecretDraftOperation(context.Context, *FailRuntimeSecretDraftOperationRequest) (*FailRuntimeSecretDraftOperationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailRuntimeSecretDraftOperation not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) ListRuntimeSecretDraftRecoveryWork(context.Context, *ListRuntimeSecretDraftRecoveryWorkRequest) (*ListRuntimeSecretDraftRecoveryWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRuntimeSecretDraftRecoveryWork not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) RecoverRuntimeSecretDraftMaterialization(context.Context, *RecoverRuntimeSecretDraftMaterializationRequest) (*RecoverRuntimeSecretDraftMaterializationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecoverRuntimeSecretDraftMaterialization not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) CompleteRuntimeSecretDraftCleanup(context.Context, *CompleteRuntimeSecretDraftCleanupRequest) (*CompleteRuntimeSecretDraftCleanupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteRuntimeSecretDraftCleanup not implemented")
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer() {
+}
+func (UnimplementedRuntimeSecretDraftWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeRuntimeSecretDraftWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RuntimeSecretDraftWorkServiceServer will
+// result in compilation errors.
+type UnsafeRuntimeSecretDraftWorkServiceServer interface {
+	mustEmbedUnimplementedRuntimeSecretDraftWorkServiceServer()
+}
+
+func RegisterRuntimeSecretDraftWorkServiceServer(s grpc.ServiceRegistrar, srv RuntimeSecretDraftWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedRuntimeSecretDraftWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&RuntimeSecretDraftWorkService_ServiceDesc, srv)
+}
+
+func _RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRuntimeSecretDraftWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CheckRuntimeSecretDraftWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CheckRuntimeSecretDraftWorkReadiness(ctx, req.(*CheckRuntimeSecretDraftWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConsumeRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ConsumeRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ConsumeRuntimeSecretDraftOperation(ctx, req.(*ConsumeRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftOperation(ctx, req.(*CompleteRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailRuntimeSecretDraftOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).FailRuntimeSecretDraftOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).FailRuntimeSecretDraftOperation(ctx, req.(*FailRuntimeSecretDraftOperationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRuntimeSecretDraftRecoveryWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ListRuntimeSecretDraftRecoveryWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).ListRuntimeSecretDraftRecoveryWork(ctx, req.(*ListRuntimeSecretDraftRecoveryWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecoverRuntimeSecretDraftMaterializationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).RecoverRuntimeSecretDraftMaterialization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).RecoverRuntimeSecretDraftMaterialization(ctx, req.(*RecoverRuntimeSecretDraftMaterializationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteRuntimeSecretDraftCleanupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftCleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeSecretDraftWorkServiceServer).CompleteRuntimeSecretDraftCleanup(ctx, req.(*CompleteRuntimeSecretDraftCleanupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// RuntimeSecretDraftWorkService_ServiceDesc is the grpc.ServiceDesc for RuntimeSecretDraftWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var RuntimeSecretDraftWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.RuntimeSecretDraftWorkService",
+	HandlerType: (*RuntimeSecretDraftWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CheckRuntimeSecretDraftWorkReadiness",
+			Handler:    _RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_Handler,
+		},
+		{
+			MethodName: "ConsumeRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "FailRuntimeSecretDraftOperation",
+			Handler:    _RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_Handler,
+		},
+		{
+			MethodName: "ListRuntimeSecretDraftRecoveryWork",
+			Handler:    _RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_Handler,
+		},
+		{
+			MethodName: "RecoverRuntimeSecretDraftMaterialization",
+			Handler:    _RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_Handler,
+		},
+		{
+			MethodName: "CompleteRuntimeSecretDraftCleanup",
+			Handler:    _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
 	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
 	RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName   = "/controlplane.v1.RuntimeSecretWorkService/CheckCredentialProjectionWorkReadiness"
 	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName            = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
@@ -8064,9 +8593,6 @@ const (
 // RuntimeSecretWorkServiceClient is the client API for RuntimeSecretWorkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
-// grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceClient interface {
 	CheckRuntimeSecretWorkReadiness(ctx context.Context, in *CheckRuntimeSecretWorkReadinessRequest, opts ...grpc.CallOption) (*CheckRuntimeSecretWorkReadinessResponse, error)
 	CheckCredentialProjectionWorkReadiness(ctx context.Context, in *CheckCredentialProjectionWorkReadinessRequest, opts ...grpc.CallOption) (*CheckCredentialProjectionWorkReadinessResponse, error)
@@ -8191,9 +8717,6 @@ func (c *runtimeSecretWorkServiceClient) ResolveTranscriptionCredentialProjectio
 // RuntimeSecretWorkServiceServer is the server API for RuntimeSecretWorkService service.
 // All implementations must embed UnimplementedRuntimeSecretWorkServiceServer
 // for forward compatibility.
-//
-// RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
-// grant связывает actor, Проект, вид операции и exact Secret revision.
 type RuntimeSecretWorkServiceServer interface {
 	CheckRuntimeSecretWorkReadiness(context.Context, *CheckRuntimeSecretWorkReadinessRequest) (*CheckRuntimeSecretWorkReadinessResponse, error)
 	CheckCredentialProjectionWorkReadiness(context.Context, *CheckCredentialProjectionWorkReadinessRequest) (*CheckCredentialProjectionWorkReadinessResponse, error)

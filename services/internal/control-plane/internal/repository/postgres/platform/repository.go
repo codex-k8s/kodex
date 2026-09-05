@@ -36,15 +36,18 @@ const (
 )
 
 type Repository struct {
-	pool                   *pgxpool.Pool
-	defaultRuntimeProvider string
-	defaultRuntimeModel    string
-	providerCredential     ProviderCredentialConfig
-	roleImages             RoleImageConfig
-	objects                objectstorage.Store
-	skillScanner           skillpolicy.Scanner
-	integrationDefinitions map[string]integrationpackage.Package
-	runtimeSecretNamespace string
+	pool                          *pgxpool.Pool
+	defaultRuntimeProvider        string
+	defaultRuntimeModel           string
+	providerCredential            ProviderCredentialConfig
+	roleImages                    RoleImageConfig
+	objects                       objectstorage.Store
+	skillScanner                  skillpolicy.Scanner
+	integrationDefinitions        map[string]integrationpackage.Package
+	runtimeSecretNamespace        string
+	runtimeSecretStagingNamespace string
+	emailConfigurationRevision    int64
+	emailConfigurationDigest      string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -76,7 +79,7 @@ func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string,
 	}
 	return &Repository{
 		pool: pool, defaultRuntimeProvider: defaultRuntimeProvider, defaultRuntimeModel: defaultRuntimeModel,
-		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime",
+		objects: objects, integrationDefinitions: definitions, runtimeSecretNamespace: "kodex-runtime", runtimeSecretStagingNamespace: "kodex-secret-drafts",
 	}, nil
 }
 
@@ -85,6 +88,14 @@ func (repository *Repository) ConfigureRuntimeSecrets(namespace string) error {
 		return errors.New("runtime secret namespace is invalid")
 	}
 	repository.runtimeSecretNamespace = namespace
+	return nil
+}
+
+func (repository *Repository) ConfigureRuntimeSecretStaging(namespace string) error {
+	if !validDNSLabel(namespace) || namespace == repository.runtimeSecretNamespace {
+		return errors.New("runtime secret staging namespace is invalid")
+	}
+	repository.runtimeSecretStagingNamespace = namespace
 	return nil
 }
 
@@ -143,6 +154,10 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	}
 	if schemaVersion != 1 {
 		return errors.New("control-plane schema version is unsupported")
+	}
+	var draftsReady bool
+	if repository.pool.QueryRow(ctx, querySecretDraftReadiness).Scan(&draftsReady) != nil || !draftsReady {
+		return errors.New("runtime secret draft schema is unavailable")
 	}
 	if err := repository.objects.Check(ctx); err != nil {
 		return errors.New("artifact object storage is unavailable")

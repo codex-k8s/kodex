@@ -12,6 +12,8 @@ import (
 type Kind string
 
 const (
+	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
+	ReportEmailEffect                  Kind = "REPORT_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
 	SaveSkillBundleDraft               Kind = "SAVE_SKILL_BUNDLE_DRAFT"
 	ValidateSkillBundleDraft           Kind = "VALIDATE_SKILL_BUNDLE_DRAFT"
@@ -106,11 +108,13 @@ const (
 	UpdateConnection                   Kind = "UPDATE_INTEGRATION_CONNECTION"
 	DeleteConnection                   Kind = "DELETE_INTEGRATION_CONNECTION"
 	ConfigureConnectionCredential      Kind = "CONFIGURE_INTEGRATION_CONNECTION_CREDENTIAL"
+	ConfigureEmailCredential           Kind = "CONFIGURE_EMAIL_MAILBOX_CREDENTIAL"
 	TestConnection                     Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled               Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant             Kind = "CHANGE_INTEGRATION_GRANT"
 	CreateAssistantConversation        Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation        Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
+	ArchiveAssistantConversation       Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
@@ -313,6 +317,13 @@ type AssistantConversationInput struct {
 	Context    entity.AssistantContextDescriptor
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
+type AssistantConversationArchiveInput struct{ ConversationRef string }
+
+type EmailCredentialInput struct {
+	ConnectionRef string
+	Credential    entity.EmailMailboxCredential
+	ReplayOnly    bool
+}
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
 }
@@ -428,6 +439,8 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	EmailReceipt            *entity.EmailEffectReceipt
+	EmailDecision           *entity.EmailReconciliationDecision
 	SkillBundle             *entity.SkillBundle
 	MemoryRecord            *entity.KodexMemoryRecord
 	ContextBinding          *entity.AgentContextBinding
@@ -449,6 +462,7 @@ type Result struct {
 	Schedule                *entity.Schedule
 	Connection              *entity.IntegrationConnection
 	Conversation            *entity.AssistantConversation
+	EmailCredential         *entity.EmailMailboxCredential
 	Plan                    *entity.AssistantPlan
 	PlanReceipt             *entity.AssistantPlanReceipt
 	Assistant               *entity.SystemAssistant
@@ -463,4 +477,8 @@ type Result struct {
 	PromotionReceipt        *entity.RoleImagePromotionReceipt
 	ManagedConfiguration    *entity.ManagedConfigurationSet
 	ManagedRevision         *entity.ManagedConfigurationRevision
+}
+
+type EmailReconciliationInput struct {
+	ReceiptRef, ExpectedReceiptDigest, Outcome, Note string
 }
