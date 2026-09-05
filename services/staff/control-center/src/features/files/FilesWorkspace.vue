@@ -2467,12 +2467,15 @@ onBeforeUnmount(() => {
   .files-list {
     min-width: 0;
   }
+  .files-list__head {
+    display: none;
+  }
   .file-list-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: 76px;
     gap: 6px 10px;
-    padding: 10px 154px 10px 2px;
+    padding: 10px 8px 10px 48px;
   }
   .file-list-row__identity {
     grid-row: 1 / 3;
@@ -2492,7 +2495,17 @@ onBeforeUnmount(() => {
     border-left: 0;
   }
   .files-list .file-collection-item__actions {
-    right: 0;
+    position: static;
+    justify-content: flex-end;
+    padding: 0 8px 8px 48px;
+    transform: none;
+  }
+  .file-list-row__identity strong {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 </style>

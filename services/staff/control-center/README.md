@@ -295,6 +295,13 @@ CP dependencies `695ae1e15`/`ae9cb517f` (локально `1a6f50310`/`55e7b65ce
 commit #1045 с генерацией из суммарного OpenAPI. Этот список фиксирует запрос,
 а не подтверждает доставку сообщения в другой тред или наличие нового HTTP.
 
+Уточнение Home/Kanban после `11401f0ac`: CP уже имеет
+`ListRunsRequest.states` (proto:1962) и `ListOwnerGatesRequest.state`
+(proto:2045), grpc/queries.go:272/334 передаёт их дальше. HTTP
+query_endpoints.go:182/233 и SDK эти поля не выводят. Нужны typed
+states[]/state в существующих `/runs` и `/owner-gates`; totals и query
+owner gates остаются отдельным producer gap.
+
 Дополнительно приняты committed checkpoints: Skill/Memory VFS `4004bd66c`
 с predecessors (локальный `fbc965c94`), email SDK `c61bcdca3` с CP `d31cd4c70`
 (локально `37feb5c1b`/`85ec98e11`), immutable managed Save/Discard `43cdb2792`
@@ -365,6 +372,11 @@ Browser-проверка общего picker на 1440/390 покрывает с
 checkbox использует объявленное `nextActions` до загрузки impact, перед
 подтверждением проверяется exact impact, запрет блокирует команду.
 Переключение списка/сетки сохраняет выбор и доступно на mobile без overflow.
+Дополнительная responsive-проверка требует ширину имени файла больше 100 px
+на 390 и скрытый desktop-header: команды вынесены в отдельную строку.
+Существующие segmented controls Files/VFS и FORM/YAML используют общий
+design-system стиль. Профильные file unit: 31 PASS; synthetic 1440/390:
+2 PASS; production build с typecheck PASS.
 Предыдущие mobile-запуски выявили скрытый переключатель и intrinsic-ширину
 grid (FAIL); после исправления повторный запуск обоих размеров PASS.
 Файловые model/API/layout unit: 23 PASS; synthetic build с typecheck PASS.

@@ -858,6 +858,38 @@ label {
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.segmented-control > button {
+  min-height: 36px;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.segmented-control > button[aria-selected="true"],
+.segmented-control > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.segmented-control > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .files-tab {
   padding: 0 14px;
   border: 0;

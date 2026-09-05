@@ -92,6 +92,14 @@ export async function checkFileSelection(
   await expect(selected).toBeEnabled();
   await expect(unavailable).toBeDisabled();
   await selected.check();
+  const name = page.locator(
+    `[data-artifact-ref="${artifact.ref}"] .file-list-row__identity strong`,
+  );
+  if ((page.viewportSize()?.width ?? 1440) < 761) {
+    const box = await name.boundingBox();
+    expect(box?.width).toBeGreaterThan(100);
+    await expect(page.locator(".files-list__head")).toBeHidden();
+  }
   await screenshot();
   const toggleBox = await page
     .getByRole("button", { name: "Сетка", exact: true })
