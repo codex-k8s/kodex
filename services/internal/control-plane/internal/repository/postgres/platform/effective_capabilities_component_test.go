@@ -81,7 +81,12 @@ func testEffectiveCapabilities(t *testing.T, ctx context.Context, repository *Re
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: candidate, Mutation: value.Mutation{IdempotencyKey: "effective-cap-escalation", ExpectedVersion: &stale}, Payload: command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.project.manage", Enabled: true}}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("capability escalation was checked after OCC: %v", err)
 	}
-	for _, key := range []string{"platform.run.launch", "platform.project.manage"} {
+	assignmentVersion := before.AgentVersion
+	assignment := command.Command{Kind: command.ChangeAgentCapability, Principal: candidate, Mutation: value.Mutation{IdempotencyKey: "effective-cap-candidate-assignment", ExpectedVersion: &assignmentVersion}, Payload: command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.launch", Enabled: true}}
+	if _, err := service.Execute(ctx, assignment); err != nil {
+		t.Fatalf("authorized capability assignment: %v", err)
+	}
+	for _, key := range []string{"platform.project.manage"} {
 		version := read(owner).AgentVersion
 		if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "effective-cap-enable-" + key, ExpectedVersion: &version}, Payload: command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: key, Enabled: true}}); err != nil {
 			t.Fatalf("owner capability assignment: %v", err)
@@ -130,6 +135,9 @@ func testEffectiveCapabilities(t *testing.T, ctx context.Context, repository *Re
 		t.Fatal("revoked authority retained eligibility snapshot")
 	}
 	checkRuntime(false)
+	if _, err := service.Execute(ctx, assignment); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("revoked capability authority replayed receipt: %v", err)
+	}
 
 	draft := entity.WorkflowVersion{Ref: "draft", Name: "Capability workflow", Purpose: "Verify exact stage capabilities", CoordinatorAgentRef: agent.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "One bounded result", ResultSchema: map[string]any{},
 		Steps: []entity.WorkflowStep{{Key: "execute", Position: 1, Name: "Execute", AgentRef: agent.Ref, Instructions: "Execute one bounded task", ExpectedResult: "One result", TimeoutSeconds: 60, RequiredCapabilityKeys: []string{"platform.run.launch"}}}}

@@ -64,6 +64,28 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
 	}
+	// Receipt не сохраняет отозванное право выдавать capability.
+	if input.Kind == command.ChangeAgentCapability || input.Kind == command.ChangeAgentGrant {
+		payload, ok := input.Payload.(command.AgentBindingInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		if input.Kind == command.ChangeAgentGrant {
+			return repository.requireAgentIntegrationGrantAuthority(ctx, tx, current, payload.AgentRef, payload.BindingRef)
+		}
+		if payload.Enabled {
+			if !validCapabilityKey(payload.BindingRef) {
+				return errs.ErrInvalid
+			}
+			var key string
+			if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectEnabledCapability, payload.BindingRef).Scan(&key); errors.Is(err, pgx.ErrNoRows) {
+				return errs.ErrNotFound
+			} else if err != nil {
+				return errs.ErrUnavailable
+			}
+			return repository.requireCapabilityGrantAuthority(ctx, tx, current, target.scope.ProjectRef, payload.AgentRef, key)
+		}
+	}
 	return nil
 }
 
