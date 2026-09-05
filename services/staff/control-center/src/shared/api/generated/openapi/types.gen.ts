@@ -11,12 +11,18 @@ export type OwnerSessionCreateInput = {
 };
 
 export type OwnerSessionPurpose = {
-    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL';
-    projectRef: OpaqueRef;
+    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL' | 'EMAIL_EFFECT_RECONCILIATION';
+    projectRef?: OpaqueRef;
     /**
      * Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
      */
     secretRef?: OpaqueRef;
+    /**
+     * Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
+     */
+    receiptRef?: OpaqueRef;
+    receiptVersion?: number;
+    receiptDigest?: string;
 };
 
 export type Timestamp = string;

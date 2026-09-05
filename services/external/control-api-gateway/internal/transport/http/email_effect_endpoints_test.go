@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,6 +32,8 @@ type emailEffectRecorder struct {
 	corrupt      func(proto.Message)
 	withDecision bool
 	readOutcome  controlplanev1.EmailEffectOutcome
+	beforeInvoke func()
+	calls        atomic.Int32
 }
 
 func emailReceiptFixture() *controlplanev1.EmailEffectReceipt {
@@ -54,6 +56,10 @@ func emailDecisionFixture() *controlplanev1.EmailReconciliationDecision {
 }
 
 func (client *emailEffectRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
+	client.calls.Add(1)
+	if client.beforeInvoke != nil {
+		client.beforeInvoke()
+	}
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
 		return client.failure
@@ -84,7 +90,11 @@ func (client *emailEffectRecorder) Invoke(_ context.Context, method string, requ
 }
 
 func emailEffectHandler(client *emailEffectRecorder) http.Handler {
-	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client)}})
+	fixture := newEmailHTTPFixture(client)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fixture.authorizeRequest(r)
+		fixture.handler.ServeHTTP(w, r)
+	})
 }
 
 func emailDecisionBody(outcome string) string {
