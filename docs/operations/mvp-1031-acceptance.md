@@ -4,7 +4,7 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -22,11 +22,17 @@ CI-входом и не добавляется в Git.
 
 ## Условия допуска
 
-- [ ] Все unit эпика реализованы и слиты. Зафиксирован один полный 40-символьный
-  SHA чистого `main`, а не смесь веток или незакоммиченных hot-reload изменений.
-- [ ] На этом SHA выполнены применимые проверки `GOV-DOC-003` и общий
+- [ ] Все unit эпика полностью реализованы в своих Issue/ветке/worktree/PR,
+  прошли targeted проверки и включены точными commits в ветку #1031.
+  Зафиксирован один полный 40-символьный SHA чистой интеграционной ветки.
+- [ ] На этом интеграционном SHA выполнены все применимые проверки
+  `GOV-DOC-003` и общий
   продуктовый, security и архитектурный цикл. Отдельные unit-review циклы
   исключены только на время ускоренной волны по решению владельца в #1018.
+- [ ] Получено отдельное подтверждение владельца на слияние проверенного
+  результата. После слияния unit в порядке зависимостей дерево чистого `main`
+  сопоставлено с проверенным интеграционным деревом; изменения требуют новой
+  проверки. Зафиксирован exact SHA `main` для развёртывания.
 - [ ] Зафиксированы разрешение на disposable staging, точный context, namespace,
   UID кластера, digest render и фактически обслуживаемый SHA каждого workload.
   Production, чужие namespaces и прежний стенд не меняются неявно.
@@ -74,20 +80,45 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 [Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
 и [declarative configuration](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/).
 
+## Текущий состав интеграции
+
+На `b1882ba4fa1f5ba728a50db21b7695b3c135b23c` включены следующие
+проверяемые зависимости. Это промежуточная интеграция полного scope,
+а не завершённый `main` или допуск стенда.
+
+| Unit | Включённый exact SHA | Граница checkpoint |
+| --- | --- | --- |
+| Control-plane #1046 | `78d700683095dadc3daf5f1e56b76b34b9d054a5` | D1/D2/D3/D4/D6/impact и policy 59; D5 typed contracts и authority registration. Полная owner delivery D5 ещё не включена. |
+| Secret Broker #1068, PR #1069 | `8b958323e6e97213aa62d67fd420d477016c6cb6` | Encrypted staged lifecycle, durable keyring guard, fenced effects/recovery и bootstrap. |
+| EMAIL #1037, PR #1062 | `f977638e10509d83ce1f27c8b386fa9bd7472842` | Managed exact pins и protected callback до публикации нового serving snapshot. |
+| Egress #1029, PR #1065 | `eaf23ce2c0596c63502c636ed01a1a65d92964c4` | Общие mail policy и DNS producer, ограниченная admission boundary, exact network pins. |
+| HTTP/SDK #1045, PR #1066 | `12e640be74b516b120f25926842e95f7880e8dc1` | Typed D5 и D6; более новый полный HTTP checkpoint ожидает включения. PWA dependency дополнительно включает closed D5 failure codes/history. |
+| PWA #1022, PR #1067 | `6931d7d52ff75017574fde2e6b3f933b844caa23` | D6 UI, credential recovery и исправления интеграционной сборки; основной D5 editor ещё не включён. |
+
+Сохранены включённые ранее controller `9aaf738a3`, runner `731f2a7c3`,
+integration `7253f43b8`, interaction `1ab0d09f1`, authority `0765f3dad`
+и исправление #1056. Исходные Proto/OpenAPI/policy объединены по семантике,
+generated Go/SDK/PWA validator получены повторной генерацией.
+
+На exact `b1882ba4fa1f5ba728a50db21b7695b3c135b23c` локально **PASS**:
+PWA `npm run build` с typecheck, Proto lint/build/clean replay,
+authority policy codegen, gateway AsyncAPI clean replay,
+internal RPC authority ABI render и web-only release checks.
+Ранее интеграционная сборка PWA была **FAIL** из-за неполных fixtures,
+несовместимых typed pins и schema/generator constraints; новый запуск после
+PWA `6931d7d52` подтверждает устранение этих ошибок. Безопасные логи текущих
+проверок: `integrated-pwa-build.log` и `integrated-contracts.log` в приватном
+локальном evidence-каталоге. Полный baseline, общий тройной review,
+merge, deploy и сквозная матрица остаются **NOT RUN**.
+
+Результаты отдельных unit и synthetic fixtures не отмечают строки этой
+матрицы выполненными. Следующая интеграция обязана включить полную owner D5,
+актуальные HTTP/PWA и остальные незавершённые функции 01–61 и CFG-01/02/03.
+
 ## Локальная подготовка EMAIL
 
-Зависимость: EMAIL #1037, [PR #1062](https://github.com/codex-k8s/kodex/pull/1062),
-`2d66e9d67` с CP publisher `af74fc7dc` поверх `8026633a9`.
-Она включена вместе с сохранённым #1056: optional session-archive,
+EMAIL включён вместе с сохранённым #1056: optional session-archive,
 backup-controller и точное назначение archive issuer не удаляются.
-Локальная интеграционная ветка также потребляет egress `f8da405af`, controller
-`9aaf738a3`, runner `731f2a7c3`, integration `7253f43b8`, interaction
-`1ab0d09f1`, authority `0765f3dad` и HTTP D1/D7 `03564b5f4`.
-Следующая интеграция потребляет HTTP/SDK D3/D5
-`cfb18a17e2048f5056ddd46c8fccbd3f1e18a3d6` и PWA assistant/impact
-`f36f9df41ba256ee8581fe8dde045b238d7093b7`. CP implementation сохранена;
-конфликтующие generated файлы пересобраны из объединённых Proto/OpenAPI.
-Это зависимости отдельных unit PR, а не завершённый `main` или допуск стенда.
 
 В обоих локальных профилях исполняются email-bridge, authority issuer и
 platform-worker-grant-agent через закреплённые Go/Air, а CLI миграции через
@@ -158,8 +189,10 @@ readback до TLS/provider bytes. `EMAIL_BRIDGE_EGRESS_POLICY_DIGEST` больш
 Локальные fixtures используют только пустые поколения, не обращаются к живым
 mail hosts и не назначают owner allowlist. Для непустого source требуется
 разрешённый оператором resolver и hosts; `--mail-resolv-conf` задаёт точный файл.
-Остаются отдельные зависимости полного прототипа: CP D2–D6, HTTP/PWA и
-автоматическая owner-доставка mail policy после UI transition D5. Повторный
+Остаются отдельные зависимости полного прототипа: завершение CP owner D5,
+новые HTTP/PWA consumers и автоматическая доставка mail policy после
+UI transition D5. D2/D4/D6 уже включены в промежуточную интеграцию;
+их сквозная приёмка ещё не выполнена. Повторный
 разрешённый `up` реализует локальную доставку, но не является фоновым reconciler.
 Локальный render не заменяет
 общий gate на точном интегрированном SHA.
@@ -340,7 +373,10 @@ SHA. Функциональные browser-проверки используют 
   проверяет OCC/retry/readback, credential binding и доступность. Проверить
   model-specific language/languages, keywords, prompt, temperature, chunking,
   stream policy и совместимость. Default берётся из versioned каталога;
-  неподдерживаемые параметры не уходят провайдеру, browser не выбирает key.
+  каталог adapter с `version/observedAt` доступен по праву управления системой
+  до первой enabled configuration и credential. Это чтение не выдаёт
+  microphone eligibility или provider READY.
+  Неподдерживаемые параметры не уходят провайдеру, browser не выбирает key.
 - [ ] MVP-UI-57: org-scoped permission с выбранным проектом и без него;
   session/CSRF/Origin -> bounded multipart -> version-bound grant -> STT ->
   provider. Проверить все девять поддерживаемых контейнеров, 10 MiB/120 s
@@ -393,7 +429,11 @@ Direct adapter smoke подтверждает только adapter. Он не з
 
 ## Порядок выполнения
 
-1. Зафиксировать допуск и fixtures выше. Подготовить приватный evidence каталог
+1. Завершить реализацию и targeted проверки всех unit, интегрировать exact
+   commits, выполнить полный baseline и общий тройной review одного SHA.
+   После отдельного owner human gate слить в проверенном порядке и сравнить
+   итоговое дерево `main` с проверенным деревом. Зафиксировать допуск и fixtures
+   выше. Подготовить приватный evidence каталог
    и записи ожидаемых 4xx. До разрешённого deploy не запускать команды среды.
 2. Из чистого финального SHA выполнить read-only preflight и существующий
    code-first rollout по [runbook hot reload](../runbooks/remote-hot-reload.md).
