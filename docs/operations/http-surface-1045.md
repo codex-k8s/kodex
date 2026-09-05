@@ -10,6 +10,250 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## Сверка принятого backlog MVP-UI-01–61 и CFG
+
+Сверка относится к поверхности #1045, а не к приёмке UI, producer или
+развёрнутого контура. Чисто визуальные требования реализует #1022.
+Наличие операции ниже означает HTTP mapping существующего Proto; readiness
+зависимого сервиса этим не подтверждается.
+
+| Требования | Существующая HTTP/SDK поверхность | Оставшаяся граница |
+| --- | --- | --- |
+| CFG, RoleImage и IntegrationDefinition | Managed list/get/revisions/impact, специализированные create/save/validate/publish/discard/rebind, Git import/copy/detach/write-back, recipe build/promotion | Полная build/package execution и доставка exact published revision принадлежат producer; общий prepublication plan ещё отсутствует |
+| 02–06, 10, 12–13 | Projects query/page, Runs states/page и Owner Gates state/page | Home и project projection должны давать server total/aggregates; Owner Gates query/total ожидает CP |
+| 05, 19–23, 39–40 | Общие query/page для каталогов, provider accounts/readiness и integration definitions/connections/grants | Selector eligibility для конкретной operation/recipient не заменяется локальной фильтрацией; effective authority projection ожидает CP |
+| 09 | Assistant conversations query/page/title/archive, context и plan lifecycle | Геометрия и browser lifecycle — PWA; server context остаётся authority |
+| 11 | Same-origin session refresh и одноразовые realtime tickets | Длительная multi-tab/reconnect проверка принадлежит PWA/integrated baseline |
+| 17–18, 21 | Model capability catalog с exact revision/digest; runtime config и canonical TOML draft/validate/publish/rollback | CP должен связать selected account/model catalog pins и effort из TOML, дать versioned allowed-fields schema и безопасные line/column/key diagnostics |
+| 01, 07–08, 16, 48, 53–54 | Typed problems, prompt validate/preview diagnostics, environment readiness/agents, public search kind/ref/projectRef | Manifest/auth-proxy и browser routing проверяются в deploy/PWA; generic 404 не считается readiness |
+| 24–29, 32–33, 38 | Runs states, organization catalogs с project filter, agent avatar command, workflow projection/launch | Layout — PWA; aggregate counts и avatar lifecycle доказываются producer, а не наличием route |
+| 30–36 | Owner-scoped typed variables, prompt preview/service blocks и persisted RuntimeRevision diff | Requested/effective/unavailable authority projection и полный continuation notice/preview требуют CP; исторический diff не заменяет их |
+| 37, 61 | VFS list/search, typed Skills/Memory lifecycle, exact revision bindings и artifacts | VFSNode пока без revision/lifecycle/scan/selection eligibility; запросы без active/trash/kind фильтров. MCP runtime и writable workspace — отдельные consumers |
+| 41–42 | Typed mailbox draft/preview/validate/publish/discard/bind/unbind/read и credential receipt/list; остальные typed integrations через существующий registry | D5 owner/policy59 и exact delivery/readiness пока не завершены; universal proxy не добавляется |
+| 43–45 | Schedule specification/preview/revisions и prompt preview, Environment read/readiness/agents | Cron materialization/continuation и eligibility принадлежат scheduler/CP; inspector — PWA |
+| 46–50 | Environment draft lifecycle; Secret encrypted draft и immutable prepublication impact plan/per-item outcomes; exact Secret pin в Environment | Prepublication plan для Environment/Prompt/Instructions/RoleImage ещё нужен в CP. Postpublication impact/rebind не закрывает это требование |
+| 51–52 | Provider delete/revoke/verify/reauthorize/device challenge и typed provider errors | Durable cleanup, blockers и real provider path требуют producer integration |
+| 14–15, 55–60 | Typed STT settings/catalog/availability и bounded multipart transcription через protected client; инструкции и variables read | Размер редактора — PWA. Реальный provider smoke и итоговая readiness требуют разрешённого контура; локальные fixtures не заменяют его |
+
+Недостающие CP контракты переданы владельцу #1046. Gateway не добавляет
+самостоятельно новые RPC, eligibility, authorizations или успешные состояния
+для закрытия этих строк.
+
+## Exact Secret pin при редактировании Environment
+
+MVP-UI-46/47: verified actor → create/publish Environment либо create/save draft
+→ HTTP `secretBindings[].revision` → существующий Proto
+`RuntimeSecretBinding.revision` → owner SQL `runtime_secret_resolve_binding`.
+Владелец повторно разрешает tenant/project и ACTIVE Secret/revision; 0 либо
+отсутствие означает current на момент materialization, положительное значение
+сохраняет выбранную immutable revision. Draft readback возвращает тот же pin,
+поэтому последующее сохранение других полей не переводит Secret на latest.
+OCC/idempotency и события сохраняют существующий lifecycle Environment;
+потребители получают exact descriptors из published RuntimeEnvironment, а
+активный attempt продолжает прежнюю RuntimeRevision. Недопустимое число
+отклоняется до RPC; повреждённый pin ответа — 502.
+Published `secretDescriptors[].revision` также описан в SDK и проверяется как
+положительный exact pin. Kubernetes namespace не входит в публичную projection.
+
+## D5: typed mailbox, schema 056547091
+
+Регистрация всех 12 публичных RPC и internal EMAIL readback подключена через
+policy59 `78d700683`. Это устраняет structural profile gap, но не доказывает
+исполнение owner, доставку конфигурации или READY.
+
+Источники: #1045/#1046/#1018, MVP-UI-41, CFG и
+`mailbox-owner-lifecycle-1046.md`. HTTP потребляет специализированные CP RPC,
+не создаёт mailbox authority из browser payload. Полная producer/consumer
+готовность требует executable CP/policy и #1029/#1037 checkpoints; одна схема
+не означает READY или завершённый пользовательский сценарий.
+
+| HTTP под verified Session/tenant | Владелец и fence | Read/event/consumer |
+| --- | --- | --- |
+| GET integration-connections/{connectionRef}/email-mailbox/configurations | ListEmailMailboxConfigurations, exact existing EMAIL connection; query/page передаются CP | Safe managed lineage/revision/spec/publication, server total/cursor |
+| GET того же email-mailbox/configuration | GetEmailMailboxConfiguration, optional exact configurationRef/revisionRef | Authoritative selected snapshot после reload, без подмены latest |
+| GET email-mailbox/credentials либо credential-receipt?idempotencyKey | ListEmailMailboxCredentials либо GetEmailMailboxCredentialReceipt; owner connection и original actor/intent | Safe descriptor/generation/kind/connection version, без значения/digest; unknown receipt 404 |
+| POST email-mailbox/preview | PreviewEmailMailboxConfiguration, connection eligibility; CSRF | Ровно typed specification либо YAML; серверный strict parser, без записи |
+| POST email-mailbox/drafts | CreateEmailMailboxDraft, integration.manage; idempotency; existing set требует If-Match | Server refs/UI lineage; incomplete draft разрешён, caller source/owner запрещены |
+| POST email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves | SaveEmailMailboxDraft, If-Match set+idempotency | Новая immutable revision, прежняя закрыта; selected revision read |
+| POST того же revision /validation, /publication, /discard | Специализированные Validate/Publish/DiscardEmailMailboxDraft, set OCC+idempotency | Exact revision; validation повторно проверяет credentials/TLS/policy, publish не означает READY |
+| POST того же revision /binding | BindEmailMailboxConfiguration, set OCC и отдельная expectedConnectionVersion | PENDING publication; CP desired projection → shared policy/CNI/Deployment/Secret readback → EMAIL report → READY |
+| DELETE email-mailbox/binding | UnbindEmailMailboxConfiguration, connection OCC+idempotency | Publication без configurationRevisionRef, безопасный новый connectionVersion |
+
+Create/save/validate/publish/discard атомарно фиксируют owner state/receipt/audit,
+без отдельного domain event. Bind/rebind/READY используют существующий
+INTEGRATION_CONNECTION_CHANGED и owner outbox. EMAIL callback остаётся internal
+RuntimeWorkService и не выдаётся через HTTP; readiness относится к принятому
+consumer snapshot/rollout, не к SMTP provider health. Политика сети и delivery
+принадлежат CP/shared mailpolicy/EMAIL consumer, новых gateway портов нет.
+
+Typed specification допускает неполный DRAFT/INVALID. UNSPECIFIED enum выдаётся
+как отсутствующее optional поле, неизвестный enum закрыто отклоняется. HTTP
+сохраняет SMTP/IMAP/POP endpoints, exact credential refs/generation, limits,
+folders/recipients и все 21 operation policies без преобразования значений.
+Preview передаёт YAML серверу без локальной переписи. Неизвестные/protected/value
+поля typed JSON отклоняются до RPC; raw malformed YAML не сохраняет CP.
+Canonical stored revision имеет JSON format и bounded content. Diagnostics
+принимаются только из закрытого кода/сообщения, без value echo; line/column
+сохраняются. READY требует readyAt, PENDING его не имеет; SUPERSEDED может
+сохранить исторический readyAt.
+
+Все ответы no-store; mutations и GET selected view возвращают set ETag,
+credential receipt и unbind — connection ETag. После unknown write receipt
+проверяется тем же connection/actor/key, новый успех не синтезируется. Чужой
+connection/config/revision, stale OCC, Git-owned mutation и revoked Session
+сохраняют owner отказ. Git copy/detach/history остаются существующими managed
+RPC и теперь сохраняют kind EMAIL_MAILBOX; specialized mailbox lifecycle
+не заменяется универсальным mutation endpoint.
+
+Ручная проверка: создать неполный draft, preview YAML ошибки без утечки текста,
+выбрать доступные credentials, validate/publish, отдельно bind с обоими OCC;
+дождаться authoritative READY после consumer readback. Перечитать selected
+revision и original credential receipt после reload; повторить stale/чужой
+ref и Git-owned изменение. Live SMTP/IMAP/POP и rollout проверяются отдельно.
+
+## D6: зашифрованный черновик Secret
+
+Зависимости: полный CP `8b4ac92f` принят merge; `78b812699` добавляет
+authoritative `secret_version`, broker `d11a1e0d9` передаёт тот же pin.
+Источники: #1045/#1046/#1068, MVP-UI-47, CFG-03 и
+`runtime-secret-draft-lifecycle-1046.md`. Prepublication impact plan и выбор
+заменяемых потребителей подключены ниже на producer `3ec3fe95b`; существующий
+postpublication impact/rebind не заменяет требование UI-47.
+
+| Инициатор и HTTP | RPC и полномочия | Fence, переход и результат |
+| --- | --- | --- |
+| Session actor → POST projects/{projectRef}/runtime-secret-drafts | PrepareSaveRuntimeSecretDraft, secret.create/fresh auth; project только locator | Idempotency-Key и exact value commitment; server refs → PREPARING → SaveSecretDraft → DRAFT |
+| Session actor → POST runtime-secrets/{secretRef}/drafts | тот же PrepareSave, secret.rotate/fresh auth; existing owner разрешает CP | If-Match Secret, immutable отдельный draft; активная revision не меняется |
+| Session actor → POST runtime-secret-drafts/{draftRef}/validate | PrepareValidate → ValidateSecretDraft, exact owner/fresh auth | If-Match Draft, idempotency; broker decrypt/validate → VALID |
+| Session actor → POST runtime-secret-drafts/{draftRef}/publish | PreparePublish → PublishSecretDraft, exact owner/fresh auth | If-Match Draft и expectedSecretVersion из owner read; fenced activation → PUBLISHED + safe Secret |
+| Session actor → POST runtime-secret-drafts/{draftRef}/discard | PrepareDiscard → DiscardSecretDraft | If-Match Draft, idempotency; owner закрывает grants до exact ciphertext cleanup → DISCARDED |
+| Session actor → GET runtime-secret-drafts/{draftRef} | GetRuntimeSecretDraft; owner eligibility до чтения | Safe current state + version/secretVersion, без изменений или event |
+
+Все mutations проходят session/tenant/revocation/CSRF middleware. CP prepare
+SAVE использует policy57 UNARY_PROTO_SHA256, metadata resource/version/attempt
+FORBIDDEN, idempotency REQUIRED; остальные prepare привязаны к draft_ref и
+mutation.expected_version. Idempotency не заменяет свежую owner проверку.
+Владелец CP атомарно фиксирует state/receipt/audit; отдельного event нет,
+authoritative public read — GetDraft/GetSecret, worker rejoin принадлежит broker.
+
+Пять broker D6 RPC используют отдельное protected connection: exact mTLS
+hostname/CA + OIDC proof control-plane.oidc-secret-draft + local issuer context,
+digest фактического protobuf request. Эти RPC не маршрутизируются в CP.
+Resource/version/attempt/idempotency metadata запрещены; одноразовый grant
+остаётся внутри protobuf gateway→broker и никогда не выдаётся браузеру.
+Перед effect gateway вызывает CheckSecretDraftReadiness через тот же protected
+client с пользовательским OIDC context. Background gateway readiness не
+подменяет пользователя; broker владеет своим storage/keyring/owner readiness.
+Используются существующие gateway identity/mount/network destination; delivery
+policy57 и broker encrypted namespace/keyring принадлежат #1068 и owner profile.
+
+HTTP не сохраняет значение; plaintext byte buffer очищается после broker call,
+в том числе ошибки. Ответы no-store и ETag Draft. Safe draft не содержит value,
+display hint, digest, grant, key ID или storage locator. Unknown enum, чужой
+ref/tenant/Secret, неверный generation/version, неполный terminal receipt и
+неверный published pin отклоняются 502. Ошибки CP/broker сохраняют строгий
+Problem mapping, без upstream diagnostics или синтетического успеха.
+
+При потерянном SAVE ответе повторяют exact body и Idempotency-Key: CP возвращает
+сохранённый terminal snapshot без нового broker effect либо fresh fenced grant.
+CLAIMED/несовпавший intent дают Conflict. После terminal replay перед следующей
+операцией выполняют GetDraft; secretVersion snapshot не подменяется latest.
+При DISCARD completion версия может совпасть с prepare: owner уже закрыл draft
+в prepare, broker только подтвердил cleanup. Отмена/timeout не доказывают откат
+зафиксированного owner intent; recovery принадлежит CP/broker, UI читает owner.
+
+Ручная проверка: сохранить значение, перечитать draft после reload, проверить
+VALID, опубликовать с обоими pins, перечитать Secret; отдельно отменить draft.
+Повторить запрос с прежним ключом, чужим ref, stale If-Match и revoked session;
+проверить отсутствие значений/grants в responses. Перед publish подготовить
+impact plan, выбрать строки и после ответа перечитать per-item outcomes.
+
+### Prepublication Impact, schema e7944151f
+
+Этот раздел дополняет первоначальный D6 checkpoint; executable CP
+`3ec3fe95b` и policy58 приняты как prerequisite. Session actor → POST
+`runtime-secret-drafts/{draftRef}/impact-plans` →
+PrepareRuntimeSecretDraftImpact с If-Match Draft и Idempotency-Key → CP exact
+owner/eligibility → immutable bounded plan с Draft/Secret versions, source
+revision, digest, expiresAt. Публикация принимает обязательные impactPlanRef и
+selectedItemRefs (явный пустой список означает отсутствие замен, максимум 1000
+уникальных server item refs). Эти поля входят в exact intent prepare и не
+назначают authority. Broker request остаётся server grant, без public plan
+payload или повторной передачи plaintext.
+
+GET `runtime-secret-draft-impact-plans/{planRef}` → GetRuntimeSecretDraftImpact
+с query/page → CP current owner eligibility + immutable snapshot → safe items
+и per-item outcome. Plan.total — исходное immutable количество до 1000;
+page.total — текущий результат eligibility/query. Gateway только передаёт
+фильтр, не фильтрует страницу после LIMIT. Cursor связан с plan digest/state,
+query/actor; переход состояния требует начать итоговый отчёт с первой страницы.
+
+При APPLIED plan нет PENDING: каждая выбранная строка имеет APPLIED, CONFLICT
+либо FORBIDDEN, невыбранная NOT_SELECTED. Только APPLIED содержит новую
+environmentVersionRef и, для agent, прежний bindingRef с большей version.
+PREPARED/CANCELLED/EXPIRED допускают PENDING/NOT_SELECTED без result fields.
+HTTP отклоняет противоречивые состояния, duplicate item refs, прежнюю result
+revision, неверный binding pin и переполнение count. Отдельного event нет;
+owner activation и результаты читаются через GetDraft/GetSecret/GetImpact.
+Повтор publish с прежним intent не создаёт второй effect; per-item conflicts
+не превращаются в ложное подтверждение изменения всех выбранных потребителей.
+
+## D4, CP 8e532589e
+
+Session actor → GET `runs/{runRef}/runtime-revision-diff` с optional
+`currentRevisionRef` → generated GetRuntimeRevisionDiff → policy56
+`platform.query.runtime-revisions.diff` (resource=run_ref, version/attempt/
+idempotency FORBIDDEN) → CP run.view и predecessor eligibility → repeatable-read
+owner query двух persisted revisions одной Session → safe typed identity/diff
+→ PWA continuation view. Предыдущую ревизию выбирает только сервер. Это query
+без события или изменения lifecycle. Новая materialization выполняется
+существующим continuation RPC отдельно; diff не доказывает её readiness.
+
+Публичный DTO не содержит worker snapshot, prompt, credential, локаторы или
+значения конфигурации. HTTP проверяет exact requested run/revision, общую
+session пары, known components и разрешённые поля каждого компонента.
+Первая ревизия не содержит previous; отсутствие изменений даёт пустой список.
+Неизвестные либо противоречивые upstream данные отклоняются 502; hidden/no
+materialization CP возвращает 404. Используется прежний защищённый CP client
+и deploy ownership gateway, без новых сетевых портов и Secrets.
+
+## Дополнение D2/D3, CP 9ad5b58d1
+
+Home/Kanban: session → `GET runs?states=RUNNING&states=QUEUED` и
+`GET owner-gates?state=OPEN` → существующие CP ListRuns.states и
+ListOwnerGates.state → owner eligibility и SQL filter до LIMIT → typed page.
+State filter не даёт полномочий и не фильтруется после страницы в gateway;
+чтение не меняет lifecycle и не создаёт event. Неизвестные/повторные states
+отклоняются до RPC. Query/total OwnerGate требуют отдельного producer
+дополнения #1046; HTTP их не выдумывает.
+
+Карта до изменения: проверенная browser session/organization → GET
+`model-capabilities` → generated Query.ListModelCapabilities → CP eligible
+accounts/model catalog → server filtering/pagination → PWA model selector.
+Read-only путь не меняет состояние и не создаёт событие. Exact catalog pin
+не заменяет owner eligibility. CP связывает cursor с tenant, actor, фильтрами
+и снимком; gateway передаёт его без локальной фильтрации. Новые workload,
+Secrets и deploy resources не нужны: используется существующий защищённый
+CP client с application identity, mTLS и signed context.
+
+SDK принимает optional `expectedCatalogRevision/expectedCatalogDigest` только
+парой (`mcat_` + SHA-256 и тот же lowercase digest). Ответ всегда содержит
+обе части, включая пустой eligible catalog. Несовпавший ответ CP отклоняется
+502; stale pin/cursor возвращает ошибку CP, без выбора другой модели.
+При смене фильтра клиент сбрасывает cursor; при refresh явно снимает старый
+pin, затем использует новую пару для следующих страниц.
+
+D3 использует прежнюю owner-context карту ниже. Исправлено преобразование
+producer `string/reference/integer/collection` в HTTP
+`STRING/OPAQUE_REF/INTEGER/COLLECTION`. Сохраняются отдельные
+`FILE_DESCRIPTOR/TOOL_DESCRIPTOR`, имена `artifact_ref/media_type` и источники
+AUTOMATION/GATE/INPUT/RUN/SESSION/WORKFLOW. Неизвестный producer type/source
+закрыто отклоняется; значения переменных не публикуются.
+
+Context7: проверены `/getkin/kin-openapi`, CLI `cmd/validate` и полная
+`Validate` без ослабляющих флагов. Проверки этого дополнения фиксируются
+по exact checkpoint отдельно; наличие схемы не доказывает live acceptance.
+
 Источники: #1045/#1021, #1018, утверждённая матрица #1031
 `docs/operations/mvp-1031-acceptance.md`. Текущий Proto совпадает с CP
 `67aa98d770ddaa24cecf01b188f006f087c7849d`; policy55 и generated client

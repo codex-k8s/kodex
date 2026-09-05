@@ -17,14 +17,24 @@ func modelCapabilityFixture() *cp.ModelCapability {
 	return &cp.ModelCapability{Id: "fixture-model", ProviderDefinitionKey: "openai-codex", ReasoningEfforts: []string{"low", "medium"}, DefaultReasoningEffort: "medium", Available: true, EligibleProviderAccountRefs: []string{"pacc_fixture01"}}
 }
 
+func modelCatalogFixture() *cp.ListModelCapabilitiesResponse {
+	digest := strings.Repeat("a", 64)
+	return &cp.ListModelCapabilitiesResponse{Models: []*cp.ModelCapability{modelCapabilityFixture()}, Total: 1, CatalogDigest: digest, CatalogRevision: "mcat_" + digest}
+}
+
 func TestModelCapabilitiesExactTypedRoute(t *testing.T) {
-	client := &catalogRPCRecorder{response: &cp.ListModelCapabilitiesResponse{Models: []*cp.ModelCapability{modelCapabilityFixture()}, Total: 7, Page: &cp.PageInfo{NextPageToken: "opaque-next"}}}
+	response := modelCatalogFixture()
+	response.Total, response.Page = 7, &cp.PageInfo{NextPageToken: "opaque-next"}
+	client := &catalogRPCRecorder{response: response}
 	w := httptest.NewRecorder()
-	catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-capabilities?providerDefinitionKey=openai-codex&providerAccountRef=pacc_fixture01&query=model&pageSize=2&pageToken=opaque-first", nil))
+	catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-capabilities?providerDefinitionKey=openai-codex&providerAccountRef=pacc_fixture01&query=model&pageSize=2&pageToken=opaque-first&expectedCatalogRevision="+response.CatalogRevision+"&expectedCatalogDigest="+response.CatalogDigest, nil))
 	if w.Code != 200 || client.method != cp.PlatformQueryService_ListModelCapabilities_FullMethodName {
 		t.Fatalf("unexpected route status %d", w.Code)
 	}
 	r := client.request.(*cp.ListModelCapabilitiesRequest)
+	if r.ExpectedCatalogRevision != response.CatalogRevision || r.ExpectedCatalogDigest != response.CatalogDigest {
+		t.Fatal("catalog pin lost")
+	}
 	if r.ProviderAccountRef != "pacc_fixture01" || r.ProviderDefinitionKey != "openai-codex" || r.Query != "model" || r.Page.PageSize != 2 || r.Page.PageToken != "opaque-first" {
 		t.Fatal("model filters or cursor changed")
 	}
@@ -32,10 +42,13 @@ func TestModelCapabilitiesExactTypedRoute(t *testing.T) {
 	if json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Total != 7 || result.NextPageToken != "opaque-next" || len(result.Items) != 1 || result.Items[0].DefaultReasoningEffort != "medium" || result.Items[0].ReasoningEfforts[0] != "low" || !result.Items[0].Available || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("model capability readback changed")
 	}
+	if result.CatalogRevision != response.CatalogRevision || result.CatalogDigest != response.CatalogDigest {
+		t.Fatal("catalog provenance lost")
+	}
 }
 
 func TestModelCapabilitiesRejectMalformedInput(t *testing.T) {
-	for _, query := range []string{"pageSize=0", "pageSize=101", "providerDefinitionKey=BAD", "providerAccountRef=prj_foreign01", "providerAccountRef=", "query=" + strings.Repeat("a", 201), "pageToken=" + strings.Repeat("x", 513)} {
+	for _, query := range []string{"expectedCatalogRevision=", "expectedCatalogDigest=", "expectedCatalogRevision=mcat_" + strings.Repeat("a", 64), "expectedCatalogDigest=" + strings.Repeat("a", 64), "expectedCatalogRevision=mcat_" + strings.Repeat("a", 64) + "&expectedCatalogDigest=" + strings.Repeat("b", 64), "pageSize=0", "pageSize=101", "providerDefinitionKey=BAD", "providerAccountRef=prj_foreign01", "providerAccountRef=", "query=" + strings.Repeat("a", 201), "pageToken=" + strings.Repeat("x", 513)} {
 		t.Run(query[:min(len(query), 32)], func(t *testing.T) {
 			client := &catalogRPCRecorder{}
 			w := httptest.NewRecorder()
@@ -49,7 +62,10 @@ func TestModelCapabilitiesRejectMalformedInput(t *testing.T) {
 
 func TestModelCapabilitiesRejectCorruptOwnerResponse(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.ListModelCapabilitiesResponse){
-		"default": func(r *cp.ListModelCapabilitiesResponse) { r.Models[0].DefaultReasoningEffort = "unknown" },
+		"digest missing":    func(r *cp.ListModelCapabilitiesResponse) { r.CatalogDigest = "" },
+		"digest malformed":  func(r *cp.ListModelCapabilitiesResponse) { r.CatalogDigest = strings.Repeat("A", 64) },
+		"revision mismatch": func(r *cp.ListModelCapabilitiesResponse) { r.CatalogRevision = "mcat_" + strings.Repeat("b", 64) },
+		"default":           func(r *cp.ListModelCapabilitiesResponse) { r.Models[0].DefaultReasoningEffort = "unknown" },
 		"account": func(r *cp.ListModelCapabilitiesResponse) {
 			r.Models[0].EligibleProviderAccountRefs = []string{"pacc_foreign01"}
 		},
@@ -64,7 +80,7 @@ func TestModelCapabilitiesRejectCorruptOwnerResponse(t *testing.T) {
 		"efforts":   func(r *cp.ListModelCapabilitiesResponse) { r.Models[0].ReasoningEfforts = []string{"medium", "medium"} },
 	} {
 		t.Run(name, func(t *testing.T) {
-			r := &cp.ListModelCapabilitiesResponse{Models: []*cp.ModelCapability{modelCapabilityFixture()}, Total: 1}
+			r := modelCatalogFixture()
 			mutate(r)
 			client := &catalogRPCRecorder{response: r}
 			w := httptest.NewRecorder()
@@ -77,7 +93,7 @@ func TestModelCapabilitiesRejectCorruptOwnerResponse(t *testing.T) {
 }
 
 func TestModelCapabilitiesDeniedAndEmpty(t *testing.T) {
-	for code, want := range map[codes.Code]int{codes.Unauthenticated: 401, codes.PermissionDenied: 403, codes.NotFound: 404, codes.Unavailable: 503} {
+	for code, want := range map[codes.Code]int{codes.InvalidArgument: 400, codes.Aborted: 412, codes.Unauthenticated: 401, codes.PermissionDenied: 403, codes.NotFound: 404, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "private upstream detail")}
 		w := httptest.NewRecorder()
 		catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-capabilities", nil))
@@ -85,11 +101,23 @@ func TestModelCapabilitiesDeniedAndEmpty(t *testing.T) {
 			t.Fatal("unsafe model error mapping")
 		}
 	}
-	client := &catalogRPCRecorder{response: &cp.ListModelCapabilitiesResponse{}}
+	response := modelCatalogFixture()
+	response.Models, response.Total = nil, 0
+	client := &catalogRPCRecorder{response: response}
 	w := httptest.NewRecorder()
 	catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-capabilities", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) || !strings.Contains(w.Body.String(), `"total":0`) {
 		t.Fatal("empty model page lost shape")
+	}
+}
+
+func TestModelCapabilitiesRejectChangedExpectedSnapshot(t *testing.T) {
+	client := &catalogRPCRecorder{response: modelCatalogFixture()}
+	w := httptest.NewRecorder()
+	digest := strings.Repeat("b", 64)
+	catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-capabilities?expectedCatalogRevision=mcat_"+digest+"&expectedCatalogDigest="+digest, nil))
+	if w.Code != 502 || client.method != cp.PlatformQueryService_ListModelCapabilities_FullMethodName {
+		t.Fatalf("changed expected snapshot accepted: %d", w.Code)
 	}
 }
 

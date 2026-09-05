@@ -883,6 +883,14 @@ paths:
       tags: [Agents]
       operationId: listModelCapabilities
       parameters:
+        - name: expectedCatalogRevision
+          in: query
+          description: Точный снимок каталога; задаётся вместе с expectedCatalogDigest.
+          schema: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        - name: expectedCatalogDigest
+          in: query
+          description: SHA-256 снимка; задаётся вместе с expectedCatalogRevision.
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
         - name: providerDefinitionKey
           in: query
           schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z][a-z0-9_-]*$' }
@@ -1490,6 +1498,296 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RuntimeSecret' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/runtime-secret-drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createRuntimeSecretDraft
+      description: Сохранить зашифрованный черновик нового Secret без публикации; повтор неизвестного результата использует прежние Idempotency-Key и тело.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretCreateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без активации Secret
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: saveRuntimeSecretDraft
+      description: Сохранить отдельный зашифрованный черновик существующего Secret; If-Match относится к Secret.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretRotateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без изменения активной revision
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }]
+      responses:
+        '200':
+          description: Авторитетное состояние черновика без значений и storage descriptors
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/impact-plans:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: prepareRuntimeSecretDraftImpact
+      description: Зафиксировать immutable план влияния до публикации; If-Match относится к проверенному Draft.
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '201':
+          description: Owner план с exact Draft/Secret pins без изменения активного Secret
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPlan' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-draft-impact-plans/{planRef}:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecretDraftImpact
+      description: Авторитетная страница immutable плана с результатами выбранных замен после публикации; фильтрация и eligibility выполняются сервером.
+      parameters:
+        - { name: planRef, in: path, required: true, schema: { $ref: '#/components/schemas/OpaqueRef' } }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Страница owner плана без credential descriptors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configurations:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxConfigurations
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configuration:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: configurationRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }, { name: revisionRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credentials:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxCredentials
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: kind, in: query, schema: { $ref: '#/components/schemas/EmailMailboxCredentialKind' } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredentialPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxCredentialReceipt
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: idempotencyKey, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredential' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/preview:
+    post:
+      tags: [EmailMailbox]
+      operationId: previewEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxPreview' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/drafts:
+    post:
+      tags: [EmailMailbox]
+      operationId: createEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { name: If-Match, in: header, schema: { type: string, maxLength: 24 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftInput' }
+      responses:
+        '201':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [EmailMailbox]
+      operationId: saveEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [EmailMailbox]
+      operationId: validateEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [EmailMailbox]
+      operationId: publishEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [EmailMailbox]
+      operationId: discardEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding:
+    post:
+      tags: [EmailMailbox]
+      operationId: bindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxBindingInput' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/binding:
+    delete:
+      tags: [EmailMailbox]
+      operationId: unbindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxUnbinding' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/validate:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: validateRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Сохранённое значение расшифровано и проверено broker
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/publish:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: publishRuntimeSecretDraft
+      description: Опубликовать VALID черновик; If-Match относится к Draft, expectedSecretVersion к назначенной сервером версии Secret.
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublishInput' }
+      responses:
+        '200':
+          description: Immutable revision активирована владельцем после exact readback
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublication' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/discard:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: discardRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Черновик закрыт, ciphertext удалён с exact preconditions
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/runtime-secrets/{secretRef}/reveal:
     post:
       tags: [RuntimeSecrets]
@@ -1709,7 +2007,21 @@ paths:
     get:
       tags: [Runs]
       operationId: listRuns
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: states
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 7
+            uniqueItems: true
+            items: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
       responses:
         '200':
           description: Доступные запуски
@@ -1732,6 +2044,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunWorkspace' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runs/{runRef}/runtime-revision-diff:
+    get:
+      tags: [Runs]
+      operationId: getRuntimeRevisionDiff
+      parameters:
+        - { $ref: '#/components/parameters/RunRef' }
+        - name: currentRevisionRef
+          in: query
+          description: Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Безопасные изменения относительно предыдущей ревизии той же сессии; значения, prompts и worker snapshot отсутствуют.
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRevisionDiff' } } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/runs/{runRef}:
     get:
@@ -1823,7 +2150,13 @@ paths:
     get:
       tags: [Decisions]
       operationId: listOwnerGates
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
       responses:
         '200':
           description: Human Gates
@@ -3290,7 +3623,7 @@ paths:
         - { $ref: '#/components/parameters/PageToken' }
         - name: kind
           in: query
-          schema: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+          schema: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
       responses:
         '200':
           description: Каталог доступных конфигураций без содержимого ревизий
@@ -3779,6 +4112,11 @@ components:
       schema: { $ref: '#/components/schemas/OpaqueRef' }
     RuntimeEnvironmentRef:
       name: environmentRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeSecretDraftRef:
+      name: draftRef
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
@@ -4409,7 +4747,7 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
         name: { type: string, minLength: 1, maxLength: 160 }
         managedBy: { type: string, enum: [UI, GIT] }
         source: { type: string, maxLength: 2000 }
@@ -4424,7 +4762,7 @@ components:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
-        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT] }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
         name: { type: string, minLength: 1, maxLength: 160 }
         managedBy: { type: string, enum: [UI, GIT] }
         source: { type: string, maxLength: 2000 }
@@ -5095,6 +5433,75 @@ components:
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraft:
+      type: object
+      additionalProperties: false
+      required: [ref, version, generation, projectRef, secretRef, secretVersion, name, description, valueType, state, publishedRevision, createdAt, updatedAt, expiresAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft. }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        state: { type: string, enum: [PREPARING, DRAFT, VALID, PUBLISHING, PUBLISHED, DISCARDED, EXPIRED, FAILED] }
+        publishedRevision: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraftPublishInput:
+      type: object
+      additionalProperties: false
+      required: [expectedSecretVersion, impactPlanRef, selectedItemRefs]
+      properties:
+        expectedSecretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        impactPlanRef: { $ref: '#/components/schemas/OpaqueRef' }
+        selectedItemRefs: { type: array, maxItems: 1000, uniqueItems: true, items: { $ref: '#/components/schemas/OpaqueRef' }, description: Пустой список публикует без замены потребителей. }
+    RuntimeSecretDraftImpactPlan:
+      type: object
+      additionalProperties: false
+      required: [ref, draftRef, draftVersion, secretRef, secretVersion, sourceRevision, digest, total, expiresAt, state]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        draftRef: { $ref: '#/components/schemas/OpaqueRef' }
+        draftVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceRevision: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        state: { type: string, enum: [PREPARED, APPLIED, EXPIRED, CANCELLED] }
+    RuntimeSecretDraftImpactItem:
+      type: object
+      additionalProperties: false
+      required: [ref, consumer, outcome]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        consumer: { $ref: '#/components/schemas/RuntimeSecretImpactConsumer' }
+        outcome: { type: string, enum: [PENDING, APPLIED, CONFLICT, FORBIDDEN, NOT_SELECTED] }
+        resultEnvironmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resultBindingRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resultBindingVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    RuntimeSecretDraftImpactPage:
+      type: object
+      additionalProperties: false
+      required: [plan, items, total, nextPageToken]
+      properties:
+        plan: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPlan' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSecretDraftImpactItem' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeSecretDraftPublication:
+      type: object
+      additionalProperties: false
+      required: [draft, secret]
+      properties:
+        draft: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        secret: { $ref: '#/components/schemas/RuntimeSecret' }
     RuntimeSecretPage:
       type: object
       additionalProperties: false
@@ -5129,7 +5536,7 @@ components:
       type: object
       additionalProperties: false
       description: Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
-      required: [name, secretRef, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
+      required: [name, secretRef, revision, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -5138,6 +5545,7 @@ components:
         secretUid: { type: string, minLength: 1, maxLength: 128 }
         secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
         contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     RuntimeSecretBinding:
       type: object
       additionalProperties: false
@@ -5145,6 +5553,12 @@ components:
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false
@@ -5595,11 +6009,11 @@ components:
         valueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT, COLLECTION] }
         description: { type: string, maxLength: 500 }
         example: { type: string, maxLength: 500 }
-        source: { type: string, enum: [SYSTEM, USER, ORGANIZATION, PROJECT, AGENT, ENVIRONMENT, RUNTIME, TOOLS, INPUT_FILES, SESSION_FILES, RUN_FILES, WORKFLOW_FILES, PROJECT_FILES] }
+        source: { type: string, enum: [SYSTEM, USER, ORGANIZATION, PROJECT, AGENT, ENVIRONMENT, RUNTIME, TOOLS, INPUT_FILES, SESSION_FILES, RUN_FILES, WORKFLOW_FILES, PROJECT_FILES, AUTOMATION, GATE, INPUT, RUN, SESSION, WORKFLOW] }
         collection: { type: boolean }
         available: { type: boolean }
         reason: { $ref: '#/components/schemas/TemplateVariableAvailabilityReason' }
-        itemValueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT] }
+        itemValueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT, FILE_DESCRIPTOR, TOOL_DESCRIPTOR] }
         itemFields: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/TemplateVariableField' } }
         rangeExample: { type: string, maxLength: 500 }
     TemplateVariableField:
@@ -5607,7 +6021,7 @@ components:
       additionalProperties: false
       required: [name, valueType, description]
       properties:
-        name: { type: string, pattern: '^[a-z][a-zA-Z0-9]*$', maxLength: 80 }
+        name: { type: string, pattern: '^[a-z][a-zA-Z0-9_]*$', maxLength: 80 }
         valueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP] }
         description: { type: string, maxLength: 300 }
     TemplateVariablePage:
@@ -5633,8 +6047,10 @@ components:
     ModelCapabilityPage:
       type: object
       additionalProperties: false
-      required: [items, total, nextPageToken]
+      required: [items, total, nextPageToken, catalogRevision, catalogDigest]
       properties:
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ModelCapability' } }
         total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string, maxLength: 512 }
@@ -6181,6 +6597,44 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         nodes: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/RunNode' } }
         edges: { type: array, maxItems: 4000, items: { $ref: '#/components/schemas/RunEdge' } }
+    PublicRuntimeRevisionIdentity:
+      type: object
+      additionalProperties: false
+      required: [ref, version, runRef, sessionRef, attempt, revisionDigest, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        attempt: { type: integer, minimum: 1, maximum: 2147483647 }
+        revisionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeRevisionDiffValue:
+      type: object
+      additionalProperties: false
+      description: Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^(sha256:)?[a-f0-9]{64}$' }
+        revision: { type: string, minLength: 1, maxLength: 160 }
+    RuntimeRevisionDiffChange:
+      type: object
+      additionalProperties: false
+      required: [component, current]
+      properties:
+        component: { type: string, enum: [PROVIDER, MODEL, RUNTIME_PROFILE, RUNTIME_CONFIGURATION, PROVIDER_POLICY, CONFIG_OVERLAY, ENVIRONMENT, ENVIRONMENT_BINDING, INSTRUCTION, INTEGRATION_GRANTS, IMAGE] }
+        previous: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+        current: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+    RuntimeRevisionDiff:
+      type: object
+      additionalProperties: false
+      required: [current, changes]
+      properties:
+        current: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        previous: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        changes: { type: array, maxItems: 11, items: { $ref: '#/components/schemas/RuntimeRevisionDiffChange' } }
     RunWorkspace:
       type: object
       additionalProperties: false
@@ -6696,6 +7150,160 @@ components:
           maxProperties: 8
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
+    EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
+    EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }
+    EmailMailboxOperation: { type: string, enum: [HEALTH, MAILBOXES, LIST, SEARCH, FETCH, DOWNLOAD, SEND, REPLY, REPLY_ALL, FORWARD, DELETE, RECEIPT, THREAD, ATTACHMENTS, MARK_READ, MARK_UNREAD, MOVE, ARCHIVE, DRAFT_CREATE, DRAFT_UPDATE, DRAFT_DELETE] }
+    EmailMailboxApprovalPolicy: { type: string, enum: [DENY, ALLOW, HUMAN_GATE] }
+    EmailMailboxCredentialReference:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 262144 }
+        generation: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    EmailMailboxEndpoint:
+      type: object
+      additionalProperties: false
+      properties:
+        host: { type: string, maxLength: 262144 }
+        port: { type: integer, format: int32 }
+        serverName: { type: string, maxLength: 262144 }
+        tlsMode: { $ref: '#/components/schemas/EmailMailboxTLSMode' }
+        authMethod: { $ref: '#/components/schemas/EmailMailboxAuthMethod' }
+        ca: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        username: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        secret: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+    EmailMailboxLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        attachmentBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        maxAttachments: { type: integer, format: int32 }
+        maxRecipients: { type: integer, format: int32 }
+        messageBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        pageSize: { type: integer, format: int32 }
+        scanMessages: { type: integer, format: int32 }
+        timeoutSeconds: { type: integer, format: int32 }
+    EmailMailboxOperationPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        operation: { $ref: '#/components/schemas/EmailMailboxOperation' }
+        policy: { $ref: '#/components/schemas/EmailMailboxApprovalPolicy' }
+        folders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+    EmailMailboxSpecification:
+      type: object
+      additionalProperties: false
+      description: Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+      properties:
+        enabled: { type: boolean }
+        receiveProtocol: { $ref: '#/components/schemas/EmailMailboxReceiveProtocol' }
+        allowedFolders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+        archiveFolder: { type: string, maxLength: 262144 }
+        draftsFolder: { type: string, maxLength: 262144 }
+        folder: { type: string, maxLength: 262144 }
+        sender: { type: string, maxLength: 262144 }
+        replyTo: { type: string, maxLength: 262144 }
+        recipients: { type: array, maxItems: 1000, items: { type: string, maxLength: 262144 } }
+        helloName: { type: string, maxLength: 262144 }
+        smtp: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        imap: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        pop: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        limits: { $ref: '#/components/schemas/EmailMailboxLimits' }
+        policies: { type: array, maxItems: 21, items: { $ref: '#/components/schemas/EmailMailboxOperationPolicy' } }
+    EmailMailboxDraftContent:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      description: Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        yaml: { type: string, maxLength: 262144 }
+    EmailMailboxDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, content]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        content: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+    EmailMailboxBindingInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    EmailMailboxDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [code, path, message, line, column]
+      properties:
+        code: { type: string, enum: [EMAIL_MAILBOX_SYNTAX_INVALID, EMAIL_MAILBOX_CONFIGURATION_INVALID, EMAIL_MAILBOX_CREDENTIAL_MISMATCH] }
+        path: { type: string, maxLength: 128 }
+        message: { type: string, maxLength: 256 }
+        line: { type: integer, format: int32, minimum: 0 }
+        column: { type: integer, format: int32, minimum: 0 }
+    EmailMailboxPublication:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, digest, state, configurationRevisionRef, createdAt, failureCode]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        state: { type: string, enum: [PENDING, READY, FAILED, SUPERSEDED] }
+        configurationRevisionRef: { type: string, maxLength: 96 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        readyAt: { $ref: '#/components/schemas/Timestamp' }
+        failureCode: { type: string, maxLength: 64 }
+    EmailMailboxConfigurationView:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        mailboxRef: { $ref: '#/components/schemas/OpaqueRef' }
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        revision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        boundRevisionRef: { type: string, maxLength: 96 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+    EmailMailboxConfigurationPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxConfigurationView' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxCredentialPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxCredential' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxPreview:
+      type: object
+      additionalProperties: false
+      required: [canonicalYaml, diagnostics, valid]
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        canonicalYaml: { type: string, maxLength: 262144 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        valid: { type: boolean }
+    EmailMailboxUnbinding:
+      type: object
+      additionalProperties: false
+      required: [publication, connectionVersion]
+      properties:
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     EmailMailboxCredentialKind:
       type: string
       enum: [CA_CERTIFICATE, USERNAME, AUTH_SECRET]

@@ -354,7 +354,7 @@ export type ManagedConfiguration = {
     ref: OpaqueRef;
     version: number;
     projectRef?: OpaqueRef;
-    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT' | 'EMAIL_MAILBOX';
     name: string;
     managedBy: 'UI' | 'GIT';
     source: string;
@@ -367,7 +367,7 @@ export type ManagedConfigurationSummary = {
     ref: OpaqueRef;
     version: number;
     projectRef?: OpaqueRef;
-    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT' | 'EMAIL_MAILBOX';
     name: string;
     managedBy: 'UI' | 'GIT';
     source: string;
@@ -923,6 +923,69 @@ export type RuntimeSecret = {
     updatedAt: Timestamp;
 };
 
+export type RuntimeSecretDraft = {
+    ref: OpaqueRef;
+    version: number;
+    generation: number;
+    projectRef: OpaqueRef;
+    secretRef: OpaqueRef;
+    /**
+     * Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft.
+     */
+    secretVersion: number;
+    name: string;
+    description: string;
+    valueType: RuntimeSecretValueType;
+    state: 'PREPARING' | 'DRAFT' | 'VALID' | 'PUBLISHING' | 'PUBLISHED' | 'DISCARDED' | 'EXPIRED' | 'FAILED';
+    publishedRevision: number;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    expiresAt: Timestamp;
+};
+
+export type RuntimeSecretDraftPublishInput = {
+    expectedSecretVersion: number;
+    impactPlanRef: OpaqueRef;
+    /**
+     * Пустой список публикует без замены потребителей.
+     */
+    selectedItemRefs: Array<OpaqueRef>;
+};
+
+export type RuntimeSecretDraftImpactPlan = {
+    ref: OpaqueRef;
+    draftRef: OpaqueRef;
+    draftVersion: number;
+    secretRef: OpaqueRef;
+    secretVersion: number;
+    sourceRevision: number;
+    digest: string;
+    total: number;
+    expiresAt: Timestamp;
+    state: 'PREPARED' | 'APPLIED' | 'EXPIRED' | 'CANCELLED';
+};
+
+export type RuntimeSecretDraftImpactItem = {
+    ref: OpaqueRef;
+    consumer: RuntimeSecretImpactConsumer;
+    outcome: 'PENDING' | 'APPLIED' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_SELECTED';
+    resultEnvironmentVersionRef?: OpaqueRef;
+    resultBindingRef?: OpaqueRef;
+    resultBindingVersion?: number;
+};
+
+export type RuntimeSecretDraftImpactPage = {
+    plan: RuntimeSecretDraftImpactPlan;
+    items: Array<RuntimeSecretDraftImpactItem>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type RuntimeSecretDraftPublication = {
+    draft: RuntimeSecretDraft;
+    secret: RuntimeSecret;
+};
+
 export type RuntimeSecretPage = {
     items: Array<RuntimeSecret>;
     nextPageToken: string;
@@ -956,11 +1019,16 @@ export type RuntimeSecretDescriptor = {
     secretUid: string;
     secretResourceVersion: string;
     contentSha256: string;
+    revision: number;
 };
 
 export type RuntimeSecretBinding = {
     name: string;
     secretRef: OpaqueRef;
+    /**
+     * Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
+     */
+    revision?: number;
 };
 
 export type RuntimeEnvironmentVersion = {
@@ -1317,11 +1385,11 @@ export type TemplateVariable = {
     valueType: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'COLLECTION';
     description: string;
     example: string;
-    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES';
+    source: 'SYSTEM' | 'USER' | 'ORGANIZATION' | 'PROJECT' | 'AGENT' | 'ENVIRONMENT' | 'RUNTIME' | 'TOOLS' | 'INPUT_FILES' | 'SESSION_FILES' | 'RUN_FILES' | 'WORKFLOW_FILES' | 'PROJECT_FILES' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'RUN' | 'SESSION' | 'WORKFLOW';
     collection: boolean;
     available: boolean;
     reason: TemplateVariableAvailabilityReason;
-    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT';
+    itemValueType?: 'STRING' | 'OPAQUE_REF' | 'INTEGER' | 'BOOLEAN' | 'TIMESTAMP' | 'OBJECT' | 'FILE_DESCRIPTOR' | 'TOOL_DESCRIPTOR';
     itemFields: Array<TemplateVariableField>;
     rangeExample?: string;
 };
@@ -1349,6 +1417,8 @@ export type ModelCapability = {
 };
 
 export type ModelCapabilityPage = {
+    catalogRevision: string;
+    catalogDigest: string;
     items: Array<ModelCapability>;
     total: number;
     nextPageToken: string;
@@ -1803,6 +1873,39 @@ export type RunGraph = {
     edges: Array<RunEdge>;
 };
 
+export type PublicRuntimeRevisionIdentity = {
+    ref: OpaqueRef;
+    version: number;
+    runRef: OpaqueRef;
+    sessionRef: OpaqueRef;
+    turnRef?: OpaqueRef;
+    attempt: number;
+    revisionDigest: string;
+    createdAt: Timestamp;
+};
+
+/**
+ * Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+ */
+export type RuntimeRevisionDiffValue = {
+    ref?: string;
+    version?: number;
+    digest?: string;
+    revision?: string;
+};
+
+export type RuntimeRevisionDiffChange = {
+    component: 'PROVIDER' | 'MODEL' | 'RUNTIME_PROFILE' | 'RUNTIME_CONFIGURATION' | 'PROVIDER_POLICY' | 'CONFIG_OVERLAY' | 'ENVIRONMENT' | 'ENVIRONMENT_BINDING' | 'INSTRUCTION' | 'INTEGRATION_GRANTS' | 'IMAGE';
+    previous?: RuntimeRevisionDiffValue;
+    current: RuntimeRevisionDiffValue;
+};
+
+export type RuntimeRevisionDiff = {
+    current: PublicRuntimeRevisionIdentity;
+    previous?: PublicRuntimeRevisionIdentity;
+    changes: Array<RuntimeRevisionDiffChange>;
+};
+
 export type RunWorkspace = {
     run: Run;
     graph: RunGraph;
@@ -2236,6 +2339,143 @@ export type IntegrationResourceScope = {
     digest: string;
 };
 
+export type EmailMailboxReceiveProtocol = 'IMAP' | 'POP3';
+
+export type EmailMailboxTlsMode = 'IMPLICIT' | 'STARTTLS';
+
+export type EmailMailboxAuthMethod = 'PASSWORD' | 'OAUTHBEARER';
+
+export type EmailMailboxOperation = 'HEALTH' | 'MAILBOXES' | 'LIST' | 'SEARCH' | 'FETCH' | 'DOWNLOAD' | 'SEND' | 'REPLY' | 'REPLY_ALL' | 'FORWARD' | 'DELETE' | 'RECEIPT' | 'THREAD' | 'ATTACHMENTS' | 'MARK_READ' | 'MARK_UNREAD' | 'MOVE' | 'ARCHIVE' | 'DRAFT_CREATE' | 'DRAFT_UPDATE' | 'DRAFT_DELETE';
+
+export type EmailMailboxApprovalPolicy = 'DENY' | 'ALLOW' | 'HUMAN_GATE';
+
+export type EmailMailboxCredentialReference = {
+    name?: string;
+    generation?: number;
+};
+
+export type EmailMailboxEndpoint = {
+    host?: string;
+    port?: number;
+    serverName?: string;
+    tlsMode?: EmailMailboxTlsMode;
+    authMethod?: EmailMailboxAuthMethod;
+    ca?: EmailMailboxCredentialReference;
+    username?: EmailMailboxCredentialReference;
+    secret?: EmailMailboxCredentialReference;
+};
+
+export type EmailMailboxLimits = {
+    attachmentBytes?: number;
+    maxAttachments?: number;
+    maxRecipients?: number;
+    messageBytes?: number;
+    pageSize?: number;
+    scanMessages?: number;
+    timeoutSeconds?: number;
+};
+
+export type EmailMailboxOperationPolicy = {
+    operation?: EmailMailboxOperation;
+    policy?: EmailMailboxApprovalPolicy;
+    folders?: Array<string>;
+};
+
+/**
+ * Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+ */
+export type EmailMailboxSpecification = {
+    enabled?: boolean;
+    receiveProtocol?: EmailMailboxReceiveProtocol;
+    allowedFolders?: Array<string>;
+    archiveFolder?: string;
+    draftsFolder?: string;
+    folder?: string;
+    sender?: string;
+    replyTo?: string;
+    recipients?: Array<string>;
+    helloName?: string;
+    smtp?: EmailMailboxEndpoint;
+    imap?: EmailMailboxEndpoint;
+    pop?: EmailMailboxEndpoint;
+    limits?: EmailMailboxLimits;
+    policies?: Array<EmailMailboxOperationPolicy>;
+};
+
+/**
+ * Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+ */
+export type EmailMailboxDraftContent = {
+    specification?: EmailMailboxSpecification;
+    yaml?: string;
+};
+
+export type EmailMailboxDraftInput = {
+    configurationRef?: OpaqueRef;
+    name: string;
+    content: EmailMailboxDraftContent;
+};
+
+export type EmailMailboxBindingInput = {
+    connectionRef: OpaqueRef;
+    expectedConnectionVersion: number;
+};
+
+export type EmailMailboxDiagnostic = {
+    code: 'EMAIL_MAILBOX_SYNTAX_INVALID' | 'EMAIL_MAILBOX_CONFIGURATION_INVALID' | 'EMAIL_MAILBOX_CREDENTIAL_MISMATCH';
+    path: string;
+    message: string;
+    line: number;
+    column: number;
+};
+
+export type EmailMailboxPublication = {
+    ref: OpaqueRef;
+    revision: number;
+    digest: string;
+    state: 'PENDING' | 'READY' | 'FAILED' | 'SUPERSEDED';
+    configurationRevisionRef: string;
+    createdAt: Timestamp;
+    readyAt?: Timestamp;
+    failureCode: string;
+};
+
+export type EmailMailboxConfigurationView = {
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    mailboxRef: OpaqueRef;
+    configuration: ManagedConfiguration;
+    revision: ManagedConfigurationRevision;
+    specification: EmailMailboxSpecification;
+    publication?: EmailMailboxPublication;
+    boundRevisionRef: string;
+    diagnostics: Array<EmailMailboxDiagnostic>;
+};
+
+export type EmailMailboxConfigurationPage = {
+    items: Array<EmailMailboxConfigurationView>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type EmailMailboxCredentialPage = {
+    items: Array<EmailMailboxCredential>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type EmailMailboxPreview = {
+    specification?: EmailMailboxSpecification;
+    canonicalYaml: string;
+    diagnostics: Array<EmailMailboxDiagnostic>;
+    valid: boolean;
+};
+
+export type EmailMailboxUnbinding = {
+    publication: EmailMailboxPublication;
+    connectionVersion: number;
+};
+
 export type EmailMailboxCredentialKind = 'CA_CERTIFICATE' | 'USERNAME' | 'AUTH_SECRET';
 
 export type EmailMailboxCredentialInput = {
@@ -2527,6 +2767,8 @@ export type AccessBindingRef = OpaqueRef;
 export type AgentRef = OpaqueRef;
 
 export type RuntimeEnvironmentRef = OpaqueRef;
+
+export type RuntimeSecretDraftRef = OpaqueRef;
 
 export type RuntimeEnvironmentDraftRef = OpaqueRef;
 
@@ -4284,6 +4526,14 @@ export type ListModelCapabilitiesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Точный снимок каталога; задаётся вместе с expectedCatalogDigest.
+         */
+        expectedCatalogRevision?: string;
+        /**
+         * SHA-256 снимка; задаётся вместе с expectedCatalogRevision.
+         */
+        expectedCatalogDigest?: string;
         providerDefinitionKey?: string;
         providerAccountRef?: string;
         query?: string;
@@ -5682,6 +5932,635 @@ export type RotateRuntimeSecretResponses = {
 
 export type RotateRuntimeSecretResponse = RotateRuntimeSecretResponses[keyof RotateRuntimeSecretResponses];
 
+export type CreateRuntimeSecretDraftData = {
+    body: RuntimeSecretCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-secret-drafts';
+};
+
+export type CreateRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeSecretDraftError = CreateRuntimeSecretDraftErrors[keyof CreateRuntimeSecretDraftErrors];
+
+export type CreateRuntimeSecretDraftResponses = {
+    /**
+     * Черновик сохранён без активации Secret
+     */
+    201: RuntimeSecretDraft;
+};
+
+export type CreateRuntimeSecretDraftResponse = CreateRuntimeSecretDraftResponses[keyof CreateRuntimeSecretDraftResponses];
+
+export type SaveRuntimeSecretDraftData = {
+    body: RuntimeSecretRotateInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/drafts';
+};
+
+export type SaveRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRuntimeSecretDraftError = SaveRuntimeSecretDraftErrors[keyof SaveRuntimeSecretDraftErrors];
+
+export type SaveRuntimeSecretDraftResponses = {
+    /**
+     * Черновик сохранён без изменения активной revision
+     */
+    201: RuntimeSecretDraft;
+};
+
+export type SaveRuntimeSecretDraftResponse = SaveRuntimeSecretDraftResponses[keyof SaveRuntimeSecretDraftResponses];
+
+export type GetRuntimeSecretDraftData = {
+    body?: never;
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}';
+};
+
+export type GetRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretDraftError = GetRuntimeSecretDraftErrors[keyof GetRuntimeSecretDraftErrors];
+
+export type GetRuntimeSecretDraftResponses = {
+    /**
+     * Авторитетное состояние черновика без значений и storage descriptors
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type GetRuntimeSecretDraftResponse = GetRuntimeSecretDraftResponses[keyof GetRuntimeSecretDraftResponses];
+
+export type PrepareRuntimeSecretDraftImpactData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/impact-plans';
+};
+
+export type PrepareRuntimeSecretDraftImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PrepareRuntimeSecretDraftImpactError = PrepareRuntimeSecretDraftImpactErrors[keyof PrepareRuntimeSecretDraftImpactErrors];
+
+export type PrepareRuntimeSecretDraftImpactResponses = {
+    /**
+     * Owner план с exact Draft/Secret pins без изменения активного Secret
+     */
+    201: RuntimeSecretDraftImpactPlan;
+};
+
+export type PrepareRuntimeSecretDraftImpactResponse = PrepareRuntimeSecretDraftImpactResponses[keyof PrepareRuntimeSecretDraftImpactResponses];
+
+export type GetRuntimeSecretDraftImpactData = {
+    body?: never;
+    path: {
+        planRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secret-draft-impact-plans/{planRef}';
+};
+
+export type GetRuntimeSecretDraftImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretDraftImpactError = GetRuntimeSecretDraftImpactErrors[keyof GetRuntimeSecretDraftImpactErrors];
+
+export type GetRuntimeSecretDraftImpactResponses = {
+    /**
+     * Страница owner плана без credential descriptors
+     */
+    200: RuntimeSecretDraftImpactPage;
+};
+
+export type GetRuntimeSecretDraftImpactResponse = GetRuntimeSecretDraftImpactResponses[keyof GetRuntimeSecretDraftImpactResponses];
+
+export type ListEmailMailboxConfigurationsData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/configurations';
+};
+
+export type ListEmailMailboxConfigurationsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListEmailMailboxConfigurationsError = ListEmailMailboxConfigurationsErrors[keyof ListEmailMailboxConfigurationsErrors];
+
+export type ListEmailMailboxConfigurationsResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationPage;
+};
+
+export type ListEmailMailboxConfigurationsResponse = ListEmailMailboxConfigurationsResponses[keyof ListEmailMailboxConfigurationsResponses];
+
+export type GetEmailMailboxConfigurationData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        configurationRef?: OpaqueRef;
+        revisionRef?: OpaqueRef;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/configuration';
+};
+
+export type GetEmailMailboxConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetEmailMailboxConfigurationError = GetEmailMailboxConfigurationErrors[keyof GetEmailMailboxConfigurationErrors];
+
+export type GetEmailMailboxConfigurationResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type GetEmailMailboxConfigurationResponse = GetEmailMailboxConfigurationResponses[keyof GetEmailMailboxConfigurationResponses];
+
+export type ListEmailMailboxCredentialsData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        kind?: EmailMailboxCredentialKind;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/credentials';
+};
+
+export type ListEmailMailboxCredentialsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListEmailMailboxCredentialsError = ListEmailMailboxCredentialsErrors[keyof ListEmailMailboxCredentialsErrors];
+
+export type ListEmailMailboxCredentialsResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxCredentialPage;
+};
+
+export type ListEmailMailboxCredentialsResponse = ListEmailMailboxCredentialsResponses[keyof ListEmailMailboxCredentialsResponses];
+
+export type GetEmailMailboxCredentialReceiptData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query: {
+        idempotencyKey: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt';
+};
+
+export type GetEmailMailboxCredentialReceiptErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetEmailMailboxCredentialReceiptError = GetEmailMailboxCredentialReceiptErrors[keyof GetEmailMailboxCredentialReceiptErrors];
+
+export type GetEmailMailboxCredentialReceiptResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxCredential;
+};
+
+export type GetEmailMailboxCredentialReceiptResponse = GetEmailMailboxCredentialReceiptResponses[keyof GetEmailMailboxCredentialReceiptResponses];
+
+export type PreviewEmailMailboxConfigurationData = {
+    body: EmailMailboxDraftContent;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/preview';
+};
+
+export type PreviewEmailMailboxConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PreviewEmailMailboxConfigurationError = PreviewEmailMailboxConfigurationErrors[keyof PreviewEmailMailboxConfigurationErrors];
+
+export type PreviewEmailMailboxConfigurationResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxPreview;
+};
+
+export type PreviewEmailMailboxConfigurationResponse = PreviewEmailMailboxConfigurationResponses[keyof PreviewEmailMailboxConfigurationResponses];
+
+export type CreateEmailMailboxDraftData = {
+    body: EmailMailboxDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/drafts';
+};
+
+export type CreateEmailMailboxDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateEmailMailboxDraftError = CreateEmailMailboxDraftErrors[keyof CreateEmailMailboxDraftErrors];
+
+export type CreateEmailMailboxDraftResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    201: EmailMailboxConfigurationView;
+};
+
+export type CreateEmailMailboxDraftResponse = CreateEmailMailboxDraftResponses[keyof CreateEmailMailboxDraftResponses];
+
+export type SaveEmailMailboxDraftData = {
+    body: EmailMailboxDraftContent;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveEmailMailboxDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveEmailMailboxDraftError = SaveEmailMailboxDraftErrors[keyof SaveEmailMailboxDraftErrors];
+
+export type SaveEmailMailboxDraftResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type SaveEmailMailboxDraftResponse = SaveEmailMailboxDraftResponses[keyof SaveEmailMailboxDraftResponses];
+
+export type ValidateEmailMailboxDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateEmailMailboxDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateEmailMailboxDraftError = ValidateEmailMailboxDraftErrors[keyof ValidateEmailMailboxDraftErrors];
+
+export type ValidateEmailMailboxDraftResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type ValidateEmailMailboxDraftResponse = ValidateEmailMailboxDraftResponses[keyof ValidateEmailMailboxDraftResponses];
+
+export type PublishEmailMailboxDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishEmailMailboxDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishEmailMailboxDraftError = PublishEmailMailboxDraftErrors[keyof PublishEmailMailboxDraftErrors];
+
+export type PublishEmailMailboxDraftResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type PublishEmailMailboxDraftResponse = PublishEmailMailboxDraftResponses[keyof PublishEmailMailboxDraftResponses];
+
+export type DiscardEmailMailboxDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardEmailMailboxDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardEmailMailboxDraftError = DiscardEmailMailboxDraftErrors[keyof DiscardEmailMailboxDraftErrors];
+
+export type DiscardEmailMailboxDraftResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type DiscardEmailMailboxDraftResponse = DiscardEmailMailboxDraftResponses[keyof DiscardEmailMailboxDraftResponses];
+
+export type BindEmailMailboxConfigurationData = {
+    body: EmailMailboxBindingInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding';
+};
+
+export type BindEmailMailboxConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindEmailMailboxConfigurationError = BindEmailMailboxConfigurationErrors[keyof BindEmailMailboxConfigurationErrors];
+
+export type BindEmailMailboxConfigurationResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxConfigurationView;
+};
+
+export type BindEmailMailboxConfigurationResponse = BindEmailMailboxConfigurationResponses[keyof BindEmailMailboxConfigurationResponses];
+
+export type UnbindEmailMailboxConfigurationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/email-mailbox/binding';
+};
+
+export type UnbindEmailMailboxConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UnbindEmailMailboxConfigurationError = UnbindEmailMailboxConfigurationErrors[keyof UnbindEmailMailboxConfigurationErrors];
+
+export type UnbindEmailMailboxConfigurationResponses = {
+    /**
+     * Безопасный owner readback
+     */
+    200: EmailMailboxUnbinding;
+};
+
+export type UnbindEmailMailboxConfigurationResponse = UnbindEmailMailboxConfigurationResponses[keyof UnbindEmailMailboxConfigurationResponses];
+
+export type ValidateRuntimeSecretDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/validate';
+};
+
+export type ValidateRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRuntimeSecretDraftError = ValidateRuntimeSecretDraftErrors[keyof ValidateRuntimeSecretDraftErrors];
+
+export type ValidateRuntimeSecretDraftResponses = {
+    /**
+     * Сохранённое значение расшифровано и проверено broker
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type ValidateRuntimeSecretDraftResponse = ValidateRuntimeSecretDraftResponses[keyof ValidateRuntimeSecretDraftResponses];
+
+export type PublishRuntimeSecretDraftData = {
+    body: RuntimeSecretDraftPublishInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/publish';
+};
+
+export type PublishRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeSecretDraftError = PublishRuntimeSecretDraftErrors[keyof PublishRuntimeSecretDraftErrors];
+
+export type PublishRuntimeSecretDraftResponses = {
+    /**
+     * Immutable revision активирована владельцем после exact readback
+     */
+    200: RuntimeSecretDraftPublication;
+};
+
+export type PublishRuntimeSecretDraftResponse = PublishRuntimeSecretDraftResponses[keyof PublishRuntimeSecretDraftResponses];
+
+export type DiscardRuntimeSecretDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secret-drafts/{draftRef}/discard';
+};
+
+export type DiscardRuntimeSecretDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRuntimeSecretDraftError = DiscardRuntimeSecretDraftErrors[keyof DiscardRuntimeSecretDraftErrors];
+
+export type DiscardRuntimeSecretDraftResponses = {
+    /**
+     * Черновик закрыт, ciphertext удалён с exact preconditions
+     */
+    200: RuntimeSecretDraft;
+};
+
+export type DiscardRuntimeSecretDraftResponse = DiscardRuntimeSecretDraftResponses[keyof DiscardRuntimeSecretDraftResponses];
+
 export type RevealRuntimeSecretData = {
     body?: never;
     headers: {
@@ -6119,6 +6998,7 @@ export type ListRunsData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
+        states?: Array<'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'>;
     };
     url: '/api/v1/runs';
 };
@@ -6169,6 +7049,38 @@ export type CreateRunResponses = {
 };
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];
+
+export type GetRuntimeRevisionDiffData = {
+    body?: never;
+    path: {
+        runRef: OpaqueRef;
+    };
+    query?: {
+        /**
+         * Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+         */
+        currentRevisionRef?: OpaqueRef;
+    };
+    url: '/api/v1/runs/{runRef}/runtime-revision-diff';
+};
+
+export type GetRuntimeRevisionDiffErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeRevisionDiffError = GetRuntimeRevisionDiffErrors[keyof GetRuntimeRevisionDiffErrors];
+
+export type GetRuntimeRevisionDiffResponses = {
+    /**
+     * Безопасные изменения относительно предыдущей ревизии той же сессии; значения, prompts и worker snapshot отсутствуют.
+     */
+    200: RuntimeRevisionDiff;
+};
+
+export type GetRuntimeRevisionDiffResponse = GetRuntimeRevisionDiffResponses[keyof GetRuntimeRevisionDiffResponses];
 
 export type GetRunData = {
     body?: never;
@@ -6328,6 +7240,7 @@ export type ListOwnerGatesData = {
         projectRef?: OpaqueRef;
         pageSize?: number;
         pageToken?: string;
+        state?: 'OPEN' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'CANCELLED' | 'EXPIRED';
     };
     url: '/api/v1/owner-gates';
 };
@@ -9228,7 +10141,7 @@ export type ListManagedConfigurationsData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
-        kind?: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+        kind?: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT' | 'EMAIL_MAILBOX';
     };
     url: '/api/v1/managed-configurations';
 };

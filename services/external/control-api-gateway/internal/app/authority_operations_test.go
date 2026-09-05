@@ -43,3 +43,17 @@ func TestAuthorityProofProfileIncludesDirectOrganizationScopedSTT(t *testing.T) 
 		t.Fatal("direct STT operation must not be routed to control-plane")
 	}
 }
+
+func TestSecretDraftProofUsesDedicatedBrokerTarget(t *testing.T) {
+	for operation, method := range controlplaneclient.SecretDraftGatewayOperations() {
+		if authorityProofOperations()[operation] != method {
+			t.Fatal("draft broker proof operation is missing")
+		}
+		if _, routed := controlplaneclient.ControlAPIGatewayOperations()[operation]; routed {
+			t.Fatal("broker operation routed to control-plane")
+		}
+		if _, required := authorityProjectRequiredOperations()[operation]; required {
+			t.Fatal("draft broker operation trusts caller project")
+		}
+	}
+}
