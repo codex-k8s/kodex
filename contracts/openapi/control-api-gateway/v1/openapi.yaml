@@ -1498,6 +1498,102 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RuntimeSecret' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/runtime-secret-drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createRuntimeSecretDraft
+      description: Сохранить зашифрованный черновик нового Secret без публикации; повтор неизвестного результата использует прежние Idempotency-Key и тело.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretCreateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без активации Secret
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: saveRuntimeSecretDraft
+      description: Сохранить отдельный зашифрованный черновик существующего Secret; If-Match относится к Secret.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretRotateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без изменения активной revision
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }]
+      responses:
+        '200':
+          description: Авторитетное состояние черновика без значений и storage descriptors
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/validate:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: validateRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Сохранённое значение расшифровано и проверено broker
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/publish:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: publishRuntimeSecretDraft
+      description: Опубликовать VALID черновик; If-Match относится к Draft, expectedSecretVersion к назначенной сервером версии Secret.
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublishInput' }
+      responses:
+        '200':
+          description: Immutable revision активирована владельцем после exact readback
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublication' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/discard:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: discardRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Черновик закрыт, ciphertext удалён с exact preconditions
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/runtime-secrets/{secretRef}/reveal:
     post:
       tags: [RuntimeSecrets]
@@ -3825,6 +3921,11 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeSecretDraftRef:
+      name: draftRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     RuntimeEnvironmentDraftRef:
       name: draftRef
       in: path
@@ -5138,6 +5239,38 @@ components:
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraft:
+      type: object
+      additionalProperties: false
+      required: [ref, version, generation, projectRef, secretRef, secretVersion, name, description, valueType, state, publishedRevision, createdAt, updatedAt, expiresAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft. }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        state: { type: string, enum: [PREPARING, DRAFT, VALID, PUBLISHING, PUBLISHED, DISCARDED, EXPIRED, FAILED] }
+        publishedRevision: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraftPublishInput:
+      type: object
+      additionalProperties: false
+      required: [expectedSecretVersion]
+      properties:
+        expectedSecretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    RuntimeSecretDraftPublication:
+      type: object
+      additionalProperties: false
+      required: [draft, secret]
+      properties:
+        draft: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        secret: { $ref: '#/components/schemas/RuntimeSecret' }
     RuntimeSecretPage:
       type: object
       additionalProperties: false

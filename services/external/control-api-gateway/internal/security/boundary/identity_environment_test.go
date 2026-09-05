@@ -15,6 +15,12 @@ import (
 
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
+		{"POST", "/api/v1/projects/prj_fixture01/runtime-secret-drafts"},
+		{"POST", "/api/v1/runtime-secrets/sec_fixture01/drafts"},
+		{"GET", "/api/v1/runtime-secret-drafts/sdft_fixture01"},
+		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/validate"},
+		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/publish"},
+		{"POST", "/api/v1/runtime-secret-drafts/sdft_fixture01/discard"},
 		{"PUT", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credential"},
 		{"GET", "/api/v1/prompt-templates/catalog"},
 		{"GET", "/api/v1/assistant-conversations"},
@@ -95,8 +101,8 @@ func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 					if !ok || identity.OrganizationID != claims.OrganizationID || identity.Subject != claims.Subject {
 						t.Fatal("verified authority was lost")
 					}
-					if _, hasProject := ProjectReferenceFromContext(r.Context()); hasProject {
-						t.Fatal("organization route acquired a project")
+					if project, hasProject := ProjectReferenceFromContext(r.Context()); hasProject != strings.HasPrefix(route.path, "/api/v1/projects/") || hasProject && project != "prj_fixture01" {
+						t.Fatal("route project context differs from its explicit scope")
 					}
 					w.WriteHeader(http.StatusNoContent)
 				})).ServeHTTP(w, r)
