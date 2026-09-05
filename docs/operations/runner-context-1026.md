@@ -4,7 +4,7 @@ title: Материализация Skills и памяти в agent-runner
 type: operations
 status: approved
 owner: backend
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -96,6 +96,33 @@ snapshot и несовпавшая revision отклоняются до проц
 | Remove/retention/revoke | Owner закрывает eligibility/grant | Новая попытка не получает удалённый контекст; expiry проверяется перед процессом |
 | Complete/cancel/expiry | Owner закрывает execution graph | Процесс останавливается существующим lifecycle; completion exact attempt |
 
+Для always-hot SystemAssistant manifest сохраняет session и exact snapshot,
+но не номер очередной attempt: одинаковые pins допускают следующий turn без
+записи в RO volume. Execution binding каждой attempt остаётся отдельным.
+Изменение pins требует нового Pod. Обычный runner дополнительно сверяет
+runtime revision, turn и attempt в manifest. Retention ограничивает deadline
+активного процесса, а не только проверяется при старте.
+
+Повторное использование provider thread допустимо только при совпавшем
+predecessor context digest. При удалении или изменении контекста CP/controller
+должны выдать новый thread с серверным continuation prompt, без прежнего
+CodexSessionID: очистка файлов не удаляет память из истории старого thread.
+Consumer не выводит полномочия из приватного архива Codex.
+
+## Provider discovery
+
+Перед thread/start либо thread/resume runner устанавливает единственный
+extra root `/workspace/context/skills`, перечитывает skills/list с forceReload,
+отключает найденные unbound Skills и сверяет exact name/description/path
+вторым чтением. Отсутствующий pinned Skill или неотключённый посторонний Skill
+закрыто останавливает запуск. В turn/start Skills передаются нативными input
+items `type=skill`; память передаётся отдельно как `kodex.provider-memory.v1`
+с полными typed records и immutable runtime/context digests.
+
+Локальные `features.memories`, `memories.generate_memories` и
+`memories.use_memories` явно выключены. Пустая память передаётся как `records:[]`,
+а не пропускается. Исходный серверный prompt остаётся отдельным input item.
+
 ## Координация и проверка
 
 Bohr владеет CP Proto/SQL/policy и shared RunnerInput wiring. Root владеет
@@ -110,6 +137,23 @@ deploy/mount/admission render. #1026 не меняет эти файлы пар�
 SKILL.md имеет YAML frontmatter name/description и инструкции; memory local state
 Codex не является платформенным API. Provider representation проверяется отдельно
 от source digest и не подменяет принадлежащий серверу prompt.
+
+Точные поля `skills/extraRoots/set`, `skills/list`, `skills/config/write` и
+native Skill input сверены также с JSON Schema, сгенерированной самим
+зафиксированным `@openai/codex@0.152.0` через
+`codex app-server generate-json-schema`. Это проверка формата, не live model call.
+
+| Критерий | Воспроизводимое доказательство | Граница проверки |
+| --- | --- | --- |
+| Exact snapshot, tenant, bindings, digest, retention | runtimecontract `TestRuntimeContextSnapshotExactPins`, `TestContextSnapshotIsBoundToExecutionAndWarmCompatibility`, `TestMemoryRetentionBoundsActiveExecution` | Локальные unit/race |
+| Bounded fetch без arbitrary path | callback `TestSkillCallbackUsesExactExecutionAndContextPins`; contextfiles `TestPartialAndOverBudgetFetchNeverPublishManifest` | Fake HTTPS, без живого controller |
+| Очистка removed context, новая attempt, warm pins | contextfiles `TestMaterializesExactSkillAndMemoryThenClearsRemovedContext`, `TestWarmContextReusesOnlyIdenticalPins` | Реальные временные файлы |
+| Traversal, symlink, hardlink, FIFO, corruption | contextfiles `TestContextRejectsCorruptUnsafeAndAdditionalFiles`, `TestMaterializerDoesNotFollowOldSymlinks` | Реальная файловая система |
+| RO context и writable workspace | `TestContextReadOnlyMountAndWritableWorkspaceProcesses` | bwrap, non-root UID 1000, create/read/replace/delete и запрещённые записи |
+| Native Skills и typed Memory | codex `TestProviderContextUsesNativeSkillAndExactMemoryPins`, `TestProviderDiscoveryReconcilesExactSkillsInRealProcess` | Реальный fake app-server process, без model API |
+| Публичный targeted профиль | `make test-agent-runner`; `go test -race -count=1 ./...` в runner и runtimecontract; `go vet ./...` в runner | Существующий schema/render; новые mounts проверяет root |
+| Полная owner/controller стыковка и thread reset | Интеграционный тест после CP/controller изменений | NOT RUN в consumer WT |
+| Live provider, staging, deploy, полный baseline | Отдельный допуск и итоговая проверка root | NOT RUN |
 
 Runtime ошибки содержат только безопасную машинную причину, без bodies, paths,
 provenance payload или credential. Deploy, live provider и общий baseline

@@ -59,6 +59,15 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, err
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := verifyProviderContext(input, snapshot); err != nil {
+		return Result{}, err
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, err
 	}
@@ -82,6 +91,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.notifyInitialized(); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
+	if err := server.configureContextSkills(ctx, state, input, snapshot); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
@@ -155,8 +167,16 @@ func turnStartParams(input model.Input, threadID string, prompt []byte) (map[str
 	if err != nil {
 		return nil, ErrRuntimeProfile
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return nil, err
+	}
+	items, err := contextInputItems(input, snapshot, prompt, time.Now())
+	if err != nil {
+		return nil, err
+	}
 	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
-		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
+		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
 	if overlay.ModelReasoningEffort != "" {
 		params["effort"] = overlay.ModelReasoningEffort

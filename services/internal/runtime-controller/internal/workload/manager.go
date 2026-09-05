@@ -413,6 +413,9 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		}
 	}
 	manager.addCatalog(&input, revision)
+	if err := hydrateRuntimeContext(&input, revision); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
@@ -437,6 +440,9 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	}
 	input.SessionRef, input.AgentRef = revision.GetSessionRef(), revision.GetAgentRef()
 	manager.addCatalog(&input, revision)
+	if err := hydrateRuntimeContext(&input, revision); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
@@ -458,6 +464,9 @@ func validateRuntimeRevisionDigest(input runtimecontract.RunnerInput, binding Pr
 }
 
 func validateRunnerInput(input runtimecontract.RunnerInput) error {
+	if _, err := input.RequiredContextSnapshot(time.Now()); err != nil {
+		return err
+	}
 	if err := input.Validate(); err != nil {
 		return err
 	}
@@ -1445,11 +1454,9 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 	if err != nil {
 		return nil, errors.New("encode runtime input projection")
 	}
-	memories := make([]runtimecontract.RunnerInputArtifact, 0)
-	for _, artifact := range input.InputArtifacts {
-		if artifact.Scope == runtimecontract.AttachmentScopeKnowledge {
-			memories = append(memories, artifact)
-		}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return nil, err
 	}
 	identity := map[string]any{
 		"organization_ref": input.OrganizationRef, "project_ref": input.ProjectRef, "run_ref": input.RunRef, "node_ref": input.NodeRef,
@@ -1464,11 +1471,11 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 		}
 		return string(raw), nil
 	}
-	skills, err := encode(map[string]any{"identity": identity, "tools": input.EnvironmentTools}, "encode runtime skill projection")
+	skills, err := encode(map[string]any{"identity": identity, "context_digest": snapshot.Digest, "skills": snapshot.Skills}, "encode runtime skill projection")
 	if err != nil {
 		return nil, err
 	}
-	memory, err := encode(map[string]any{"identity": identity, "artifacts": memories}, "encode runtime memory projection")
+	memory, err := encode(map[string]any{"identity": identity, "context_digest": snapshot.Digest, "memories": snapshot.Memories}, "encode runtime memory projection")
 	if err != nil {
 		return nil, err
 	}
@@ -1698,6 +1705,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
 		{Name: "vfs-input", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
 		{Name: "vfs-knowledge", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		{Name: "runtime-context", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("520Mi"))}}},
 		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: runtimeProjectionName(input)}, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "runtime-ticket", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
@@ -1713,12 +1721,14 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "session", MountPath: "/workspace/.kodex/state"},
 		{Name: "vfs-input", MountPath: "/workspace/input"},
 		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge"},
+		{Name: "runtime-context", MountPath: runtimecontract.RuntimeContextRoot},
 	}
 	sandboxWorkspaceMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: "session", MountPath: "/workspace/.kodex/state"},
 		{Name: "vfs-input", MountPath: "/workspace/input", ReadOnly: true},
 		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge", ReadOnly: true},
+		{Name: "runtime-context", MountPath: runtimecontract.RuntimeContextRoot, ReadOnly: true},
 	}
 	roleMounts := append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...)
 	roleMounts = append(roleMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, corev1.VolumeMount{Name: "provider-socket", MountPath: "/run/kodex/provider"}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})

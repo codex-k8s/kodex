@@ -11,10 +11,12 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
 func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
@@ -421,6 +423,7 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 	state := &health{input: model.Input{WorkspaceRoot: root, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}}
 	state.live.Store(true)
 	state.ready.Store(true)
+	state.workspace.Store(&workspaceHealth{checked: time.Now(), err: workspacepolicy.RunCanary(t.Context(), root, state.input.WorkspacePolicy)})
 	response := httptest.NewRecorder()
 	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if response.Code != http.StatusNoContent {
@@ -432,6 +435,7 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, ".kodex/outbox")); err != nil {
 		t.Fatal(err)
 	}
+	state.workspace.Store(&workspaceHealth{checked: time.Now(), err: workspacepolicy.RunCanary(t.Context(), root, state.input.WorkspacePolicy)})
 	response = httptest.NewRecorder()
 	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if response.Code != http.StatusServiceUnavailable ||

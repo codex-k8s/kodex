@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -910,7 +909,10 @@ func TestWarmCompatibilityIgnoresTurnIdentityButRejectsRuntimeDrift(t *testing.T
 	if err != nil {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
-	turn, _, err := manager.BuildTurnInput(testExecution(true))
+	execution := testExecution(true)
+	execution.Run.ProjectRef = ""
+	sealTestTurnExecution(execution)
+	turn, _, err := manager.BuildTurnInput(execution)
 	if err != nil {
 		t.Fatalf("BuildTurnInput() error = %v", err)
 	}
@@ -1295,7 +1297,10 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)
-	first, firstBinding, err := manager.BuildTurnInput(testExecution(false))
+	firstExecution := testExecution(false)
+	testContextRevision(firstExecution.Revision)
+	sealTestTurnExecution(firstExecution)
+	first, firstBinding, err := manager.BuildTurnInput(firstExecution)
 	if err != nil || manager.EnsureTurn(context.Background(), first, firstBinding, testCredentialProjection(first)) != nil {
 		t.Fatalf("materialize first attempt: %v", err)
 	}
@@ -1315,6 +1320,9 @@ func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	}
 	if first.RuntimeRevisionDigest == retry.RuntimeRevisionDigest || first.ExecutionBindingDigest == retry.ExecutionBindingDigest || runtimeProjectionName(first) == runtimeProjectionName(retry) {
 		t.Fatal("retry reused an immutable runtime binding")
+	}
+	if first.ContextSnapshot.Digest == retry.ContextSnapshot.Digest || len(retry.ContextSnapshot.Skills) != 0 || len(retry.ContextSnapshot.Memories) != 0 {
+		t.Fatal("retry retained removed context")
 	}
 	if err := manager.DeleteTurn(context.Background(), first.LeaseRef); err != nil {
 		t.Fatalf("DeleteTurn(first) error = %v", err)
@@ -1601,10 +1609,16 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, serviceAccountName, podName)
 	execution.Revision.EnvironmentPolicy = testRuntimeEnvironmentPolicyProto(policy)
 	execution.Revision.EffectiveKubernetesAccess = testRuntimeKubernetesAccessProto(access)
-	workspace := runtimecontract.RuntimeWorkspacePolicy{Revision: 1, Root: "/workspace", Rules: []runtimecontract.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: "READ_ONLY"}, {Path: "/workspace/knowledge", Access: "READ_ONLY"}, {Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"}, {Path: "/workspace", Access: "WRITABLE"}}, MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000, DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"}}
-	rawWorkspace, _ := json.Marshal(workspace)
-	workspaceDigest := sha256.Sum256(rawWorkspace)
-	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: hex.EncodeToString(workspaceDigest[:]), DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}, Rules: []*controlplanev1.RuntimeWorkspacePathRule{{Path: "/workspace/input", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/knowledge", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace/.kodex/state/codex-home/auth.json", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY}, {Path: "/workspace", Access: controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE}}}
+	workspace := runtimecontract.RuntimeWorkspacePolicyV1()
+	execution.Revision.WorkspacePolicy = &controlplanev1.RuntimeWorkspacePolicy{Revision: workspace.Revision, Root: workspace.Root, MaximumWritableBytes: workspace.MaximumWritableBytes, MaximumFileCount: workspace.MaximumFileCount, Digest: workspace.Digest,
+		DenialReasons: []controlplanev1.RuntimeWorkspaceDenialReason{controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE, controlplanev1.RuntimeWorkspaceDenialReason_RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR}}
+	for _, rule := range workspace.Rules {
+		access := controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_READ_ONLY
+		if rule.Access == runtimecontract.RuntimeWorkspaceWritable {
+			access = controlplanev1.RuntimeWorkspaceAccess_RUNTIME_WORKSPACE_ACCESS_WRITABLE
+		}
+		execution.Revision.WorkspacePolicy.Rules = append(execution.Revision.WorkspacePolicy.Rules, &controlplanev1.RuntimeWorkspacePathRule{Path: rule.Path, Access: access})
+	}
 	image, tools := runtimeEnvironmentContract(execution.Revision)
 	execution.Revision.RuntimeEnvironmentDigest, _ = runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, tools, policy)
 	execution.Revision.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(map[string]any{})
@@ -1647,6 +1661,9 @@ func sealTestTurnExecution(execution *controlplanev1.ClaimedExecution) {
 		input.BoundedInput = execution.Revision.BoundedInput.AsMap()
 	}
 	manager.addCatalog(&input, execution.Revision)
+	if err := hydrateRuntimeContext(&input, execution.Revision); err != nil {
+		panic(err)
+	}
 	binding, err := providerSecretBinding(execution.Revision)
 	if err != nil {
 		panic(err)
@@ -1668,6 +1685,9 @@ func sealTestWarmRevision(revision *controlplanev1.RuntimeRevisionSnapshot) {
 	}
 	input.SessionRef, input.AgentRef = revision.SessionRef, revision.AgentRef
 	manager.addCatalog(&input, revision)
+	if err := hydrateRuntimeContext(&input, revision); err != nil {
+		panic(err)
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		panic(err)
