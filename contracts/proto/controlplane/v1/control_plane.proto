@@ -4276,12 +4276,19 @@ message ListModelCapabilitiesRequest {
   string provider_account_ref = 2;
   string query = 3;
   PageRequest page = 4;
+  // Exact pin снимка CP; обе части либо заданы вместе, либо отсутствуют.
+  string expected_catalog_revision = 5;
+  string expected_catalog_digest = 6;
 }
 
 message ListModelCapabilitiesResponse {
   repeated ModelCapability models = 1;
   int64 total = 2;
   PageInfo page = 3;
+  // Content-addressed revision всего eligible каталога до query/page.
+  string catalog_revision = 4;
+  // SHA-256 канонического снимка, lowercase hex без префикса.
+  string catalog_digest = 5;
 }
 
 message RoleImageRecipeRevision {

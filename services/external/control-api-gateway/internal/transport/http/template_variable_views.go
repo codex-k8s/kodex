@@ -50,7 +50,7 @@ func templateVariableView(v *cp.TemplateVariable) (generated.TemplateVariable, b
 	}
 	item := generated.TemplateVariable{
 		Name: v.GetName(), Description: v.GetDescription(), Example: v.GetExample(), Collection: v.GetCollection(), Available: v.GetAvailable(),
-		ValueType: generated.TemplateVariableValueType(v.GetValueType()), Source: generated.TemplateVariableSource(v.GetSource()),
+		ValueType: generated.TemplateVariableValueType(templateVariableType(v.GetValueType())), Source: generated.TemplateVariableSource(v.GetSource()),
 		Reason:       generated.TemplateVariableAvailabilityReason(strings.TrimPrefix(v.GetReason().String(), "TEMPLATE_VARIABLE_AVAILABILITY_REASON_")),
 		RangeExample: optionalManagedString(v.GetRangeExample()), ItemFields: make([]generated.TemplateVariableField, 0, len(v.GetItemFields())),
 	}
@@ -58,7 +58,7 @@ func templateVariableView(v *cp.TemplateVariable) (generated.TemplateVariable, b
 		return item, false
 	}
 	if v.GetItemValueType() != "" {
-		value := generated.TemplateVariableItemValueType(v.GetItemValueType())
+		value := generated.TemplateVariableItemValueType(templateVariableType(v.GetItemValueType()))
 		if !value.Valid() {
 			return item, false
 		}
@@ -68,11 +68,31 @@ func templateVariableView(v *cp.TemplateVariable) (generated.TemplateVariable, b
 		if field == nil {
 			return item, false
 		}
-		value := generated.TemplateVariableField{Name: field.GetName(), Description: field.GetDescription(), ValueType: generated.TemplateVariableFieldValueType(field.GetValueType())}
+		value := generated.TemplateVariableField{Name: field.GetName(), Description: field.GetDescription(), ValueType: generated.TemplateVariableFieldValueType(templateVariableType(field.GetValueType()))}
 		if !value.ValueType.Valid() {
 			return item, false
 		}
 		item.ItemFields = append(item.ItemFields, value)
 	}
 	return item, true
+}
+
+// Каталог CP использует отдельный закрытый словарь типов, включая descriptor.
+func templateVariableType(value string) string {
+	switch value {
+	case "string":
+		return "STRING"
+	case "reference":
+		return "OPAQUE_REF"
+	case "integer":
+		return "INTEGER"
+	case "collection":
+		return "COLLECTION"
+	case "file_descriptor":
+		return "FILE_DESCRIPTOR"
+	case "tool_descriptor":
+		return "TOOL_DESCRIPTOR"
+	default:
+		return ""
+	}
 }

@@ -12,7 +12,41 @@ import (
 )
 
 func variableFixture() *cp.TemplateVariable {
-	return &cp.TemplateVariable{Name: "agent.name", ValueType: "STRING", Source: "AGENT", Reason: cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_AGENT_CONTEXT_REQUIRED}
+	return &cp.TemplateVariable{Name: "agent.name", ValueType: "string", Source: "AGENT", Reason: cp.TemplateVariableAvailabilityReason_TEMPLATE_VARIABLE_AVAILABILITY_REASON_AGENT_CONTEXT_REQUIRED}
+}
+
+func TestTemplateVariablesProducerVocabulary(t *testing.T) {
+	for _, path := range []string{"/api/v1/projects/prj_fixture01/template-variables", "/api/v1/prompt-templates/catalog"} {
+		for _, source := range []string{"AGENT", "AUTOMATION", "RUNTIME", "GATE", "INPUT", "RUN", "ORGANIZATION", "PROJECT", "SESSION", "USER", "WORKFLOW"} {
+			for _, kind := range []struct{ producer, public string }{{"string", "STRING"}, {"reference", "OPAQUE_REF"}, {"integer", "INTEGER"}, {"collection", "COLLECTION"}} {
+				for _, descriptor := range []struct{ producer, public string }{{"file_descriptor", "FILE_DESCRIPTOR"}, {"tool_descriptor", "TOOL_DESCRIPTOR"}} {
+					v := variableFixture()
+					v.ValueType, v.Source = kind.producer, source
+					if kind.producer == "collection" {
+						v.Collection, v.ItemValueType = true, descriptor.producer
+						v.ItemFields = []*cp.TemplateVariableField{{Name: "artifact_ref", ValueType: "reference"}, {Name: "name", ValueType: "string"}, {Name: "size", ValueType: "integer"}}
+					}
+					client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{Variables: []*cp.TemplateVariable{v}, Total: 1}}
+					w := httptest.NewRecorder()
+					catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+					if w.Code != 200 || !strings.Contains(w.Body.String(), `"valueType":"`+kind.public+`"`) || !strings.Contains(w.Body.String(), `"source":"`+source+`"`) {
+						t.Fatalf("%s/%s: %d %s", source, kind.producer, w.Code, w.Body.String())
+					}
+					if v.Collection && (!strings.Contains(w.Body.String(), `"itemValueType":"`+descriptor.public+`"`) || !strings.Contains(w.Body.String(), `"name":"artifact_ref","valueType":"OPAQUE_REF"`)) {
+						var body struct {
+							Items []struct {
+								ItemFields    []struct{ Name, ValueType string }
+								ItemValueType string
+							}
+						}
+						if json.Unmarshal(w.Body.Bytes(), &body) != nil || len(body.Items) != 1 || body.Items[0].ItemValueType != descriptor.public || len(body.Items[0].ItemFields) != 3 || body.Items[0].ItemFields[0].Name != "artifact_ref" || body.Items[0].ItemFields[0].ValueType != "OPAQUE_REF" {
+							t.Fatalf("descriptor lost: %s", w.Body.String())
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func TestTemplateVariablesOwnerContext(t *testing.T) {
@@ -63,6 +97,12 @@ func TestTemplateVariablesRejectMalformed(t *testing.T) {
 		}
 	}
 	for _, mutate := range []func(*cp.ListTemplateVariablesResponse){
+		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].ValueType = "STRING" },
+		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].ValueType = "unknown" },
+		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].ItemValueType = "unknown_descriptor" },
+		func(r *cp.ListTemplateVariablesResponse) {
+			r.Variables[0].ItemFields = []*cp.TemplateVariableField{{Name: "name", ValueType: "unknown"}}
+		},
 		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].Reason = 0 },
 		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].Reason = 99 },
 		func(r *cp.ListTemplateVariablesResponse) { r.Variables[0].Available = true },

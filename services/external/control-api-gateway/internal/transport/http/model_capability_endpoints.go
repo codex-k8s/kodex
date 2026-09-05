@@ -13,6 +13,7 @@ import (
 
 var modelProviderKey = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,79}$`)
 var modelBlocker = regexp.MustCompile(`^[A-Z0-9_]{1,80}$`)
+var modelCatalogDigest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Request, p generated.ListModelCapabilitiesParams) {
 	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
@@ -20,6 +21,11 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	key, account := stringValue(p.ProviderDefinitionKey), stringValue(p.ProviderAccountRef)
+	revision, digest := stringValue(p.ExpectedCatalogRevision), stringValue(p.ExpectedCatalogDigest)
+	if (p.ExpectedCatalogRevision != nil || p.ExpectedCatalogDigest != nil) && (!modelCatalogDigest.MatchString(digest) || revision != "mcat_"+digest) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	if p.ProviderDefinitionKey != nil && !modelProviderKey.MatchString(key) || p.ProviderAccountRef != nil &&
 		(!opaqueHTTPReference.MatchString(account) || !strings.HasPrefix(account, "pacc_") || len(account) > 96) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -27,17 +33,19 @@ func (server *Server) ListModelCapabilities(w http.ResponseWriter, r *http.Reque
 	}
 	response, err := server.control.Query.ListModelCapabilities(r.Context(), &cp.ListModelCapabilitiesRequest{
 		ProviderDefinitionKey: key, ProviderAccountRef: account, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
+		ExpectedCatalogRevision: revision, ExpectedCatalogDigest: digest,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	if response == nil || response.Total < int64(len(response.Models)) || response.Total > maximumSafeJSONInteger ||
+	if response == nil || !modelCatalogDigest.MatchString(response.GetCatalogDigest()) || response.GetCatalogRevision() != "mcat_"+response.GetCatalogDigest() ||
+		revision != "" && (response.GetCatalogRevision() != revision || response.GetCatalogDigest() != digest) || response.Total < int64(len(response.Models)) || response.Total > maximumSafeJSONInteger ||
 		len(response.Models) > int(page(p.PageSize, p.PageToken).PageSize) || len(response.GetPage().GetNextPageToken()) > 512 || !utf8.ValidString(response.GetPage().GetNextPageToken()) {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	result := generated.ModelCapabilityPage{Items: make([]generated.ModelCapability, 0, len(response.Models)), Total: response.Total, NextPageToken: response.GetPage().GetNextPageToken()}
+	result := generated.ModelCapabilityPage{Items: make([]generated.ModelCapability, 0, len(response.Models)), Total: response.Total, NextPageToken: response.GetPage().GetNextPageToken(), CatalogRevision: response.GetCatalogRevision(), CatalogDigest: response.GetCatalogDigest()}
 	seen := map[string]bool{}
 	for _, model := range response.Models {
 		item, valid := modelCapabilityView(model)
