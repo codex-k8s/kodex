@@ -33455,8 +33455,10 @@ type RuntimeSecretDraftWork struct {
 	ClaimGeneration       int64                                  `protobuf:"varint,11,opt,name=claim_generation,json=claimGeneration,proto3" json:"claim_generation,omitempty"`
 	LeaseDeadline         *timestamppb.Timestamp                 `protobuf:"bytes,12,opt,name=lease_deadline,json=leaseDeadline,proto3" json:"lease_deadline,omitempty"`
 	ExpiresAt             *timestamppb.Timestamp                 `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Staging принадлежит namespace broker; namespace=5 — runtime publication.
+	StagedNamespace string `protobuf:"bytes,14,opt,name=staged_namespace,json=stagedNamespace,proto3" json:"staged_namespace,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RuntimeSecretDraftWork) Reset() {
@@ -33578,6 +33580,13 @@ func (x *RuntimeSecretDraftWork) GetExpiresAt() *timestamppb.Timestamp {
 		return x.ExpiresAt
 	}
 	return nil
+}
+
+func (x *RuntimeSecretDraftWork) GetStagedNamespace() string {
+	if x != nil {
+		return x.StagedNamespace
+	}
+	return ""
 }
 
 type CheckRuntimeSecretDraftWorkReadinessRequest struct {
@@ -57513,7 +57522,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x129\n" +
 	"\x05draft\x18\x05 \x01(\v2#.controlplane.v1.RuntimeSecretDraftR\x05draft\x12G\n" +
 	"\x0fterminal_secret\x18\x06 \x01(\v2\x1e.controlplane.v1.RuntimeSecretR\x0eterminalSecret\x12L\n" +
-	"\ffailure_code\x18\a \x01(\x0e2).controlplane.v1.RuntimeSecretFailureCodeR\vfailureCode\"\xb7\x05\n" +
+	"\ffailure_code\x18\a \x01(\x0e2).controlplane.v1.RuntimeSecretFailureCodeR\vfailureCode\"\xe2\x05\n" +
 	"\x16RuntimeSecretDraftWork\x12#\n" +
 	"\roperation_ref\x18\x01 \x01(\tR\foperationRef\x12D\n" +
 	"\x04kind\x18\x02 \x01(\x0e20.controlplane.v1.RuntimeSecretDraftOperationKindR\x04kind\x129\n" +
@@ -57530,7 +57539,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10claim_generation\x18\v \x01(\x03R\x0fclaimGeneration\x12A\n" +
 	"\x0elease_deadline\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\rleaseDeadline\x129\n" +
 	"\n" +
-	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"-\n" +
+	"expires_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12)\n" +
+	"\x10staged_namespace\x18\x0e \x01(\tR\x0fstagedNamespace\"-\n" +
 	"+CheckRuntimeSecretDraftWorkReadinessRequest\"D\n" +
 	",CheckRuntimeSecretDraftWorkReadinessResponse\x12\x14\n" +
 	"\x05ready\x18\x01 \x01(\bR\x05ready\"u\n" +
