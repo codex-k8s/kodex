@@ -445,3 +445,10 @@ Consumer может требовать exact UID без исключения д�
 mail service → настоящий локальный POP fixture для implicit TLS и STARTTLS,
 двух UID, явной/default INBOX и всех трёх операций. Listing вложений не
 возвращает их содержимое. Это локальная проверка, не live mail или staging.
+
+Почтовый CONNECT использует только listener `8082` из #1029. Runtime default,
+валидация конфигурации, ConfigMap, deployable descriptor и собственная
+NetworkPolicy согласованы; общие `8080`, STT `8081` и чужие адреса отклоняются
+до запуска. `TestMailEgressDestination` проверяет эту границу, render-проверка
+сверяет точные namespace/pod/port и runtime endpoint. Эти проверки не доказывают
+готовность listener или mailbox projection: их producer принадлежит #1029/#1046.

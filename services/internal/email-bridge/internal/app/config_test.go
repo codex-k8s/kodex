@@ -19,3 +19,25 @@ func TestDatabaseTransport(t *testing.T) {
 		}
 	}
 }
+
+func TestMailEgressDestination(t *testing.T) {
+	for _, key := range []string{"EMAIL_BRIDGE_CONFIGURATION_FILE", "EMAIL_BRIDGE_SECRETS_ROOT", "EMAIL_BRIDGE_DSN_FILE", "EMAIL_BRIDGE_CERTIFICATE_FILE", "EMAIL_BRIDGE_PRIVATE_KEY_FILE", "EMAIL_BRIDGE_CA_FILE", "EMAIL_BRIDGE_APPLICATION_GRANT_FILE", "OTEL_EXPORTER_OTLP_CA_FILE"} {
+		t.Setenv(key, "/fixture/"+key)
+	}
+	t.Setenv("DEPLOYMENT_ENVIRONMENT", "test")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel.example.test:4317")
+	t.Setenv("OTEL_EXPORTER_OTLP_TLS_SERVER_NAME", "otel.example.test")
+	t.Setenv("EMAIL_BRIDGE_AUTHORITY_TARGET", "control-plane.kodex-system.svc.cluster.local:8443")
+	t.Setenv("EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS", "15")
+	t.Setenv("EMAIL_BRIDGE_RECONCILIATION_BATCH", "16")
+	for _, address := range []string{"egress-gateway.kodex-system.svc:8082", "egress-gateway.kodex-system.svc:8080", "egress-gateway.kodex-system.svc:8081", "foreign.example.test:8082", "127.0.0.1:8082"} {
+		t.Run(address, func(t *testing.T) {
+			t.Setenv("EMAIL_BRIDGE_EGRESS_ADDRESS", address)
+			config, err := loadConfig()
+			allowed := address == "egress-gateway.kodex-system.svc:8082"
+			if (err == nil) != allowed || (allowed && config.EgressAddress != address) {
+				t.Fatal("mail egress destination validation mismatch")
+			}
+		})
+	}
+}
