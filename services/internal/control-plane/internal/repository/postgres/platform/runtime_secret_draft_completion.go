@@ -38,6 +38,11 @@ func (r *Repository) finishDraftOperation(ctx context.Context, tx pgx.Tx, o secr
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	if result.State == "FAILED" {
+		if _, err := tx.Exec(ctx, querySecretDraftImpactFinish, pgx.StrictNamedArgs{"operation_id": o.id, "state": "CANCELLED"}); err != nil {
+			return errs.ErrUnavailable
+		}
+	}
 	return nil
 }
 func (r *Repository) publishSecretDraft(ctx context.Context, tx pgx.Tx, s scope, d secretDraftRow, o secretDraftOperationRow, materialization *entity.RuntimeSecretMaterialization) (*entity.RuntimeSecret, error) {
@@ -203,6 +208,9 @@ func (r *Repository) FinishRuntimeSecretDraft(ctx context.Context, p value.Princ
 			result.Secret, err = r.publishSecretDraft(ctx, tx, s, d, o, input.Materialization)
 			if err == nil {
 				d.public.SecretVersion = result.Secret.Version
+				err = r.applySecretDraftImpact(ctx, tx, owner, o, *result.Secret)
+			}
+			if err == nil {
 				err = r.updateSecretDraft(ctx, tx, &d, "PUBLISHED", nil, o.targetRevision)
 			}
 		case "DISCARD":

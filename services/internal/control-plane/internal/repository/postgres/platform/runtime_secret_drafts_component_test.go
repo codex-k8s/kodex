@@ -85,7 +85,15 @@ func testRuntimeSecretDraftLifecycle(t *testing.T, ctx context.Context, r *Repos
 	}
 	prepareNext := func(kind, key string, draft entity.RuntimeSecretDraft) entity.RuntimeSecretDraftWork {
 		t.Helper()
-		return claim(prepare(repoport.RuntimeSecretDraftPrepareInput{Kind: kind, DraftRef: draft.Ref, ExpectedSecretVersion: draft.SecretVersion, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &draft.Version}}))
+		input := repoport.RuntimeSecretDraftPrepareInput{Kind: kind, DraftRef: draft.Ref, ExpectedSecretVersion: draft.SecretVersion, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &draft.Version}}
+		if kind == "PUBLISH" {
+			plan, err := s.PrepareRuntimeSecretDraftImpact(ctx, owner, draft.Ref, value.Mutation{IdempotencyKey: key + "-impact", ExpectedVersion: &draft.Version})
+			if err != nil || plan.Total != 0 {
+				t.Fatalf("prepare empty impact: %+v %v", plan, err)
+			}
+			input.ImpactPlanRef = plan.Ref
+		}
+		return claim(prepare(input))
 	}
 	validate := prepareNext("VALIDATE", "draft-validate-original", saved.Draft)
 	bad := *encrypted

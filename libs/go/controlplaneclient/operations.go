@@ -4,6 +4,7 @@ import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/co
 
 func EmailBridgeOperations() map[string]string {
 	return map[string]string{
+		"platform.email.configuration.report":   controlplanev1.RuntimeWorkService_ReportEmailConfigurationReadback_FullMethodName,
 		"platform.email.authorization.resolve":  controlplanev1.RuntimeWorkService_ResolveEmailAuthorization_FullMethodName,
 		"platform.email.effect-receipts.report": controlplanev1.RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
 		"platform.email.reconciliation.resolve": controlplanev1.RuntimeWorkService_ResolveEmailReconciliation_FullMethodName,
@@ -11,7 +12,10 @@ func EmailBridgeOperations() map[string]string {
 }
 
 func STTGatewayOperations() map[string]string {
-	return map[string]string{"platform.stt.transcribe": "/stt.v1.SpeechToTextService/Transcribe"}
+	return map[string]string{
+		"platform.stt.transcribe":        "/stt.v1.SpeechToTextService/Transcribe",
+		"platform.stt.model-catalog.get": "/stt.v1.SpeechToTextService/GetModelCatalog",
+	}
 }
 
 func SecretDraftGatewayOperations() map[string]string {
@@ -31,7 +35,21 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.query.email-mailbox.configurations.list":         controlplanev1.PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName,
+		"platform.query.email-mailbox.configurations.get":          controlplanev1.PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName,
+		"platform.query.email-mailbox.configurations.preview":      controlplanev1.PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName,
+		"platform.query.email-mailbox.credentials.list":            controlplanev1.PlatformQueryService_ListEmailMailboxCredentials_FullMethodName,
+		"platform.query.email-mailbox.credential-receipts.get":     controlplanev1.PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName,
+		"platform.command.email-mailbox.drafts.create":             controlplanev1.PlatformCommandService_CreateEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.save":               controlplanev1.PlatformCommandService_SaveEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.validate":           controlplanev1.PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.publish":            controlplanev1.PlatformCommandService_PublishEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.drafts.discard":            controlplanev1.PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName,
+		"platform.command.email-mailbox.configurations.bind":       controlplanev1.PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName,
+		"platform.command.email-mailbox.configurations.unbind":     controlplanev1.PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName,
 		"platform.command.runtime-secret-drafts.save":              controlplanev1.PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName,
+		"platform.command.runtime-secret-drafts.impact.prepare":    controlplanev1.PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName,
+		"platform.query.runtime-secret-drafts.impact.get":          controlplanev1.PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName,
 		"platform.command.runtime-secret-drafts.validate":          controlplanev1.PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName,
 		"platform.command.runtime-secret-drafts.publish":           controlplanev1.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName,
 		"platform.command.runtime-secret-drafts.discard":           controlplanev1.PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName,

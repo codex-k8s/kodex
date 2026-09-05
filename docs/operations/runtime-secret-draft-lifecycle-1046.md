@@ -34,6 +34,10 @@ PUBLISH completion может добавить immutable revision и актив�
 | VALIDATE prepare/consume | fresh actor/owner, exact draft version, не terminal/expired, новый grant/claim | прежний encrypted snapshot закреплён; никакой повторной передачи значения |
 | VALIDATE complete | broker decrypt+format/size validation и exact UID/RV/digest readback; тот же fence | VALID, version++, receipt/audit; ошибка не создаёт VALID |
 | PUBLISH prepare/consume | fresh actor/owner, VALID, draft OCC и отдельная expected_secret_version, новый grant/claim | PUBLISHING, уникальная server target_revision; encrypted descriptor неизменяем |
+| Impact prepare | fresh exact draft owner, VALID draft OCC, current Secret version | immutable actor-bound plan с source revision, target draft/version, exact eligible bindings, permission snapshot и expiry; idempotency replay возвращает тот же plan |
+| Impact read | тот же actor/owner, permission проверяется повторно, query/cursor относятся к plan | bounded safe items и итоговые receipts; скрытые bindings не раскрываются после отзыва прав |
+| Publish с plan | exact неизрасходованный plan, draft/secret pins и expiry, выбранные item refs принадлежат plan | при activation каждый выбранный consumer повторно проверяет authority/OCC; отдельный receipt APPLIED/CONFLICT/FORBIDDEN, невыбранные остаются прежними; plan терминален |
+| Impact cancel/expiry | owner failure/discard/lease expiry закрывают связанный plan вместе с operation | CANCELLED не публикует и не заменяет; неиспользованный plan после expires_at читается EXPIRED; retry создаёт новый plan |
 | PUBLISH complete | exact fence, secret OCC, ciphertext/source binding и immutable materialization readback | одна transaction: revision/current pointer, draft PUBLISHED, receipt/audit; execution snapshots прежние |
 | DISCARD prepare | fresh owner и draft OCC; publish/terminal conflict закрыто отклоняется | draft DISCARDED и отзыв всех прежних grants/claims до cleanup intent |
 | DISCARD consume/complete | только exact cleanup grant для уже terminal draft | broker удаляет ciphertext с UID/RV preconditions; completion фиксирует cleanup, не открывает grant заново |
@@ -72,7 +76,7 @@ EMAIL_EFFECT_RECONCILIATION. Public ingress/listener и новый deployable CP
 CP хранит назначенный сервером staging namespace `kodex-secret-drafts` отдельно
 от runtime namespace `kodex-runtime`; encrypted data key — `ciphertext`,
 published data key — `value`. Readiness проверяет таблицы, sequence и уникальный
-индекс активной операции. Policy revision 57 включает отдельный OIDC producer
+индекс активной операции. Policy revision 58 включает отдельный OIDC producer
 для вызовов Secret Broker с точным target workload. Все D6 work tuples связаны
 через `UNARY_PROTO_SHA256`; их resource/version/attempt metadata запрещены.
 
@@ -89,10 +93,21 @@ SAVE, VALIDATE, PUBLISH и DISCARD не создают domain event: кажды�
 FAIL и expiry не создают event; read path — draft и bounded recovery work.
 Cleanup не создаёт event; его exact UID/RV intention и ACK находятся в owner
 operation, повторный read выполняет broker recovery.
+Impact prepare/read не создают event; immutable plan и per-item receipts читаются
+по отдельному protected plan read. Успешная замена Environment использует его
+существующий platform event/outbox; конфликт/отзыв прав не создаёт событие замены.
 
 Локальный CP checkpoint проверяет save/reissue/consume/validate/publish,
 неверный encrypted descriptor, stale completion, потерю cleanup ACK,
 монотонный target revision после orphan, discard, expiry всех active grants,
 fresh authentication и общий legacy/D6 recovery после revoke.
+Prepublish impact ограничен 1000 items, каждый принадлежит server plan.
+Plan.total — immutable исходное число; paged response.total учитывает текущую
+eligibility и поиск. Cursor связывает actor, plan digest/state и query; terminal
+переход требует новой первой страницы. APPLIED item содержит новую Environment
+revision, а для Agent также тот же binding ref с большей version. Остальные
+outcomes не содержат result refs. Публикация без выбранных items сохраняет
+bindings и отмечает их NOT_SELECTED. Legacy и D6 используют общий монотонный
+диапазон target revisions, включая неубранные orphan attempts.
 Broker apply/readback, HTTP/PWA и live подтверждаются только соответствующими
 unit checkpoints. Это не completion #1046/#1068.

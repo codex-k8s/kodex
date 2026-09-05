@@ -216,6 +216,8 @@ type TranscriptionCredentialProjection struct {
 
 type Repository interface {
 	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
+	PrepareRuntimeSecretDraftImpact(context.Context, value.Principal, string, value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error)
+	GetRuntimeSecretDraftImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeSecretDraftImpactPage, error)
 	PrepareRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error)
 	ConsumeRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftWork, error)
 	FinishRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftResult, error)

@@ -148,6 +148,11 @@ func (r *Repository) updateSecretDraft(ctx context.Context, tx pgx.Tx, d *secret
 		return errs.ErrConflict
 	}
 	d.public.State = state
+	if state == "DISCARDED" || state == "EXPIRED" {
+		if _, err := tx.Exec(ctx, querySecretDraftImpactCancel, pgx.StrictNamedArgs{"draft_id": d.id}); err != nil {
+			return errs.ErrUnavailable
+		}
+	}
 	d.public.PublishedRevision = published
 	if encrypted != nil {
 		d.encrypted = encrypted
@@ -359,6 +364,11 @@ func (r *Repository) PrepareRuntimeSecretDraft(ctx context.Context, p value.Prin
 	_, err = tx.Exec(ctx, querySecretDraftOperationInsert, pgx.StrictNamedArgs{"ref": opRef, "organization_id": s.organizationID, "draft_id": d.id, "actor_id": s.actorID, "kind": input.Kind, "draft_version": d.public.Version, "secret_version": secret.version, "current_revision": secret.currentRevision, "target_revision": targetRevision, "token_digest": token, "idempotency_key": input.Mutation.IdempotencyKey, "intent_digest": input.Mutation.IntentDigest, "grant_expires_at": expires, "correlation_ref": p.CorrelationRef})
 	if err != nil {
 		return empty, mapWriteError(err)
+	}
+	if input.Kind == "PUBLISH" {
+		if err = r.bindSecretDraftImpact(ctx, tx, s, d, input, opRef); err != nil {
+			return empty, err
+		}
 	}
 	o := secretDraftOperationRow{ref: opRef, kind: input.Kind, actorID: s.actorID, correlation: p.CorrelationRef}
 	if err = r.auditSecretDraft(ctx, tx, s, d, o, "SUCCEEDED"); err != nil {
