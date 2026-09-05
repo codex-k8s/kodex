@@ -13,6 +13,12 @@ const Version = "openai-file-2026-09-05.1"
 const RecommendedModel = "gpt-transcribe"
 const RecommendedMaximumBytes = 10 << 20
 const RecommendedMaximumDuration = 120 * time.Second
+const MinimumAudioBytes = 1024
+const MaximumAudioBytes = 25 << 20
+const MinimumAudioDuration = time.Second
+const MaximumAudioDuration = 30 * time.Minute
+const MinimumProviderTimeout = time.Second
+const MaximumProviderTimeout = 15 * time.Second
 
 type Parameters struct {
 	Languages        []string
