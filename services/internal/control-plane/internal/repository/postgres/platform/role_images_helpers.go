@@ -228,7 +228,7 @@ func scanLockedPromotionRequest(row roleImageRowScanner) (lockedPromotionRequest
 
 func roleImageActions(recipe entity.RoleImageRecipe, canManage bool) []string {
 	actions := []string{"OPEN"}
-	if !canManage {
+	if !canManage || shippedRoleImage(recipe) {
 		return actions
 	}
 	if recipe.State == "ACTIVE" {

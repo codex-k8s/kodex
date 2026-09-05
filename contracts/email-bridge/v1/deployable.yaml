@@ -1,0 +1,51 @@
+version: 1
+id: email-bridge
+owner: email-bridge
+issue: 1037
+source: services/internal/email-bridge
+api: contracts/openapi/email-bridge/v1/openapi.yaml
+configuration: contracts/email-bridge/v1/configuration.schema.json
+generated_client: libs/go/emailbridgeapi/api.gen.go
+deployment: deploy/k8s/overlays/staging/email-bridge
+runtime_image: email-bridge
+migration_image: email-bridge-migration
+migration_version: 20260905000200
+caller_spiffe: spiffe://kodex.local/ns/kodex-system/sa/integration-gateway
+authority:
+  owner: control-plane
+  issue: 1046
+  transport: grpc
+  endpoint: control-plane.kodex-system.svc.cluster.local:8443
+  methods:
+    - /controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization
+    - /controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt
+    - /controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation
+  application_grant_env: EMAIL_BRIDGE_APPLICATION_GRANT_FILE
+  issuer_proof: local-internal-rpc-authority
+  source: authoritative-grant-and-gate
+  cache: forbidden
+readiness:
+  local: /readyz
+  authenticated: /v1/health
+  local_requires: [configuration-watermark, runtime-postgresql-role, local-issuer]
+  authenticated_requires: [execution-binding, owner-authorization, smtp-auth-noop, configured-pop-or-imap-read]
+  unavailable: fail-closed
+egress:
+  owner: egress-gateway
+  issue: 1029
+  endpoint: egress-gateway.kodex-system.svc:8082
+  direct_dial: forbidden
+state:
+  owner: email-bridge
+  store: PostgreSQL
+  receipts: [unknown, accepted, failed, deleted]
+  automatic_mutation_retry: forbidden
+  event: none
+  authoritative_read: getMessageStatus
+credentials:
+  owner: secret-broker
+  mailbox_projection: email-bridge-mailbox-projection
+  runtime_database: email-bridge-runtime-database
+  migration_database: email-bridge-migration-database
+  bootstrap_database: email-bridge-postgresql-bootstrap
+  workload_tls: email-bridge-tls

@@ -1,0 +1,159 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "email-bridge",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge"
+    }
+  },
+  "spec": {
+    "replicas": 2,
+    "revisionHistoryLimit": 3,
+    "selector": {
+      "matchLabels": {
+        "app.kubernetes.io/name": "email-bridge"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app.kubernetes.io/name": "email-bridge"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "email-bridge",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 10001,
+          "runAsGroup": 10001,
+          "fsGroup": 10001,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "terminationGracePeriodSeconds": 40,
+        "containers": [
+          {
+            "name": "email-bridge",
+            "image": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/email-bridge@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "ports": [
+              {
+                "name": "https",
+                "containerPort": 8443
+              },
+              {
+                "name": "metrics",
+                "containerPort": 9090
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "email-bridge-runtime"
+                }
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/livez",
+                "port": "metrics"
+              },
+              "periodSeconds": 2,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "metrics"
+              },
+              "periodSeconds": 10
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/livez",
+                "port": "metrics"
+              },
+              "periodSeconds": 10
+            },
+            "volumeMounts": [
+              {
+                "name": "application-grant",
+                "mountPath": "/var/run/secrets/kodex/email-bridge/application-grant",
+                "readOnly": true
+              },
+              {
+                "name": "internal-rpc-authority-observability",
+                "mountPath": "/var/run/email/observability",
+                "readOnly": true
+              },
+              {
+                "name": "tls",
+                "mountPath": "/var/run/email/tls",
+                "readOnly": true
+              },
+              {
+                "name": "database",
+                "mountPath": "/var/run/email/database",
+                "readOnly": true
+              },
+              {
+                "name": "mail",
+                "mountPath": "/var/run/email/mail",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "application-grant",
+            "emptyDir": {"medium": "Memory", "sizeLimit": "1Mi"}
+          },
+          {
+            "name": "tls",
+            "secret": {
+              "secretName": "email-bridge-tls",
+              "defaultMode": 288
+            }
+          },
+          {
+            "name": "database",
+            "secret": {
+              "secretName": "email-bridge-runtime-database",
+              "defaultMode": 288
+            }
+          },
+          {
+            "name": "mail",
+            "secret": {
+              "secretName": "email-bridge-mailbox-projection",
+              "defaultMode": 288
+            }
+          }
+        ]
+      }
+    }
+  }
+}

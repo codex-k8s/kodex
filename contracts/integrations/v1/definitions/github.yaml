@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 2.2.0
+  version: 2.3.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -30,6 +30,11 @@ spec:
     - key: github_api
       source: STATIC
       hostname: api.github.com
+      port: 443
+      tls: REQUIRED
+    - key: github_git
+      source: STATIC
+      hostname: github.com
       port: 443
       tls: REQUIRED
   healthCheck:
@@ -244,7 +249,7 @@ spec:
         - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
         - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"message","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
-        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {"key":"content_base64","type":"STRING","format":"PLAIN","required":true,"maximumLength":349528,"allowEmpty":true}
         - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
       outputFields:
         - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}

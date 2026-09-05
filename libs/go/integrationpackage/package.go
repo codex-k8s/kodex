@@ -21,10 +21,14 @@ import (
 )
 
 const (
-	APIVersion = "integrations.kodex.io/v1"
-	Kind       = "IntegrationPackage"
-	Origin     = "SHIPPED"
-	maxBytes   = 256 << 10
+	APIVersion     = "integrations.kodex.io/v1"
+	Kind           = "IntegrationPackage"
+	Origin         = "SHIPPED"
+	OriginUI       = "UI"
+	OriginGit      = "GIT"
+	maxBytes       = 256 << 10
+	maxObjectBytes = 512 << 10
+	maxFieldLength = 349528
 )
 
 var (
@@ -122,6 +126,9 @@ func Parse(raw []byte) (Package, error) {
 	if len(raw) == 0 || len(raw) > maxBytes {
 		return Package{}, errors.New("integration package size is invalid")
 	}
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && trimmed[0] == '{' {
+		return parsePackageJSON(trimmed)
+	}
 	var document yaml.Node
 	nodeDecoder := yaml.NewDecoder(bytes.NewReader(raw))
 	if err := nodeDecoder.Decode(&document); err != nil {
@@ -162,6 +169,9 @@ func LoadShipped() (map[string]Package, error) {
 		}
 		if err := ValidateAdapterBinding(definition); err != nil {
 			return nil, fmt.Errorf("load shipped integration package %s: %w", filename, err)
+		}
+		if definition.Metadata.Origin != Origin {
+			return nil, errors.New("shipped integration package origin is invalid")
 		}
 		if _, exists := result[definition.Metadata.Key]; exists {
 			return nil, errors.New("duplicate shipped integration package key")
@@ -328,7 +338,7 @@ func validateObject(raw []byte, declared []Field, kind string) ([]byte, error) {
 }
 
 func decodeJSONObject(raw []byte) (map[string]json.RawMessage, error) {
-	if len(raw) == 0 || len(raw) > maxBytes {
+	if len(raw) == 0 || len(raw) > maxObjectBytes {
 		return nil, errors.New("JSON object size is invalid")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -431,8 +441,26 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 	return nil
 }
 
+// EMAIL проверяет approval по авторитетной mailbox policy перед каждым effect.
+func emailMailboxApproval(result *Package, capability Capability) bool {
+	if result.Metadata.Key != "email" ||
+		result.Spec.Adapter != "EMAIL_HTTPS" || result.Spec.AdapterOwner != "integration-gateway" ||
+		result.Spec.ExecutionRoute != "MANAGED_MCP" || capability.ResourceScope.Kind != "EMAIL_SENDER" ||
+		capability.ApprovalPolicy != "NONE" {
+		return false
+	}
+	switch capability.Operation {
+	case "email.message.send", "email.message.reply", "email.message.reply_all", "email.message.forward",
+		"email.message.delete", "email.message.mark_read", "email.message.mark_unread", "email.message.move",
+		"email.message.archive", "email.draft.create", "email.draft.update", "email.draft.delete":
+		return true
+	default:
+		return false
+	}
+}
+
 func validate(result *Package) error {
-	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
+	if result.APIVersion != APIVersion || result.Kind != Kind || !oneOf(result.Metadata.Origin, Origin, OriginUI, OriginGit) ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
 		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) || ValidateAdapterBinding(*result) != nil ||
@@ -486,7 +514,8 @@ func validate(result *Package) error {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
 			!validRisk(capability.Risk) || !validApprovalPolicy(capability.ApprovalPolicy) ||
-			(capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") ||
+			(capability.Risk != "READ" && capability.ApprovalPolicy == "NONE" &&
+				!emailMailboxApproval(result, capability)) ||
 			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
@@ -535,7 +564,7 @@ func validateFields(fields []Field) (map[string]struct{}, error) {
 	for _, field := range fields {
 		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			(field.AllowEmpty && (field.Type != "STRING" || field.Format != "PLAIN" || len(field.AllowedValues) > 0)) ||
-			field.MaximumLength < 0 || field.MaximumLength > 65536 || field.Minimum < 0 || field.Maximum < 0 ||
+			field.MaximumLength < 0 || field.MaximumLength > maxFieldLength || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
 			(field.Type == "STRING" && field.MaximumLength == 0) ||
 			(field.Type != "STRING" && field.MaximumLength != 0) ||

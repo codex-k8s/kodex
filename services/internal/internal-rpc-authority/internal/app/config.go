@@ -195,6 +195,13 @@ func applyWorkloadProfile(config *Config) error {
 	}
 	profiles := map[Mode]map[string]workloadProfile{
 		ModeIssuer: {
+			"email-bridge": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+				readbackCredentialSecret:    "internal-rpc-authority-email-bridge-issuer-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-email-bridge-issuer-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-email-bridge-issuer-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-email-bridge-issuer-restore-ack",
+			},
 			"stt-tts-service": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service",
 				readbackCredentialSecret:    "internal-rpc-authority-stt-tts-service-issuer-readback-credential",

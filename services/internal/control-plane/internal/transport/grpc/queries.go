@@ -4,6 +4,7 @@ import (
 	"context"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
@@ -156,11 +157,11 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
+	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Memberships = append(response.Memberships, castMembership(item))
 	}
@@ -268,17 +269,18 @@ func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.List
 	if err != nil {
 		return nil, err
 	}
-	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())}
+	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage()), ResumableSessionsOnly: request.GetResumableSessionsOnly(), TargetType: request.GetTargetType(), TargetRef: request.GetTargetRef()}
 	for _, state := range request.GetStates() {
-		if state != controlplanev1.RunState_RUN_STATE_UNSPECIFIED {
-			filter.States = append(filter.States, enumSuffix(state, "RUN_STATE_"))
+		if state == controlplanev1.RunState_RUN_STATE_UNSPECIFIED {
+			return nil, transportError(errs.ErrInvalid)
 		}
+		filter.States = append(filter.States, enumSuffix(state, "RUN_STATE_"))
 	}
-	items, next, err := server.service.ListRuns(ctx, p, filter)
+	items, total, next, err := server.service.ListRuns(ctx, p, filter)
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListRunsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListRunsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Runs = append(response.Runs, castRun(item))
 	}
@@ -334,11 +336,15 @@ func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev
 	if request.GetState() != controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED {
 		state = enumSuffix(request.GetState(), "OWNER_GATE_STATE_")
 	}
-	items, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, Page: page(request.GetPage())})
+	states := make([]string, 0, len(request.GetStates()))
+	for _, item := range request.GetStates() {
+		states = append(states, enumSuffix(item, "OWNER_GATE_STATE_"))
+	}
+	items, total, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, States: states, Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, Total: total}
 	for _, item := range items {
 		response.Gates = append(response.Gates, castGate(item))
 	}
@@ -378,14 +384,14 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	if request.GetSourceKind() != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED {
 		sourceKind = enumSuffix(request.GetSourceKind(), "ARTIFACT_SOURCE_")
 	}
-	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
+	items, total, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
 		ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(),
 		State: lifecycleState, ArtifactType: artifactType, ScanState: scanState, SourceKind: sourceKind, Page: page(request.GetPage()),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListArtifactsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListArtifactsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Artifacts = append(response.Artifacts, castArtifact(item))
 	}

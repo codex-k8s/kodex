@@ -4,7 +4,7 @@ SELECT
     project.ref,
     root.ref,
     delivery.state,
-    delivery.attempt,
+    delivery.attempt,delivery.execution_max_attempts,
     delivery.created_at
 FROM control_plane.runs requested
 JOIN control_plane.runs root
@@ -17,7 +17,7 @@ JOIN control_plane.interaction_deliveries delivery
 WHERE requested.organization_id = @organization_id::uuid
   AND requested.ref = @run_ref
   AND (
-      delivery.state = 'FAILED'
+      delivery.state IN ('FAILED','UNKNOWN_OUTCOME')
       OR (delivery.state = 'SUCCEEDED' AND delivery.attempt > 1)
   )
   AND (

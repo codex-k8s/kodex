@@ -7,13 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	revisionservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/revision"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -52,12 +50,69 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, configuration); err != nil {
+		return commandOutcome{}, err
+	}
 	if (action != "CREATE" || payload.ConfigurationRef != "") &&
 		(input.Mutation.ExpectedVersion == nil || configuration.Version != *input.Mutation.ExpectedVersion) {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
+	if action == "DETACH" {
+		if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, configuration.Ref, ""); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if (action == "CREATE" || action == "SAVE" || action == "DISCARD" || action == "VALIDATE" || action == "PUBLISH") && configuration.ManagedBy != "UI" {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	switch action {
+	case "SAVE", "DISCARD":
+		locked, lockErr := repository.lockManagedRevision(ctx, tx, current, configuration, payload.RevisionRef)
+		if lockErr != nil {
+			return commandOutcome{}, lockErr
+		}
+		if locked.State != "DRAFT" && locked.State != "VALID" && locked.State != "INVALID" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		item, discardErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationDiscardRevision, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "configuration_set_id": configuration.id, "revision_id": locked.RefID,
+		}))
+		if discardErr != nil {
+			return commandOutcome{}, mapWriteError(discardErr)
+		}
+		revision = &item.ManagedConfigurationRevision
+		if action == "SAVE" {
+			format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
+			if len(payload.Content) > 256<<10 || !utf8.ValidString(payload.Content) || strings.ContainsRune(payload.Content, 0) ||
+				kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
+				kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+			content := strings.TrimSpace(payload.Content)
+			if kind == revisionservice.KindIntegrationDefinition {
+				format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+			}
+			digest := sha256.Sum256([]byte(content))
+			ref, refErr := newRef("mrev")
+			if refErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			created, createErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
+				"revision_ref": ref, "organization_id": current.organizationID, "configuration_set_id": configuration.id,
+				"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
+				"parent_revision_id": locked.RefID, "actor_id": current.actorID,
+			}))
+			if createErr != nil {
+				return commandOutcome{}, mapWriteError(createErr)
+			}
+			revision = &created.ManagedConfigurationRevision
+		}
+		if err := tx.QueryRow(ctx, queryManagedConfigurationTouchSet, pgx.StrictNamedArgs{
+			"configuration_set_id": configuration.id, "expected_version": configuration.Version,
+		}).Scan(&configuration.Version, &configuration.UpdatedAt); err != nil {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
 	case "CREATE":
 		if strings.TrimSpace(payload.Name) == "" || len(payload.Name) > 160 || strings.TrimSpace(payload.Content) == "" || len(payload.Content) > 256<<10 {
 			return commandOutcome{}, errs.ErrInvalid
@@ -70,7 +125,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if configuration.ManagedBy != "UI" {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		digest := sha256.Sum256([]byte(strings.TrimSpace(payload.Content)))
+		content := strings.TrimSpace(payload.Content)
+		if kind == revisionservice.KindIntegrationDefinition {
+			format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+		}
+		digest := sha256.Sum256([]byte(content))
 		revisionRef, refErr := newRef("mrev")
 		if refErr != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -78,7 +137,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		item, itemErr := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
 			"revision_ref": revisionRef, "organization_id": current.organizationID,
 			"configuration_set_id": configuration.id, "content_format": format,
-			"content": strings.TrimSpace(payload.Content), "digest": hex.EncodeToString(digest[:]),
+			"content": content, "digest": hex.EncodeToString(digest[:]),
 			"parent_revision_id": configuration.currentRevisionID, "actor_id": current.actorID,
 		}))
 		if itemErr != nil {
@@ -98,6 +157,22 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, lockErr
 		}
 		_, diagnostics, validationErr := revisionservice.Validate(kind, locked.ContentFormat, locked.Content)
+		if kind == revisionservice.KindRoleImage {
+			validationErr = repository.validateSourceRoleImage(configuration, locked.ContentFormat, locked.Content)
+			if errors.Is(validationErr, errs.ErrUnavailable) {
+				return commandOutcome{}, validationErr
+			}
+			diagnostics = nil
+			if validationErr != nil {
+				diagnostics = []revisionservice.Diagnostic{{Code: "ROLE_IMAGE_CONFIGURATION_INVALID", Message: "Role image configuration is incompatible with the active catalog"}}
+			}
+		}
+		if kind == revisionservice.KindEmailMailbox {
+			diagnostics, validationErr = repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision)
+			if validationErr != nil && !errors.Is(validationErr, errs.ErrInvalid) {
+				return commandOutcome{}, validationErr
+			}
+		}
 		state := "VALID"
 		if validationErr != nil {
 			state = "INVALID"
@@ -126,9 +201,19 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if kind == revisionservice.KindSystemSTT && locked.ContentFormat != "JSON" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if kind == revisionservice.KindEmailMailbox {
+			if _, err := repository.validateEmailMailboxRevision(ctx, tx, current, configuration, locked.ManagedConfigurationRevision); err != nil {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+		}
 		if kind == revisionservice.KindIntegrationDefinition {
 			if _, err := revisionservice.IntegrationPackage(locked.ContentFormat, locked.Content); err != nil {
 				return commandOutcome{}, errs.ErrInvalid
+			}
+		}
+		if kind == revisionservice.KindRoleImage {
+			if err := repository.publishSourceRoleImage(ctx, tx, current, configuration, locked.ManagedConfigurationRevision); err != nil {
+				return commandOutcome{}, err
 			}
 		}
 		item, setVersion, updatedAt, publishErr := scanPublishedManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationPublishRevision, pgx.StrictNamedArgs{
@@ -144,7 +229,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if lockErr != nil || locked.State != "PUBLISHED" {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		impact, impactErr := repository.managedImpactTx(ctx, tx, current, configuration.Ref, locked.Ref)
+		impact, impactErr := repository.managedImpactTx(ctx, tx, current, configuration.Ref, locked.Ref, query.Filter{Page: query.Page{Size: 1}})
 		if impactErr != nil || payload.ImpactDigest != impact.Digest {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -154,6 +239,22 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		for _, consumer := range payload.Consumers {
 			if !managedConsumerAllowed(kind, consumer) {
 				return commandOutcome{}, errs.ErrInvalid
+			}
+			switch consumer.Kind {
+			case "AGENT_CONTINUATION":
+				permission, target, resolveErr := repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.manage", consumer.Ref)
+				if resolveErr != nil || repository.requireAccess(ctx, tx, current, permission, target) != nil {
+					return commandOutcome{}, errs.ErrNotFound
+				}
+			case "AGENT", "WORKFLOW", "SCHEDULE":
+				permission := strings.ToLower(consumer.Kind) + ".manage"
+				if err := repository.requireAccess(ctx, tx, current, permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: consumer.Kind, ResourceRef: consumer.Ref}); err != nil {
+					return commandOutcome{}, errs.ErrNotFound
+				}
+			case "RUNTIME_ENVIRONMENT":
+				if _, _, err := repository.environmentImpactTarget(ctx, tx, current, consumer.Ref, ""); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			expectedDefinitionKey := ""
 			if kind == revisionservice.KindIntegrationDefinition {
@@ -170,6 +271,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				if resolveErr != nil || repository.requireAccess(ctx, tx, current, "integration.manage", connection) != nil {
 					return commandOutcome{}, errs.ErrNotFound
 				}
+				if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, "", consumer.Ref); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			var allowed bool
 			if err := tx.QueryRow(ctx, queryManagedConfigurationValidateConsumer, pgx.StrictNamedArgs{
@@ -177,6 +281,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 				"project_id": nullUUID(configuration.projectID), "expected_definition_key": expectedDefinitionKey,
 			}).Scan(&allowed); err != nil || !allowed {
 				return commandOutcome{}, errs.ErrNotFound
+			}
+			if kind == revisionservice.KindIntegrationDefinition {
+				if err := repository.bindIntegrationPackage(ctx, tx, current, consumer.Ref, locked.ContentFormat, locked.Content); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			bindingRef, _ := newRef("mcbind")
 			var bindingRefReadback string
@@ -195,9 +304,28 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		}
 		revision = &locked.ManagedConfigurationRevision
 	case "DETACH":
-		if configuration.ManagedBy != "GIT" {
+		if configuration.ManagedBy != "GIT" || configuration.CurrentRevision == nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		revisionRef, err := newRef("mrev")
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		source := configuration.CurrentRevision
+		format, content := source.ContentFormat, source.Content
+		if kind == revisionservice.KindIntegrationDefinition || configuration.Kind == revisionservice.KindIntegrationDefinition {
+			format, content = repository.normalizeIntegrationDraft(format, content, "UI")
+		}
+		digest := sha256.Sum256([]byte(content))
+		draft, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{
+			"revision_ref": revisionRef, "organization_id": current.organizationID, "configuration_set_id": configuration.id,
+			"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
+			"parent_revision_id": configuration.currentRevisionID, "actor_id": current.actorID,
+		}))
+		if err != nil {
+			return commandOutcome{}, mapWriteError(err)
+		}
+		revision = &draft.ManagedConfigurationRevision
 		if err := tx.QueryRow(ctx, queryManagedConfigurationDetach, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "configuration_ref": configuration.Ref,
 			"expected_version": configuration.Version,
@@ -205,7 +333,20 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		configuration.ManagedBy, configuration.Source, configuration.SourceRevision = "UI", "control-center", ""
-		configuration.CurrentRevision = nil
+		if configuration.GitSource != nil {
+			source, err := readConfigurationSource(ctx, tx, current.organizationID, configuration.Ref)
+			if err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if _, err := tx.Exec(ctx, queryConfigurationSourceCancelWork, configuration.id); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			result, err := repository.sourceState(ctx, tx, current, source, entity.ConfigurationSourceDetached, "")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			configuration.GitSource = &result
+		}
 	}
 	return managedOutcome(configuration, revision), nil
 }
@@ -228,6 +369,16 @@ func (repository *Repository) resolveManagedSet(ctx context.Context, tx pgx.Tx, 
 		}
 		if kind != "" && item.Kind != kind {
 			return managedSet{}, errs.ErrNotFound
+		}
+		if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &item); err != nil {
+			return managedSet{}, err
+		}
+		if item.currentRevisionID != "" {
+			revision, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationCurrentRevision, current.organizationID, item.id, item.currentRevisionID))
+			if err != nil || revision.State != "PUBLISHED" {
+				return managedSet{}, errs.ErrUnavailable
+			}
+			item.CurrentRevision = &revision.ManagedConfigurationRevision
 		}
 		return item, nil
 	}
@@ -263,22 +414,62 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 	if input.Mutation.ExpectedVersion == nil || payload.ConfigurationRef == "" || strings.TrimSpace(payload.Name) == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	source, err := repository.resolveManagedSet(ctx, tx, current, payload, "", false)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if source.ManagedBy != "GIT" || source.CurrentRevision == nil {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	format, content := source.CurrentRevision.ContentFormat, source.CurrentRevision.Content
+	if source.Kind == revisionservice.KindIntegrationDefinition {
+		format, content = repository.normalizeIntegrationDraft(format, content, "UI")
+	}
+	digest := sha256.Sum256([]byte(content))
 	copyRef, _ := newRef("mcfg")
 	revisionRef, _ := newRef("mrev")
 	set, revision, err := scanManagedCopy(tx.QueryRow(ctx, queryManagedConfigurationCopy, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "configuration_ref": payload.ConfigurationRef,
 		"expected_version": *input.Mutation.ExpectedVersion, "copy_ref": copyRef, "revision_ref": revisionRef,
 		"name": strings.TrimSpace(payload.Name), "actor_id": current.actorID,
+		"content_format": format, "content": content, "digest": hex.EncodeToString(digest[:]),
 	}))
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
+	}
+	if set.Kind == revisionservice.KindEmailMailbox {
+		var connectionRef, sourceMailboxRef string
+		if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, payload.ConfigurationRef).Scan(&connectionRef, &sourceMailboxRef); err != nil {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		mailboxRef, err := newMailboxRef()
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		tag, err := tx.Exec(ctx, queryEmailMailboxConfigurationInsertOwner, current.organizationID, set.Ref, connectionRef, mailboxRef)
+		if err != nil || tag.RowsAffected() != 1 {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 	}
 	return managedOutcome(set, &revision), nil
 }
 
 func managedCommand(kind command.Kind) (string, string) {
 	mapping := map[command.Kind][2]string{
-		command.CreatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
+		command.CreateEmailMailboxDraft:            {revisionservice.KindEmailMailbox, "CREATE"},
+		command.SaveEmailMailboxDraft:              {revisionservice.KindEmailMailbox, "SAVE"},
+		command.ValidateEmailMailboxDraft:          {revisionservice.KindEmailMailbox, "VALIDATE"},
+		command.PublishEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "PUBLISH"},
+		command.DiscardEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "DISCARD"},
+		command.SavePromptTemplateDraft:            {revisionservice.KindPromptTemplate, "SAVE"},
+		command.DiscardPromptTemplateDraft:         {revisionservice.KindPromptTemplate, "DISCARD"},
+		command.SaveRoleImageRevisionDraft:         {revisionservice.KindRoleImage, "SAVE"},
+		command.DiscardRoleImageRevisionDraft:      {revisionservice.KindRoleImage, "DISCARD"},
+		command.SaveIntegrationDefinitionDraft:     {revisionservice.KindIntegrationDefinition, "SAVE"},
+		command.DiscardIntegrationDefinitionDraft:  {revisionservice.KindIntegrationDefinition, "DISCARD"},
+		command.SaveSystemSTTConfigurationDraft:    {revisionservice.KindSystemSTT, "SAVE"},
+		command.DiscardSystemSTTConfigurationDraft: {revisionservice.KindSystemSTT, "DISCARD"},
+		command.CreatePromptTemplateDraft:          {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
 		command.CreateRoleImageRevisionDraft: {revisionservice.KindRoleImage, "CREATE"}, command.ValidateRoleImageRevision: {revisionservice.KindRoleImage, "VALIDATE"}, command.PublishRoleImageRevision: {revisionservice.KindRoleImage, "PUBLISH"}, command.RebindRoleImage: {revisionservice.KindRoleImage, "REBIND"},
 		command.CreateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "CREATE"}, command.ValidateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "VALIDATE"}, command.PublishIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "PUBLISH"}, command.RebindIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "REBIND"},
 		command.CreateSystemSTTDraft: {revisionservice.KindSystemSTT, "CREATE"}, command.ValidateSystemSTTDraft: {revisionservice.KindSystemSTT, "VALIDATE"}, command.PublishSystemSTTDraft: {revisionservice.KindSystemSTT, "PUBLISH"}, command.RebindSystemSTT: {revisionservice.KindSystemSTT, "REBIND"},
@@ -290,7 +481,7 @@ func managedCommand(kind command.Kind) (string, string) {
 
 func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationConsumer) bool {
 	allowed := map[string][]string{
-		revisionservice.KindPromptTemplate:        {"AGENT", "WORKFLOW", "SCHEDULE"},
+		revisionservice.KindPromptTemplate:        {"AGENT", "AGENT_CONTINUATION", "WORKFLOW", "SCHEDULE"},
 		revisionservice.KindRoleImage:             {"RUNTIME_ENVIRONMENT"},
 		revisionservice.KindIntegrationDefinition: {"INTEGRATION_CONNECTION"},
 		revisionservice.KindSystemSTT:             {"STT_SERVICE"},
@@ -307,7 +498,6 @@ func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationCon
 }
 
 func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevision) commandOutcome {
-	set.CurrentRevision = nil
 	if revision != nil && revision.State == "PUBLISHED" {
 		set.CurrentRevision = revision
 	}
@@ -403,6 +593,9 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.view", "organization.view"); err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrNotFound
 	}
+	if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &set); err != nil {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", err
+	}
 	includeContent := true
 	if set.Kind == revisionservice.KindPromptTemplate {
 		var fullTarget any = organizationTarget(current.organizationRef)
@@ -484,7 +677,13 @@ func decodeManagedHistoryCursor(token, configurationRef string) (managedHistoryC
 	return cursor, nil
 }
 
-func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context, principal value.Principal, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context, principal value.Principal, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) {
+		return entity.ManagedConfigurationImpact{}, errs.ErrInvalid
+	}
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
@@ -501,7 +700,7 @@ func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context,
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.manage", "organization.manage"); err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrNotFound
 	}
-	impact, err := repository.managedImpactTx(ctx, tx, current, ref, revisionRef)
+	impact, err := repository.managedImpactTx(ctx, tx, current, ref, revisionRef, filter)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
 	}
@@ -527,6 +726,13 @@ func (repository *Repository) GetEffectiveManagedConfiguration(ctx context.Conte
 }
 
 func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pgx.Tx, current scope, set managedSet, projectPermission, organizationPermission string) error {
+	if set.Kind == revisionservice.KindEmailMailbox {
+		var connectionRef, mailboxRef string
+		if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, set.Ref).Scan(&connectionRef, &mailboxRef); err != nil {
+			return errs.ErrNotFound
+		}
+		return repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: connectionRef})
+	}
 	if set.ProjectRef == "" {
 		return repository.requireAccess(ctx, tx, current, organizationPermission, organizationTarget(current.organizationRef))
 	}
@@ -534,7 +740,7 @@ func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pg
 		Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef,
 	})
 }
-func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, current scope, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, current scope, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	set, err := scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationLockSet, pgx.StrictNamedArgs{"organization_id": current.organizationID, "configuration_ref": ref}))
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrNotFound
@@ -543,7 +749,18 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
 	}
-	rows, err := tx.Query(ctx, queryManagedConfigurationListBindings, pgx.StrictNamedArgs{"organization_id": current.organizationID, "configuration_ref": ref})
+	filter = query.Filter{ResourceRef: ref, Category: revision.Ref, Query: filter.Query, Page: filter.Page}
+	cursor, err := decodeCatalogCursor(current, "MANAGED_IMPACT", filter)
+	if err != nil {
+		return entity.ManagedConfigurationImpact{}, err
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := tx.Query(ctx, queryManagedConfigurationListBindings, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "configuration_ref": ref, "revision_ref": revision.Ref,
+		"actor_id": current.actorID, "authority_project": current.authorityProjectID,
+		"organization_managed": set.ProjectRef == "", "evaluated_at": time.Now().UTC(),
+		"query": filter.Query, "cursor_ref": cursor, "page_size": limit + 1,
+	})
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 	}
@@ -551,37 +768,54 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 	result := entity.ManagedConfigurationImpact{ConfigurationRef: ref, TargetRevisionRef: revision.Ref}
 	for rows.Next() {
 		var item entity.ManagedConfigurationConsumer
-		if rows.Scan(&item.Kind, &item.Ref, &item.RevisionRef, &item.Version) != nil {
+		if rows.Scan(&item.Kind, &item.Ref, &item.RevisionRef, &item.Version, &result.Total, &result.Digest) != nil {
 			return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 		}
-		result.Consumers = append(result.Consumers, item)
+		if item.Ref != "" {
+			result.Consumers = append(result.Consumers, item)
+		}
 	}
-	sort.Slice(result.Consumers, func(i, j int) bool {
-		return result.Consumers[i].Kind+"\x00"+result.Consumers[i].Ref < result.Consumers[j].Kind+"\x00"+result.Consumers[j].Ref
-	})
-	digest := sha256.New()
-	_, _ = digest.Write([]byte(ref + "\x00" + revision.Ref))
-	for _, item := range result.Consumers {
-		_, _ = digest.Write([]byte("\x00" + item.Kind + "\x00" + item.Ref + "\x00" + item.RevisionRef + "\x00" + strconv.FormatInt(item.Version, 10)))
+	if rows.Err() != nil {
+		return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 	}
-	result.Digest = hex.EncodeToString(digest.Sum(nil))
+	if len(result.Consumers) > int(limit) {
+		result.Consumers = result.Consumers[:limit]
+		last := result.Consumers[len(result.Consumers)-1]
+		result.NextPageToken = encodeCatalogCursor(current, "MANAGED_IMPACT", filter, last.Kind+":"+last.Ref)
+	}
 	return result, nil
 }
 
 func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, principal value.Principal) (entity.SystemSTTConfiguration, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
+	permission := "organization.view"
+	if principal.CallerWorkload == "stt-tts-service" && principal.Permission == "platform.stt.policy.resolve" {
+		permission = "platform.stt.use"
+	}
+	current, tx, err := repository.authorizedRead(ctx, principal, permission, func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
 	})
 	if err != nil {
 		return entity.SystemSTTConfiguration{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := repository.getSystemSTTConfigurationTx(ctx, tx, current)
+	if err != nil {
+		return entity.SystemSTTConfiguration{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.SystemSTTConfiguration{}, errs.ErrConflict
+	}
+	return result, nil
+}
+
+func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, tx pgx.Tx, current scope) (entity.SystemSTTConfiguration, error) {
 	var result entity.SystemSTTConfiguration
-	var eligible, providerEnabled, apiKey bool
+	var eligible, providerEnabled, apiKey, enabled bool
 	var rawProviderCapabilities []byte
-	err = tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
+	var content string
+	err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": current.organizationID}).Scan(
 		&result.ConfigurationRef, &result.RevisionRef, &result.Revision, &result.Digest, &result.ProviderAccountRef, &result.Model, &result.Language, &result.PermissionKey,
-		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey)
+		&eligible, &providerEnabled, &rawProviderCapabilities, &result.ProviderCredentialGeneration, &apiKey, &enabled, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.SystemSTTConfiguration{}, errs.ErrNotFound
 	}
@@ -590,6 +824,15 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	}
 	if result.PermissionKey != "platform.stt.use" {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PERMISSION_INVALID")
+	}
+	if err := repository.requireAccess(ctx, tx, current, "platform.stt.use", organizationTarget(current.organizationRef)); err != nil {
+		if !errors.Is(err, errs.ErrNotFound) {
+			return entity.SystemSTTConfiguration{}, err
+		}
+		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PERMISSION_DENIED")
+	}
+	if !enabled {
+		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_DISABLED")
 	}
 	if !eligible {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_ACCOUNT_INELIGIBLE")
@@ -604,14 +847,24 @@ func (repository *Repository) GetSystemSTTConfiguration(ctx context.Context, pri
 	if !providerEnabled {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_DISABLED")
 	}
-	if _, allowed := modelcatalog.Find(result.Model, providerReportedModels(providerCapabilities)); !allowed {
+	specification, specificationErr := revisionservice.ParseSystemSTT(content)
+	digest := sha256.Sum256([]byte(content))
+	if specificationErr != nil || hex.EncodeToString(digest[:]) != result.Digest {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_MODEL_UNSUPPORTED")
+	} else {
+		result.Parameters = specification.Parameters
+		result.Enabled = specification.Enabled
+		result.MaximumAudioBytes = specification.MaximumAudioBytes
+		result.MaximumAudioDurationMilliseconds = specification.MaximumAudioDurationMilliseconds
+		result.ProviderTimeoutMilliseconds = specification.ProviderTimeoutMilliseconds
 	}
 	result.Ready = len(result.ReadinessBlockers) == 0
-	if err := tx.Commit(ctx); err != nil {
-		return entity.SystemSTTConfiguration{}, errs.ErrConflict
-	}
 	return result, nil
+}
+
+// Профиль совпадает с исполняемым adapter stt-tts-service, а не каталогом LLM агента.
+func systemSTTModelSupported(model, language string) bool {
+	return (value.STTParameters{}).Validate(model, language) == nil
 }
 
 func (repository *Repository) GetEffectivePromptTemplate(ctx context.Context, principal value.Principal, agentRef string) (entity.InstructionVersion, error) {

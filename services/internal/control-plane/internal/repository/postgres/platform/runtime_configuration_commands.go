@@ -45,7 +45,20 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	environmentVersionRef, _ := newRef("renvv")
 	bindingRef, _ := newRef("aenv")
 	var updatedAgentID, runtimeEnvironmentID, runtimeEnvironmentVersionID string
+	candidates, err := captureRuntimeCatalogPins(ctx, tx, scope{organizationID: organizationID}, runtime.Provider, runtime.Model, nil)
+	if errors.Is(err, errs.ErrConflict) {
+		candidates, err = bootstrapUnpinnedCatalogCandidates(ctx, tx, organizationID, runtime.Provider)
+	}
+	if err != nil {
+		return err
+	}
+	rawCandidates, _ := json.Marshal(candidates)
+	mode := "LEAST_USED"
+	if len(candidates) == 1 {
+		mode = "FIXED"
+	}
 	err = tx.QueryRow(ctx, queryRuntimeConfigurationBootstrapAgent, pgx.StrictNamedArgs{
+		"account_candidates": rawCandidates, "policy_mode": mode, "policy_digest": digestBytes([]byte(mode), rawCandidates),
 		"organization_id": organizationID, "agent_id": agentID, "project_id": projectID,
 		"policy_ref": policyRef, "config_ref": configRef, "overlay_ref": overlayRef,
 		"environment_ref": environmentRef, "environment_version_ref": environmentVersionRef,
@@ -101,7 +114,7 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	specification := entity.RoleImageRecipeInput{
 		BaseImageReference: repository.roleImages.DefaultImageReference[:separator],
 		BaseImageDigest:    repository.roleImages.DefaultImageDigest,
-		SourceRef:          "platform-owned:default-role-image",
+		SourceRef:          platformOwnedRoleImageSource,
 		SourceRevision:     repository.roleImages.DefaultImageDigest,
 		SourceSHA256:       contentSHA256,
 		ContextRef:         repository.roleImages.DefaultImageReference,
@@ -176,6 +189,10 @@ func scanBootstrapRuntimeEnvironmentImage(row interface{ Scan(...any) error }) (
 }
 
 func (repository *Repository) selectProviderAccountForAgent(ctx context.Context, tx pgx.Tx, organizationID, agentRef string) (string, error) {
+	var lockedAgentID string
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAgent, organizationID, agentRef).Scan(&lockedAgentID); err != nil {
+		return "", errs.ErrConflict
+	}
 	var accountID, accountRef, configRef, configDigest, policyRef, policyDigest string
 	var configVersion, policyVersion int64
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef).Scan(
@@ -320,6 +337,14 @@ func (repository *Repository) publishAgentRuntimeConfiguration(ctx context.Conte
 	if err != nil || defaultModel == "" || runtimeRevision == "" {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	_, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	policyRef, _ := newRef("ppol")
 	configRef, _ := newRef("rconf")
 	rawAccounts, _ := json.Marshal(accounts)
@@ -360,6 +385,17 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	if *input.Mutation.ExpectedVersion != agent.agentVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	var publicationSchema runtimecontract.ConfigOverlaySchema
+	if input.Kind == command.PublishConfigOverlayDraft || input.Kind == command.RollbackConfigOverlay {
+		configuration, _, readErr := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		publicationSchema, err = runtimeOverlaySchema(ctx, tx, scope, configuration)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	switch input.Kind {
 	case command.CreateConfigOverlayDraft:
 		if runtimecontract.ValidateConfigOverlayDraftPayload(payload.Content) != nil {
@@ -385,7 +421,15 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		}
 		state := "VALID"
 		problems := []string{}
-		if _, _, parseErr := runtimecontract.CanonicalConfigOverlay(content); parseErr != nil {
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		_, efforts, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, "", configuration.ProviderPolicy.AccountCandidates, false)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if len(runtimecontract.DiagnoseConfigOverlay(content, efforts)) != 0 {
 			state = "INVALID"
 			problems = []string{"i18n:CONFIG_OVERLAY_INVALID_OR_PROTECTED"}
 		}
@@ -404,6 +448,13 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, payload.AgentRef, "")
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+			return commandOutcome{}, err
+		}
 		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedePublishedOverlay, agent.id); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -419,6 +470,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err := tx.QueryRow(ctx, queryRuntimeConfigurationPublishOverlay, pgx.StrictNamedArgs{
 			"agent_id": agent.id, "organization_id": scope.organizationID, "draft_id": draftID,
 			"ref": ref, "content": canonical, "digest": digest, "created_by": scope.actorID,
+			"schema_revision": publicationSchema.Revision, "schema_digest": publicationSchema.Digest,
 		}).Scan(&published); err != nil || published != ref {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -434,6 +486,7 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if err := tx.QueryRow(ctx, queryRuntimeConfigurationRollbackOverlay, pgx.StrictNamedArgs{
 			"agent_id": agent.id, "organization_id": scope.organizationID, "source_ref": payload.PublishedOverlayRef,
 			"ref": ref, "created_by": scope.actorID,
+			"schema_revision": publicationSchema.Revision, "schema_digest": publicationSchema.Digest,
 		}).Scan(&published); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrNotFound
 		} else if err != nil || published != ref {
@@ -445,6 +498,14 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, payload.AgentRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if input.Kind == command.RollbackConfigOverlay {
+		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if err := saveRuntimeOverlayDiagnostics(ctx, tx, scope, &view, input.Kind == command.CreateConfigOverlayDraft || input.Kind == command.ValidateConfigOverlayDraft); err != nil {
 		return commandOutcome{}, err
 	}
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_CONFIG_OVERLAY_CHANGED"), nil
@@ -660,7 +721,8 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	var bindingRef string
 	err = tx.QueryRow(ctx, queryRuntimeConfigurationBindEnvironment, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "environment_ref": payload.EnvironmentRef, "project_id": agent.projectID,
-		"agent_id": agent.id, "expected_version": agent.bindingVersion, "digest": digest, "updated_by": scope.actorID,
+		"version_ref": payload.VersionRef,
+		"agent_id":    agent.id, "expected_version": agent.bindingVersion, "digest": digest, "updated_by": scope.actorID,
 	}).Scan(&bindingRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
@@ -692,10 +754,20 @@ func lockOverlayDraft(ctx context.Context, tx pgx.Tx, organizationID, agentRef s
 }
 
 func (repository *Repository) getRuntimeConfigurationViewTx(ctx context.Context, tx pgx.Tx, scope scope, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	// Caller уже проверил точное право Agent; legacy membership не заменяет эту policy.
 	view, err := repository.scanAgentRuntimeConfigurationView(tx.QueryRow(ctx, queryRuntimeConfigurationGetAgentView,
-		scope.organizationID, ref, scope.role, scope.actorID))
+		scope.organizationID, ref, "OWNER", scope.actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
+	}
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
+	}
+	if err := repository.populateContextBindings(ctx, tx, scope, ref, &view); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if err := populateRuntimeOverlaySchema(ctx, tx, scope, &view); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
 	}
 	return view, nil
 }
@@ -752,7 +824,7 @@ func (repository *Repository) resolveEnvironmentPayload(
 	descriptors := make([]entity.RuntimeSecretDescriptor, 0, len(bindings))
 	for _, binding := range bindings {
 		if !strings.HasPrefix(binding.SecretRef, "sec_") || len(binding.SecretRef) > 96 ||
-			strings.TrimSpace(binding.Name) != binding.Name || binding.Name == "" {
+			strings.TrimSpace(binding.Name) != binding.Name || binding.Name == "" || binding.Revision < 0 {
 			return nil, nil, nil, nil, errs.ErrInvalid
 		}
 		if _, duplicate := seen[binding.Name]; duplicate {
@@ -762,6 +834,7 @@ func (repository *Repository) resolveEnvironmentPayload(
 		item := entity.RuntimeSecretDescriptor{Name: binding.Name}
 		if err := tx.QueryRow(ctx, queryRuntimeSecretResolveBinding, pgx.StrictNamedArgs{
 			"organization_id": organizationID, "project_id": projectID, "secret_ref": binding.SecretRef,
+			"revision": binding.Revision,
 		}).Scan(&item.SecretRef, &item.Namespace, &item.Revision, &item.SecretName, &item.SecretKey, &item.SecretUID, &item.SecretResourceVersion, &item.ContentSHA256); errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, nil, nil, errs.ErrNotFound
 		} else if err != nil {

@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.9
-updated: 2026-09-03
+version: 1.4.11
+updated: 2026-09-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -76,6 +76,15 @@ Gateway не восполняет отсутствующую доменную п
 Разные оси состояния не объединяются молча. Например, публикация, качество,
 модерация и полнота могут образовывать eligibility rule только после явного
 решения и должны одинаково трактоваться всеми read/event paths.
+
+Проекция возможностей, preview и новая runtime materialization используют
+текущие direct/group access bindings с их сроками и exact resource scope.
+Историческая platform role или membership не подменяет прикладные permissions.
+Запрошенная capability агента не расширяет полномочия root initiator. Для
+интеграции проверяются конкретные connection/grant/version/digest и фактически
+закреплённый immutable package; совпадение capability key у двух подключений
+не переносит разрешение между ними. Shipped schema не заменяет более узкую
+UI/Git revision. Выдача capability проверяет полномочия до OCC и receipt replay.
 
 ## Browser SSO и API session
 
@@ -197,6 +206,15 @@ grant. Идентификаторы из полезной нагрузки RPC �
 доверенного ключа, остаётся неизменным при таком обновлении и связывает claim,
 renew и complete одной работы. Ротация ключа меняет поколение и закрыто
 отклоняет продолжение работы, заявленной предыдущим credential.
+
+Локальный signer связывает полный key ID с точными workload и поколением,
+а не только с совпавшим префиксом. Его readback проверяет подпись и весь
+назначенный сервером набор identity claims. Добавление workload одновременно
+охватывает закрытый signer registry, индивидуальные ключи fresh install,
+публичный trust потребителя, issuer profile, PostgreSQL LOGIN/CONNECT/SET,
+реестр доставки, точные Secrets/RBAC и оба направления сетевого пути.
+Проверки итоговых профилей сохраняют изоляцию optional consumer; наличие
+только декларации операции либо Secret mount не доказывает рабочую выдачу.
 
 Ресурс, который выдаёт полномочия либо управляет исполнением, не изменяется
 универсальным CRUD. Специализированная команда назначает owner и начальное
@@ -487,6 +505,15 @@ Projected secret file считается допустимым только пр�
   записи/исполнения;
 - путь, metadata и содержимое credential не попадают в логи и внешние ошибки.
 
+Если документ конфигурации и credentials поставляются одним обновляемым
+Secret, consumer читает их из одного закреплённого поколения AtomicWriter,
+а не разрешает `..data` отдельно для каждого файла. Обслуживаемый snapshot
+заменяется целиком только после строгой проверки и durable revision/digest
+watermark. Ошибка загрузки или rollback закрывает новые операции; старый
+snapshot не превращается в обход проверки свежести у авторитетного владельца.
+Mount с `subPath` не подходит для этого lifecycle, поскольку не получает
+обновления Secret.
+
 Projected ServiceAccount token проверяется отдельным API. Kubelet вправе
 публиковать его с mode `0640` как root-owned либо принадлежащий UID/GID
 non-root процесса из-за Pod `fsGroup`. Во втором случае совпадение владельца и
@@ -722,3 +749,12 @@ disposable среды фиксируется как `NOT RUN` и не ослаб
 `GO-DOC-004`, `GO-DOC-005`, `GO-DOC-006`, `INFRA-DOC-001`.
 Для защищённых агрегатов и графа выполнения дополнительно применяется
 `GUIDE-DOC-006`.
+
+Управляемый UI/GIT IntegrationPackage может удалять network destinations из
+поставленного набора, сохраняя каждый оставшийся tuple целиком. Изменение host,
+port, TLS, source либо configuration field не является сужением. Consumer
+проверяет необходимый destination в фактическом immutable package перед
+операцией; наличие destination только в shipped registry не выдаёт полномочий.
+GitHub API-only package сохраняет API возможности, но не разрешает Git transport
+без точного `github_git` / `github.com:443` / `TLS=REQUIRED`. SHIPPED revision
+по-прежнему требует exact digest, без исторического fallback.
