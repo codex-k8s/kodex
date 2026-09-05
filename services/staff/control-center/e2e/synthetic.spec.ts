@@ -210,7 +210,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           nextActions: ["CREATE_PROJECT"],
         },
         "/api/v1/runs": { items: [], nextActions: [] },
-        "/api/v1/owner-gates": { items: [] },
+        "/api/v1/owner-gates": { items: [], total: 0, nextPageToken: "" },
         "/api/v1/system-assistant": assistant,
         "/api/v1/assistant-conversations": { items: [] },
       };

@@ -21,6 +21,8 @@ import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useGateCatalog } from "@/features/workboard/gate-catalog";
+import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 import {
   decisionActionLayout,
   decisionHistory,
@@ -56,6 +58,25 @@ const projectFilter = ref(
 let preferredGateRef =
   typeof route.query.gateRef === "string" ? route.query.gateRef : "";
 const view = ref<"PENDING" | "HISTORY">("PENDING");
+const search = ref("");
+const catalog = useGateCatalog();
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const addressedGate = ref<OwnerGate>();
+function loadCatalog(more = false): Promise<void> {
+  return catalog.load(
+    {
+      projectRef: projectFilter.value || undefined,
+      query: search.value,
+      view: view.value,
+    },
+    more,
+  );
+}
+function scrollCatalog(event: Event): void {
+  const element = event.currentTarget as HTMLElement;
+  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
+    void loadCatalog(true);
+}
 const selectedRef = ref(preferredGateRef);
 const comments = ref<Record<string, string>>({});
 const decisionDrafts = ref<Record<string, DecisionAction>>({});
@@ -98,12 +119,14 @@ async function loadAddressedGate(): Promise<void> {
       throw new Error("Owner gate readback is outdated");
     view.value = gate.state === "OPEN" ? "PENDING" : "HISTORY";
     platform.gates[gate.ref] = gate;
+    addressedGate.value = gate;
     selectedRef.value = gate.ref;
     preferredGateRef = "";
   } catch (error) {
     if (!controller.signal.aborted && pageMounted) {
       addressedGateProblem.value = asProblem(error);
       selectedRef.value = "";
+      addressedGate.value = undefined;
       if ([403, 404].includes(addressedGateProblem.value.status))
         Reflect.deleteProperty(platform.gates, reference);
     }
@@ -117,12 +140,23 @@ function selectGate(reference: string): void {
   addressedGateLoading.value = false;
   addressedGateProblem.value = undefined;
   preferredGateRef = "";
+  addressedGate.value = undefined;
   selectedRef.value = reference;
+}
+function selectView(value: "PENDING" | "HISTORY"): void {
+  addressedGateController?.abort();
+  addressedGate.value = undefined;
+  addressedGateProblem.value = undefined;
+  addressedGateLoading.value = false;
+  preferredGateRef = "";
+  selectedRef.value =
+    value === view.value ? (visibleItems.value[0]?.gate.ref ?? "") : "";
+  view.value = value;
 }
 
 const inbox = computed(() =>
   decisionInbox(
-    platform.gateList,
+    catalog.items.value,
     platform.projectList,
     projectFilter.value || undefined,
     new Date(),
@@ -131,19 +165,64 @@ const inbox = computed(() =>
 );
 const history = computed(() =>
   decisionHistory(
-    platform.gateList,
+    catalog.items.value,
     platform.projectList,
     projectFilter.value || undefined,
     platform.runList,
   ),
 );
-const visibleItems = computed(() =>
-  view.value === "PENDING" ? inbox.value : history.value,
-);
-const groups = computed(() => groupDecisionInbox(visibleItems.value));
-const selected = computed(() =>
-  visibleItems.value.find((item) => item.gate.ref === selectedRef.value),
-);
+const visibleItems = computed(() => {
+  const byRef = new Map(
+    (view.value === "PENDING" ? inbox.value : history.value).map((item) => [
+      item.gate.ref,
+      item,
+    ]),
+  );
+  return catalog.items.value.flatMap((gate) => {
+    const item = byRef.get(gate.ref);
+    return item ? [item] : [];
+  });
+});
+// Объединяем только соседние группы, сохраняя порядок серверных страниц.
+const groups = computed(() => {
+  const result: ReturnType<typeof groupDecisionInbox> = [];
+  for (const item of visibleItems.value) {
+    const previous = result.at(-1);
+    if (
+      previous?.urgency === item.urgency &&
+      previous.items[0]?.gate.projectRef === item.gate.projectRef
+    )
+      previous.items.push(item);
+    else
+      result.push(
+        ...groupDecisionInbox([item]).map((group) => ({
+          ...group,
+          key: item.gate.ref,
+        })),
+      );
+  }
+  return result;
+});
+const selected = computed(() => {
+  if (addressedGate.value && addressedGate.value.ref === selectedRef.value) {
+    const gate = addressedGate.value;
+    return gate.state === "OPEN"
+      ? decisionInbox(
+          [gate],
+          platform.projectList,
+          undefined,
+          new Date(),
+          platform.runList,
+        )[0]
+      : decisionHistory(
+          [gate],
+          platform.projectList,
+          undefined,
+          platform.runList,
+        )[0];
+  }
+  return visibleItems.value.find((item) => item.gate.ref === selectedRef.value);
+});
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -162,20 +241,11 @@ const selectedAuditEvents = computed(() => {
     .filter((event) => event.resourceRef === selected.value?.gate.ref)
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
 });
-const projectsWithGates = computed(() => {
-  const refs = new Set(
-    platform.gateList
-      .filter((gate) =>
-        view.value === "PENDING" ? gate.state === "OPEN" : true,
-      )
-      .map((gate) => gate.projectRef),
-  );
-  return platform.projectList.filter((project) => refs.has(project.ref));
-});
 
 watch(
   visibleItems,
   (items) => {
+    if (addressedGate.value?.ref === selectedRef.value) return;
     selectedRef.value = gateSelection(
       items.map((item) => item.gate.ref),
       selectedRef.value,
@@ -187,14 +257,15 @@ watch(
 
 watch(
   projectFilter,
-  (value) => {
+  () => {
     if (!pageMounted || routingProject) return;
     addressedGateController?.abort();
     addressedGateLoading.value = false;
     addressedGateProblem.value = undefined;
     preferredGateRef = "";
     selectedRef.value = "";
-    void platform.loadGates(value || undefined);
+    addressedGate.value = undefined;
+    void loadCatalog();
   },
   { flush: "sync" },
 );
@@ -205,6 +276,7 @@ watch(
     addressedGateLoading.value = false;
     addressedGateProblem.value = undefined;
     const project = typeof projectRef === "string" ? projectRef : "";
+    addressedGate.value = undefined;
     const changedProject = project !== projectFilter.value;
     routingProject = true;
     projectFilter.value = project;
@@ -213,7 +285,7 @@ watch(
     selectedRef.value = "";
     if (!pageMounted) return;
     if (changedProject)
-      void platform.loadGates(project || undefined).then(() => {
+      void loadCatalog().then(() => {
         if (pageMounted) return loadAddressedGate();
       });
     else if (preferredGateRef) void loadAddressedGate();
@@ -223,7 +295,34 @@ watch(
 onBeforeUnmount(() => {
   pageMounted = false;
   addressedGateController?.abort();
+  clearTimeout(searchTimer);
+  catalog.reset();
   attachmentLoadGeneration += 1;
+});
+watch(view, () => {
+  if (pageMounted) void loadCatalog();
+});
+watch(
+  () =>
+    platform.gateList
+      .map((gate) => `${gate.ref}:${String(gate.version)}`)
+      .sort()
+      .join("|"),
+  () => {
+    catalog.invalidate({
+      projectRef: projectFilter.value || undefined,
+      query: search.value,
+      view: view.value,
+    });
+  },
+);
+watch(search, () => {
+  clearTimeout(searchTimer);
+  addressedGate.value = undefined;
+  catalog.reset();
+  searchTimer = setTimeout(() => {
+    if (pageMounted) void loadCatalog();
+  }, 250);
 });
 
 function formatDate(value?: string): string {
@@ -365,9 +464,11 @@ async function decide(gate: OwnerGate): Promise<void> {
     Reflect.deleteProperty(decisionDrafts.value, gate.ref);
     Reflect.deleteProperty(validationMessages.value, gate.ref);
     Reflect.deleteProperty(attachmentStates.value, gate.ref);
+    addressedGate.value = undefined;
+    await loadCatalog();
   } catch (error) {
     problem.value = asProblem(error);
-    if (problem.value.kind === "conflict") await platform.loadGates();
+    if (problem.value.kind === "conflict") await loadCatalog();
   } finally {
     busyRef.value = "";
   }
@@ -409,7 +510,7 @@ function submitActionClass(decision?: DecisionAction): string[] {
 onMounted(() => {
   pageMounted = true;
   void Promise.all([
-    platform.loadGates(projectFilter.value || undefined),
+    loadCatalog(),
     platform.loadProjects(),
     platform.loadRuns(),
   ]).then(async () => {
@@ -436,7 +537,7 @@ onMounted(() => {
             :aria-label="$t('decisions.pendingAccessible')"
             :title="$t('decisions.pendingAccessible')"
             :disabled="addressedGateLoading"
-            @click="view = 'PENDING'"
+            @click="selectView('PENDING')"
           >
             {{ $t("decisions.pending") }}
           </button>
@@ -445,32 +546,27 @@ onMounted(() => {
             type="button"
             :aria-pressed="view === 'HISTORY'"
             :disabled="addressedGateLoading"
-            @click="view = 'HISTORY'"
+            @click="selectView('HISTORY')"
           >
             {{ $t("decisions.history") }}
           </button>
         </div>
-        <label>
-          <span>{{ $t("decisions.projectFilter") }}</span>
-          <select v-model="projectFilter">
-            <option value="">{{ $t("decisions.allProjects") }}</option>
-            <option
-              v-for="project in projectsWithGates"
-              :key="project.ref"
-              :value="project.ref"
-            >
-              {{ project.name }}
-            </option>
-          </select>
-        </label>
+        <GateProjectFilter v-model="projectFilter" />
       </div>
-      <span class="decision-toolbar__count">
+      <label
+        ><span>{{ $t("common.search") }}</span
+        ><input v-model="search" type="search" maxlength="200"
+      /></label>
+      <span
+        v-if="catalog.total.value !== undefined"
+        class="decision-toolbar__count"
+      >
         {{
           $t(
             view === "PENDING"
               ? "decisions.pendingCount"
               : "decisions.historyCount",
-            { count: visibleItems.length },
+            { count: catalog.total.value },
           )
         }}
       </span>
@@ -489,12 +585,12 @@ onMounted(() => {
     </div>
     <AsyncState
       :loading="
-        platform.loading.gates ||
+        (catalog.loading.value && !catalog.items.value.length && !selected) ||
         platform.loading.projects ||
         platform.loading.runs
       "
-      :problem="platform.problems.gates"
-      :empty="visibleItems.length === 0"
+      :problem="catalog.problem.value"
+      :empty="visibleItems.length === 0 && !selected"
       :empty-title="
         $t(
           view === 'PENDING'
@@ -509,10 +605,10 @@ onMounted(() => {
             : 'decisions.historyEmptyText',
         )
       "
-      @retry="platform.loadGates()"
+      @retry="loadCatalog()"
     >
       <div class="decision-inbox">
-        <div class="decision-list">
+        <div class="decision-list" @scroll="scrollCatalog">
           <section v-for="group in groups" :key="group.key">
             <header class="decision-group-header">
               <span
@@ -584,6 +680,15 @@ onMounted(() => {
               </button>
             </div>
           </section>
+          <button
+            v-if="catalog.pageToken.value"
+            class="button"
+            type="button"
+            :disabled="catalog.loading.value"
+            @click="loadCatalog(true)"
+          >
+            {{ $t("common.loadMore") }}
+          </button>
         </div>
 
         <aside v-if="selected" class="decision-detail">
@@ -942,6 +1047,7 @@ onMounted(() => {
 <style scoped>
 .decision-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: 12px;
@@ -956,7 +1062,8 @@ onMounted(() => {
 .decision-toolbar label {
   display: grid;
   gap: 5px;
-  min-width: min(320px, 100%);
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.78rem;
   font-weight: 600;
 }

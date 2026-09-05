@@ -8,6 +8,7 @@ for (const width of [390, 2900]) {
     const failures: string[] = [];
     page.on("pageerror", (error) => failures.push(error.message));
     const reads: string[] = [];
+    const lists: URLSearchParams[] = [];
     const gate: OwnerGate = {
       ref: "gate_addressed",
       version: 2,
@@ -58,16 +59,23 @@ for (const width of [390, 2900]) {
         return;
       }
       if (url.pathname === "/api/v1/owner-gates") {
+        lists.push(url.searchParams);
+        const history = !url.searchParams.getAll("states").includes("OPEN");
+        const more = url.searchParams.has("pageToken");
         await route.fulfill({
           json: {
             items: [
               {
                 ...gate,
-                ref: "gate_other",
-                title: "Другое решение первой страницы",
+                state: history ? "APPROVED" : "OPEN",
+                ref: more ? "gate_next" : "gate_other",
+                title: more
+                  ? "Решение следующей страницы"
+                  : "Другое решение первой страницы",
               },
             ],
-            nextPageToken: "more_gates",
+            nextPageToken: more ? "" : "more_gates",
+            total: 91,
           },
         });
         return;
@@ -143,6 +151,13 @@ for (const width of [390, 2900]) {
       "Адресованная история",
     );
     await expect(page.locator(".decision-detail")).toContainText("Одобрено");
+    await expect(page.locator(".decision-toolbar__count")).toContainText("91");
+    expect(
+      lists.some(
+        (params) =>
+          params.getAll("states").length === 5 && !params.has("state"),
+      ),
+    ).toBe(true);
     await page.screenshot({
       path: testInfo.outputPath(`gate-navigation-${String(width)}.png`),
       fullPage: true,
@@ -168,11 +183,42 @@ for (const width of [390, 2900]) {
       fullPage: true,
     });
     await page
+      .getByRole("button", { name: "Decisions awaiting your answer" })
+      .click();
+    await expect(page.locator(".decision-detail h2")).toHaveText(
+      "Другое решение первой страницы",
+    );
+    expect(lists.at(-1)?.getAll("states")).toEqual(["OPEN"]);
+    await page
       .getByRole("button", { name: "Открыть скрытое решение", exact: true })
       .click();
     await expect.poll(() => reads.includes("gate_hidden")).toBe(true);
     await expect(page.locator(".decision-detail")).toHaveCount(0);
     await expect(page.locator(".problem-notice")).toBeVisible();
+    await page.getByRole("button", { name: "Home Gates", exact: true }).click();
+    await expect(page.locator(".home-gate-catalog header")).toContainText("91");
+    await page
+      .getByRole("button", { name: "Expand list", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("91");
+    await dialog.getByRole("searchbox").fill("literal %_");
+    await expect.poll(() => lists.at(-1)?.get("query")).toBe("literal %_");
+    expect(lists.at(-1)?.has("pageToken")).toBe(false);
+    await dialog
+      .getByRole("button", { name: "Load more", exact: true })
+      .click();
+    await expect(dialog.locator(".home-gate-row")).toHaveCount(2);
+    expect(lists.at(-1)?.get("pageToken")).toBe("more_gates");
+    await page.screenshot({
+      path: testInfo.outputPath(`home-gates-${String(width)}.png`),
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
     await page.unrouteAll({ behavior: "wait" });
     expect(failures).toEqual([]);
   });
