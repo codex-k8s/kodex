@@ -82,6 +82,11 @@ Shared workspace policy включает `/workspace/context=READ_ONLY`. Produce
 consumer пересобираются с одной версией shared policy: её digest изменился,
 старый snapshot с четырьмя правилами не принимается. Завершённый WT #1026 не меняется;
 узкие изменения runner находятся в интеграционном WT #1025.
+В CP checkpoint `2bb8df5ba` функция `platform.runtimeWorkspacePolicy()` ещё
+дублирует четыре правила вручную. Owner должен отобразить shared V1 в entity
+либо добавить context RO в том же порядке перед provider auth. До этого claim
+producer несовместим с новым consumer; наличие успешных fake tests не закрывает
+эту интеграционную зависимость.
 
 ## Writable readiness
 
