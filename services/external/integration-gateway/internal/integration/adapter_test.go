@@ -340,9 +340,14 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configurationAny[key] = value
 	}
 	invocation := "inv_fixture01"
+	definitionPackage, err := json.Marshal(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return Request{
-		EmailExecution: &emailapi.ExecutionBinding{InvocationRef: &invocation, Lease: emailapi.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}},
-		DefinitionKey:  definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
+		DefinitionPackage: definitionPackage,
+		EmailExecution:    &emailapi.ExecutionBinding{InvocationRef: &invocation, Lease: emailapi.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}},
+		DefinitionKey:     definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
 		DefinitionDigest: definition.Digest, ConnectionRef: "int_test", CapabilityKey: capability.Key,
 		Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
 		ResourceKind: capability.ResourceScope.Kind, ResourceScope: scope,

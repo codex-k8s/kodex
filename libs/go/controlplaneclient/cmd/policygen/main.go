@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 60, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 61, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -297,7 +297,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
-	case "platform.stt.model-catalog.get", "platform.email.configuration.report",
+	case "platform.provider-accounts.model-catalog.observe", "platform.stt.model-catalog.get", "platform.email.configuration.report",
 		"platform.query.email-mailbox.configurations.list", "platform.query.email-mailbox.configurations.preview", "platform.query.email-mailbox.credentials.list":
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.query.email-mailbox.configurations.get", "platform.query.email-mailbox.credential-receipts.get":

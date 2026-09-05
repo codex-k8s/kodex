@@ -29,7 +29,7 @@ WHERE i.organization_id=$1::uuid
       AND binding->>'ref'=g.ref AND binding->>'capabilityKey'=g.capability_key
 	  AND binding->>'grantVersion'=g.version::text
   )
-  AND (((i.risk='READ' OR (c.definition_key='email' AND i.approval_policy='NONE'))
+  AND (((i.risk='READ' OR c.definition_key='email') AND i.approval_policy='NONE'
         AND NOT i.mailbox_gate_required) OR EXISTS(
       SELECT 1 FROM control_plane.owner_gates gate
       WHERE gate.integration_invocation_id=i.id AND gate.state='APPROVED'

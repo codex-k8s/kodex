@@ -47,9 +47,12 @@ type gitLabPipeline struct {
 }
 
 func (adapter *Adapter) testGitLab(ctx context.Context, request Request, configuration map[string]string) error {
-	definition := adapter.definitions["gitlab"]
+	definition, err := adapter.validateDefinition(request)
+	if err != nil {
+		return err
+	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
-	_, err := adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, adapter.gitLabProjectPath(configuration), nil, nil, "")
+	_, err = adapter.gitLabJSON(ctx, request, capability, configuration, http.MethodGet, adapter.gitLabProjectPath(configuration), nil, nil, "")
 	return err
 }
 

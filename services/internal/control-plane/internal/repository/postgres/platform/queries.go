@@ -81,7 +81,7 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	gates, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
+	gates, _, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -1246,27 +1246,6 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	return result, run.EventSequence, complete, nil
 }
 
-func (repository *Repository) ListOwnerGates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OwnerGate, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, "", err
-	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListownergatesSelectOwnerGatesOrganizationIdRefState, scope.organizationID, filter.ProjectRef, filter.State, scope.role, scope.actorID, boundedPage(filter.Page))
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.OwnerGate
-	for rows.Next() {
-		item, scanErr := scanGate(rows, true)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	return result, "", rows.Err()
-}
-
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
@@ -1715,7 +1694,7 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")
 	}
-	if manageConnection && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
+	if manageConnection && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
 		actions = append(actions, "TEST")
 	}
 	if manageConnection {
@@ -1739,6 +1718,9 @@ func connectionAuthority(ctx context.Context, querier connectionQuerier, scope s
 }
 
 func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
+	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
+		return err
+	}
 	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.role, scope.actorID)
 	if err != nil {
 		return err

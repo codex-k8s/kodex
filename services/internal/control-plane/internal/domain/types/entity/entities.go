@@ -255,6 +255,7 @@ type ManagedConfigurationSet struct {
 	Version                                                        int64
 	CurrentRevision                                                *ManagedConfigurationRevision
 	UpdatedAt                                                      time.Time
+	GitSource                                                      *ManagedConfigurationGitSource
 }
 
 type ManagedConfigurationConsumer struct {
@@ -616,6 +617,7 @@ type IntegrationGrant struct {
 }
 
 type IntegrationConnection struct {
+	TestRequiresApproval                                                    bool
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
 	CredentialSecretKey                                                     string
 	DefinitionVersion, DefinitionDigest                                     string

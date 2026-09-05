@@ -84,6 +84,17 @@ disposable PG. Push/PR/merge/deploy не выполнялись. Listener8082/co
 Зависимости: CP `88f4331ff`, EMAIL `07cd3ee69` и metadata `a67f200623`.
 Каталог остальных vendors сохранён из #1057 без расширения операций.
 
+Интеграция `cde36049c` потребляет EMAIL `2d66e9d67` и CP `af74fc7dc`, включая
+поздний Report, publisher mailbox Secret и atomic consumer reload. На этом
+точном SHA локально PASS: полный gateway race/vet/build, оба integration/
+EMAIL/projection render-профиля и disposable PostgreSQL `.*schedule|integration|email`
+(6.579 с). Проверены schedule race/retry/prompt snapshot/expiry, current revision
+и continuation readback, immutable occurrence, integration gates/cardinality,
+connection tests/workload binding и EMAIL owner lifecycle. Gateway source
+идентичен `7253f43b8`, EMAIL source идентичен `2d66e9d67`; поздний CP Report
+больше не остаётся непотреблённой зависимостью. Live/CNI/browser/staging и D5
+UI/credential write lifecycle по-прежнему не доказаны этими локальными тестами.
+
 EMAIL `2759e04aa` исправляет отсутствие UID и папки в POP fetch/download/
 attachment list; HTTPS/POP fixture проверяет все три операции с двумя UID и
 обоими TLS режимами. Consumer требует exact UID для POP и IMAP без исключения

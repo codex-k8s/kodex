@@ -707,6 +707,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	if _, err := service.GetEffectiveManagedConfiguration(ctx, integrationReader, "PROMPT_TEMPLATE", "INTEGRATION_CONNECTION", connection.Connection.Ref); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("generic managed configuration kind escalation was accepted: %v", err)
 	}
+	testManagedIntegrationPackageExecution(t, ctx, repository, service, owner, connection.Connection.Ref, integrationDefinition)
 	gitContent := "Git-owned prompt for {{ .project.ref }}."
 	gitDigest := sha256.Sum256([]byte(gitContent))
 	var gitConfigurationID, gitRevisionID string
@@ -4258,6 +4259,7 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || final.Run == nil || final.Run.State != "SUCCEEDED" {
 		t.Fatalf("approve reworked workflow: run=%#v err=%v", final.Run, err)
 	}
+	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
