@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-rpc-authority-stt-tts-service-workload
+  annotations: {argocd.argoproj.io/sync-wave: "-9"}
+spec:
+  secretName: internal-rpc-authority-stt-tts-service-workload-tls
+  duration: 720h
+  renewBefore: 120h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - stt-tts-service
+    - stt-tts-service.kodex-system.svc
+    - stt-tts-service.kodex-system.svc.cluster.local
+  uris: [spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service]
+  usages: [server auth, client auth]
+  issuerRef: {name: kodex-installation-ca, kind: Issuer}

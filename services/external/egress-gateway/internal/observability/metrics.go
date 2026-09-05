@@ -119,7 +119,7 @@ func normalizeReason(value string) string {
 	switch value {
 	case "none", "malformed", "method", "authority", "body", "credentials", "oversized", "policy",
 		"missing_sni", "duplicate_sni", "sni_mismatch", "ech", "timeout", "nxdomain", "truncated",
-		"bounds", "special_address", "empty", "connection_limit", "dial_failure", "io", "shutdown":
+		"bounds", "special_address", "empty", "connection_limit", "dial_failure", "io", "shutdown", "not_ready":
 		return value
 	default:
 		return "unknown"

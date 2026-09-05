@@ -22,6 +22,9 @@ const (
 	APIVersion       = "kodex.io/v1alpha1"
 	Kind             = "EgressGatewayPolicy"
 	MaximumFileBytes = 64 << 10
+	STTProfileName   = "openai-stt"
+	STTWorkload      = "stt-tts-service"
+	STTOperation     = "openai.transcription"
 )
 
 // Document — версионированный machine policy contract.
@@ -42,6 +45,15 @@ type Metadata struct {
 type Spec struct {
 	DNS          DNSConfig     `json:"dns"`
 	Limits       Limits        `json:"limits"`
+	Destinations []Destination `json:"destinations"`
+	Profiles     []Profile     `json:"profiles,omitempty"`
+}
+
+// Profile связывает отдельный listener с закрытым workload/operation набором.
+type Profile struct {
+	Name         string        `json:"name"`
+	Workload     string        `json:"workload"`
+	Operation    string        `json:"operation"`
 	Destinations []Destination `json:"destinations"`
 }
 
@@ -82,6 +94,7 @@ type Active struct {
 	document Document
 	digest   string
 	allowed  map[string]struct{}
+	profile  *Profile
 }
 
 // LoadFile bounded-читает, строго валидирует и сверяет revision/digest.
@@ -177,9 +190,36 @@ func (active *Active) Limits() Limits { return active.document.Spec.Limits }
 
 // Destinations возвращает копию exact allowlist.
 func (active *Active) Destinations() []Destination {
-	result := make([]Destination, len(active.document.Spec.Destinations))
-	copy(result, active.document.Spec.Destinations)
+	destinations := active.document.Spec.Destinations
+	if active.profile != nil {
+		destinations = active.profile.Destinations
+	}
+	result := make([]Destination, len(destinations))
+	copy(result, destinations)
 	return result
+}
+
+// ForProfile разрешает только зарегистрированный профиль того же snapshot.
+func (active *Active) ForProfile(name string) (*Active, error) {
+	for _, profile := range active.document.Spec.Profiles {
+		if profile.Name != name {
+			continue
+		}
+		allowed := make(map[string]struct{}, len(profile.Destinations))
+		for _, destination := range profile.Destinations {
+			allowed[net.JoinHostPort(destination.Hostname, strconv.Itoa(destination.Port))] = struct{}{}
+		}
+		return &Active{document: active.document, digest: active.digest, allowed: allowed, profile: &profile}, nil
+	}
+	return nil, errors.New("egress policy profile is not registered")
+}
+
+// ProfileIdentity возвращает только проверенные серверные идентификаторы.
+func (active *Active) ProfileIdentity() (name, workload, operation string) {
+	if active.profile != nil {
+		return active.profile.Name, active.profile.Workload, active.profile.Operation
+	}
+	return "default", "", ""
 }
 
 // Allows проверяет exact normalized hostname и port.
@@ -266,6 +306,18 @@ func validate(document *Document) error {
 	sort.Slice(document.Spec.Destinations, func(left, right int) bool {
 		return document.Spec.Destinations[left].Hostname < document.Spec.Destinations[right].Hostname
 	})
+	if len(document.Spec.Profiles) > 1 {
+		return errors.New("policy profiles are invalid")
+	}
+	for _, profile := range document.Spec.Profiles {
+		if profile.Name != STTProfileName || profile.Workload != STTWorkload || profile.Operation != STTOperation ||
+			len(profile.Destinations) != 1 || profile.Destinations[0] != (Destination{Hostname: "api.openai.com", Port: 443}) {
+			return errors.New("policy profile is not registered")
+		}
+		if _, exists := seen["api.openai.com:443"]; !exists {
+			return errors.New("policy profile destination is not registered")
+		}
+	}
 	return nil
 }
 
@@ -305,6 +357,16 @@ func canonicalJSON(document Document) ([]byte, error) {
 				"writeTimeoutMilliseconds":       document.Spec.Limits.WriteTimeoutMilliseconds,
 			},
 		},
+	}
+	if len(document.Spec.Profiles) > 0 {
+		profiles := make([]map[string]any, 0, len(document.Spec.Profiles))
+		for _, profile := range document.Spec.Profiles {
+			profiles = append(profiles, map[string]any{
+				"name": profile.Name, "workload": profile.Workload, "operation": profile.Operation,
+				"destinations": []map[string]any{{"hostname": profile.Destinations[0].Hostname, "port": profile.Destinations[0].Port}},
+			})
+		}
+		canonical["spec"].(map[string]any)["profiles"] = profiles
 	}
 	return json.Marshal(canonical)
 }

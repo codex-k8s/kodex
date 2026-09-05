@@ -278,6 +278,8 @@ func TestGitLabMetadataUsesExactProjectScope(t *testing.T) {
 	}
 }
 
+var testDefinitions = sync.OnceValues(integrationpackage.LoadShipped)
+
 func testAdapter(t *testing.T) *Adapter {
 	t.Helper()
 	root := t.TempDir()
@@ -285,7 +287,7 @@ func testAdapter(t *testing.T) *Adapter {
 	if err != nil {
 		t.Fatal(err)
 	}
-	definitions, err := integrationpackage.LoadShipped()
+	definitions, err := testDefinitions()
 	if err != nil {
 		t.Fatal(err)
 	}

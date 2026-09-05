@@ -12,6 +12,7 @@ spec:
     app.kubernetes.io/component: platform-egress
   ports:
     - {name: connect, port: 8080, targetPort: connect, protocol: TCP}
+    - {name: stt-connect, port: 8081, targetPort: stt-connect, protocol: TCP}
 ---
 apiVersion: v1
 kind: Service

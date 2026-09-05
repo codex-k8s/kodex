@@ -3,7 +3,7 @@
   "kind": "EgressGatewayPolicy",
   "metadata": {
     "name": "egress-gateway",
-    "revision": "2026-08-28.1"
+    "revision": "2026-09-05.1"
   },
   "spec": {
     "dns": {
@@ -28,6 +28,12 @@
       "writeTimeoutMilliseconds": 5000,
       "shutdownTimeoutMilliseconds": 20000
     },
+    "profiles": [{
+      "name": "openai-stt",
+      "workload": "stt-tts-service",
+      "operation": "openai.transcription",
+      "destinations": [{"hostname": "api.openai.com", "port": 443}]
+    }],
     "destinations": [
       {"hostname": "api.openai.com", "port": 443},
       {"hostname": "auth.openai.com", "port": 443},

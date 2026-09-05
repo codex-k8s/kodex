@@ -30,7 +30,7 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 		verified.GetRequestBindingMode() != internalrpcauth.RequestBindingStream ||
 		verified.GetTargetWorkloadId() != expectedWorkloadID || verified.GetCallerWorkloadId() != expectedCaller ||
 		verified.GetFullMethod() != fullMethod || verified.GetOperationId() != transcribeOperation ||
-		verified.GetPermission() != value.PermissionTranscribe || verified.GetAuthority() == nil ||
+		verified.GetPermission() != value.TransportPermissionTranscribe || verified.GetAuthority() == nil ||
 		verified.GetExpiresAt() == nil || !verified.GetExpiresAt().IsValid() ||
 		verified.GetSourceRevision() == 0 || verified.GetSourceRevision() > maximumAuthorityRevision ||
 		!validSHA256(verified.GetSourceDigestSha256()) || uuid.Validate(verified.GetJti()) != nil {
@@ -45,14 +45,17 @@ func Principal(ctx context.Context, fullMethod string) (value.Principal, error) 
 	if err != nil {
 		return value.Principal{}, errors.New("verified STT tenant is invalid")
 	}
-	project, err := identity(authority.GetProject())
-	if err != nil {
-		return value.Principal{}, errors.New("verified STT project is invalid")
+	var project verifiedIdentity
+	if authority.GetProject() != nil {
+		project, err = identity(authority.GetProject())
+		if err != nil {
+			return value.Principal{}, errors.New("verified STT project is invalid")
+		}
 	}
 	return value.Principal{
 		ActorID: actor.id, TenantID: tenant.id, ProjectID: project.id,
 		Actor: actor.provenance, Tenant: tenant.provenance, Project: project.provenance,
-		RequestID: verified.GetJti(), Permission: verified.GetPermission(),
+		RequestID: verified.GetJti(), Permission: value.PermissionTranscribe,
 		AuthorityRevision: verified.GetSourceRevision(), AuthorityDigestSHA256: verified.GetSourceDigestSha256(),
 		ExpiresAt: verified.GetExpiresAt().AsTime().UTC(),
 	}, nil

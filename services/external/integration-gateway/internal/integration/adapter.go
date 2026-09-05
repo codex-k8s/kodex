@@ -336,6 +336,20 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	if err != nil || hex.EncodeToString(inputDigest[:]) != request.InputDigest {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
+	if strings.HasPrefix(request.Operation, "github.") || strings.HasPrefix(request.Operation, "gitlab.") {
+		for _, field := range []string{"path", "file_path", "branch", "ref", "head", "base", "target_branch", "source_branch"} {
+			if value, ok := request.Input[field].(string); ok && !validRepositoryPath(value, field == "path") {
+				return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			}
+		}
+	}
+	if request.Operation == "github.actions.workflow.dispatch" {
+		if raw, ok := request.Input["workflow_inputs"].(string); ok {
+			if _, err := githubWorkflowInputs(raw); err != nil {
+				return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
+			}
+		}
+	}
 	return definition, capability, canonicalInput, configuration, nil
 }
 
@@ -463,7 +477,7 @@ func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capa
 	case "github.issue.update":
 		return adapter.updateGitHubIssue(ctx, client, owner, repository, request, capability, canonicalInput)
 	default:
-		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return adapter.executeGitHubCatalog(ctx, client, owner, repository, request, capability, canonicalInput)
 	}
 }
 
@@ -556,7 +570,13 @@ func (adapter *Adapter) githubClient(ctx context.Context, credential *Credential
 	if err != nil {
 		return nil, func() {}, err
 	}
-	client := github.NewClient(adapter.githubHTTPClient).WithAuthToken(string(value))
+	httpClient := *adapter.githubHTTPClient
+	transport := httpClient.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	httpClient.Transport = githubBoundedTransport{next: transport}
+	client := github.NewClient(&httpClient).WithAuthToken(string(value))
 	client.BaseURL = adapter.githubBaseURL
 	return client, func() { clear(value) }, nil
 }

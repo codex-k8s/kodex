@@ -37,8 +37,8 @@ type SpeechToTextServiceClient interface {
 	// CheckReadiness проверяет только локальную способность принимать RPC,
 	// локальный verifier/config и локальные обязательные ресурсы.
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
-	// CheckProtectedPath — диагностический readback полного защищённого пути.
-	// Он не является Kubernetes readiness и не выполняет provider effect.
+	// CheckProtectedPath без пользовательского authority не подтверждает
+	// доступность микрофона. Полная проверка: Transcribe с availability_check.
 	CheckProtectedPath(ctx context.Context, in *CheckProtectedPathRequest, opts ...grpc.CallOption) (*CheckProtectedPathResponse, error)
 }
 
@@ -96,8 +96,8 @@ type SpeechToTextServiceServer interface {
 	// CheckReadiness проверяет только локальную способность принимать RPC,
 	// локальный verifier/config и локальные обязательные ресурсы.
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
-	// CheckProtectedPath — диагностический readback полного защищённого пути.
-	// Он не является Kubernetes readiness и не выполняет provider effect.
+	// CheckProtectedPath без пользовательского authority не подтверждает
+	// доступность микрофона. Полная проверка: Transcribe с availability_check.
 	CheckProtectedPath(context.Context, *CheckProtectedPathRequest) (*CheckProtectedPathResponse, error)
 	mustEmbedUnimplementedSpeechToTextServiceServer()
 }
