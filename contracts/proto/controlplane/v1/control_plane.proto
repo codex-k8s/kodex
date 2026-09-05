@@ -12,6 +12,7 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc GetRuntimeRevisionDiff(GetRuntimeRevisionDiffRequest) returns (GetRuntimeRevisionDiffResponse);
   rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
   rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
   rpc GetSkillBundle(GetSkillBundleRequest) returns (GetSkillBundleResponse);
@@ -2522,6 +2523,56 @@ message ListAuditEventsRequest {
 message ListAuditEventsResponse {
   repeated AuditEvent events = 1;
   PageInfo page = 2;
+}
+
+// Публичная проекция не содержит рабочего snapshot, значений или локаторов.
+message PublicRuntimeRevisionIdentity {
+  string ref = 1;
+  int64 version = 2;
+  string run_ref = 3;
+  string session_ref = 4;
+  string turn_ref = 5;
+  int32 attempt = 6;
+  string revision_digest = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+enum RuntimeRevisionDiffComponent {
+  RUNTIME_REVISION_DIFF_COMPONENT_UNSPECIFIED = 0;
+  RUNTIME_REVISION_DIFF_COMPONENT_PROVIDER = 1;
+  RUNTIME_REVISION_DIFF_COMPONENT_MODEL = 2;
+  RUNTIME_REVISION_DIFF_COMPONENT_RUNTIME_PROFILE = 3;
+  RUNTIME_REVISION_DIFF_COMPONENT_RUNTIME_CONFIGURATION = 4;
+  RUNTIME_REVISION_DIFF_COMPONENT_PROVIDER_POLICY = 5;
+  RUNTIME_REVISION_DIFF_COMPONENT_CONFIG_OVERLAY = 6;
+  RUNTIME_REVISION_DIFF_COMPONENT_ENVIRONMENT = 7;
+  RUNTIME_REVISION_DIFF_COMPONENT_ENVIRONMENT_BINDING = 8;
+  RUNTIME_REVISION_DIFF_COMPONENT_INSTRUCTION = 9;
+  RUNTIME_REVISION_DIFF_COMPONENT_INTEGRATION_GRANTS = 10;
+  RUNTIME_REVISION_DIFF_COMPONENT_IMAGE = 11;
+}
+
+message RuntimeRevisionDiffValue {
+  string ref = 1;
+  int64 version = 2;
+  string digest = 3;
+  string revision = 4;
+}
+message RuntimeRevisionDiffChange {
+  RuntimeRevisionDiffComponent component = 1;
+  RuntimeRevisionDiffValue previous = 2;
+  RuntimeRevisionDiffValue current = 3;
+}
+message GetRuntimeRevisionDiffRequest {
+  string run_ref = 1;
+  // Пустое значение выбирает последнюю сохранённую ревизию данного Run.
+  string current_revision_ref = 2;
+}
+message GetRuntimeRevisionDiffResponse {
+  PublicRuntimeRevisionIdentity current = 1;
+  // Сервер выбирает непосредственно предшествующую ревизию той же Session.
+  PublicRuntimeRevisionIdentity previous = 2;
+  repeated RuntimeRevisionDiffChange changes = 3;
 }
 
 message RuntimeRevisionSnapshot {

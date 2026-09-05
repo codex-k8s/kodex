@@ -10,6 +10,25 @@ updated: 2026-09-05
 
 # Граница проверки
 
+## D4, CP 8e532589e
+
+Session actor → GET `runs/{runRef}/runtime-revision-diff` с optional
+`currentRevisionRef` → generated GetRuntimeRevisionDiff → policy56
+`platform.query.runtime-revisions.diff` (resource=run_ref, version/attempt/
+idempotency FORBIDDEN) → CP run.view и predecessor eligibility → repeatable-read
+owner query двух persisted revisions одной Session → safe typed identity/diff
+→ PWA continuation view. Предыдущую ревизию выбирает только сервер. Это query
+без события или изменения lifecycle. Новая materialization выполняется
+существующим continuation RPC отдельно; diff не доказывает её readiness.
+
+Публичный DTO не содержит worker snapshot, prompt, credential, локаторы или
+значения конфигурации. HTTP проверяет exact requested run/revision, общую
+session пары, known components и разрешённые поля каждого компонента.
+Первая ревизия не содержит previous; отсутствие изменений даёт пустой список.
+Неизвестные либо противоречивые upstream данные отклоняются 502; hidden/no
+materialization CP возвращает 404. Используется прежний защищённый CP client
+и deploy ownership gateway, без новых сетевых портов и Secrets.
+
 ## Дополнение D2/D3, CP 9ad5b58d1
 
 Home/Kanban: session → `GET runs?states=RUNNING&states=QUEUED` и

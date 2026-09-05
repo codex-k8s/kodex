@@ -3240,6 +3240,51 @@ func (e RuntimeNetworkProtocol) Valid() bool {
 	}
 }
 
+// Defines values for RuntimeRevisionDiffChangeComponent.
+const (
+	RuntimeRevisionDiffChangeComponentCONFIGOVERLAY        RuntimeRevisionDiffChangeComponent = "CONFIG_OVERLAY"
+	RuntimeRevisionDiffChangeComponentENVIRONMENT          RuntimeRevisionDiffChangeComponent = "ENVIRONMENT"
+	RuntimeRevisionDiffChangeComponentENVIRONMENTBINDING   RuntimeRevisionDiffChangeComponent = "ENVIRONMENT_BINDING"
+	RuntimeRevisionDiffChangeComponentIMAGE                RuntimeRevisionDiffChangeComponent = "IMAGE"
+	RuntimeRevisionDiffChangeComponentINSTRUCTION          RuntimeRevisionDiffChangeComponent = "INSTRUCTION"
+	RuntimeRevisionDiffChangeComponentINTEGRATIONGRANTS    RuntimeRevisionDiffChangeComponent = "INTEGRATION_GRANTS"
+	RuntimeRevisionDiffChangeComponentMODEL                RuntimeRevisionDiffChangeComponent = "MODEL"
+	RuntimeRevisionDiffChangeComponentPROVIDER             RuntimeRevisionDiffChangeComponent = "PROVIDER"
+	RuntimeRevisionDiffChangeComponentPROVIDERPOLICY       RuntimeRevisionDiffChangeComponent = "PROVIDER_POLICY"
+	RuntimeRevisionDiffChangeComponentRUNTIMECONFIGURATION RuntimeRevisionDiffChangeComponent = "RUNTIME_CONFIGURATION"
+	RuntimeRevisionDiffChangeComponentRUNTIMEPROFILE       RuntimeRevisionDiffChangeComponent = "RUNTIME_PROFILE"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeRevisionDiffChangeComponent enum.
+func (e RuntimeRevisionDiffChangeComponent) Valid() bool {
+	switch e {
+	case RuntimeRevisionDiffChangeComponentCONFIGOVERLAY:
+		return true
+	case RuntimeRevisionDiffChangeComponentENVIRONMENT:
+		return true
+	case RuntimeRevisionDiffChangeComponentENVIRONMENTBINDING:
+		return true
+	case RuntimeRevisionDiffChangeComponentIMAGE:
+		return true
+	case RuntimeRevisionDiffChangeComponentINSTRUCTION:
+		return true
+	case RuntimeRevisionDiffChangeComponentINTEGRATIONGRANTS:
+		return true
+	case RuntimeRevisionDiffChangeComponentMODEL:
+		return true
+	case RuntimeRevisionDiffChangeComponentPROVIDER:
+		return true
+	case RuntimeRevisionDiffChangeComponentPROVIDERPOLICY:
+		return true
+	case RuntimeRevisionDiffChangeComponentRUNTIMECONFIGURATION:
+		return true
+	case RuntimeRevisionDiffChangeComponentRUNTIMEPROFILE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeSecretState.
 const (
 	RuntimeSecretStateACTIVE  RuntimeSecretState = "ACTIVE"
@@ -4454,46 +4499,46 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 
 // Defines values for VFSNodeKind.
 const (
-	AGENT       VFSNodeKind = "AGENT"
-	AUTOMATION  VFSNodeKind = "AUTOMATION"
-	AVATAR      VFSNodeKind = "AVATAR"
-	DIRECTORY   VFSNodeKind = "DIRECTORY"
-	ENVIRONMENT VFSNodeKind = "ENVIRONMENT"
-	INPUT       VFSNodeKind = "INPUT"
-	MEMORY      VFSNodeKind = "MEMORY"
-	PROJECT     VFSNodeKind = "PROJECT"
-	RESULT      VFSNodeKind = "RESULT"
-	RUN         VFSNodeKind = "RUN"
-	SKILL       VFSNodeKind = "SKILL"
-	WORKFLOW    VFSNodeKind = "WORKFLOW"
+	VFSNodeKindAGENT       VFSNodeKind = "AGENT"
+	VFSNodeKindAUTOMATION  VFSNodeKind = "AUTOMATION"
+	VFSNodeKindAVATAR      VFSNodeKind = "AVATAR"
+	VFSNodeKindDIRECTORY   VFSNodeKind = "DIRECTORY"
+	VFSNodeKindENVIRONMENT VFSNodeKind = "ENVIRONMENT"
+	VFSNodeKindINPUT       VFSNodeKind = "INPUT"
+	VFSNodeKindMEMORY      VFSNodeKind = "MEMORY"
+	VFSNodeKindPROJECT     VFSNodeKind = "PROJECT"
+	VFSNodeKindRESULT      VFSNodeKind = "RESULT"
+	VFSNodeKindRUN         VFSNodeKind = "RUN"
+	VFSNodeKindSKILL       VFSNodeKind = "SKILL"
+	VFSNodeKindWORKFLOW    VFSNodeKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeKind enum.
 func (e VFSNodeKind) Valid() bool {
 	switch e {
-	case AGENT:
+	case VFSNodeKindAGENT:
 		return true
-	case AUTOMATION:
+	case VFSNodeKindAUTOMATION:
 		return true
-	case AVATAR:
+	case VFSNodeKindAVATAR:
 		return true
-	case DIRECTORY:
+	case VFSNodeKindDIRECTORY:
 		return true
-	case ENVIRONMENT:
+	case VFSNodeKindENVIRONMENT:
 		return true
-	case INPUT:
+	case VFSNodeKindINPUT:
 		return true
-	case MEMORY:
+	case VFSNodeKindMEMORY:
 		return true
-	case PROJECT:
+	case VFSNodeKindPROJECT:
 		return true
-	case RESULT:
+	case VFSNodeKindRESULT:
 		return true
-	case RUN:
+	case VFSNodeKindRUN:
 		return true
-	case SKILL:
+	case VFSNodeKindSKILL:
 		return true
-	case WORKFLOW:
+	case VFSNodeKindWORKFLOW:
 		return true
 	default:
 		return false
@@ -6800,6 +6845,18 @@ type ProviderDefinitionPage struct {
 	NextPageToken string               `json:"nextPageToken"`
 }
 
+// PublicRuntimeRevisionIdentity defines model for PublicRuntimeRevisionIdentity.
+type PublicRuntimeRevisionIdentity struct {
+	Attempt        int        `json:"attempt"`
+	CreatedAt      Timestamp  `json:"createdAt"`
+	Ref            OpaqueRef  `json:"ref"`
+	RevisionDigest string     `json:"revisionDigest"`
+	RunRef         OpaqueRef  `json:"runRef"`
+	SessionRef     OpaqueRef  `json:"sessionRef"`
+	TurnRef        *OpaqueRef `json:"turnRef,omitempty"`
+	Version        int64      `json:"version"`
+}
+
 // RoleEnvironment defines model for RoleEnvironment.
 type RoleEnvironment struct {
 	Available                 bool                      `json:"available"`
@@ -7469,6 +7526,35 @@ type RuntimeResourcePolicy struct {
 	EphemeralStorageRequestMib int64 `json:"ephemeralStorageRequestMib"`
 	MemoryLimitMib             int64 `json:"memoryLimitMib"`
 	MemoryRequestMib           int64 `json:"memoryRequestMib"`
+}
+
+// RuntimeRevisionDiff defines model for RuntimeRevisionDiff.
+type RuntimeRevisionDiff struct {
+	Changes  []RuntimeRevisionDiffChange    `json:"changes"`
+	Current  PublicRuntimeRevisionIdentity  `json:"current"`
+	Previous *PublicRuntimeRevisionIdentity `json:"previous,omitempty"`
+}
+
+// RuntimeRevisionDiffChange defines model for RuntimeRevisionDiffChange.
+type RuntimeRevisionDiffChange struct {
+	Component RuntimeRevisionDiffChangeComponent `json:"component"`
+
+	// Current Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+	Current RuntimeRevisionDiffValue `json:"current"`
+
+	// Previous Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+	Previous *RuntimeRevisionDiffValue `json:"previous,omitempty"`
+}
+
+// RuntimeRevisionDiffChangeComponent defines model for RuntimeRevisionDiffChange.Component.
+type RuntimeRevisionDiffChangeComponent string
+
+// RuntimeRevisionDiffValue Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+type RuntimeRevisionDiffValue struct {
+	Digest   *string `json:"digest,omitempty"`
+	Ref      *string `json:"ref,omitempty"`
+	Revision *string `json:"revision,omitempty"`
+	Version  *int64  `json:"version,omitempty"`
 }
 
 // RuntimeSecret defines model for RuntimeSecret.
@@ -9676,6 +9762,12 @@ type ListRunEventsParams struct {
 	Limit         *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetRuntimeRevisionDiffParams defines parameters for GetRuntimeRevisionDiff.
+type GetRuntimeRevisionDiffParams struct {
+	// CurrentRevisionRef Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+	CurrentRevisionRef *OpaqueRef `form:"currentRevisionRef,omitempty" json:"currentRevisionRef,omitempty"`
+}
+
 // DiscardRuntimeEnvironmentDraftParams defines parameters for DiscardRuntimeEnvironmentDraft.
 type DiscardRuntimeEnvironmentDraftParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -10933,6 +11025,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runs/{runRef}/graph)
 	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (GET /api/v1/runs/{runRef}/runtime-revision-diff)
+	GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Request, runRef RunRef, params GetRuntimeRevisionDiffParams)
 
 	// (DELETE /api/v1/runtime-environment-drafts/{draftRef})
 	DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, draftRef RuntimeEnvironmentDraftRef, params DiscardRuntimeEnvironmentDraftParams)
@@ -26575,6 +26670,54 @@ func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetRuntimeRevisionDiff operation middleware
+func (siw *ServerInterfaceWrapper) GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRuntimeRevisionDiffParams
+
+	// ------------- Optional query parameter "currentRevisionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "currentRevisionRef", r.URL.Query(), &params.CurrentRevisionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "currentRevisionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "currentRevisionRef", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRuntimeRevisionDiff(w, r, runRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DiscardRuntimeEnvironmentDraft operation middleware
 func (siw *ServerInterfaceWrapper) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -32449,6 +32592,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/runtime-revision-diff", wrapper.GetRuntimeRevisionDiff)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.DiscardRuntimeEnvironmentDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.GetRuntimeEnvironmentDraft)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.SaveRuntimeEnvironmentDraft)

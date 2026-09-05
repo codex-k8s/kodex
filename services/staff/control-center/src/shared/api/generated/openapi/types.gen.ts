@@ -1805,6 +1805,39 @@ export type RunGraph = {
     edges: Array<RunEdge>;
 };
 
+export type PublicRuntimeRevisionIdentity = {
+    ref: OpaqueRef;
+    version: number;
+    runRef: OpaqueRef;
+    sessionRef: OpaqueRef;
+    turnRef?: OpaqueRef;
+    attempt: number;
+    revisionDigest: string;
+    createdAt: Timestamp;
+};
+
+/**
+ * Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+ */
+export type RuntimeRevisionDiffValue = {
+    ref?: string;
+    version?: number;
+    digest?: string;
+    revision?: string;
+};
+
+export type RuntimeRevisionDiffChange = {
+    component: 'PROVIDER' | 'MODEL' | 'RUNTIME_PROFILE' | 'RUNTIME_CONFIGURATION' | 'PROVIDER_POLICY' | 'CONFIG_OVERLAY' | 'ENVIRONMENT' | 'ENVIRONMENT_BINDING' | 'INSTRUCTION' | 'INTEGRATION_GRANTS' | 'IMAGE';
+    previous?: RuntimeRevisionDiffValue;
+    current: RuntimeRevisionDiffValue;
+};
+
+export type RuntimeRevisionDiff = {
+    current: PublicRuntimeRevisionIdentity;
+    previous?: PublicRuntimeRevisionIdentity;
+    changes: Array<RuntimeRevisionDiffChange>;
+};
+
 export type RunWorkspace = {
     run: Run;
     graph: RunGraph;
@@ -6180,6 +6213,38 @@ export type CreateRunResponses = {
 };
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];
+
+export type GetRuntimeRevisionDiffData = {
+    body?: never;
+    path: {
+        runRef: OpaqueRef;
+    };
+    query?: {
+        /**
+         * Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+         */
+        currentRevisionRef?: OpaqueRef;
+    };
+    url: '/api/v1/runs/{runRef}/runtime-revision-diff';
+};
+
+export type GetRuntimeRevisionDiffErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeRevisionDiffError = GetRuntimeRevisionDiffErrors[keyof GetRuntimeRevisionDiffErrors];
+
+export type GetRuntimeRevisionDiffResponses = {
+    /**
+     * Безопасные изменения относительно предыдущей ревизии той же сессии; значения, prompts и worker snapshot отсутствуют.
+     */
+    200: RuntimeRevisionDiff;
+};
+
+export type GetRuntimeRevisionDiffResponse = GetRuntimeRevisionDiffResponses[keyof GetRuntimeRevisionDiffResponses];
 
 export type GetRunData = {
     body?: never;
