@@ -4590,6 +4590,8 @@ message ManagedConfigurationImpact {
   string target_revision_ref = 2;
   repeated ManagedConfigurationConsumer consumers = 3;
   string digest = 4;
+  int64 total = 5;
+  PageInfo page = 6;
 }
 message ManagedConfigurationBindingSnapshot {
   string binding_ref = 1;
@@ -4808,6 +4810,8 @@ message ListManagedConfigurationHistoryResponse {
 message GetManagedConfigurationImpactRequest {
   string configuration_ref = 1;
   string revision_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
 }
 message GetManagedConfigurationImpactResponse { ManagedConfigurationImpact impact = 1; }
 
