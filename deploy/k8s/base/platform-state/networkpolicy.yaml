@@ -21,6 +21,7 @@ spec:
                   - control-api-gateway
                   - control-plane
                   - integration-gateway
+                  - email-bridge
                   - internal-rpc-authority
                   - internal-rpc-authority-publisher
                   - internal-rpc-authority-readback-attestor

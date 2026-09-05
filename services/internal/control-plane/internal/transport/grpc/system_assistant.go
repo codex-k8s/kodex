@@ -2,12 +2,26 @@ package grpc
 
 import (
 	"context"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+func (server *Server) ArchiveAssistantConversation(ctx context.Context, request *controlplanev1.ArchiveAssistantConversationRequest) (*controlplanev1.ArchiveAssistantConversationResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_ArchiveAssistantConversation_FullMethodName, command.ArchiveAssistantConversation, request.GetMutation(), command.AssistantConversationArchiveInput{ConversationRef: request.GetConversationRef()})
+	if err != nil {
+		return nil, err
+	}
+	if result.Conversation == nil {
+		return nil, status.Error(codes.Internal, "assistant archive result is missing")
+	}
+	return &controlplanev1.ArchiveAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}, nil
+}
 
 func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.GetSystemAssistantRequest) (*controlplanev1.GetSystemAssistantResponse, error) {
 	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName)
@@ -26,7 +40,11 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAssistantConversations(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	state := strings.TrimPrefix(request.GetState().String(), "ASSISTANT_CONVERSATION_STATE_")
+	if state == "UNSPECIFIED" {
+		state = "ACTIVE"
+	}
+	items, next, err := server.service.ListAssistantConversations(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), State: state, Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

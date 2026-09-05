@@ -1,0 +1,309 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-bridge
+spec:
+  template:
+    metadata:
+      labels:
+        kodex.dev/internal-rpc-authority-issuer: enabled
+        kodex.dev/internal-rpc-authority-abi: "2"
+    spec:
+      securityContext:
+        fsGroup: 29000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: internal-rpc-authority-socket-init
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/internal-rpc-authority-socket-init]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29000
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/kodex
+      containers:
+        - name: email-bridge
+          env:
+            - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
+              value: /run/kodex/internal-rpc-authority/issuer.sock
+            - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
+              value: issuer
+          volumeMounts:
+            - name: internal-rpc-authority-observability
+              mountPath: /var/run/email/observability
+              readOnly: true
+            - name: application-grant
+              mountPath: /var/run/secrets/kodex/email-bridge/application-grant
+              readOnly: true
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/kodex
+              readOnly: true
+        - name: internal-rpc-authority-issuer
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/internal-rpc-authority-issuer]
+          env:
+            - name: DEPLOYMENT_ENVIRONMENT
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['kodex.dev/environment']"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.observability.svc:4317
+            - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+              value: otel-collector.observability.svc.cluster.local
+            - name: OTEL_EXPORTER_OTLP_CA_FILE
+              value: /var/run/config/kodex/internal-rpc-authority/observability/otel-ca.pem
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.1"
+            - name: SENTRY_DSN_FILE
+              value: /var/run/secrets/kodex/internal-rpc-authority/observability/sentry-dsn
+            - name: SENTRY_EXPECTED_HOST
+              value: sentry-relay.observability.svc:8443
+            - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
+              value: email-bridge
+            - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID
+              value: spiffe://kodex.local/ns/kodex-system/sa/email-bridge
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
+              value: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
+              value: internal-rpc-authority-readback-attestor.kodex-system.svc
+            - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+              value: /var/run/config/kodex/internal-rpc-authority/readback/ca.pem
+            - name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
+              value: /var/run/config/kodex/internal-rpc-authority/restore/ca.pem
+            - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
+              value: ":9091"
+            - name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT
+              value: 60s
+            - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
+              value: "10001"
+            - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID
+              value: "10001"
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+              value: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+            - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: internal-rpc-authority-email-bridge-issuer-postgresql
+                  key: username
+          ports:
+            - name: auth-metrics
+              containerPort: 9091
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: auth-metrics
+            timeoutSeconds: 3
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: auth-metrics
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: auth-metrics
+            timeoutSeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29001
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/kodex
+            - name: internal-rpc-authority-snapshot
+              mountPath: /var/run/config/kodex/internal-rpc-authority/snapshot
+              readOnly: true
+            - name: internal-rpc-authority-manifest-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+              readOnly: true
+            - name: internal-rpc-authority-proof-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+              readOnly: true
+            - name: internal-rpc-authority-issuer-key
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/issuer
+              readOnly: true
+            - name: internal-rpc-authority-workload-tls
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/workload-tls
+              readOnly: true
+            - name: internal-rpc-authority-readback-attestor-ca
+              mountPath: /var/run/config/kodex/internal-rpc-authority/readback
+              readOnly: true
+            - name: internal-rpc-authority-restore-controller-ca
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore
+              readOnly: true
+            - name: internal-rpc-authority-restore-controller-certificate
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore/controller-trust
+              readOnly: true
+            - name: internal-rpc-authority-restore-role-trust
+              mountPath: /var/run/config/kodex/internal-rpc-authority/restore/role-trust
+              readOnly: true
+            - name: internal-rpc-authority-postgresql
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/postgres
+              readOnly: true
+            - name: internal-rpc-authority-postgresql-ca
+              mountPath: /var/run/config/kodex/internal-rpc-authority/postgresql
+              readOnly: true
+            - name: internal-rpc-authority-observability
+              mountPath: /var/run/config/kodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: internal-rpc-authority-sentry-dsn
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/observability
+              readOnly: true
+            - name: authority-bootstrap-roots
+              mountPath: /usr/local/share/internal-rpc-authority/manifest-root
+              readOnly: true
+            - name: authority-readback-credential
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+              readOnly: true
+            - name: authority-readback-possession
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+              readOnly: true
+            - name: authority-restore-credential
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+              readOnly: true
+            - name: authority-restore-ack
+              mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+              readOnly: true
+        - name: platform-worker-grant-agent
+          image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
+          env:
+            - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: email-bridge}
+            - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /var/run/secrets/kodex/email-bridge/application-grant/application-grant.jws}
+          ports: [{name: grant-metrics, containerPort: 9093, protocol: TCP}]
+          startupProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
+          readinessProbe: {httpGet: {path: /readyz, port: grant-metrics}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3}
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 48Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 29004
+            runAsGroup: 29000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: application-grant, mountPath: /var/run/secrets/kodex/email-bridge/application-grant}
+            - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/kodex/platform-worker-grant-signer, readOnly: true}
+      volumes:
+        - name: authority-bootstrap-roots
+          secret:
+            secretName: internal-rpc-authority-bootstrap-roots
+            defaultMode: 0444
+            items:
+              - {key: manifest-root-public.jwk, path: bootstrap-public.jwk}
+              - {key: manifest-root-metadata.json, path: bootstrap-metadata.json}
+        - name: platform-worker-grant-signer
+          secret:
+            secretName: email-bridge-platform-worker-grant-signer
+            defaultMode: 292
+        - name: internal-rpc-authority-sockets
+          emptyDir:
+            sizeLimit: 32Mi
+        - name: internal-rpc-authority-snapshot
+          secret:
+            secretName: internal-rpc-authority-snapshot
+            defaultMode: 0440
+        - name: internal-rpc-authority-manifest-trust
+          secret:
+            secretName: internal-rpc-authority-email-bridge-manifest-trust
+            defaultMode: 292
+        - name: internal-rpc-authority-proof-trust
+          secret:
+            secretName: internal-rpc-authority-email-bridge-proof-trust
+            defaultMode: 292
+        - name: internal-rpc-authority-issuer-key
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-key
+            defaultMode: 292
+        - name: internal-rpc-authority-workload-tls
+          secret:
+            secretName: internal-rpc-authority-email-bridge-workload-tls
+            defaultMode: 0440
+        - name: internal-rpc-authority-readback-attestor-ca
+          configMap:
+            name: internal-rpc-authority-readback-attestor-ca
+            defaultMode: 0440
+        - name: internal-rpc-authority-restore-controller-ca
+          configMap:
+            name: internal-rpc-authority-restore-controller-ca
+            defaultMode: 0440
+        - name: internal-rpc-authority-restore-controller-certificate
+          secret:
+            secretName: internal-rpc-authority-restore-controller-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+        - name: internal-rpc-authority-restore-role-trust
+          secret:
+            secretName: internal-rpc-authority-restore-role-trust
+            defaultMode: 0440
+            items:
+              - key: restore-role-trust.jws
+                path: restore-role-trust.jws
+        - name: internal-rpc-authority-postgresql
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-postgresql
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: dsn
+        - name: internal-rpc-authority-postgresql-ca
+          configMap:
+            name: internal-rpc-authority-postgresql-ca
+            defaultMode: 0440
+        - name: internal-rpc-authority-observability
+          configMap:
+            name: internal-rpc-authority-otel-ca
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: otel-ca.pem
+        - name: internal-rpc-authority-sentry-dsn
+          secret:
+            secretName: internal-rpc-authority-sentry
+            defaultMode: 0440
+            items:
+              - key: dsn
+                path: sentry-dsn
+        - name: authority-readback-credential
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-readback-credential
+            defaultMode: 292
+        - name: authority-readback-possession
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-readback-possession
+            defaultMode: 292
+        - name: authority-restore-credential
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-restore-credential
+            defaultMode: 292
+        - name: authority-restore-ack
+          secret:
+            secretName: internal-rpc-authority-email-bridge-issuer-restore-ack
+            defaultMode: 292

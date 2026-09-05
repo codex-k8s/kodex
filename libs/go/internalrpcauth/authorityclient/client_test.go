@@ -30,7 +30,7 @@ type fakeVerifier struct {
 
 type fakeIssuer struct {
 	response             *internalrpcauthorityv1.IssueAuthorizationContextResponse
-	continuationResponse *internalrpcauthorityv1.IssueAuthorizationContextResponse
+	continuationResponse *internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse
 	continuationRequest  *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest
 	calls                int
 }
@@ -100,7 +100,7 @@ func (issuer *fakeIssuer) IssueContinuationAuthorizationContext(
 	_ context.Context,
 	request *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest,
 	_ ...grpc.CallOption,
-) (*internalrpcauthorityv1.IssueAuthorizationContextResponse, error) {
+) (*internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse, error) {
 	issuer.continuationRequest = request
 	return issuer.continuationResponse, nil
 }
@@ -287,7 +287,7 @@ func TestContinuationInterceptorUsesOnlyVerifiedParent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("привязать continuation: %v", err)
 	}
-	issuer := &fakeIssuer{continuationResponse: &internalrpcauthorityv1.IssueAuthorizationContextResponse{CompactJws: "child-compact"}}
+	issuer := &fakeIssuer{continuationResponse: &internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse{CompactJws: "child-compact"}}
 	interceptor := ContinuationUnaryClientInterceptor(issuer, fakeOperationResolver{method: operation})
 	invocations := 0
 	err = interceptor(bound, method, &emptypb.Empty{}, nil, nil,

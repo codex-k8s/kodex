@@ -10,7 +10,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/google/uuid"
@@ -18,14 +17,15 @@ import (
 )
 
 const (
-	runtimeProjectionMethod = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials"
-	sttProjectionMethod     = "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential"
-	maximumProjectionItems  = 64
+	runtimeProjectionMethod   = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials"
+	assistantProjectionMethod = "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
+	sttProjectionMethod       = "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential"
+	maximumProjectionItems    = 64
 )
 
 func (repository *Repository) ResolveRuntimeCredentialProjection(ctx context.Context, principal value.Principal, input platformrepo.RuntimeCredentialProjectionInput) (platformrepo.RuntimeCredentialProjection, error) {
 	if !validCredentialProjectionOwner(principal, "platform.credential-projections.runtime.resolve") ||
-		!validProjectionAuthority(input.Authority, "runtime-controller", runtimeProjectionMethod) || input.Fence == "" {
+		!validRuntimeProjectionAuthority(input.Authority) || input.Fence == "" {
 		return platformrepo.RuntimeCredentialProjection{}, errs.ErrForbidden
 	}
 	return repository.resolveRuntimeCredentialProjection(ctx, principal, input)
@@ -33,7 +33,7 @@ func (repository *Repository) ResolveRuntimeCredentialProjection(ctx context.Con
 
 func (repository *Repository) ValidateRuntimeCredentialProjection(ctx context.Context, principal value.Principal, input platformrepo.RuntimeCredentialProjectionInput) (bool, error) {
 	if !validCredentialProjectionOwner(principal, "platform.credential-projections.runtime.validate") ||
-		!validProjectionAuthority(input.Authority, "runtime-controller", runtimeProjectionMethod) || input.Fence != "" {
+		!validRuntimeProjectionAuthority(input.Authority) || input.Fence != "" {
 		return false, errs.ErrForbidden
 	}
 	resolved, err := repository.resolveRuntimeCredentialProjection(ctx, principal, input)
@@ -67,7 +67,8 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 	var rawSecrets []byte
 	err = tx.QueryRow(ctx, queryCredentialProjectionResolveRuntime, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": input.Authority.ActorID,
-		"project_id": input.Authority.ProjectID, "lease_ref": input.LeaseRef,
+		"project_id": nullUUID(input.Authority.ProjectID), "lease_ref": input.LeaseRef,
+		"system_assistant":  input.Authority.CallerFullMethod == assistantProjectionMethod,
 		"workload_instance": input.WorkloadInstance, "generation": input.Generation, "fence": input.Fence,
 		"runtime_revision_ref": input.RuntimeRevisionRef, "runtime_revision_digest": input.RuntimeRevisionDigest,
 		"attempt": input.Attempt, "input_digest": input.InputDigest, "session_ref": input.SessionRef, "turn_ref": input.TurnRef,
@@ -84,6 +85,9 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 	var stored []runtimecontract.RuntimeSecretProjection
 	if err := jsonUnmarshal(rawSecrets, &stored); err != nil || len(stored) > maximumProjectionItems {
 		return platformrepo.RuntimeCredentialProjection{}, errs.ErrConflict
+	}
+	if input.Authority.ProjectID == "" && len(stored) != 0 {
+		return platformrepo.RuntimeCredentialProjection{}, errs.ErrForbidden
 	}
 	for _, candidate := range stored {
 		var descriptor entity.RuntimeSecretRevisionDescriptor
@@ -127,16 +131,37 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrForbidden
 	}
 	var result platformrepo.TranscriptionCredentialProjection
-	var model string
+	user, err := repository.ResolvePrincipal(ctx, value.Principal{ActorID: input.Authority.ActorID, AuthorityTenant: input.Authority.TenantID})
+	if err != nil {
+		return result, err
+	}
+	userScope, err := repository.resolveScope(ctx, user)
+	if err != nil {
+		return result, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return result, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	configuration, err := repository.getSystemSTTConfigurationTx(ctx, tx, userScope)
+	if err != nil {
+		return result, err
+	}
+	if !configuration.Ready || uint64(configuration.Revision) != input.ConfigRevision || configuration.Digest != input.ConfigDigestSHA256 ||
+		configuration.ProviderAccountRef != input.ProviderAccountRef || uint64(configuration.ProviderCredentialGeneration) != input.ProviderCredentialGeneration {
+		return result, errs.ErrNotFound
+	}
+	var model, language string
 	var rawProviderCapabilities []byte
-	err = repository.pool.QueryRow(ctx, queryCredentialProjectionResolveSTT, pgx.StrictNamedArgs{
+	err = tx.QueryRow(ctx, queryCredentialProjectionResolveSTT, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "config_revision": input.ConfigRevision,
 		"config_digest": input.ConfigDigestSHA256, "account_ref": input.ProviderAccountRef,
 		"credential_generation": input.ProviderCredentialGeneration,
 	}).Scan(&result.ProviderCredential.AccountRef, &result.ProviderCredential.CredentialRevisionRef,
 		&result.ProviderCredential.CredentialRevision, &result.ProviderCredential.SecretName,
 		&result.ProviderCredential.SecretUID, &result.ProviderCredential.SecretResourceVersion,
-		&result.ProviderCredential.ContentSHA256, &model, &rawProviderCapabilities)
+		&result.ProviderCredential.ContentSHA256, &model, &language, &rawProviderCapabilities)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrNotFound
 	}
@@ -147,12 +172,15 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 	if jsonUnmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrUnavailable
 	}
-	if _, allowed := modelcatalog.Find(model, providerReportedModels(providerCapabilities)); !allowed {
+	if !systemSTTModelSupported(model, language) {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrNotFound
 	}
 	result.ExpiresAt = time.Now().UTC().Add(time.Minute)
 	if input.Authority.ExpiresAt.Before(result.ExpiresAt) {
 		result.ExpiresAt = input.Authority.ExpiresAt
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrConflict
 	}
 	return result, nil
 }
@@ -164,10 +192,18 @@ func validCredentialProjectionOwner(principal value.Principal, permission string
 func validProjectionAuthority(authority platformrepo.CredentialProjectionAuthority, workload, method string) bool {
 	now := time.Now().UTC()
 	return uuid.Validate(authority.ActorID) == nil && uuid.Validate(authority.TenantID) == nil &&
-		uuid.Validate(authority.ProjectID) == nil && uuid.Validate(authority.ProofJTI) == nil &&
+		(uuid.Validate(authority.ProjectID) == nil || (method == assistantProjectionMethod || method == sttProjectionMethod) && authority.ProjectID == "") && uuid.Validate(authority.ProofJTI) == nil &&
 		authority.SourceRevision > 0 && authority.CallerCredentialRevision > 0 && validRuntimeSecretSHA256(authority.SourceDigestSHA256) &&
 		authority.CallerWorkloadID == workload && authority.CallerFullMethod == method &&
 		authority.ExpiresAt.After(now) && !authority.ExpiresAt.After(now.Add(5*time.Minute))
+}
+
+func validRuntimeProjectionAuthority(authority platformrepo.CredentialProjectionAuthority) bool {
+	method := runtimeProjectionMethod
+	if authority.ProjectID == "" {
+		method = assistantProjectionMethod
+	}
+	return validProjectionAuthority(authority, "runtime-controller", method)
 }
 
 func validRuntimeProjectionInput(input platformrepo.RuntimeCredentialProjectionInput) bool {
