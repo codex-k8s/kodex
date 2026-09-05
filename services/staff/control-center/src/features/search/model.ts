@@ -1,9 +1,14 @@
 import type { SearchResult } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
+import {
+  invalidSearchResult,
+  isSearchResult,
+} from "@/shared/api/search-result";
 
 export const globalSearchDebounceMs = 500;
 
 export function canonicalSearchRoute(result: SearchResult): string {
+  if (!isSearchResult(result)) throw invalidSearchResult();
   const project = encodeURIComponent(result.projectRef);
   const reference = encodeURIComponent(result.ref);
   switch (result.kind) {
@@ -34,5 +39,11 @@ export class SearchCoordinator {
   cancel(): void {
     if (this.timer !== undefined) globalThis.clearTimeout(this.timer);
     this.timer = undefined;
+  }
+
+  flush(term: string, search: (normalized: string) => void): void {
+    this.cancel();
+    const normalized = term.trim();
+    if (normalized.length >= 2) search(normalized);
   }
 }

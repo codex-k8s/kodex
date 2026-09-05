@@ -6,7 +6,6 @@ import {
   ChevronDown,
   History,
   ListChecks,
-  Mic,
   Pencil,
   Plus,
   Send,
@@ -57,6 +56,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -89,7 +89,7 @@ const attachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const panel = ref<HTMLElement>();
-const composer = ref<HTMLTextAreaElement>();
+const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
@@ -461,6 +461,34 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
+      <nav
+        v-if="!currentPlan"
+        class="assistant-conversation-sidebar"
+        :aria-label="$t('assistant.history')"
+      >
+        <button
+          class="button"
+          type="button"
+          :disabled="!canStartConversation"
+          @click="startConversation"
+        >
+          <Plus :size="18" />{{ $t("assistant.newConversation") }}
+        </button>
+        <button
+          v-for="conversation in store.sortedConversations"
+          :key="conversation.ref"
+          class="assistant-conversation-entry"
+          :class="{ selected: conversation.ref === store.selectedRef }"
+          type="button"
+          @click="chooseConversation(conversation.ref)"
+        >
+          <strong>{{ conversationDisplayTitle(conversation.title) }}</strong>
+          <time :datetime="conversation.updatedAt">{{
+            new Date(conversation.updatedAt).toLocaleString()
+          }}</time>
+        </button>
+      </nav>
+
       <AssistantPlanEditor
         v-if="currentPlan"
         :plan="currentPlan"
@@ -658,7 +686,7 @@ onBeforeUnmount(() => {
                 @change="attachmentState = $event"
               />
               <div class="assistant-composer__field">
-                <textarea
+                <VoiceTextarea
                   ref="composer"
                   v-model="message"
                   rows="2"
@@ -669,15 +697,6 @@ onBeforeUnmount(() => {
                   @keydown="handleComposerKeydown"
                 />
                 <div>
-                  <button
-                    class="assistant-composer__icon"
-                    type="button"
-                    disabled
-                    :aria-label="$t('assistant.microphoneUnavailable')"
-                    :title="$t('assistant.microphoneUnavailable')"
-                  >
-                    <Mic :size="18" aria-hidden="true" />
-                  </button>
                   <button
                     class="assistant-composer__send"
                     type="button"
@@ -735,13 +754,11 @@ onBeforeUnmount(() => {
 }
 .assistant-drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  inset: 4dvh 4vw;
   display: flex;
-  width: clamp(520px, 42vw, 640px);
-  max-width: calc(100vw - 32px);
-  height: 100dvh;
+  width: 92vw;
+  max-width: 92vw;
+  height: 92dvh;
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
@@ -750,7 +767,57 @@ onBeforeUnmount(() => {
   outline: 0;
 }
 .assistant-drawer--plan {
-  width: min(960px, calc(100vw - 32px));
+  width: 92vw;
+}
+.assistant-conversation-sidebar {
+  display: none;
+}
+@media (min-width: 1001px) {
+  .assistant-drawer:not(.assistant-drawer--plan) {
+    padding-left: 280px;
+  }
+  .assistant-drawer:not(.assistant-drawer--plan) > .assistant-drawer__header {
+    margin-left: -280px;
+    height: 72px;
+  }
+  .assistant-conversation-sidebar {
+    position: absolute;
+    inset: 72px auto 0 0;
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .assistant-history {
+    display: none;
+  }
+  .assistant-conversation-entry {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border: 0;
+    border-radius: 6px;
+    text-align: left;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .assistant-conversation-entry.selected {
+    background: var(--accent-soft);
+  }
+  .assistant-conversation-entry strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .assistant-conversation-entry time {
+    color: var(--muted);
+    font-size: 12px;
+  }
 }
 .assistant-drawer > .assistant-plan-editor,
 .assistant-drawer__view,
@@ -1077,7 +1144,7 @@ onBeforeUnmount(() => {
 .assistant-composer__field {
   position: relative;
 }
-.assistant-composer textarea {
+.assistant-composer :deep(textarea) {
   width: 100%;
   min-height: 72px;
   max-height: 180px;
@@ -1085,6 +1152,9 @@ onBeforeUnmount(() => {
   padding: 11px 104px 11px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
+}
+.assistant-composer :deep(.voice-textarea__action) {
+  right: 58px;
 }
 .assistant-composer__field > div {
   position: absolute;
@@ -1130,14 +1200,15 @@ onBeforeUnmount(() => {
     bottom: 0;
     width: 100%;
     max-width: none;
-    height: min(88dvh, 900px);
-    max-height: calc(100dvh - 12px);
+    height: 100dvh;
+    max-height: 100dvh;
     border: 1px solid var(--border);
     border-bottom: 0;
-    border-radius: 14px 14px 0 0;
+    border-radius: 0;
     box-shadow: 0 -16px 40px rgb(15 23 42 / 22%);
   }
   .assistant-drawer::before {
+    display: none;
     position: absolute;
     top: 6px;
     left: 50%;

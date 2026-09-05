@@ -7,13 +7,17 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 
 const route = useRoute();
 const projectRef = computed(() => String(route.params.projectRef));
+const initialSecretRef = computed(() =>
+  typeof route.query.secretRef === "string" ? route.query.secretRef : undefined,
+);
 </script>
 
 <template>
-  <PageFrame
-    :title="$t('runtimeSecrets.title')"
-    :subtitle="$t('runtimeSecrets.subtitle')"
-  >
-    <RuntimeSecretsWorkspace :project-ref="projectRef" />
+  <PageFrame :title="$t('runtimeSecrets.title')">
+    <RuntimeSecretsWorkspace
+      :key="projectRef"
+      :project-ref="projectRef"
+      :initial-secret-ref="initialSecretRef"
+    />
   </PageFrame>
 </template>

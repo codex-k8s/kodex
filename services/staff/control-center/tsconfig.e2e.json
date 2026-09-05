@@ -12,6 +12,7 @@
     "playwright.api-session.config.ts",
     "playwright.integration.config.ts",
     "playwright.local.config.ts",
+    "playwright.synthetic.config.ts",
     "e2e/**/*.ts"
   ]
 }

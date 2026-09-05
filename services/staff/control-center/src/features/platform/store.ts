@@ -1,5 +1,9 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref } from "vue";
+import {
+  invalidSearchResult,
+  isSearchResult,
+} from "@/shared/api/search-result";
 
 import { requestSignal } from "@/shared/api/client";
 import {
@@ -378,12 +382,26 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
+  let searchController: AbortController | undefined;
+
+  function cancelSearch(): void {
+    searchController?.abort();
+    searchController = undefined;
+    generation.set("search", (generation.get("search") ?? 0) + 1);
+    loading.search = false;
+    searchResults.value = [];
+    Reflect.deleteProperty(problems, "search");
+  }
+
   async function search(term: string): Promise<void> {
+    cancelSearch();
     const normalized = term.trim();
     if (normalized.length < 2) {
       searchResults.value = [];
       return;
     }
+    const controller = new AbortController();
+    searchController = controller;
     await query(
       "search",
       async () =>
@@ -391,11 +409,13 @@ export const usePlatformStore = defineStore("platform", () => {
           await unwrap(
             searchPlatform({
               query: { query: normalized, limit: 20 },
-              signal: requestSignal(),
+              signal: requestSignal(controller.signal),
             }),
           )
         ).data,
       (value) => {
+        if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
+          throw invalidSearchResult();
         searchResults.value = value.items;
       },
     );
@@ -1829,6 +1849,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function clearOwnerState(): void {
+    cancelSearch();
     platformReloadPromise = undefined;
     generation.clear();
     for (const target of [
@@ -1926,6 +1947,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadBootstrap,
     loadOverview,
     search,
+    cancelSearch,
     loadProjects,
     loadProject,
     loadAgents,

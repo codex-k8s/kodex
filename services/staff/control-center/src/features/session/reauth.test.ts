@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   consumeOidcIntent,
+  createEmailReconciliationIntent,
+  parseEmailReconciliationIntent,
   consumeRuntimeEnvironmentPolicyReauthCompletion,
   createRuntimeEnvironmentPolicyIntent,
   createRuntimeSecretRevealIntent,
@@ -32,6 +34,44 @@ function pendingStorage(intent: unknown): Storage {
 }
 
 describe("OIDC re-auth intents", () => {
+  it("связывает email state с exact receipt без project и secret", () => {
+    const intent = createEmailReconciliationIntent(
+      {
+        receiptRef: "receipt_synthetic",
+        receiptVersion: 7,
+        receiptDigest: "a".repeat(64),
+        connectionRef: "connection_synthetic",
+        invocationRef: "invocation_synthetic",
+      },
+      1000,
+    );
+    expect(consumeOidcIntent(intent, pendingStorage(intent), 1100)).toEqual(
+      intent,
+    );
+    expect(intent.returnPath).toBe(
+      "/integrations?connectionRef=connection_synthetic&invocationRef=invocation_synthetic",
+    );
+    expect(() =>
+      parseEmailReconciliationIntent(
+        { ...intent, projectRef: "project_synthetic" },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseEmailReconciliationIntent(
+        { ...intent, secretRef: "secret_synthetic" },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      consumeOidcIntent(
+        { ...intent, receiptVersion: 8 },
+        pendingStorage(intent),
+        1100,
+      ),
+    ).toThrow();
+    expect(() => parseEmailReconciliationIntent(intent, 301001)).toThrow();
+  });
   it("формирует только внутренний project secrets return path", () => {
     const intent = createRuntimeSecretRevealIntent(
       "project_sales",

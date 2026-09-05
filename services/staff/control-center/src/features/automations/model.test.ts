@@ -30,10 +30,21 @@ function schedule(options: Partial<Schedule> = {}): Schedule {
     input: { task: "Собрать сводку", retained: { exact: true } },
     sessionPolicy: "NEW_EACH_RUN",
     notificationPolicy: "CONTROL_CENTER_ONLY",
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy: "COALESCE",
+    overlapPolicy: "FORBID",
+    automationText: "",
+    promptInputs: {},
+    targetVersion: 2,
+    targetDigest: "b".repeat(64),
+    cronExpression: "0 9 * * *",
     currentRevision: {
       ref: "schedule_revision_3",
       revision: 3,
       digest: "a".repeat(64),
+      targetVersion: 2,
+      targetDigest: "b".repeat(64),
       name: "Ежедневная сводка",
       target: {
         type: "AGENT",
@@ -47,6 +58,12 @@ function schedule(options: Partial<Schedule> = {}): Schedule {
       input: { task: "Собрать сводку", retained: { exact: true } },
       sessionPolicy: "NEW_EACH_RUN",
       notificationPolicy: "CONTROL_CENTER_ONLY",
+      dstGapPolicy: "SHIFT_FORWARD",
+      dstFoldPolicy: "RUN_ONCE_EARLIEST",
+      misfirePolicy: "COALESCE",
+      overlapPolicy: "FORBID",
+      automationText: "",
+      promptInputs: {},
       createdAt: "2026-08-30T06:00:00Z",
     },
     nextActions: ["EDIT", "DISABLE", "DELETE"],
@@ -66,6 +83,12 @@ describe("automations model", () => {
       input: { task: "Собрать сводку", retained: { exact: true } },
       sessionPolicy: "NEW_EACH_RUN",
       notificationPolicy: "CONTROL_CENTER_ONLY",
+      dstGapPolicy: "SHIFT_FORWARD",
+      dstFoldPolicy: "RUN_ONCE_EARLIEST",
+      misfirePolicy: "COALESCE",
+      overlapPolicy: "FORBID",
+      automationText: "",
+      promptInputs: {},
     });
   });
 
@@ -73,6 +96,9 @@ describe("automations model", () => {
     const submitted = scheduleInput(schedule());
     const mutation = schedule({
       version: 4,
+      targetVersion: 2,
+      targetDigest: "b".repeat(64),
+      cronExpression: "0 9 * * *",
       currentRevision: {
         ...schedule().currentRevision,
         ref: "schedule_revision_4",
@@ -90,6 +116,9 @@ describe("automations model", () => {
         schedule({
           version: 4,
           name: "Другое имя",
+          targetVersion: 2,
+          targetDigest: "b".repeat(64),
+          cronExpression: "0 9 * * *",
           currentRevision: mutation.currentRevision,
         }),
       ),
@@ -101,6 +130,9 @@ describe("automations model", () => {
         mutation,
         schedule({
           version: 4,
+          targetVersion: 2,
+          targetDigest: "b".repeat(64),
+          cronExpression: "0 9 * * *",
           currentRevision: mutation.currentRevision,
           input: { retained: { exact: true }, task: "Собрать сводку" },
         }),

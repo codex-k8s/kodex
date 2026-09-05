@@ -4,9 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const api = vi.hoisted(() => ({
   createOwnerSession: vi.fn(),
   deleteOwnerSession: vi.fn(() => Promise.resolve({ data: undefined })),
-  getBootstrapState: vi.fn(() =>
-    Promise.resolve({ data: {}, etag: '"7"' }),
-  ),
+  getBootstrapState: vi.fn(() => Promise.resolve({ data: {}, etag: '"7"' })),
   renewOwnerSession: vi.fn((options?: { signal?: AbortSignal }) => {
     void options;
     return Promise.resolve({ data: undefined });
@@ -189,6 +187,32 @@ describe("session renewal lifecycle", () => {
       expect.objectContaining({ requestTimeoutInSeconds: 10 }),
     );
   });
+  test("не повторяет окончательный forbidden при продлении", async () => {
+    api.renewOwnerSession.mockRejectedValueOnce({
+      kind: "forbidden",
+      retryable: false,
+    });
+    const session = useSessionStore();
+    await session.probe();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(session.phase).toBe("forbidden");
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(api.renewOwnerSession).toHaveBeenCalledOnce();
+  });
+  test("увеличивает интервал повторов временно недоступного renewal", async () => {
+    api.renewOwnerSession
+      .mockRejectedValueOnce({ kind: "unavailable", retryable: true })
+      .mockRejectedValueOnce({ kind: "unavailable", retryable: true });
+    const session = useSessionStore();
+    await session.probe();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(api.renewOwnerSession).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(api.renewOwnerSession).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(api.renewOwnerSession).toHaveBeenCalledTimes(3);
+    expect(session.phase).toBe("authenticated");
+  });
 
   test("объединяет параллельный OIDC redirect и показывает busy state", async () => {
     let finishRedirect!: () => void;
@@ -318,6 +342,54 @@ describe("session renewal lifecycle", () => {
       returnPath: "/projects/project_sales/secrets",
       secretRef: "secret_main",
     });
+  });
+  test("выдаёт только receipt-bound email purpose после fresh OIDC и локально расходует один раз", async () => {
+    const session = useSessionStore();
+    const input = {
+      receiptRef: "receipt_synthetic",
+      receiptVersion: 7,
+      receiptDigest: "a".repeat(64),
+      connectionRef: "connection_synthetic",
+      invocationRef: "invocation_synthetic",
+    };
+    await session.beginEmailReconciliationReauth(input);
+    const redirect = oidc.signinRedirect.mock.calls[0]?.[0] as {
+      state?: unknown;
+    };
+    expect(oidc.signinRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({ max_age: 0, prompt: "login" }),
+    );
+    expect(session.hasPendingEmailConfirmation(input)).toBe(false);
+    oidc.signinRedirectCallback.mockResolvedValue({
+      access_token: "synthetic-fresh-token",
+      state: redirect.state,
+    });
+    expect(await session.completeLogin()).toMatchObject({
+      kind: "email-reconciliation",
+      returnPath:
+        "/integrations?connectionRef=connection_synthetic&invocationRef=invocation_synthetic",
+    });
+    expect(requestBody(api.createOwnerSession.mock.calls[0] ?? [])).toEqual({
+      purpose: {
+        kind: "EMAIL_EFFECT_RECONCILIATION",
+        receiptRef: input.receiptRef,
+        receiptVersion: 7,
+        receiptDigest: input.receiptDigest,
+      },
+    });
+    expect(api.renewOwnerSession).not.toHaveBeenCalled();
+    expect(
+      session.hasPendingEmailConfirmation({ ...input, receiptVersion: 8 }),
+    ).toBe(false);
+    expect(
+      session.hasPendingEmailConfirmation(input, Date.now() + 120000),
+    ).toBe(false);
+    expect(session.consumePendingEmailConfirmation(input)).toBe(true);
+    expect(session.consumePendingEmailConfirmation(input)).toBe(false);
+    session.finishEmailConfirmation();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.renewOwnerSession).toHaveBeenCalledOnce();
+    expect(oidc.removeUser).toHaveBeenCalledOnce();
   });
 
   test("после callback создаёт свежую owner session и возвращает к секретам", async () => {

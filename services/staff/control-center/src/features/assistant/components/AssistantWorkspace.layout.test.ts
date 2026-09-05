@@ -29,24 +29,24 @@ describe("AssistantWorkspace layout", () => {
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
   });
 
-  it("даёт desktop drawer достаточно места для истории и agent detail", () => {
-    expect(styles).toMatch(/width:\s*clamp\(520px,\s*42vw,\s*640px\)/);
-    expect(styles).toMatch(/max-width:\s*calc\(100vw\s*-\s*32px\)/);
+  it("открывает desktop modal с отдельной колонкой истории", () => {
+    expect(styles).toMatch(/width:\s*92vw/);
+    expect(styles).toMatch(/height:\s*92dvh/);
     expect(template).toContain("'assistant-drawer--plan': currentPlan");
     expect(styles).toMatch(
-      /\.assistant-drawer--plan\s*\{[\s\S]*?width:\s*min\(960px,\s*calc\(100vw\s*-\s*32px\)\)/,
+      /\.assistant-drawer--plan\s*\{[\s\S]*?width:\s*92vw/,
     );
   });
 
-  it("переключает drawer в mobile bottom sheet", () => {
+  it("переключает modal в полноэкранный mobile", () => {
     const mobile = styles.slice(styles.indexOf("@media (max-width: 720px)"));
 
     expect(mobile).toMatch(/\.assistant-drawer\s*\{[\s\S]*?left:\s*0/);
     expect(mobile).toMatch(/top:\s*auto/);
     expect(mobile).toMatch(/bottom:\s*0/);
     expect(mobile).toMatch(/width:\s*100%/);
-    expect(mobile).toMatch(/height:\s*min\(88dvh,\s*900px\)/);
-    expect(mobile).toMatch(/border-radius:\s*14px 14px 0 0/);
+    expect(mobile).toMatch(/height:\s*100dvh/);
+    expect(mobile).toMatch(/border-radius:\s*0/);
   });
 
   it("оставляет scroll только логу и закрепляет composer", () => {

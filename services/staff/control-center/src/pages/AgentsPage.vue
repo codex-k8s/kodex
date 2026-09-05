@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Plus } from "@lucide/vue";
 import {
   computed,
@@ -121,7 +122,7 @@ watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => {
     void catalog.load(projectRef.value, value);
-  }, 300);
+  }, 500);
 });
 
 onBeforeUnmount(() => {
@@ -188,14 +189,13 @@ onBeforeUnmount(() => {
             maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.role") }}</span
-          ><textarea
+          ><VoiceTextarea
             v-model.trim="form.roleDescription"
             required
-            maxlength="1000"
-          /></label
+            maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.instructions") }}</span
-          ><textarea
+          ><VoiceTextarea
             v-model.trim="form.initialInstructions"
             required
             maxlength="65536"

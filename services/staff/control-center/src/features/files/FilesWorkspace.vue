@@ -135,7 +135,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 250 },
+  { debounceMs: 500 },
 );
 const {
   error: loadError,
@@ -453,7 +453,7 @@ watch(
   (artifacts) => {
     if (initialLoading.value && artifacts.length === 0) return;
     if (!artifacts.some((artifact) => artifact.ref === selectedRef.value))
-      selectedRef.value = artifacts[0]?.ref ?? "";
+      selectedRef.value = "";
   },
   { immediate: true },
 );
@@ -1244,7 +1244,10 @@ onBeforeUnmount(() => {
       </ul>
     </section>
 
-    <section class="trash-toolbar">
+    <section
+      v-if="trashMode || selectedArtifacts.length > 0"
+      :class="trashMode ? 'trash-toolbar' : 'selection-toolbar'"
+    >
       <div>
         <strong>{{ trashMode ? custom.trash : custom.activeSelection }}</strong>
         <p>

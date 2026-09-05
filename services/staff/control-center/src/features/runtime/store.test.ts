@@ -94,6 +94,8 @@ function deferred<T>(): {
 
 function view(model: string, version: number): AgentRuntimeConfigurationView {
   return {
+    skillBindings: [],
+    memoryBindings: [],
     configuration: {
       ref: `rconf_${String(version)}`,
       version,

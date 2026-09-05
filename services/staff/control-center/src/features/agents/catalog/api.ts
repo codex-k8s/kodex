@@ -12,6 +12,7 @@ export interface AgentCatalogPageRequest {
 
 export async function loadAgentCatalogPage(
   request: AgentCatalogPageRequest,
+  signal: AbortSignal = requestSignal(),
 ): Promise<AgentPage> {
   return (
     await unwrap(
@@ -22,7 +23,7 @@ export async function loadAgentCatalogPage(
           ...(request.query.trim() ? { query: request.query.trim() } : {}),
           ...(request.pageToken ? { pageToken: request.pageToken } : {}),
         },
-        signal: requestSignal(),
+        signal,
       }),
     )
   ).data;

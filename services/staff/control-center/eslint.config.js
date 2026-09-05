@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 import vue from "eslint-plugin-vue";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "src/shared/api/generated/**"] },
+  { ignores: ["dist/**", "dist-synthetic/**", "src/shared/api/generated/**"] },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...vue.configs["flat/essential"],

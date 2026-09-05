@@ -7,6 +7,11 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, placeholder as editorPlaceholder } from "@codemirror/view";
 import { FileCode2, LockKeyhole, ShieldAlert } from "@lucide/vue";
 import { basicSetup } from "codemirror";
+import {
+  codeEditorKeymap,
+  insertVoiceText,
+} from "@/shared/ui/code-editor-keymap";
+import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -185,6 +190,7 @@ onMounted(() => {
     doc: props.modelValue,
     extensions: [
       basicSetup,
+      codeEditorKeymap,
       lintGutter(),
       EditorState.tabSize.of(2),
       EditorView.lineWrapping,
@@ -279,7 +285,17 @@ defineExpose({ focus, insertAtCursor });
       <span class="code-editor__spacer" />
       <LockKeyhole v-if="readonly" :size="15" aria-hidden="true" />
     </div>
-    <div ref="editorRoot" class="code-editor__viewport" />
+    <div class="code-editor-voice">
+      <div
+        ref="editorRoot"
+        class="code-editor__viewport"
+        :title="$t('app.editorKeyboard')"
+      />
+      <VoiceInputButton
+        :readonly="readonly"
+        @transcript="insertVoiceText(view, $event)"
+      />
+    </div>
     <div class="code-editor__foot" aria-live="polite">
       <span class="mono">{{ lineCount }} · {{ modelValue.length }}</span>
       <span

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   Bot,
   Check,
@@ -546,7 +547,7 @@ watch(
                   {{ $t("runs.task") }}
                   <span class="required-mark" aria-hidden="true">*</span>
                 </span>
-                <textarea
+                <VoiceTextarea
                   v-model="form.task"
                   required
                   maxlength="32768"
@@ -578,7 +579,7 @@ watch(
                 class="field field--wide"
               >
                 <span>{{ field.label }}</span>
-                <textarea
+                <VoiceTextarea
                   v-model="inputValues[field.key]"
                   :required="field.required"
                   maxlength="32768"

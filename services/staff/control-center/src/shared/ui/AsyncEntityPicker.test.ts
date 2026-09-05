@@ -33,6 +33,78 @@ afterEach(() => {
 });
 
 describe("useAsyncEntityCollection", () => {
+  it("отменяет незавершённый запрос и допускает новое открытие", async () => {
+    vi.useFakeTimers();
+    const first = deferred<AsyncEntityPage<TestItem>>();
+    const loader = vi
+      .fn<
+        (request: AsyncEntityLoadRequest) => Promise<AsyncEntityPage<TestItem>>
+      >()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({
+        items: [{ id: "new", label: "Новое", revision: 2 }],
+      });
+    const scope = effectScope();
+    const collection = scope.run(() => useAsyncEntityCollection(loader));
+    if (!collection) throw new Error("Missing collection");
+    await vi.advanceTimersByTimeAsync(500);
+    collection.cancel();
+    expect(loader.mock.calls[0]?.[0].signal.aborted).toBe(true);
+    first.resolve({ items: [{ id: "old", label: "Устаревшее", revision: 1 }] });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(collection.items.value).toEqual([]);
+    collection.refresh();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(collection.items.value.map((item) => item.id)).toEqual(["new"]);
+    scope.stop();
+  });
+  it("по умолчанию ждёт 500 ms и атомарно отклоняет повторный cursor", async () => {
+    vi.useFakeTimers();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ id: "one", label: "Один" }],
+        nextCursor: "same",
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: "two", label: "Два" }],
+        nextCursor: "same",
+      });
+    const scope = effectScope();
+    const collection = scope.run(() => useAsyncEntityCollection(loader));
+    if (!collection) throw new Error("Missing collection");
+    await vi.advanceTimersByTimeAsync(499);
+    expect(loader).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await collection.loadMore();
+    expect(collection.items.value.map((item) => item.id)).toEqual(["one"]);
+    expect(collection.loadMoreError.value).toBe(true);
+    scope.stop();
+  });
+
+  it.each([
+    null,
+    {},
+    { items: [null] },
+    { items: [], nextCursor: 0 },
+    {
+      items: [
+        { id: "one", label: "Один" },
+        { id: "one", label: "Дубликат" },
+      ],
+    },
+  ])("отклоняет поврежденную страницу %j", async (page) => {
+    vi.useFakeTimers();
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection(vi.fn().mockResolvedValue(page)),
+    );
+    if (!collection) throw new Error("Missing collection");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(collection.phase.value).toBe("error");
+    expect(collection.items.value).toEqual([]);
+    scope.stop();
+  });
   it("debounce-ит серверный поиск и публикует только актуальный ответ", async () => {
     vi.useFakeTimers();
     const first = deferred<AsyncEntityPage<TestItem>>();
@@ -73,7 +145,7 @@ describe("useAsyncEntityCollection", () => {
     scope.stop();
   });
 
-  it("добавляет cursor-страницу без дублей и не запускает append дважды", async () => {
+  it("добавляет cursor-страницу и не запускает append дважды", async () => {
     vi.useFakeTimers();
     const append = deferred<AsyncEntityPage<TestItem>>();
     const loader = vi
@@ -108,15 +180,12 @@ describe("useAsyncEntityCollection", () => {
       expect.objectContaining({ cursor: "cursor-2", query: "каталог" }),
     );
     append.resolve({
-      items: [
-        { id: "one", label: "Один обновлён", revision: 2 },
-        { id: "two", label: "Два", revision: 1 },
-      ],
+      items: [{ id: "two", label: "Два", revision: 1 }],
     });
     await Promise.all([firstAppend, duplicateAppend]);
 
     expect(collection.items.value).toEqual([
-      { id: "one", label: "Один обновлён", revision: 2 },
+      { id: "one", label: "Один", revision: 1 },
       { id: "two", label: "Два", revision: 1 },
     ]);
     expect(collection.hasMore.value).toBe(false);

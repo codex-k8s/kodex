@@ -16,6 +16,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   gates: OwnerGate[];
+  gatesCount?: number;
   failedRuns: Run[];
   projects: Project[];
   gatesReady: boolean;
@@ -58,7 +59,6 @@ function formatDate(value?: string): string {
     <header class="home-attention__header">
       <div class="home-attention__heading">
         <h2 id="home-attention-title">{{ $t("workboard.attention") }}</h2>
-        <span class="home-attention__count">{{ total }}</span>
       </div>
       <span
         v-if="refreshing && ready"
@@ -77,7 +77,13 @@ function formatDate(value?: string): string {
     >
       <span /><span /><span />
     </div>
-    <div v-else class="home-attention__body">
+    <div
+      v-else
+      class="home-attention__body"
+      :class="{
+        'home-attention__body--single': !gates.length || !failedRuns.length,
+      }"
+    >
       <ProblemNotice
         v-if="gatesProblem"
         :problem="gatesProblem"
@@ -93,7 +99,7 @@ function formatDate(value?: string): string {
         <div class="home-attention__group-head">
           <ShieldQuestion :size="18" aria-hidden="true" />
           <h3>{{ $t("home.pending") }}</h3>
-          <span>{{ gates.length }}</span>
+          <span v-if="gatesCount !== undefined">{{ gatesCount }}</span>
           <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
         </div>
         <RouterLink
@@ -133,7 +139,6 @@ function formatDate(value?: string): string {
         >
           <AlertTriangle :size="18" aria-hidden="true" />
           <h3>{{ $t("runs.title") }} · {{ $t("workboard.attention") }}</h3>
-          <span>{{ failedRuns.length }}</span>
           <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
         </div>
         <RouterLink
@@ -240,11 +245,20 @@ function formatDate(value?: string): string {
 }
 .home-attention__group {
   min-width: 0;
+  max-height: 596px;
+  overflow: auto;
+}
+.home-attention__body--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 .home-attention__group + .home-attention__group {
   border-left: 1px solid var(--hairline);
 }
 .home-attention__group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
   min-height: 44px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--hairline);

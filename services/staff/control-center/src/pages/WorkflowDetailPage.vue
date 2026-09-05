@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { Check, Play, Plus, Save, Trash2, Upload } from "@lucide/vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import type {
   WorkflowInputFieldInput,
   WorkflowStepInput,
@@ -11,8 +16,12 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 const platform = usePlatformStore();
 const route = useRoute();
+const { t } = useI18n();
 const projectRef = computed(() => String(route.params.projectRef));
 const workflowRef = computed(() => String(route.params.workflowRef));
 const workflow = computed(() => platform.workflows[workflowRef.value]);
@@ -25,8 +34,45 @@ const agentList = computed(() =>
     (i) => i.projectRef === projectRef.value && !i.system,
   ),
 );
+async function searchAgents(
+  query: string,
+  pageToken: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  const project = projectRef.value;
+  const page = await loadAgentCatalogPage(
+    { projectRef: project, query, pageToken, pageSize: 40 },
+    signal,
+  );
+  if (page.items.some((agent) => agent.projectRef !== project))
+    throw new Error("Workflow agent selector scope mismatch");
+  return {
+    items: page.items
+      .filter((agent) => !agent.system)
+      .map((agent) => ({
+        ref: agent.ref,
+        title: agent.name,
+        description: agent.purpose,
+        meta: agent.roleDescription,
+      })),
+    nextPageToken: page.nextPageToken,
+  };
+}
+function selectedAgent(ref: string) {
+  const agent = agentList.value.find((item) => item.ref === ref);
+  return agent
+    ? { ref: agent.ref, title: agent.name, description: agent.purpose }
+    : undefined;
+}
+function selectAgent(value: unknown, step?: WorkflowStepInput): void {
+  if (!canEdit.value || busy.value) return;
+  const ref = typeof value === "string" ? value : "";
+  if (step) step.agentRef = ref;
+  else form.coordinatorAgentRef = ref;
+}
 const busy = ref(false);
 const problem = ref<AppProblem>();
+let loadGeneration = 0;
 const gateDecisionOptions = [
   "APPROVE",
   "REJECT",
@@ -43,6 +89,20 @@ const form = reactive({
   inputFields: [] as WorkflowInputFieldInput[],
   steps: [] as WorkflowStepInput[],
 });
+const savedForm = ref("");
+const dirty = computed(
+  () => savedForm.value !== "" && JSON.stringify(form) !== savedForm.value,
+);
+useUnsavedChanges(dirty, () => t("managed.discard"));
+const validStepText = computed(() =>
+  form.steps.every(
+    (step) =>
+      !!step.purpose.trim() &&
+      !step.purpose.includes("\0") &&
+      step.expectedResult.length <= 1000 &&
+      !step.expectedResult.includes("\0"),
+  ),
+);
 function addInputField() {
   if (!canEdit.value) return;
   form.inputFields.push({
@@ -100,49 +160,64 @@ function removeStep(index: number) {
   });
 }
 async function load() {
-  await Promise.all([
-    platform.loadWorkflow(workflowRef.value),
-    platform.loadAgents(projectRef.value),
-    platform.loadCapabilities(),
-  ]);
-  if (workflow.value) {
-    Object.assign(form, {
-      name: workflow.value.name,
-      purpose: workflow.value.purpose,
-      coordinatorAgentRef: workflow.value.coordinatorAgentRef ?? "",
-      maxConcurrency: workflow.value.maxConcurrency ?? 1,
-      timeoutSeconds: workflow.value.timeoutSeconds ?? 7200,
-      completionCriteria: workflow.value.completionCriteria ?? "",
-      inputFields: workflow.value.inputFields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        description: field.description,
-        valueType: field.valueType,
-        required: field.required,
-        options: [...field.options],
-      })),
-      steps: workflow.value.steps.map((step) => ({
-        position: step.position,
-        name: step.name,
-        purpose: step.purpose,
-        agentRef: step.agentRef ?? "",
-        parallel: step.parallel,
-        parallelGroup: step.parallelGroup,
-        humanGate: step.humanGate,
-        timeoutSeconds: step.timeoutSeconds,
-        expectedResult: step.expectedResult,
-        gateDecisions: [...step.gateDecisions],
-        requiredCapabilityKeys: [...step.requiredCapabilityKeys],
-      })),
-    });
+  const current = ++loadGeneration;
+  const project = projectRef.value;
+  const target = workflowRef.value;
+  problem.value = undefined;
+  try {
+    await Promise.all([
+      platform.loadWorkflow(target),
+      platform.loadAgents(project),
+      platform.loadCapabilities(),
+    ]);
+    if (current !== loadGeneration) return;
+    if (workflow.value && workflow.value.projectRef !== project)
+      throw new Error("Workflow project scope mismatch");
+    if (workflow.value) {
+      Object.assign(form, {
+        name: workflow.value.name,
+        purpose: workflow.value.purpose,
+        coordinatorAgentRef: workflow.value.coordinatorAgentRef ?? "",
+        maxConcurrency: workflow.value.maxConcurrency ?? 1,
+        timeoutSeconds: workflow.value.timeoutSeconds ?? 7200,
+        completionCriteria: workflow.value.completionCriteria ?? "",
+        inputFields: workflow.value.inputFields.map((field) => ({
+          key: field.key,
+          label: field.label,
+          description: field.description,
+          valueType: field.valueType,
+          required: field.required,
+          options: [...field.options],
+        })),
+        steps: workflow.value.steps.map((step) => ({
+          position: step.position,
+          name: step.name,
+          purpose: step.purpose,
+          agentRef: step.agentRef ?? "",
+          parallel: step.parallel,
+          parallelGroup: step.parallelGroup,
+          humanGate: step.humanGate,
+          timeoutSeconds: step.timeoutSeconds,
+          expectedResult: step.expectedResult,
+          gateDecisions: [...step.gateDecisions],
+          requiredCapabilityKeys: [...step.requiredCapabilityKeys],
+        })),
+      });
+      savedForm.value = JSON.stringify(form);
+    }
+  } catch (error) {
+    if (current === loadGeneration) problem.value = asProblem(error);
   }
 }
 async function save() {
-  if (!workflow.value || !canEdit.value) return;
+  if (!workflow.value || !canEdit.value || busy.value || !validStepText.value)
+    return;
+  const current = loadGeneration;
   busy.value = true;
   problem.value = undefined;
   try {
     await platform.saveWorkflow(projectRef.value, form, workflow.value);
+    if (current === loadGeneration) savedForm.value = JSON.stringify(form);
   } catch (error) {
     problem.value = asProblem(error);
   } finally {
@@ -150,7 +225,12 @@ async function save() {
   }
 }
 async function command(action: "VALIDATE" | "PUBLISH" | "ARCHIVE") {
-  if (!workflow.value?.nextActions.includes(action)) return;
+  if (
+    !workflow.value?.nextActions.includes(action) ||
+    busy.value ||
+    dirty.value
+  )
+    return;
   busy.value = true;
   try {
     await platform.changeWorkflow(workflow.value, action);
@@ -168,55 +248,75 @@ function launchRoute(): string {
   });
   return `/projects/${projectRef.value}/runs/new?${query.toString()}`;
 }
-onMounted(() => void load());
+watch(
+  () => [projectRef.value, workflowRef.value],
+  () => void load(),
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  loadGeneration += 1;
+});
 </script>
 <template>
   <PageFrame
     :title="workflow?.name ?? $t('workflows.title')"
     :subtitle="workflow?.purpose"
     ><template #actions
-      ><StatusBadge v-if="workflow" :state="workflow.state" /><button
+      ><StatusBadge
+        v-if="workflow"
+        :state="dirty ? 'DRAFT' : workflow.state"
+        :label="dirty ? $t('runtime.localChanges') : undefined"
+      />
+      <RouterLink
+        v-if="canLaunch && !dirty && !busy"
+        class="button button--primary"
+        :to="launchRoute()"
+        ><Play :size="16" />{{ $t("common.launch") }}</RouterLink
+      ><button
         v-if="workflow?.nextActions.includes('VALIDATE')"
         class="button"
         type="button"
-        :disabled="busy"
+        :disabled="busy || dirty"
         @click="command('VALIDATE')"
       >
-        {{ $t("workflows.validate") }}</button
+        <Check :size="16" />{{ $t("workflows.validate") }}</button
       ><button
         v-if="workflow?.nextActions.includes('PUBLISH')"
         class="button button--primary"
         type="button"
-        :disabled="busy"
+        :disabled="busy || dirty"
         @click="command('PUBLISH')"
       >
-        {{ $t("workflows.publish") }}
+        <Upload :size="16" />{{ $t("workflows.publish") }}
       </button></template
     ><AsyncState
       :loading="platform.loading.workflow"
       :problem="platform.problems.workflow"
       @retry="load"
       ><div v-if="workflow" class="workflow-layout">
-        <fieldset class="workflow-editor" :disabled="!canEdit">
+        <fieldset class="workflow-editor" :disabled="!canEdit || busy">
           <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
-          <div class="panel form-grid">
+          <div class="form-grid">
             <label class="field"
               ><span>{{ $t("common.name") }}</span
-              ><input v-model.trim="form.name" required /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.coordinator") }}</span
-              ><select v-model="form.coordinatorAgentRef" required>
-                <option
-                  v-for="agent in agentList"
-                  :key="agent.ref"
-                  :value="agent.ref"
-                >
-                  {{ agent.name }}
-                </option>
-              </select></label
-            ><label class="field field--wide"
+              ><input v-model.trim="form.name" required
+            /></label>
+            <div class="field">
+              <span>{{ $t("workflows.coordinator") }}</span
+              ><AsyncEntityPicker
+                :model-value="form.coordinatorAgentRef || null"
+                :selected="selectedAgent(form.coordinatorAgentRef)"
+                :load-page="searchAgents"
+                :disabled="!canEdit || busy"
+                :trigger-label="$t('workflows.coordinator')"
+                @update:model-value="selectAgent($event)"
+              />
+            </div>
+            <label class="field field--wide"
               ><span>{{ $t("common.purpose") }}</span
-              ><textarea v-model.trim="form.purpose" /></label
+              ><VoiceTextarea
+                v-model.trim="form.purpose"
+                :disabled="!canEdit || busy" /></label
             ><label class="field"
               ><span>{{ $t("workflows.timeout") }}</span
               ><input
@@ -295,11 +395,11 @@ onMounted(() => void load());
                   v-if="field.valueType === 'SELECT'"
                   class="field field--wide"
                   ><span>{{ $t("workflows.inputOptions") }}</span
-                  ><textarea
+                  ><VoiceTextarea
+                    :disabled="!canEdit || busy"
                     :value="field.options.join('\n')"
                     required
-                    @input="updateFieldOptions(field, $event)"
-                  /></label
+                    @input="updateFieldOptions(field, $event)" /></label
                 ><label class="check-field"
                   ><input v-model="field.required" type="checkbox" />{{
                     $t("workflows.inputRequired")
@@ -326,7 +426,7 @@ onMounted(() => void load());
               type="button"
               @click="addStep"
             >
-              {{ $t("common.create") }}
+              <Plus :size="16" />{{ $t("common.create") }}
             </button>
           </div>
           <article
@@ -338,22 +438,28 @@ onMounted(() => void load());
             <div class="form-grid">
               <label class="field"
                 ><span>{{ $t("workflows.stepName") }}</span
-                ><input v-model.trim="step.name" required /></label
-              ><label class="field"
-                ><span>{{ $t("workflows.stepAgent") }}</span
-                ><select v-model="step.agentRef" required>
-                  <option
-                    v-for="agent in agentList"
-                    :key="agent.ref"
-                    :value="agent.ref"
-                  >
-                    {{ agent.name }}
-                  </option>
-                </select></label
-              ><label class="field field--wide"
-                ><span>{{ $t("common.purpose") }}</span
-                ><textarea v-model.trim="step.purpose" required /></label
-              ><label class="check-field"
+                ><input v-model.trim="step.name" required
+              /></label>
+              <div class="field">
+                <span>{{ $t("workflows.stepAgent") }}</span
+                ><AsyncEntityPicker
+                  :model-value="step.agentRef || null"
+                  :selected="selectedAgent(step.agentRef ?? '')"
+                  :load-page="searchAgents"
+                  :disabled="!canEdit || busy"
+                  :trigger-label="$t('workflows.stepAgent')"
+                  @update:model-value="selectAgent($event, step)"
+                />
+              </div>
+              <div class="field field--wide">
+                <span>{{ $t("common.purpose") }}</span
+                ><CodeEditor
+                  v-model="step.purpose"
+                  :label="$t('common.purpose')"
+                  :disabled="!canEdit || busy"
+                />
+              </div>
+              <label class="check-field"
                 ><input v-model="step.parallel" type="checkbox" />{{
                   $t("workflows.parallel")
                 }}</label
@@ -382,13 +488,20 @@ onMounted(() => void load());
                       max="86400"
                       required
                   /></label>
-                  <label class="field field--wide"
-                    ><span>{{ $t("workflows.expectedResult") }}</span
-                    ><textarea
-                      v-model.trim="step.expectedResult"
-                      maxlength="1000"
+                  <div class="field field--wide">
+                    <span>{{ $t("workflows.expectedResult") }}</span
+                    ><CodeEditor
+                      :disabled="!canEdit || busy"
+                      v-model="step.expectedResult"
+                      :label="$t('workflows.expectedResult')"
                     />
-                  </label>
+                    <span
+                      :class="{
+                        'text-danger': step.expectedResult.length > 1000,
+                      }"
+                      >{{ step.expectedResult.length }} / 1000</span
+                    >
+                  </div>
                   <fieldset
                     v-if="step.humanGate"
                     class="choice-field field--wide"
@@ -437,34 +550,30 @@ onMounted(() => void load());
               :aria-label="$t('common.delete')"
               @click="removeStep(index)"
             >
-              ×
+              <Trash2 :size="16" />
             </button>
           </article>
           <ProblemNotice v-if="problem" :problem="problem" compact /><button
             v-if="canEdit"
-            class="button button--primary"
+            class="button button--primary workflow-save"
             type="button"
-            :disabled="busy"
+            :disabled="busy || !validStepText"
             @click="save"
           >
-            {{ $t("common.save") }}
+            <Save :size="16" />{{ $t("common.save") }}
           </button>
         </fieldset>
-        <aside v-if="canLaunch" class="panel launch-panel">
-          <h2>{{ $t("runs.new") }}</h2>
-          <p>{{ $t("workflows.launchHint") }}</p>
-          <RouterLink class="button button--primary" :to="launchRoute()">
-            {{ $t("common.launch") }}
-          </RouterLink>
-        </aside>
       </div></AsyncState
     ></PageFrame
   >
 </template>
 <style scoped>
+.text-danger {
+  color: var(--danger);
+}
 .workflow-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 .workflow-editor {
@@ -499,8 +608,11 @@ onMounted(() => void load());
 .workflow-step {
   position: relative;
   display: grid;
-  grid-template-columns: 36px 1fr 40px;
+  grid-template-columns: 36px minmax(0, 1fr) 40px;
   gap: 12px;
+}
+.workflow-save {
+  justify-self: start;
 }
 .step-number {
   display: grid;

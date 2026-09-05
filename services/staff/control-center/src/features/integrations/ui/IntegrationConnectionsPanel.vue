@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import {
   FlaskConical,
+  Info,
+  Maximize2,
+  Search,
   KeyRound,
   LoaderCircle,
   Pencil,
@@ -10,6 +13,8 @@ import {
   Trash2,
 } from "@lucide/vue";
 import { useI18n } from "vue-i18n";
+import { ref } from "vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
 import {
@@ -28,6 +33,9 @@ defineProps<{
   coreReady: boolean;
   busyRef: string;
   busyAction?: "TEST" | "ENABLE" | "DISABLE";
+  search?: string;
+  loading?: boolean;
+  hasMore?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -39,26 +47,55 @@ const emit = defineEmits<{
   edit: [connection: IntegrationConnection];
   delete: [connection: IntegrationConnection];
   grants: [connection: IntegrationConnection];
+  details: [connection: IntegrationConnection];
+  "update:search": [query: string];
+  more: [];
 }>();
 
 const { t } = useI18n();
+const expanded = ref(false);
 </script>
 
 <template>
-  <section class="connections-panel" aria-labelledby="connections-title">
+  <component
+    :is="expanded ? ModalDialog : 'section'"
+    :title="t('integrationsRedesign.connectionsTitle')"
+    size="full"
+    class="connections-panel"
+    aria-labelledby="connections-title"
+    @close="expanded = false"
+  >
     <header class="panel-heading">
       <div>
         <h2 id="connections-title">
           {{ t("integrationsRedesign.connectionsTitle") }}
         </h2>
-        <p>{{ t("integrationsRedesign.connectionsDescription") }}</p>
       </div>
       <span class="result-count">{{
         t("integrationsRedesign.connectionCount", {
           count: connections.length,
         })
       }}</span>
+      <button
+        v-if="!expanded"
+        class="icon-button"
+        :title="t('contextResources.expand')"
+        :aria-label="t('contextResources.expand')"
+        @click="expanded = true"
+      >
+        <Maximize2 :size="18" />
+      </button>
     </header>
+    <label class="connection-search"
+      ><Search :size="18" /><input
+        type="search"
+        :value="search"
+        :aria-label="t('common.search')"
+        maxlength="500"
+        @input="
+          emit('update:search', ($event.target as HTMLInputElement).value)
+        "
+    /></label>
     <div v-if="coreReady" class="core-readiness" role="status">
       <ShieldCheck :size="20" aria-hidden="true" />
       <div>
@@ -66,7 +103,13 @@ const { t } = useI18n();
         <p>{{ t("integrations.webOnlyReady") }}</p>
       </div>
     </div>
-    <div v-if="connections.length" class="connection-grid" role="list">
+    <div
+      v-if="connections.length"
+      class="connection-grid"
+      :class="{ 'connection-grid--expanded': expanded }"
+      role="list"
+      :aria-busy="loading"
+    >
       <article
         v-for="connection in connections"
         :key="connection.ref"
@@ -184,6 +227,15 @@ const { t } = useI18n();
 
         <footer class="connection-actions">
           <button
+            class="icon-button"
+            type="button"
+            :title="t('identity.details')"
+            :aria-label="t('identity.details')"
+            @click="emit('details', connection)"
+          >
+            <Info :size="17" />
+          </button>
+          <button
             v-if="
               canConfigureCredential(
                 definitions[connection.definitionKey],
@@ -294,18 +346,38 @@ const { t } = useI18n();
         </footer>
       </article>
     </div>
+    <p v-else-if="loading" role="status">{{ t("common.loading") }}</p>
     <div v-else class="connection-empty">
       <PowerOff :size="28" aria-hidden="true" />
       <h3>{{ t("integrationsRedesign.noConnectionsYet") }}</h3>
       <p>{{ t("integrations.noConnections") }}</p>
     </div>
-  </section>
+    <button
+      v-if="hasMore"
+      class="button"
+      :disabled="loading"
+      @click="emit('more')"
+    >
+      {{ t("impact.more") }}
+    </button>
+  </component>
 </template>
 
 <style scoped>
 .connections-panel {
   display: grid;
   gap: 14px;
+  min-width: 0;
+}
+.connection-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.connection-search input {
+  width: 100%;
+  min-width: 0;
 }
 .panel-heading,
 .connection-title,
@@ -372,6 +444,11 @@ const { t } = useI18n();
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   gap: 12px;
+  max-height: 2220px;
+  overflow: auto;
+}
+.connection-grid--expanded {
+  max-height: none;
 }
 .connection-card {
   display: flex;

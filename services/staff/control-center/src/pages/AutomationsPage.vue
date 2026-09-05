@@ -7,6 +7,11 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 
 const route = useRoute();
 const projectRef = computed(() => String(route.params.projectRef));
+const initialScheduleRef = computed(() =>
+  typeof route.query.scheduleRef === "string"
+    ? route.query.scheduleRef
+    : undefined,
+);
 </script>
 
 <template>
@@ -14,6 +19,10 @@ const projectRef = computed(() => String(route.params.projectRef));
     :title="$t('automations.title')"
     :subtitle="$t('automations.subtitle')"
   >
-    <AutomationsWorkspace :key="projectRef" :project-ref="projectRef" />
+    <AutomationsWorkspace
+      :key="projectRef"
+      :project-ref="projectRef"
+      :initial-schedule-ref="initialScheduleRef"
+    />
   </PageFrame>
 </template>

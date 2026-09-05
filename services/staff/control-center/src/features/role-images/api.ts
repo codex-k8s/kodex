@@ -50,6 +50,7 @@ function versionedHeaders(headers: MutationHeaders): {
 export async function loadRoleImagePage(
   projectRef: string,
   pageToken?: string,
+  signal: AbortSignal = requestSignal(),
 ): Promise<RoleImageRecipePage> {
   return (
     await unwrap(
@@ -59,7 +60,7 @@ export async function loadRoleImagePage(
           pageSize: 40,
           ...(pageToken ? { pageToken } : {}),
         },
-        signal: requestSignal(),
+        signal,
       }),
     )
   ).data;
@@ -170,13 +171,15 @@ export async function loadRoleImageDependencies(
   return result;
 }
 
-export async function loadRoleEnvironmentCatalog(): Promise<RoleEnvironment[]> {
-  return (await unwrap(listRoleEnvironments({ signal: requestSignal() }))).data
-    .items;
+export async function loadRoleEnvironmentCatalog(
+  signal: AbortSignal = requestSignal(),
+): Promise<RoleEnvironment[]> {
+  return (await unwrap(listRoleEnvironments({ signal }))).data.items;
 }
 
 export async function loadRoleDefinitionOptions(
   projectRef: string,
+  signal: AbortSignal = requestSignal(),
 ): Promise<RoleDefinitionOption[]> {
   const values = new Map<string, { label: string; agentRefs: Set<string> }>();
   const visitedTokens = new Set<string>();
@@ -190,7 +193,7 @@ export async function loadRoleDefinitionOptions(
             pageSize: 100,
             ...(pageToken ? { pageToken } : {}),
           },
-          signal: requestSignal(),
+          signal,
         }),
       )
     ).data;

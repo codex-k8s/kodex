@@ -224,7 +224,257 @@ npm run test:e2e:check
 npm run build
 ```
 
-Повторный `npm run codegen` должен оставлять generated diff чистым.
+Повторный `npm run codegen` должен оставлять TypeScript generated diff чистым.
+AsyncAPI generator также пишет Go-модели; из корня репозитория выполнить
+`make gen-control-api-gateway-asyncapi`, который применяет `gofmt` и проверяет
+канонический generated contract. Ручная правка generated файлов запрещена.
+
+## Матрица приёмки MVP #1022
+
+Матрица связывает обязательный scope с кодом и проверками, но не заменяет
+итоговый отчёт exact SHA. Наличие строки не означает завершённую приёмку.
+Все пути ниже относительны `services/staff/control-center`; `*.test.ts` рядом
+с модулем выполняются через `npm run test:unit`.
+
+| Критерии                                                            | Реализация                                                                                                                                              | Проверка / незакрытая часть                                                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01, 07, 08, 53, 54: переводы, PWA, ошибки, поиск                    | `src/app/i18n`, `src/features/search`, `src/shared/api/search-result.ts`, `src/shared/config`                                                           | Search/session/PWA unit; полнота переводов всех экранов ещё проверяется                                                                        |
+| 02, 03, 04, 06, 10, 12, 13: shell, Home, проекты                    | `src/app/AppShell.vue`, `src/pages/HomePage.vue`, `src/pages/ProjectsPage.vue`, `src/features/projects`                                                 | `e2e/synthetic.spec.ts`; дополнительные detail viewport ещё проверяются                                                                        |
+| 05, 19, 22, 27: ограниченные списки, selectors, глобальные каталоги | `src/shared/ui/AsyncEntityPicker.vue`, `src/features/catalogs`, `src/features/managed-configurations/ConfigurationCatalog.vue`                          | Picker unit; synthetic catalog; распространение bounded/expand на все списки ещё выполняется                                                   |
+| 09: модальный ассистент                                             | `src/features/assistant`                                                                                                                                | Layout/context unit, synthetic; server history query/cursor ещё отсутствует                                                                    |
+| 11: продление сессии                                                | `src/features/session/store.ts`, `src/features/realtime`                                                                                                | Session renewal/backoff unit; exact expiry/reconnect после интеграции требует отдельной проверки                                               |
+| 14, 20, 55-60: общий voice и Tab                                    | `src/shared/ui/VoiceTextarea.vue`, `VoiceInputButton.vue`, `CodeEditor.vue`, `code-editor-keymap.ts`, `src/features/speech`, `src/shared/api/speech.ts` | Voice/lease/API unit, `e2e/voice.synthetic.spec.ts`, bootstrap STT в `e2e/synthetic.spec.ts`; real-provider smoke только у владельцев backend  |
+| 15, 16, 21, 23, 30, 31: инструкции, preview, runtime и полномочия   | `src/features/agents/detail`, `src/features/runtime`                                                                                                    | Существующие detail/runtime unit; сквозная матрица user∩agent и все preview ещё проверяются                                                    |
+| 17, 18: модели и reasoning                                          | `src/features/providers`, `src/features/agents/detail`                                                                                                  | Требуется account-scoped каталог моделей и разрешённых параметров от producer                                                                  |
+| 24-26, 37, 61: Kanban, файлы, VFS и workspace                       | `src/features/workboard/components/RunsBoard.vue`, `src/features/files`, `src/features/context-resources`                                               | VFS/context API unit, synthetic Skill/Memory lifecycle и exact binding readback; runtime write proof принадлежит runner/runtime                |
+| 28, 29, 32, 33, 38: карточки, аватары, запуск, решения              | `src/features/agents/catalog`, `src/pages/WorkflowsPage.vue`, `WorkflowDetailPage.vue`, `DecisionsPage.vue`                                             | Базовые workboard/agent unit; полная ручная приёмка ещё не выполнена                                                                           |
+| 34-36, 43: workflow/continuation/automation prompts, cron           | `src/features/automations`, `src/pages/WorkflowDetailPage.vue`, `src/features/runs`                                                                     | Schedule model/API/editor unit; все materialization previews ещё подключаются                                                                  |
+| 39-42: типизированные интеграции и Human Gate                       | `src/features/integrations`, `src/features/managed-configurations/ConfigurationFields.vue`                                                              | Integration/typed YAML unit, synthetic details/form/YAML; server Gate policy и SMTP/IMAP отсутствуют в текущем contract                        |
+| 44-48: environment draft/impact/rebind                              | `src/pages/RuntimeEnvironmentsPage.vue`, `RuntimeEnvironmentEditorPage.vue`, `src/features/runtime`                                                     | Draft/reauth unit; `revision-impact.test.ts`; synthetic save/reload/validate/publish/discard и выборочный environment rebind на 1440/390       |
+| 49, 50: редактор и нормализация Secret                              | `src/features/runtime-secrets`, `src/features/runtime/SecretImpactDialog.vue`                                                                           | Base64/page-normalization/store unit; `revision-impact.test.ts`; synthetic JSON editor и rebind окружения без агентов                          |
+| 51, 52: provider delete/verify/reauth                               | `src/features/providers`                                                                                                                                | Store/model unit; DELETE возвращает REVOKED, terminal cleanup/impact ещё не представлен контрактом                                             |
+| UI-managed RoleImage/IntegrationDefinition                          | `src/features/managed-configurations`, `src/features/role-images`                                                                                       | Model/document unit, synthetic draft→validate→publish; полный build/provenance/source ownership ещё проверяется                                |
+| Mattermost: административная привязка внешней identity              | `src/features/integrations/interaction-identities.ts`, `ui/InteractionIdentitiesPanel.vue`, `src/pages/IntegrationsPage.vue`                            | `interaction-identities.test.ts`: OCC bind/revoke и closed receipt; `e2e/fixtures/interaction-identities.ts`: list/create/revoke. Live NOT RUN |
+
+Дополнение к интеграционным зависимостям:
+
+- Mattermost bind фиксирует exact connection version через `If-Match`, revoke
+  использует version identity. Actor не вводится пользователем. Для target
+  нужен активный `USER` с активным platform membership; существующий
+  `listAccessSubjects(kind=USER)` поддерживает query/cursor, но не фильтрует
+  platform membership. Требуются eligible selector, team/channel каталоги и
+  каноническое правило SHA256 внешнего user ID. Наличие записи не означает
+  готовности inbound: решение принадлежит серверу.
+- `RuntimeEnvironmentDraft` в checkpoint `04957a990` не содержит времени
+  последнего server save и номера base revision. `expectedEnvironmentVersion`
+  не подменяет номер immutable revision; локальное время не выдаётся за
+  серверное. Save/validate/publish/discard и защита несохранённых изменений
+  подключены к реальному draft API. Selective rebind подключён к HTTP #1045:
+  `revision-impact.ts`, `EnvironmentImpactDialog.vue`, `SecretImpactDialog.vue`.
+  `revision-impact.test.ts` проверяет OCC, исходную/целевую ревизии, запрет
+  чужой выборки, неполную квитанцию и публикацию окружения без агентов.
+
+### Локальная синтетическая проверка
+
+Адресная передача #1045 исполнителю Meitner (`01a06dee-d29a-72c2-8d22-3a67d150c8a7`):
+
+| Приоритетный контракт | Требуемые данные для PWA                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mattermost identity   | HTTP list/bind/revoke получены и подключены. Остались eligible USER selector с активным platform membership, team/channel и правило SHA256 внешнего user; текущая форма принимает готовый lowercase SHA256                                                                                                                                                                                |
+| Полные параметры STT  | Получены и подключены; bootstrap `speechTranscription` остаётся единственным источником пользовательской eligibility, config readiness её не заменяет. Каталог совместимых моделей ещё отсутствует                                                                                                                                                                                        |
+| Skills/Memory         | HTTP `441564286` и CP Skill lifecycle/binding получены. UI подключает bindings из runtime configuration, If-Match agent version и обязательный readback после mutation. Реальные scanner/runtime и staging acceptance остаются у владельцев backend                                                                                                                                       |
+| VFS lifecycle         | Eligibility/nextActions, состояние active/trash и версии узлов для выбора и массовых операций; текущий VfsNode не даёт права выводить их из вида узла                                                                                                                                                                                                                                     |
+| Home                  | Server-filtered cursor-каталоги active/failed/continuable runs и owner gates; поиск и totals. Организационные assistant artifacts не подменяют глобальные результаты проектов                                                                                                                                                                                                             |
+| RoleImage recipes     | `listRoleImageRecipes` сейчас имеет только `roleDefinitionRef/pageSize/pageToken`; нужны server `query/state` и связь recipe/build с managed ownership, не сопоставление по имени                                                                                                                                                                                                         |
+| Model/reasoning       | CP `PlatformQueryService.ListModelCapabilities` (`internal/transport/grpc/mvp_queries.go:81`) уже принимает definition/account/query/page и возвращает `ModelCapability` с reasoning efforts/default/eligible accounts. Mapping повторно проверен и отсутствует в HTTP/TS checkpoint `43cdb2792`; также нужен сохраняемый model/effort в immutable runtime configuration и exact readback |
+| Workflow user∩agent   | `PlatformCapability` из `/platform-capabilities` не содержит user eligibility; `availableWithoutIntegration` не является полномочием. Нужен authoritative effective capability catalog для текущего пользователя и конкретного agent/шага; неизвестные полномочия нельзя выводить из имени роли                                                                                           |
+
+Точка интеграции HTTP/SDK `441564286` (локальный cherry-pick `c2adafe95`),
+CP dependencies `695ae1e15`/`ae9cb517f` (локально `1a6f50310`/`55e7b65ce`).
+Ранее интегрирован `e9eeaaeac` (merge `1a948c1a0`); generated TS принимается только через
+commit #1045 с генерацией из суммарного OpenAPI. Этот список фиксирует запрос,
+а не подтверждает доставку сообщения в другой тред или наличие нового HTTP.
+
+Дополнительно приняты committed checkpoints: Skill/Memory VFS `4004bd66c`
+с predecessors (локальный `fbc965c94`), email SDK `c61bcdca3` с CP `d31cd4c70`
+(локально `37feb5c1b`/`85ec98e11`), immutable managed Save/Discard `43cdb2792`
+с CP dependencies `3380a7e98`/`23bc30d65`/`f7c2d2ecb` (локальный HTTP `094628325`).
+Receipt-bound email session `5c32fa683` принят как `e075e1247`.
+Собственная PWA-реализация ещё не является завершённым unit.
+
+Локальный checkpoint на базе `e075e1247`: `npm run typecheck`,
+`npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).
+Повторный `npm run codegen` побайтово воспроизвёл весь
+`src/shared/api/generated`. Build сообщает о JS chunk больше 500 kB,
+AsyncAPI parser рекомендует более новую версию спецификации; предупреждения
+не скрыты настройками. Synthetic UI прошёл 1280/1440/1920/2560/2900,
+дополнительный 900 и mobile 390. Полные detail lifecycle проверяются только
+на 1440/390; эти запуски не являются полной приёмкой 61 критериев,
+staging, CI или проверкой Safari.
+
+| Критерий                                       | Файл                                                                        | Тест и ручная приёмка                                                                                                                                                                                                                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Immutable Save/Discard четырёх managed kinds   | `src/features/managed-configurations/api.ts`, `ConfigurationEditor.vue`     | `drafts.test.ts`; synthetic prompt сохраняет пустой текст и новую revision, IntegrationPackage показывает старую DISCARDED и exact discard. Вручную: сохранить пустой draft, проверить новый ref/parent, открыть историю, отбросить новый draft; опубликованная revision не меняется |
+| Email UNKNOWN и отдельное решение владельца    | `src/features/integrations/email-effects.ts`, `ui/EmailEffectPanel.vue`     | `email-effects.test.ts`, `e2e/fixtures/email-effects.ts`. Вручную: открыть email connection, найти exact invocation receipt, выбрать подтверждённый исход, подтвердить решение; первоначальная UNKNOWN receipt остаётся в аудите                                                     |
+| Skill files: шесть строк, раскрытие, read-only | `src/features/context-resources/SkillManifestFiles.vue`                     | `SkillManifestFiles.test.ts`; при восьми файлах шесть строк, раскрытие доступно и после архивации                                                                                                                                                                                    |
+| Memory retention                               | `src/features/context-resources/retention.ts`, `ContextEditor.vue`          | `retention.test.ts`, synthetic expiry: содержимое убирается по deadline, сервер перечитывается, локальный код не назначает EXPIRED                                                                                                                                                   |
+| Полнота переводов                              | `src/app/i18n/index.ts`                                                     | `index.test.ts`: все RU keys имеют EN; единственный русский autonym в EN — название языка Русский                                                                                                                                                                                    |
+| Workflow: инструкции и ожидаемый результат     | `src/pages/WorkflowDetailPage.vue`, `src/shared/ui/CodeEditor.vue`          | `e2e/fixtures/workflow.ts`: Tab, сохранение исходных пробелов, dirty navigation; server materialization и provenance не подменяются браузерной интерполяцией                                                                                                                         |
+| Kanban: bounded columns и общий cursor         | `src/pages/RunsPage.vue`, `src/features/workboard/components/RunsBoard.vue` | `e2e/fixtures/runs-catalog.ts`: восемь длинных карточек, scroll до следующей страницы, search/reset cursor, page overflow; layout входит во все семь synthetic viewport                                                                                                              |
+
+Email receipt UI не получает worker grant/effect key/external receipt ref и не
+повторяет reconciliation автоматически. При ошибке мутации нужно новое чтение;
+историческое решение показывается без восстановления его срока действия.
+Пока нет HTTP каталога integration invocations или ссылки invocationRef из
+run history: ввод exact ref не заменяет требуемый список. Receipt-bound fresh
+session подключена к HTTP #1045; live email authority и полный consumer
+lifecycle не подтверждаются synthetic UI.
+
+Перед email reconciliation выполняется существующий OIDC redirect с
+`prompt=login/max_age=0`, затем `createOwnerSession` с exact receipt purpose
+без project/secret. После callback пользователь явно выбирает исход и
+подтверждает команду. Примечание и transcript не помещаются в storage.
+Для неопределённой попытки `email-attempt.ts` хранит только refs/version/digest,
+outcome, хеш тела и прежний idempotency key (не более 20 незавершённых попыток).
+После нового SSO прежнее примечание нужно ввести снова: несовпадающее тело
+закрыто отклоняется, ключ не заменяется автоматически. Авторитетное decision
+readback удаляет запись; logout очищает локальные метаданные.
+`session/reauth.test.ts`, `session/store.test.ts`, `email-attempt.test.ts`
+проверяют binding, одноразовое локальное подтверждение, deadline и ключ.
+`e2e/fixtures/email-oidc.ts` использует синтетический IdP с PKCE, purpose и
+replacement cookies; этот тест не проверяет подпись реального IdP на gateway.
+Context7 проверен для `/authts/oidc-client-ts`; дополнительно прочитаны API
+установленной версии и `security-headers.conf`. Popup не используется: текущий
+COOP `same-origin` сохранён без ослабления защитных headers.
+
+`listRuns` в текущем SDK принимает только `projectRef/query/pageSize/pageToken`.
+Каталог использует настоящие страницы по 40 записей и общий cursor; scroll
+любой колонки догружает следующую общую страницу. Независимая server-side
+пагинация колонок и полные ACTIVE/TERMINAL фильтры требуют state/lane filter
+в producer и HTTP. До него фильтры отражают только загруженные записи;
+локальные lane counts не выдаются за серверные totals. Контракт не имитируется.
+
+Уточнение после `261b577ce`: typed Skill/Memory HTTP и STT parameters уже
+получены. `src/features/context-resources` подключает отдельные каталоги,
+Skill draft/save/validate/review/publish, Memory immutable revision/retention,
+archive/restore/purge и history; `api.test.ts` проверяет scope, redaction и OCC.
+`e2e/fixtures/context-resources.ts` содержит synthetic lifecycle, не CP/runtime
+acceptance. Memory producer checkpoint `e9eeaaeac` интегрирован без изменения SDK.
+Skill owner lifecycle и bind/unbind подключены через готовые checkpoints.
+`ContextBindingPanel.vue` и `bindings.ts` используют обязательные
+`skillBindings`/`memoryBindings` из runtime view с точным agent ETag. Только
+пустой авторитетный список допускает `expectedBindingVersion=0`; неизвестный
+snapshot закрывает команды. Unbind использует прежнюю связанную revision,
+а не новую current revision ресурса. После команды обязательны GET и проверка
+квитанции; ошибка не вызывает повтор mutation. `bindings.test.ts` проверяет
+два OCC, пустые массивы, старую revision и повреждённую квитанцию.
+
+`SkillImportDialog.vue` использует существующий artifact upload, затем exact
+revision read для scan. Импортирует выбранные файлы/папку либо SKILL.md из общего
+CodeMirror; не реализует ZIP extraction на клиенте и не выдает импорт за
+validation/review. Файлы добавляются в manifest после CLEAN. Формат draft
+сверен с `context-http-1045.md`: root SKILL.md, closed extensions, Unicode
+name/description, 240 UTF-8 bytes на path, 128 файлов, file digest с `sha256:`.
+Локальные bounds upload: 32 MiB на файл, 64 MiB на очередь, 256 KiB на SKILL.md;
+совокупный размер уже существующего bundle окончательно проверяет CP.
+`skill-import.test.ts` проверяет paths, дубли, byte limits и exact receipt.
+Memory source-run selector использует project/query/cursor и сохраняет
+owner-returned sourceRef при новой revision (`selectors.test.ts`).
+
+`ConfigurationFields.vue` отображает STT languages/keywords/prompt/temperature,
+chunking и три лимита; `ConfigurationFields.test.ts` проверяет полный профиль
+и disabled-форму. Server modelprofile остаётся источником совместимости.
+Отсутствующий HTTP model catalog не заменён списком придуманных моделей.
+Guard `shared/ui/unsaved-changes.ts` защищает workflow/managed/context формы;
+unit и synthetic workflow проверяют отмену ухода. Через Context7 сверены
+Vue Router Composition API leave/update guards и их lifecycle cleanup.
+
+Canonical IntegrationPackage: `IntegrationPackageField.vue` строит форму по
+`contracts/integrations/v1/integration-package.schema.json`: вложенные
+capabilities, credential slot без значений секретов, typed connection/input/output
+fields, network destinations, health check, retry/idempotency и Human Gate policy.
+`npm run generate:integration-schema` генерирует standalone browser validator
+(Ajv 2020-12, без runtime eval); генератор включён в `npm run codegen`.
+Context7: Ajv standalone ESM/CSP и esbuild stdin/resolveDir/browser bundle.
+`integration-package.test.ts` проверяет все
+семь shipped manifests, bounds, conditional destination и отсутствие значений
+в diagnostics; `document.test.ts` проверяет нормализованный diff без перестановки
+массивов. `e2e/fixtures/integration-package.ts` проверяет form→JSON→save и diff
+на синтетическом HTTP, не объявляет публикацию работающей на CP.
+
+Конкретная незакрытая producer-зависимость: `revision.IntegrationPackage()`
+в control-plane принимает только digest из `integrationpackage.LoadShipped()`.
+Любая UI-правка manifest отклоняется даже для известного adapter. Schema пока
+разрешает только `metadata.origin=SHIPPED`; UI/GIT origin и исполнение новой
+опубликованной managed revision требуют producer/consumer contract. PWA не
+меняет schema и не объявляет draft готовым runtime package. Публичный flattened
+IntegrationDefinition не подменяется полным manifest; источник полного content
+для существующей managed configuration читается через history.
+
+Дополнительная воспроизводимая приёмка #1022:
+
+| Критерий                                                                                          | Файл                                                                                              | Тест                                                                             |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Secret JSON: позиция ошибки без фрагмента значения, форматирование, отсутствие voice              | `src/shared/ui/json-diagnostic.ts`, `src/features/runtime-secrets/RuntimeSecretValueDialog.vue`   | `json-diagnostic.test.ts`, `e2e/fixtures/secrets.ts`                             |
+| Подтверждённая Secret revision не откатывается отставшими GET/list; plaintext не попадает в Pinia | `src/features/runtime-secrets/model.ts`, `store.ts`                                               | `model.test.ts`, `store.test.ts`, synthetic create/readback                      |
+| Provider selector и остановка device polling после закрытия                                       | `src/features/providers/ProviderAccountsWorkspace.vue`, `store.ts`                                | `store.test.ts`, `e2e/fixtures/providers.ts`, `e2e/synthetic.spec.ts`            |
+| RoleImage bounded/expand, version/cursor/project scope и отмена чтения                            | `src/features/role-images/RoleImageCatalog.vue`, `store.ts`                                       | `store.test.ts`, `e2e/fixtures/role-images.ts`                                   |
+| Voice скрыт в disabled managed/workflow fields                                                    | `src/features/managed-configurations/ConfigurationFields.vue`, `src/pages/WorkflowDetailPage.vue` | Передача disabled проверена в коде; отдельный browser case этих форм ещё NOT RUN |
+
+В ручной приёмке JSON-секрета ввести невалидный документ, убедиться в отсутствии
+POST, исправить и отформатировать, затем сохранить. После закрытия диалога
+значение не должно оставаться в DOM/Pinia/browser storage. При задержке
+каталога подтверждённая ревизия остаётся видна; повторный POST не выполняется.
+На 390 px кнопки действий Secret и footer RoleImage должны целиком помещаться
+в строку/карточку. Synthetic проверяет их геометрию отдельно от page overflow.
+
+`npm run test:e2e:synthetic` собирает отдельный `dist-synthetic`, запускает
+локальный preview `http://127.0.0.1:43122` и закрывает его после тестов.
+Обязательные desktop screenshots: 1280, 1440, 1920, 2560 и 2900 px,
+mobile: 390 px; дополнительно проверяется 900 px. Результаты находятся
+в `test-results/synthetic`. Запросы приложения перехвачены безопасными fixtures,
+MediaRecorder использует искусственное устройство Chromium. Это не live,
+не проверка OIDC-провайдера и не реальная транскрипция. Успех этого набора
+не означает приёмку всех MVP-UI-01..61: подробные lifecycle-сценарии сейчас
+проверяются на 1440/390, остальные размеры покрывают только сценарии,
+явно выполняемые в `synthetic.spec.ts`. Полная staging-матрица принадлежит #1031.
+Service Worker в этом
+контуре заблокирован; его контракт проверяется отдельно. Fixture-страница voice
+не входит в production-сборку `npm run build`.
+
+### Ручная приёмка владельцем
+
+1. Проверить постоянную навигацию и выбор проекта, глобальные каталоги,
+   группировку, поиск с задержкой 500 ms, курсорное продолжение и expand.
+2. Создать managed draft, проверить невалидный документ, затем validate,
+   publish, history, exact impact и выборочное rebind. Git-owned запись
+   изменять только после явного detach/copy.
+3. Проверить файлы без автоселекции, VFS breadcrumbs, просмотр объекта,
+   корзину и exact bulk receipts; неизвестные виды не должны открывать чужой UI.
+4. Проверить provider verify/reauth/revoke/delete, cron preview, environment
+   save/validate/publish/discard и Secret rotation; неполный environment draft сохраняется без публикации, API-ошибка сохраняет введённые данные.
+5. Для STT проверить `available=false`, просроченный `validUntil`, отзыв,
+   browser deny, запись длиннее 30 секунд с успешным refresh, cancel и undo.
+   На Secret/password/readonly/disabled полях микрофона быть не должно.
+6. Проверить все detail/editor панели на desktop/mobile, console/network,
+   session renewal и realtime reconnect. Live выполняет root после общей
+   интеграции и отдельного разрешения владельца.
+7. Импортировать Skill с root SKILL.md и supporting files; проверить отказ на
+   traversal/дубли/превышение limits, PENDING/CLEAN/INFECTED, отдельные
+   save/validate/review/publish. Source SKILL.md редактируется общим CodeMirror
+   с Tab и voice eligibility, не становится опубликованным после upload.
+8. Создать Memory с source run и retention, выпустить revision, проверить
+   archive/restore/purge/redacted history. Привязать Skill/Memory к агенту,
+   сменить exact revision, отвязать: agent ETag и binding version независимы;
+   stale version не повторяет mutation. Уже работающий attempt не меняется.
+9. Открыть canonical IntegrationPackage, изменить типизированное поле,
+   переключить JSON/YAML и проверить нормализованный diff. Невалидная schema
+   не подтверждает runtime readiness; публикация UI/GIT требует закрытия
+   описанной producer-зависимости, synthetic save не заменяет её приёмку.
+
+Для #1022 дополнительно проверены Context7 Vue (`/websites/vuejs`), CodeMirror
+(`/websites/codemirror_net`), MediaRecorder (`/mdn/content`), oidc-client-ts
+(`/authts/oidc-client-ts`), js-yaml (`/nodeca/js-yaml`) и Vite (`/vitejs/vite/v8.0.10`).
 
 ## Deploy ownership
 

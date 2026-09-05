@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   CalendarClock,
   CheckCircle2,
@@ -743,7 +744,7 @@ onMounted(() => {
                   обязательно
                 </strong>
               </span>
-              <textarea
+              <VoiceTextarea
                 v-model="comments[selected.gate.ref]"
                 maxlength="4000"
                 :required="requiresDecisionComment(selectedDecision)"
@@ -1185,7 +1186,7 @@ onMounted(() => {
   color: var(--danger);
   font-size: 0.72rem;
 }
-.decision-comment textarea {
+.decision-comment :deep(textarea) {
   min-height: 92px;
 }
 .decision-validation {

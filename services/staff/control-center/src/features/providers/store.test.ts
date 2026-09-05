@@ -247,6 +247,7 @@ describe("providers store", () => {
     });
     api.reauthorizeProviderDevice.mockResolvedValue(pending);
     const apiKey = account({
+      nextActions: ["DELETE", "REVOKE"],
       authorization: {
         ref: "pauth_key",
         method: "API_KEY",
@@ -260,11 +261,77 @@ describe("providers store", () => {
     const store = useProvidersStore();
 
     await store.startDevice(expired);
-    await store.revoke(apiKey);
+    await store.remove(apiKey);
 
     expect(api.reauthorizeProviderDevice).toHaveBeenCalledWith(expired);
     expect(api.startDeviceAuthorization).not.toHaveBeenCalled();
     expect(api.deleteProviderApiKeyAccount).toHaveBeenCalledWith(apiKey);
     expect(api.revokeProviderAccount).not.toHaveBeenCalled();
+  });
+  it("не подменяет отзыв API-key командой удаления", async () => {
+    const item = account({
+      nextActions: ["REVOKE"],
+      authorization: {
+        ref: "pauth_key",
+        method: "API_KEY",
+        state: "AUTHORIZED",
+      },
+    });
+    api.revokeProviderAccount.mockResolvedValue({ ...item, state: "REVOKED" });
+    const store = useProvidersStore();
+    await store.revoke(item);
+    expect(api.revokeProviderAccount).toHaveBeenCalledWith(item);
+    expect(api.deleteProviderApiKeyAccount).not.toHaveBeenCalled();
+    await store.remove(item);
+    expect(api.deleteProviderApiKeyAccount).not.toHaveBeenCalled();
+  });
+
+  it.each(["start", "refresh"])(
+    "не возобновляет polling после закрытия во время %s",
+    async (operation) => {
+      vi.useFakeTimers();
+      const pending = account({
+        state: "PENDING_AUTHORIZATION",
+        nextActions: ["REFRESH_AUTHORIZATION", "CONFIGURE_CREDENTIAL"],
+        authorization: {
+          ref: "pauth_pending",
+          method: "DEVICE_CODE",
+          state: "PENDING",
+          expiresAt: "2099-08-30T08:10:00Z",
+        },
+      });
+      const response = deferred<ProviderAccount>();
+      const store = useProvidersStore();
+      store.accounts = [pending];
+      api.startDeviceAuthorization.mockReturnValue(response.promise);
+      api.verifyDeviceAuthorization.mockReturnValue(response.promise);
+      const result =
+        operation === "start"
+          ? store.startDevice(pending)
+          : store.refreshAuthorization(pending);
+      store.stopAllPolling();
+      response.resolve({ ...pending, version: 2 });
+      await result;
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(store.pollingRefs).toEqual([]);
+      expect(
+        api.startDeviceAuthorization.mock.calls.length +
+          api.verifyDeviceAuthorization.mock.calls.length,
+      ).toBe(1);
+    },
+  );
+
+  it("не отправляет параллельную мутацию одной учётной записи", async () => {
+    const response = deferred<ProviderAccount>();
+    const current = account();
+    api.setProviderAccountEnabled.mockReturnValue(response.promise);
+    const store = useProvidersStore();
+    const first = store.setEnabled(current, false);
+    await expect(store.setEnabled(current, false)).rejects.toThrow(
+      "Provider account mutation is already in progress",
+    );
+    response.resolve({ ...current, enabled: false, version: 2 });
+    await first;
+    expect(api.setProviderAccountEnabled).toHaveBeenCalledOnce();
   });
 });

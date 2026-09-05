@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { CalendarClock, Save } from "@lucide/vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { scheduleInput } from "@/features/automations/model";
+import { loadSchedulePreview } from "@/features/automations/api";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import {
   createExecutionTargetPickerLoader,
   targetRefAfterTypeChange,
@@ -12,8 +15,10 @@ import {
 import type {
   Schedule,
   ScheduleInput,
+  SchedulePreview,
+  SchedulePreviewInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import type { AppProblem } from "@/shared/api/problem";
+import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -38,6 +43,12 @@ const form = reactive({
   targetType: initial?.targetType ?? ("AGENT" as "AGENT" | "WORKFLOW"),
   targetRef: initial?.targetRef ?? "",
   preset: initial?.preset ?? ("DAILY" as ScheduleInput["preset"]),
+  cronExpression: initial?.cronExpression ?? "",
+  misfirePolicy:
+    initial?.misfirePolicy ?? ("COALESCE" as ScheduleInput["misfirePolicy"]),
+  overlapPolicy:
+    initial?.overlapPolicy ?? ("FORBID" as ScheduleInput["overlapPolicy"]),
+  automationText: initial?.automationText ?? "",
   timeOfDay: initial?.timeOfDay ?? "09:00",
   dayOfWeek:
     initial?.dayOfWeek ?? ("MONDAY" as NonNullable<ScheduleInput["dayOfWeek"]>),
@@ -92,6 +103,51 @@ const timezoneOptions = Array.from(
     "America/Chicago",
     "America/Los_Angeles",
   ]),
+);
+const preview = ref<SchedulePreview>();
+const previewProblem = ref<AppProblem>();
+const previewBusy = ref(false);
+const schedulePreviewInput = computed<SchedulePreviewInput>(() => ({
+  preset: form.preset,
+  ...(form.preset === "CUSTOM"
+    ? { cronExpression: form.cronExpression.trim() }
+    : { timeOfDay: form.preset === "HOURLY" ? "00:00" : form.timeOfDay }),
+  ...(form.preset === "WEEKLY" ? { dayOfWeek: form.dayOfWeek } : {}),
+  timezone: form.timezone,
+  dstGapPolicy: "SHIFT_FORWARD",
+  dstFoldPolicy: "RUN_ONCE_EARLIEST",
+  misfirePolicy: form.misfirePolicy,
+  overlapPolicy: form.overlapPolicy,
+  limit: 6,
+}));
+onMounted(() =>
+  watch(
+    schedulePreviewInput,
+    (input, _previous, onCleanup) => {
+      const controller = new AbortController();
+      preview.value = undefined;
+      previewProblem.value = undefined;
+      previewBusy.value = true;
+      const timer = setTimeout(() => {
+        void loadSchedulePreview(input, controller.signal)
+          .then((value) => {
+            if (!controller.signal.aborted) preview.value = value;
+          })
+          .catch((error: unknown) => {
+            if (!controller.signal.aborted)
+              previewProblem.value = asProblem(error);
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) previewBusy.value = false;
+          });
+      }, 500);
+      onCleanup(() => {
+        clearTimeout(timer);
+        controller.abort();
+      });
+    },
+    { immediate: true },
+  ),
 );
 const targetLoader = computed(() =>
   createExecutionTargetPickerLoader(props.projectRef, form.targetType),
@@ -149,6 +205,8 @@ watch(
 );
 
 function submit(): void {
+  if (props.busy || previewBusy.value || !preview.value || previewProblem.value)
+    return;
   const input: ScheduleInput = {
     name: form.name.trim(),
     targetType: form.targetType,
@@ -160,6 +218,15 @@ function submit(): void {
     input: { ...baseInput, task: form.task },
     sessionPolicy: form.sessionPolicy,
     notificationPolicy: form.notificationPolicy,
+    ...(form.preset === "CUSTOM"
+      ? { cronExpression: preview.value.normalizedCronExpression }
+      : {}),
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy: form.misfirePolicy,
+    overlapPolicy: form.overlapPolicy,
+    automationText: form.automationText,
+    promptInputs: { ...initial?.promptInputs },
   };
   emit("submit", input, props.schedule);
 }
@@ -225,9 +292,21 @@ function submit(): void {
               <option value="DAILY">{{ $t("automations.daily") }}</option>
               <option value="WEEKDAYS">{{ $t("automations.weekdays") }}</option>
               <option value="WEEKLY">{{ $t("automations.weekly") }}</option>
+              <option value="CUSTOM">Cron</option>
             </select>
           </label>
-          <label v-if="form.preset !== 'HOURLY'" class="field">
+          <label v-if="form.preset === 'CUSTOM'" class="field"
+            ><span>Cron</span
+            ><input
+              v-model="form.cronExpression"
+              required
+              maxlength="256"
+              spellcheck="false"
+          /></label>
+          <label
+            v-if="form.preset !== 'HOURLY' && form.preset !== 'CUSTOM'"
+            class="field"
+          >
             <span>{{ $t("automations.timeOfDay") }}</span>
             <input v-model="form.timeOfDay" type="time" required />
           </label>
@@ -264,17 +343,63 @@ function submit(): void {
             </select>
           </label>
         </div>
+        <div class="automation-editor__schedule-grid">
+          <label class="field"
+            ><span>{{ $t("automations.misfire") }}</span
+            ><select v-model="form.misfirePolicy">
+              <option
+                v-for="value in ['COALESCE', 'CATCH_UP_ONE', 'SKIP']"
+                :key="value"
+                :value="value"
+              >
+                {{ $t(`automations.policies.${value}`) }}
+              </option>
+            </select></label
+          >
+          <label class="field"
+            ><span>{{ $t("automations.overlap") }}</span
+            ><select v-model="form.overlapPolicy">
+              <option value="FORBID">
+                {{ $t("automations.policies.FORBID") }}
+              </option>
+              <option value="ALLOW">
+                {{ $t("automations.policies.ALLOW") }}
+              </option>
+            </select></label
+          >
+        </div>
+        <ProblemNotice v-if="previewProblem" :problem="previewProblem" />
+        <p v-if="previewBusy" role="status">{{ $t("common.loading") }}</p>
+        <div v-else-if="preview" class="automation-editor__preview">
+          <code>{{ preview.normalizedCronExpression }}</code>
+          <ol>
+            <li v-for="time in preview.occurrences" :key="time">
+              <time>{{
+                new Date(time).toLocaleString(locale, {
+                  timeZone: form.timezone,
+                })
+              }}</time>
+            </li>
+          </ol>
+        </div>
       </section>
 
       <section>
+        <label class="field"
+          ><span>{{ $t("automations.automationText") }}</span
+          ><CodeEditor
+            v-model="form.automationText"
+            :label="$t('automations.automationText')"
+            :disabled="busy"
+        /></label>
         <label class="field">
           <span>{{ custom.task }}</span>
-          <textarea
+          <VoiceTextarea
             v-model="form.task"
             rows="5"
             required
             maxlength="6000"
-          ></textarea>
+          ></VoiceTextarea>
         </label>
         <div class="automation-editor__policy-grid">
           <label class="field">
@@ -316,7 +441,7 @@ function submit(): void {
         class="button button--primary"
         form="automation-editor-form"
         type="submit"
-        :disabled="busy"
+        :disabled="busy || previewBusy || !preview || Boolean(previewProblem)"
       >
         <Save :size="16" aria-hidden="true" />
         {{ schedule ? $t("common.save") : $t("common.create") }}
@@ -378,10 +503,10 @@ function submit(): void {
 }
 .automation-editor input,
 .automation-editor select,
-.automation-editor textarea {
+.automation-editor :deep(textarea) {
   width: 100%;
 }
-.automation-editor textarea {
+.automation-editor :deep(textarea) {
   resize: vertical;
 }
 @media (max-width: 760px) {

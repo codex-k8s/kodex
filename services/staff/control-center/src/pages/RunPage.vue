@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
@@ -691,7 +692,10 @@ onBeforeUnmount(() => {
               <div class="gate-response">
                 <label class="field"
                   ><span>{{ $t("decisions.comment") }}</span
-                  ><textarea v-model="comments[gate.ref]" maxlength="1000" />
+                  ><VoiceTextarea
+                    v-model="comments[gate.ref]"
+                    maxlength="1000"
+                  />
                 </label>
                 <AttachmentComposer
                   :ref="
@@ -783,7 +787,7 @@ onBeforeUnmount(() => {
               <form class="run-continuation" @submit.prevent="continueRun">
                 <label class="field">
                   <span>{{ $t("runs.continueTask") }}</span>
-                  <textarea v-model="turn" maxlength="8000" />
+                  <VoiceTextarea v-model="turn" maxlength="8000" />
                 </label>
                 <AttachmentComposer
                   ref="turnAttachmentComposer"
@@ -937,7 +941,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
 }
-.gate-response textarea {
+.gate-response :deep(textarea) {
   min-height: 92px;
 }
 .gate-actions {

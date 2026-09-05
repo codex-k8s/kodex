@@ -94,6 +94,26 @@ describe("provider account model", () => {
     ).toEqual([]);
   });
 
+  it("не запускает бесконечный device poll без корректного срока действия", () => {
+    for (const expiresAt of [undefined, "invalid"]) {
+      expect(
+        isPendingDeviceAuthorization(
+          account({
+            authorization: {
+              ref: "auth",
+              method: "DEVICE_CODE",
+              state: "PENDING",
+              expiresAt,
+            },
+          }),
+        ),
+      ).toBe(false);
+    }
+    expect(
+      safeVerificationUri("https://user:password@provider.example/device"),
+    ).toBeNull();
+  });
+
   it("нормализует веса при смене policy без мутации входа", () => {
     const input = [
       { accountRef: "pacc_first", weight: 7 },
