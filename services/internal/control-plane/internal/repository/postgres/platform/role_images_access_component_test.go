@@ -82,7 +82,10 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("resolve role image candidate principal: %v", err)
 	}
 
-	items, _, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 20}})
+	items, _, total, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 20}})
+	if err != nil || total != int64(len(items)) {
+		t.Fatalf("role image list count mismatch: %v", err)
+	}
 	var listed *entity.RoleImageRecipe
 	for index := range items {
 		if !sameStrings(items[index].NextActions, []string{"OPEN"}) {
@@ -94,6 +97,38 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	}
 	if err != nil || listed == nil {
 		t.Fatalf("project viewer list mismatch: items=%#v err=%v", items, err)
+	}
+	filtered, _, filteredTotal, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "Application RBAC", State: "ACTIVE", Page: query.Page{Size: 1}})
+	if err != nil || filteredTotal != 1 || len(filtered) != 1 || filtered[0].Ref != created.Recipe.Ref || filtered[0].ManagedLineage == nil {
+		t.Fatalf("filtered recipe lineage/count mismatch: %v", err)
+	}
+	literal, _, literalTotal, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "%", Page: query.Page{Size: 1}})
+	if err != nil || literalTotal != 0 || len(literal) != 0 {
+		t.Fatalf("recipe query treated wildcard as pattern: %v", err)
+	}
+	seen, token := map[string]bool{}, ""
+	for {
+		page, next, count, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 1, Token: token}})
+		if err != nil || count != total || len(page) != 1 || seen[page[0].Ref] {
+			t.Fatalf("recipe pagination mismatch: %v", err)
+		}
+		seen[page[0].Ref] = true
+		if next == "" {
+			break
+		}
+		if _, _, _, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "changed", Page: query.Page{Size: 1, Token: next}}); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("recipe cursor escaped query: %v", err)
+		}
+		if _, _, _, err := repository.List(ctx, roleImageOwner, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 1, Token: next}}); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("recipe cursor escaped actor: %v", err)
+		}
+		token = next
+		if int64(len(seen)) >= total {
+			t.Fatal("recipe cursor did not terminate")
+		}
+	}
+	if int64(len(seen)) != total {
+		t.Fatal("recipe pagination omitted visible items")
 	}
 	if _, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref); err != nil {
 		t.Fatalf("project viewer cannot read exact role image: %v", err)

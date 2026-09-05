@@ -37,15 +37,41 @@ filter, total/cursor и безопасную связь source/revision/build. S
 
 Git write-back остаётся отдельным обязательным owner lifecycle с Human Gate,
 exact base commit/path и effect receipt; read-only SourceWork его не заменяет.
-Эта матрица задаёт оставшийся scope. До executable checkpoint UI publication,
-specialized Manage lineage и actual selective rebind — NOT RUN.
+Эта матрица задаёт полный scope. Actual selective promoted-artifact rebind
+и Git write-back пока остаются NOT RUN; metadata binding не считается
+переключением исполняемого образа.
 
 Public additive contract: ListRoleImageRecipes получает literal `query` и
 `state` (пусто либо ACTIVE/ARCHIVED), response `total` считает все видимые
 совпадения независимо от cursor. Cursor связан с actor/tenant/project/role/query/state.
 `RoleImageRecipe.managed_lineage` содержит configuration ref, immutable
-revision ref/number, managedBy UI/GIT, source ref/revision и origin
+revision ref/number, managedBy UI/GIT/SHIPPED, source ref/revision и origin
 BASELINE/MANAGED. `ImageBuild.configuration_revision_ref` связывает конкретную
 попытку с тем же input; старый build без доказанного mapping оставляет поле
 пустым. Content/Dockerfile этим дополнением не раскрываются. RPC и policy
-операции прежние; новые поля source ещё требуют executable owner readback.
+операции прежние. Owner readback связей, фильтров и счётчика подключён.
+
+SHIPPED system-base назначается по server-owned input source
+`platform-owned:default-role-image` и environment `system-base`. Он содержит
+фактический release digest. Если mapping635 исторически отсутствует,
+configuration/revision tuple остаётся пустым/0; новый managed UI объект не
+выдумывается. Старый mapping сохраняется как история. UPDATE/ARCHIVE/RESTORE
+и RequestBuild системной prebuilt базы отклоняются; nextActions не обещают
+Git build для release-owned source. Изменение выполняется новой catalog recipe.
+
+UI Validate проверяет actual environment catalog, Publish создаёт recipe/build
+и mapping635 той же транзакцией. Specialized Manage CREATE/UPDATE сохраняет
+каноническую опубликованную managed revision из server-resolved recipe input.
+Если существует параллельный managed draft, direct UPDATE закрывается Conflict:
+recipe OCC не заменяет version этого draft. GIT mutation также отклоняется.
+SHIPPED generic/source commands закрыто отклоняются по actual owner provenance.
+
+На дереве поверх `bdf7a0dc75a756613b38c71b730efe56d264bffb` полный
+`TestBootstrapComponent` — PASS (21.238 s). Проверены actual managed lineage,
+canonical content, build generation, parallel draft OCC, SHIPPED read-only,
+literal query/state/total, actor/filter cursor, точная видимость и promotion.
+Repository/transport/role-image domain race, полный control-plane vet/build,
+SQL boundary, Proto replay, policy63 и authority ABI render — PASS.
+Первоначальные isolated test fixture ошибки (raw principal вместо resolved,
+чтение CurrentRevision вместо revisions страницы history) исправлены в тесте;
+повтор targeted PostgreSQL — PASS (0.724 s). Browser/live — NOT RUN.
