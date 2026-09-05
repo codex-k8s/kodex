@@ -332,7 +332,7 @@ if [[ "$profile" == "web-with-mattermost" ]]; then
   ' "$rendered"
 fi
 
-runtime_contract_file="$repository_root/contracts/runtime-controller/v6/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -376,7 +376,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.builderSHA256 = "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(LOCK_DIGEST) |
-    .data.roleRuntimeContractRevision = "1" |
+    .data.roleRuntimeContractRevision = "2" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
