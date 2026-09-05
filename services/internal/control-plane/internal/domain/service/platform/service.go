@@ -487,7 +487,7 @@ func (service *Service) ListManagedConfigurationHistory(ctx context.Context, p v
 	}
 	return service.repository.ListManagedConfigurationHistory(ctx, p, strings.TrimSpace(ref), page)
 }
-func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p value.Principal, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p value.Principal, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
@@ -495,7 +495,7 @@ func (service *Service) GetManagedConfigurationImpact(ctx context.Context, p val
 	if strings.TrimSpace(ref) == "" || strings.TrimSpace(revisionRef) == "" {
 		return entity.ManagedConfigurationImpact{}, errs.ErrInvalid
 	}
-	return service.repository.GetManagedConfigurationImpact(ctx, p, strings.TrimSpace(ref), strings.TrimSpace(revisionRef))
+	return service.repository.GetManagedConfigurationImpact(ctx, p, strings.TrimSpace(ref), strings.TrimSpace(revisionRef), filter)
 }
 func (service *Service) GetEffectiveManagedConfiguration(ctx context.Context, p value.Principal, kind, consumerKind, consumerRef string) (entity.ManagedConfigurationBindingSnapshot, error) {
 	p, err := service.principal(ctx, p)

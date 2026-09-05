@@ -251,6 +251,8 @@ type ManagedConfigurationConsumer struct {
 type ManagedConfigurationImpact struct {
 	ConfigurationRef, TargetRevisionRef, Digest string
 	Consumers                                   []ManagedConfigurationConsumer
+	Total                                       int64
+	NextPageToken                               string
 }
 
 type ManagedConfigurationBindingSnapshot struct {

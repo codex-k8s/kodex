@@ -274,7 +274,7 @@ type Repository interface {
 	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
 	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
 	ListManagedConfigurations(context.Context, value.Principal, query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error)
-	GetManagedConfigurationImpact(context.Context, value.Principal, string, string) (entity.ManagedConfigurationImpact, error)
+	GetManagedConfigurationImpact(context.Context, value.Principal, string, string, query.Filter) (entity.ManagedConfigurationImpact, error)
 	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
 	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)
 	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)

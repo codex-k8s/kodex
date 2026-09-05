@@ -362,7 +362,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish managed prompt: result=%#v err=%v", published, err)
 	}
-	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
 	if err != nil || impact.Digest == "" || len(impact.Consumers) != 0 {
 		t.Fatalf("preview managed prompt impact: impact=%#v err=%v", impact, err)
 	}
@@ -437,7 +437,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || effective.Ref != created.ManagedRevision.Ref || effective.Content != payload.Content {
 		t.Fatalf("publish changed consumer before selective rebind: prompt=%#v err=%v", effective, err)
 	}
-	correctedImpact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, correctedDraft.ManagedRevision.Ref)
+	correctedImpact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, correctedDraft.ManagedRevision.Ref, query.Filter{})
 	if err != nil || len(correctedImpact.Consumers) != 1 || correctedImpact.Consumers[0].RevisionRef != created.ManagedRevision.Ref {
 		t.Fatalf("corrected managed prompt impact: impact=%#v err=%v", correctedImpact, err)
 	}
@@ -558,7 +558,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || sttPublished.ManagedRevision == nil || sttPublished.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish system STT draft: result=%#v err=%v", sttPublished, err)
 	}
-	sttImpact, err := service.GetManagedConfigurationImpact(ctx, owner, sttCreated.ManagedConfiguration.Ref, sttCreated.ManagedRevision.Ref)
+	sttImpact, err := service.GetManagedConfigurationImpact(ctx, owner, sttCreated.ManagedConfiguration.Ref, sttCreated.ManagedRevision.Ref, query.Filter{})
 	if err != nil || sttImpact.Digest == "" {
 		t.Fatalf("preview system STT impact: impact=%#v err=%v", sttImpact, err)
 	}
@@ -765,6 +765,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	if _, err := pool.Exec(ctx, `DELETE FROM control_plane.managed_configuration_revisions WHERE ref = $1`, created.ManagedRevision.Ref); err == nil {
 		t.Fatal("published managed prompt was deletable")
 	}
+	testManagedImpactPagination(t, ctx, service, owner, projectResult.Project.Ref, correctedRebound)
 }
 
 func testManagedPromptHistoryRedaction(
@@ -890,7 +891,7 @@ func testIntegrationDefinitionRebindAuthority(
 		t.Fatalf("bind definition scope manager: binding=%#v err=%v", binding.AccessBinding, err)
 	}
 	manager := resolvedTestPrincipal(t, ctx, repository, input, "control-api-gateway")
-	impact, err := service.GetManagedConfigurationImpact(ctx, owner, definition.ManagedConfiguration.Ref, definition.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, definition.ManagedConfiguration.Ref, definition.ManagedRevision.Ref, query.Filter{})
 	if err != nil {
 		t.Fatalf("read definition impact for authority test: %v", err)
 	}
@@ -938,7 +939,7 @@ func publishAndRebindManagedConfiguration(
 	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish %s draft: result=%#v err=%v", key, published, err)
 	}
-	impact, err := service.GetManagedConfigurationImpact(ctx, principal, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref)
+	impact, err := service.GetManagedConfigurationImpact(ctx, principal, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
 	if err != nil || impact.Digest == "" {
 		t.Fatalf("read %s impact: impact=%#v err=%v", key, impact, err)
 	}

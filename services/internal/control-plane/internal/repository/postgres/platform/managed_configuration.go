@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -190,7 +188,7 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		if lockErr != nil || locked.State != "PUBLISHED" {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		impact, impactErr := repository.managedImpactTx(ctx, tx, current, configuration.Ref, locked.Ref)
+		impact, impactErr := repository.managedImpactTx(ctx, tx, current, configuration.Ref, locked.Ref, query.Filter{Page: query.Page{Size: 1}})
 		if impactErr != nil || payload.ImpactDigest != impact.Digest {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -200,6 +198,17 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		for _, consumer := range payload.Consumers {
 			if !managedConsumerAllowed(kind, consumer) {
 				return commandOutcome{}, errs.ErrInvalid
+			}
+			switch consumer.Kind {
+			case "AGENT", "WORKFLOW", "SCHEDULE":
+				permission := strings.ToLower(consumer.Kind) + ".manage"
+				if err := repository.requireAccess(ctx, tx, current, permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: consumer.Kind, ResourceRef: consumer.Ref}); err != nil {
+					return commandOutcome{}, errs.ErrNotFound
+				}
+			case "RUNTIME_ENVIRONMENT":
+				if _, _, err := repository.environmentImpactTarget(ctx, tx, current, consumer.Ref, ""); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			expectedDefinitionKey := ""
 			if kind == revisionservice.KindIntegrationDefinition {
@@ -557,7 +566,13 @@ func decodeManagedHistoryCursor(token, configurationRef string) (managedHistoryC
 	return cursor, nil
 }
 
-func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context, principal value.Principal, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context, principal value.Principal, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) {
+		return entity.ManagedConfigurationImpact{}, errs.ErrInvalid
+	}
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
@@ -574,7 +589,7 @@ func (repository *Repository) GetManagedConfigurationImpact(ctx context.Context,
 	if err := repository.requireManagedSetAccess(ctx, tx, current, set, "project.manage", "organization.manage"); err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrNotFound
 	}
-	impact, err := repository.managedImpactTx(ctx, tx, current, ref, revisionRef)
+	impact, err := repository.managedImpactTx(ctx, tx, current, ref, revisionRef, filter)
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
 	}
@@ -607,7 +622,7 @@ func (repository *Repository) requireManagedSetAccess(ctx context.Context, tx pg
 		Kind: "RESOURCE_INSTANCE", ProjectRef: set.ProjectRef, ResourceKind: "PROJECT", ResourceRef: set.ProjectRef,
 	})
 }
-func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, current scope, ref, revisionRef string) (entity.ManagedConfigurationImpact, error) {
+func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, current scope, ref, revisionRef string, filter query.Filter) (entity.ManagedConfigurationImpact, error) {
 	set, err := scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationLockSet, pgx.StrictNamedArgs{"organization_id": current.organizationID, "configuration_ref": ref}))
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrNotFound
@@ -616,7 +631,18 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, err
 	}
-	rows, err := tx.Query(ctx, queryManagedConfigurationListBindings, pgx.StrictNamedArgs{"organization_id": current.organizationID, "configuration_ref": ref})
+	filter = query.Filter{ResourceRef: ref, Category: revision.Ref, Query: filter.Query, Page: filter.Page}
+	cursor, err := decodeCatalogCursor(current, "MANAGED_IMPACT", filter)
+	if err != nil {
+		return entity.ManagedConfigurationImpact{}, err
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := tx.Query(ctx, queryManagedConfigurationListBindings, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "configuration_ref": ref, "revision_ref": revision.Ref,
+		"actor_id": current.actorID, "authority_project": current.authorityProjectID,
+		"organization_managed": set.ProjectRef == "", "evaluated_at": time.Now().UTC(),
+		"query": filter.Query, "cursor_ref": cursor, "page_size": limit + 1,
+	})
 	if err != nil {
 		return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 	}
@@ -624,20 +650,21 @@ func (repository *Repository) managedImpactTx(ctx context.Context, tx pgx.Tx, cu
 	result := entity.ManagedConfigurationImpact{ConfigurationRef: ref, TargetRevisionRef: revision.Ref}
 	for rows.Next() {
 		var item entity.ManagedConfigurationConsumer
-		if rows.Scan(&item.Kind, &item.Ref, &item.RevisionRef, &item.Version) != nil {
+		if rows.Scan(&item.Kind, &item.Ref, &item.RevisionRef, &item.Version, &result.Total, &result.Digest) != nil {
 			return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 		}
-		result.Consumers = append(result.Consumers, item)
+		if item.Ref != "" {
+			result.Consumers = append(result.Consumers, item)
+		}
 	}
-	sort.Slice(result.Consumers, func(i, j int) bool {
-		return result.Consumers[i].Kind+"\x00"+result.Consumers[i].Ref < result.Consumers[j].Kind+"\x00"+result.Consumers[j].Ref
-	})
-	digest := sha256.New()
-	_, _ = digest.Write([]byte(ref + "\x00" + revision.Ref))
-	for _, item := range result.Consumers {
-		_, _ = digest.Write([]byte("\x00" + item.Kind + "\x00" + item.Ref + "\x00" + item.RevisionRef + "\x00" + strconv.FormatInt(item.Version, 10)))
+	if rows.Err() != nil {
+		return entity.ManagedConfigurationImpact{}, errs.ErrUnavailable
 	}
-	result.Digest = hex.EncodeToString(digest.Sum(nil))
+	if len(result.Consumers) > int(limit) {
+		result.Consumers = result.Consumers[:limit]
+		last := result.Consumers[len(result.Consumers)-1]
+		result.NextPageToken = encodeCatalogCursor(current, "MANAGED_IMPACT", filter, last.Kind+":"+last.Ref)
+	}
 	return result, nil
 }
 
