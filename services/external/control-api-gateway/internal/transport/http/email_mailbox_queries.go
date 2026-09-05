@@ -63,14 +63,19 @@ func (s *Server) ListEmailMailboxCredentials(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	result := generated.EmailMailboxCredentialPage{Items: []generated.EmailMailboxCredential{}, Total: response.GetTotal(), NextPageToken: response.GetPage().GetNextPageToken()}
-	seen := map[string]bool{}
+	type credentialIdentity struct {
+		name       string
+		generation int64
+	}
+	seen := map[credentialIdentity]bool{}
 	for _, v := range response.GetItems() {
 		item, ok := mailboxCredentialView(v, ref, cp.EmailMailboxCredentialKind(kind))
-		if !ok || seen[item.Name] {
+		identity := credentialIdentity{item.Name, item.Generation}
+		if !ok || seen[identity] {
 			invalidSecretDraft(w)
 			return
 		}
-		seen[item.Name] = true
+		seen[identity] = true
 		result.Items = append(result.Items, item)
 	}
 	writeJSON(w, 200, result)
