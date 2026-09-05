@@ -10,11 +10,11 @@ import (
 
 func (server *Server) GetRuntimeSecretImpact(w http.ResponseWriter, r *http.Request, ref generated.SecretRef, revision generated.RuntimeSecretRevision, p generated.GetRuntimeSecretImpactParams) {
 	setRuntimeSecretHeaders(w)
-	if !opaqueHTTPReference.MatchString(ref) || revision < 1 || revision > maximumSafeJSONInteger || !validHTTPPage(p.PageSize, p.PageToken) {
+	if !opaqueHTTPReference.MatchString(ref) || revision < 1 || revision > maximumSafeJSONInteger || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	response, err := server.control.Query.GetRuntimeSecretImpact(r.Context(), &controlplanev1.GetRuntimeSecretImpactRequest{SecretRef: ref, Revision: revision, Page: page(p.PageSize, p.PageToken)})
+	response, err := server.control.Query.GetRuntimeSecretImpact(r.Context(), &controlplanev1.GetRuntimeSecretImpactRequest{SecretRef: ref, Revision: revision, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

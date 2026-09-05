@@ -9,11 +9,11 @@ import (
 )
 
 func (server *Server) GetRuntimeEnvironmentImpact(w http.ResponseWriter, r *http.Request, environmentRef generated.RuntimeEnvironmentRef, versionRef generated.RuntimeEnvironmentVersionRef, p generated.GetRuntimeEnvironmentImpactParams) {
-	if !opaqueHTTPReference.MatchString(environmentRef) || !opaqueHTTPReference.MatchString(versionRef) || !validHTTPPage(p.PageSize, p.PageToken) {
+	if !opaqueHTTPReference.MatchString(environmentRef) || !opaqueHTTPReference.MatchString(versionRef) || !validHTTPPage(p.PageSize, p.PageToken) || !validSearchText(stringValue(p.Query), 0, 200) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	response, err := server.control.Query.GetRuntimeEnvironmentImpact(r.Context(), &controlplanev1.GetRuntimeEnvironmentImpactRequest{EnvironmentRef: environmentRef, VersionRef: versionRef, Page: page(p.PageSize, p.PageToken)})
+	response, err := server.control.Query.GetRuntimeEnvironmentImpact(r.Context(), &controlplanev1.GetRuntimeEnvironmentImpactRequest{EnvironmentRef: environmentRef, VersionRef: versionRef, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

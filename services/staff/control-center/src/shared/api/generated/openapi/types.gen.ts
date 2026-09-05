@@ -4784,6 +4784,7 @@ export type GetRuntimeSecretImpactData = {
         revision: number;
     };
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
     };
@@ -5001,6 +5002,7 @@ export type GetRuntimeEnvironmentImpactData = {
         versionRef: OpaqueRef;
     };
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
     };

@@ -95,3 +95,11 @@ receipt binding, расходование до RPC, timeout/denial без пов
 доказывают эти части. Их итоговая реализация и защищённый сквозной тест остаются
 обязательными зависимостями #1046/#1037 до приёмки. Live mail, новые сетевые
 порты и staging этим изменением не запускались.
+
+Повторная сверка CP `98a71da1e`: GetEmailEffectReceipt/ReconcileEmailEffect,
+worker ResolveEmailAuthorization/ReportEmailEffectReceipt/ResolveEmailReconciliation
+уже имеют transport/domain/repository handlers. Отсутствие handlers выше
+относится только к историческому d31 checkpoint. Public receipt/decision Proto
+не изменился, дополнительные HTTP RPC не требуются. `fed22b1f6` переносит
+mailbox gate policy в owner state; HTTP её не вычисляет. Typed UI mailbox
+configuration/credential lifecycle и delivery projection остаются зависимостями.

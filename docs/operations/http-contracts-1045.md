@@ -88,6 +88,17 @@ Problem mapping без upstream detail. Изменения session/CSRF/readines
 
 ## Secret revision impact и rebind
 
+### Поиск impact из CP 98a71da1e
+
+Оба GET impact принимают optional `query` (до 200 Unicode-символов, без NUL).
+HTTP передаёт его вместе с pageSize/pageToken в точный typed RPC; CP нормализует
+крайние пробелы и применяет поиск/eligibility до SQL LIMIT. Total и cursor
+относятся к найденным доступным строкам. Смена поиска сбрасывает cursor в UI;
+старый cursor с другим query возвращает безопасный InvalidArgument/400.
+Нового события, mutation, OCC либо actor authority этот read не создаёт.
+ETag и selected-consumer rebind остаются прежними. SDK операции
+`getRuntimeEnvironmentImpact` и `getRuntimeSecretImpact` расширены без переименования.
+
 Producer: `b3375dfa64e6f404df83ce7b05904a5143e2e6e3`.
 
 - GET `/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact`,
