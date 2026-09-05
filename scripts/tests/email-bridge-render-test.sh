@@ -19,8 +19,8 @@ images:
     digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 YAML
 kubectl kustomize "$temporary" > "$temporary/render.yaml"
-python3 - "$temporary/render.yaml" <<'PY'
-import sys, yaml
+python3 - "$temporary/render.yaml" "$root/tools/install/secret-projections.json" <<'PY'
+import json, sys, yaml
 objects = list(yaml.safe_load_all(open(sys.argv[1])))
 def get(kind, name):
     return next(o for o in objects if o['kind'] == kind and o['metadata']['name'] == name)
@@ -42,6 +42,11 @@ issuer = next(x for x in pod['containers'] if x['name'] == 'internal-rpc-authori
 issuer_volumes = {x['name']: x for x in pod['volumes']}
 assert issuer_volumes['internal-rpc-authority-postgresql']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-issuer-postgresql'
 assert issuer_volumes['internal-rpc-authority-workload-tls']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-workload-tls'
+certificate = get('Certificate', 'internal-rpc-authority-email-bridge-workload')['spec']
+assert certificate['secretName'] == issuer_volumes['internal-rpc-authority-workload-tls']['secret']['secretName']
+assert certificate['uris'] == ['spiffe://kodex.local/ns/kodex-system/sa/email-bridge']
+assert certificate['issuerRef'] == {'name': 'kodex-installation-ca', 'kind': 'Issuer'}
+assert sorted(certificate['usages']) == ['client auth', 'server auth']
 assert next(x for x in issuer['volumeMounts'] if x['name'] == 'internal-rpc-authority-postgresql')['mountPath'] == '/var/run/secrets/kodex/internal-rpc-authority/postgres'
 assert get('PodDisruptionBudget', 'email-bridge')['spec']['minAvailable'] == 1
 assert get('ServiceMonitor', 'email-bridge')['spec']['endpoints'][0]['port'] == 'metrics'
@@ -58,7 +63,22 @@ assert destinations['control-plane'] == ('kodex-system', 8443)
 assert destinations['email-bridge-postgresql'] == ('kodex-system', 5432)
 assert destinations['opentelemetry-collector'] == ('observability', 4317)
 assert get('Job', 'email-bridge-migration')['spec']['activeDeadlineSeconds'] == 120
-assert get('StatefulSet', 'email-bridge-postgresql')['spec']['volumeClaimTemplates']
+database = get('StatefulSet', 'email-bridge-postgresql')['spec']
+assert database['volumeClaimTemplates']
+for probe in ['startupProbe', 'readinessProbe', 'livenessProbe']:
+    assert database['template']['spec']['containers'][0][probe]['exec']['command'] == ['pg_isready', '-h', '127.0.0.1', '-U', 'postgres']
+registry = {s['name']: s for s in json.load(open(sys.argv[2]))['secrets']}
+for name, fields, ref in [
+    ('email-bridge-postgresql-bootstrap', ['admin-password', 'runtime-password', 'migration-password'], 'postgres-bootstrap'),
+    ('email-bridge-runtime-database', ['dsn'], 'postgres-runtime'),
+    ('email-bridge-migration-database', ['dsn'], 'postgres-migration'),
+]:
+    secret = registry[name]
+    assert secret['dynamic'] is False
+    assert sorted(i['key'] for i in secret['items']) == sorted(fields)
+    assert all(i['source'] == {'type': 'material', 'ref': 'kodex/email-bridge/' + ref, 'field': i['key']} for i in secret['items'])
+migration_volumes = get('Job', 'email-bridge-migration')['spec']['template']['spec']['volumes']
+assert next(v['secret']['items'] for v in migration_volumes if v['name'] == 'tls') == [{'key': 'ca.crt', 'path': 'ca.crt'}]
 for o in objects:
     if o['kind'] != 'NetworkPolicy': continue
     for rule in o['spec'].get('egress', []):

@@ -242,7 +242,8 @@ yq -N -r '
       .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
 ' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  email-bridge-migration; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done
