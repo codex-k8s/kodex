@@ -29,8 +29,30 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
   let controller: AbortController | undefined;
   let generation = 0;
   let scopeKey = "";
+  let invalidated = false;
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function keyFor(scope: RunCatalogScope): string {
+    return JSON.stringify([scope.projectRef, scope.query.trim(), scope.filter]);
+  }
+
+  function invalidate(scope: RunCatalogScope): void {
+    if (keyFor(scope) !== scopeKey) return;
+    invalidated = true;
+    if (loading.value || refreshTimer) return;
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      if (keyFor(scope) !== scopeKey) return;
+      if (loading.value) return;
+      invalidated = false;
+      void load(scope);
+    }, 250);
+  }
 
   function reset(): void {
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+    invalidated = false;
     controller?.abort();
     generation++;
     items.value = [];
@@ -43,11 +65,7 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
   }
 
   async function load(scope: RunCatalogScope, more = false): Promise<void> {
-    const key = JSON.stringify([
-      scope.projectRef,
-      scope.query.trim(),
-      scope.filter,
-    ]);
+    const key = keyFor(scope);
     if (more && (loading.value || !pageToken.value || key !== scopeKey)) return;
     controller?.abort();
     const active = new AbortController();
@@ -58,8 +76,13 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
     loading.value = true;
     problem.value = undefined;
     if (!more) {
-      if (key !== scopeKey) ready.value = false;
-      items.value = [];
+      clearTimeout(refreshTimer);
+      refreshTimer = undefined;
+      invalidated = false;
+      if (key !== scopeKey) {
+        ready.value = false;
+        items.value = [];
+      }
       pageToken.value = undefined;
       cursors.clear();
       scopeKey = key;
@@ -102,8 +125,11 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
       if (current === generation && !active.signal.aborted)
         problem.value = asProblem(error);
     } finally {
-      if (current === generation) loading.value = false;
+      if (current === generation) {
+        loading.value = false;
+        if (invalidated) invalidate(scope);
+      }
     }
   }
-  return { items, ready, pageToken, loading, problem, load, reset };
+  return { items, ready, pageToken, loading, problem, load, reset, invalidate };
 });

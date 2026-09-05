@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 const sdk = vi.hoisted(() => ({
   listRuns:
@@ -27,9 +27,56 @@ function response(items: Run[], nextPageToken = "") {
   };
 }
 describe("серверный каталог запусков", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+  });
+  it("объединяет realtime invalidation и перечитывает фильтр после текущего чтения", async () => {
+    vi.useFakeTimers();
+    const store = useRunCatalogStore();
+    const scope = { query: "", filter: "ACTIVE" as const };
+    let finish!: (value: ReturnType<typeof response>) => void;
+    sdk.listRuns.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const loading = store.load(scope);
+    store.invalidate(scope);
+    store.invalidate(scope);
+    sdk.listRuns.mockResolvedValueOnce(response([run("new_match")]));
+    finish(response([]));
+    await loading;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sdk.listRuns).toHaveBeenCalledTimes(2);
+    expect(store.items.map((item) => item.ref)).toEqual(["new_match"]);
+  });
+  it("не выполняет отложенный refresh прежнего фильтра", async () => {
+    vi.useFakeTimers();
+    const store = useRunCatalogStore();
+    const scope = { query: "", filter: "ACTIVE" as const };
+    sdk.listRuns.mockResolvedValueOnce(response([]));
+    await store.load(scope);
+    store.invalidate(scope);
+    sdk.listRuns.mockResolvedValueOnce(response([run("failed", "FAILED")]));
+    await store.load({ query: "", filter: "TERMINAL" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sdk.listRuns).toHaveBeenCalledTimes(2);
+    expect(store.items.map((item) => item.ref)).toEqual(["failed"]);
+  });
+  it("сохраняет текущие строки при ошибке realtime refresh", async () => {
+    vi.useFakeTimers();
+    const store = useRunCatalogStore();
+    const scope = { query: "", filter: "ACTIVE" as const };
+    sdk.listRuns.mockResolvedValueOnce(response([run("retained")]));
+    await store.load(scope);
+    sdk.listRuns.mockRejectedValueOnce(new Error("Read unavailable"));
+    store.invalidate(scope);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(store.problem).toBeDefined();
+    expect(store.items.map((item) => item.ref)).toEqual(["retained"]);
   });
   it("передаёт фильтр и сбрасывает cursor при переходе к другому состоянию", async () => {
     const store = useRunCatalogStore();

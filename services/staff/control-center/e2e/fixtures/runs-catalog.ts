@@ -4,7 +4,9 @@ export async function checkRunsCatalog(
   page: Page,
   projectRef: string,
   capture: () => Promise<void>,
+  invalidate: () => void,
 ): Promise<void> {
+  let newRun = false;
   function run(index: number): Run {
     const ref = `run_catalog_${String(index)}`;
     return {
@@ -51,6 +53,20 @@ export async function checkRunsCatalog(
   await page.route("**/api/v1/runs?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
     expect(params.get("projectRef")).toBe(projectRef);
+    if (params.get("pageSize") === "100") {
+      expect(params.getAll("states")).toEqual([]);
+      expect(params.get("pageToken")).toBeNull();
+      await route.fulfill({
+        json: {
+          items: [
+            ...Array.from({ length: 8 }, (_, index) => run(index)),
+            ...(newRun ? [run(99)] : []),
+          ],
+          nextPageToken: "",
+        },
+      });
+      return;
+    }
     expect(params.get("pageSize")).toBe("40");
     const query = params.get("query") ?? "";
     const cursor = params.get("pageToken");
@@ -64,7 +80,10 @@ export async function checkRunsCatalog(
             ? []
             : cursor
               ? [run(9)]
-              : Array.from({ length: 8 }, (_, index) => run(index)),
+              : [
+                  ...Array.from({ length: 8 }, (_, index) => run(index)),
+                  ...(newRun ? [run(99)] : []),
+                ],
         nextPageToken:
           states.includes("FAILED") || query || cursor ? "" : "runs_next",
       },
@@ -121,6 +140,18 @@ export async function checkRunsCatalog(
     )
     .toBe(true);
   await expect(lane.locator(".run-work-item")).toHaveCount(8);
+  const filteredReads = queries.filter((entry) =>
+    entry.states.includes("CANCELLING"),
+  ).length;
+  newRun = true;
+  invalidate();
+  await expect
+    .poll(
+      () =>
+        queries.filter((entry) => entry.states.includes("CANCELLING")).length,
+    )
+    .toBeGreaterThan(filteredReads);
+  await expect(lane.locator(".run-work-item")).toHaveCount(9);
   await page
     .getByRole("textbox", { name: "Поиск запусков", exact: true })
     .fill("No synthetic match");

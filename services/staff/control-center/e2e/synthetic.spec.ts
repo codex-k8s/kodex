@@ -239,6 +239,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
       await route.fulfill({ response });
     });
     let invalidateAgents: (() => void) | undefined;
+    let invalidateRuns: (() => void) | undefined;
     await page.routeWebSocket("**/*", (socket) => {
       socket.onMessage((message) => {
         const input = JSON.parse(String(message)) as {
@@ -246,6 +247,7 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
           requestRef: string;
         };
         if (input.type === "SESSION_RESUME") {
+          let invalidationCursor = 0;
           invalidateAgents = () =>
             socket.send(
               JSON.stringify({
@@ -253,9 +255,21 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
                 requestRef: input.requestRef,
                 streamKind: "PLATFORM",
                 streamRef: "PLATFORM",
-                cursor: 1,
+                cursor: ++invalidationCursor,
                 eventName: "AGENT_CHANGED",
                 kind: "AGENT",
+              }),
+            );
+          invalidateRuns = () =>
+            socket.send(
+              JSON.stringify({
+                type: "PLATFORM_INVALIDATED",
+                requestRef: input.requestRef,
+                streamKind: "PLATFORM",
+                streamRef: "PLATFORM",
+                cursor: ++invalidationCursor,
+                eventName: "RUN_CHANGED",
+                kind: "RUN",
               }),
             );
           socket.send(
@@ -1162,12 +1176,21 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
     }
     const catalogProject = projects[0];
     if (!catalogProject) throw new Error("Missing synthetic project");
-    await checkRunsCatalog(page, catalogProject.ref, async () => {
-      await page.screenshot({
-        path: testInfo.outputPath(`runs-catalog-${String(width)}.png`),
-        fullPage: false,
-      });
-    });
+    await checkRunsCatalog(
+      page,
+      catalogProject.ref,
+      async () => {
+        await page.screenshot({
+          path: testInfo.outputPath(`runs-catalog-${String(width)}.png`),
+          fullPage: false,
+        });
+      },
+      () => {
+        if (!invalidateRuns)
+          throw new Error("Missing synthetic platform stream");
+        invalidateRuns();
+      },
+    );
     await checkOrganizationCatalog(
       page,
       projects,

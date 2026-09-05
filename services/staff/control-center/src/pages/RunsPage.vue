@@ -96,6 +96,20 @@ watch(filter, () => {
   query.value = search.value.trim();
   void refreshRuns();
 });
+watch(
+  () =>
+    Object.values(platform.runs)
+      .filter((run) => !projectRef.value || run.projectRef === projectRef.value)
+      .map((run) => `${run.ref}:${String(run.version)}`)
+      .sort()
+      .join("|"),
+  () =>
+    catalog.invalidate({
+      projectRef: projectRef.value,
+      query: query.value,
+      filter: filter.value,
+    }),
+);
 onBeforeUnmount(() => {
   clearTimeout(timer);
   catalog.reset();
