@@ -91,42 +91,69 @@ func executeClaim(ctx context.Context, client *model.Client4, channel *model.Cha
 }
 
 func (adapter *Adapter) TestConnection(ctx context.Context, claim *controlplanev1.IntegrationConnectionTestClaim) (string, error) {
-	if !adapter.validDefinition(claim.GetDefinitionKey(), claim.GetDefinitionVersion(), claim.GetDefinitionDigest()) {
+	definition, err := adapter.claimDefinition(claim.GetDefinitionPackage(), claim.GetDefinitionKey(), claim.GetDefinitionVersion(), claim.GetDefinitionDigest())
+	if err != nil {
 		return "", errConfiguration
 	}
 	configuration, err := configurationStrings(claim.GetPublicConfiguration())
-	if err != nil || adapter.definition.ValidateConfiguration(configuration) != nil {
+	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", errConfiguration
 	}
+	capability, ok := definition.Capability(definition.Spec.HealthCheck.Operation)
+	if !ok || capability.Risk != "READ" || capability.ApprovalPolicy != "NONE" {
+		return "", errInvocation
+	}
+	if _, err := capability.ValidateInput([]byte("{}")); err != nil {
+		return "", errInvocation
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(min(capability.Execution.TimeoutSeconds, definition.Spec.HealthCheck.TimeoutSeconds))*time.Second)
+	defer cancel()
 	client, channel, cleanup, err := adapter.invocationClient(ctx, configuration, claim.GetCredentialRevision())
 	if err != nil {
 		return "", err
 	}
 	defer cleanup()
-	_, _, _, err = executeOperation(ctx, client, channel, adapter.definition.Spec.HealthCheck.Operation, operationInput{})
+	output, _, _, err := executeOperation(ctx, client, channel, capability.Operation, operationInput{})
 	if err != nil {
 		return "", err
+	}
+	raw, err := json.Marshal(output)
+	if err != nil || len(raw) > maximumInvocationOutput {
+		return "", errResponse
+	}
+	if _, err := capability.ValidateOutput(raw); err != nil {
+		return "", errResponse
 	}
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
 }
 
-func (adapter *Adapter) validDefinition(key, version, digest string) bool {
-	return key == "mattermost" && adapter.definition.Metadata.Version == version && adapter.definition.Digest == digest && adapter.definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)
+func (adapter *Adapter) claimDefinition(raw []byte, key, version, digest string) (integrationpackage.Package, error) {
+	if key != "mattermost" || len(raw) == 0 || len(raw) > 256<<10 {
+		return integrationpackage.Package{}, errConfiguration
+	}
+	definition, err := integrationpackage.Parse(raw)
+	if err != nil || integrationpackage.ValidateExecutableRevision(definition, adapter.definition) != nil ||
+		definition.Metadata.Key != key || definition.Metadata.Version != version || definition.Digest != digest ||
+		!definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction) {
+		return integrationpackage.Package{}, errConfiguration
+	}
+	return definition, nil
 }
 
 func (adapter *Adapter) validateInvocation(claim *controlplanev1.IntegrationInvocationClaim) (integrationpackage.Capability, map[string]string, operationInput, error) {
 	invalid := func(err error) (integrationpackage.Capability, map[string]string, operationInput, error) {
 		return integrationpackage.Capability{}, nil, operationInput{}, err
 	}
-	if !adapter.validDefinition(claim.GetDefinitionKey(), claim.GetDefinitionVersion(), claim.GetDefinitionDigest()) {
+	definition, err := adapter.claimDefinition(claim.GetDefinitionPackage(), claim.GetDefinitionKey(), claim.GetDefinitionVersion(), claim.GetDefinitionDigest())
+	if err != nil {
 		return invalid(errConfiguration)
 	}
-	capability, ok := adapter.definition.Capability(claim.GetCapabilityKey())
+	capability, ok := definition.Capability(claim.GetCapabilityKey())
 	if !ok || !capability.CallableByAgent() || capability.Operation != claim.GetOperation() || "INTEGRATION_RISK_"+capability.Risk != claim.GetRisk().String() || "INTEGRATION_APPROVAL_POLICY_"+capability.ApprovalPolicy != claim.GetApprovalPolicy().String() || claim.GetResourceScope().GetKind() != controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_MATTERMOST_CHANNEL || !boundedReference(claim.GetEffectKey()) {
 		return invalid(errInvocation)
 	}
 	configuration, err := configurationStrings(claim.GetPublicConfiguration())
-	if err != nil || adapter.definition.ValidateConfiguration(configuration) != nil {
+	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return invalid(errConfiguration)
 	}
 	expected, err := capability.ResourceScopeValues(configuration)

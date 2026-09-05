@@ -4,8 +4,8 @@ title: Необязательный interaction gateway Kodex
 type: unit-readme
 status: approved
 owner: platform
-version: 1.0.0
-updated: 2026-08-23
+version: 1.2.0
+updated: 2026-09-05
 ---
 
 # interaction-gateway
@@ -32,6 +32,10 @@ Gateway не читает PostgreSQL и не меняет core lifecycle сам�
 Решение Human Gate использует тот же one-winner/OCC contract, что и Control
 Center, поэтому повтор с другой поверхности получает stale readback.
 
+Notification и result mirror создают отдельный OwnerGate до доставки. Только
+его `APPROVE` открывает очередь; `REJECT`, `CANCEL`, отзыв grant или смена pins
+закрывают intent. Основной Run сохраняет свой результат и версию.
+
 Неопределённая отправка фиксируется как `UNKNOWN_OUTCOME` без автоматического
 повтора. Входящий gate reply подтверждается чтением post/root и точной связкой
 gate/run/version; внешнего user identifier недостаточно без server-owned
@@ -48,6 +52,17 @@ key/content digest и реальный team/channel lookup, что рабочи�
 MCP claims и connection tests обрабатываются только по отдельному
 `InteractionGatewayOperations` профилю; generic integration worker их не
 получает.
+
+Connection test и MCP invocation проверяют private package bytes и точные
+version/digest каждой claim. Опубликованная UI/Git revision может сужать
+поставленный контракт; она не заменяет глобальный registry. Configuration,
+input и deadline проверяются по выбранной revision. Автоматический health
+check не выполняет операцию, которой требуется отдельный Human Gate.
+
+Системные source/delivery проверяют тот же private package, connection version,
+input и deadline. Claim notification/mirror дополнительно содержит точную
+одобренную gate revision. Потеря authoritative discovery останавливает старые
+подписки; следующее подтверждённое поколение восстанавливается через cancel/join.
 
 `/healthz` отражает жизнь собственного процесса. `/readyz` читает локальный
 снимок authority sidecar и не вызывает `control-plane` или Mattermost. Сбои

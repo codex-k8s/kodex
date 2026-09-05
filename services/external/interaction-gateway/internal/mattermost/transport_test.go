@@ -86,7 +86,9 @@ func TestDeliveryPreflightConfirmsNoEffect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = adapter.Deliver(t.Context(), &controlplanev1.InteractionDeliveryClaim{MessageKey: "READY", BaseUrl: "https://unapproved.example.test"})
+	claim := systemDeliveryFixture(t, adapter)
+	claim.BaseUrl = "https://unapproved.example.test"
+	_, err = adapter.Deliver(t.Context(), claim)
 	if err == nil || !ConfirmedNoEffect(err) {
 		t.Fatalf("preflight failure not classified: %v", err)
 	}

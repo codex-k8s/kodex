@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -110,16 +111,13 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	if claim == nil || claim.GetMessageKey() == "" {
 		return result, errConfiguration
 	}
+	capability, err := adapter.deliveryCapability(claim)
+	if err != nil {
+		return result, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+	defer cancel()
 	gate, err := gateFromClaim(claim)
-	if err != nil {
-		return result, err
-	}
-	client, _, channel, closeClient, err := adapter.client(ctx, claim)
-	if err != nil {
-		return result, err
-	}
-	defer closeClient()
-	root, err := deliveryRoot(ctx, client, channel, claim)
 	if err != nil {
 		return result, err
 	}
@@ -133,6 +131,24 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *controlplanev1.Inter
 	message := adapter.text.Localize(claim.GetLocale(), claim.GetMessageKey(), data)
 	if message == claim.GetMessageKey() || strings.TrimSpace(message) == "" || len(message) > 16<<10 {
 		return result, errResponse
+	}
+	if claim.GetCapabilityKey() == "mattermost.notifications" || claim.GetCapabilityKey() == "mattermost.result_mirror" {
+		raw, err := json.Marshal(map[string]string{"message": message})
+		if err != nil {
+			return result, errInvocation
+		}
+		if _, err := capability.ValidateInput(raw); err != nil {
+			return result, errInvocation
+		}
+	}
+	client, _, channel, closeClient, err := adapter.client(ctx, claim)
+	if err != nil {
+		return result, err
+	}
+	defer closeClient()
+	root, err := deliveryRoot(ctx, client, channel, claim)
+	if err != nil {
+		return result, err
 	}
 	if err := ctx.Err(); err != nil {
 		return result, err
@@ -152,15 +168,22 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	if source.GetConnectionVersion() < 1 || source.GetCredentialRevisionRef() != source.GetCredentialDescriptor().GetRef() || source.GetCredentialRevision() != source.GetCredentialDescriptor().GetRevision() {
 		return errConfiguration
 	}
-	client, token, channel, closeClient, err := adapter.client(ctx, source)
+	budget, err := adapter.sourceBudget(source)
+	if err != nil {
+		return err
+	}
+	startup, cancelStartup := context.WithTimeout(ctx, budget)
+	defer cancelStartup()
+	client, token, channel, closeClient, err := adapter.client(startup, source)
 	if err != nil {
 		return err
 	}
 	defer closeClient()
-	me, _, err := client.GetMe(ctx, "")
+	me, _, err := client.GetMe(startup, "")
 	if err != nil || me == nil || !model.IsValidId(me.Id) {
 		return classify(err)
 	}
+	cancelStartup()
 	base, err := adapter.baseURL(source.GetBaseUrl())
 	if err != nil {
 		return err
@@ -169,7 +192,7 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 	websocketURL.Scheme = "wss"
 	dialer := &websocket.Dialer{
 		Proxy:            http.ProxyURL(adapter.proxy),
-		HandshakeTimeout: adapter.timeout,
+		HandshakeTimeout: budget,
 		TLSClientConfig:  &tls.Config{MinVersion: tls.VersionTLS13, ServerName: base.Hostname()},
 	}
 	socket, err := model.NewWebSocketClient4WithDialer(dialer, strings.TrimRight(websocketURL.String(), "/"), token)
@@ -198,20 +221,33 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 			if !ok {
 				continue
 			}
-			verified, _, verifyErr := client.GetPost(ctx, post.Id, "")
+			messageContext, cancelMessage := context.WithTimeout(ctx, budget)
+			verified, _, verifyErr := client.GetPost(messageContext, post.Id, "")
 			if verifyErr != nil {
+				cancelMessage()
 				return classify(verifyErr)
 			}
 			if !sameInboundPost(post, verified, channel.Id, me.Id) {
+				cancelMessage()
 				continue
 			}
 			post = verified
-			gate, gateErr := readGateContext(ctx, client, post, channel.Id, me.Id)
+			gate, gateErr := readGateContext(messageContext, client, post, channel.Id, me.Id)
 			if gateErr != nil {
+				cancelMessage()
 				return gateErr
+			}
+			key := "mattermost.inbound"
+			if gate != nil {
+				key = "mattermost.gate_decisions"
+			}
+			if !slices.Contains(source.GetEnabledCapabilities(), key) {
+				cancelMessage()
+				continue
 			}
 			decision := ParseDecision(post.Message)
 			if decision != controlplanev1.OwnerGateDecision_OWNER_GATE_DECISION_UNSPECIFIED && gate == nil {
+				cancelMessage()
 				continue
 			}
 			message := Message{
@@ -222,7 +258,13 @@ func (adapter *Adapter) Listen(ctx context.Context, source *controlplanev1.Inter
 			if gate != nil {
 				message.GateRef, message.GateVersion, message.RunRef = gate.ref, gate.version, gate.runRef
 			}
-			if err := handler(ctx, message); err != nil {
+			if adapter.validateSourceInput(source, key, message.GateRef, decision) != nil {
+				cancelMessage()
+				continue
+			}
+			err := handler(messageContext, message)
+			cancelMessage()
+			if err != nil {
 				return err
 			}
 		}

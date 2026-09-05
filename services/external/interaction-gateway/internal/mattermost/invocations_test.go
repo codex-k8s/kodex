@@ -49,8 +49,13 @@ func claimFixture(t *testing.T, key string, input map[string]any) (*Adapter, *co
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitionPackage, err := json.Marshal(adapter.definition)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return adapter, &controlplanev1.IntegrationInvocationClaim{
-		InvocationRef: "inv_fixture", DefinitionKey: "mattermost", ConnectionRef: "connection",
+		DefinitionPackage: definitionPackage,
+		InvocationRef:     "inv_fixture", DefinitionKey: "mattermost", ConnectionRef: "connection",
 		DefinitionVersion: adapter.definition.Metadata.Version, DefinitionDigest: adapter.definition.Digest,
 		CapabilityKey: key, Operation: capability.Operation, EffectKey: "eff_fixture", InputDigest: hex.EncodeToString(inputDigest[:]),
 		Risk:                controlplanev1.IntegrationRisk(controlplanev1.IntegrationRisk_value["INTEGRATION_RISK_"+capability.Risk]),

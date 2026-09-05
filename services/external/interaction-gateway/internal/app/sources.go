@@ -59,9 +59,13 @@ func runSourceRefresh(manager *sourceManager, control *controlplaneclient.Client
 					degraded = false
 					logger.InfoContext(ctx, "interaction source discovery restored")
 				}
-			} else if !degraded {
-				degraded = true
-				logger.WarnContext(ctx, "interaction source discovery degraded", "error_class", "control_plane")
+			} else {
+				// Неподтверждённый owner snapshot не продлевает внешнюю подписку.
+				manager.Reconcile(ctx, nil)
+				if !degraded {
+					degraded = true
+					logger.WarnContext(ctx, "interaction source discovery degraded", "error_class", "control_plane")
+				}
 			}
 			select {
 			case <-ctx.Done():

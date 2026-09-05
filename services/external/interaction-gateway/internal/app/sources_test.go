@@ -9,6 +9,7 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -24,6 +25,57 @@ func (fn listenFunc) Listen(ctx context.Context, source *controlplanev1.Interact
 
 func testSource(revision string) *controlplanev1.InteractionSource {
 	return &controlplanev1.InteractionSource{ConnectionRef: "connection", CredentialMaterializationRef: revision, EnabledCapabilities: []string{"mattermost.inbound"}}
+}
+
+type discoveryControl struct {
+	controlplanev1.InteractionWorkServiceClient
+	started <-chan struct{}
+}
+
+func (control discoveryControl) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest, _ ...grpc.CallOption) (*controlplanev1.ListInteractionSourcesResponse, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-control.started:
+		return nil, status.Error(codes.Unavailable, "synthetic owner outage")
+	}
+}
+
+func TestSourceDiscoveryFailureCancelsPreviousSubscription(t *testing.T) {
+	started, stopped := make(chan struct{}), make(chan struct{})
+	listener := listenFunc(func(ctx context.Context, _ *controlplanev1.InteractionSource, _ mattermost.MessageHandler) error {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return ctx.Err()
+	})
+	config := Config{RequestTimeout: time.Second, SourceRefreshInterval: time.Hour}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	control := discoveryControl{started: started}
+	manager := newSourceManager(control, listener, logger, config)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	manager.Reconcile(ctx, []*controlplanev1.InteractionSource{testSource("same")})
+	finished := make(chan error, 1)
+	go func() {
+		finished <- runSourceRefresh(manager, &controlplaneclient.Client{Interaction: control}, logger, config)(ctx)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("unconfirmed source kept external subscription")
+	}
+	cancel()
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("source discovery did not stop")
+	}
+	shutdown, stopShutdown := context.WithTimeout(t.Context(), time.Second)
+	defer stopShutdown()
+	if err := manager.Close(shutdown); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSourceFingerprintIncludesImmutableConnectionAndCredential(t *testing.T) {

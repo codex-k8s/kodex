@@ -39,6 +39,25 @@ func interactionSourceCapability(definition integrationpackage.Package, key stri
 	}
 }
 
+func validateInteractionSourceInput(definition integrationpackage.Package, key, gateRef, decision string) error {
+	if !interactionSourceCapability(definition, key) {
+		return errs.ErrForbidden
+	}
+	capability, _ := definition.Capability(key)
+	input := map[string]string{}
+	if key == "mattermost.gate_decisions" {
+		input["decision_ref"], input["decision"] = gateRef, decision
+	}
+	raw, err := json.Marshal(input)
+	if err != nil {
+		return errs.ErrInvalid
+	}
+	if _, err := capability.ValidateInput(raw); err != nil {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
 func projectInteractionPackage(item map[string]any, connection lockedIntegrationConnection, definition integrationpackage.Package) error {
 	raw, err := json.Marshal(definition)
 	if err != nil || len(raw) == 0 || len(raw) > 256<<10 {
