@@ -1,0 +1,1202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Configuration",
+  "$defs": {
+    "Operation": {
+      "type": "string",
+      "enum": [
+        "health",
+        "mailboxes",
+        "list",
+        "search",
+        "fetch",
+        "download",
+        "mark",
+        "delete",
+        "send",
+        "reply",
+        "reply_all",
+        "forward",
+        "receipt",
+        "thread",
+        "attachments",
+        "mark_read",
+        "mark_unread",
+        "move",
+        "archive",
+        "draft_create",
+        "draft_update",
+        "draft_delete"
+      ]
+    },
+    "Policy": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "human_gate",
+        "deny"
+      ]
+    },
+    "Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "generation": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "name",
+        "generation"
+      ]
+    },
+    "Endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "tls_mode": {
+          "type": "string",
+          "enum": [
+            "implicit",
+            "starttls"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        },
+        "server_name": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "ca": {
+          "$ref": "#/$defs/Descriptor",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "username": {
+          "$ref": "#/$defs/Descriptor",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "auth_method": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "enum": [
+            "password",
+            "oauthbearer"
+          ],
+          "description": "password: SMTP AUTH PLAIN, IMAP LOGIN, POP USER/PASS; oauthbearer: SASL OAUTHBEARER после TLS."
+        },
+        "secret": {
+          "$ref": "#/$defs/Descriptor",
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "tls_mode",
+        "server_name",
+        "ca",
+        "username",
+        "secret",
+        "auth_method"
+      ]
+    },
+    "Limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "message_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 16777216,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachment_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "max_attachments": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "max_recipients": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "scan_messages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "timeout_seconds",
+        "message_bytes",
+        "attachment_bytes",
+        "max_attachments",
+        "max_recipients",
+        "page_size",
+        "scan_messages"
+      ]
+    },
+    "OperationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/Operation",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folders": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "operation",
+        "policy"
+      ]
+    },
+    "Mailbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "tenant_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "connection_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "revision": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "enabled": {
+          "type": "boolean",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "sender": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "smtp": {
+          "$ref": "#/$defs/Endpoint",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "pop": {
+          "$ref": "#/$defs/Endpoint"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OperationPolicy"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "envelope_from": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "hello_name": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "receive_protocol": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "enum": [
+            "imap",
+            "pop3"
+          ]
+        },
+        "imap": {
+          "$ref": "#/$defs/Endpoint"
+        },
+        "allowed_folders": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "archive_folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "drafts_folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "reply_to": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "credential_generation": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "description": "Назначаемое producer поколение credential binding подключения; поколения отдельных descriptors независимы."
+        }
+      },
+      "required": [
+        "id",
+        "tenant_id",
+        "connection_id",
+        "revision",
+        "enabled",
+        "folder",
+        "sender",
+        "recipients",
+        "smtp",
+        "limits",
+        "policies",
+        "envelope_from",
+        "hello_name",
+        "receive_protocol",
+        "allowed_folders",
+        "reply_to",
+        "credential_generation"
+      ]
+    },
+    "Configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "enum": [
+            "email-bridge/v1"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        },
+        "revision": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "managed_by": {
+          "type": "string",
+          "enum": [
+            "ui",
+            "git"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        },
+        "source": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "mailboxes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mailbox"
+          },
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "version",
+        "revision",
+        "managed_by",
+        "source",
+        "mailboxes"
+      ]
+    },
+    "Attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "content_type": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "content_base64": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "filename",
+        "content_type",
+        "content_base64"
+      ]
+    },
+    "MessageInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "to": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "subject": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "body_text": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "source_uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "source_uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "subject",
+        "body_text"
+      ]
+    },
+    "Command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/Operation",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "mailbox_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "effect_key": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "cursor": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "query": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachment_index": {
+          "type": "integer",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "message": {
+          "$ref": "#/$defs/MessageInput",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "receipt_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "destination_folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 255
+        },
+        "expected_digest": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 64
+        },
+        "thread_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 255
+        },
+        "uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "operation",
+        "mailbox_id"
+      ]
+    },
+    "MessageStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "delivered",
+            "failed",
+            "unknown",
+            "deleted"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "message_id",
+        "status"
+      ]
+    },
+    "MailHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "from": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "to": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "subject": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "size": {
+          "type": "integer",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "flags": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "message_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "uid",
+        "from",
+        "to",
+        "subject",
+        "size"
+      ]
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "message_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MailHeader"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "next_cursor": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "body_text": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "mailboxes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "read_state_supported": {
+          "type": "boolean",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder_support": {
+          "type": "boolean",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "content_digest": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "thread_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/MessageView"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "protocol_readiness": {
+          "$ref": "#/$defs/ProtocolReadiness"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "Health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "not_ready"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "INVALID",
+            "DENIED",
+            "GATE_REQUIRED",
+            "CONFLICT",
+            "NOT_FOUND",
+            "UNSUPPORTED",
+            "UNAVAILABLE"
+          ],
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "AuthorizationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "invocation_token": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "caller_spiffe_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "mailbox_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "sender": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "input_sha256": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "effect_key": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "destination_folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/ExecutionBinding"
+        }
+      },
+      "required": [
+        "invocation_token",
+        "caller_spiffe_id",
+        "mailbox_id",
+        "sender",
+        "operation",
+        "input_sha256",
+        "effect_key",
+        "configuration_revision"
+      ]
+    },
+    "Scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mailbox_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "sender": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folders": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "mailbox_id",
+        "operations",
+        "recipients",
+        "sender",
+        "folders"
+      ]
+    },
+    "AuthorizationDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "type": "boolean",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "actor_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "agent_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "tenant_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "connection_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "mailbox_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "input_sha256": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "effect_key": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "configuration_revision": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "credential_generation": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "grant_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "expires_at": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "user_scope": {
+          "$ref": "#/$defs/Scope",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "agent_scope": {
+          "$ref": "#/$defs/Scope",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "connection_scope": {
+          "$ref": "#/$defs/Scope",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "resource_scope": {
+          "$ref": "#/$defs/Scope",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "gate_approved": {
+          "type": "boolean",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/ExecutionBinding"
+        }
+      },
+      "required": [
+        "allowed",
+        "actor_id",
+        "agent_id",
+        "tenant_id",
+        "connection_id",
+        "mailbox_id",
+        "operation",
+        "input_sha256",
+        "effect_key",
+        "configuration_revision",
+        "credential_generation",
+        "grant_id",
+        "expires_at",
+        "user_scope",
+        "agent_scope",
+        "connection_scope",
+        "resource_scope",
+        "policy",
+        "gate_approved"
+      ]
+    },
+    "Attachments": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/Attachment"
+      }
+    },
+    "Recipients": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 320
+      }
+    },
+    "IntegrationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "subject": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "body_text": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "cc": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "bcc": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachments": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "source_uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "cursor": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "query": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "message_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachment_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 19,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "effect_key": {
+          "type": "string",
+          "maxLength": 128,
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 255
+        },
+        "destination_folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 255
+        },
+        "expected_digest": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 64
+        },
+        "thread_id": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true,
+          "maxLength": 255
+        },
+        "uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "source_uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        }
+      }
+    },
+    "MessageView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "folder": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "uid_validity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "x-go-type": "uint32",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "body_text": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "content_digest": {
+          "type": "string",
+          "x-go-type-skip-optional-pointer": true
+        },
+        "headers": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "x-go-type-skip-optional-pointer": true
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          },
+          "x-go-type-skip-optional-pointer": true
+        }
+      },
+      "required": [
+        "uid",
+        "folder",
+        "uid_validity",
+        "body_text",
+        "content_digest"
+      ]
+    },
+    "ProtocolReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "smtp",
+        "imap",
+        "pop3"
+      ],
+      "properties": {
+        "smtp": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "not_ready",
+            "not_configured"
+          ]
+        },
+        "imap": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "not_ready",
+            "not_configured"
+          ]
+        },
+        "pop3": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "not_ready",
+            "not_configured"
+          ]
+        }
+      }
+    },
+    "ExecutionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "invocation_ref": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "connection_test_ref": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "lease": {
+          "$ref": "#/$defs/ExecutionLease"
+        }
+      },
+      "required": [
+        "lease"
+      ],
+      "description": "Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health."
+    },
+    "ExecutionLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "fence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "generation": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ref",
+        "fence",
+        "generation",
+        "expires_at"
+      ]
+    }
+  }
+}

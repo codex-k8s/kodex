@@ -13,6 +13,7 @@ import (
 )
 
 type BootstrapState struct {
+	SpeechTranscription               entity.SpeechTranscriptionAvailability
 	Bootstrapped, OnboardingCompleted bool
 	OrganizationRef                   string
 	Assistant                         entity.SystemAssistant
@@ -214,6 +215,28 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
+	PrepareRuntimeSecretDraftImpact(context.Context, value.Principal, string, value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error)
+	GetRuntimeSecretDraftImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeSecretDraftImpactPage, error)
+	PrepareRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error)
+	ConsumeRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftWork, error)
+	FinishRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftResult, error)
+	ListRuntimeSecretDraftRecovery(context.Context, value.Principal, query.Page) ([]entity.RuntimeSecretDraftWork, string, error)
+	CheckRuntimeSecretDraftWork(context.Context, value.Principal) error
+	GetRuntimeRevisionPublicPair(context.Context, value.Principal, string, string) (entity.RuntimeRevisionPublicProjection, *entity.RuntimeRevisionPublicProjection, error)
+	GetEmailEffectReceipt(context.Context, value.Principal, string) (entity.EmailEffectReceiptView, error)
+	ResolveEmailAuthorization(context.Context, value.Principal, query.EmailAuthorization) (entity.EmailAuthorization, error)
+	ResolveEmailReconciliation(context.Context, value.Principal, string, string, string, string) (entity.EmailEffectReceiptView, error)
+	GetMemoryRecord(context.Context, value.Principal, string) (entity.KodexMemoryRecord, error)
+	GetSkillBundle(context.Context, value.Principal, string) (entity.SkillBundle, error)
+	ListSkillBundles(context.Context, value.Principal, query.Filter) ([]entity.SkillBundle, int64, string, error)
+	ListSkillBundleRevisions(context.Context, value.Principal, string, query.Page) ([]entity.SkillBundleRevision, int64, string, error)
+	ListMemoryRecords(context.Context, value.Principal, query.Filter) ([]entity.KodexMemoryRecord, int64, string, error)
+	ListMemoryRecordRevisions(context.Context, value.Principal, string, query.Page) ([]entity.MemoryRecordRevision, int64, string, error)
+	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
+	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, string, query.Page) (entity.RuntimeSecretImpact, error)
+	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
+	ListInteractionIdentities(context.Context, value.Principal, string, query.Page) ([]entity.InteractionIdentity, string, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
 	AcceptWorkerGrant(context.Context, WorkerGrantInput) error
@@ -257,9 +280,10 @@ type Repository interface {
 	ResolveTranscriptionCredentialProjection(context.Context, value.Principal, TranscriptionCredentialProjectionInput) (TranscriptionCredentialProjection, error)
 	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, int64, string, error)
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
-	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
+	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) (entity.ModelCatalog, error)
 	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
-	GetManagedConfigurationImpact(context.Context, value.Principal, string, string) (entity.ManagedConfigurationImpact, error)
+	ListManagedConfigurations(context.Context, value.Principal, query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error)
+	GetManagedConfigurationImpact(context.Context, value.Principal, string, string, query.Filter) (entity.ManagedConfigurationImpact, error)
 	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
 	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)
 	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)

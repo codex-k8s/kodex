@@ -1,0 +1,104 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "email-bridge-migration",
+    "namespace": "kodex-system",
+    "labels": {
+      "app.kubernetes.io/name": "email-bridge-migration"
+    },
+    "annotations": {
+      "argocd.argoproj.io/sync-wave": "-1"
+    }
+  },
+  "spec": {
+    "backoffLimit": 1,
+    "activeDeadlineSeconds": 120,
+    "template": {
+      "metadata": {
+        "labels": {
+          "app.kubernetes.io/name": "email-bridge-migration"
+        }
+      },
+      "spec": {
+        "restartPolicy": "Never",
+        "serviceAccountName": "email-bridge-migration",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 10001,
+          "runAsGroup": 10001,
+          "fsGroup": 10001,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "migration",
+            "image": "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/email-bridge-migration@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "env": [
+              {
+                "name": "EMAIL_BRIDGE_MIGRATION_DSN_FILE",
+                "value": "/var/run/email/database/dsn"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "1",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "database",
+                "mountPath": "/var/run/email/database",
+                "readOnly": true
+              },
+              {
+                "name": "tls",
+                "mountPath": "/var/run/email/tls",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "database",
+            "secret": {
+              "secretName": "email-bridge-migration-database",
+              "defaultMode": 288
+            }
+          },
+          {
+            "name": "tls",
+            "secret": {
+              "secretName": "email-bridge-postgresql-tls",
+              "defaultMode": 288,
+              "items": [
+                {
+                  "key": "ca.crt",
+                  "path": "ca.crt"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
