@@ -1,11 +1,50 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
 import type {
   Agent,
+  BootstrapState,
   Workflow,
   WorkflowInput,
 } from "../../src/shared/api/generated/openapi/types.gen";
 
-export async function checkWorkflowEditor(page: Page, projectRef: string) {
+export async function checkWorkflowEditor(
+  page: Page,
+  projectRef: string,
+  speechBootstrap?: BootstrapState,
+) {
+  let releaseSave: (() => void) | undefined;
+  const saveBarrier = speechBootstrap
+    ? new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      })
+    : Promise.resolve();
+  const bootstrapRoute = async (route: Route) => {
+    await route.fulfill({
+      headers: { ETag: '"1"' },
+      json: {
+        ...speechBootstrap,
+        speechTranscription: {
+          available: true,
+          reason: "READY",
+          validUntil: new Date(
+            (await page.evaluate(() => Date.now())) + 30_000,
+          ).toISOString(),
+        },
+      },
+    });
+  };
+  if (speechBootstrap) {
+    await page
+      .context()
+      .grantPermissions(["microphone"], { origin: "https://kodex.test" });
+    await page.route("**/api/v1/bootstrap", bootstrapRoute);
+  }
+  let transcriptions = 0;
+  const transcriptionRoute = async (route: Route) => {
+    transcriptions += 1;
+    await route.fulfill({ json: { text: "Unexpected transcription" } });
+  };
+  if (speechBootstrap)
+    await page.route("**/api/v1/speech/transcriptions", transcriptionRoute);
   const agent: Agent = {
     ref: "agent_workflow_synthetic",
     version: 1,
@@ -65,6 +104,7 @@ export async function checkWorkflowEditor(page: Page, projectRef: string) {
   await page.route("**/api/v1/workflows/workflow_synthetic", async (route) => {
     if (route.request().method() === "PATCH") {
       saves += 1;
+      await saveBarrier;
       if (
         route.request().headers()["if-match"] !==
           `"${String(workflow.version)}"` ||
@@ -114,13 +154,38 @@ export async function checkWorkflowEditor(page: Page, projectRef: string) {
   await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
     "Изменённый процесс",
   );
-  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  const voice = step.locator(".shared-code-editor .voice-input").first();
+  if (speechBootstrap) {
+    await voice.locator("button").click();
+    await expect(voice).toHaveAttribute("data-state", "recording");
+  }
+  try {
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    if (speechBootstrap) {
+      await expect.poll(() => saves).toBe(1);
+      await expect(
+        page.locator(".workflow-editor .voice-input button"),
+      ).toHaveCount(0);
+      await expect(voice).toHaveAttribute("data-state", "idle");
+      await expect(instructions).toHaveAttribute("contenteditable", "false");
+      expect(transcriptions).toBe(0);
+    }
+  } finally {
+    releaseSave?.();
+  }
   await expect(
     page.getByRole("button", { name: "Проверить Процесс", exact: true }),
   ).toBeEnabled();
   expect(saves).toBe(1);
   expect(workflow.steps[0]?.purpose).toBe(exactInstructions);
   expect(workflow.steps[0]?.expectedResult).toBe("  Synthetic result  ");
+  if (speechBootstrap) {
+    await expect(voice.locator("button")).toHaveCount(1);
+    await expect(instructions).toHaveAttribute("contenteditable", "true");
+    expect(transcriptions).toBe(0);
+    await page.unroute("**/api/v1/bootstrap", bootstrapRoute);
+    await page.unroute("**/api/v1/speech/transcriptions", transcriptionRoute);
+  }
   expect(failures).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);

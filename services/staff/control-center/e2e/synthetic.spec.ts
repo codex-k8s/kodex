@@ -1123,7 +1123,11 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         path: testInfo.outputPath(`role-image-history-${String(width)}.png`),
         fullPage: true,
       });
-      await checkWorkflowEditor(page, project.ref);
+      await checkWorkflowEditor(
+        page,
+        project.ref,
+        width === 1440 || width === 390 ? bootstrap : undefined,
+      );
       await page.screenshot({
         path: testInfo.outputPath(`workflow-${String(width)}.png`),
         fullPage: true,
