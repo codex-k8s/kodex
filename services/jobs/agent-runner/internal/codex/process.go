@@ -59,6 +59,15 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, err
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := verifyProviderContext(input, snapshot); err != nil {
+		return Result{}, err
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, err
 	}
@@ -82,6 +91,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.notifyInitialized(); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
+	if err := server.configureContextSkills(ctx, state, input, snapshot); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
@@ -152,14 +164,22 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 
 func turnStartParams(input model.Input, threadID string, prompt []byte) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	if err != nil {
+	if err != nil || runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return nil, ErrRuntimeProfile
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return nil, err
+	}
+	items, err := contextInputItems(input, snapshot, prompt, time.Now())
+	if err != nil {
+		return nil, err
+	}
 	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
-		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
+		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
-	if overlay.ModelReasoningEffort != "" {
-		params["effort"] = overlay.ModelReasoningEffort
+	if input.ReasoningMode == runtimecontract.ReasoningSupported {
+		params["effort"] = input.EffectiveReasoningEffort
 	}
 	if overlay.Personality != "" {
 		params["personality"] = overlay.Personality

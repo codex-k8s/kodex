@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kodex-system
+resources:
+  - ../../../base/email-bridge
+  - ../../../base/email-bridge-data
+  - ../../../base/email-bridge-migration
+labels:
+  - pairs: {kodex.dev/environment: production}
+    includeSelectors: false
+    includeTemplates: true
+patches:
+  - target: {kind: ConfigMap, name: email-bridge-runtime}
+    patch: |-
+      - op: replace
+        path: /data/DEPLOYMENT_ENVIRONMENT
+        value: production

@@ -1,13 +1,13 @@
 -- name: interaction_claim_deliveries :many
 WITH expired AS (
     UPDATE control_plane.interaction_deliveries
-    SET state = 'FAILED',
+    SET state = 'UNKNOWN_OUTCOME',
         lease_ref = NULL,
         fence_digest = NULL,
         workload_instance = NULL,
         lease_expires_at = NULL,
         available_at = clock_timestamp(),
-        safe_error_code = 'INTERACTION_LEASE_EXPIRED',
+        safe_error_code = 'INTERACTION_OUTCOME_UNKNOWN',
         version = version + 1,
         updated_at = clock_timestamp()
     WHERE organization_id = @organization_id::uuid
@@ -18,6 +18,8 @@ WITH expired AS (
     SELECT d.id, gen_random_uuid()::text AS fence
     FROM control_plane.interaction_deliveries d
     JOIN control_plane.integration_connections c ON c.id = d.connection_id
+    JOIN control_plane.integration_credential_revisions credential_revision ON credential_revision.id=c.credential_revision_id
+      AND credential_revision.organization_id=c.organization_id AND credential_revision.connection_id=c.id
     JOIN control_plane.integration_grants g ON g.id = d.grant_id
     LEFT JOIN control_plane.owner_gates gate ON gate.id = d.gate_id
     WHERE d.organization_id = @organization_id::uuid
@@ -27,6 +29,14 @@ WITH expired AS (
       AND c.enabled
       AND c.state IN ('CONNECTED', 'DEGRADED')
       AND g.enabled
+      AND (d.acceptance_receipt_id IS NULL OR EXISTS (
+          SELECT 1 FROM control_plane.interaction_message_receipts receipt
+          JOIN control_plane.interaction_identities identity ON identity.id=receipt.identity_id
+          JOIN control_plane.subjects subject ON subject.id=receipt.subject_id
+          WHERE receipt.id=d.acceptance_receipt_id AND identity.state='ACTIVE' AND subject.active
+            AND identity.connection_id=c.id AND identity.connection_version=c.version
+            AND identity.external_team_ref=d.external_team_ref AND identity.external_channel_ref=d.external_channel_ref
+      ))
       AND (d.gate_id IS NULL OR gate.state = 'OPEN')
       AND (SELECT count(*) FROM expired) >= 0
     ORDER BY d.available_at, d.created_at
@@ -62,10 +72,18 @@ SELECT
     claimed.lease_ref,
     claimed.fence,
     claimed.generation,
-    claimed.lease_expires_at
+    claimed.lease_expires_at,
+    COALESCE(gate.ref,''),COALESCE(gate.version,0),run.ref,
+    claimed.external_team_ref,claimed.external_channel_ref,claimed.target_root_post_ref,COALESCE(receipt.ref,''),
+    credential_revision.ref,credential_revision.revision,credential_revision.secret_ref,credential_revision.secret_uid::text,
+    credential_revision.secret_resource_version,credential_revision.content_sha256,credential_revision.created_at
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
-LEFT JOIN control_plane.integration_credential_revisions credential_revision
+JOIN control_plane.integration_credential_revisions credential_revision
   ON credential_revision.id = c.credential_revision_id
+ AND credential_revision.organization_id=c.organization_id AND credential_revision.connection_id=c.id
 JOIN control_plane.projects project ON project.id = claimed.project_id
+JOIN control_plane.runs run ON run.id=claimed.root_run_id
+LEFT JOIN control_plane.owner_gates gate ON gate.id=claimed.gate_id
+LEFT JOIN control_plane.interaction_message_receipts receipt ON receipt.id=claimed.acceptance_receipt_id
 ORDER BY claimed.created_at

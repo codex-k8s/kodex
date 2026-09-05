@@ -59,7 +59,8 @@ func (service *Service) ConfigureIntegrationCredential(
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	definition, registered := definitions[connection.DefinitionKey]
-	if !registered || !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
+	if !registered || !(definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
+		definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)) {
 		return entity.IntegrationConnection{}, errs.ErrForbidden
 	}
 	digest := sha256.Sum256([]byte(connectionRef + "\x00" + mutation.IdempotencyKey))

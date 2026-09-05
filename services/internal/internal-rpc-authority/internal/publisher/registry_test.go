@@ -25,20 +25,23 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	}{
 		{
 			relative:             "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
-			wantStartupReadbacks: 11,
+			wantStartupReadbacks: 14,
 			requiredTargets: []string{
 				"control-plane.authorization-issuer",
 				"secret-broker.authorization-verifier",
 				"stt-tts-service.authorization-issuer",
 				"stt-tts-service.authorization-verifier",
+				"email-bridge.authorization-issuer",
 			},
 		},
 		{
 			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
-			wantStartupReadbacks: 11,
+			wantStartupReadbacks: 14,
 			requiredTargets: []string{
 				"control-plane.authorization-issuer",
 				"secret-broker.authorization-verifier",
+				"email-bridge.authorization-issuer",
+				"interaction-gateway.authorization-issuer",
 			},
 		},
 	} {

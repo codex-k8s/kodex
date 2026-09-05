@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -35,14 +36,17 @@ const (
 )
 
 type Repository struct {
-	pool                   *pgxpool.Pool
-	defaultRuntimeProvider string
-	defaultRuntimeModel    string
-	providerCredential     ProviderCredentialConfig
-	roleImages             RoleImageConfig
-	objects                objectstorage.Store
-	integrationDefinitions map[string]integrationpackage.Package
-	runtimeSecretNamespace string
+	pool                       *pgxpool.Pool
+	defaultRuntimeProvider     string
+	defaultRuntimeModel        string
+	providerCredential         ProviderCredentialConfig
+	roleImages                 RoleImageConfig
+	objects                    objectstorage.Store
+	skillScanner               skillpolicy.Scanner
+	integrationDefinitions     map[string]integrationpackage.Package
+	runtimeSecretNamespace     string
+	emailConfigurationRevision int64
+	emailConfigurationDigest   string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой
@@ -621,6 +625,8 @@ func systemAssistantCoreRevisionNumber(revision string) (uint64, bool) {
 }
 
 type scope struct {
+	interactionIdentityID                                                               string
+	authorityProjectID                                                                  string
 	organizationID, organizationRef, actorID, actorRef, actorName, role, correlationRef string
 	credentialAuthenticatedAt                                                           time.Time
 }
@@ -880,6 +886,7 @@ func (repository *Repository) resolveScope(ctx context.Context, principal value.
 		return scope{}, errs.ErrUnavailable
 	}
 	result.correlationRef = principal.CorrelationRef
+	result.authorityProjectID = principal.ProjectRef
 	result.credentialAuthenticatedAt = principal.CredentialAuthenticatedAt
 	return result, nil
 }

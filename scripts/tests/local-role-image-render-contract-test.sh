@@ -252,13 +252,14 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       contains("variables.admissionId")))
 ' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
-  jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
+  jq -cS . "$source_root/contracts/runtime-controller/v7/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
 )
 actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256)' \
   <<<"$policy_json" | sha256sum | awk '{print $1}')
 jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_contract_digest" '
   .data.policySHA256 == $policy and
+  .data.roleRuntimeContractRevision == "2" and
   .data.roleRuntimeContractSHA256 == $runtime
 ' <<<"$policy_json" >/dev/null ||
   fail 'local policy or role runtime contract identity is not content-addressed'

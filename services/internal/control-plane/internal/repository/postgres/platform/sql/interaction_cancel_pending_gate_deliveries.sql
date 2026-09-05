@@ -1,6 +1,7 @@
 -- name: interaction_cancel_pending_gate_deliveries :exec
 UPDATE control_plane.interaction_deliveries
-SET state = 'CANCELLED',
+SET state = CASE WHEN state = 'CLAIMED' THEN 'UNKNOWN_OUTCOME' ELSE 'CANCELLED' END,
+    safe_error_code = CASE WHEN state = 'CLAIMED' THEN 'INTERACTION_OUTCOME_UNKNOWN' ELSE safe_error_code END,
     lease_ref = NULL,
     fence_digest = NULL,
     workload_instance = NULL,
