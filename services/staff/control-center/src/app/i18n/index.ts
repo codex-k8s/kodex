@@ -2192,6 +2192,7 @@ const ru = {
       "После отправки поле будет очищено. Kodex не сохраняет и не показывает значение повторно.",
     authorizeApiKey: "Авторизовать",
     selectorLabel: "Учётные записи провайдера",
+    modelUnavailable: "Модель недоступна для выбранных учётных записей",
     runtimeReadinessUnknown: "Готовность runtime не подтверждена",
     selectedCount: "Выбрано: {count}",
     noEligibleAccounts:
@@ -4670,6 +4671,7 @@ const en = {
       "The field is cleared after submission. Kodex does not retain or show the value again.",
     authorizeApiKey: "Authorize",
     selectorLabel: "Provider accounts",
+    modelUnavailable: "Model unavailable for the selected accounts",
     runtimeReadinessUnknown: "Runtime readiness is unconfirmed",
     selectedCount: "Selected: {count}",
     noEligibleAccounts:

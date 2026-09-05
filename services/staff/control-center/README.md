@@ -278,16 +278,16 @@ AsyncAPI generator также пишет Go-модели; из корня реп
 
 Адресная передача #1045 исполнителю Meitner (`01a06dee-d29a-72c2-8d22-3a67d150c8a7`):
 
-| Приоритетный контракт | Требуемые данные для PWA                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mattermost identity   | HTTP list/bind/revoke получены и подключены. Остались eligible USER selector с активным platform membership, team/channel и правило SHA256 внешнего user; текущая форма принимает готовый lowercase SHA256                                                                                                                                                                                |
-| Полные параметры STT  | Получены и подключены; bootstrap `speechTranscription` остаётся единственным источником пользовательской eligibility, config readiness её не заменяет. Каталог совместимых моделей ещё отсутствует                                                                                                                                                                                        |
-| Skills/Memory         | HTTP `441564286` и CP Skill lifecycle/binding получены. UI подключает bindings из runtime configuration, If-Match agent version и обязательный readback после mutation. Реальные scanner/runtime и staging acceptance остаются у владельцев backend                                                                                                                                       |
-| VFS lifecycle         | Eligibility/nextActions, состояние active/trash и версии узлов для выбора и массовых операций; текущий VfsNode не даёт права выводить их из вида узла                                                                                                                                                                                                                                     |
-| Home                  | Server-filtered cursor-каталоги active/failed/continuable runs и owner gates; поиск и totals. Организационные assistant artifacts не подменяют глобальные результаты проектов                                                                                                                                                                                                             |
-| RoleImage recipes     | `listRoleImageRecipes` сейчас имеет только `roleDefinitionRef/pageSize/pageToken`; нужны server `query/state` и связь recipe/build с managed ownership, не сопоставление по имени                                                                                                                                                                                                         |
-| Model/reasoning       | CP `PlatformQueryService.ListModelCapabilities` (`internal/transport/grpc/mvp_queries.go:81`) уже принимает definition/account/query/page и возвращает `ModelCapability` с reasoning efforts/default/eligible accounts. Mapping повторно проверен и отсутствует в HTTP/TS checkpoint `43cdb2792`; также нужен сохраняемый model/effort в immutable runtime configuration и exact readback |
-| Workflow user∩agent   | `PlatformCapability` из `/platform-capabilities` не содержит user eligibility; `availableWithoutIntegration` не является полномочием. Нужен authoritative effective capability catalog для текущего пользователя и конкретного agent/шага; неизвестные полномочия нельзя выводить из имени роли                                                                                           |
+| Приоритетный контракт | Требуемые данные для PWA                                                                                                                                                                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mattermost identity   | HTTP list/bind/revoke получены и подключены. Остались eligible USER selector с активным platform membership, team/channel и правило SHA256 внешнего user; текущая форма принимает готовый lowercase SHA256                                                                                                                                    |
+| Полные параметры STT  | Получены и подключены; bootstrap `speechTranscription` остаётся единственным источником пользовательской eligibility, config readiness её не заменяет. Каталог совместимых моделей ещё отсутствует                                                                                                                                            |
+| Skills/Memory         | HTTP `441564286` и CP Skill lifecycle/binding получены. UI подключает bindings из runtime configuration, If-Match agent version и обязательный readback после mutation. Реальные scanner/runtime и staging acceptance остаются у владельцев backend                                                                                           |
+| VFS lifecycle         | Eligibility/nextActions, состояние active/trash и версии узлов для выбора и массовых операций; текущий VfsNode не даёт права выводить их из вида узла                                                                                                                                                                                         |
+| Home                  | Server-filtered cursor-каталоги active/failed/continuable runs и owner gates; поиск и totals. Организационные assistant artifacts не подменяют глобальные результаты проектов                                                                                                                                                                 |
+| RoleImage recipes     | `listRoleImageRecipes` сейчас имеет только `roleDefinitionRef/pageSize/pageToken`; нужны server `query/state` и связь recipe/build с managed ownership, не сопоставление по имени                                                                                                                                                             |
+| Model/reasoning       | HTTP `11401f0ac` получен: model catalog account/query/page подключён через `ProviderModelSelector`. Модель сохраняется отдельной от default runtime profile; старый ID не подменяется. Остаются catalog revision/digest и reasoning effort в publish/readback immutable runtime configuration; отдельный overlay не выдаётся за этот контракт |
+| Workflow user∩agent   | `PlatformCapability` из `/platform-capabilities` не содержит user eligibility; `availableWithoutIntegration` не является полномочием. Нужен authoritative effective capability catalog для текущего пользователя и конкретного agent/шага; неизвестные полномочия нельзя выводить из имени роли                                               |
 
 Точка интеграции HTTP/SDK `441564286` (локальный cherry-pick `c2adafe95`),
 CP dependencies `695ae1e15`/`ae9cb517f` (локально `1a6f50310`/`55e7b65ce`).
@@ -301,6 +301,25 @@ commit #1045 с генерацией из суммарного OpenAPI. Этот
 с CP dependencies `3380a7e98`/`23bc30d65`/`f7c2d2ecb` (локальный HTTP `094628325`).
 Receipt-bound email session `5c32fa683` принят как `e075e1247`.
 Собственная PWA-реализация ещё не является завершённым unit.
+
+HTTP `055d8e050` и `11401f0ac` приняты поверх чистого PWA как `267a7007e`
+и `60bfaab72`, handwritten файлы сохранены. Повторная OpenAPI-генерация
+проверяется из суммарного контракта. `src/features/providers/model-catalog.ts`
+и `ProviderModelSelector.vue` подключают поиск/cursor и точную проверку модели
+для каждой выбранной account; `AgentRuntimePanel.vue` не ограничивает выбор
+default моделью runtime profile. `model-catalog.test.ts` проверяет scope,
+cursor, отмену и исчезновение ID; `e2e/models.synthetic.spec.ts` прошёл на
+1440/390, включая замену модели, пустой поиск и несовместимую вторую account.
+Ручная приёмка: выбрать доступную account и модель вне default профиля,
+сохранить, перечитать runtime configuration; отозвать доступ и убедиться,
+что ID остаётся видимым, а подтверждение заблокировано.
+Типизированный publish/readback reasoning effort и свежесть provider snapshot
+не подтверждены этим synthetic-сценарием; см. D1..D7 в
+`docs/operations/http-surface-1045.md` от корня репозитория.
+После подключения моделей: production build с typecheck PASS, unit 809/809
+в 168 файлах PASS, focused model browser 2/2 PASS, повтор OpenAPI generation
+без generated diff. Остальные browser-сценарии на этом изменении повторно
+не запускались; предыдущие результаты привязаны к предыдущим checkpoint.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).

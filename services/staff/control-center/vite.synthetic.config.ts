@@ -11,6 +11,9 @@ export default mergeConfig(base, {
         voice: fileURLToPath(
           new URL("./e2e/fixtures/voice.html", import.meta.url),
         ),
+        models: fileURLToPath(
+          new URL("./e2e/fixtures/models.html", import.meta.url),
+        ),
       },
     },
   },

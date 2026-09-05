@@ -6,13 +6,12 @@ import { useI18n } from "vue-i18n";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import { ProviderAccountSelector } from "@/features/providers";
+import ProviderModelSelector from "@/features/providers/ProviderModelSelector.vue";
 import {
   readyRuntimes,
-  runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
   runtimeSelectionByRef,
-  runtimesForSelection,
   type ApplyBoundary,
 } from "@/features/agents/detail/model";
 import {
@@ -56,6 +55,7 @@ const loading = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const overlayContent = ref("");
+const modelAvailable = ref(false);
 const providerAccountEligibility = ref<"CONNECTING" | "READY" | "UNAVAILABLE">(
   "CONNECTING",
 );
@@ -81,14 +81,9 @@ const selectedProvider = computed(
   () =>
     selectedRuntime.value?.provider ?? view.value?.configuration.provider ?? "",
 );
-const models = computed(() =>
-  runtimeModels(availableRuntimes.value, selectedProvider.value),
-);
 const matchingRuntimes = computed(() =>
-  runtimesForSelection(
-    availableRuntimes.value,
-    selectedProvider.value,
-    form.model,
+  availableRuntimes.value.filter(
+    (runtime) => runtime.provider === selectedProvider.value,
   ),
 );
 const providerOptions = computed<AsyncEntityOption[]>(() =>
@@ -98,18 +93,6 @@ const providerOptions = computed<AsyncEntityOption[]>(() =>
     description: `${copy.value.runtime.providerProfiles}: ${String(
       availableRuntimes.value.filter((item) => item.provider === provider)
         .length,
-    )}`,
-  })),
-);
-const modelOptions = computed<AsyncEntityOption[]>(() =>
-  models.value.map((model) => ({
-    ref: model,
-    title: model,
-    description: `${copy.value.runtime.modelProfiles}: ${String(
-      availableRuntimes.value.filter(
-        (item) =>
-          item.provider === selectedProvider.value && item.model === model,
-      ).length,
     )}`,
   })),
 );
@@ -125,13 +108,6 @@ const selectedProviderOption = computed(() =>
   selectedOrUnavailable(
     selectedProvider.value,
     providerOptions.value,
-    copy.value.runtime.unavailableSelection,
-  ),
-);
-const selectedModelOption = computed(() =>
-  selectedOrUnavailable(
-    form.model,
-    modelOptions.value,
     copy.value.runtime.unavailableSelection,
   ),
 );
@@ -235,13 +211,6 @@ function loadProviderPage(
   return Promise.resolve(localOptionPage(providerOptions.value, query, cursor));
 }
 
-function loadModelPage(
-  query: string,
-  cursor?: string,
-): Promise<AsyncEntityOptionPage> {
-  return Promise.resolve(localOptionPage(modelOptions.value, query, cursor));
-}
-
 function loadRuntimePage(
   query: string,
   cursor?: string,
@@ -272,15 +241,7 @@ function chooseProvider(value: string | null | readonly string[]): void {
 
 function chooseModel(value: string | null | readonly string[]): void {
   const model = pickerValue(value);
-  const provider = selectedRuntime.value?.provider;
-  if (!model || !provider) return;
-  const runtimeRef = runtimeRefForSelection(
-    availableRuntimes.value,
-    provider,
-    model,
-  );
-  if (!runtimeRef) return;
-  form.runtimeProfileRef = runtimeRef;
+  if (!model || !selectedRuntime.value) return;
   form.model = model;
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
@@ -292,7 +253,7 @@ function chooseRuntime(value: string | null | readonly string[]): void {
   );
   if (!selected) return;
   form.runtimeProfileRef = selected.ref;
-  form.model = selected.model;
+  if (!form.model) form.model = selected.model;
   notify(runtimeDirty.value ? "DRAFT" : "APPLIED");
 }
 
@@ -346,7 +307,14 @@ async function execute(
 
 async function saveRuntime(): Promise<void> {
   const current = view.value;
-  if (!current || !props.canEdit || !runtimeDirty.value) return;
+  if (
+    !current ||
+    !props.canEdit ||
+    !runtimeDirty.value ||
+    !modelAvailable.value ||
+    providerAccountEligibility.value !== "READY"
+  )
+    return;
   await execute(() =>
     saveAgentRuntime(
       props.agentRef,
@@ -412,14 +380,15 @@ onMounted(() => void load());
           </label>
           <label class="field">
             <span>{{ $t("agents.model") }}</span>
-            <AsyncEntityPicker
+            <ProviderModelSelector
               :model-value="form.model"
-              :selected="selectedModelOption"
-              :load-page="loadModelPage"
-              :placeholder="copy.runtime.chooseModel"
-              :search-placeholder="copy.runtime.searchModel"
-              :disabled="!canEdit || busy || models.length === 0"
+              :definition-key="selectedProvider"
+              :account-refs="
+                form.providerAccounts.map((account) => account.accountRef)
+              "
+              :disabled="!canEdit || busy"
               @update:model-value="chooseModel"
+              @availability-change="modelAvailable = $event"
             />
           </label>
           <label class="field">
@@ -502,6 +471,7 @@ onMounted(() => void load());
               !runtimeDirty ||
               !form.runtimeProfileRef ||
               !form.model ||
+              !modelAvailable ||
               !selectedRuntime?.ready ||
               !form.providerAccounts.length ||
               providerAccountEligibility !== 'READY'
