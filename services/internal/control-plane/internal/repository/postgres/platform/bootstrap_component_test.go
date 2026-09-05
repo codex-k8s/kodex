@@ -183,6 +183,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("memory records owner lifecycle", func(t *testing.T) {
 		testMemoryRecords(t, ctx, repository)
 	})
+	t.Run("email receipt reconciliation is fresh exact and non retrying", func(t *testing.T) {
+		testEmailReceiptReconciliation(t, ctx, repository, pool)
+	})
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
 	})

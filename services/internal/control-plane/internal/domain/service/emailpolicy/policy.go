@@ -15,6 +15,7 @@ const (
 	PermissionView                = "integration.view"
 	PermissionRunView             = "run.view"
 	MaximumNoteRunes              = 2000
+	MaximumEffectKeyBytes         = 128
 	FreshAuthenticationMaximumAge = 5 * time.Minute
 	AuthorizationMaximumAge       = 2 * time.Minute
 	OutcomeUnknown                = "UNKNOWN_OUTCOME"
@@ -28,6 +29,25 @@ var (
 )
 
 func ValidDigest(digest string) bool { return digestPattern.MatchString(digest) }
+
+func ValidateEffectKey(key string) error {
+	if len(key) == 0 || len(key) > MaximumEffectKeyBytes || !utf8.ValidString(key) || strings.ContainsRune(key, 0) {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
+func ValidateReceiptTransition(previous, next string) error {
+	switch next {
+	case OutcomeUnknown, OutcomeEffectConfirmed, OutcomeNoEffectConfirmed:
+	default:
+		return errs.ErrInvalid
+	}
+	if previous == "" && next == OutcomeUnknown || previous == OutcomeUnknown || previous == next {
+		return nil
+	}
+	return errs.ErrConflict
+}
 
 func ValidateExternalReceipt(ref, digest string) error {
 	if !externalReceiptPattern.MatchString(ref) || !ValidDigest(digest) {

@@ -60,3 +60,32 @@ func TestReconciliationRequiresVerifiedInteractiveFreshness(t *testing.T) {
 		}
 	}
 }
+
+func TestEffectKeyIsOpaqueAndByteBounded(t *testing.T) {
+	for _, key := range []string{"x", "eff_opaque:with/slashes and spaces", strings.Repeat("x", 128), strings.Repeat("\u044f", 64)} {
+		if err := ValidateEffectKey(key); err != nil {
+			t.Fatalf("valid opaque key rejected: %v", err)
+		}
+	}
+	for _, key := range []string{"", strings.Repeat("x", 129), strings.Repeat("\u044f", 65), "a\x00b", string([]byte{0xff})} {
+		if !errors.Is(ValidateEffectKey(key), errs.ErrInvalid) {
+			t.Fatal("invalid effect key accepted")
+		}
+	}
+}
+
+func TestReceiptTransitionMatrix(t *testing.T) {
+	states := []string{"", OutcomeUnknown, OutcomeEffectConfirmed, OutcomeNoEffectConfirmed, "INVALID"}
+	for _, previous := range states {
+		for _, next := range states {
+			t.Run(previous+"/"+next, func(t *testing.T) {
+				err := ValidateReceiptTransition(previous, next)
+				validNext := next == OutcomeUnknown || next == OutcomeEffectConfirmed || next == OutcomeNoEffectConfirmed
+				allowed := validNext && (previous == "" && next == OutcomeUnknown || previous == OutcomeUnknown || previous == next)
+				if allowed && err != nil || !allowed && err == nil {
+					t.Fatalf("receipt transition allowed=%t: %v", allowed, err)
+				}
+			})
+		}
+	}
+}

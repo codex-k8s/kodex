@@ -12,9 +12,11 @@ updated: 2026-09-05
 
 Источник: Issues #1037/#1046, MVP-UI-42. Этот checkpoint передаёт исходные
 Proto, generated Go и operation policy для параллельной реализации consumer.
-SQL/domain handlers, выдача worker credential и deploy trust для нового
-producer ещё не реализованы. Наличие RPC в generated не означает доступный
-рабочий путь: до подключения handler сервер возвращает Unimplemented.
+Owner read, ReconcileEmailEffect и ResolveEmailReconciliation подключены к
+SQL/domain handlers. ResolveEmailAuthorization, ReportEmailEffectReceipt,
+выдача worker credential и deploy trust ещё не завершены. Наличие остальных
+RPC в generated не означает доступный рабочий путь: до подключения handler
+сервер возвращает Unimplemented.
 
 ## Исполняемая авторизация
 
@@ -92,12 +94,48 @@ Note ограничен 2000 Unicode code points, UTF-8, без NUL. Digest — 
 lowercase hex без `sha256:`. External receipt ref соответствует генерируемому
 bridge ID: ровно 32 lowercase hex. Outcome reconciliation допускает только
 EFFECT_CONFIRMED и NO_EFFECT_CONFIRMED, не UNKNOWN_OUTCOME или RETRY.
-Domain policy Go/race tests: PASS локально. Подключение этих правил к SQL/RPC
-handler ещё не завершено, рабочий protected path не объявляется PASS.
+EffectKey остаётся opaque UTF-8 строкой длиной 1..128 bytes без NUL, без
+ограничения на hex или prefix. CP сейчас назначает `eff_` и 32 hex из digest
+намерения, но это не меняет общий bridge-контракт.
+
+`ExternalReceiptDigest` соответствует immutable identity
+`kodex.email.receipt.v1` из bridge, а не semantic command digest. Он не меняется
+при подтверждении outcome. CP сохраняет исходный UNKNOWN и последующие
+observations; запрещены изменение identity и замена terminal outcome.
+
+## Реализованный owner path
+
+Миграция `20260904000615` добавляет email receipts, append-only observations и
+immutable reconciliation decisions. Create начинается с UNKNOWN; подтверждение
+добавляет observation с новой версией, сохраняя прежний факт. Decision не меняет
+receipt, invocation, run, claims и не создаёт retry либо нового SMTP effect.
+Новый domain event отсутствует: авторитетны GetEmailEffectReceipt и защищённый
+ResolveEmailReconciliation. Command transaction сохраняет decision, audit и
+idempotency receipt атомарно.
+
+Reconcile проверяет integration.manage на exact connection и run.view до OCC
+и idempotency replay; freshness повторяется и при replay. Project выводится
+из invocation/run; несовпадающий project в проверенном transport отклоняется.
+Решение допускается только для UNKNOWN invocation и exact receipt version/digest.
+Другой outcome уже принятого решения запрещён; повторная свежая авторизация
+того же outcome может создать новое решение и grant не более чем на две минуты.
+Resolve принимает только email-bridge и последнее решение, сверяет exact refs,
+digest, version, expiry и актуальные права actor. Предыдущий grant после нового
+решения, revoked actor permission и несовпадающая source identity отклоняются.
+
+Локальные проверки:
+- Go/race domain emailpolicy, platform service и gRPC transport: PASS.
+- Disposable PostgreSQL `^TestBootstrapComponent$/email_receipt`: PASS;
+  собственные project/agent/run/receipt fixtures, freshness/OCC/digest/replay,
+  run-only denial, permission intersection, revoke перед replay/resolve,
+  exact worker/decision/source, отсутствие retry и immutable observations.
+- Source authorization/report через реальный protected bridge RPC: NOT RUN.
+
+## Оставшийся producer
 
 - Owner mailbox configuration с immutable revision и credential generation.
 - Авторизация по текущему claim/grant/gate и проверенному semantic command.
-- Durable receipts, owner reconciliation и повторная проверка grant.
+- Привязка Report к durable receipts и source authorization перед первым write.
 - Worker credential issuance, trust registration и deploy key delivery.
 - PostgreSQL positive/negative matrix и consumer gRPC проверки: NOT RUN.
 

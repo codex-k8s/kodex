@@ -12,6 +12,7 @@ import (
 type Kind string
 
 const (
+	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
 	SaveSkillBundleDraft               Kind = "SAVE_SKILL_BUNDLE_DRAFT"
 	ValidateSkillBundleDraft           Kind = "VALIDATE_SKILL_BUNDLE_DRAFT"
@@ -428,6 +429,7 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	EmailDecision           *entity.EmailReconciliationDecision
 	SkillBundle             *entity.SkillBundle
 	MemoryRecord            *entity.KodexMemoryRecord
 	ContextBinding          *entity.AgentContextBinding
@@ -463,4 +465,8 @@ type Result struct {
 	PromotionReceipt        *entity.RoleImagePromotionReceipt
 	ManagedConfiguration    *entity.ManagedConfigurationSet
 	ManagedRevision         *entity.ManagedConfigurationRevision
+}
+
+type EmailReconciliationInput struct {
+	ReceiptRef, ExpectedReceiptDigest, Outcome, Note string
 }
