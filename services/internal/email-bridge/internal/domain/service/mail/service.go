@@ -17,6 +17,7 @@ import (
 
 type Service struct {
 	Ledger         receipt.ReconciliationRepository
+	Reports        receipt.ReportRepository
 	Effects        receipt.EffectAuthority
 	CompletionBase context.Context
 	Config         api.Configuration
@@ -25,7 +26,7 @@ type Service struct {
 	Receipts       receipt.Repository
 }
 
-const receiptCompletionTimeout = 3 * time.Second
+const receiptCompletionTimeout = receipt.ReportGrace
 
 func Mutation(op api.Operation) bool {
 	switch op {
@@ -184,7 +185,7 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	if !Mutation(command.Operation) {
 		return s.Provider.Read(ctx, mailbox, command)
 	}
-	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil || s.Ledger == nil {
+	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil || s.Ledger == nil || s.Reports == nil {
 		return api.Result{}, errs.Unavailable
 	}
 	id := fmt.Sprintf("%x", randomID())
@@ -196,18 +197,21 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 		}{mailbox.ConnectionId, folder, command.Uid, command.UidValidity})
 	}
 	audit := receipt.Audit{Actor: decision.ActorId, Agent: decision.AgentId, Grant: decision.GrantId, Operation: command.Operation, ConfigurationRevision: decision.ConfigurationRevision, CredentialGeneration: decision.CredentialGeneration, GateApproved: decision.GateApproved}
-	r, created, err := s.Receipts.Reserve(ctx, scope, command.EffectKey, request.InputSha256, id, resource, audit)
+	source := receipt.ReportSource{Binding: request.ExecutionBinding, Connection: mailbox.ConnectionId}
+	candidate := receipt.Record{ID: id, Key: command.EffectKey, Digest: request.InputSha256, Resource: resource, Audit: audit, Status: "unknown"}
+	r, created, err := s.Reports.ReserveEffect(ctx, scope, candidate, source)
 	if err != nil {
 		return api.Result{}, err
 	}
 	if !created {
-		if _, err := s.report(ctx, request.ExecutionBinding, scope, mailbox, r); err != nil {
-			return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
-		}
+		// Исходный journal восстанавливает Report без подмены lineage новым invocation.
 		return r.Result(), nil
 	}
 	if _, err := s.report(ctx, request.ExecutionBinding, scope, mailbox, r); err != nil {
 		return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
+	}
+	if ctx.Err() != nil || !source.Binding.Lease.ExpiresAt.After(time.Now()) {
+		return api.Result{Status: "unknown", MessageId: r.ID}, errs.Denied
 	}
 	status := "unknown"
 	if Sending(command.Operation) {
@@ -226,10 +230,11 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	}
 	completion, finish := context.WithTimeout(s.CompletionBase, receiptCompletionTimeout)
 	defer finish()
-	if err = s.Receipts.Complete(completion, scope, r, status); err != nil {
+	completed, err := s.Reports.CompleteEffect(completion, scope, r, status, source)
+	if err != nil {
 		return api.Result{Status: "unknown", MessageId: r.ID}, nil
 	}
-	r.Status = status
+	r = completed
 	if _, err := s.report(completion, request.ExecutionBinding, scope, mailbox, r); err != nil {
 		return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
 	}
@@ -237,24 +242,19 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 }
 
 func (s *Service) report(ctx context.Context, binding *api.ExecutionBinding, scope receipt.Scope, mailbox api.Mailbox, r receipt.Record) (receipt.OwnerReceipt, error) {
-	invocation := ""
-	if binding != nil && binding.InvocationRef != nil {
-		invocation = *binding.InvocationRef
+	pending := receipt.PendingReport{Scope: scope, Record: r, Source: receipt.ReportSource{Binding: binding, Connection: mailbox.ConnectionId}}
+	if !pending.Valid() {
+		return receipt.OwnerReceipt{}, errs.Invalid
 	}
-	owner := receipt.OwnerReceipt{Invocation: invocation, ExternalRef: r.ID, ExternalDigest: r.ExternalDigest(scope), InputDigest: r.Digest, EffectKey: r.Key, Mailbox: scope.Mailbox, Connection: mailbox.ConnectionId, ConfigurationRevision: r.Audit.ConfigurationRevision, Outcome: r.Outcome()}
-	key := api.Digest(struct {
-		Digest  string
-		Outcome receipt.Outcome
-	}{owner.ExternalDigest, owner.Outcome})
-	confirmed, err := s.Effects.Report(ctx, receipt.Report{Binding: binding, Receipt: owner, IdempotencyKey: key})
+	confirmed, err := s.Effects.Report(ctx, pending.Report(false))
 	if err != nil {
 		return receipt.OwnerReceipt{}, err
 	}
-	after := time.Now().Add(receiptCompletionTimeout)
-	if binding != nil {
-		after = binding.Lease.ExpiresAt.Add(receiptCompletionTimeout)
-	}
+	after := binding.Lease.ExpiresAt.Add(receiptCompletionTimeout)
 	if err := s.Ledger.Remember(ctx, scope, r, confirmed, after); err != nil {
+		return receipt.OwnerReceipt{}, err
+	}
+	if err := s.Reports.AcknowledgeReport(ctx, pending); err != nil {
 		return receipt.OwnerReceipt{}, err
 	}
 	return confirmed, nil

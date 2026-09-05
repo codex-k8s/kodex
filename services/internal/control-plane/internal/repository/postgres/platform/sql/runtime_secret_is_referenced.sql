@@ -8,6 +8,12 @@ SELECT EXISTS (
       AND version.secret_descriptors @> jsonb_build_array(jsonb_build_object('secret_ref', @secret_ref::text))
     UNION ALL
     SELECT 1
+    FROM control_plane.agent_runtime_environment_bindings binding
+    JOIN control_plane.runtime_environment_versions version ON version.id = binding.environment_version_id
+    WHERE binding.organization_id = @organization_id::uuid
+      AND version.secret_descriptors @> jsonb_build_array(jsonb_build_object('secret_ref', @secret_ref::text))
+    UNION ALL
+    SELECT 1
     FROM control_plane.runtime_revisions revision
     JOIN control_plane.runs run ON run.id = revision.run_id
     JOIN control_plane.runtime_environment_versions version

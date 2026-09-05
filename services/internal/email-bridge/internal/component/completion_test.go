@@ -34,20 +34,21 @@ func (p *cancellingProvider) Apply(ctx context.Context, _ api.Mailbox, _ api.Com
 
 type completionStore struct {
 	port.Repository
+	port.ReportRepository
 	t    *testing.T
 	fail bool
 }
 
-func (s *completionStore) Complete(ctx context.Context, scope port.Scope, record port.Record, status string) error {
+func (s *completionStore) CompleteEffect(ctx context.Context, scope port.Scope, record port.Record, status string, source port.ReportSource) (port.Record, error) {
 	s.t.Helper()
 	deadline, ok := ctx.Deadline()
 	if ctx.Err() != nil || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 3*time.Second {
 		s.t.Fatal("receipt completion must have an independent bounded context")
 	}
 	if s.fail {
-		return errs.Unavailable
+		return port.Record{}, errs.Unavailable
 	}
-	return s.Repository.Complete(ctx, scope, record, status)
+	return s.ReportRepository.CompleteEffect(ctx, scope, record, status, source)
 }
 
 func TestReceiptCompletionAfterCancellation(t *testing.T) {
@@ -63,8 +64,8 @@ func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 		}
 		store := &memory{rows: map[string]port.Record{}}
 		provider := &cancellingProvider{cancel: func() {}}
-		service := &mail.Service{Ledger: store, CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
-		_, err := service.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", send(api.OperationSend, "missing-cleanup"))
+		service := &mail.Service{Reports: store, Ledger: store, CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
+		_, err := service.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", send(api.OperationSend, "missing-cleanup"))
 		if !errors.Is(err, errs.Unavailable) || provider.calls != 0 || len(store.rows) != 0 {
 			t.Fatal("mutation started without a completion lifecycle")
 		}
@@ -85,9 +86,9 @@ func testReceiptCompletion(t *testing.T, durable port.Repository) {
 			if base == nil {
 				base = &memory{rows: map[string]port.Record{}}
 			}
-			store := &completionStore{Repository: base, t: t, fail: scenario == "store-failure"}
+			store := &completionStore{Repository: base, ReportRepository: base.(port.ReportRepository), t: t, fail: scenario == "store-failure"}
 			provider := &cancellingProvider{cancel: cancel}
-			service := &mail.Service{Ledger: base.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: receiptConfiguration(), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
+			service := &mail.Service{Reports: store, Ledger: base.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: receiptConfiguration(), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
 			command := send(api.OperationSend, "completion-key")
 			want := "accepted"
 			if scenario == "imap-partial" {
@@ -97,7 +98,7 @@ func testReceiptCompletion(t *testing.T, durable port.Repository) {
 				want = "unknown"
 			}
 			command.EffectKey += "-" + scenario
-			result, err := service.Execute(ctx, httptransport.CallerSPIFFE, "fixture-token", command)
+			result, err := service.Execute(executionContext(ctx), httptransport.CallerSPIFFE, "fixture-token", command)
 			if err != nil || result.Status != want || ctx.Err() == nil {
 				t.Fatal("unexpected completion outcome")
 			}
@@ -108,13 +109,13 @@ func testReceiptCompletion(t *testing.T, durable port.Repository) {
 			if scenario == "imap-partial" && (record.UID != "42" || record.UIDValidity != 7 || record.Folder != "INBOX" || record.ContentDigest != strings.Repeat("a", 64)) {
 				t.Fatal("partial provider coordinates lost")
 			}
-			replayed, err := service.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", command)
+			replayed, err := service.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", command)
 			if err != nil || replayed.Status != want || provider.calls != 1 {
 				t.Fatal("receipt replay repeated the provider effect")
 			}
 			if scenario == "imap-partial" {
 				command.EffectKey = "another-key"
-				if _, err := service.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", command); !errors.Is(err, errs.Conflict) || provider.calls != 1 {
+				if _, err := service.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", command); !errors.Is(err, errs.Conflict) || provider.calls != 1 {
 					t.Fatal("unknown source lock was bypassed")
 				}
 			}

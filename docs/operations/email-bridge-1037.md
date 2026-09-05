@@ -189,7 +189,8 @@ ResolveEmailReconciliation означает выбор текущего дейс
 | --- | --- | --- | --- |
 | reserve → CP UNKNOWN → durable owner binding | Исходный invocation lease, generated CP Report с worker grant/proof | CP ref/version, invocation, connection и digest сохраняются до provider write; отказ закрывает effect | Local receipt + CP GET |
 | Startup → polling | DB schema/configuration и local issuer barrier; lifecycle context | До barrier нет CP poll или local unlock; worker cancel/join до закрытия pool/client | Local readiness не объявляет полный CP path |
-| UNKNOWN → bounded batch | Только durable UNKNOWN с сохранённым CP binding; лимит и fair next-check scheduling | Отсутствие binding оставляет receipt закрытой; нет синтеза owner ref | Local receipt/journal |
+| Report response lost → exact replay | После исходного lease + completion budget; новый worker grant, прежние Binding и idempotency key | Reserve/Complete атомарно сохраняют закрытый журнал запроса; replay не вызывает provider и не создаёт owner ref локально | Local report journal + CP stored observation |
+| UNKNOWN → bounded batch | Только durable UNKNOWN с восстановленным CP receipt ref; лимит и fair next-check scheduling | Отсутствие подтверждённого CP receipt оставляет effect закрытым; нет синтеза owner ref | Local receipt/journal |
 | Poll → NOT_FOUND/denied/error | Каждый раз fresh typed Resolve по exact receipt ref/external ref/digest; DecisionRef пустой | Нет local state transition, source lock сохраняется, следующий bounded interval | CP authoritative GET |
 | Poll → действующее решение | CP выбирает server decision; exact receipt/version/digest/invocation, actor/grant, outcome и TTL | Проверка freshness повторяется перед local commit; просрочка/несовпадение не снимает lock | CP decision + local audit |
 | Решение → local audit + source unlock | Только EFFECT_CONFIRMED либо NO_EFFECT_CONFIRMED, без provider port | Одна owner DB transaction: immutable decision audit и unlock; исходный UNKNOWN/outcome/provider metadata не переписываются | Local journal + исходный receipt + CP GET |
@@ -219,9 +220,10 @@ Main `8026633a9` с новым vendor catalog сохранён отдельны�
   После protocol effect сначала сохраняется локальный outcome, затем report.
   Отказ после reserve возвращает UNAVAILABLE/unknown, включая revoked grant:
   его нельзя превратить в безопасный для повтора HTTP 403.
-- Повтор исходного command допубликовывает локально известный receipt, но не
-  вызывает provider повторно. Idempotency report привязана к immutable receipt
-  digest и outcome; mail effect не получает автоматический retry.
+- Повтор исходного command возвращает локально известный receipt, не вызывает
+  provider и не подменяет исходный invocation. Допубликация принадлежит
+  фоновому worker с устойчивым исходным запросом. Idempotency report привязана
+  к immutable receipt digest и outcome; mail effect не получает automatic retry.
 - Typed `ResolveEmailReconciliation` adapter проверяет exact receipt/version,
   external ref/digest, invocation, decision/version, actor/grant, freshness и
   закрытый outcome. Он не снимает local source lock сам по себе и не заменяет
@@ -305,13 +307,11 @@ projection допускает инфраструктурную readiness, но H
 `/var/run/secrets/kodex/internal-rpc-authority/postgres`, роль
 `ira_email_bridge_issuer_g1`. Общая материализация приходит отдельным #1059.
 
-Открытая граница: потеря CP Report response до сохранения owner receipt_ref
-оставляет local UNKNOWN без binding и без provider effect. Такой receipt
-намеренно не снимает lock. Root передано предложение exact lookup по external
-ref/digest с пустым receipt_ref; расширение контракта без согласования не введено.
-Нужен exact producer checkpoint SQL/RPC/CP trust от Bohr. Собственные database
-Secrets: email-bridge-postgresql-bootstrap, email-bridge-runtime-database и
-email-bridge-migration-database требуют отдельной доставки при установке.
+На исходном checkpoint потеря CP Report response до сохранения owner receipt_ref
+оставляла local UNKNOWN без owner binding. Восстановление этого случая описано
+ниже; lookup с пустым receipt_ref не вводится. Доставка собственных database
+Secrets реализована в разделе установки БД. Полный producer path остаётся
+отдельной интеграционной зависимостью #1046.
 
 Общий go-toolchain contract: FAIL вне EMAIL, runtime-controller Dockerfile
 не материализует local replacement libs/go/secretbrokerapi; root уведомлён.
@@ -385,3 +385,106 @@ credentials удаляются; значения не печатаются. Prod
 [TLS](https://www.postgresql.org/docs/18/ssl-tcp.html),
 [проверка hostname](https://www.postgresql.org/docs/18/libpq-ssl.html),
 [service file](https://www.postgresql.org/docs/18/libpq-pgservice.html).
+
+## Восстановление потерянного Report
+
+Forward migration `20260905000200_email_report_journal.sql` добавляет к той же
+FORCE RLS receipt строке закрытый `report_source`, его digest, монотонную
+версию и bounded retry schedule. Reserve и Complete сохраняют receipt и
+журнал в одном SQL statement: разрыва между effect state и recovery state нет.
+Исходный fence хранится только в частном журнале PostgreSQL, не в audit,
+публичном API или логах. После terminal ACK он удаляется; для подтверждённой
+начальной записи его удаляет bounded cleanup после lease + 3 секунды.
+
+Отдельный worker с теми же ограничениями batch/interval и startup/cancel/join
+контрактом восстанавливает исходные Binding, external ref/digest, outcome и
+idempotency key. Повтор начинается после исходного lease + completion budget.
+Adapter снимает только локальный запрет истёкшего lease для этого replay;
+generated client по-прежнему получает свежие transport/worker полномочия.
+CP возвращает ранее сохранённое наблюдение либо принимает поздний UNKNOWN
+по прежде выданной immutable authorization с теми же organization/source/
+lease/fence/generation/semantic digest. Поздний terminal требует прежний UNKNOWN
+и не может противоречить решению владельца. Этот путь не продлевает grant,
+не открывает invocation повторно и никогда не обращается к mail Provider.
+
+Точное подтверждение сначала сохраняет CP ref/version, затем закрывает
+pending report. Сбой между этими шагами приводит к идемпотентному повтору.
+CAS по tenant/mailbox/receipt/source digest/report version не позволяет
+старому ACK скрыть новый terminal report. Отдельные циклы восстановления
+Report и исполнения owner decision имеют независимые bounded бюджеты.
+
+Локально проверены на disposable PostgreSQL под race: потеря начального и
+terminal ответа с восстановлением новым repository adapter, отсутствие
+повторного SMTP при новом HTTP invocation, конкурентный claim, stale ACK,
+atomic validation, удаление fence и отказ при повреждении source. Unit-тесты
+проверяют original expired Binding в gRPC mapping, deny/error readback,
+частичный прогресс и cancel/join на barrier/PG/RPC/remember/ACK.
+
+В интеграции `25b10c8bf` потреблён CP `bc146c2c7` с поздней записью наблюдения:
+если первый Report не дошёл до CP до expiry, worker сохраняет UNKNOWN по
+прежней authorization. CP атомарно закрывает истёкший RUNNING источник в
+UNKNOWN_OUTCOME; owner reconciliation доступна также для FAILED/CANCELLED,
+но новый claim и provider retry запрещены. Terminal без начального UNKNOWN
+отклоняется. Источник SUCCEEDED не получает новое UNKNOWN наблюдение.
+
+На этом SHA локально PASS: EMAIL race/vet/build, integrationpackage race,
+EMAIL codegen и render обоих профилей. Настоящий CP PostgreSQL contour
+`email_configuration|email_receipt` проверил выдачу authorization до expiry,
+первый Report после expiry, поздний terminal, owner decision/Resolve,
+FAILED/CANCELLED, подмену fence и отсутствие повторного claim. Это отдельные
+owner/consumer контуры, не доказательство полной защищённой цепочки.
+Полный issuer → CP SQL → EMAIL, доставка mailbox projection и staging: NOT RUN.
+
+## Идентичность POP readback
+
+Ответы POP fetch, download и attachment list сохраняют точный UID из
+проверенного UIDL snapshot и разрешённую нормализованную папку команды.
+UIDVALIDITY остаётся нулевым: POP не предоставляет IMAP поколения папок.
+Consumer может требовать exact UID без исключения для пустого поля.
+`TestPOPReadIdentityHTTPS` проверяет generated HTTP client → mTLS handler →
+mail service → настоящий локальный POP fixture для implicit TLS и STARTTLS,
+двух UID, явной/default INBOX и всех трёх операций. Listing вложений не
+возвращает их содержимое. Это локальная проверка, не live mail или staging.
+
+Почтовый CONNECT использует только listener `8082` из #1029. Runtime default,
+валидация конфигурации, ConfigMap, deployable descriptor и собственная
+NetworkPolicy согласованы; общие `8080`, STT `8081` и чужие адреса отклоняются
+до запуска. `TestMailEgressDestination` проверяет эту границу, render-проверка
+сверяет точные namespace/pod/port и runtime endpoint. Эти проверки не доказывают
+готовность listener или mailbox projection: их producer принадлежит #1029/#1046.
+
+## Жизненный цикл обновления конфигурации
+
+Источник: #1037/#1046. CP принимает immutable документ в owner PostgreSQL,
+проверяет exact credential keys и атомарно обновляет заранее созданный Secret.
+Bridge не получает Kubernetes API или права записи. Весь Secret монтируется
+read-only без subPath; документ и credentials читаются из одного поколения
+Kubernetes AtomicWriter. Новая попытка использует одну неизменяемую пару
+configuration/credentials. Документ не является authority: перед каждой
+операцией CP по-прежнему проверяет original execution binding и grants.
+
+| Переход | Условие и эффект | Событие и read path |
+| --- | --- | --- |
+| Startup | Строгий bounded документ и credentials; durable SQL watermark до открытия рабочих запросов | События нет; локальная readiness |
+| Новая revision | Один bounded monitor принимает только forward-only SQL revision/digest и атомарно заменяет обслуживаемый snapshot | События нет; новый HTTP запрос использует новую пару |
+| Тот же документ | Exact revision/digest допустим; credential keys читаются из того же поколения mount | События нет; SQL watermark и snapshot |
+| Disable/remove | Новый документ исключает доступную mailbox; новые запросы отклоняются, уже взятые immutable requests остаются ограничены lease и CP authority | События нет; CP authorization и typed HTTP error |
+| Invalid/missing/rollback | Новые запросы закрыто отклоняются, readiness false; прежний durable watermark не удаляется | События нет; следующая bounded попытка перечитывает mount |
+| Cancel/shutdown | Monitor отменяется и завершается до закрытия PostgreSQL; новые запросы закрываются | События нет; shutdown lifecycle |
+
+Значения credentials находятся только в закрытом bounded snapshot и не
+сериализуются, не логируются и не выдаются transport. Reload не создаёт
+invocation, не повторяет provider effect и не изменяет receipt recovery.
+
+Потреблён producer `af74fc7dc` через интеграцию `53f767134`. Локально выполнены:
+EMAIL full race/vet/build; `make test-email-bridge` с отдельной PostgreSQL
+(27.010 с), включая `TestMailboxProjectionReloadHTTPS`; staging и оба полных
+EMAIL/projection render-профиля. Общий `make test-web-only-release` теперь
+PASS: ранее отсутствовавший producer Secret присутствует. Это не доказывает
+live delivery или CNI enforcement. UI/credential write lifecycle D5, защищённая
+цепочка с реальным CP и staging ещё не проверены.
+
+Через Context7 `/kubernetes/website` проверены
+[обновляемые Secret volumes](https://kubernetes.io/docs/concepts/storage/volumes/#secret)
+и AtomicWriter с переключением `..data`. В работающем кластере доставка имеет
+задержку kubelet; consumer monitor перечитывает mount каждые 15 секунд.

@@ -16,9 +16,13 @@ import (
 )
 
 // Тот же mapping используется gateway и producer для immutable input digest.
-func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service) func(string, string, map[string]any) api.Result {
+func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service, current ...func() *mail.Service) func(string, string, map[string]any) api.Result {
 	t.Helper()
-	server := httptest.NewUnstartedServer(httptransport.Handler{Service: s})
+	handler := httptransport.Handler{Service: s}
+	if len(current) == 1 {
+		handler.Current = current[0]
+	}
+	server := httptest.NewUnstartedServer(handler)
 	ca := x509.NewCertPool()
 	ca.AppendCertsFromPEM(f.ca)
 	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
@@ -126,6 +130,32 @@ func TestTypedCatalogHTTPS(t *testing.T) {
 	defer f.mu.Unlock()
 	if len(f.sent) != 5 || f.deletes != 1 {
 		t.Fatalf("effects SMTP=%d POP=%d", len(f.sent), f.deletes)
+	}
+}
+
+func TestPOPReadIdentityHTTPS(t *testing.T) {
+	for _, mode := range []string{"implicit", "starttls"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t, mode)
+			s, _, _ := service(t, f, mode, nil)
+			invoke := httpsInvoker(t, f, s)
+			for _, operation := range []string{"email.message.read", "email.attachment.read", "email.attachment.list"} {
+				for _, uid := range []string{"uid-one", "uid-two"} {
+					for _, folder := range []string{"", "INBOX"} {
+						result := invoke(operation, "", map[string]any{"uid": uid, "folder": folder})
+						if result.Status != "ok" || result.Uid != uid || result.Folder != "INBOX" || result.UidValidity != 0 {
+							t.Fatalf("%s: POP read identity mismatch", operation)
+						}
+						if len(result.Attachments) != 1 {
+							t.Fatalf("%s: attachment metadata missing", operation)
+						}
+						if operation == "email.attachment.list" && result.Attachments[0].ContentBase64 != "" {
+							t.Fatal("attachment listing returned content")
+						}
+					}
+				}
+			}
+		})
 	}
 }
 

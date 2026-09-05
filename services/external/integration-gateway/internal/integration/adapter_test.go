@@ -237,7 +237,7 @@ func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	if err != nil || !strings.Contains(result.Summary, `"message_id":"msg-1"`) || strings.Contains(result.Summary, "provider_debug") {
 		t.Fatalf("email send = %#v, %v", result, err)
 	}
-	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "NONE" {
 		t.Fatalf("email send policy = %s/%s", send.Risk, send.ApprovalPolicy)
 	}
 }

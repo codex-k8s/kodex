@@ -19,8 +19,8 @@ images:
     digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 YAML
 kubectl kustomize "$temporary" > "$temporary/render.yaml"
-python3 - "$temporary/render.yaml" "$root/tools/install/secret-projections.json" <<'PY'
-import json, sys, yaml
+python3 - "$temporary/render.yaml" "$root/tools/install/secret-projections.json" "$root" <<'PY'
+import json, pathlib, sys, yaml
 objects = list(yaml.safe_load_all(open(sys.argv[1])))
 def get(kind, name):
     return next(o for o in objects if o['kind'] == kind and o['metadata']['name'] == name)
@@ -40,6 +40,10 @@ for container in pod['containers'] + pod['initContainers']:
 assert pod['securityContext']['fsGroup'] == 29000
 issuer = next(x for x in pod['containers'] if x['name'] == 'internal-rpc-authority-issuer')
 issuer_volumes = {x['name']: x for x in pod['volumes']}
+assert 'configuration' not in issuer_volumes
+assert issuer_volumes['mail']['secret'] == {'secretName': 'email-bridge-mailbox-projection', 'defaultMode': 288}
+mail_mount = next(x for x in c['volumeMounts'] if x['name'] == 'mail')
+assert mail_mount == {'name': 'mail', 'mountPath': '/var/run/email/mail', 'readOnly': True}
 assert issuer_volumes['internal-rpc-authority-postgresql']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-issuer-postgresql'
 assert issuer_volumes['internal-rpc-authority-workload-tls']['secret']['secretName'] == 'internal-rpc-authority-email-bridge-workload-tls'
 certificate = get('Certificate', 'internal-rpc-authority-email-bridge-workload')['spec']
@@ -60,8 +64,28 @@ for rule in get('NetworkPolicy', 'email-bridge')['spec']['egress']:
         if name:
             destinations[name] = (destination['namespaceSelector']['matchLabels']['kubernetes.io/metadata.name'], rule['ports'][0]['port'])
 assert destinations['control-plane'] == ('kodex-system', 8443)
+assert destinations['egress-gateway'] == ('kodex-system', 8082)
 assert destinations['email-bridge-postgresql'] == ('kodex-system', 5432)
 assert destinations['opentelemetry-collector'] == ('observability', 4317)
+root = pathlib.Path(sys.argv[3])
+descriptor = yaml.safe_load((root / 'contracts/email-bridge/v1/deployable.yaml').read_text())
+runtime = get('ConfigMap', 'email-bridge-runtime')['data']
+assert runtime['EMAIL_BRIDGE_SECRETS_ROOT'] == mail_mount['mountPath']
+assert 'EMAIL_BRIDGE_CONFIGURATION_FILE' not in runtime
+authority = descriptor['authority']
+assert authority['transport'] == 'grpc'
+assert authority['endpoint'] == runtime['EMAIL_BRIDGE_AUTHORITY_TARGET']
+assert authority['application_grant_env'] in runtime
+assert authority['issuer_proof'] == 'local-internal-rpc-authority'
+methods = ['ResolveEmailAuthorization', 'ReportEmailEffectReceipt', 'ResolveEmailReconciliation']
+assert authority['methods'] == ['/controlplane.v1.RuntimeWorkService/' + name for name in methods]
+generated = (root / 'libs/go/controlplaneapi/gen/controlplane/v1/control_plane_grpc.pb.go').read_text()
+assert all('"' + method + '"' in generated for method in authority['methods'])
+migrations = root / 'services/internal/email-bridge/cmd/cli/migrations'
+assert int(descriptor['migration_version']) == max(int(path.name.split('_')[0]) for path in migrations.glob('*.sql'))
+assert descriptor['egress']['endpoint'] == runtime['EMAIL_BRIDGE_EGRESS_ADDRESS']
+assert runtime['EMAIL_BRIDGE_EGRESS_ADDRESS'] == 'egress-gateway.kodex-system.svc:8082'
+assert 'owner-authorization' not in descriptor['readiness']['local_requires']
 assert get('Job', 'email-bridge-migration')['spec']['activeDeadlineSeconds'] == 120
 database = get('StatefulSet', 'email-bridge-postgresql')['spec']
 assert database['volumeClaimTemplates']

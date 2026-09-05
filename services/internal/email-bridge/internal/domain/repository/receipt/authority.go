@@ -28,6 +28,7 @@ type Report struct {
 	Binding        *api.ExecutionBinding
 	Receipt        OwnerReceipt
 	IdempotencyKey string
+	Replay         bool
 }
 
 type Decision struct {

@@ -12,6 +12,7 @@ COPY libs/go/cache/ libs/go/cache/
 COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/eventing/ libs/go/eventing/
+COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
@@ -25,6 +26,7 @@ COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY libs/go/runtimesecret/ libs/go/runtimesecret/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/sttapi/ libs/go/sttapi/
 COPY services/internal/control-plane/ services/internal/control-plane/
 
 WORKDIR /workspace/services/internal/control-plane

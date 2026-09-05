@@ -15,6 +15,7 @@ type Observer interface{ Reconciliation(string) }
 
 type Service struct {
 	Repository receipt.ReconciliationRepository
+	Reports    receipt.ReportRepository
 	Authority  receipt.EffectAuthority
 	Barrier    func(context.Context) error
 	Observer   Observer
@@ -23,6 +24,17 @@ type Service struct {
 }
 
 func (s *Service) Run(ctx context.Context) error {
+	return s.run(ctx, s.Cycle)
+}
+
+func (s *Service) RunReports(ctx context.Context) error {
+	if s.Reports == nil {
+		return errs.Invalid
+	}
+	return s.run(ctx, s.ReportCycle)
+}
+
+func (s *Service) run(ctx context.Context, cycleWork func(context.Context) error) error {
 	if s.Repository == nil || s.Authority == nil || s.Barrier == nil || s.Interval < 5*time.Second || s.Interval > 5*time.Minute || s.Batch < 1 || s.Batch > 64 {
 		return errs.Invalid
 	}
@@ -34,7 +46,7 @@ func (s *Service) Run(ctx context.Context) error {
 		}
 		cycle, cancel := context.WithTimeout(ctx, CycleTimeout)
 		if err := s.Barrier(cycle); err == nil && cycle.Err() == nil {
-			if err := s.Cycle(cycle); err != nil {
+			if err := cycleWork(cycle); err != nil {
 				s.observe("error")
 			}
 		} else {

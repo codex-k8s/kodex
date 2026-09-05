@@ -21,6 +21,14 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытый owner-facing реестр.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.command.prompt-templates.save-draft":             controlplanev1.PlatformCommandService_SavePromptTemplateDraft_FullMethodName,
+		"platform.command.prompt-templates.discard-draft":          controlplanev1.PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName,
+		"platform.command.role-image-revisions.save-draft":         controlplanev1.PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName,
+		"platform.command.role-image-revisions.discard-draft":      controlplanev1.PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName,
+		"platform.command.integration-definitions.save-draft":      controlplanev1.PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName,
+		"platform.command.integration-definitions.discard-draft":   controlplanev1.PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName,
+		"platform.command.system-stt.save-draft":                   controlplanev1.PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName,
+		"platform.command.system-stt.discard-draft":                controlplanev1.PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName,
 		"platform.query.email-effect-receipts.get":                 controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
 		"platform.command.email-effects.reconcile":                 controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
 		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
@@ -242,6 +250,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.assistant.conversations.list":                    controlplanev1.SystemAssistantService_ListAssistantConversations_FullMethodName,
 		"platform.assistant.conversations.create":                  controlplanev1.SystemAssistantService_CreateAssistantConversation_FullMethodName,
 		"platform.assistant.conversations.title.update":            controlplanev1.SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName,
+		"platform.assistant.conversations.archive":                 controlplanev1.SystemAssistantService_ArchiveAssistantConversation_FullMethodName,
 		"platform.assistant.turns.add":                             controlplanev1.SystemAssistantService_AddAssistantTurn_FullMethodName,
 		"platform.assistant.plans.apply":                           controlplanev1.SystemAssistantService_ApplyAssistantPlan_FullMethodName,
 		"platform.assistant.plans.draft.update":                    controlplanev1.SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName,

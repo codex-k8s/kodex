@@ -62,7 +62,7 @@ func TestIMAPAuthorityBeforeCredentials(t *testing.T) {
 						}
 					}
 					before := sec.reads.Load()
-					_, err := s.Execute(t.Context(), "caller", "token", cmd)
+					_, err := s.Execute(executionContext(t.Context()), "caller", "token", cmd)
 					want := errs.Denied
 					if boundary == "gate" {
 						want = errs.Gate

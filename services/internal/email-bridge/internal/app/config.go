@@ -11,12 +11,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
+const mailEgressAddress = "egress-gateway.kodex-system.svc:8082"
+
 type Config struct {
 	ReconciliationIntervalSeconds int    `env:"EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS"`
 	ReconciliationBatch           int    `env:"EMAIL_BRIDGE_RECONCILIATION_BATCH"`
 	Listen                        string `env:"EMAIL_BRIDGE_LISTEN"`
 	Technical                     string `env:"EMAIL_BRIDGE_TECHNICAL_LISTEN"`
-	ConfigurationFile             string `env:"EMAIL_BRIDGE_CONFIGURATION_FILE,required,notEmpty"`
 	SecretsRoot                   string `env:"EMAIL_BRIDGE_SECRETS_ROOT,required,notEmpty"`
 	DSNFile                       string `env:"EMAIL_BRIDGE_DSN_FILE,required,notEmpty"`
 	CertificateFile               string `env:"EMAIL_BRIDGE_CERTIFICATE_FILE,required,notEmpty"`
@@ -32,17 +33,17 @@ type Config struct {
 }
 
 func loadConfig() (Config, error) {
-	c := Config{ReconciliationIntervalSeconds: 15, ReconciliationBatch: 16, Listen: ":8443", Technical: ":9090", AuthorityTarget: "control-plane.kodex-system.svc.cluster.local:8443", EgressAddress: "egress-gateway.kodex-system.svc:8080"}
+	c := Config{ReconciliationIntervalSeconds: 15, ReconciliationBatch: 16, Listen: ":8443", Technical: ":9090", AuthorityTarget: "control-plane.kodex-system.svc.cluster.local:8443", EgressAddress: mailEgressAddress}
 	if env.ParseWithOptions(&c, env.Options{}) != nil {
 		return c, errors.New("invalid email bridge environment")
 	}
 	if c.ReconciliationIntervalSeconds < 5 || c.ReconciliationIntervalSeconds > 300 || c.ReconciliationBatch < 1 || c.ReconciliationBatch > 64 {
 		return c, errors.New("invalid email reconciliation limits")
 	}
-	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != "egress-gateway.kodex-system.svc:8080" {
+	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != mailEgressAddress {
 		return c, errors.New("invalid email bridge destinations")
 	}
-	for _, p := range []string{c.ConfigurationFile, c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
+	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
 			return c, errors.New("invalid email bridge file path")
 		}

@@ -1,7 +1,7 @@
 -- name: managed_configuration_copy :one
 WITH source AS (
     SELECT configuration.organization_id, configuration.project_id, configuration.kind,
-           revision.content_format, revision.content, revision.digest
+           revision.id AS revision_id, revision.content_format, revision.content, revision.digest
     FROM control_plane.managed_configuration_sets configuration
     JOIN control_plane.managed_configuration_revisions revision ON revision.id = configuration.current_revision_id
     WHERE configuration.organization_id = @organization_id::uuid AND configuration.ref = @configuration_ref
@@ -15,7 +15,7 @@ WITH source AS (
     INSERT INTO control_plane.managed_configuration_revisions
         (ref, organization_id, configuration_set_id, revision, state, content_format, content, digest, parent_revision_id, created_by)
     SELECT @revision_ref, source.organization_id, inserted_set.id, 1, 'DRAFT', source.content_format,
-           source.content, source.digest, NULL, @actor_id::uuid
+           source.content, source.digest, source.revision_id, @actor_id::uuid
     FROM source JOIN inserted_set ON true RETURNING *
 )
 SELECT inserted_set.id::text, inserted_set.ref, COALESCE(inserted_set.project_id::text, ''),
