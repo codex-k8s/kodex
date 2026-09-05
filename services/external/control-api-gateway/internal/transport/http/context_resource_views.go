@@ -46,7 +46,7 @@ func skillRevisionView(value *controlplanev1.SkillBundleRevision) (generated.Ski
 	if !ok || !opaqueHTTPReference.MatchString(value.GetRef()) || !validManagedVersion(value.GetRevision()) || !validManagedDigest(value.GetDigest()) ||
 		value.GetState() < controlplanev1.SkillRevisionState_SKILL_REVISION_STATE_DRAFT || value.GetState() > controlplanev1.SkillRevisionState_SKILL_REVISION_STATE_DISCARDED ||
 		value.GetScanState() < controlplanev1.SkillScanState_SKILL_SCAN_STATE_PENDING || value.GetScanState() > controlplanev1.SkillScanState_SKILL_SCAN_STATE_ERROR ||
-		len(value.GetFiles()) > 128 || len(value.GetDiagnostics()) > 128 || utf8.RuneCountInString(value.GetName()) > 160 || len(value.GetDescription()) > 4000 {
+		len(value.GetFiles()) > 128 || len(value.GetDiagnostics()) > 128 || utf8.RuneCountInString(value.GetName()) > 160 || utf8.RuneCountInString(value.GetDescription()) > 2000 || strings.ContainsRune(value.GetName()+value.GetDescription(), 0) {
 		return generated.SkillBundleRevision{}, false
 	}
 	result := generated.SkillBundleRevision{Ref: value.GetRef(), Revision: value.GetRevision(), State: generated.SkillBundleRevisionState(strings.TrimPrefix(value.GetState().String(), "SKILL_REVISION_STATE_")),
@@ -69,11 +69,17 @@ func skillRevisionView(value *controlplanev1.SkillBundleRevision) (generated.Ski
 		}
 	}
 	seen := make(map[string]bool)
+	var totalSize int64
 	for _, file := range value.GetFiles() {
-		if !validSkillManifestPath(file.GetPath()) || seen[file.GetPath()] || !opaqueHTTPReference.MatchString(file.GetArtifactRef()) || !validManagedVersion(file.GetArtifactRevision()) || !validManagedDigest(file.GetDigest()) || file.GetSizeBytes() < 0 || file.GetSizeBytes() > maximumSafeJSONInteger {
+		key := strings.ToLower(file.GetPath())
+		if !validSkillManifestPath(file.GetPath()) || seen[key] || !opaqueHTTPReference.MatchString(file.GetArtifactRef()) || !validManagedVersion(file.GetArtifactRevision()) || !strings.HasPrefix(file.GetDigest(), "sha256:") || !validManagedDigest(strings.TrimPrefix(file.GetDigest(), "sha256:")) || file.GetSizeBytes() < 0 || file.GetSizeBytes() > 32<<20 {
 			return result, false
 		}
-		seen[file.GetPath()] = true
+		totalSize += file.GetSizeBytes()
+		if totalSize > 64<<20 {
+			return result, false
+		}
+		seen[key] = true
 		result.Files = append(result.Files, generated.SkillBundleFile{Path: file.GetPath(), ArtifactRef: file.GetArtifactRef(), ArtifactRevision: file.GetArtifactRevision(), Digest: file.GetDigest(), SizeBytes: file.GetSizeBytes()})
 	}
 	for _, diagnostic := range result.Diagnostics {
@@ -152,10 +158,14 @@ func writeMemoryRecord(w http.ResponseWriter, value *controlplanev1.KodexMemoryR
 }
 
 func writeAgentContextBinding(w http.ResponseWriter, value *controlplanev1.AgentContextBinding, agent, resource, revision string) {
-	if !opaqueHTTPReference.MatchString(value.GetRef()) || !validManagedVersion(value.GetVersion()) || value.GetAgentRef() != agent || value.GetResourceRef() != resource || value.GetRevisionRef() != revision || !validManagedDigest(value.GetDigest()) {
+	if !validAgentContextBinding(value, agent) || value.GetResourceRef() != resource || value.GetRevisionRef() != revision {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	// If-Match этой операции относится к agent, а CP возвращает только binding version.
 	writeJSON(w, http.StatusOK, generated.AgentContextBinding{Ref: value.GetRef(), Version: value.GetVersion(), AgentRef: agent, ResourceRef: resource, RevisionRef: revision, Digest: value.GetDigest()})
+}
+
+func validAgentContextBinding(value *controlplanev1.AgentContextBinding, agent string) bool {
+	return opaqueHTTPReference.MatchString(value.GetRef()) && validManagedVersion(value.GetVersion()) && value.GetAgentRef() == agent && opaqueHTTPReference.MatchString(value.GetResourceRef()) && opaqueHTTPReference.MatchString(value.GetRevisionRef()) && validManagedDigest(value.GetDigest())
 }

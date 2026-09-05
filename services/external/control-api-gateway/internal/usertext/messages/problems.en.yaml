@@ -742,3 +742,11 @@ RUNTIME_SECRET_SELECTED_REBOUND:
   other: Selected environments rebound to a new secret revision
 SCHEDULE_OCCURRENCE_FAILED:
   other: Scheduled occurrence failed
+AGENT_CONTEXT_BINDING_CHANGED:
+  other: Agent context binding changed
+MEMORY_RECORD_CHANGED:
+  other: Memory record changed
+SKILL_BUNDLE_CHANGED:
+  other: Skill bundle changed
+SYSTEM_ROLE_STT_PERMISSION:
+  other: System permission for voice input

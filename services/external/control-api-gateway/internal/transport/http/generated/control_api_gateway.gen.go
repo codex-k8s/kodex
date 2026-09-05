@@ -5183,8 +5183,10 @@ type AgentRuntimeConfigurationView struct {
 	DraftOverlay        *ConfigOverlayVersion          `json:"draftOverlay,omitempty"`
 	Environment         RuntimeEnvironmentSet          `json:"environment"`
 	EnvironmentBinding  AgentRuntimeEnvironmentBinding `json:"environmentBinding"`
+	MemoryBindings      []AgentContextBinding          `json:"memoryBindings"`
 	PublishedOverlay    ConfigOverlayVersion           `json:"publishedOverlay"`
 	SafeEffectiveConfig string                         `json:"safeEffectiveConfig"`
+	SkillBindings       []AgentContextBinding          `json:"skillBindings"`
 }
 
 // AgentRuntimeEnvironmentBinding defines model for AgentRuntimeEnvironmentBinding.
@@ -7575,15 +7577,19 @@ type SkillBundleFile struct {
 	ArtifactRef      OpaqueRef `json:"artifactRef"`
 	ArtifactRevision int64     `json:"artifactRevision"`
 	Digest           string    `json:"digest"`
-	Path             string    `json:"path"`
-	SizeBytes        int64     `json:"sizeBytes"`
+
+	// Path Относительный canonical manifest path, не более 240 UTF-8 bytes.
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 // SkillBundleFileInput defines model for SkillBundleFileInput.
 type SkillBundleFileInput struct {
 	ArtifactRef      OpaqueRef `json:"artifactRef"`
 	ArtifactRevision int64     `json:"artifactRevision"`
-	Path             string    `json:"path"`
+
+	// Path Относительный canonical manifest path, не более 240 UTF-8 bytes; ограничения структуры проверяет сервер.
+	Path string `json:"path"`
 }
 
 // SkillBundlePage defines model for SkillBundlePage.

@@ -18,9 +18,10 @@ updated: 2026-09-05
 
 Дополнительно потреблён CP `7df60ddef88348aaf47dd50d0d22737d1e83fec3`:
 MemoryRecord create/revise/archive/restore/purge, get/list/history имеют
-SQL/domain implementation. Skill lifecycle, agent bind/unbind обоих видов
-и runtime materialization ещё реализует #1046. HTTP не заменяет отсутствующий
-owner lifecycle локальным state и не превращает ошибку CP в успешный результат.
+SQL/domain implementation. Из `8f8e88aa8` и `bd674280e` подключены Skill
+lifecycle и agent bind/unbind обоих видов. Runtime materialization и реальный
+scanner deploy ещё реализует #1046. HTTP не заменяет отсутствующий owner
+lifecycle локальным state и не превращает ошибку CP в успешный результат.
 Полный unit #1045 не финализирован.
 
 ## Paths И SDK
@@ -75,7 +76,12 @@ owner lifecycle локальным state и не превращает ошибк
 - Agent bind/unbind: If-Match = **agent version**, body revisionRef +
   expectedBindingVersion (0 означает отсутствие binding). Response содержит
   точную binding version, **не ETag agent**; после мутации нужен авторитетный
-  GetAgent перед следующей agent mutation. HTTP не выдумывает новую agent version.
+  GetAgentRuntimeConfiguration перед следующей agent mutation. Ответ содержит
+  обязательные массивы skillBindings/memoryBindings и agentVersion из одной
+  owner transaction; пустые bindings возвращаются как `[]`. HTTP не выдумывает
+  новую agent version. Все семь операций, возвращающих runtime configuration,
+  проверяют соответствие binding агенту, refs/digest/version, отсутствие дублей
+  и общий предел 128. Ошибка не выдаёт частичный snapshot или новый ETag.
 - Archive допускает restore. Purge необратим и оставляет metadata/tombstone.
   Memory EXPIRED/PURGED требует redacted revision с пустым summary; неполная
   redaction закрыто отклоняется HTTP. History использует тот же typed view.
@@ -92,14 +98,21 @@ owner lifecycle локальным state и не превращает ошибк
 
 ## Границы Формата
 
-- Skill specification: name <=160 Unicode символов, description <=4000 UTF-8 bytes, files <=128.
-  Каждый файл имеет относительный canonical manifest path <=512 bytes,
-  artifactRef и положительную exact artifactRevision. Traversal, абсолютные
-  пути, Windows separators, повторные paths и небезопасные JSON integers
-  отклоняются до CP. HTTP не читает filesystem по path.
-- Ровно один SKILL.md, ownership artifact revision, structure/scan/policy
-  проверяет CP validation. Черновик может быть структурно неполным.
-  Scan/review/provenance доступны только в ответе.
+- Skill specification: name <=160 и description <=2000 Unicode символов,
+  files 1..128. Каждый файл имеет относительный canonical manifest path
+  <=240 UTF-8 bytes, artifactRef и положительную exact artifactRevision.
+  Traversal, абсолютные пути, dotfiles, whitespace по краям сегментов,
+  Windows separators, регистронезависимые дубли и небезопасные JSON integers
+  отклоняются до CP. Обязателен root `SKILL.md` с точным регистром;
+  supporting files только md/txt/json/csv/png/jpg/jpeg/webp. HTTP не читает
+  filesystem по path и не считает эти проверки malware scan.
+- Ownership artifact revision и содержимое manifest/scan/policy проверяет CP.
+  Draft уже должен иметь допустимый набор paths, но его содержание может ещё
+  не пройти validation. Scan/review/provenance доступны только в ответе.
+- File digest сохраняет точный artifact receipt `sha256:<64 hex>`, в отличие
+  от aggregate/provenance/scan digest без префикса. HTTP не переписывает digest.
+  Файл <=32 MiB, сумма <=64 MiB; CP дополнительно ограничивает `SKILL.md`
+  256 KiB при validation. Purged revision может иметь пустой files.
 - Memory title <=160 Unicode символов, summary <=65536 UTF-8 bytes;
   оба непустые при create/revise, NUL запрещён.
   RetentionUntil — корректный timestamp. Разрешённый срок и source run
@@ -126,6 +139,22 @@ corrupt response и redaction. Общий PWA прогон не повторял
 redacted историю при активной записи, сохранение retention/digest/provenance.
 Это проверка HTTP с fake gRPC response по сверенной SQL projection,
 не запуск PostgreSQL и не сквозной protected CP integration.
+
+После подключения `bd674280e` выполнены полный `go test -race ./... -count=1`,
+`go vet ./...` и `go build ./...` в control-api-gateway: локальный PASS.
+Новые `TestRuntimeContextBindings*` покрывают все семь runtime responses,
+пустые массивы, точный agent ETag и закрытый отказ на повреждённых bindings.
+`TestSkillOwner*` проверяют Unicode/UTF-8 limits, paths, file size limits и
+неизменённый artifact digest. Обнаруженные четыре отсутствующих CP message IDs
+добавлены в оба HTTP locale catalogs; полный catalog test проходит.
+Go/TypeScript codegen и отдельный strict typecheck generated SDK: PASS.
+Общий PWA typecheck в HTTP worktree остаётся FAIL: незавершённые Schedule/
+IntegrationDefinition fixtures и новый обязательный binding readback в runtime
+fixture. Handwritten PWA меняет исполнитель #1022, schema не ослаблена.
+
+Через Context7 проверена [документация oapi-codegen](https://pkg.go.dev/github.com/oapi-codegen/oapi-codegen/v2):
+generated models по referenced schemas не заменяют request/response validation.
+Новые bounds проверяются исполняемым HTTP adapter и тестами, а не только YAML.
 
 NOT RUN: новые CP owner SQL и runtime materialization в HTTP integration,
 браузерный пользовательский lifecycle, live providers, staging/deploy.

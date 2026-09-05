@@ -12,22 +12,39 @@ import (
 )
 
 func validSkillManifestPath(value string) bool {
-	return value != "" && len(value) <= 512 && value != "." && !strings.ContainsAny(value, "\\:\x00\r\n") && !strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "../") && value != ".." && path.Clean(value) == value
+	if value == "" || len(value) > 240 || !utf8.ValidString(value) || value == "." || strings.ContainsAny(value, "\\:\x00\r\n") || strings.HasPrefix(value, "/") || strings.HasPrefix(value, "../") || value == ".." || path.Clean(value) != value {
+		return false
+	}
+	for _, part := range strings.Split(value, "/") {
+		if strings.TrimSpace(part) != part || strings.HasPrefix(part, ".") {
+			return false
+		}
+	}
+	if strings.EqualFold(value, "SKILL.md") {
+		return value == "SKILL.md"
+	}
+	switch strings.ToLower(path.Ext(value)) {
+	case ".md", ".txt", ".json", ".csv", ".png", ".jpg", ".jpeg", ".webp":
+		return true
+	default:
+		return false
+	}
 }
 func skillSpecificationInput(value generated.SkillBundleSpecification) (*controlplanev1.SkillBundleSpecification, bool) {
-	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || len(value.Description) > 4000 || value.Files == nil || len(value.Files) > 128 {
+	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || utf8.RuneCountInString(value.Description) > 2000 || !utf8.ValidString(value.Name+value.Description) || strings.ContainsRune(value.Name+value.Description, 0) || len(value.Files) == 0 || len(value.Files) > 128 {
 		return nil, false
 	}
 	result := &controlplanev1.SkillBundleSpecification{Name: value.Name, Description: value.Description}
 	seen := make(map[string]bool)
 	for _, file := range value.Files {
-		if !validSkillManifestPath(file.Path) || seen[file.Path] || !opaqueHTTPReference.MatchString(file.ArtifactRef) || !validManagedVersion(file.ArtifactRevision) {
+		key := strings.ToLower(file.Path)
+		if !validSkillManifestPath(file.Path) || seen[key] || !opaqueHTTPReference.MatchString(file.ArtifactRef) || !validManagedVersion(file.ArtifactRevision) {
 			return nil, false
 		}
-		seen[file.Path] = true
+		seen[key] = true
 		result.Files = append(result.Files, &controlplanev1.SkillBundleFileInput{Path: file.Path, ArtifactRef: file.ArtifactRef, ArtifactRevision: file.ArtifactRevision})
 	}
-	return result, true
+	return result, seen["skill.md"]
 }
 func memorySpecificationInput(value generated.MemoryRecordSpecification) (*controlplanev1.MemoryRecordSpecification, bool) {
 	retention := timestamppb.New(value.RetentionUntil)

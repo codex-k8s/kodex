@@ -29,7 +29,7 @@ func contextFixtures() (*controlplanev1.SkillBundle, *controlplanev1.KodexMemory
 	provenance := &controlplanev1.ContextProvenance{ActorRef: "usr_fixture01", SourceKind: "USER", SourceRef: "run_fixture01", SourceRevision: "1", Digest: strings.Repeat("a", 64), CreatedAt: stamp}
 	skill := &controlplanev1.SkillBundle{Ref: "skl_fixture01", Version: 4, ProjectRef: "prj_fixture01", State: controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ACTIVE, CreatedAt: stamp, UpdatedAt: stamp,
 		DraftRevision: &controlplanev1.SkillBundleRevision{Ref: "rev_fixture01", Revision: 2, State: controlplanev1.SkillRevisionState_SKILL_REVISION_STATE_DRAFT, Name: "Fixture skill", Description: "Fixture", Digest: strings.Repeat("a", 64), Provenance: provenance, ScanState: controlplanev1.SkillScanState_SKILL_SCAN_STATE_PENDING,
-			Files: []*controlplanev1.SkillBundleFile{{Path: "SKILL.md", ArtifactRef: "art_fixture01", ArtifactRevision: 2, Digest: strings.Repeat("b", 64), SizeBytes: 50}}}}
+			Files: []*controlplanev1.SkillBundleFile{{Path: "SKILL.md", ArtifactRef: "art_fixture01", ArtifactRevision: 2, Digest: "sha256:" + strings.Repeat("b", 64), SizeBytes: 50}}}}
 	memory := &controlplanev1.KodexMemoryRecord{Ref: "mem_fixture01", Version: 4, ProjectRef: "prj_fixture01", State: controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ACTIVE, CreatedAt: stamp, UpdatedAt: stamp,
 		CurrentRevision: &controlplanev1.MemoryRecordRevision{Ref: "rev_fixture01", Revision: 2, Title: "Fixture memory", Summary: "Fixture summary", Digest: strings.Repeat("a", 64), Provenance: provenance, RetentionUntil: timestamppb.New(time.Date(2027, 9, 5, 0, 0, 0, 0, time.UTC))}}
 	binding := &controlplanev1.AgentContextBinding{Ref: "bind_fixture01", Version: 3, AgentRef: "agt_fixture01", ResourceRef: skill.Ref, RevisionRef: "rev_fixture01", Digest: strings.Repeat("a", 64)}
@@ -271,7 +271,7 @@ func TestContextSkillNameUsesUnicodeCharacters(t *testing.T) {
 	for _, size := range []int{160, 161} {
 		name := strings.Repeat("я", size)
 		want := size == 160
-		_, ok := skillSpecificationInput(generated.SkillBundleSpecification{Name: name, Files: []generated.SkillBundleFileInput{}})
+		_, ok := skillSpecificationInput(generated.SkillBundleSpecification{Name: name, Files: []generated.SkillBundleFileInput{{Path: "SKILL.md", ArtifactRef: "art_fixture01", ArtifactRevision: 1}}})
 		if ok != want {
 			t.Fatalf("input: characters=%d accepted=%t", size, ok)
 		}
