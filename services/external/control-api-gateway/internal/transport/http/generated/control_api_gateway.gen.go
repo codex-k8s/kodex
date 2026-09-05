@@ -927,6 +927,27 @@ func (e EmailEffectOutcome) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxCredentialKind.
+const (
+	AUTHSECRET    EmailMailboxCredentialKind = "AUTH_SECRET"
+	CACERTIFICATE EmailMailboxCredentialKind = "CA_CERTIFICATE"
+	USERNAME      EmailMailboxCredentialKind = "USERNAME"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxCredentialKind enum.
+func (e EmailMailboxCredentialKind) Valid() bool {
+	switch e {
+	case AUTHSECRET:
+		return true
+	case CACERTIFICATE:
+		return true
+	case USERNAME:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailReconciliationOutcome.
 const (
 	EmailReconciliationOutcomeEFFECTCONFIRMED   EmailReconciliationOutcome = "EFFECT_CONFIRMED"
@@ -5745,6 +5766,26 @@ type EmailEffectReceiptView struct {
 	Receipt  EmailEffectReceipt           `json:"receipt"`
 }
 
+// EmailMailboxCredential defines model for EmailMailboxCredential.
+type EmailMailboxCredential struct {
+	ConnectionRef     OpaqueRef                  `json:"connectionRef"`
+	ConnectionVersion int64                      `json:"connectionVersion"`
+	Generation        int64                      `json:"generation"`
+	Kind              EmailMailboxCredentialKind `json:"kind"`
+	Name              string                     `json:"name"`
+}
+
+// EmailMailboxCredentialInput defines model for EmailMailboxCredentialInput.
+type EmailMailboxCredentialInput struct {
+	Kind EmailMailboxCredentialKind `json:"kind"`
+
+	// Value UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
+	Value *string `json:"value,omitempty"`
+}
+
+// EmailMailboxCredentialKind defines model for EmailMailboxCredentialKind.
+type EmailMailboxCredentialKind string
+
 // EmailReconciliationDecision defines model for EmailReconciliationDecision.
 type EmailReconciliationDecision struct {
 	ActorRef       OpaqueRef                  `json:"actorRef"`
@@ -8867,6 +8908,13 @@ type ConfigureIntegrationConnectionCredentialParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ConfigureEmailMailboxCredentialParams defines parameters for ConfigureEmailMailboxCredential.
+type ConfigureEmailMailboxCredentialParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ChangeIntegrationGrantParams defines parameters for ChangeIntegrationGrant.
 type ChangeIntegrationGrantParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -10049,6 +10097,9 @@ type CommandIntegrationConnectionJSONRequestBody = IntegrationConnectionCommand
 // ConfigureIntegrationConnectionCredentialJSONRequestBody defines body for ConfigureIntegrationConnectionCredential for application/json ContentType.
 type ConfigureIntegrationConnectionCredentialJSONRequestBody = IntegrationCredentialInput
 
+// ConfigureEmailMailboxCredentialJSONRequestBody defines body for ConfigureEmailMailboxCredential for application/json ContentType.
+type ConfigureEmailMailboxCredentialJSONRequestBody = EmailMailboxCredentialInput
+
 // ChangeIntegrationGrantJSONRequestBody defines body for ChangeIntegrationGrant for application/json ContentType.
 type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
@@ -10474,6 +10525,9 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/integration-connections/{connectionRef}/credential)
 	ConfigureIntegrationConnectionCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureIntegrationConnectionCredentialParams)
+
+	// (PUT /api/v1/integration-connections/{connectionRef}/email-mailbox/credential)
+	ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureEmailMailboxCredentialParams)
 
 	// (POST /api/v1/integration-connections/{connectionRef}/grants)
 	ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ChangeIntegrationGrantParams)
@@ -17414,6 +17468,112 @@ func (siw *ServerInterfaceWrapper) ConfigureIntegrationConnectionCredential(w ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ConfigureIntegrationConnectionCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigureEmailMailboxCredential operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureEmailMailboxCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureEmailMailboxCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureEmailMailboxCredential(w, r, connectionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -32033,6 +32193,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}", wrapper.UpdateIntegrationConnection)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/commands", wrapper.CommandIntegrationConnection)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/credential", wrapper.ConfigureIntegrationConnectionCredential)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credential", wrapper.ConfigureEmailMailboxCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)

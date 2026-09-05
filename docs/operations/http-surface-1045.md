@@ -12,13 +12,13 @@ updated: 2026-09-05
 
 Источники: #1045/#1021, #1018, утверждённая матрица #1031
 `docs/operations/mvp-1031-acceptance.md`. Текущий Proto совпадает с CP
-`c3446af76e9269f2637e699f7746c0f4ae71d8a8`; policy54 и generated client
-потреблены из `a241b73e1`, D3 Proto/generated из `c3446af76`.
+`67aa98d770ddaa24cecf01b188f006f087c7849d`; policy55 и generated client
+потреблены из этого checkpoint, включая D3 из `c3446af76`.
 D7 перенесён commit `88f4331ff` целиком.
 CP SQL/handlers вручную не редактировались. PWA handwritten остаётся у Newton.
 
 В таблице указана HTTP поддержка, а не PASS пользовательского сценария.
-Проверка generated RPC surface охватывает 71 Query, 135 Command и 12 Assistant
+Проверка generated RPC surface охватывает 71 Query, 136 Command и 12 Assistant
 методов. Для всех есть authority profile и HTTP consumer; event cursor
 используется только WebSocket resume. Runtime/credential/email worker методы
 не публикуются в browser API. Наличие consumer не доказывает CP SQL/runtime.
@@ -38,6 +38,7 @@ CSRF/idempotency/If-Match правила существующих специал
 | Архив D1 | Session + CSRF → POST assistant-conversations/{ref}/archive → ArchiveAssistantConversation, policy54 | Owner до If-Match/idempotency; ACTIVE/CLOSED → ARCHIVED без busy run; CP атомарно сохраняет receipt/audit/SYSTEM_ASSISTANT_CHANGED и отклоняет pending plans |
 | Impact D7 | Проверенная session → GET managed-configurations/{ref}/revisions/{revisionRef}/impact query/page → GetManagedConfigurationImpact | CP eligibility/search до SQL LIMIT; точный revision/digest, total/cursor; чтение без события и без изменения bindings |
 | Variables D3 | Session → project template-variables либо global prompt-templates/catalog с optional agentRef/runtimeRevisionRef → ListTemplateVariables (c3446af76) | Owner agent.view/run.view и exact sealed context; query/context-bound cursor; только available/reason, не значения; чтение без события |
+| EMAIL credential D5 | Session + CSRF → PUT integration-connections/{connectionRef}/email-mailbox/credential → ConfigureEmailMailboxCredential (67aa98d77, policy55) | CP integration.manage/CONFIGURE_CREDENTIAL и EMAIL definition до OCC; immutable key, idempotency receipt, новая connection version; safe descriptor без value/digest/Secret locator; публикация mailbox отдельно, read path owner command receipt |
 
 Producer D7 переносится exact commit `88f4331ff`; D1 потребляет exact
 Proto/generated client/policy54 из `a241b73e1`, без ручного изменения CP
@@ -119,7 +120,7 @@ SQL/handlers. Исполняемый CP `a241b73e1` обязателен при 
 | D2 | ModelCapability/ListModelCapabilitiesResponse не содержат catalog revision/digest. | Account/effort selection доступен; version-bound catalog readback нельзя выдумать. |
 | D3 | Закрыт в HTTP/SDK: c3446af76, agentRef/runtimeRevisionRef и available/reason/total в обоих каталогах. | При общей интеграции обязателен исполняемый CP c3446af76; availability переменной не означает readiness запуска. |
 | D4 | RuntimeRevisionSnapshot относится к worker execution; публичный previous/current typed diff перед continuation отсутствует. | Нельзя выдавать worker snapshot либо вычислять безопасный diff из неподтверждённых UI данных. |
-| D5 | Публичный typed EMAIL safe mailbox configuration отсутствует; worker Resolve/Report/Projection не UI API. | HTTP receipt/reconcile готов, но UI/YAML EMAIL configuration требует согласованного producer. |
+| D5 | HTTP credential consumer 67aa98d77 подключён; snapshot delivery реализован в af74fc7dc. Публичный typed safe mailbox configuration lifecycle ещё отсутствует. | Receipt/reconcile и write-only credential доступны в SDK; публикацию/привязку mailbox descriptor нельзя заменить этими командами. |
 | D6 | RuntimeSecret публично имеет PrepareCreate/Rotate/Reveal/Revoke, но не отдельные save/validate/publish/discard staged encrypted draft commands. | Не заявляется staged Secret acceptance по immediate create/rotate. |
 | D7 | Закрыт в HTTP/SDK: managed query/page/total/cursor из 88f4331ff; environment/secret query из 98a71da1e. | CP выполняет filtering до SQL LIMIT; HTTP не фильтрует локально и сохраняет pinned digest/cursor. |
 
@@ -167,9 +168,41 @@ HTTP route, все пять reasons, отсутствие project, malformed inp
 
 Сверка следующего чистого CP `67aa98d77`: D2/D4/D6 остаются открытыми.
 Для D5 snapshot delivery уже реализован в af74fc7dc; write-only credential
-RPC появился в 67aa98d77 и требует HTTP consumer. Typed safe mailbox
+RPC появился в 67aa98d77 и подключён к HTTP ниже. Typed safe mailbox
 configuration lifecycle пока не появился. Старые записи об отсутствии всей
 projection/credential реализации ниже относятся к прежним checkpoint.
+
+### Передача D5 Credential, CP 67aa98d77
+
+SDK `configureEmailMailboxCredential`: PUT
+`/api/v1/integration-connections/{connectionRef}/email-mailbox/credential`,
+session, CSRF, If-Match connection version, Idempotency-Key.
+Body `{kind,value}`: CA_CERTIFICATE/USERNAME/AUTH_SECRET, write-only value.
+Лимиты байтов: 65536/320/16384; пустое значение запрещено, пробелы значимы.
+USERNAME/AUTH_SECRET запрещают NUL/CR/LF; PEM CA проверяет authoritative CP.
+Server-owned descriptor `{name,generation,kind,connectionRef,connectionVersion}`
+и ETag новой connection version; value/digest/Secret locator отсутствуют.
+HTTP сверяет exact connection/kind/version/generation перед ответом.
+Повтор после потери ответа использует тот же idempotency key и исходный
+If-Match; автоматического retry нет. OCC → 412, eligibility → 403/404,
+state conflict → 409, CP unavailable → 503. Mailbox publication отдельно.
+
+Локально PASS: focused race HTTP/boundary/app (D3, D5, все public RPC,
+session/CSRF/tenant/revocation, exact policy operation), vet этих пакетов,
+gateway build, strict OpenAPI validation, strict SDK typecheck, Go/TS
+byte-identical codegen replay, Proto replay и authority policy55 codegen.
+Первая компиляция FAIL из-за pointer-типа write-only value/expected_version;
+исправлены getters, повторные проверки PASS. HTTP fixtures проверяют все
+три kind, сохранение пробелов, ограничения до RPC, запрет caller owner fields,
+safe descriptor/error, exact readback и OCC. Полный CP SQL/materialization
+через HTTP, live mail и browser NOT RUN; неизменённые полные suites/Docker
+не повторялись. Это не full #1045 acceptance.
+
+Порядок следующих зависимостей для PWA: D2 version/digest модельного каталога;
+D4 безопасный публичный previous/current RuntimeRevision diff; D6 staged
+encrypted Secret save/validate/publish/discard. На чистом CP 67aa98d77 этих
+полей/RPC нет. Оставшаяся D5: typed safe mailbox configuration и привязка
+выданного descriptor к публикации. CP/SQL вручную не редактировались.
 
 Попытка cherry-pick D1 целиком остановилась на отсутствующих CP EMAIL
 command/permissions dependencies и была отменена. CP owner-файлы не разрешались

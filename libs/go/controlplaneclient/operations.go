@@ -31,6 +31,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.system-stt.discard-draft":                controlplanev1.PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName,
 		"platform.query.email-effect-receipts.get":                 controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName,
 		"platform.command.email-effects.reconcile":                 controlplanev1.PlatformCommandService_ReconcileEmailEffect_FullMethodName,
+		"platform.command.email-mailbox.configure-credential":      controlplanev1.PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName,
 		"platform.query.skill-bundles.list":                        controlplanev1.PlatformQueryService_ListSkillBundles_FullMethodName,
 		"platform.query.skill-bundles.get":                         controlplanev1.PlatformQueryService_GetSkillBundle_FullMethodName,
 		"platform.query.skill-bundle-revisions.list":               controlplanev1.PlatformQueryService_ListSkillBundleRevisions_FullMethodName,

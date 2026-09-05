@@ -2373,6 +2373,27 @@ paths:
           description: Connection disabled and terminally deleted; grants revoked
           content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConnection' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credential:
+    put:
+      tags: [Integrations]
+      operationId: configureEmailMailboxCredential
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxCredentialInput' }
+      responses:
+        '200':
+          description: Immutable credential материализован без публикации mailbox configuration
+          headers:
+            ETag:
+              description: Новая версия integration connection
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredential' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections/{connectionRef}/credential:
     put:
       tags: [Integrations]
@@ -6675,6 +6696,31 @@ components:
           maxProperties: 8
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    EmailMailboxCredentialKind:
+      type: string
+      enum: [CA_CERTIFICATE, USERNAME, AUTH_SECRET]
+    EmailMailboxCredentialInput:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties:
+        kind: { $ref: '#/components/schemas/EmailMailboxCredentialKind' }
+        value:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          writeOnly: true
+          description: UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
+    EmailMailboxCredential:
+      type: object
+      additionalProperties: false
+      required: [name, generation, kind, connectionRef, connectionVersion]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9_-]+$' }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        kind: { $ref: '#/components/schemas/EmailMailboxCredentialKind' }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     IntegrationCredentialInput:
       type: object
       additionalProperties: false
