@@ -39,6 +39,8 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 
 func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	switch descriptor.FullName() {
+	case "controlplane.v1.IntegrationConnection":
+		delete(value, "credentialRevision")
 	case "controlplane.v1.IntegrationCapability", "controlplane.v1.IntegrationGrant":
 		schema, hasSchema := value["inputSchema"]
 		digest, hasDigest := value["inputSchemaSha256"]

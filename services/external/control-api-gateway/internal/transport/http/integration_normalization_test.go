@@ -116,3 +116,13 @@ func TestIntegrationInputSchemaRequiresExactDigest(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationConnectionDoesNotExposeInternalCredentialDescriptor(t *testing.T) {
+	value, err := messageMap(&cp.IntegrationConnection{Ref: "conn_fixture01", CredentialsConfigured: true, CredentialsHint: "configured", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "cred_fixture01", SecretRef: "internal-secret", SecretUid: "internal-uid", SecretResourceVersion: "123", ContentSha256: strings.Repeat("a", 64)}})
+	if err != nil || value["credentialsConfigured"] != true || value["credentialsHint"] != "configured" {
+		t.Fatal("public credential readiness lost")
+	}
+	if _, exists := value["credentialRevision"]; exists {
+		t.Fatal("internal credential descriptor leaked")
+	}
+}

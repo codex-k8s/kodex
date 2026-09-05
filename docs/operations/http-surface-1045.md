@@ -52,6 +52,8 @@ ResourceKind/DefinitionOrigin преобразуются только как typ
 optional numeric bounds, включая явный 0. Safe canonical inputSchema из
 registry передаётся вместе с проверенным SHA256 и лимитом 256 KiB; HTTP не
 вычисляет из этой схемы authority и не исполняет arbitrary provider calls.
+Connection сохраняет публичные credential readiness/hint, а internal
+credentialRevision descriptor исключается согласно OpenAPI projection.
 
 ## Exact Secret pin при редактировании Environment
 
