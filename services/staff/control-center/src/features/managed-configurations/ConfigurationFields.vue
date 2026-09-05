@@ -35,6 +35,7 @@ const props = defineProps<{
   name: string;
   format: "JSON" | "YAML";
   disabled?: boolean;
+  initializeStt?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const { t } = useI18n();
@@ -42,6 +43,7 @@ const catalog = shallowRef<SttModelCatalog>();
 const catalogFailed = ref(false);
 const catalogScope = new AbortController();
 let catalogGeneration = 0;
+let initializedStt = false;
 onScopeDispose(() => catalogScope.abort());
 const modelProfile = computed(() =>
   catalog.value?.models.find((item) => item.model === text(stt.value.model)),
@@ -72,6 +74,37 @@ async function loadModels(
     if (!combined.aborted && generation === catalogGeneration) {
       catalog.value = result;
       catalogFailed.value = false;
+      const initialize =
+        props.initializeStt && !initializedStt && !props.modelValue.trim();
+      initializedStt = true;
+      if (initialize) {
+        const recommended = result.models.find(
+          (item) => item.model === result.recommendedModel,
+        );
+        write({
+          stt: {
+            enabled: false,
+            model: result.recommendedModel,
+            language: sttParameterSupported(recommended, "language")
+              ? "ru"
+              : "",
+            permissionKey: "platform.stt.use",
+            parameters: {
+              languages: sttParameterSupported(recommended, "languages")
+                ? ["ru", "en"]
+                : [],
+              keywords: [],
+              prompt: "",
+              temperature: 0,
+              chunkingStrategy: "",
+              stream: false,
+            },
+            maximumAudioBytes: result.recommendedMaximumAudioBytes,
+            maximumAudioDurationMilliseconds:
+              result.recommendedMaximumAudioDurationMilliseconds,
+          },
+        });
+      }
     }
     return {
       items: result.models
@@ -163,21 +196,19 @@ function updateSttParameter(key: string, value: unknown): void {
   });
 }
 function updateSttNumber(key: string, event: Event, parameter = false): void {
-  if (
-    !(event.target instanceof HTMLInputElement) ||
-    !Number.isFinite(event.target.valueAsNumber)
-  )
-    return;
-  if (parameter) updateSttParameter(key, event.target.valueAsNumber);
-  else
-    write({
-      ...parsed.value.value,
-      stt: {
-        ...stt.value,
-        permissionKey: "platform.stt.use",
-        [key]: event.target.valueAsNumber,
-      },
-    });
+  if (!(event.target instanceof HTMLInputElement)) return;
+  const fields = { ...(parameter ? sttParameters.value : stt.value) };
+  if (event.target.value === "") Reflect.deleteProperty(fields, key);
+  else if (Number.isFinite(event.target.valueAsNumber))
+    fields[key] = event.target.valueAsNumber;
+  else return;
+  write({
+    ...parsed.value.value,
+    stt: {
+      ...(parameter ? { ...stt.value, parameters: fields } : fields),
+      permissionKey: "platform.stt.use",
+    },
+  });
 }
 const selectedAccount = ref<AsyncEntityOption>();
 watch(
@@ -425,7 +456,7 @@ function update(key: string, event: Event, group?: "stt"): void {
           :min="Math.max(0, modelProfile?.minimumTemperature ?? 0)"
           :max="Math.min(1, modelProfile?.maximumTemperature ?? 1)"
           step="0.05"
-          :value="sttParameters.temperature ?? 0"
+          :value="sttParameters.temperature"
           @input="updateSttNumber('temperature', $event, true)"
         />
       </label>

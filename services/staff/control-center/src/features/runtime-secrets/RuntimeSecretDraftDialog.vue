@@ -287,12 +287,24 @@ onBeforeUnmount(() => {
         <dd>{{ draft.state }}</dd>
         <dt>{{ t("runtimeSecrets.draft.reference") }}</dt>
         <dd>{{ draft.ref }}</dd>
-        <dt>{{ t("runtimeSecrets.revision") }}</dt>
+        <dt>{{ t("runtimeSecrets.draft.version") }}</dt>
         <dd>{{ draft.version }}</dd>
+        <template v-if="draft.publishedRevision > 0">
+          <dt>{{ t("runtimeSecrets.draft.publishedRevision") }}</dt>
+          <dd>{{ draft.publishedRevision }}</dd>
+        </template>
         <dt>{{ t("runtimeSecrets.draft.expires") }}</dt>
         <dd>{{ draft.expiresAt }}</dd>
       </dl>
-      <p>{{ t("runtimeSecrets.draft.savedHelp") }}</p>
+      <p>
+        {{
+          t(
+            draft.state === "PUBLISHED"
+              ? "runtimeSecrets.draft.publishedHelp"
+              : "runtimeSecrets.draft.savedHelp",
+          )
+        }}
+      </p>
       <RuntimeSecretDraftImpact
         v-if="['VALID', 'PUBLISHED'].includes(draft.state)"
         :draft="draft"

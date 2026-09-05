@@ -37,6 +37,8 @@
               },
             }),
           );
+          if (new URLSearchParams(location.search).get("new") === "1")
+            document.value = "";
           return () =>
             h(
               "main",
@@ -46,6 +48,7 @@
                   kind: "SYSTEM_STT",
                   name: "Распознавание",
                   format: "JSON",
+                  initializeStt: true,
                   modelValue: document.value,
                   "onUpdate:modelValue": (value) => (document.value = value),
                 }),

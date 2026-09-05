@@ -105,6 +105,16 @@ for (const width of [390, 2900]) {
     await expect(
       page.getByLabel("Максимальная длительность, мс"),
     ).toHaveAttribute("max", "1800000");
+    await page.getByLabel("Таймаут провайдера, мс").fill("");
+    await expect(page.getByLabel("Таймаут провайдера, мс")).toHaveValue("");
+    await expect(page.getByTestId("document")).not.toContainText(
+      "providerTimeoutMilliseconds",
+    );
+    await page.getByLabel("Температура", { exact: true }).fill("");
+    await expect(page.getByLabel("Температура", { exact: true })).toHaveValue(
+      "",
+    );
+    await expect(page.getByTestId("document")).not.toContainText("temperature");
     unavailable = true;
     await page.locator(".async-picker__trigger").nth(1).click();
     await page.locator('input[role="combobox"]').fill("unavailable");
@@ -125,6 +135,22 @@ for (const width of [390, 2900]) {
       path: testInfo.outputPath(`stt-catalog-${String(width)}.png`),
       fullPage: true,
     });
+    unavailable = false;
+    await page.goto("https://kodex.test/e2e/fixtures/stt-catalog.html?new=1");
+    await expect(page.getByTestId("document")).toContainText(
+      '"model": "fixture-model"',
+    );
+    await expect(
+      page.getByLabel("Языки (коды, по одному на строку)"),
+    ).toHaveValue("ru\nen");
+    await expect(page.getByLabel("Температура", { exact: true })).toHaveValue(
+      "0",
+    );
+    await expect(page.getByLabel("Максимальная длительность, мс")).toHaveValue(
+      "120000",
+    );
+    await expect(page.getByLabel("Таймаут провайдера, мс")).toHaveValue("");
+    await page.unrouteAll({ behavior: "wait" });
     expect(failures).toEqual([]);
   });
 }

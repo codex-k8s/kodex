@@ -530,9 +530,12 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 
 Остальные строки исходной матрицы выше требуют общей интеграционной и ручной
 приёмки; локальный unit/browser PASS не превращает их в выполненные business
-acceptance criteria. D6 staged rotation, conflict/forbidden outcomes и живой
-путь CP→broker→runtime проверяются в полном сценарном наборе отдельно от
-показанного synthetic create.
+acceptance criteria. `rotation.synthetic.spec.ts` отдельно проверяет staged
+rotation на 390/2900: lost save ACK → exact retry с исходными Secret OCC/key/value →
+validate/impact → lost publish ACK → reload с авторитетными PUBLISHED/APPLIED
+readbacks. APPLIED, CONFLICT и FORBIDDEN остаются отдельными результатами
+потребителей; повторная публикация для такого recovery не отправляется.
+Живой путь CP→broker→runtime по этим fixtures не считается проверенным.
 
 Локальный checkpoint `adeed52b71eca951f2104220d5c69b95c6c575ce` на базе `e075e1247`: `npm run typecheck`,
 `npm run build` и `npm run test:unit` прошли (796 тестов, 165 файлов).
@@ -805,6 +808,13 @@ reload результат восстанавливается авторитет�
 показаны отдельно и не подменяют эти границы. Профиль задаёт ограничения prompt,
 keywords и temperature; текущий публичный API по-прежнему не допускает stream=true.
 Динамическая проекция общей policy min/max отсутствует в текущем каталоге.
+Только новый пустой профиль один раз получает recommended model и совместимые
+начальные language hints/параметры из текущего каталога; существующий документ
+не перезаписывается. Timeout требует явного ввода в серверных границах.
+Очистка числового поля удаляет значение из неполного черновика, не оставляет
+скрытый прежний номер и не подставляет temperature=0. Обычный STT JSON/YAML
+редактор содержит credential reference и допускает общий voice input;
+credential value редакторы остаются sensitive и не получают микрофон.
 `stt-catalog.synthetic.spec.ts` проверяет сохранение значений, поиск, ошибку
 каталога и геометрию на 390/2900; реальный STT/provider/runtime остаётся NOT RUN.
 

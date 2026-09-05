@@ -359,7 +359,7 @@ const ru = {
     sttCatalog: {
       recommended: "Рекомендованная модель",
       recommendations:
-        "Рекомендации: {model}, {bytes} байт, {milliseconds} мс. Они не заменяют предельные значения и не меняют документ автоматически.",
+        "Рекомендации: {model}, {bytes} байт, {milliseconds} мс. Они не заменяют предельные значения и не перезаписывают сохранённый документ.",
       keywordBounds: "До {count} ключевых слов, до {bytes} байт UTF-8 каждое.",
       legacy: "Прежнее поколение",
       metadata:
@@ -1120,6 +1120,11 @@ const ru = {
     decodedSize: "Размер данных: {size} байт",
     draft: {
       title: "Черновик секрета",
+      version: "Версия черновика",
+      publishedRevision: "Опубликованная ревизия",
+      publishedHelp:
+        "Ревизия опубликована. Результат применения показан отдельно для каждого потребителя.",
+      planResultTotal: "Всего в плане: {total}",
       searchConsumers: "Поиск потребителей",
       publishOnly: "Опубликовать без замены",
       clearSelection: "Снять весь выбор",
@@ -2856,7 +2861,7 @@ const en = {
     sttCatalog: {
       recommended: "Recommended model",
       recommendations:
-        "Recommendations: {model}, {bytes} bytes, {milliseconds} ms. They do not replace limits or change the document automatically.",
+        "Recommendations: {model}, {bytes} bytes, {milliseconds} ms. They do not replace limits or overwrite a saved document.",
       keywordBounds: "Up to {count} keywords, up to {bytes} UTF-8 bytes each.",
       legacy: "Legacy model",
       metadata:
@@ -3906,6 +3911,11 @@ const en = {
     title: "Project secrets",
     draft: {
       title: "Secret draft",
+      version: "Draft version",
+      publishedRevision: "Published revision",
+      publishedHelp:
+        "The revision is published. Each consumer has its own application outcome.",
+      planResultTotal: "Plan total: {total}",
       searchConsumers: "Search consumers",
       publishOnly: "Publish without replacements",
       clearSelection: "Clear selection",

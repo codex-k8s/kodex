@@ -353,7 +353,15 @@ onMounted(() => void restore());
     >
       {{ t("runtimeSecrets.draft.restorePlan") }}
     </button>
-    <p>{{ t("runtimeSecrets.draft.impactHelp") }}</p>
+    <p>
+      {{
+        t(
+          plan?.state === "APPLIED"
+            ? "runtimeSecrets.draft.publishedHelp"
+            : "runtimeSecrets.draft.impactHelp",
+        )
+      }}
+    </p>
     <button
       v-if="
         draft.state === 'VALID' &&
@@ -368,10 +376,15 @@ onMounted(() => void restore());
     <template v-if="plan">
       <p>
         {{
-          t("runtimeSecrets.draft.planTotal", {
-            total: plan.total,
-            selected: selected.length,
-          })
+          t(
+            plan.state === "PREPARED"
+              ? "runtimeSecrets.draft.planTotal"
+              : "runtimeSecrets.draft.planResultTotal",
+            {
+              total: plan.total,
+              selected: selected.length,
+            },
+          )
         }}
         · {{ plan.state }}
       </p>
