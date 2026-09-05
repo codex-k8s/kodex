@@ -162,6 +162,8 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.access.bindings.change":                           controlplanev1.AccessService_ChangeAccessBinding_FullMethodName,
 		"platform.access.bindings.revoke":                           controlplanev1.AccessService_RevokeAccessBinding_FullMethodName,
 		"platform.query.agent-runtime-configuration.get":            controlplanev1.PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName,
+		"platform.query.config-overlays.revisions.list":             controlplanev1.PlatformQueryService_ListConfigOverlayRevisions_FullMethodName,
+		"platform.query.config-overlays.revisions.get":              controlplanev1.PlatformQueryService_GetConfigOverlayRevision_FullMethodName,
 		"platform.query.agent-runtime-configuration-versions.list":  controlplanev1.PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName,
 		"platform.query.runtime-environments.list":                  controlplanev1.PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName,
 		"platform.query.runtime-environments.get":                   controlplanev1.PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName,

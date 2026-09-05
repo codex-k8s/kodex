@@ -91,7 +91,23 @@ func (repository *Repository) completeConfigurationSource(ctx context.Context, p
 		if actor.actorID == "" {
 			actor = current
 		}
-	} else if input.Ancestry != "UNCHANGED" {
+	} else if input.Ancestry == "UNCHANGED" {
+		set, err := repository.resolveManagedSet(ctx, tx, actor, command.ManagedConfigurationInput{ConfigurationRef: row.configurationRef}, row.work.Kind, false)
+		if err != nil {
+			return entity.ManagedConfigurationGitSource{}, err
+		}
+		if set.Kind == "INTEGRATION_DEFINITION" {
+			_, _, err = integrationpackage.NormalizeManagedRevision(input.Content, "GIT", repository.integrationDefinitions)
+		} else {
+			err = repository.validateSourceRoleImage(set, row.work.ContentFormat, string(input.Content))
+		}
+		if err == errs.ErrUnavailable {
+			return entity.ManagedConfigurationGitSource{}, err
+		}
+		if err != nil {
+			next, failure = entity.ConfigurationSourceBlocked, entity.ConfigurationSourceContent
+		}
+	} else {
 		set, err := repository.resolveManagedSet(ctx, tx, actor, command.ManagedConfigurationInput{ConfigurationRef: row.configurationRef}, row.work.Kind, false)
 		if err != nil {
 			return entity.ManagedConfigurationGitSource{}, err

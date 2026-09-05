@@ -16,9 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const maximumInteractionDeliveryAttempts = 10
-
-func projectInteractionIncident(incident entity.Incident, deliveryState string, attempt int) entity.Incident {
+func projectInteractionIncident(incident entity.Incident, deliveryState string, attempt, maximumAttempts int) entity.Incident {
 	incident.Category = "OPTIONAL_INTERACTION_DELIVERY"
 	incident.CoreAffected = false
 	switch {
@@ -32,7 +30,7 @@ func projectInteractionIncident(incident entity.Incident, deliveryState string, 
 		incident.State = "RESOLVED"
 		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_RECOVERED"
 		incident.SafeNextStep = "i18n:INTERACTION_DELIVERY_RECOVERY_COMPLETE"
-	case attempt >= maximumInteractionDeliveryAttempts:
+	case attempt >= maximumAttempts:
 		incident.Severity = "ERROR"
 		incident.State = "OPEN"
 		incident.SafeSummary = "i18n:INTERACTION_DELIVERY_FAILED"
@@ -51,7 +49,12 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 	if err != nil {
 		return nil, err
 	}
-	rows, err := repository.pool.Query(ctx, queryInteractionListSources, pgx.StrictNamedArgs{
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, queryInteractionListSources, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 	})
 	if err != nil {
@@ -82,7 +85,32 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 	if err := rows.Err(); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	return result, nil
+	rows.Close()
+	eligible := make([]map[string]any, 0, len(result))
+	for _, item := range result {
+		connection, definition, err := repository.interactionConnectionPackage(ctx, tx, scope.organizationID, stringMap(item, "connectionRef"))
+		if err != nil {
+			return nil, err
+		}
+		capabilities := []string{}
+		for _, key := range item["capabilities"].([]string) {
+			if interactionSourceCapability(definition, key) {
+				capabilities = append(capabilities, key)
+			}
+		}
+		if len(capabilities) == 0 {
+			continue
+		}
+		item["capabilities"] = capabilities
+		if err := projectInteractionPackage(item, connection, definition); err != nil {
+			return nil, err
+		}
+		eligible = append(eligible, item)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return eligible, nil
 }
 
 func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, principal value.Principal, workloadInstance string, limit int32) ([]map[string]any, error) {
@@ -90,7 +118,12 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 	if err != nil {
 		return nil, err
 	}
-	rows, err := repository.pool.Query(ctx, queryInteractionClaimDeliveries, pgx.StrictNamedArgs{
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, queryInteractionClaimDeliveries, pgx.StrictNamedArgs{
 		"organization_id":   scope.organizationID,
 		"workload_instance": workloadInstance,
 		"claim_limit":       limit,
@@ -109,6 +142,8 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 		var externalTeam, externalChannel, externalRoot, receiptRef string
 		var credential entity.IntegrationCredentialRevision
 		var gateVersion int64
+		var sourceCapabilityKey, approvalGateRef string
+		var approvalGateVersion int64
 		var expiresAt any
 		if err := rows.Scan(
 			&deliveryRef, &connectionRef, &credentialRef, &baseURL, &teamName, &channelName, &locale,
@@ -117,6 +152,7 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 			&externalTeam, &externalChannel, &externalRoot, &receiptRef,
 			&credential.Ref, &credential.Revision, &credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion,
 			&credential.ContentSHA256, &credential.CreatedAt,
+			&sourceCapabilityKey, &approvalGateRef, &approvalGateVersion,
 		); err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -132,10 +168,32 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 			"gateRef": gateRef, "gateVersion": gateVersion, "runRef": runRef,
 			"externalTeamRef": externalTeam, "externalChannelRef": externalChannel, "externalRootPostRef": externalRoot, "acceptanceReceiptRef": receiptRef,
+			"sourceCapabilityKey": sourceCapabilityKey, "approvalGateRef": approvalGateRef, "approvalGateVersion": approvalGateVersion,
 		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, errs.ErrUnavailable
+	}
+	rows.Close()
+	for _, item := range result {
+		connection, definition, err := repository.interactionConnectionPackage(ctx, tx, scope.organizationID, stringMap(item, "connectionRef"))
+		if err != nil {
+			return nil, err
+		}
+		key := stringMap(item, "sourceCapabilityKey")
+		if stringMap(item, "capabilityKey") == "mattermost.acknowledgements" || key == "mattermost.gate_decisions" {
+			if !interactionSourceCapability(definition, key) {
+				return nil, errs.ErrForbidden
+			}
+		} else if capability, ok := definition.Capability(key); !ok || capability.Risk != "WRITE" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" || stringMap(item, "approvalGateRef") == "" {
+			return nil, errs.ErrForbidden
+		}
+		if err := projectInteractionPackage(item, connection, definition); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errs.ErrConflict
 	}
 	return result, nil
 }
@@ -161,7 +219,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	}
 	var deliveryID, projectID, projectRef, rootRunID, runRef, gateID, capabilityKey string
 	var targetTeam, targetChannel, targetRoot string
-	var attempt int
+	var attempt, maximumAttempts int
 	var createdAt time.Time
 	err := tx.QueryRow(ctx, queryInteractionCompleteDeliveryResolve, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
@@ -169,7 +227,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 		"lease_ref":       payload.LeaseRef,
 		"fence":           payload.Fence,
 		"generation":      payload.Generation,
-	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt, &createdAt, &targetTeam, &targetChannel, &targetRoot)
+	}).Scan(&deliveryID, &projectID, &projectRef, &rootRunID, &runRef, &gateID, &capabilityKey, &attempt, &maximumAttempts, &createdAt, &targetTeam, &targetChannel, &targetRoot)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrConflict
 	}
@@ -204,7 +262,7 @@ func (repository *Repository) completeInteractionDelivery(ctx context.Context, t
 	if !payload.Success || attempt > 1 {
 		incident := projectInteractionIncident(entity.Incident{
 			Ref: deliveryRef, ProjectRef: projectRef, RunRef: runRef, CreatedAt: createdAt,
-		}, state, attempt)
+		}, state, attempt, maximumAttempts)
 		emitted, emitErr := repository.emitRunEventWithIncident(
 			ctx, tx, scope, projectID, rootRunID, deliveryRef, "INCIDENT_LINKED",
 			"", "", "", "", &incident, incident.SafeSummary, "", "",
@@ -239,6 +297,17 @@ func (repository *Repository) acceptInteractionMessage(ctx context.Context, tx p
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	_, definition, err := repository.interactionConnectionPackage(ctx, tx, scope.organizationID, payload.ConnectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	capabilityKey := "mattermost.inbound"
+	if payload.GateRef != "" || payload.Decision != "" {
+		capabilityKey = "mattermost.gate_decisions"
+	}
+	if err := validateInteractionSourceInput(definition, capabilityKey, payload.GateRef, payload.Decision); err != nil {
+		return commandOutcome{}, err
 	}
 	human, err := repository.resolveInteractionIdentity(ctx, tx, scope, payload)
 	if err != nil {
@@ -482,14 +551,7 @@ func (repository *Repository) enqueueTerminalInteractionDeliveries(ctx context.C
 	if projectID == "" {
 		return nil
 	}
-	if _, err := tx.Exec(ctx, queryInteractionEnqueueTerminalDeliveries, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"project_id":      projectID,
-		"root_run_id":     rootRunID,
-	}); err != nil {
-		return errs.ErrUnavailable
-	}
-	return nil
+	return repository.enqueueApprovedTerminalInteraction(ctx, tx, scope, projectID, rootRunID)
 }
 
 func interactionDigest(connectionRef, externalEventRef string) string {

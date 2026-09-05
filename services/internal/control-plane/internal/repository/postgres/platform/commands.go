@@ -2244,6 +2244,9 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if nextState == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if outcome, handled, err := repository.resolveInteractionDeliveryGate(ctx, tx, scope, input); handled {
+		return outcome, err
+	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
 	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
 	var version int64

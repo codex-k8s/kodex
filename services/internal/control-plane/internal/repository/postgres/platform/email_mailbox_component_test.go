@@ -158,7 +158,7 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		Payload: command.EmailMailboxInput{ConnectionRef: connectionRef, ExpectedConnectionVersion: view.ConnectionVersion,
 			Managed: command.ManagedConfigurationInput{ConfigurationRef: view.Configuration.Ref, RevisionRef: view.Revision.Ref}}})
 	if err != nil || bound.EmailPublication == nil || bound.EmailPublication.State != "PENDING" {
-		t.Fatalf("bind must await delivery: %v", err)
+		t.Fatalf("bind must await delivery: %v; actions=%+v", err, view.NextActions)
 	}
 	work, found, err := repository.ClaimEmailMailboxPublication(ctx, "mailbox-pg-worker")
 	if err != nil || !found || work.Ref != bound.EmailPublication.Ref {

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
@@ -270,15 +271,16 @@ func (server *Server) ListRuns(ctx context.Context, request *controlplanev1.List
 	}
 	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())}
 	for _, state := range request.GetStates() {
-		if state != controlplanev1.RunState_RUN_STATE_UNSPECIFIED {
-			filter.States = append(filter.States, enumSuffix(state, "RUN_STATE_"))
+		if state == controlplanev1.RunState_RUN_STATE_UNSPECIFIED {
+			return nil, transportError(errs.ErrInvalid)
 		}
+		filter.States = append(filter.States, enumSuffix(state, "RUN_STATE_"))
 	}
-	items, next, err := server.service.ListRuns(ctx, p, filter)
+	items, total, next, err := server.service.ListRuns(ctx, p, filter)
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListRunsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListRunsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Runs = append(response.Runs, castRun(item))
 	}
@@ -382,14 +384,14 @@ func (server *Server) ListArtifacts(ctx context.Context, request *controlplanev1
 	if request.GetSourceKind() != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED {
 		sourceKind = enumSuffix(request.GetSourceKind(), "ARTIFACT_SOURCE_")
 	}
-	items, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
+	items, total, next, err := server.service.ListArtifacts(ctx, p, query.Filter{
 		ProjectRef: request.GetProjectRef(), ResourceRef: request.GetRunRef(), Query: request.GetQuery(),
 		State: lifecycleState, ArtifactType: artifactType, ScanState: scanState, SourceKind: sourceKind, Page: page(request.GetPage()),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListArtifactsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListArtifactsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Artifacts = append(response.Artifacts, castArtifact(item))
 	}

@@ -4,7 +4,7 @@ SELECT
     project.ref,
     root.ref,
     delivery.state,
-    delivery.attempt,
+    delivery.attempt,delivery.execution_max_attempts,
     delivery.created_at
 FROM control_plane.runs requested
 JOIN control_plane.runs root

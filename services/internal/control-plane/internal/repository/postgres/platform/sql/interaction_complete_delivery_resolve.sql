@@ -7,7 +7,7 @@ SELECT
     run.ref,
     COALESCE(d.gate_id::text, ''),
     d.capability_key,
-    d.attempt,
+    d.attempt,d.execution_max_attempts,
     d.created_at,
     d.external_team_ref,d.external_channel_ref,d.target_root_post_ref
 FROM control_plane.interaction_deliveries d

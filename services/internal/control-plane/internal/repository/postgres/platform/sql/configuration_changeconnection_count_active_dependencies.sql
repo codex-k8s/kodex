@@ -11,7 +11,7 @@ SELECT
   + (SELECT count(*)
      FROM control_plane.interaction_deliveries delivery
      WHERE delivery.connection_id = @connection_id::uuid
-       AND delivery.state IN ('DUE', 'CLAIMED')) AS active_effects,
+       AND delivery.state IN ('WAITING_APPROVAL', 'DUE', 'CLAIMED', 'FAILED', 'UNKNOWN_OUTCOME')) AS active_effects,
     (SELECT count(*)
      FROM control_plane.integration_grants grant_row
      WHERE grant_row.connection_id = @connection_id::uuid

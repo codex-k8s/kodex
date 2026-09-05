@@ -527,6 +527,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		}
 		if !payload.Enabled {
 			args := pgx.StrictNamedArgs{"organization_id": scope.organizationID, "connection_ref": payload.Ref}
+			if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.Ref); err != nil {
+				return commandOutcome{}, err
+			}
 			if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionUpdateIntegrationGrantsEnabledVersionUpdatedAt, args); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
@@ -755,6 +758,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		if err != nil {
 			return commandOutcome{}, errs.ErrNotFound
 		}
+	}
+	if err := repository.cancelInteractionIntents(ctx, tx, scope, payload.ConnectionRef); err != nil {
+		return commandOutcome{}, err
 	}
 	tag, err := tx.Exec(ctx, queryConfigurationChangeintegrationgrantUpdateIntegrationConnectionsVersion, connectionID, connectionVersion)
 	if err != nil {
