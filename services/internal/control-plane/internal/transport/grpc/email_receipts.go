@@ -11,6 +11,25 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func (server *Server) ReportEmailEffectReceipt(ctx context.Context, request *controlplanev1.ReportEmailEffectReceiptRequest) (*controlplanev1.ReportEmailEffectReceiptResponse, error) {
+	binding, err := emailBindingFromProto(request.GetBinding())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ReportEmailEffectReceipt_FullMethodName,
+		command.ReportEmailEffect, request.GetMutation(), command.EmailEffectReportInput{Binding: binding,
+			ExternalReceiptRef: request.GetExternalReceiptRef(), ExternalReceiptDigest: request.GetExternalReceiptDigest(),
+			SemanticInputDigest: request.GetSemanticInputDigest(), Outcome: emailOutcomeFromProto(request.GetOutcome()),
+		})
+	if err != nil {
+		return nil, err
+	}
+	if result.EmailReceipt == nil {
+		return nil, transportError(errs.ErrUnavailable)
+	}
+	return &controlplanev1.ReportEmailEffectReceiptResponse{Receipt: castEmailReceipt(*result.EmailReceipt)}, nil
+}
+
 func (server *Server) GetEmailEffectReceipt(ctx context.Context, request *controlplanev1.GetEmailEffectReceiptRequest) (*controlplanev1.GetEmailEffectReceiptResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetEmailEffectReceipt_FullMethodName)
 	if err != nil {

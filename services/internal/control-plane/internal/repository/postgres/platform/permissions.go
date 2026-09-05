@@ -12,6 +12,9 @@ import (
 
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	switch input.Kind {
+	case command.ReportEmailEffect:
+		_, _, _, err := repository.authorizeEmailReport(ctx, tx, current, input)
+		return err
 	case command.ReconcileEmailEffect:
 		_, err := repository.authorizeEmailReconciliation(ctx, tx, current, input)
 		return err

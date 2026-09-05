@@ -216,6 +216,7 @@ type TranscriptionCredentialProjection struct {
 
 type Repository interface {
 	GetEmailEffectReceipt(context.Context, value.Principal, string) (entity.EmailEffectReceiptView, error)
+	ResolveEmailAuthorization(context.Context, value.Principal, query.EmailAuthorization) (entity.EmailAuthorization, error)
 	ResolveEmailReconciliation(context.Context, value.Principal, string, string, string, string) (entity.EmailEffectReceiptView, error)
 	GetMemoryRecord(context.Context, value.Principal, string) (entity.KodexMemoryRecord, error)
 	GetSkillBundle(context.Context, value.Principal, string) (entity.SkillBundle, error)

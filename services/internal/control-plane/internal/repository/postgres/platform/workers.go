@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -1014,21 +1015,37 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
-	intentDigest := sha256.Sum256([]byte(strings.Join([]string{
+	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest,
-	}, "\x00")))
+	}
+	mailboxGate := false
+	if definitionKey == "email" {
+		mailbox, err := repository.readEmailMailbox(ctx, tx, scope, resourceScope["mailbox_id"], 0)
+		if err != nil {
+			return nil, err
+		}
+		if mailbox.ConnectionRef != input["connection_ref"] {
+			return nil, errs.ErrForbidden
+		}
+		intentParts = append(intentParts, mailbox.SourceDigest)
+		mailboxGate, err = emailpolicy.CommandRequiresGate(mailbox, capability.Operation, "", canonicalInput)
+		if err != nil {
+			return nil, err
+		}
+	}
+	intentDigest := sha256.Sum256([]byte(strings.Join(intentParts, "\x00")))
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
 	state := "READY"
-	if risk != "READ" {
+	if risk != "READ" || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var invocationID, resolvedRef, resolvedState string
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
-		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey,
+		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey, mailboxGate,
 	).Scan(&invocationID, &resolvedRef, &resolvedState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse

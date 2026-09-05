@@ -1151,7 +1151,7 @@ func (service *Service) ClaimInteractionDeliveries(ctx context.Context, p value.
 
 func knownCommand(kind command.Kind) bool {
 	switch kind {
-	case command.ReconcileEmailEffect:
+	case command.ReconcileEmailEffect, command.ReportEmailEffect:
 		return true
 	case command.BindAgentMemoryRecord, command.UnbindAgentMemoryRecord, command.BindAgentSkillBundle, command.UnbindAgentSkillBundle:
 		return true

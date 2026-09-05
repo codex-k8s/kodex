@@ -395,6 +395,7 @@ SELECT n.id::text,
        COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', integration_grant.ref,
+		       'grantVersion', integration_grant.version::text,
                'connectionRef', connection.ref,
                'definitionKey', connection.definition_key,
                'definitionVersion', connection.definition_version,

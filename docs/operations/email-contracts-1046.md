@@ -183,13 +183,66 @@ PASS. Проверены exact replay, document/mailbox rollback, descriptor com
 binding generation rollback, удаление/возврат, unknown connection, атомарный
 отказ с сохранением прежнего состояния и запрет старого instance read.
 
-## Оставшийся producer
+## Исполняемые Authorization И Report
+
+`ResolveEmailAuthorization` и `ReportEmailEffectReceipt` реализованы через
+transport/caster/domain/repository. Proto и policy52/53 shapes не меняются.
+Миграция `20260904000619` хранит immutable authorization на exact
+organization/source ref/lease ref/fence digest/generation. Fence value в
+сохранённые query/decision projections не попадает. Source выбирается из
+действующего owner invocation либо connection test, принадлежащего только
+`integration-gateway`; вызывающий workload может быть только `email-bridge`.
+
+Для invocation CP повторно проверяет active node/agent, user `integration.manage`,
+project/agent view, точный agent grant/version в последнем RuntimeRevision,
+shipped definition version/digest, connection/resource scope, lease и mailbox
+revision. Semantic digest вычисляется общим `emailbridgeapi.CommandForIntegration`,
+не принимается на доверии. Scopes сужаются до конкретной операции, folder,
+destination и recipients неизменяемой команды. Политика mailbox может только
+усилить package minimum; WRITE сохраняет effective HUMAN_GATE даже при mailbox
+ALLOW. READ с mailbox HUMAN_GATE получает owner gate и не claim-ится до approve.
+Mailbox source digest входит в invocation intent digest.
+
+Connection test допускает только health, с actor исходного Test command,
+без фиктивного agent/project. Ответ связывается с exact binding и TTL не более
+двух минут и срока lease. Старый grant ref после revoke/re-enable не оживляет
+старый runtime: snapshot содержит `grantVersion`.
+
+Report допускает только 12 mutation operations. Первая запись обязательно
+UNKNOWN_OUTCOME и требует действующей source authorization. Receipt identity,
+external commitment и authorization ref неизменяемы. UNKNOWN → confirmed
+сохраняет исходную observation и увеличивает version; противоположный terminal
+запрещён. Receipt, observation, audit и idempotency result фиксируются одной
+owner-транзакцией. Нового domain event нет: Get/Resolve являются owner read path.
+
+### Потеря Report Response
+
+Повторить `ReportEmailEffectReceipt` с прежними Binding, ExternalReceiptRef,
+ExternalReceiptDigest, SemanticInputDigest, Outcome и Idempotency-Key.
+CP возвращает тот же owner ref и сохранённый command result. После expiry/revoke
+допускается только exact replay уже сохранённой observation, не первая запись
+и не новый provider effect. Свежий verified EMAIL worker credential обязателен.
+Пустой receipt_ref в `ResolveEmailReconciliation` не вводится.
+
+Consumer recovery должен устойчиво сохранить исходный binding и idempotency key
+до Report, убрать local expiry precheck только для этого read-like replay и не
+продолжать отправку после истечения lease. Он не может восстановить source
+lineage по произвольному external ref/digest. Эта consumer доработка передана root.
+
+Локально PASS: 21-operation semantic/scope/Human Gate matrix (12 mutations),
+Go/race domain/service/repository/gRPC, disposable PG email receipt/watermark/
+configuration + integration read regression. PG проходит реальные owner
+Create/credential/Test/claim, health authorization, agent grant/run/gate,
+send authorization, UNKNOWN Report, replay, confirmed observation, revoke и
+re-enable denial. Реальный issuer→CP protected SQL→SMTP: NOT RUN.
+
+## Оставшийся Producer
 
 - Доставка доверенной mailbox configuration в CP и bridge.
-- Авторизация по текущему claim/grant/gate и проверенному semantic command.
-- Привязка Report к durable receipts и source authorization перед первым write.
-- Worker credential issuance, trust registration и deploy key delivery.
-- PostgreSQL positive/negative matrix и consumer gRPC проверки: NOT RUN.
+- Typed UI/YAML mailbox commands и отдельный write-only credential lifecycle.
+- Dynamic Secret `email-bridge-mailbox-projection`: owner delivery/version/readback;
+  нынешние фиксированные `ca-1/username-1/password-1` не являются полным producer.
+- Protected issuer/bridge сквозная проверка и recovery consumer: NOT RUN.
 
 Policy revision 52 сохраняет scheduler/interaction/STT operations и добавляет
 только отдельный email-bridge producer с тремя закрытыми operations.

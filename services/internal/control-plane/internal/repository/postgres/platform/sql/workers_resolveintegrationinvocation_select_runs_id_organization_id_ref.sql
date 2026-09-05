@@ -31,5 +31,6 @@ WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
     WHERE revision.node_id=n.id AND revision.organization_id=r.organization_id
       AND revision.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest WHERE latest.node_id=n.id)
       AND binding->>'ref'=g.ref AND binding->>'capabilityKey'=g.capability_key
+	  AND binding->>'grantVersion'=g.version::text
   )
 FOR UPDATE OF n,c,g

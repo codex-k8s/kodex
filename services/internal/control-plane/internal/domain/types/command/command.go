@@ -13,6 +13,7 @@ type Kind string
 
 const (
 	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
+	ReportEmailEffect                 Kind = "REPORT_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
 	SaveSkillBundleDraft               Kind = "SAVE_SKILL_BUNDLE_DRAFT"
 	ValidateSkillBundleDraft           Kind = "VALIDATE_SKILL_BUNDLE_DRAFT"
@@ -429,6 +430,7 @@ type ManagedConfigurationInput struct {
 }
 
 type Result struct {
+	EmailReceipt            *entity.EmailEffectReceipt
 	EmailDecision           *entity.EmailReconciliationDecision
 	SkillBundle             *entity.SkillBundle
 	MemoryRecord            *entity.KodexMemoryRecord

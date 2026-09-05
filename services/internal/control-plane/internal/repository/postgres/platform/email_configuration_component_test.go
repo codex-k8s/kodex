@@ -115,4 +115,10 @@ func testEmailConfiguration(t *testing.T, ctx context.Context, repository *Repos
 	config.Mailboxes[0].ConnectionId = "unknown-connection"
 	accept(true)
 	read(repository, 4, false)
+	config.Revision = 5
+	config.Mailboxes[0].Revision = 4
+	config.Mailboxes[0].ConnectionId = connection.Connection.Ref
+	t.Run("authorization and report owner lifecycle", func(t *testing.T) {
+		testEmailProducer(t, ctx, repository, service, owner, *connection.Connection, config)
+	})
 }

@@ -51,7 +51,7 @@ func (repository *Repository) readEmailMailbox(ctx context.Context, tx pgx.Tx, c
 		return emailpolicy.MailboxProjection{}, errs.ErrUnavailable
 	}
 	var mailbox emailpolicy.MailboxProjection
-	if json.Unmarshal(raw, &mailbox) != nil || mailbox.Ref != ref || mailbox.Revision != revision {
+	if json.Unmarshal(raw, &mailbox) != nil || mailbox.Ref != ref || revision != 0 && mailbox.Revision != revision {
 		return emailpolicy.MailboxProjection{}, errs.ErrUnavailable
 	}
 	return mailbox, nil
