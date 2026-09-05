@@ -125,6 +125,8 @@ func (repository *Repository) validateEmailMailboxRevision(ctx context.Context, 
 	if err != nil {
 		return invalid(emailpolicy.DiagnosticConfiguration)
 	}
+	// Проверка владельца обязательна и для выключенной конфигурации.
+	mailbox.Enabled = true
 	if _, err := emailCredentialDigests(ctx, tx, api.Configuration{Mailboxes: []api.Mailbox{mailbox}}); err != nil {
 		if errors.Is(err, errs.ErrConflict) {
 			return invalid(emailpolicy.DiagnosticCredential)

@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -48,6 +49,27 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		AllowedFolders: mailbox.AllowedFolders, ArchiveFolder: mailbox.ArchiveFolder, DraftsFolder: mailbox.DraftsFolder,
 		Folder: mailbox.Folder, Sender: mailbox.Sender, ReplyTo: mailbox.ReplyTo, Recipients: mailbox.Recipients, HelloName: mailbox.HelloName,
 		SMTP: mailbox.Smtp, IMAP: mailbox.Imap, POP: mailbox.Pop, Limits: mailbox.Limits, Policies: mailbox.Policies}
+	disabled := spec
+	disabled.Enabled = false
+	disabled.SMTP.Secret.Name = "email-" + strings.Repeat("0", 32)
+	disabledRaw, err := json.Marshal(disabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabledPreview, err := service.PreviewEmailMailboxConfiguration(ctx, owner, connectionRef, "JSON", string(disabledRaw))
+	if err != nil || disabledPreview.Valid || len(disabledPreview.Diagnostics) != 1 || disabledPreview.Diagnostics[0].Code != emailpolicy.DiagnosticCredential {
+		t.Fatalf("disabled mailbox preview must verify credential owner: %v", err)
+	}
+	disabledSaved, err := change(command.SaveEmailMailboxDraft, "mailbox-owner-disabled-save", string(disabledRaw))
+	if err != nil || disabledSaved.EmailMailbox == nil {
+		t.Fatalf("save disabled mailbox draft: %v", err)
+	}
+	view = disabledSaved.EmailMailbox
+	disabledValidated, err := change(command.ValidateEmailMailboxDraft, "mailbox-owner-disabled-validate", "")
+	if err != nil || disabledValidated.EmailMailbox == nil || disabledValidated.EmailMailbox.Revision.State != "INVALID" || len(disabledValidated.EmailMailbox.Diagnostics) != 1 || disabledValidated.EmailMailbox.Diagnostics[0].Code != emailpolicy.DiagnosticCredential {
+		t.Fatalf("disabled mailbox validation must verify credential owner: %v", err)
+	}
+	view = disabledValidated.EmailMailbox
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		t.Fatal(err)

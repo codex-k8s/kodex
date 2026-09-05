@@ -69,6 +69,8 @@ func (repository *Repository) PreviewEmailMailboxConfiguration(ctx context.Conte
 		result.Diagnostics = []entity.EmailMailboxDiagnostic{emailpolicy.Diagnostic(emailpolicy.DiagnosticConfiguration)}
 		return result, nil
 	}
+	// Preview проверяет ссылки независимо от включения доставки.
+	mailbox.Enabled = true
 	if _, err := emailCredentialDigests(ctx, tx, api.Configuration{Mailboxes: []api.Mailbox{mailbox}}); err != nil {
 		if errors.Is(err, errs.ErrConflict) {
 			result.Diagnostics = []entity.EmailMailboxDiagnostic{emailpolicy.Diagnostic(emailpolicy.DiagnosticCredential)}
