@@ -192,6 +192,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("email configuration is immutable and revokes old readers", func(t *testing.T) {
 		testEmailConfiguration(t, ctx, repository)
 	})
+	t.Run("email credentials are immutable owner bound and replayable", func(t *testing.T) {
+		testEmailCredentials(t, ctx, repository)
+	})
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
 	})

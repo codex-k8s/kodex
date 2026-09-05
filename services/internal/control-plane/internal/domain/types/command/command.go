@@ -108,6 +108,7 @@ const (
 	UpdateConnection                   Kind = "UPDATE_INTEGRATION_CONNECTION"
 	DeleteConnection                   Kind = "DELETE_INTEGRATION_CONNECTION"
 	ConfigureConnectionCredential      Kind = "CONFIGURE_INTEGRATION_CONNECTION_CREDENTIAL"
+	ConfigureEmailCredential           Kind = "CONFIGURE_EMAIL_MAILBOX_CREDENTIAL"
 	TestConnection                     Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled               Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant             Kind = "CHANGE_INTEGRATION_GRANT"
@@ -317,6 +318,12 @@ type AssistantConversationInput struct {
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
+
+type EmailCredentialInput struct {
+	ConnectionRef string
+	Credential    entity.EmailMailboxCredential
+	ReplayOnly    bool
+}
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
 }
@@ -455,6 +462,7 @@ type Result struct {
 	Schedule                *entity.Schedule
 	Connection              *entity.IntegrationConnection
 	Conversation            *entity.AssistantConversation
+	EmailCredential         *entity.EmailMailboxCredential
 	Plan                    *entity.AssistantPlan
 	PlanReceipt             *entity.AssistantPlanReceipt
 	Assistant               *entity.SystemAssistant

@@ -4,6 +4,8 @@ package emailprojection
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -68,7 +70,7 @@ func CredentialKey(descriptor api.Descriptor) (string, error) {
 
 // Publish вызывается только после принятия revision в PostgreSQL владельца.
 // Credential values уже материализованы отдельно; публикация не меняет их.
-func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Configuration) (Receipt, error) {
+func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Configuration, credentialDigests map[string]string) (Receipt, error) {
 	if api.ValidateConfiguration(configuration) != nil {
 		return Receipt{}, ErrInvalid
 	}
@@ -88,7 +90,7 @@ func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Conf
 		if previous.Revision > configuration.Revision || previous.Revision == configuration.Revision && api.Digest(previous) != api.Digest(configuration) {
 			return ErrConflict
 		}
-		if err := validateCredentials(configuration, secret.Data); err != nil {
+		if err := validateCredentials(configuration, secret.Data, credentialDigests); err != nil {
 			return err
 		}
 		if bytes.Equal(secret.Data[DocumentKey], raw) {
@@ -113,10 +115,10 @@ func (publisher *Kubernetes) Publish(ctx context.Context, configuration api.Conf
 		}
 		return Receipt{}, ErrUnavailable
 	}
-	return publisher.Check(ctx, configuration)
+	return publisher.Check(ctx, configuration, credentialDigests)
 }
 
-func (publisher *Kubernetes) Check(ctx context.Context, configuration api.Configuration) (Receipt, error) {
+func (publisher *Kubernetes) Check(ctx context.Context, configuration api.Configuration, credentialDigests map[string]string) (Receipt, error) {
 	if api.ValidateConfiguration(configuration) != nil {
 		return Receipt{}, ErrInvalid
 	}
@@ -130,13 +132,13 @@ func (publisher *Kubernetes) Check(ctx context.Context, configuration api.Config
 		secret.UID == "" || secret.ResourceVersion == "" {
 		return Receipt{}, ErrConflict
 	}
-	if err := validateCredentials(served, secret.Data); err != nil {
+	if err := validateCredentials(served, secret.Data, credentialDigests); err != nil {
 		return Receipt{}, err
 	}
 	return Receipt{Revision: served.Revision, Digest: api.Digest(served), SecretUID: string(secret.UID), ResourceVersion: secret.ResourceVersion}, nil
 }
 
-func validateCredentials(configuration api.Configuration, data map[string][]byte) error {
+func validateCredentials(configuration api.Configuration, data map[string][]byte, credentialDigests map[string]string) error {
 	for _, mailbox := range configuration.Mailboxes {
 		if !mailbox.Enabled {
 			continue
@@ -149,6 +151,10 @@ func validateCredentials(configuration api.Configuration, data map[string][]byte
 				key, err := CredentialKey(descriptor)
 				if err != nil || len(data[key]) == 0 {
 					return ErrUnavailable
+				}
+				digest := sha256.Sum256(data[key])
+				if credentialDigests[key] != hex.EncodeToString(digest[:]) {
+					return ErrConflict
 				}
 			}
 		}

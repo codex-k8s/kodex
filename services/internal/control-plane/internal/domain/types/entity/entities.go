@@ -179,6 +179,12 @@ type TemplateVariable struct {
 
 type TemplateVariableField struct{ Name, Type, Description string }
 
+type EmailMailboxCredential struct {
+	Name, Kind, ConnectionRef                                  string
+	Generation, ConnectionVersion                              int64
+	ContentSHA256, SecretRef, SecretUID, SecretResourceVersion string
+}
+
 type ProviderDefinition struct {
 	Key, Name, Description, DefaultModelID string
 	AuthorizationMethods, ModelIDs         []string

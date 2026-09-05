@@ -197,8 +197,8 @@ Get readback revision/digest/UID/resourceVersion. Ошибка не превра
 готовность. Отдельный bounded cancel/join worker восстанавливает projection,
 readiness выполняет только readback текущего DB snapshot, не публикацию.
 
-Это producer checkpoint, не завершение D5: UI/YAML commands и отдельный
-write-only credential lifecycle ещё не подключены. Существующий bridge
+Это producer checkpoint, не завершение D5: UI/YAML mailbox commands
+ещё не подключены. Существующий в этой ветке bridge
 пока читает startup ConfigMap и фиксированные credential paths; переход на
 атомарный Secret snapshot и reload передан root как consumer dependency.
 До его подключения изменение mailbox document не считается доставленным
@@ -215,6 +215,45 @@ Protected CP -> bridge, consumer reload и внешняя почта: NOT RUN.
 PASS. Проверены exact replay, document/mailbox rollback, descriptor commitment,
 binding generation rollback, удаление/возврат, unknown connection, атомарный
 отказ с сохранением прежнего состояния и запрет старого instance read.
+
+### Write-only Credentials D5
+
+RPC `ConfigureEmailMailboxCredential`, операция
+`platform.command.email-mailbox.configure-credential`, policy 55.
+Request: `mutation=1`, `connection_ref=2`, `kind=3`, `credential_value=4`.
+Response `credential=1`: `name=1`, `generation=2`, `kind=3`,
+`connection_ref=4`, `connection_version=5`. Digest, Secret UID/ref/resourceVersion
+и credential value в публичной модели отсутствуют.
+
+Kind: CA_CERTIFICATE (1..64 KiB, только PEM CA certificates, до 32 штук),
+USERNAME (1..320 bytes UTF-8, без NUL/CR/LF), AUTH_SECRET (1..16 KiB UTF-8,
+без NUL/CR/LF). Пробелы значимы, значение не обрезается. UNKNOWN kind закрыт.
+`mutation.expected_version` относится к integration connection. Требуются
+актуальные integration.manage/CONFIGURE_CREDENTIAL и exact EMAIL definition.
+Worker token не заменяет пользовательское право этой команды.
+
+Name назначается сервером из tenant/actor/connection/idempotency identity,
+generation равна новой OCC version connection. Новое значение получает новый
+immutable descriptor/key, прежний key не меняется. Повтор потерянного ответа
+читает owner command receipt без повторной записи Secret; changed-value replay
+отклоняется по semantic digest. Stale новый command не материализует значение.
+При гонке после проверки OCC возможен неиспользованный immutable key, но он не
+попадает в config и не даёт доступ. Credentials и старые snapshot refs не
+удаляются этим endpoint; mailbox binding/publication и retention остаются
+отдельными owner lifecycle.
+
+Миграция 00624 хранит только owner/connection/kind/generation/digest и безопасный
+materialization receipt; secret value остаётся в защищённом Kubernetes Secret.
+Publisher теперь дополнительно проверяет каждый включённый descriptor по
+этому DB registry (tenant, connection, kind) и сравнивает SHA-256 фактических
+байтов с DB commitment. Изменение значения прежнего ключа закрывает readiness.
+Эта проверка не заменяет SMTP/IMAP health check или egress generation readback.
+
+Локально PASS: targeted PG `email_credentials` с create/replacement/exact
+replay, changed-value reuse, stale OCC без внешней записи, запретом без
+permission, wrong kind/connection; Go/race domain/app/publisher/transport и
+controlplaneclient, vet, проверка безопасного caster, Proto lint/codegen и
+policy codegen. Полный HTTP путь и mail-network activation: NOT RUN.
 
 ## Исполняемые Authorization И Report
 

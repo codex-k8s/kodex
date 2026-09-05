@@ -138,8 +138,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct provider credential materializer adapter: %w", err)
 	}
+	emailCredentials, err := constructEmailCredentialMaterializer(config)
+	if err != nil {
+		return fmt.Errorf("construct email credential materializer: %w", err)
+	}
 	service, err := platformservice.New(repository,
 		platformservice.WithCredentialMaterializer(credentialMaterializer),
+		platformservice.WithEmailCredentialMaterializer(emailCredentials),
 		platformservice.WithProviderCredentialMaterializer(providerMaterializer),
 	)
 	if err != nil {

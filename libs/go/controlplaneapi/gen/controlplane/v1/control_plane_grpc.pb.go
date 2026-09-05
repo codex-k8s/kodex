@@ -2794,6 +2794,7 @@ const (
 	PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/SaveSystemSTTConfigurationDraft"
 	PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/DiscardSystemSTTConfigurationDraft"
 	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
+	PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName          = "/controlplane.v1.PlatformCommandService/ConfigureEmailMailboxCredential"
 	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
 	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
 	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
@@ -2935,6 +2936,7 @@ type PlatformCommandServiceClient interface {
 	SaveSystemSTTConfigurationDraft(ctx context.Context, in *SaveSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*SaveSystemSTTConfigurationDraftResponse, error)
 	DiscardSystemSTTConfigurationDraft(ctx context.Context, in *DiscardSystemSTTConfigurationDraftRequest, opts ...grpc.CallOption) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(ctx context.Context, in *ReconcileEmailEffectRequest, opts ...grpc.CallOption) (*ReconcileEmailEffectResponse, error)
+	ConfigureEmailMailboxCredential(ctx context.Context, in *ConfigureEmailMailboxCredentialRequest, opts ...grpc.CallOption) (*ConfigureEmailMailboxCredentialResponse, error)
 	CreateSkillBundleDraft(ctx context.Context, in *CreateSkillBundleDraftRequest, opts ...grpc.CallOption) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(ctx context.Context, in *SaveSkillBundleDraftRequest, opts ...grpc.CallOption) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(ctx context.Context, in *ValidateSkillBundleDraftRequest, opts ...grpc.CallOption) (*ValidateSkillBundleDraftResponse, error)
@@ -3160,6 +3162,16 @@ func (c *platformCommandServiceClient) ReconcileEmailEffect(ctx context.Context,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReconcileEmailEffectResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_ReconcileEmailEffect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ConfigureEmailMailboxCredential(ctx context.Context, in *ConfigureEmailMailboxCredentialRequest, opts ...grpc.CallOption) (*ConfigureEmailMailboxCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureEmailMailboxCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4457,6 +4469,7 @@ type PlatformCommandServiceServer interface {
 	SaveSystemSTTConfigurationDraft(context.Context, *SaveSystemSTTConfigurationDraftRequest) (*SaveSystemSTTConfigurationDraftResponse, error)
 	DiscardSystemSTTConfigurationDraft(context.Context, *DiscardSystemSTTConfigurationDraftRequest) (*DiscardSystemSTTConfigurationDraftResponse, error)
 	ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error)
+	ConfigureEmailMailboxCredential(context.Context, *ConfigureEmailMailboxCredentialRequest) (*ConfigureEmailMailboxCredentialResponse, error)
 	CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error)
 	SaveSkillBundleDraft(context.Context, *SaveSkillBundleDraftRequest) (*SaveSkillBundleDraftResponse, error)
 	ValidateSkillBundleDraft(context.Context, *ValidateSkillBundleDraftRequest) (*ValidateSkillBundleDraftResponse, error)
@@ -4624,6 +4637,9 @@ func (UnimplementedPlatformCommandServiceServer) DiscardSystemSTTConfigurationDr
 }
 func (UnimplementedPlatformCommandServiceServer) ReconcileEmailEffect(context.Context, *ReconcileEmailEffectRequest) (*ReconcileEmailEffectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcileEmailEffect not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureEmailMailboxCredential(context.Context, *ConfigureEmailMailboxCredentialRequest) (*ConfigureEmailMailboxCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureEmailMailboxCredential not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) CreateSkillBundleDraft(context.Context, *CreateSkillBundleDraftRequest) (*CreateSkillBundleDraftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateSkillBundleDraft not implemented")
@@ -5183,6 +5199,24 @@ func _PlatformCommandService_ReconcileEmailEffect_Handler(srv interface{}, ctx c
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).ReconcileEmailEffect(ctx, req.(*ReconcileEmailEffectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ConfigureEmailMailboxCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureEmailMailboxCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureEmailMailboxCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureEmailMailboxCredential(ctx, req.(*ConfigureEmailMailboxCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7457,6 +7491,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReconcileEmailEffect",
 			Handler:    _PlatformCommandService_ReconcileEmailEffect_Handler,
+		},
+		{
+			MethodName: "ConfigureEmailMailboxCredential",
+			Handler:    _PlatformCommandService_ConfigureEmailMailboxCredential_Handler,
 		},
 		{
 			MethodName: "CreateSkillBundleDraft",
