@@ -35,6 +35,9 @@ spec:
             - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
               value: issuer
           volumeMounts:
+            - name: internal-rpc-authority-observability
+              mountPath: /var/run/email/observability
+              readOnly: true
             - name: application-grant
               mountPath: /var/run/secrets/kodex/email-bridge/application-grant
               readOnly: true
@@ -239,7 +242,7 @@ spec:
             defaultMode: 292
         - name: internal-rpc-authority-workload-tls
           secret:
-            secretName: email-bridge-tls
+            secretName: internal-rpc-authority-email-bridge-workload-tls
             defaultMode: 0440
         - name: internal-rpc-authority-readback-attestor-ca
           configMap:

@@ -12,27 +12,32 @@ import (
 )
 
 type Config struct {
-	Listen               string `env:"EMAIL_BRIDGE_LISTEN"`
-	Technical            string `env:"EMAIL_BRIDGE_TECHNICAL_LISTEN"`
-	ConfigurationFile    string `env:"EMAIL_BRIDGE_CONFIGURATION_FILE,required,notEmpty"`
-	SecretsRoot          string `env:"EMAIL_BRIDGE_SECRETS_ROOT,required,notEmpty"`
-	DSNFile              string `env:"EMAIL_BRIDGE_DSN_FILE,required,notEmpty"`
-	CertificateFile      string `env:"EMAIL_BRIDGE_CERTIFICATE_FILE,required,notEmpty"`
-	PrivateKeyFile       string `env:"EMAIL_BRIDGE_PRIVATE_KEY_FILE,required,notEmpty"`
-	CAFile               string `env:"EMAIL_BRIDGE_CA_FILE,required,notEmpty"`
-	AuthorityTarget      string `env:"EMAIL_BRIDGE_AUTHORITY_TARGET"`
-	ApplicationGrantFile string `env:"EMAIL_BRIDGE_APPLICATION_GRANT_FILE,required,notEmpty"`
-	EgressAddress        string `env:"EMAIL_BRIDGE_EGRESS_ADDRESS"`
-	Environment          string `env:"DEPLOYMENT_ENVIRONMENT,required,notEmpty"`
-	OTLPEndpoint         string `env:"OTEL_EXPORTER_OTLP_ENDPOINT,required,notEmpty"`
-	OTLPServerName       string `env:"OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,required,notEmpty"`
-	OTLPCAFile           string `env:"OTEL_EXPORTER_OTLP_CA_FILE,required,notEmpty"`
+	ReconciliationIntervalSeconds int    `env:"EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS"`
+	ReconciliationBatch           int    `env:"EMAIL_BRIDGE_RECONCILIATION_BATCH"`
+	Listen                        string `env:"EMAIL_BRIDGE_LISTEN"`
+	Technical                     string `env:"EMAIL_BRIDGE_TECHNICAL_LISTEN"`
+	ConfigurationFile             string `env:"EMAIL_BRIDGE_CONFIGURATION_FILE,required,notEmpty"`
+	SecretsRoot                   string `env:"EMAIL_BRIDGE_SECRETS_ROOT,required,notEmpty"`
+	DSNFile                       string `env:"EMAIL_BRIDGE_DSN_FILE,required,notEmpty"`
+	CertificateFile               string `env:"EMAIL_BRIDGE_CERTIFICATE_FILE,required,notEmpty"`
+	PrivateKeyFile                string `env:"EMAIL_BRIDGE_PRIVATE_KEY_FILE,required,notEmpty"`
+	CAFile                        string `env:"EMAIL_BRIDGE_CA_FILE,required,notEmpty"`
+	AuthorityTarget               string `env:"EMAIL_BRIDGE_AUTHORITY_TARGET"`
+	ApplicationGrantFile          string `env:"EMAIL_BRIDGE_APPLICATION_GRANT_FILE,required,notEmpty"`
+	EgressAddress                 string `env:"EMAIL_BRIDGE_EGRESS_ADDRESS"`
+	Environment                   string `env:"DEPLOYMENT_ENVIRONMENT,required,notEmpty"`
+	OTLPEndpoint                  string `env:"OTEL_EXPORTER_OTLP_ENDPOINT,required,notEmpty"`
+	OTLPServerName                string `env:"OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,required,notEmpty"`
+	OTLPCAFile                    string `env:"OTEL_EXPORTER_OTLP_CA_FILE,required,notEmpty"`
 }
 
 func loadConfig() (Config, error) {
-	c := Config{Listen: ":8443", Technical: ":9090", AuthorityTarget: "control-plane.kodex-system.svc.cluster.local:8443", EgressAddress: "egress-gateway.kodex-system.svc:8080"}
+	c := Config{ReconciliationIntervalSeconds: 15, ReconciliationBatch: 16, Listen: ":8443", Technical: ":9090", AuthorityTarget: "control-plane.kodex-system.svc.cluster.local:8443", EgressAddress: "egress-gateway.kodex-system.svc:8080"}
 	if env.ParseWithOptions(&c, env.Options{}) != nil {
 		return c, errors.New("invalid email bridge environment")
+	}
+	if c.ReconciliationIntervalSeconds < 5 || c.ReconciliationIntervalSeconds > 300 || c.ReconciliationBatch < 1 || c.ReconciliationBatch > 64 {
+		return c, errors.New("invalid email reconciliation limits")
 	}
 	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != "egress-gateway.kodex-system.svc:8080" {
 		return c, errors.New("invalid email bridge destinations")

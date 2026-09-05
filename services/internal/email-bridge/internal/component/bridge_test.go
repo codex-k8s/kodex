@@ -334,8 +334,13 @@ func (a *authorityFixture) Resolve(_ context.Context, r api.AuthorizationRequest
 }
 
 type memory struct {
+	port.ReconciliationRepository
 	mu   sync.Mutex
 	rows map[string]port.Record
+}
+
+func (m *memory) Remember(context.Context, port.Scope, port.Record, port.OwnerReceipt, time.Time) error {
+	return nil
 }
 
 func (m *memory) Reserve(_ context.Context, s port.Scope, key, digest, id, resource string, audit port.Audit) (port.Record, bool, error) {
@@ -407,7 +412,7 @@ func service(t *testing.T, f *providerFixture, mode string, store port.Repositor
 	if store == nil {
 		store = &memory{rows: map[string]port.Record{}}
 	}
-	s := &mail.Service{CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Effects: effectFixture{}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
+	s := &mail.Service{Ledger: store.(port.ReconciliationRepository), CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Effects: effectFixture{}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
 	return s, sec, auth
 }
 func send(op api.Operation, key string) api.Command {

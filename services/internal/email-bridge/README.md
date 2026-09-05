@@ -48,7 +48,9 @@ envelope_from, hello_name и recipients задают точный envelope scope
 
 Конфигурация загружается при старте. Новая revision требует rollout; PostgreSQL
 watermark запрещает обслуживать прежнюю revision после запуска новой. Пустая
-bootstrap configuration намеренно не READY, пока владелец не подключил mailbox.
+bootstrap configuration допускает только инфраструктурную local readiness:
+PostgreSQL/configuration и issuer. Неподключённая mailbox всегда отклоняется
+до credentials/provider; local readiness не означает доступный mail route.
 
 ## Состояние
 
@@ -62,6 +64,11 @@ exact CP UNKNOWN до чтения provider credentials и внешней mutati
 mail effect. Конкурентный запрос получает
 ту же запись; смена входа при том же key возвращает CONFLICT. Сбой процесса,
 таймаут final SMTP response либо POP QUIT не запускает автоматический повтор.
+CP receipt binding сохраняется до provider write. Фоновый consumer выбирает
+связанные durable UNKNOWN после окончания исходного lease и completion budget,
+получает текущее owner decision и повторно авторизует exact decision перед commit.
+Audit и source unlock фиксируются атомарно, исходный UNKNOWN не переписывается.
+Consumer не имеет provider port и не отправляет почту повторно.
 Успешная SMTP final response переводит receipt в accepted; успешный DELE/QUIT
 в deleted. Event bus, очередь доставки и фоновая повторная отправка отсутствуют;
 авторитетный путь — receipt read. Ручное превращение unknown в ready запрещено.
@@ -86,8 +93,15 @@ Typed gRPC consumer использует checkpoint #1046 `d31cd4c70`; нали�
 RPC не доказывает CP SQL, worker trust или key delivery. Local `/readyz`
 проверяет PostgreSQL/configuration и local issuer, не полный protected path.
 Полная проверка выполняется HEALTH с настоящим owner connection-test claim.
-Материализация owner reconciliation и утверждённый mail route требуют стыковки до
+Owner reconciliation consumer проверен с fake CP и disposable PostgreSQL;
+реальные CP producer/#1059 key delivery и утверждённый mail route требуют стыковки до
 финального SHA: существующий egress не разрешает mail mode. Зависимости не обходятся
 локальным allow-all или прямым dial. Список доказательств и ограничений:
 `docs/operations/email-bridge-1037.md`; действия владельца:
 `docs/runbooks/email-bridge.md`.
+
+Production overlay включён в `web-only` и `web-with-mattermost`. Release manifest
+содержит `email-bridge:runtime` и `email-bridge-migration:migration` как разные
+immutable images. Worker defaults: batch 16, interval 15 секунд, cycle budget
+5 секунд; допустимы batch 1..64 и interval 5..300 секунд через
+`EMAIL_BRIDGE_RECONCILIATION_BATCH`/`EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS`.

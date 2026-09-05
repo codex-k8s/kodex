@@ -35,12 +35,8 @@ grant/effect после решения владельца, прежняя receip
 ## Контракты для root
 
 - #1046: `ResolveEmailAuthorization`, только typed Proto/gRPC через
-  `controlplaneclient`, canonical transport → caster → service. Ранее указанный
-  HTTP `/internal/v1/email-authorizations/resolve` не является доступным API
-  control-plane и должен быть удалён из OpenAPI/client при стыковке.
-  Семантические модели `AuthorizationRequest/AuthorizationDecision` пока
-  находятся в `libs/go/emailbridgeapi`; точный Proto service/method и номера
-  полей согласуются с владельцем producer до финальной сдачи.
+  `controlplaneclient`, canonical transport → caster → service. Старый HTTP
+  authorization endpoint удалён; потреблён typed контракт d31cd4c70.
   Producer подтверждает живые actor/agent/tenant/connection/grant, exact input
   digest, effect, config revision и credential generation; четыре scopes и gate
   берутся из authoritative state, не из запроса пользователя.
@@ -182,6 +178,29 @@ Live mail, cluster/remote/deploy и новые сетевые разрешени
 
 ## Typed CP consumer и UNKNOWN-before-effect
 
+### Матрица фонового reconciliation (решение владельца после c07e66b20)
+
+Canonical `kodex.email.receipt.v1` принят владельцем как opaque commitment;
+CP не пересчитывает его из HTTP safe view. Пустой DecisionRef в
+ResolveEmailReconciliation означает выбор текущего действующего server-owned
+решения CP; NOT_FOUND означает отсутствие решения, не разрешение retry.
+
+| Переход | Authority / effect | Атомарное состояние и failure | Read path |
+| --- | --- | --- | --- |
+| reserve → CP UNKNOWN → durable owner binding | Исходный invocation lease, generated CP Report с worker grant/proof | CP ref/version, invocation, connection и digest сохраняются до provider write; отказ закрывает effect | Local receipt + CP GET |
+| Startup → polling | DB schema/configuration и local issuer barrier; lifecycle context | До barrier нет CP poll или local unlock; worker cancel/join до закрытия pool/client | Local readiness не объявляет полный CP path |
+| UNKNOWN → bounded batch | Только durable UNKNOWN с сохранённым CP binding; лимит и fair next-check scheduling | Отсутствие binding оставляет receipt закрытой; нет синтеза owner ref | Local receipt/journal |
+| Poll → NOT_FOUND/denied/error | Каждый раз fresh typed Resolve по exact receipt ref/external ref/digest; DecisionRef пустой | Нет local state transition, source lock сохраняется, следующий bounded interval | CP authoritative GET |
+| Poll → действующее решение | CP выбирает server decision; exact receipt/version/digest/invocation, actor/grant, outcome и TTL | Проверка freshness повторяется перед local commit; просрочка/несовпадение не снимает lock | CP decision + local audit |
+| Решение → local audit + source unlock | Только EFFECT_CONFIRMED либо NO_EFFECT_CONFIRMED, без provider port | Одна owner DB transaction: immutable decision audit и unlock; исходный UNKNOWN/outcome/provider metadata не переписываются | Local journal + исходный receipt + CP GET |
+| Duplicate/replica/restart | Повтор того же exact decision идемпотентен | Конфликт ref/version/digest/outcome закрыт; audit не дублируется | Durable journal |
+| Crash/timeout/cancel | Сроки RPC/cycle/transaction ограничены; нет blind provider retry | До commit всё откатывается; после commit audit и unlock видимы вместе | Authoritative PostgreSQL |
+| Shutdown | cancel → join → close CP/PG | Новые batch не стартуют, cleanup имеет отдельный bounded context | Readiness stopping |
+
+Новый event не вводится: для каждого перехода авторитетен local PostgreSQL
+journal и CP receipt/decision GET. Фоновый consumer не получает mail Provider,
+не читает mail credentials и не создаёт новое намерение или grant.
+
 Следующее состояние заменяет ограничения исходной передачи в части HTTP stub.
 Потреблён exact checkpoint `d31cd4c7015e0513db7ca1afeacc12a7a6e155ac`:
 Proto/generated/operation profile и policy revision 52. Предшествующие CP
@@ -206,13 +225,13 @@ Main `8026633a9` с новым vendor catalog сохранён отдельны�
 - Typed `ResolveEmailReconciliation` adapter проверяет exact receipt/version,
   external ref/digest, invocation, decision/version, actor/grant, freshness и
   закрытый outcome. Он не снимает local source lock сам по себе и не заменяет
-  ещё не материализованный owner-decision consumer.
+  фоновый owner-decision consumer, описанный ниже.
 
 ### Канонический external receipt digest
 
-Consumer-кандидат `kodex.email.receipt.v1` реализован и закреплён golden test.
-Требуется подтверждение Bohr до полного handoff; прямой `send_input` отсутствует
-в доступных инструментах этой сессии. CP сохраняет и сверяет digest как exact
+`kodex.email.receipt.v1` реализован, закреплён golden test и принят владельцем.
+Прямой `send_input` отсутствует; координация с Bohr идёт через root.
+CP сохраняет и сверяет digest как exact
 opaque commitment, а не пересчитывает его из public HTTP view.
 
 SHA256 вычисляется по UTF-8 JSON `encoding/json.Marshal` следующего фиксированного
@@ -251,20 +270,83 @@ TestPostgresEffects повышал общий configuration watermark и нар�
 rollback policy и monotonic watermark не ослаблены. Повтор всего runner:
 PASS, включая все protocol и PostgreSQL scenarios под race.
 
-Проверенный CP WT `ac62c263c` не содержит реализаций трёх EMAIL RPC в app/transport.
+На checkpoint c07 проверенный CP WT `ac62c263c` не содержал реализаций трёх EMAIL RPC в app/transport.
 Note `10132529a` явно оставляет SQL/RPC handlers незавершёнными.
 CP WorkerGrantTrustFiles не содержит email-bridge. Registry workloads
 `internal-rpc-authority/internal/platformworkergrant/app.go` также не включает
 email-bridge. Собственный grant mount настроен, но наличие mount/Secret name
 не доказывает выпуск ключа, trust registration, readback или restore.
 
-Нужны от Bohr/root: подтверждение digest; точный producer checkpoint SQL/RPC;
-worker grant/trust/key-delivery registration; исполняемая доставка owner
-decision_ref с receipt_ref/version к EMAIL consumer (его actor/lease и retry
-policy). Последний путь нужен для атомарного local audit и снятия resource lock
-без изменения исходного UNKNOWN receipt. Status GET этого не делает.
+### Фоновый consumer и production activation
+
+Реализованы durable owner binding до provider, bounded polling (по умолчанию
+16 записей каждые 15 секунд, пределы 1..64 и 5..300 секунд), startup barrier,
+cancel/join и повторный exact Resolve с выбранным decision_ref перед commit.
+Polling начинается после исходного lease + 3 секунды completion budget.
+Одна PostgreSQL transaction фиксирует audit и source unlock; исходный UNKNOWN
+и provider metadata неизменны. Просрочка во время ожидания row lock отменяет
+commit. Поздний Complete после unlock запрещён. Подтверждения CP монотонны:
+задержавшийся UNKNOWN не понижает уже сохранённую terminal version.
+
+Новая forward migration `20260905000100_email_reconciliation.sql` вводит
+FORCE RLS journal без DELETE для runtime. Worker не имеет provider port.
+Локально PASS: полный disposable PG/protocol runner под race, EMAIL race/vet,
+codegen и render обоих профилей с fixture release locks, Docker runtime build.
+Проверены concurrent commit, stale acknowledgement, corruption, TTL expiry
+при row lock, revoke на повторном Resolve, NOT_FOUND, bounded selection и
+cancel/join на barrier/PG/RPC/commit. Реальный CP не подменяется этими фейками.
+
+Production overlay `deploy/k8s/overlays/production/email-bridge` включён в
+web-only и web-with-mattermost. Runtime/migration включены в image manifest и
+закрытый release target registry. Mail egress не расширялся. Пустая mailbox
+projection допускает инфраструктурную readiness, но HEALTH/send закрыто
+отклоняются. Issuer использует `internal-rpc-authority-email-bridge-workload-tls`
+и `internal-rpc-authority-email-bridge-issuer-postgresql`, путь PostgreSQL
+`/var/run/secrets/kodex/internal-rpc-authority/postgres`, роль
+`ira_email_bridge_issuer_g1`. Общая материализация приходит отдельным #1059.
+
+Открытая граница: потеря CP Report response до сохранения owner receipt_ref
+оставляет local UNKNOWN без binding и без provider effect. Такой receipt
+намеренно не снимает lock. Root передано предложение exact lookup по external
+ref/digest с пустым receipt_ref; расширение контракта без согласования не введено.
+Нужен exact producer checkpoint SQL/RPC/CP trust от Bohr. Собственные database
+Secrets: email-bridge-postgresql-bootstrap, email-bridge-runtime-database и
+email-bridge-migration-database требуют отдельной доставки при установке.
+
+Общий go-toolchain contract: FAIL вне EMAIL, runtime-controller Dockerfile
+не материализует local replacement libs/go/secretbrokerapi; root уведомлён.
 Shared CP/security ownership без согласования не изменяется.
 
 Full protected issuer→CP SQL→EMAIL reconciliation: NOT RUN и не READY.
 Полный #1037 остаётся незавершённым. Mail route/ports, live mail, cluster,
 staging, deploy, push и PR: NOT RUN; запреты владельца сохранены.
+
+## Checkpoint b94400fa6 и зависимость #1059
+
+Consumer/migration/production activation зафиксированы в `b94400fa6`.
+Exact root `0765f3dadb901664da3b83e3701a4a739f209e54` перенесён без конфликтов;
+совместный checkpoint `80a0ae927`. EMAIL includes обоих профилей и третья
+PostgreSQL StatefulSet сохранены вместе с registry revision 7 и exact RBAC.
+
+На `80a0ae927` локально PASS:
+
+- `make check-email-bridge-codegen test-email-bridge-render test-worker-authority-projections`:
+  codegen, оба полных профиля, fixture release locks, exact issuer/key/ingress.
+- `make test-install-contract test-internal-rpc-authority-abi-render`:
+  install contract, IPv6 ingress и ABI sidecars.
+- EMAIL `go test -race ./internal/domain/service/reconciliation ./internal/clients/authority -count=1 -timeout=90s`.
+- Docker target migration, включая сборку runtime и migration binaries.
+
+`make test-web-only-release`: FAIL. Существующий assertion требует
+`project_required=true` у `platform.stt.credential.project`, но сохранённая
+policy52 правильно содержит ранее согласованное organization-only `false`.
+STT/shared policy не изменялись; расхождение передано root, FAIL не скрыт.
+
+Read-only проверен новый CP handoff `10266a2ef`: owner-selected reconciliation,
+worker trust и durable watermark реализованы у Bohr. Но исходники CP ещё не
+содержат handlers `ResolveEmailAuthorization` и `ReportEmailEffectReceipt`;
+handoff явно отмечает незавершённые mailbox projection и source authorization.
+CP checkpoint пока не переносился выборочно без полного producer handoff.
+Нужен согласованный полный checkpoint этих handlers/projection и deployment env
+`CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE` с public key path из #1059. Этот env
+и CP domain остаются ownership Bohr/root, EMAIL не включает их обходным путём.

@@ -16,6 +16,7 @@ import (
 )
 
 type Service struct {
+	Ledger         receipt.ReconciliationRepository
 	Effects        receipt.EffectAuthority
 	CompletionBase context.Context
 	Config         api.Configuration
@@ -183,7 +184,7 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	if !Mutation(command.Operation) {
 		return s.Provider.Read(ctx, mailbox, command)
 	}
-	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil {
+	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil || s.Ledger == nil {
 		return api.Result{}, errs.Unavailable
 	}
 	id := fmt.Sprintf("%x", randomID())
@@ -245,7 +246,18 @@ func (s *Service) report(ctx context.Context, binding *api.ExecutionBinding, sco
 		Digest  string
 		Outcome receipt.Outcome
 	}{owner.ExternalDigest, owner.Outcome})
-	return s.Effects.Report(ctx, receipt.Report{Binding: binding, Receipt: owner, IdempotencyKey: key})
+	confirmed, err := s.Effects.Report(ctx, receipt.Report{Binding: binding, Receipt: owner, IdempotencyKey: key})
+	if err != nil {
+		return receipt.OwnerReceipt{}, err
+	}
+	after := time.Now().Add(receiptCompletionTimeout)
+	if binding != nil {
+		after = binding.Lease.ExpiresAt.Add(receiptCompletionTimeout)
+	}
+	if err := s.Ledger.Remember(ctx, scope, r, confirmed, after); err != nil {
+		return receipt.OwnerReceipt{}, err
+	}
+	return confirmed, nil
 }
 
 func randomID() []byte {

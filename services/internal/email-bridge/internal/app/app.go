@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/authority"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/mailtransport"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
+	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/reconciliation"
 	business "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/observability/metrics"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/repository/postgres/receipt"
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
@@ -70,7 +71,7 @@ func Run(ctx, background context.Context, version string) error {
 	defer serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing})
 	metrics := observability.NewMetrics("email_bridge", version, nil)
 	businessMetrics := business.New()
-	if metrics.Register(businessMetrics.Operations) != nil {
+	if metrics.Register(businessMetrics.Operations) != nil || metrics.Register(businessMetrics.Reconciliations) != nil {
 		return errors.New("metrics unavailable")
 	}
 	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
@@ -79,7 +80,16 @@ func Run(ctx, background context.Context, version string) error {
 	}
 	defer client.Close()
 	owner := &authority.Client{API: client.Runtime}
-	service := &mail.Service{CompletionBase: background, Config: configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+	service := &mail.Service{Ledger: repository, CompletionBase: background, Config: configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+	reconciler := &reconciliation.Service{Repository: repository, Authority: owner, Interval: time.Duration(c.ReconciliationIntervalSeconds) * time.Second, Batch: c.ReconciliationBatch, Observer: businessMetrics, Barrier: func(probe context.Context) error {
+		if err := repository.Ready(probe); err != nil {
+			return err
+		}
+		if err := repository.Configuration(probe, configuration, api.Digest(configuration)); err != nil {
+			return err
+		}
+		return client.CheckLocalAuthority(probe)
+	}}
 	readiness := serviceruntime.NewReadiness()
 	tech, e := httpserver.New(httpserver.Config{Address: c.Technical, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 16384, MaximumConnections: 64}, readiness, metrics.PrometheusHandler())
 	if e != nil {
@@ -106,7 +116,7 @@ func Run(ctx, background context.Context, version string) error {
 	if e != nil {
 		return errors.New("HTTPS listener unavailable")
 	}
-	group := serviceruntime.StartWorkers(ctx, func(context.Context) error {
+	group := serviceruntime.StartWorkers(ctx, reconciler.Run, func(context.Context) error {
 		e := tech.Serve()
 		if e != nil {
 			stop()
@@ -127,14 +137,7 @@ func Run(ctx, background context.Context, version string) error {
 		for {
 			probe, stop := context.WithTimeout(worker, 10*time.Second)
 			ok := repository.Ready(probe) == nil && client.CheckLocalAuthority(probe) == nil && repository.Configuration(probe, configuration, api.Digest(configuration)) == nil
-			active := 0
-			for _, m := range configuration.Mailboxes {
-				if m.Enabled {
-					active++
-				}
-			}
 			stop()
-			ok = ok && active > 0
 			readiness.Set(ok, "dependencies")
 			metrics.SetReady(ok)
 			select {
