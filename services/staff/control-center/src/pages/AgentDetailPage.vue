@@ -58,16 +58,6 @@ const canManageAvatar = computed(() => canEdit.value);
 const canManageCapabilities = computed(
   () => agent.value?.nextActions.includes("MANAGE_CAPABILITIES") ?? false,
 );
-const capabilityCatalog = computed(() => {
-  const values = [...platform.capabilities].sort(
-    (left, right) =>
-      left.category.localeCompare(right.category) ||
-      left.name.localeCompare(right.name),
-  );
-  return canManageCapabilities.value
-    ? values
-    : values.filter((item) => hasCapability(item.key));
-});
 const instructionHistory = computed(
   () => platform.instructionVersions[agentRef.value] ?? [],
 );
@@ -198,10 +188,6 @@ const tabs = computed<Array<{ id: AgentDetailTab; label: string }>>(() => [
   { id: "environment", label: t("roleEnvironments.title") },
   { id: "access", label: t("agents.capabilities") },
 ]);
-
-function hasCapability(key: string): boolean {
-  return agent.value?.capabilities.some((item) => item.key === key) ?? false;
-}
 
 function tabScope(tab: AgentDetailTab): string {
   return tabs.value.find((item) => item.id === tab)?.label ?? tab;
@@ -539,10 +525,15 @@ function updateApplyState(
   setApplyState(state, scope, boundary);
 }
 
-async function toggleCapability(key: string): Promise<void> {
+async function toggleCapability(
+  key: string,
+  enabled: boolean,
+  version: number,
+): Promise<void> {
   if (
     busy.value ||
     !agent.value ||
+    agent.value.version !== version ||
     !canManageCapabilities.value ||
     capabilityBusy.value
   )
@@ -553,7 +544,7 @@ async function toggleCapability(key: string): Promise<void> {
   markApplying(tabScope("access"), "next-run");
   try {
     await platform.changeAgent(agent.value, {
-      action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
+      action: enabled ? "GRANT_CAPABILITY" : "REVOKE_CAPABILITY",
       capabilityKey: key,
     });
     if (!active()) return;
@@ -891,13 +882,13 @@ onBeforeUnmount(() => {
           <AgentAccessPanel
             :project-ref="agent.projectRef"
             :agent-ref="agent.ref"
-            :capabilities="capabilityCatalog"
-            :granted-keys="agent.capabilities.map((item) => item.key)"
+            :agent-version="agent.version"
             :integrations="agent.integrations"
             :knowledge-count="agent.knowledgeArtifactRefs.length"
             :can-manage="canManageCapabilities"
             :busy-key="capabilityBusy"
             @toggle="toggleCapability"
+            @refresh="platform.loadAgent(agentRef)"
           />
           <ProblemNotice
             v-if="platform.problems.capabilities"

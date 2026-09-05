@@ -16,6 +16,7 @@ import {
   checkRoleImageHistory,
 } from "./fixtures/role-images";
 import { checkWorkflowEditor } from "./fixtures/workflow";
+import { checkEffectiveCapabilities } from "./fixtures/effective-capabilities";
 import type {
   ManagedConfiguration,
   ManagedConfigurationRevision,
@@ -1166,6 +1167,15 @@ for (const width of [2900, 2560, 1920, 1440, 1280, 900, 390]) {
         path: testInfo.outputPath(`workflow-${String(width)}.png`),
         fullPage: true,
       });
+      if (width === 390 || width === 2900) {
+        await checkEffectiveCapabilities(page, project.ref);
+        await page.screenshot({
+          path: testInfo.outputPath(
+            `effective-capabilities-${String(width)}.png`,
+          ),
+          fullPage: true,
+        });
+      }
       await checkContextResources(
         page,
         project.ref,

@@ -1,4 +1,9 @@
 import { expect, type Page, type Route } from "@playwright/test";
+import {
+  deniedLaunch,
+  effectiveFiles,
+  effectivePage,
+} from "./effective-capabilities";
 import type {
   Agent,
   BootstrapState,
@@ -98,6 +103,32 @@ export async function checkWorkflowEditor(
   await page.route("**/api/v1/platform-capabilities", (route) =>
     route.fulfill({ json: { items: [] } }),
   );
+  await page.route(
+    `**/api/v1/agents/${agent.ref}/effective-capabilities*`,
+    (route) => {
+      const url = new URL(route.request().url());
+      const published = url.searchParams.has("workflowRef");
+      if (published) {
+        expect(url.searchParams.get("workflowRef")).toBe(workflow.ref);
+        expect(url.searchParams.get("stepKey")).toBe("step_synthetic");
+      }
+      return route.fulfill({
+        json: {
+          ...effectivePage(agent, [
+            { ...effectiveFiles, required: published },
+            deniedLaunch,
+          ]),
+          ...(published
+            ? {
+                workflowRef: workflow.ref,
+                stepKey: "step_synthetic",
+                workflowVersionRef: "workflow_published_version",
+              }
+            : {}),
+        },
+      });
+    },
+  );
   await page.route(`**/api/v1/projects/${projectRef}/agents*`, (route) =>
     route.fulfill({ json: { items: [agent], nextPageToken: "" } }),
   );
@@ -143,6 +174,10 @@ export async function checkWorkflowEditor(
   const exactInstructions = await instructions.innerText();
   expect(exactInstructions).toContain("  Synthetic instructions  ");
   await step.locator(".step-advanced summary").click();
+  await step.getByRole("checkbox", { name: /^Файлы/ }).check();
+  await expect(
+    step.getByRole("checkbox", { name: /^Запуск задач/ }),
+  ).toBeDisabled();
   const expectedResult = step.locator(".cm-content").nth(1);
   await expectedResult.fill("  Synthetic result  ");
   await expect(
@@ -187,6 +222,21 @@ export async function checkWorkflowEditor(
     await page.unroute("**/api/v1/speech/transcriptions", transcriptionRoute);
   }
   expect(failures).toEqual([]);
+  expect(workflow.steps[0]?.requiredCapabilityKeys).toEqual([
+    effectiveFiles.key,
+  ]);
+  workflow.state = "PUBLISHED";
+  await page.goto(`/projects/${projectRef}/workflows/${workflow.ref}`);
+  await page.locator(".step-advanced summary").first().click();
+  await page
+    .getByRole("button", {
+      name: "Возможности опубликованного этапа",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Требуется этапом", { exact: true }),
+  ).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   expect(

@@ -3,6 +3,28 @@ import { createI18n } from "vue-i18n";
 import { currentLocale } from "@/shared/locale";
 
 const ru = {
+  capabilityAuthority: {
+    publishedStep: "Возможности опубликованного этапа",
+    total: "Всего возможностей",
+    requested: "Назначено",
+    notRequested: "Не назначено",
+    effective: "Доступно сейчас",
+    unavailable: "Недоступно сейчас",
+    required: "Требуется этапом",
+    connection: "Подключение",
+    draftIntent:
+      "Выбираются требования черновика. Доступность показана для текущего сотрудника; опубликованный этап проверяется отдельно.",
+    reasons: {
+      AVAILABLE: "Текущие полномочия и runtime позволяют действие.",
+      ACTOR_PERMISSION_REQUIRED: "У вас нет полномочий на это действие.",
+      AGENT_CAPABILITY_REQUIRED: "Возможность не назначена сотруднику.",
+      RUNTIME_NOT_READY: "Runtime сотрудника пока не готов.",
+      WORKFLOW_CAPABILITY_NOT_REQUIRED:
+        "Возможность не входит в требования опубликованного этапа.",
+      INTEGRATION_GRANT_UNAVAILABLE: "Разрешение этого подключения недоступно.",
+      INTEGRATION_REVISION_UNAVAILABLE: "Ревизия этого подключения недоступна.",
+    },
+  },
   runtimeOverlay: {
     environmentBase: "Базовая опубликованная ревизия",
     environmentBaseUnknown:
@@ -2830,6 +2852,31 @@ const ru = {
 
 const en = {
   ...ru,
+  capabilityAuthority: {
+    publishedStep: "Published step capabilities",
+    total: "Total capabilities",
+    requested: "Assigned",
+    notRequested: "Not assigned",
+    effective: "Available now",
+    unavailable: "Unavailable now",
+    required: "Required by step",
+    connection: "Connection",
+    draftIntent:
+      "These are draft requirements. Availability reflects the current agent; the published step is checked separately.",
+    reasons: {
+      AVAILABLE: "Current permissions and runtime allow this action.",
+      ACTOR_PERMISSION_REQUIRED: "You do not have permission for this action.",
+      AGENT_CAPABILITY_REQUIRED:
+        "This capability is not assigned to the agent.",
+      RUNTIME_NOT_READY: "The agent runtime is not ready yet.",
+      WORKFLOW_CAPABILITY_NOT_REQUIRED:
+        "This capability is not required by the published step.",
+      INTEGRATION_GRANT_UNAVAILABLE:
+        "The grant for this connection is unavailable.",
+      INTEGRATION_REVISION_UNAVAILABLE:
+        "The revision of this connection is unavailable.",
+    },
+  },
   runtimeOverlay: {
     environmentBase: "Base published revision",
     environmentBaseUnknown:

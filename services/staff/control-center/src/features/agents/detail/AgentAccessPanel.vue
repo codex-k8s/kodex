@@ -4,11 +4,10 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { agentDetailCopy } from "@/features/agents/detail/copy";
-import type { PlatformCapability } from "@/shared/api/generated/openapi/types.gen";
+import EffectiveCapabilityCatalog from "./EffectiveCapabilityCatalog.vue";
 
-const props = defineProps<{
-  capabilities: readonly PlatformCapability[];
-  grantedKeys: readonly string[];
+defineProps<{
+  agentVersion: number;
   integrations: readonly string[];
   knowledgeCount: number;
   canManage: boolean;
@@ -16,10 +15,12 @@ const props = defineProps<{
   projectRef?: string;
   agentRef?: string;
 }>();
-const emit = defineEmits<{ toggle: [key: string] }>();
+const emit = defineEmits<{
+  toggle: [key: string, enabled: boolean, agentVersion: number];
+  refresh: [];
+}>();
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
-const granted = computed(() => new Set(props.grantedKeys));
 </script>
 
 <template>
@@ -31,23 +32,19 @@ const granted = computed(() => new Set(props.grantedKeys));
           <h2>{{ $t("agents.capabilities") }}</h2>
         </div>
       </div>
-      <div class="access-panel__list">
-        <label v-for="capability in capabilities" :key="capability.key">
-          <input
-            v-if="canManage"
-            type="checkbox"
-            :checked="granted.has(capability.key)"
-            :disabled="Boolean(busyKey)"
-            @change="emit('toggle', capability.key)"
-          />
-          <span class="access-panel__check" aria-hidden="true" />
-          <span>
-            <strong>{{ capability.name }}</strong>
-            <small>{{ capability.description }}</small>
-          </span>
-        </label>
-        <p v-if="capabilities.length === 0">{{ $t("common.empty") }}</p>
-      </div>
+      <EffectiveCapabilityCatalog
+        v-if="agentRef"
+        :agent-ref="agentRef"
+        :agent-version="agentVersion"
+        :project-ref="projectRef"
+        mode="GRANTS"
+        :can-manage="canManage"
+        :busy="Boolean(busyKey)"
+        @toggle="
+          (key, enabled, version) => emit('toggle', key, enabled, version)
+        "
+        @refresh="emit('refresh')"
+      />
       <p v-if="busyKey" class="access-panel__saving" aria-live="polite">
         {{ $t("agents.capabilitySaving") }}
       </p>
@@ -139,42 +136,6 @@ const granted = computed(() => new Set(props.grantedKeys));
   margin-top: 3px;
   color: var(--muted);
   font-size: 0.8rem;
-}
-.access-panel__list {
-  display: grid;
-  border-top: 1px solid var(--border);
-}
-.access-panel__list label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-  padding: 11px 2px;
-  border-bottom: 1px solid var(--hairline);
-  cursor: pointer;
-}
-.access-panel__list label:has(input) {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-.access-panel__list label:not(:has(input)) {
-  grid-template-columns: minmax(0, 1fr);
-}
-.access-panel__list input {
-  width: 17px;
-  min-height: 17px;
-  margin: 1px 0 0;
-}
-.access-panel__check {
-  display: none;
-}
-.access-panel__list strong,
-.access-panel__list small {
-  display: block;
-}
-.access-panel__list small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-weight: 400;
 }
 .access-panel__saving {
   color: var(--warning);

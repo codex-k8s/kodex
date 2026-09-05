@@ -19,6 +19,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const { t } = useI18n();
@@ -71,6 +72,12 @@ function selectAgent(value: unknown, step?: WorkflowStepInput): void {
   else form.coordinatorAgentRef = ref;
 }
 const busy = ref(false);
+const publishedCapabilitiesStep = ref("");
+function publishedStep(position: number) {
+  return workflow.value?.state === "PUBLISHED"
+    ? workflow.value.steps.find((step) => step.position === position)
+    : undefined;
+}
 const problem = ref<AppProblem>();
 let loadGeneration = 0;
 const gateDecisionOptions = [
@@ -123,10 +130,15 @@ function updateFieldOptions(field: WorkflowInputFieldInput, event: Event) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
-function toggleCapability(step: WorkflowStepInput, key: string) {
+function toggleCapability(
+  step: WorkflowStepInput,
+  key: string,
+  enabled: boolean,
+) {
+  if (!canEdit.value || busy.value) return;
   const index = step.requiredCapabilityKeys.indexOf(key);
-  if (index >= 0) step.requiredCapabilityKeys.splice(index, 1);
-  else step.requiredCapabilityKeys.push(key);
+  if (index >= 0 && !enabled) step.requiredCapabilityKeys.splice(index, 1);
+  else if (index < 0 && enabled) step.requiredCapabilityKeys.push(key);
 }
 function toggleDecision(
   step: WorkflowStepInput,
@@ -250,7 +262,10 @@ function launchRoute(): string {
 }
 watch(
   () => [projectRef.value, workflowRef.value],
-  () => void load(),
+  () => {
+    publishedCapabilitiesStep.value = "";
+    void load();
+  },
   { immediate: true },
 );
 onBeforeUnmount(() => {
@@ -521,24 +536,44 @@ onBeforeUnmount(() => {
                   </fieldset>
                   <fieldset class="choice-field field--wide">
                     <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
-                    <label
-                      v-for="capability in platform.capabilities"
-                      :key="capability.key"
-                      class="check-field"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="
-                          step.requiredCapabilityKeys.includes(capability.key)
+                    <EffectiveCapabilityCatalog
+                      v-if="step.agentRef"
+                      :agent-ref="step.agentRef"
+                      :project-ref="projectRef"
+                      mode="REQUIREMENTS"
+                      :selected-keys="step.requiredCapabilityKeys"
+                      :can-manage="Boolean(canEdit)"
+                      :busy="busy"
+                      @toggle="
+                        (key, enabled) => toggleCapability(step, key, enabled)
+                      "
+                    />
+                    <div v-if="publishedStep(step.position)?.agentRef">
+                      <button
+                        type="button"
+                        class="button button--secondary"
+                        @click="
+                          publishedCapabilitiesStep =
+                            publishedCapabilitiesStep ===
+                            publishedStep(step.position)!.ref
+                              ? ''
+                              : publishedStep(step.position)!.ref
                         "
-                        @change="toggleCapability(step, capability.key)"
-                      />{{ capability.name }}
-                    </label>
-                    <span
-                      v-if="!platform.capabilities.length"
-                      class="secondary-copy"
-                      >{{ $t("common.noData") }}</span
-                    >
+                      >
+                        {{ $t("capabilityAuthority.publishedStep") }}
+                      </button>
+                      <EffectiveCapabilityCatalog
+                        v-if="
+                          publishedCapabilitiesStep ===
+                          publishedStep(step.position)!.ref
+                        "
+                        :agent-ref="publishedStep(step.position)!.agentRef!"
+                        :project-ref="projectRef"
+                        :workflow-ref="workflowRef"
+                        :step-key="publishedStep(step.position)!.ref"
+                        mode="READ"
+                      />
+                    </div>
                   </fieldset>
                 </div>
               </details>
