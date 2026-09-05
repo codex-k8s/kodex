@@ -4,7 +4,7 @@ title: Сервис secret-broker
 type: repository-readme
 status: approved
 owner: backend
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-05
 ---
 
@@ -28,7 +28,9 @@ immutable значения находятся в `kodex-runtime`, зашифро
 - `TranscriptionCredentialProjectionService` возвращает API key только для
   exact System STT config/account/credential generation;
 - `ProviderCredentialMaterializerService` создаёт и удаляет provider
-  credential materialization по owner-командам control-plane.
+  credential materialization по owner-командам control-plane; отдельный
+  `ObserveProviderModelCatalog` возвращает только безопасные возможности
+  моделей для exact account/credential task, без credential или provider payload.
 
 Projection RPC защищены mTLS, одноразовым internal authorization context и
 закрытым operation registry. Runtime projection хранит immutable manifest для
@@ -52,3 +54,6 @@ make test-authority-policy-codegen
 
 Жизненный цикл черновика, bootstrap/rotation и ограничения checkpoint — в
 [`secret-drafts-1068.md`](../../../docs/operations/secret-drafts-1068.md).
+
+Полномочия, источник и ограничения каталога моделей описаны в
+[`provider-model-catalog-1068.md`](../../../docs/operations/provider-model-catalog-1068.md).

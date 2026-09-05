@@ -177,6 +177,9 @@ func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, 
 }
 
 func validProjectionProject(method string, project *internalrpcauthorityv1.AuthorityIdentity) bool {
+	if method == controlplanev1.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName {
+		return project == nil
+	}
 	if method == secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName {
 		return project == nil
 	}
