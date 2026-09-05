@@ -16,7 +16,7 @@ WITH requested(ref) AS (
       ON environment.id = binding.environment_set_id
      AND environment.state = 'ACTIVE'
     JOIN control_plane.runtime_environment_versions environment_version
-      ON environment_version.id = environment.current_version_id
+      ON environment_version.id = binding.environment_version_id
     JOIN control_plane.image_artifacts artifact
       ON artifact.id = environment_version.role_image_artifact_id
      AND artifact.organization_id = agent.organization_id

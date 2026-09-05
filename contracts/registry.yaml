@@ -5,9 +5,19 @@ packages:
     owner: email-bridge
     source: contracts/openapi/email-bridge/v1/openapi.yaml
     generated:
-      go: services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go
+      go: libs/go/emailbridgeapi/api.gen.go
     consumers:
       - integration-gateway
+      - email-bridge
+      - control-plane
+  - id: email-bridge-configuration-v1
+    format: json-schema
+    owner: email-bridge
+    source: contracts/email-bridge/v1/configuration.schema.json
+    consumers:
+      - email-bridge
+      - control-plane
+      - control-center
   - id: egress-gateway-policy-v1
     format: json-schema
     owner: egress-gateway
@@ -83,6 +93,13 @@ packages:
     format: json-schema
     owner: runtime-controller
     source: contracts/runtime-controller/v6/agent-runner-input.schema.json
+    consumers:
+      - runtime-controller
+      - agent-runner
+  - id: runtime-controller-agent-runner-input-v7
+    format: json-schema
+    owner: runtime-controller
+    source: contracts/runtime-controller/v7/agent-runner-input.schema.json
     consumers:
       - runtime-controller
       - agent-runner

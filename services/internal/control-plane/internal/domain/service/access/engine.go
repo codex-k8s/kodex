@@ -16,6 +16,7 @@ const maximumBindingWindow = 366 * 24 * time.Hour
 
 var definitions = []entity.PermissionDefinition{
 	permission("organization.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
+	permission("platform.stt.use", "WRITE", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("organization.manage", "ADMIN", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
@@ -150,7 +151,7 @@ func ValidateScope(scope entity.AccessScope) error {
 		}
 	case "RESOURCE_INSTANCE":
 		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "PROVIDER_ACCOUNT" ||
-			scope.ResourceKind == "ARTIFACT" && scope.ProjectRef == ""
+			(scope.ResourceKind == "ARTIFACT" || scope.ResourceKind == "RUN") && scope.ProjectRef == ""
 		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
 			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||
 			!organizationScoped && scope.ProjectRef == "" {

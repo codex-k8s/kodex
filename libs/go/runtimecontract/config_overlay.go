@@ -161,8 +161,8 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 }
 
 func ParseConfigOverlay(raw string) (ConfigOverlay, error) {
-	if ValidateConfigOverlayDraftPayload(raw) != nil {
-		return ConfigOverlay{}, errors.New("config overlay size or encoding is invalid")
+	if len(DiagnoseConfigOverlay(raw, nil)) != 0 {
+		return ConfigOverlay{}, errors.New("config overlay is invalid or protected")
 	}
 	var overlay ConfigOverlay
 	metadata, err := toml.Decode(raw, &overlay)
@@ -171,12 +171,6 @@ func ParseConfigOverlay(raw string) (ConfigOverlay, error) {
 	}
 	if undecoded := metadata.Undecoded(); len(undecoded) != 0 {
 		return ConfigOverlay{}, errors.New("config overlay contains unsupported keys")
-	}
-	if !containsString([]string{"", "none", "low", "medium", "high", "xhigh", "max"}, overlay.ModelReasoningEffort) ||
-		!containsString([]string{"", "none", "friendly", "pragmatic"}, overlay.Personality) ||
-		!containsString([]string{"", "save-all", "none"}, overlay.History.Persistence) ||
-		(overlay.AllowLoginShell != nil && *overlay.AllowLoginShell) {
-		return ConfigOverlay{}, errors.New("config overlay value is outside the allowlist")
 	}
 	return overlay, nil
 }

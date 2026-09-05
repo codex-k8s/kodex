@@ -19,6 +19,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
+	emailapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/google/go-github/v74/github"
 	"github.com/google/uuid"
@@ -33,8 +34,9 @@ const (
 )
 
 type Config struct {
-	CredentialDirectory, ProxyURL, SyntheticBaseURL string
-	Timeout                                         time.Duration
+	CredentialDirectory, ProxyURL, SyntheticBaseURL        string
+	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile string
+	Timeout                                                time.Duration
 }
 
 type CredentialRevision struct {
@@ -43,6 +45,7 @@ type CredentialRevision struct {
 }
 
 type Request struct {
+	EmailExecution                                                    *emailapi.ExecutionBinding
 	DefinitionKey, DefinitionVersion, DefinitionDigest, ConnectionRef string
 	CapabilityKey, Operation, Risk, ApprovalPolicy                    string
 	ResourceKind, ResourceScopeDigest, EffectKey, InputDigest         string
@@ -79,6 +82,7 @@ type Adapter struct {
 	githubHTTPClient   *http.Client
 	githubBaseURL      *url.URL
 	providerHTTPClient *http.Client
+	emailHTTPClient    *http.Client
 	syntheticClient    *http.Client
 	syntheticBaseURL   *url.URL
 	timeout            time.Duration
@@ -114,8 +118,13 @@ func New(config Config) (*Adapter, error) {
 	}
 	providerTransport := githubTransport.Clone()
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+	emailClient, err := newEmailClient(config)
+	if err != nil {
+		return nil, err
+	}
 	return &Adapter{
-		credentials: credentials, definitions: definitions,
+		emailHTTPClient: emailClient,
+		credentials:     credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{
@@ -141,7 +150,8 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 		configuration = claim.GetPublicConfiguration().AsMap()
 	}
 	return Request{
-		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		EmailExecution: emailExecutionBinding("", claim.GetTestRef(), claim.GetLease()),
+		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		Configuration: configuration, Credential: credentialFromProto(claim.GetCredentialRevision()),
 	}
@@ -163,7 +173,8 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		resourceScopeDigest = scope.GetDigest()
 	}
 	return Request{
-		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		EmailExecution: emailExecutionBinding(claim.GetInvocationRef(), "", claim.GetLease()),
+		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		CapabilityKey: claim.GetCapabilityKey(), Operation: claim.GetOperation(),
 		Risk:           strings.TrimPrefix(claim.GetRisk().String(), "INTEGRATION_RISK_"),

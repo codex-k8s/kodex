@@ -214,10 +214,12 @@ func credentialProjectionFromSecret(secret *corev1.Secret, checkData bool) (Cred
 }
 
 func validateCredentialProjectionManifest(value CredentialProjectionManifest, namespace string) error {
-	if namespace != "kodex-runtime" || value.Authority.ActorID == "" || value.Authority.TenantID == "" || value.Authority.ProjectID == "" ||
+	assistant := value.Authority.CallerFullMethod == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
+	if namespace != "kodex-runtime" || value.Authority.ActorID == "" || value.Authority.TenantID == "" ||
+		(assistant && (value.Authority.ProjectID != "" || len(value.RuntimeSecrets) != 0)) || (!assistant && value.Authority.ProjectID == "") ||
 		value.Authority.ProofJTI == "" || value.Authority.SourceRevision == 0 || value.Authority.CallerCredentialRevision == 0 ||
 		!validProjectionDigest(value.Authority.SourceDigestSHA256) || value.Authority.CallerWorkloadID != "runtime-controller" ||
-		value.Authority.CallerFullMethod != "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials" ||
+		(!assistant && value.Authority.CallerFullMethod != "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials") ||
 		value.WorkloadInstance == "" || value.LeaseRef == "" || value.Generation < 1 || value.Attempt < 1 ||
 		value.RuntimeRevisionRef == "" || value.SessionRef == "" || value.TurnRef == "" || !validProjectionDigest(value.RuntimeRevisionDigest) ||
 		!validProjectionDigest(value.InputDigest) || value.ExpiresAt.IsZero() || value.ProviderCredential.AccountRef == "" ||

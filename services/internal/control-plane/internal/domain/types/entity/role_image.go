@@ -41,6 +41,7 @@ type RoleEnvironmentSelection struct {
 }
 
 type RoleImageRecipe struct {
+	ManagedLineage                                                   *RoleImageManagedLineage
 	Ref, ProjectRef, RoleDefinitionRef, Name, State                  string
 	SpecSHA256, PolicySHA256, RoleRuntimeContractSHA256              string
 	ActiveImageArtifactRef, PromotedImageReference                   string
@@ -51,6 +52,7 @@ type RoleImageRecipe struct {
 }
 
 type ImageBuild struct {
+	ConfigurationRevisionRef                                              string
 	Ref, RecipeRef, SpecSHA256, Stage, StagingReference, ManifestDigest   string
 	ProvenanceSHA256, ImmutableBuildSHA256, SafeErrorCode, DiagnosticCode string
 	DiagnosticSummary, LeaseTokenSHA256, ClaimantWorkload                 string
@@ -59,6 +61,11 @@ type ImageBuild struct {
 	LeaseExpiresAt                                                        *time.Time
 	CreatedAt, UpdatedAt                                                  time.Time
 	Dockerfile                                                            string
+}
+
+type RoleImageManagedLineage struct {
+	ConfigurationRef, RevisionRef, ManagedBy, SourceRef, SourceRevision, Origin string
+	Revision                                                                    int64
 }
 
 type ImageArtifact struct {

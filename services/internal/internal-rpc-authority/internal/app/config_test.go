@@ -13,6 +13,18 @@ func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 		resolver   bool
 	}{
 		{
+			name: "email bridge issuer", mode: ModeIssuer,
+			workloadID: "email-bridge",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/email-bridge",
+			prefix:     "internal-rpc-authority-email-bridge-issuer",
+		},
+		{
+			name: "interaction gateway issuer", mode: ModeIssuer,
+			workloadID: "interaction-gateway",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+			prefix:     "internal-rpc-authority-interaction-gateway-issuer",
+		},
+		{
 			name: "runtime controller issuer", mode: ModeIssuer,
 			workloadID: "runtime-controller",
 			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
@@ -75,5 +87,20 @@ func TestApplyWorkloadProfileRejectsUnknownBinding(t *testing.T) {
 	}
 	if err := applyWorkloadProfile(&config); err == nil {
 		t.Fatal("unregistered workload binding was accepted")
+	}
+}
+
+func TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole(t *testing.T) {
+	t.Parallel()
+	for _, workload := range []string{"email-bridge", "interaction-gateway"} {
+		for _, config := range []Config{
+			{Mode: ModeIssuer, WorkloadID: workload, WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/control-plane"},
+			{Mode: ModeVerifier, WorkloadID: workload, WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/" + workload},
+		} {
+			config.SecretBackend = string(secretBackendKubernetes)
+			if err := applyWorkloadProfile(&config); err == nil {
+				t.Fatal("foreign identity or unsupported verifier profile was accepted")
+			}
+		}
 	}
 }

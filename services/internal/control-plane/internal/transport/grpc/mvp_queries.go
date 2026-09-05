@@ -83,17 +83,31 @@ func (server *Server) ListModelCapabilities(ctx context.Context, request *contro
 	if err != nil {
 		return nil, err
 	}
-	items, total, next, err := server.service.ListModelCapabilities(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+	catalog, err := server.service.ListModelCatalog(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+		ExpectedCatalogRevision: request.GetExpectedCatalogRevision(), ExpectedCatalogDigest: request.GetExpectedCatalogDigest(),
 		Query: request.GetQuery(), Page: page(request.GetPage()),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListModelCapabilitiesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
+	return castModelCatalog(catalog), nil
+}
+
+func castModelCatalog(catalog entity.ModelCatalog) *controlplanev1.ListModelCapabilitiesResponse {
+	response := &controlplanev1.ListModelCapabilitiesResponse{Total: catalog.Total, Page: &controlplanev1.PageInfo{NextPageToken: catalog.NextPageToken}, CatalogRevision: catalog.Revision, CatalogDigest: catalog.Digest}
+	if catalog.Status != nil {
+		value := catalog.Status
+		response.CatalogStatus = &controlplanev1.ProviderModelCatalogStatus{
+			State:      controlplanev1.ProviderModelCatalogState(controlplanev1.ProviderModelCatalogState_value["PROVIDER_MODEL_CATALOG_STATE_"+value.State]),
+			Source:     controlplanev1.ProviderModelCatalogSource(controlplanev1.ProviderModelCatalogSource_value["PROVIDER_MODEL_CATALOG_SOURCE_"+value.Source]),
+			Failure:    controlplanev1.ProviderModelCatalogFailure(controlplanev1.ProviderModelCatalogFailure_value["PROVIDER_MODEL_CATALOG_FAILURE_"+value.Failure]),
+			ObservedAt: optionalTimestamp(value.ObservedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt),
+		}
+	}
+	for _, item := range catalog.Models {
 		response.Models = append(response.Models, castModelCapability(item))
 	}
-	return response, nil
+	return response
 }
 
 func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapability {

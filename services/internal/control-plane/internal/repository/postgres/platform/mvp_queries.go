@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -56,104 +58,80 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 		if enabled, _ := capabilityMap["deviceAuthorization"].(bool); enabled {
 			item.AuthorizationMethods = append([]string{"DEVICE_CODE"}, item.AuthorizationMethods...)
 		}
-		item.DefaultModelID = repository.defaultRuntimeModel
-		for _, model := range modelcatalog.Models(nil) {
-			item.ModelIDs = append(item.ModelIDs, model.ID)
-			item.Models = append(item.Models, entity.ModelCapability{ID: model.ID, ProviderDefinitionKey: item.Key,
-				DefaultReasoningEffort: model.DefaultEffort, ReasoningEfforts: model.Efforts, Available: item.Available})
-		}
-		item.Ready = item.Available
-		if !item.Ready {
-			item.ReadinessBlockers = []string{"PROVIDER_DISABLED"}
-		}
 		items = append(items, item)
 	}
 	if rows.Err() != nil {
 		return nil, "", errs.ErrUnavailable
 	}
+	rows.Close()
 	next := ""
 	if len(items) > int(limit) {
 		items = items[:limit]
 		next = items[len(items)-1].Key
 	}
+	for index := range items {
+		item := &items[index]
+		catalog, err := readModelCatalogTx(ctx, tx, current, item.Key, "")
+		if err != nil {
+			return nil, "", err
+		}
+		item.Models = catalog.Models
+		for _, model := range catalog.Models {
+			item.ModelIDs = append(item.ModelIDs, model.ID)
+			if model.Available {
+				item.Ready = true
+				if model.ID == repository.defaultRuntimeModel {
+					item.DefaultModelID = model.ID
+				}
+			}
+		}
+		if !item.Available {
+			item.Ready = false
+			item.ReadinessBlockers = []string{"PROVIDER_DISABLED"}
+		} else if !item.Ready {
+			item.ReadinessBlockers = []string{"ELIGIBLE_PROVIDER_MODEL_MISSING"}
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, "", errs.ErrConflict
 	}
-	_ = current
 	return items, next, nil
 }
 
 type modelCapabilityCursor struct {
+	CatalogRevision       string `json:"r"`
+	CatalogDigest         string `json:"d"`
 	Version               int    `json:"v"`
 	Filter                string `json:"f"`
 	ProviderDefinitionKey string `json:"p"`
 	Model                 string `json:"m"`
 }
 
-func (repository *Repository) ListModelCapabilities(ctx context.Context, principal value.Principal, definitionKey, accountRef string, filter query.Filter) ([]entity.ModelCapability, int64, string, error) {
+func (repository *Repository) ListModelCapabilities(ctx context.Context, principal value.Principal, definitionKey, accountRef string, filter query.Filter) (entity.ModelCatalog, error) {
 	current, tx, err := repository.authorizedRead(ctx, principal, "organization.view", func(current scope) entity.AccessScope {
 		return organizationTarget(current.organizationRef)
 	})
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if definitionKey != "" && !validStableKey(definitionKey) || accountRef != "" && (!strings.HasPrefix(accountRef, "pacc_") || len(accountRef) > 96) || len([]rune(filter.Query)) > 200 {
-		return nil, 0, "", errs.ErrInvalid
+		return entity.ModelCatalog{}, errs.ErrInvalid
 	}
-	cursor, err := decodeModelCapabilityCursor(filter.Page.Token, definitionKey, accountRef, filter.Query)
+	cursor, err := decodeModelCapabilityCursor(filter.Page.Token, definitionKey, accountRef, modelCatalogActorFilter(current, filter.Query))
 	if err != nil {
-		return nil, 0, "", err
+		return entity.ModelCatalog{}, err
 	}
-	rows, err := tx.Query(ctx, queryMVPListModelCapabilities, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "provider_definition_key": definitionKey,
-		"provider_account_ref": accountRef,
-	})
+	catalog, err := readModelCatalogTx(ctx, tx, current, definitionKey, accountRef)
 	if err != nil {
-		return nil, 0, "", errs.ErrUnavailable
+		return entity.ModelCatalog{}, err
 	}
-	defer rows.Close()
-	result := make([]entity.ModelCapability, 0)
-	foundAccount := accountRef == ""
-	for rows.Next() {
-		var key string
-		var enabled bool
-		var raw []byte
-		var eligibleAccounts, matchedAccounts, accountBlockers []string
-		if err := rows.Scan(&key, &enabled, &raw, &eligibleAccounts, &matchedAccounts, &accountBlockers); err != nil {
-			return nil, 0, "", errs.ErrUnavailable
-		}
-		var capabilities map[string]any
-		if json.Unmarshal(raw, &capabilities) != nil {
-			return nil, 0, "", errs.ErrUnavailable
-		}
-		if len(matchedAccounts) != 0 {
-			foundAccount = true
-		}
-		sort.Strings(accountBlockers)
-		reportedModels := []string(nil)
-		if accountRef != "" {
-			reportedModels = providerReportedModels(capabilities)
-		}
-		for _, model := range modelcatalog.Models(reportedModels) {
-			item := entity.ModelCapability{ID: model.ID, ProviderDefinitionKey: key,
-				DefaultReasoningEffort: model.DefaultEffort, ReasoningEfforts: model.Efforts,
-				EligibleProviderAccountRefs: eligibleAccounts, Available: enabled && len(eligibleAccounts) != 0}
-			if !enabled {
-				item.ReadinessBlockers = []string{"PROVIDER_DISABLED"}
-			} else if len(eligibleAccounts) == 0 && len(accountBlockers) != 0 {
-				item.ReadinessBlockers = append([]string(nil), accountBlockers...)
-			} else if len(eligibleAccounts) == 0 {
-				item.ReadinessBlockers = []string{"ELIGIBLE_PROVIDER_ACCOUNT_MISSING"}
-			}
-			result = append(result, item)
-		}
+	result, revision, digest := catalog.Models, catalog.Revision, catalog.Digest
+	if (filter.ExpectedCatalogRevision != "" || filter.ExpectedCatalogDigest != "") && (filter.ExpectedCatalogRevision != revision || filter.ExpectedCatalogDigest != digest) {
+		return entity.ModelCatalog{}, errs.ErrInvalid
 	}
-	if rows.Err() != nil {
-		return nil, 0, "", errs.ErrUnavailable
-	}
-	if !foundAccount {
-		return nil, 0, "", errs.ErrNotFound
+	if cursor.Model != "" && (cursor.CatalogDigest != digest || cursor.CatalogRevision != revision) {
+		return entity.ModelCatalog{}, errs.ErrInvalid
 	}
 	needle := strings.ToLower(strings.TrimSpace(filter.Query))
 	filtered := make([]entity.ModelCapability, 0, len(result))
@@ -172,7 +150,7 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 			}
 		}
 		if start == 0 {
-			return nil, 0, "", errs.ErrInvalid
+			return entity.ModelCatalog{}, errs.ErrInvalid
 		}
 	}
 	limit := int(boundedPage(filter.Page))
@@ -181,15 +159,97 @@ func (repository *Repository) ListModelCapabilities(ctx context.Context, princip
 	next := ""
 	if end < len(filtered) {
 		last := items[len(items)-1]
-		next = encodeModelCapabilityCursor(last.ProviderDefinitionKey, last.ID, definitionKey, accountRef, filter.Query)
+		next = encodeModelCapabilityCursor(last.ProviderDefinitionKey, last.ID, definitionKey, accountRef, modelCatalogActorFilter(current, filter.Query), revision, digest)
 		if next == filter.Page.Token {
-			return nil, 0, "", errs.ErrConflict
+			return entity.ModelCatalog{}, errs.ErrConflict
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, 0, "", errs.ErrConflict
+		return entity.ModelCatalog{}, errs.ErrConflict
 	}
-	return items, total, next, nil
+	return entity.ModelCatalog{Models: items, Total: total, NextPageToken: next, Revision: revision, Digest: digest, Status: catalog.Status}, nil
+}
+
+func readModelCatalogTx(ctx context.Context, tx pgx.Tx, current scope, definitionKey, accountRef string) (entity.ModelCatalog, error) {
+	rows, err := tx.Query(ctx, queryMVPListModelCapabilities, pgx.StrictNamedArgs{"organization_id": current.organizationID, "provider_definition_key": definitionKey, "provider_account_ref": accountRef})
+	if err != nil {
+		return entity.ModelCatalog{}, errs.ErrUnavailable
+	}
+	defer rows.Close()
+	result := entity.ModelCatalog{Models: []entity.ModelCapability{}}
+	sources := []string{}
+	positions := map[string]int{}
+	conflicts := map[string]bool{}
+	for rows.Next() {
+		var key, ref, blocker, source string
+		var raw []byte
+		var status entity.ModelCatalogStatus
+		if rows.Scan(&key, &ref, &raw, &blocker, &status.State, &status.ObservedAt, &status.ExpiresAt, &status.Source, &status.Failure, &source) != nil {
+			return entity.ModelCatalog{}, errs.ErrUnavailable
+		}
+		sources = append(sources, source)
+		if len(sources) > 4096 || len(raw) > 131072 || len(source) > 1048576 {
+			return entity.ModelCatalog{}, errs.ErrUnavailable
+		}
+		if accountRef != "" {
+			result.Status = &status
+		}
+		var records []platformrepo.ProviderModelCatalogRecord
+		if decodeStrict(raw, &records) != nil || len(records) > 128 {
+			return entity.ModelCatalog{}, errs.ErrUnavailable
+		}
+		for _, record := range records {
+			modelKey := key + "\x00" + record.ID
+			position, exists := positions[modelKey]
+			if !exists {
+				position = len(result.Models)
+				positions[modelKey] = position
+				result.Models = append(result.Models, entity.ModelCapability{ID: record.ID, ProviderDefinitionKey: key, DefaultReasoningEffort: record.DefaultReasoningEffort, ReasoningEfforts: append([]string{}, record.ReasoningEfforts...)})
+			}
+			item := &result.Models[position]
+			if item.DefaultReasoningEffort != record.DefaultReasoningEffort || !slices.Equal(item.ReasoningEfforts, record.ReasoningEfforts) {
+				conflicts[modelKey] = true
+			}
+			if blocker == "" {
+				item.EligibleProviderAccountRefs = append(item.EligibleProviderAccountRefs, ref)
+			} else if !slices.Contains(item.ReadinessBlockers, blocker) {
+				item.ReadinessBlockers = append(item.ReadinessBlockers, blocker)
+			}
+		}
+	}
+	if rows.Err() != nil {
+		return entity.ModelCatalog{}, errs.ErrUnavailable
+	}
+	if accountRef != "" && result.Status == nil {
+		return entity.ModelCatalog{}, errs.ErrNotFound
+	}
+	for index := range result.Models {
+		item := &result.Models[index]
+		if conflicts[item.ProviderDefinitionKey+"\x00"+item.ID] {
+			item.EligibleProviderAccountRefs = nil
+			item.ReadinessBlockers = []string{"MODEL_CATALOG_CAPABILITIES_CONFLICT"}
+		}
+		item.Available = len(item.EligibleProviderAccountRefs) > 0
+		if item.Available {
+			item.ReadinessBlockers = nil
+		}
+		sort.Strings(item.ReadinessBlockers)
+	}
+	slices.SortFunc(result.Models, func(a, b entity.ModelCapability) int {
+		if a.ProviderDefinitionKey != b.ProviderDefinitionKey {
+			return strings.Compare(a.ProviderDefinitionKey, b.ProviderDefinitionKey)
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	// Content pin не включает наблюдаемое время, expiry и результат текущей eligibility.
+	digest, err := modelcatalog.Digest(nil, sources...)
+	if err != nil {
+		return entity.ModelCatalog{}, errs.ErrUnavailable
+	}
+	result.Digest = digest
+	result.Revision = "mcat_" + digest
+	result.Total = int64(len(result.Models))
+	return result, nil
 }
 
 func modelCapabilityFilterDigest(definitionKey, accountRef, queryValue string) string {
@@ -197,8 +257,8 @@ func modelCapabilityFilterDigest(definitionKey, accountRef, queryValue string) s
 	return base64.RawURLEncoding.EncodeToString(sum[:12])
 }
 
-func encodeModelCapabilityCursor(definitionKey, model, filterDefinitionKey, accountRef, queryValue string) string {
-	raw, _ := json.Marshal(modelCapabilityCursor{Version: 1,
+func encodeModelCapabilityCursor(definitionKey, model, filterDefinitionKey, accountRef, queryValue, revision, digest string) string {
+	raw, _ := json.Marshal(modelCapabilityCursor{Version: 2, CatalogRevision: revision, CatalogDigest: digest,
 		Filter: modelCapabilityFilterDigest(filterDefinitionKey, accountRef, queryValue), ProviderDefinitionKey: definitionKey, Model: model})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
@@ -208,29 +268,19 @@ func decodeModelCapabilityCursor(token, definitionKey, accountRef, queryValue st
 		return modelCapabilityCursor{}, nil
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) > 1024 {
+	if err != nil || len(token) > 512 || len(raw) > 512 {
 		return modelCapabilityCursor{}, errs.ErrInvalid
 	}
 	var cursor modelCapabilityCursor
-	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Filter != modelCapabilityFilterDigest(definitionKey, accountRef, queryValue) ||
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 2 || cursor.Filter != modelCapabilityFilterDigest(definitionKey, accountRef, queryValue) ||
 		cursor.ProviderDefinitionKey == "" || cursor.Model == "" {
 		return modelCapabilityCursor{}, errs.ErrInvalid
 	}
 	return cursor, nil
 }
 
-func providerReportedModels(capabilities map[string]any) []string {
-	raw, ok := capabilities["modelIds"].([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]string, 0, len(raw))
-	for _, value := range raw {
-		if model, ok := value.(string); ok {
-			result = append(result, model)
-		}
-	}
-	return result
+func modelCatalogActorFilter(current scope, queryValue string) string {
+	return strings.Join([]string{current.organizationID, current.actorID, current.authorityProjectID, strings.TrimSpace(queryValue)}, "\x00")
 }
 
 func (repository *Repository) ListProviderAccounts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.ProviderAccount, string, []string, error) {
