@@ -101,14 +101,17 @@ WITH eligible_accounts AS (
     RETURNING id, environment_set_id
 ), binding AS (
     INSERT INTO control_plane.agent_runtime_environment_bindings
-        (ref, organization_id, agent_id, environment_set_id, digest, updated_by)
+        (ref, organization_id, agent_id, environment_set_id, environment_version_id, digest, updated_by)
     SELECT @binding_ref, @organization_id::uuid, @agent_id::uuid, environment.id,
+           CASE WHEN agent.project_id IS NULL AND agent.system_key = 'system-assistant' THEN NULL
+                ELSE COALESCE(inserted_environment_version.id, environment.current_version_id) END,
            encode(digest(convert_to(agent.ref, 'UTF8') || decode('00', 'hex') ||
                          convert_to(environment.ref, 'UTF8') || decode('00', 'hex') ||
                          convert_to('1', 'UTF8') || decode('00', 'hex'), 'sha256'), 'hex'),
            @created_by::uuid
     FROM environment
     JOIN control_plane.agents agent ON agent.id = @agent_id::uuid
+    LEFT JOIN inserted_environment_version ON inserted_environment_version.environment_set_id = environment.id
     RETURNING id
 ), updated_agent AS (
     UPDATE control_plane.agents agent

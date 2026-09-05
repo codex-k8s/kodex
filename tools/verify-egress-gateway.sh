@@ -67,7 +67,7 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     .automountServiceAccountToken == false and
     ((.imagePullSecrets // []) | length) == 0' "$gateway_render" >/dev/null
 
-  policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != "") | .metadata.name' "$gateway_render")"
+  policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != null and .data."policy.json" != "") | .metadata.name' "$gateway_render")"
   if [[ ! "$policy_name" =~ ^egress-gateway-policy-[a-z0-9]+$ ]]; then
     echo "rendered immutable policy is not content-addressed" >&2
     exit 1
@@ -84,7 +84,8 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     .spec.selector."app.kubernetes.io/component" == "platform-egress" and
     ([.spec.ports[] | select(.name == "connect" and .port == 8080)] | length == 1) and
     ([.spec.ports[] | select(.name == "stt-connect" and .port == 8081 and .targetPort == "stt-connect")] | length == 1) and
-    (.spec.ports | length == 2)' "$gateway_render" >/dev/null
+    ([.spec.ports[] | select(.name == "mail-connect" and .port == 8082 and .targetPort == "mail-connect")] | length == 1) and
+    (.spec.ports | length == 3)' "$gateway_render" >/dev/null
 
   yq -e 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
     ([.spec.template.spec.containers[0].env[] | select(.name == "EGRESS_GATEWAY_STT_CONNECT_LISTEN" and .value == ":8081")] | length == 1) and
@@ -95,7 +96,11 @@ for gateway_render in "$base_render" "$staging_render" "$production_render"; do
     ([.spec.ports[] | select(.name == "metrics" and .port == 9090)] | length == 1)' "$gateway_render" >/dev/null
 
   yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "egress-gateway-exact-runtime-paths") |
-    (.spec.ingress | length == 3) and (.spec.egress | length == 3) and
+    (.spec.ingress | length == 4) and (.spec.egress | length == 3) and
+    ([.spec.ingress[] | select(.ports[].port == 8082) | .from[]] | length == 1) and
+    ([.spec.ingress[] | select(.ports[].port == 8082) | .from[] |
+      select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
+        .podSelector.matchLabels."app.kubernetes.io/name" == "email-bridge")] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8081) | .from[]] | length == 1) and
     ([.spec.ingress[] | select(.ports[].port == 8081) | .from[] |
       select(.namespaceSelector.matchLabels."kubernetes.io/metadata.name" == "kodex-system" and
@@ -239,8 +244,8 @@ sed -i \
   "$rollout_base/deployment.yaml"
 next_render="$temporary_directory/next-policy.yaml"
 kubectl kustomize "$rollout_base" >"$next_render"
-current_policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != "") | .metadata.name' "$base_render")"
-next_policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != "") | .metadata.name' "$next_render")"
+current_policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != null and .data."policy.json" != "") | .metadata.name' "$base_render")"
+next_policy_name="$(yq -r 'select(.kind == "ConfigMap" and .immutable == true and .data."policy.json" != null and .data."policy.json" != "") | .metadata.name' "$next_render")"
 next_reference="$(yq -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
   .spec.template.spec.volumes[] | select(.name == "policy") | .configMap.name' "$next_render")"
 if [[ "$current_policy_name" == "$next_policy_name" || "$next_policy_name" != "$next_reference" ]]; then

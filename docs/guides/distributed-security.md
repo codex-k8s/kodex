@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.9
-updated: 2026-09-03
+version: 1.4.10
+updated: 2026-09-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -197,6 +197,15 @@ grant. Идентификаторы из полезной нагрузки RPC �
 доверенного ключа, остаётся неизменным при таком обновлении и связывает claim,
 renew и complete одной работы. Ротация ключа меняет поколение и закрыто
 отклоняет продолжение работы, заявленной предыдущим credential.
+
+Локальный signer связывает полный key ID с точными workload и поколением,
+а не только с совпавшим префиксом. Его readback проверяет подпись и весь
+назначенный сервером набор identity claims. Добавление workload одновременно
+охватывает закрытый signer registry, индивидуальные ключи fresh install,
+публичный trust потребителя, issuer profile, PostgreSQL LOGIN/CONNECT/SET,
+реестр доставки, точные Secrets/RBAC и оба направления сетевого пути.
+Проверки итоговых профилей сохраняют изоляцию optional consumer; наличие
+только декларации операции либо Secret mount не доказывает рабочую выдачу.
 
 Ресурс, который выдаёт полномочия либо управляет исполнением, не изменяется
 универсальным CRUD. Специализированная команда назначает owner и начальное
@@ -487,6 +496,15 @@ Projected secret file считается допустимым только пр�
   записи/исполнения;
 - путь, metadata и содержимое credential не попадают в логи и внешние ошибки.
 
+Если документ конфигурации и credentials поставляются одним обновляемым
+Secret, consumer читает их из одного закреплённого поколения AtomicWriter,
+а не разрешает `..data` отдельно для каждого файла. Обслуживаемый snapshot
+заменяется целиком только после строгой проверки и durable revision/digest
+watermark. Ошибка загрузки или rollback закрывает новые операции; старый
+snapshot не превращается в обход проверки свежести у авторитетного владельца.
+Mount с `subPath` не подходит для этого lifecycle, поскольку не получает
+обновления Secret.
+
 Projected ServiceAccount token проверяется отдельным API. Kubelet вправе
 публиковать его с mode `0640` как root-owned либо принадлежащий UID/GID
 non-root процесса из-за Pod `fsGroup`. Во втором случае совпадение владельца и
@@ -563,6 +581,18 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
+  Он не получает direct outbound: producer из того же version-pinned typed
+  mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.
+  Runtime policy и CNI `/32`/`/128` pins создаются вместе; destination-less
+  mail egress запрещён. Закрытый набор: SMTP `465/implicit`, `587/starttls`,
+  POP3 `995/implicit`, `110/starttls`, IMAP `993/implicit`, `143/starttls`.
+  Implicit TLS сохраняет проверку ClientHello до dial. Для STARTTLS greeting
+  предшествует TLS, поэтому gateway после exact policy/DNS проверки создаёт
+  opaque tunnel без TLS termination или разбора почтовых команд. Обязательные
+  TLS upgrade, exact hostname/CA и запрет credentials до TLS принадлежат
+  email-bridge. Изменение DNS вне pins закрывает доступ до новой согласованной
+  проекции; фильтрация небезопасной части ответа и fallback запрещены.
 - Отдельный сетевой профиль связывает immutable workload/operation/destination
   с принадлежащим серверу listener и точными CNI selectors; caller header не
   назначает профиль. Readiness и CONNECT возвращают фактически обслуживаемые

@@ -21,6 +21,8 @@ const (
 )
 
 type Config struct {
+	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
+	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
 	TechnicalListen                 string        `env:"CONTROL_PLANE_TECHNICAL_LISTEN"`
 	ServerCertificateFile           string        `env:"CONTROL_PLANE_TLS_CERTIFICATE_FILE"`
@@ -56,6 +58,7 @@ type Config struct {
 	IntegrationCredentialNamespace  string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE"`
 	IntegrationCredentialSecretName string        `env:"CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME"`
 	RuntimeSecretNamespace          string        `env:"CONTROL_PLANE_RUNTIME_SECRET_NAMESPACE"`
+	RuntimeSecretStagingNamespace   string        `env:"CONTROL_PLANE_RUNTIME_SECRET_STAGING_NAMESPACE"`
 	KubernetesAPITimeout            time.Duration `env:"CONTROL_PLANE_KUBERNETES_API_TIMEOUT"`
 	SecretBrokerTarget              string        `env:"CONTROL_PLANE_SECRET_BROKER_TARGET"`
 	SecretBrokerTLSServerName       string        `env:"CONTROL_PLANE_SECRET_BROKER_TLS_SERVER_NAME"`
@@ -75,6 +78,8 @@ type Config struct {
 	SessionArchiveGrantTrustFile    string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_GRANT_TRUST_FILE"`
 	IntegrationGrantTrustFile       string        `env:"CONTROL_PLANE_INTEGRATION_GRANT_TRUST_FILE"`
 	InteractionGrantTrustFile       string        `env:"CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE"`
+	EmailGrantTrustFile             string        `env:"CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE"`
+	EmailConfigurationFile          string        `env:"CONTROL_PLANE_EMAIL_CONFIGURATION_FILE"`
 	RuntimeGrantTrustFile           string        `env:"CONTROL_PLANE_RUNTIME_GRANT_TRUST_FILE"`
 	RoleImageBuilderGrantTrustFile  string        `env:"CONTROL_PLANE_ROLE_IMAGE_BUILDER_GRANT_TRUST_FILE"`
 	ImageAdmissionGrantTrustFile    string        `env:"CONTROL_PLANE_IMAGE_ADMISSION_GRANT_TRUST_FILE"`
@@ -122,7 +127,9 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		GRPCListen: ":8443", TechnicalListen: ":9090",
+		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
+		SkillScannerTimeout: 15 * time.Second,
+		GRPCListen:          ":8443", TechnicalListen: ":9090",
 		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
 		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
 		ClientCAFile:                    "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
@@ -149,6 +156,7 @@ func loadConfig() (Config, error) {
 		IntegrationCredentialNamespace:  "kodex-system",
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
 		RuntimeSecretNamespace:          "kodex-runtime",
+		RuntimeSecretStagingNamespace:   "kodex-secret-drafts",
 		KubernetesAPITimeout:            3 * time.Second,
 		SecretBrokerTarget:              providerTarget,
 		SecretBrokerTLSServerName:       providerTLSServerName,
@@ -199,6 +207,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
+		return errors.New("control-plane skill scanner configuration is invalid")
+	}
 	for _, address := range []string{config.GRPCListen, config.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("control-plane listen address is invalid")
@@ -212,6 +223,12 @@ func (config Config) validate() error {
 	if config.InteractionGrantTrustFile != "" && (!filepath.IsAbs(config.InteractionGrantTrustFile) || filepath.Clean(config.InteractionGrantTrustFile) != config.InteractionGrantTrustFile) {
 		return errors.New("control-plane interaction grant trust path is invalid")
 	}
+	if config.EmailGrantTrustFile != "" && (!filepath.IsAbs(config.EmailGrantTrustFile) || filepath.Clean(config.EmailGrantTrustFile) != config.EmailGrantTrustFile) {
+		return errors.New("control-plane email grant trust path is invalid")
+	}
+	if config.EmailConfigurationFile != "" && (!filepath.IsAbs(config.EmailConfigurationFile) || filepath.Clean(config.EmailConfigurationFile) != config.EmailConfigurationFile) {
+		return errors.New("control-plane email configuration path is invalid")
+	}
 	if config.PostgresTLSServerName == "" || net.ParseIP(config.PostgresTLSServerName) != nil ||
 		config.NATSTLSServerName == "" || net.ParseIP(config.NATSTLSServerName) != nil || config.NATSURL == "" ||
 		config.PostgresMaxConnections < 2 || config.PostgresMaxConnections > 64 ||
@@ -223,6 +240,7 @@ func (config Config) validate() error {
 		!validSHA256(config.DefaultProviderCredentialSHA256) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||
+		!validDNSLabel(config.RuntimeSecretStagingNamespace) || config.RuntimeSecretNamespace == config.RuntimeSecretStagingNamespace ||
 		config.KubernetesAPITimeout < 500*time.Millisecond || config.KubernetesAPITimeout > 10*time.Second ||
 		!validProviderCredentialBoundary(config) ||
 		config.ProviderIssuerUID == 0 || config.ProviderIssuerGID == 0 ||

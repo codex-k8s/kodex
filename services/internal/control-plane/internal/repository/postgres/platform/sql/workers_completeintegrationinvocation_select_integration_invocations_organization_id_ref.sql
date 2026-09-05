@@ -9,5 +9,5 @@ JOIN control_plane.runs r ON r.id=i.run_id
 JOIN control_plane.projects p ON p.id=r.project_id
 JOIN control_plane.run_nodes n ON n.id=i.node_id
 LEFT JOIN control_plane.integration_effect_receipts receipt ON receipt.id=i.effect_receipt_id
-WHERE i.organization_id=$1::uuid AND i.ref=$2
+WHERE i.organization_id=$1::uuid AND i.ref=$2 AND i.claimed_workload=$3
 FOR UPDATE OF i
