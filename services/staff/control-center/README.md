@@ -231,6 +231,20 @@ AsyncAPI generator также пишет Go-модели; из корня реп
 
 ## Матрица приёмки MVP #1022
 
+Проверенный накопленный code checkpoint:
+`128223747b7a3e533622eb5c6cd254b479394ad0`.
+Локально PASS: production build с typecheck, unit 815/815 в 168 файлах,
+полный lint, format:check, отдельный TypeScript check E2E и synthetic
+Playwright 12/12. Synthetic покрывает 1280/1440/1920/2560/2900, 900 и 390;
+новые model/history/file-selection сценарии дополнительно выполняются
+на 1440/390. Console/network assertions прошли. Скриншоты этого запуска
+сохранены в `/tmp/kodex-1022-128223747-synthetic.tgz`; это архив локальных
+безопасных fixtures, не staging и не проверка реального provider.
+Повтор OpenAPI generation на принятом HTTP `11401f0ac` дал пустой generated
+diff; после него исходный контракт не менялся. CI/live/staging/Safari:
+NOT RUN. Полный unit остаётся незавершённым по перечисленным ниже контрактным
+зависимостям; 12 тестов не означают 61 успешный приёмочный сценарий.
+
 Матрица связывает обязательный scope с кодом и проверками, но не заменяет
 итоговый отчёт exact SHA. Наличие строки не означает завершённую приёмку.
 Все пути ниже относительны `services/staff/control-center`; `*.test.ts` рядом
