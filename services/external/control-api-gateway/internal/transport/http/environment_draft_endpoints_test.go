@@ -27,6 +27,7 @@ type environmentDraftRecorder struct {
 	failure  error
 	empty    bool
 	bindings []*controlplanev1.RuntimeSecretBinding
+	mutate   func(*controlplanev1.RuntimeEnvironmentDraft)
 }
 
 func (client *environmentDraftRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -49,10 +50,16 @@ func (client *environmentDraftRecorder) Invoke(_ context.Context, method string,
 		draft.State = "DISCARDED"
 	}
 	target := response.(proto.Message).ProtoReflect()
+	if create, ok := request.(*controlplanev1.CreateRuntimeEnvironmentDraftRequest); ok {
+		draft.EnvironmentRef, draft.ExpectedEnvironmentVersion = create.GetEnvironmentRef(), create.GetExpectedEnvironmentVersion()
+	}
 	if strings.HasSuffix(method, "/PublishRuntimeEnvironmentDraft") {
 		draft.State, draft.PublishedEnvironmentRef = "PUBLISHED", "renv_fixture01"
 		draft.ValidationDigest = strings.Repeat("a", 64)
 		target.Set(target.Descriptor().Fields().ByName("environment"), protoreflect.ValueOfMessage((&controlplanev1.RuntimeEnvironmentSet{Ref: draft.PublishedEnvironmentRef, Version: 2}).ProtoReflect()))
+	}
+	if client.mutate != nil {
+		client.mutate(draft)
 	}
 	target.Set(target.Descriptor().Fields().ByName("draft"), protoreflect.ValueOfMessage(draft.ProtoReflect()))
 	return nil
@@ -211,6 +218,35 @@ func TestEnvironmentDraftPinsExistingEnvironmentVersion(t *testing.T) {
 		draftTestHandler(client).ServeHTTP(response, managedTestRequest(http.MethodPost, "/api/v1/projects/prj_fixture01/runtime-environment-drafts", `{`+prefix+`"specification":`+draftSpecBody+`}`))
 		if response.Code != http.StatusBadRequest || client.request != nil {
 			t.Fatal("unversioned environment draft reached RPC")
+		}
+	}
+}
+
+func TestEnvironmentDraftRejectsForeignReceipt(t *testing.T) {
+	for _, route := range []struct{ method, path, body string }{
+		{"GET", "/api/v1/runtime-environment-drafts/renvd_fixture01", ""},
+		{"PUT", "/api/v1/runtime-environment-drafts/renvd_fixture01", draftSpecBody},
+		{"POST", "/api/v1/runtime-environment-drafts/renvd_fixture01/validation", ""},
+		{"POST", "/api/v1/runtime-environment-drafts/renvd_fixture01/publication", ""},
+		{"DELETE", "/api/v1/runtime-environment-drafts/renvd_fixture01", ""},
+	} {
+		client := &environmentDraftRecorder{mutate: func(d *controlplanev1.RuntimeEnvironmentDraft) { d.Ref = "renvd_other01" }}
+		w := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(w, managedTestRequest(route.method, route.path, route.body))
+		if w.Code != 502 || strings.Contains(w.Body.String(), "renvd_other01") {
+			t.Fatalf("foreign receipt accepted: %s %s status=%d", route.method, route.path, w.Code)
+		}
+	}
+	for _, mutate := range []func(*controlplanev1.RuntimeEnvironmentDraft){
+		func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ProjectRef = "prj_other01" },
+		func(d *controlplanev1.RuntimeEnvironmentDraft) { d.EnvironmentRef = "renv_other01" },
+		func(d *controlplanev1.RuntimeEnvironmentDraft) { d.ExpectedEnvironmentVersion = 8 },
+	} {
+		client := &environmentDraftRecorder{mutate: mutate}
+		w := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/projects/prj_fixture01/runtime-environment-drafts", `{"environmentRef":"renv_fixture01","expectedEnvironmentVersion":7,"specification":`+draftSpecBody+`}`))
+		if w.Code != 502 {
+			t.Fatal("create receipt lost project/environment/version fence")
 		}
 	}
 }

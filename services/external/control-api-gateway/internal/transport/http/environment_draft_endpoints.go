@@ -17,7 +17,7 @@ func (server *Server) GetRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.
 		writeRPCProblem(w, err)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft())
+	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
 func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, projectRef generated.ProjectRef, p generated.CreateRuntimeEnvironmentDraftParams) {
@@ -53,7 +53,11 @@ func (server *Server) CreateRuntimeEnvironmentDraft(w http.ResponseWriter, r *ht
 		writeRPCProblem(w, err)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusCreated, response.GetDraft())
+	if response.GetDraft().GetEnvironmentRef() != stringValue(body.EnvironmentRef) || response.GetDraft().GetExpectedEnvironmentVersion() != expected {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeEnvironmentDraft(w, http.StatusCreated, response.GetDraft(), "", projectRef)
 }
 
 func (server *Server) SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.SaveRuntimeEnvironmentDraftParams) {
@@ -74,7 +78,7 @@ func (server *Server) SaveRuntimeEnvironmentDraft(w http.ResponseWriter, r *http
 		writeRPCProblem(w, err)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft())
+	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
 func (server *Server) ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.ValidateRuntimeEnvironmentDraftParams) {
@@ -87,7 +91,7 @@ func (server *Server) ValidateRuntimeEnvironmentDraft(w http.ResponseWriter, r *
 		writeRPCProblem(w, err)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft())
+	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
 func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.PublishRuntimeEnvironmentDraftParams) {
@@ -104,7 +108,7 @@ func (server *Server) PublishRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft())
+	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
 func (server *Server) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentDraftRef, p generated.DiscardRuntimeEnvironmentDraftParams) {
@@ -117,7 +121,7 @@ func (server *Server) DiscardRuntimeEnvironmentDraft(w http.ResponseWriter, r *h
 		writeRPCProblem(w, err)
 		return
 	}
-	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft())
+	writeEnvironmentDraft(w, http.StatusOK, response.GetDraft(), ref, "")
 }
 
 func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.RuntimeEnvironmentDraftSpecification) (*controlplanev1.RuntimeEnvironmentDraftSpecification, bool) {
@@ -138,8 +142,9 @@ func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.R
 	return result, true
 }
 
-func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft) {
+func writeEnvironmentDraft(w http.ResponseWriter, statusCode int, input *controlplanev1.RuntimeEnvironmentDraft, ref, project string) {
 	if input == nil || input.GetSpecification() == nil || input.GetRef() == "" || input.GetProjectRef() == "" ||
+		ref != "" && input.GetRef() != ref || project != "" && input.GetProjectRef() != project ||
 		input.GetVersion() < 1 || input.GetVersion() > maximumSafeJSONInteger || input.GetExpectedEnvironmentVersion() < 0 ||
 		input.GetExpectedEnvironmentVersion() > maximumSafeJSONInteger || len(input.GetDiagnostics()) > 64 {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)

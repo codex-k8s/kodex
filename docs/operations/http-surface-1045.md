@@ -54,6 +54,9 @@ OCC/idempotency и события сохраняют существующий li
 отклоняется до RPC; повреждённый pin ответа — 502.
 Published `secretDescriptors[].revision` также описан в SDK и проверяется как
 положительный exact pin. Kubernetes namespace не входит в публичную projection.
+Все existing-draft read/mutation ответы связываются с exact requested draftRef;
+create дополнительно сохраняет projectRef и исходную пару Environment/version.
+Несовпадение не выдаётся как успешный receipt другого ресурса.
 
 ## D5: typed mailbox, schema 056547091
 
