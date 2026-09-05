@@ -118,7 +118,7 @@ capability и исполнение effect остаются в существую
 | --- | --- | --- |
 | Mattermost | Optional inbound, notifications, result mirror и Human Gate decisions | Typed interaction adapter |
 | OpenAI Codex | Первый поставщик среды выполнения агента | Адаптер поставщика и device-code авторизация |
-| OpenAI Audio Transcriptions | Планируемое русское STT для Control Center | Неактивный `stt-tts-service`; после #1019/#1021/#1023/#1024 — `gpt-transcribe` и exact HTTPS через egress-gateway |
+| OpenAI Audio Transcriptions | Русское STT для Control Center | `stt-tts-service`: `gpt-transcribe`, exact HTTPS через egress-gateway; live acceptance требует отдельного test credential |
 | GitHub | Репозитории, Issues, PR и рецензирование | Типизированный управляемый MCP adapter по exact grant |
 | Kubernetes | Среда платформы и целевых проектов | Kubernetes платформы — внутренний runtime boundary; целевые кластеры — типизированный MCP adapter по exact grant |
 | Электронная почта | Прием и исходящая коммуникация | Управляемый MCP |
@@ -148,12 +148,15 @@ server-owned A/AAAA resolution с TTL/CNAME/special-purpose validation. TLS
 
 STT adapter допускает только `POST https://api.openai.com/v1/audio/transcriptions`
 с end-to-end TLS. Multipart содержит проверенный файл, server-pinned
-`model=gpt-transcribe` и `language=ru`; произвольные provider-параметры из
+Рекомендуются `model=gpt-transcribe`, `languages[]=ru,en`, `temperature=0`,
+`response_format=json`, 10 MiB/120 секунд. Каталог и model-specific параметры
+принадлежат STT adapter; CP immutable projection передаёт их consumer. Произвольные provider-параметры из
 browser отсутствуют. API key выдаёт `secret-broker` краткоживущей projection
 для exact actor/tenant/config/account generation и не получает
-`egress-gateway`. До materialization producer/consumer/authority из
-#1019/#1021/#1023/#1024 этот путь не включён в shipped profiles, а STT producer
-закрыто отказывает до projection RPC.
+`egress-gateway`. Небиллинговая availability-проверка использует
+`GET https://api.openai.com/v1/models/gpt-transcribe` через тот же exact TLS
+client и защищённые policy/credential projections. Локальная readiness этого
+не доказывает. Путь входит в shipped profiles; deploy отдельно разрешает владелец.
 
 ## Контракт согласования
 

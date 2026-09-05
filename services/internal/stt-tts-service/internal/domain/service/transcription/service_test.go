@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/modelprofile"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/audio/ffmpeg"
 )
 
 type fakePolicy struct {
@@ -58,19 +60,35 @@ type observed struct {
 	calls int
 }
 
+func TestInvalidModelParametersStopBeforeCredentialAndProvider(t *testing.T) {
+	now := time.Now()
+	for _, parameters := range []modelprofile.Parameters{{Stream: true}, {Keywords: []string{"bad\nterm"}}, {Temperature: 2}, {Languages: []string{"ru", "en"}}} {
+		policy := validPolicy(now)
+		policy.Parameters = parameters
+		policies, credentials, provider := &fakePolicy{policy: policy}, &fakeCredential{}, &fakeProvider{}
+		service, err := New(policies, credentials, provider, &observed{}, 10*time.Second, ffmpeg.New(t.TempDir()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Transcribe(t.Context(), validInput(now, pcmWAV(time.Second))); err == nil || credentials.calls != 0 || provider.calls != 0 {
+			t.Fatal("invalid parameters reached a downstream effect")
+		}
+	}
+}
+
 func (observer *observed) Observe(stage value.Stage, class value.ErrorClass) {
 	observer.stage, observer.class = stage, class
 	observer.calls++
 }
 
 func TestTranscribeCompletePath(t *testing.T) {
-	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	policy := validPolicy(now)
 	key := []byte("test-only-credential")
 	policies := &fakePolicy{policy: policy}
 	credentials := &fakeCredential{credential: validCredential(policy, key, now)}
 	provider, observer := &fakeProvider{text: "  распознанный текст  "}, &observed{}
-	service, err := New(policies, credentials, provider, observer, 10*time.Second)
+	service, err := New(policies, credentials, provider, observer, 10*time.Second, ffmpeg.New(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +134,7 @@ func TestTranscribeFailsClosedBeforeProvider(t *testing.T) {
 				test.mutate(&input, &policy)
 			}
 			provider, observer := &fakeProvider{text: "не вызывать"}, &observed{}
-			service, _ := New(&fakePolicy{policy: policy, err: test.policyErr}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now), err: test.credentialErr}, provider, observer, 10*time.Second)
+			service, _ := New(&fakePolicy{policy: policy, err: test.policyErr}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now), err: test.credentialErr}, provider, observer, 10*time.Second, ffmpeg.New(t.TempDir()))
 			service.now = func() time.Time { return now }
 			if _, err := service.Transcribe(t.Context(), input); err == nil || provider.calls != 0 || observer.calls != 1 {
 				t.Fatalf("fail-closed нарушен: calls=%d observed=%d err=%v", provider.calls, observer.calls, err)
@@ -129,7 +147,7 @@ func TestTranscribeCapsDeadlineByAuthorityExpiry(t *testing.T) {
 	now := time.Now().UTC()
 	policy := validPolicy(now)
 	provider := &deadlineProvider{}
-	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second, ffmpeg.New(t.TempDir()))
 	service.now = func() time.Time { return now }
 	raw := pcmWAV(time.Second)
 	input := validInput(now, raw)
@@ -144,7 +162,7 @@ func TestTranscribeDoesNotWidenTransportDeadline(t *testing.T) {
 	now := time.Now().UTC()
 	policy := validPolicy(now)
 	provider := &deadlineProvider{}
-	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second, ffmpeg.New(t.TempDir()))
 	service.now = func() time.Time { return now }
 	raw := pcmWAV(time.Second)
 	transportDeadline := time.Now().Add(200 * time.Millisecond)
@@ -160,7 +178,7 @@ func TestReadinessAndDiagnosticHaveNoRemoteEffect(t *testing.T) {
 	now := time.Now().UTC()
 	policy := validPolicy(now)
 	provider := &fakeProvider{text: "не вызывать"}
-	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second)
+	service, _ := New(&fakePolicy{policy: policy}, &fakeCredential{credential: validCredential(policy, []byte("test-only-key"), now)}, provider, &observed{}, 10*time.Second, ffmpeg.New(t.TempDir()))
 	if err := service.CheckLocal(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -183,21 +201,21 @@ func (*deadlineProvider) CheckEgress(context.Context) error { return nil }
 
 func TestValidateAudioRejectsTrailingWAVDataAndHeaderOnlyFLAC(t *testing.T) {
 	wav := append(pcmWAV(time.Second), 0)
-	if _, err := ValidateAudio(bytes.NewReader(wav), int64(len(wav)), "audio/wav", int64(len(wav)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+	if _, err := ValidateAudio(t.Context(), bytes.NewReader(wav), int64(len(wav)), "audio/wav", int64(len(wav)), time.Minute, ffmpeg.New(t.TempDir())); !errors.Is(err, errs.ErrUnsupportedAudio) {
 		t.Fatalf("WAV trailing data принят: %v", err)
 	}
 	for _, flac := range [][]byte{falseFLACTotalSamples(), overflowFLACTotalSamples(), append(falseFLACTotalSamples(), []byte("trailing")...)} {
-		if _, err := ValidateAudio(bytes.NewReader(flac), int64(len(flac)), "audio/flac", int64(len(flac)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+		if _, err := ValidateAudio(t.Context(), bytes.NewReader(flac), int64(len(flac)), "audio/flac", int64(len(flac)), time.Minute, ffmpeg.New(t.TempDir())); !errors.Is(err, errs.ErrUnsupportedAudio) {
 			t.Fatalf("непроверенный FLAC принят: %v", err)
 		}
 	}
 	mp3 := make([]byte, 104)
 	copy(mp3, []byte{0xff, 0xfb, 0x10, 0x00})
-	if _, err := ValidateAudio(bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute); err != nil {
-		t.Fatalf("валидный MP3 отклонён: %v", err)
+	if _, err := ValidateAudio(t.Context(), bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute, ffmpeg.New(t.TempDir())); !errors.Is(err, errs.ErrUnsupportedAudio) {
+		t.Fatalf("синтетический header без корректных frames принят: %v", err)
 	}
 	mp3 = append(mp3, 0)
-	if _, err := ValidateAudio(bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute); !errors.Is(err, errs.ErrUnsupportedAudio) {
+	if _, err := ValidateAudio(t.Context(), bytes.NewReader(mp3), int64(len(mp3)), "audio/mpeg", int64(len(mp3)), time.Minute, ffmpeg.New(t.TempDir())); !errors.Is(err, errs.ErrUnsupportedAudio) {
 		t.Fatalf("MP3 trailing data принят: %v", err)
 	}
 }

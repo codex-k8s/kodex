@@ -229,7 +229,7 @@ func (adapter *Adapter) executeGitLab(
 		}
 		return providerResult(request, "gitlab-pipeline:"+strconv.FormatInt(provider.ID, 10), projection)
 	default:
-		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return adapter.executeGitLabCatalog(ctx, request, providerCall{BaseURL: configuration["base_url"], Path: projectPath, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability}, canonicalInput)
 	}
 }
 

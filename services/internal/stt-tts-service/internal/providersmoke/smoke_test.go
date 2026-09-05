@@ -9,7 +9,7 @@ import (
 
 func TestLiveProviderRussianNumberFixture(t *testing.T) {
 	path := os.Getenv("KODEX_STT_ACCEPTANCE_FIXTURE")
-	fixture, err := VerifyFixture(path)
+	fixture, err := VerifyFixture(t.Context(), path)
 	if err != nil {
 		t.Fatalf("fixture preflight: %v", err)
 	}
@@ -23,5 +23,16 @@ func TestLiveProviderRussianNumberFixture(t *testing.T) {
 	defer cancel()
 	if err := fixture.Run(ctx, key); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFixturePreflight(t *testing.T) {
+	fixture, err := VerifyFixture(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fixture.Close()
+	if fixture.audio.SizeBytes != 46364 || fixture.audio.Duration <= 0 {
+		t.Fatal("неверная фикстура")
 	}
 }

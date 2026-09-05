@@ -28,7 +28,6 @@ spec:
           imagePullPolicy: IfNotPresent
           command: [/usr/local/bin/stt-provider-smoke]
           env:
-            - {name: KODEX_STT_ACCEPTANCE_FIXTURE, value: /fixtures/1-2-3-4-5.mp3}
             - {name: KODEX_STT_PROVIDER_SMOKE_OPENAI_API_KEY_FILE, value: /var/run/secrets/kodex/stt-provider-smoke/api-key}
           resources:
             requests: {cpu: 25m, memory: 32Mi}
@@ -41,10 +40,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: fixture, mountPath: /fixtures, readOnly: true}
+            - {name: spool, mountPath: /tmp}
             - {name: credential, mountPath: /var/run/secrets/kodex/stt-provider-smoke, readOnly: true}
       volumes:
-        - name: fixture
-          persistentVolumeClaim: {claimName: stt-provider-smoke-fixture, readOnly: true}
+        - name: spool
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
         - name: credential
           secret: {secretName: stt-provider-smoke-openai, defaultMode: 0440, items: [{key: api-key, path: api-key}]}
