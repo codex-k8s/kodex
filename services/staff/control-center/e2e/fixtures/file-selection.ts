@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import type {
+  Agent,
   Artifact,
   ArtifactImpact,
 } from "../../src/shared/api/generated/openapi/types.gen";
@@ -9,6 +10,25 @@ export async function checkFileSelection(
   projectRef: string,
   screenshot: () => Promise<void>,
 ): Promise<void> {
+  const agent: Agent = {
+    ref: "agent_unbind",
+    version: 2,
+    projectRef,
+    name: "Агент без доступа к файлам",
+    purpose: "Проверка снятия прежней связи",
+    roleDescription: "Аналитик",
+    state: "READY",
+    enabled: true,
+    system: false,
+    runtimeRef: "runtime_unbind",
+    runtimeName: "Synthetic",
+    runtimeReady: false,
+    capabilities: [],
+    integrations: [],
+    knowledgeArtifactRefs: [],
+    updatedAt: "2026-09-05T00:00:00Z",
+    nextActions: [],
+  };
   const artifact: Artifact = {
     ref: "artifact_selection",
     projectRef,
@@ -21,17 +41,37 @@ export async function checkFileSelection(
     scanState: "CLEAN",
     source: "CONTROL_CENTER",
     lifecycleState: "ACTIVE",
-    agentBindings: [],
+    agentBindings: [agent.ref],
     previewAvailable: false,
     createdAt: "2026-09-05T00:00:00Z",
-    nextActions: ["DELETE"],
+    nextActions: ["DELETE", "BIND"],
   };
   let impactCalls = 0;
   let permitted = false;
   await page.route(
     `**/api/v1/projects/${projectRef}/agents*`,
     async (route) => {
-      await route.fulfill({ json: { items: [] } });
+      await route.fulfill({ json: { items: [agent] } });
+    },
+  );
+  let bindingCalls = 0;
+  await page.route(`**/api/v1/agents/${agent.ref}`, async (route) => {
+    await route.fulfill({ json: agent });
+  });
+  await page.route(
+    `**/api/v1/artifacts/${artifact.ref}/bindings`,
+    async (route) => {
+      expect(route.request().method()).toBe("POST");
+      expect(route.request().headers()["if-match"]).toBe('"4"');
+      expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+      expect(route.request().postDataJSON()).toEqual({
+        agentRef: agent.ref,
+        enabled: false,
+      });
+      bindingCalls += 1;
+      artifact.version = 5;
+      artifact.agentBindings = [];
+      await route.fulfill({ json: artifact });
     },
   );
   await page.route(
@@ -133,6 +173,16 @@ export async function checkFileSelection(
   ).toBeEnabled();
   expect(impactCalls).toBe(2);
   await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
+  await page.locator(`[data-artifact-ref="${artifact.ref}"]`).click();
+  const binding = page
+    .locator(".file-details__bindings")
+    .getByRole("checkbox", { name: agent.name });
+  await expect(binding).toBeChecked();
+  await expect(binding).toBeEnabled();
+  await binding.uncheck();
+  await expect(binding).not.toBeChecked();
+  await expect(binding).toBeDisabled();
+  expect(bindingCalls).toBe(1);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

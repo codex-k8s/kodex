@@ -31,6 +31,7 @@ import {
   artifactLifecycleState,
   artifactLifecycleAnnounced,
   artifactSourceKinds,
+  artifactBindingControlEnabled,
   artifactSourcesForTab,
   createUploadQueueItems,
   nextUploadQueueItems,
@@ -959,7 +960,15 @@ async function changeBinding(
   agentRef: string,
   enabled: boolean,
 ): Promise<void> {
-  if (!artifact.nextActions.includes("BIND")) return;
+  if (
+    bindingBusy.value ||
+    !artifactBindingControlEnabled(
+      artifact,
+      agentRef,
+      agentSupportsFiles(agentRef),
+    )
+  )
+    return;
   bindingBusy.value = `${artifact.ref}:${agentRef}`;
   operationProblem.value = undefined;
   try {
@@ -1761,9 +1770,11 @@ onBeforeUnmount(() => {
                 type="checkbox"
                 :checked="selectedArtifact.agentBindings.includes(agent.ref)"
                 :disabled="
-                  !selectedArtifact.nextActions.includes('BIND') ||
-                  !agentSupportsFiles(agent.ref) ||
-                  bindingBusy === `${selectedArtifact.ref}:${agent.ref}`
+                  !artifactBindingControlEnabled(
+                    selectedArtifact,
+                    agent.ref,
+                    agentSupportsFiles(agent.ref),
+                  ) || !!bindingBusy
                 "
                 @change="
                   changeBinding(

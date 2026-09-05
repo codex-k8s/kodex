@@ -8,6 +8,17 @@ export type FileSource = "ALL" | Artifact["source"];
 export type FileCollectionMode = "ACTIVE" | "TRASH";
 export type FileTab = "FILES" | "KNOWLEDGE" | "RESULTS" | "TRASH";
 
+export function artifactBindingControlEnabled(
+  artifact: Pick<Artifact, "nextActions" | "agentBindings">,
+  agentRef: string,
+  hasAssignedFilesCapability: boolean,
+): boolean {
+  return (
+    artifact.nextActions.includes("BIND") &&
+    (artifact.agentBindings.includes(agentRef) || hasAssignedFilesCapability)
+  );
+}
+
 export type ArtifactLifecycleAction = "DELETE" | "RESTORE" | "PURGE";
 export type ArtifactTrashBulkAction = "DELETE" | "RESTORE" | "PURGE" | "EMPTY";
 export type ArtifactLifecycleBlockReason =

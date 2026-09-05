@@ -965,6 +965,16 @@ NewRun и server RoleImage search/state/count. Его ожидаемый HTTP412
 
 ## Авторитетные полномочия сотрудника и этапа
 
+В Files существующую связь с сотрудником можно снять после отзыва его
+`platform.artifact.manage`, если Artifact по-прежнему разрешает `BIND`.
+Это соответствует owner-команде: capability требуется только для добавления
+связи. UI сериализует изменения версии файла; после ответа сервера снятая
+связь не может быть добавлена снова без capability. Unit и synthetic проверяют
+этот переход с точными OCC/idempotency и авторитетным ответом. `runtimeReady`
+не используется как разрешение настройки связи. Удаление связей архивированного
+сотрудника и полный server-owned каталог допустимых целей остаются отдельными
+owner-зависимостями; реальные browser→HTTP→CP проверки этого пути — NOT RUN.
+
 `AgentAccessPanel` читает `getAgentEffectiveCapabilities`: поиск, total и cursor
 принадлежат серверу. UI сохраняет отдельные requested/effective/grantable и
 закрытые причины отказа; одинаковые capability key разных connection/grant

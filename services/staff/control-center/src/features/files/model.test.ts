@@ -5,6 +5,7 @@ import {
   artifactLifecycleAnnounced,
   artifactKind,
   artifactSourceKinds,
+  artifactBindingControlEnabled,
   createUploadQueueItems,
   fileVisual,
   matchesArtifactFilters,
@@ -37,6 +38,26 @@ function artifact(options: Partial<Artifact> = {}): Artifact {
 }
 
 describe("files model", () => {
+  it("разрешает снять прежнюю связь после отзыва capability, сохраняя BIND fence", () => {
+    const bound = artifact({ agentBindings: ["agent_sales"] });
+    expect(artifactBindingControlEnabled(bound, "agent_sales", false)).toBe(
+      true,
+    );
+    expect(artifactBindingControlEnabled(bound, "agent_other", false)).toBe(
+      false,
+    );
+    expect(artifactBindingControlEnabled(bound, "agent_other", true)).toBe(
+      true,
+    );
+    expect(
+      artifactBindingControlEnabled(
+        { ...bound, nextActions: [] },
+        "agent_sales",
+        true,
+      ),
+    ).toBe(false);
+  });
+
   it("выбирает различимые иконки по media type и расширению", () => {
     expect(fileVisual(artifact()).icon).toBe("pdf");
     expect(
