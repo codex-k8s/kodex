@@ -261,11 +261,7 @@ func authorityProofOperations() map[string]string {
 }
 
 func authorityProjectRequiredOperations() map[string]struct{} {
-	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
-	for operation := range controlplaneclient.STTGatewayOperations() {
-		result[operation] = struct{}{}
-	}
-	return result
+	return controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
 }
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

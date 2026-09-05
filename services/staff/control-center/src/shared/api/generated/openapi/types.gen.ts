@@ -11,12 +11,18 @@ export type OwnerSessionCreateInput = {
 };
 
 export type OwnerSessionPurpose = {
-    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL';
-    projectRef: OpaqueRef;
+    kind: 'RUNTIME_SECRET_CREATE' | 'RUNTIME_SECRET_ROTATE' | 'RUNTIME_SECRET_REVOKE' | 'RUNTIME_SECRET_REVEAL' | 'EMAIL_EFFECT_RECONCILIATION';
+    projectRef?: OpaqueRef;
     /**
      * Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
      */
     secretRef?: OpaqueRef;
+    /**
+     * Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
+     */
+    receiptRef?: OpaqueRef;
+    receiptVersion?: number;
+    receiptDigest?: string;
 };
 
 export type Timestamp = string;
@@ -289,6 +295,331 @@ export type BootstrapState = {
     currentUser: UserSummary;
     platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
     nextActions: Array<NextAction>;
+    speechTranscription: SpeechTranscriptionAvailability;
+};
+
+export type SpeechTranscriptionAvailability = {
+    available: boolean;
+    reason: 'READY' | 'STT_NOT_CONFIGURED' | 'STT_DISABLED' | 'STT_PERMISSION_DENIED' | 'STT_PERMISSION_INVALID' | 'STT_PROVIDER_ACCOUNT_INELIGIBLE' | 'STT_PROVIDER_CREDENTIAL_UNSUPPORTED' | 'STT_PROVIDER_DISABLED' | 'STT_MODEL_UNSUPPORTED' | 'STT_CONFIGURATION_UNAVAILABLE' | 'STT_SERVICE_UNAVAILABLE' | 'STT_CREDENTIAL_UNAVAILABLE' | 'STT_EGRESS_UNAVAILABLE' | 'STT_PROVIDER_UNAVAILABLE';
+    validUntil?: Timestamp;
+};
+
+export type ManagedConfigurationDraftInput = {
+    configurationRef?: OpaqueRef;
+    projectRef?: OpaqueRef;
+    name: string;
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    content: string;
+};
+
+export type ManagedConfigurationDraftSaveInput = {
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
+     */
+    content: string;
+};
+
+export type ManagedConfigurationCopyInput = {
+    name: string;
+};
+
+export type ManagedConfigurationConsumer = {
+    kind: 'AGENT' | 'WORKFLOW' | 'SCHEDULE' | 'RUNTIME_ENVIRONMENT' | 'INTEGRATION_CONNECTION' | 'STT_SERVICE';
+    ref: string;
+    revisionRef: OpaqueRef;
+    version: number;
+};
+
+export type ManagedConfigurationRebindInput = {
+    impactDigest: string;
+    consumers: Array<ManagedConfigurationConsumer>;
+};
+
+export type ManagedConfigurationRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED' | 'DISCARDED';
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    content: string;
+    digest: string;
+    validationDiagnostics: Array<string>;
+    parentRevisionRef?: OpaqueRef;
+    createdAt: Timestamp;
+    validatedAt?: Timestamp;
+    publishedAt?: Timestamp;
+};
+
+export type ManagedConfiguration = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    name: string;
+    managedBy: 'UI' | 'GIT';
+    source: string;
+    sourceRevision: string;
+    currentRevision?: ManagedConfigurationRevision;
+    updatedAt: Timestamp;
+};
+
+export type ManagedConfigurationSummary = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef?: OpaqueRef;
+    kind: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    name: string;
+    managedBy: 'UI' | 'GIT';
+    source: string;
+    sourceRevision: string;
+    currentRevision?: {
+        ref: OpaqueRef;
+        revision: number;
+        state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'SUPERSEDED' | 'DISCARDED';
+        digest: string;
+    };
+    updatedAt: Timestamp;
+};
+
+export type ManagedConfigurationPage = {
+    items: Array<ManagedConfigurationSummary>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type ManagedConfigurationResult = {
+    configuration: ManagedConfiguration;
+    revision: ManagedConfigurationRevision;
+};
+
+export type ManagedConfigurationDetachment = {
+    configuration: ManagedConfiguration;
+};
+
+export type ManagedConfigurationHistory = {
+    configuration: ManagedConfiguration;
+    items: Array<ManagedConfigurationRevision>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type ManagedConfigurationImpact = {
+    configurationRef: OpaqueRef;
+    targetRevisionRef: OpaqueRef;
+    consumers: Array<ManagedConfigurationConsumer>;
+    digest: string;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type ContextResourceState = 'ACTIVE' | 'ARCHIVED' | 'EXPIRED' | 'PURGED';
+
+export type ContextProvenance = {
+    actorRef: OpaqueRef;
+    sourceKind: string;
+    sourceRef?: string;
+    sourceRevision?: string;
+    digest: string;
+    createdAt: Timestamp;
+};
+
+export type SkillBundleFileInput = {
+    /**
+     * Относительный canonical manifest path, не более 240 UTF-8 bytes; ограничения структуры проверяет сервер.
+     */
+    path: string;
+    artifactRef: OpaqueRef;
+    artifactRevision: number;
+};
+
+export type SkillBundleFile = {
+    /**
+     * Относительный canonical manifest path, не более 240 UTF-8 bytes.
+     */
+    path: string;
+    artifactRef: OpaqueRef;
+    artifactRevision: number;
+    digest: string;
+    sizeBytes: number;
+};
+
+export type SkillBundleSpecification = {
+    name: string;
+    description: string;
+    files: Array<SkillBundleFileInput>;
+};
+
+export type SkillBundleDraftCreateInput = {
+    bundleRef?: OpaqueRef;
+    specification: SkillBundleSpecification;
+};
+
+export type ContextRevisionDigestInput = {
+    expectedDigest: string;
+};
+
+export type SkillBundleReviewInput = {
+    expectedDigest: string;
+    decision: 'APPROVE' | 'REJECT';
+    comment: string;
+};
+
+export type SkillBundleRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    state: 'DRAFT' | 'INVALID' | 'VALIDATED' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'DISCARDED';
+    name: string;
+    description: string;
+    files: Array<SkillBundleFile>;
+    digest: string;
+    parentRevisionRef?: OpaqueRef;
+    provenance: ContextProvenance;
+    scanState: 'PENDING' | 'CLEAN' | 'INFECTED' | 'ERROR';
+    scanEngine?: string;
+    scanDigest?: string;
+    scannedAt?: Timestamp;
+    reviewedBy?: OpaqueRef;
+    reviewedAt?: Timestamp;
+    diagnostics: Array<string>;
+};
+
+export type SkillBundle = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    state: ContextResourceState;
+    currentRevision?: SkillBundleRevision;
+    draftRevision?: SkillBundleRevision;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type MemoryRecordSpecification = {
+    title: string;
+    summary: string;
+    sourceRunRef?: OpaqueRef;
+    retentionUntil: Timestamp;
+};
+
+export type MemoryRecordCreateInput = {
+    agentRef?: OpaqueRef;
+    specification: MemoryRecordSpecification;
+};
+
+export type MemoryRecordRevision = {
+    ref: OpaqueRef;
+    revision: number;
+    title: string;
+    summary: string;
+    digest: string;
+    parentRevisionRef?: OpaqueRef;
+    provenance: ContextProvenance;
+    retentionUntil: Timestamp;
+    redacted: boolean;
+};
+
+export type KodexMemoryRecord = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    agentRef?: OpaqueRef;
+    state: ContextResourceState;
+    currentRevision: MemoryRecordRevision;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+};
+
+export type AgentContextBindingInput = {
+    revisionRef: OpaqueRef;
+    expectedBindingVersion: number;
+};
+
+export type AgentContextBinding = {
+    ref: OpaqueRef;
+    version: number;
+    agentRef: OpaqueRef;
+    resourceRef: OpaqueRef;
+    revisionRef: OpaqueRef;
+    digest: string;
+};
+
+export type SkillBundlePage = {
+    items: Array<SkillBundle>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type MemoryRecordPage = {
+    items: Array<KodexMemoryRecord>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type SkillBundleRevisionPage = {
+    items: Array<SkillBundleRevision>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type MemoryRecordRevisionPage = {
+    items: Array<MemoryRecordRevision>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type SystemSttParameters = {
+    languages: Array<string>;
+    keywords: Array<string>;
+    /**
+     * Дополнительно ограничен 896 UTF-8 bytes общим modelprofile.
+     */
+    prompt: string;
+    temperature: number;
+    chunkingStrategy: '' | 'auto';
+    /**
+     * Синхронная диктовка; stream=true закрыто отклоняется.
+     */
+    stream: false;
+};
+
+export type SystemSttSpecification = {
+    enabled: boolean;
+    providerAccountRef: OpaqueRef;
+    /**
+     * Проверяется общим исполняемым modelprofile, не произвольным LLM catalog.
+     */
+    model: string;
+    language: string;
+    permissionKey: 'platform.stt.use';
+    parameters: SystemSttParameters;
+    maximumAudioBytes: number;
+    maximumAudioDurationMilliseconds: number;
+    providerTimeoutMilliseconds: number;
+};
+
+export type SystemSttConfigurationDraftInput = {
+    configurationRef?: OpaqueRef;
+    name: string;
+    specification: SystemSttSpecification;
+};
+
+export type SystemSttConfiguration = {
+    configurationRef: OpaqueRef;
+    revisionRef: OpaqueRef;
+    revision: number;
+    digest: string;
+    providerAccountRef: OpaqueRef;
+    model: string;
+    language: string;
+    permissionKey: 'platform.stt.use';
+    ready: boolean;
+    readinessBlockers: Array<string>;
+    providerCredentialGeneration: number;
+    enabled: boolean;
+    parameters: SystemSttParameters;
+    maximumAudioBytes: number;
+    maximumAudioDurationMilliseconds: number;
+    providerTimeoutMilliseconds: number;
 };
 
 export type Project = {
@@ -352,6 +683,10 @@ export type ProjectPage = {
 
 export type Membership = {
     ref: OpaqueRef;
+    /**
+     * Проект участника; отсутствует у участника платформы
+     */
+    projectRef?: OpaqueRef;
     version: number;
     user: UserSummary;
     platformRole: 'OWNER' | 'ADMINISTRATOR' | 'OPERATOR' | 'MEMBER' | 'AUDITOR';
@@ -475,6 +810,32 @@ export type AgentCommand = {
 export type InstructionCommand = {
     action: 'VALIDATE' | 'PUBLISH' | 'ROLLBACK';
     publishedInstructionRef?: OpaqueRef;
+};
+
+export type VfsNode = {
+    ref: string;
+    path: string;
+    parentPath: string;
+    name: string;
+    kind: 'DIRECTORY' | 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'INPUT' | 'RESULT' | 'SKILL' | 'MEMORY' | 'AUTOMATION' | 'ENVIRONMENT' | 'AVATAR';
+    directory: boolean;
+    projectRef: string;
+    entityRef: string;
+    runRef: string;
+    sizeBytes: number;
+    digest: string;
+    modifiedAt?: Timestamp;
+};
+
+export type VfsNodePage = {
+    items: Array<VfsNode>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type SchedulePage = {
+    items: Array<Schedule>;
+    nextPageToken: string;
 };
 
 export type AgentPage = {
@@ -718,6 +1079,183 @@ export type RuntimeEnvironmentReadiness = {
     observedAt: Timestamp;
 };
 
+export type RuntimeSecretImpactConsumer = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    environmentVersionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    secretRevisions: Array<number>;
+    /**
+     * Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
+     */
+    consumer?: RuntimeEnvironmentConsumer;
+};
+
+export type RuntimeSecretImpact = {
+    secretRef: OpaqueRef;
+    secretVersion: number;
+    targetRevision: number;
+    consumers: Array<RuntimeSecretImpactConsumer>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type RuntimeSecretRebindSelection = {
+    environmentRef: OpaqueRef;
+    expectedEnvironmentVersion: number;
+    sourceVersionRef: OpaqueRef;
+    consumers: Array<RuntimeEnvironmentConsumer>;
+};
+
+export type RuntimeSecretRebindInput = {
+    /**
+     * Уникальные environments; суммарно не более 100 consumers.
+     */
+    selections: Array<RuntimeSecretRebindSelection>;
+};
+
+export type RuntimeSecretReboundEnvironment = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    projectRef: OpaqueRef;
+    versionRef: OpaqueRef;
+    digest: string;
+};
+
+export type RuntimeSecretRebindResult = {
+    environments: Array<RuntimeSecretReboundEnvironment>;
+    bindings: Array<AgentRuntimeEnvironmentBinding>;
+};
+
+export type EmailEffectOutcome = 'UNKNOWN_OUTCOME' | 'EFFECT_CONFIRMED' | 'NO_EFFECT_CONFIRMED';
+
+export type EmailReconciliationOutcome = 'EFFECT_CONFIRMED' | 'NO_EFFECT_CONFIRMED';
+
+export type EmailEffectReceipt = {
+    ref: OpaqueRef;
+    version: number;
+    invocationRef: OpaqueRef;
+    externalReceiptDigest: string;
+    semanticInputDigest: string;
+    outcome: EmailEffectOutcome;
+    mailboxRef: string;
+    configurationRevision: number;
+    connectionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type EmailReconciliationDecision = {
+    ref: OpaqueRef;
+    version: number;
+    receiptRef: OpaqueRef;
+    receiptVersion: number;
+    receiptDigest: string;
+    invocationRef: OpaqueRef;
+    outcome: EmailReconciliationOutcome;
+    actorRef: OpaqueRef;
+    createdAt: string;
+    expiresAt: string;
+};
+
+export type EmailEffectReceiptView = {
+    receipt: EmailEffectReceipt;
+    decision?: EmailReconciliationDecision;
+};
+
+export type EmailReconciliationInput = {
+    expectedReceiptDigest: string;
+    outcome: EmailReconciliationOutcome;
+    note?: string;
+};
+
+export type InteractionIdentityBindInput = {
+    externalTeamRef: string;
+    externalChannelRef: string;
+    externalUserDigest: string;
+    subjectRef: OpaqueRef;
+};
+
+export type InteractionIdentity = {
+    ref: OpaqueRef;
+    version: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    externalTeamRef: string;
+    externalChannelRef: string;
+    externalUserDigest: string;
+    subjectRef: OpaqueRef;
+    state: 'ACTIVE' | 'REVOKED';
+};
+
+export type InteractionIdentityPage = {
+    items: Array<InteractionIdentity>;
+    nextPageToken: string;
+};
+
+export type RuntimeEnvironmentConsumer = {
+    agentRef: OpaqueRef;
+    agentVersion: number;
+    bindingRef: OpaqueRef;
+    bindingVersion: number;
+    /**
+     * Прежняя версия окружения в binding; не целевая версия из path.
+     */
+    versionRef: OpaqueRef;
+    projectRef: OpaqueRef;
+};
+
+export type RuntimeEnvironmentImpact = {
+    environmentRef: OpaqueRef;
+    environmentVersion: number;
+    targetVersionRef: OpaqueRef;
+    targetDigest: string;
+    consumers: Array<RuntimeEnvironmentConsumer>;
+    total: number;
+    nextPageToken: string;
+};
+
+export type RuntimeEnvironmentRebindInput = {
+    consumers: Array<RuntimeEnvironmentConsumer>;
+};
+
+export type RuntimeEnvironmentRebindResult = {
+    bindings: Array<AgentRuntimeEnvironmentBinding>;
+};
+
+export type RuntimeEnvironmentDraftCreateInput = {
+    environmentRef?: OpaqueRef;
+    expectedEnvironmentVersion?: number;
+    specification: RuntimeEnvironmentDraftSpecification;
+};
+
+/**
+ * Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+ */
+export type RuntimeEnvironmentDraftSpecification = {
+    name: string;
+    description: string;
+    imageArtifactRef: string;
+    tools: Array<RuntimeEnvironmentTool>;
+    values: Array<RuntimeEnvironmentValue>;
+    secretBindings: Array<RuntimeSecretBinding>;
+    policy?: RuntimeEnvironmentPolicyInput;
+};
+
+export type RuntimeEnvironmentDraft = {
+    ref: OpaqueRef;
+    version: number;
+    projectRef: OpaqueRef;
+    environmentRef?: OpaqueRef;
+    expectedEnvironmentVersion: number;
+    state: 'DRAFT' | 'VALID' | 'INVALID' | 'PUBLISHED' | 'DISCARDED';
+    specification: RuntimeEnvironmentDraftSpecification;
+    validationDigest?: string;
+    diagnostics: Array<string>;
+    publishedEnvironmentRef?: OpaqueRef;
+};
+
 export type RuntimeEnvironmentInput = {
     name: string;
     description: string;
@@ -737,6 +1275,7 @@ export type AgentRuntimeEnvironmentBinding = {
     version: number;
     agentRef: OpaqueRef;
     environmentRef: OpaqueRef;
+    versionRef?: OpaqueRef;
     digest: string;
 };
 
@@ -752,6 +1291,8 @@ export type AgentRuntimeConfigurationView = {
     environment: RuntimeEnvironmentSet;
     safeEffectiveConfig: string;
     agentVersion: number;
+    skillBindings: Array<AgentContextBinding>;
+    memoryBindings: Array<AgentContextBinding>;
 };
 
 export type AgentRuntimeConfigurationPage = {
@@ -792,6 +1333,22 @@ export type TemplateVariablePage = {
     nextPageToken?: string;
 };
 
+export type ModelCapability = {
+    id: string;
+    providerDefinitionKey: string;
+    reasoningEfforts: Array<string>;
+    defaultReasoningEffort: string;
+    available: boolean;
+    eligibleProviderAccountRefs: Array<OpaqueRef>;
+    readinessBlockers: Array<string>;
+};
+
+export type ModelCapabilityPage = {
+    items: Array<ModelCapability>;
+    total: number;
+    nextPageToken: string;
+};
+
 export type ProviderDefinition = {
     key: 'openai-codex';
     name: string;
@@ -799,6 +1356,7 @@ export type ProviderDefinition = {
     authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
     modelIds: Array<string>;
     defaultModelId: string;
+    models?: Array<ModelCapability>;
     available: boolean;
     ready: boolean;
     readinessBlockers: Array<string>;
@@ -1799,10 +2357,13 @@ export type AssistantTurn = {
     createdAt: Timestamp;
 };
 
+export type AssistantConversationState = 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+
 export type AssistantConversation = {
     ref: OpaqueRef;
     version: number;
     title: string;
+    state: AssistantConversationState;
     titleSource: 'SERVER_DEFAULT' | 'AGENT_PROPOSED' | 'USER_EDITED';
     titleRevision: number;
     context: AssistantContextDescriptor;
@@ -1904,6 +2465,20 @@ export type AdministrationState = {
     observedAt: Timestamp;
 };
 
+export type SkillBundleRef = OpaqueRef;
+
+export type MemoryRecordRef = OpaqueRef;
+
+export type ContextRevisionRef = OpaqueRef;
+
+export type ContextAgentRefQuery = OpaqueRef;
+
+export type ContextResourceStateQuery = ContextResourceState;
+
+export type ConfigurationRef = OpaqueRef;
+
+export type ConfigurationRevisionRef = OpaqueRef;
+
 export type CsrfToken = string;
 
 export type IdempotencyKey = string;
@@ -1925,6 +2500,18 @@ export type AccessBindingRef = OpaqueRef;
 export type AgentRef = OpaqueRef;
 
 export type RuntimeEnvironmentRef = OpaqueRef;
+
+export type RuntimeEnvironmentDraftRef = OpaqueRef;
+
+export type RuntimeEnvironmentVersionRef = OpaqueRef;
+
+export type RuntimeSecretRevision = number;
+
+export type IntegrationInvocationRef = OpaqueRef;
+
+export type EmailEffectReceiptRef = OpaqueRef;
+
+export type InteractionIdentityRef = OpaqueRef;
 
 export type SecretRef = OpaqueRef;
 
@@ -1974,6 +2561,8 @@ export type Query = string;
 export type PageSize = number;
 
 export type PageToken = string;
+
+export type VfsPageToken = string;
 
 export type DeleteOwnerSessionData = {
     body?: never;
@@ -2348,7 +2937,11 @@ export type ListProjectMembershipsData = {
     path: {
         projectRef: OpaqueRef;
     };
-    query?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
     url: '/api/v1/projects/{projectRef}/members';
 };
 
@@ -2368,6 +2961,7 @@ export type ListProjectMembershipsResponses = {
     200: {
         items: Array<Membership>;
         nextActions: Array<NextAction>;
+        nextPageToken?: string;
     };
 };
 
@@ -2722,6 +3316,250 @@ export type CreateAgentResponses = {
 };
 
 export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type ListOrganizationProjectMembershipsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/project-memberships';
+};
+
+export type ListOrganizationProjectMembershipsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationProjectMembershipsError = ListOrganizationProjectMembershipsErrors[keyof ListOrganizationProjectMembershipsErrors];
+
+export type ListOrganizationProjectMembershipsResponses = {
+    /**
+     * Участники доступных проектов
+     */
+    200: {
+        items: Array<Membership>;
+        nextActions: Array<NextAction>;
+        nextPageToken?: string;
+    };
+};
+
+export type ListOrganizationProjectMembershipsResponse = ListOrganizationProjectMembershipsResponses[keyof ListOrganizationProjectMembershipsResponses];
+
+export type ListOrganizationAgentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/agents';
+};
+
+export type ListOrganizationAgentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationAgentsError = ListOrganizationAgentsErrors[keyof ListOrganizationAgentsErrors];
+
+export type ListOrganizationAgentsResponses = {
+    /**
+     * ИИ-сотрудники доступных проектов
+     */
+    200: AgentPage;
+};
+
+export type ListOrganizationAgentsResponse = ListOrganizationAgentsResponses[keyof ListOrganizationAgentsResponses];
+
+export type ListOrganizationWorkflowsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/workflows';
+};
+
+export type ListOrganizationWorkflowsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationWorkflowsError = ListOrganizationWorkflowsErrors[keyof ListOrganizationWorkflowsErrors];
+
+export type ListOrganizationWorkflowsResponses = {
+    /**
+     * Процессы доступных проектов
+     */
+    200: WorkflowPage;
+};
+
+export type ListOrganizationWorkflowsResponse = ListOrganizationWorkflowsResponses[keyof ListOrganizationWorkflowsResponses];
+
+export type ListOrganizationSchedulesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/schedules';
+};
+
+export type ListOrganizationSchedulesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationSchedulesError = ListOrganizationSchedulesErrors[keyof ListOrganizationSchedulesErrors];
+
+export type ListOrganizationSchedulesResponses = {
+    /**
+     * Автоматизации доступных проектов
+     */
+    200: SchedulePage;
+};
+
+export type ListOrganizationSchedulesResponse = ListOrganizationSchedulesResponses[keyof ListOrganizationSchedulesResponses];
+
+export type ListOrganizationRuntimeEnvironmentSetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments';
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsError = ListOrganizationRuntimeEnvironmentSetsErrors[keyof ListOrganizationRuntimeEnvironmentSetsErrors];
+
+export type ListOrganizationRuntimeEnvironmentSetsResponses = {
+    /**
+     * Окружения доступных проектов
+     */
+    200: RuntimeEnvironmentPage;
+};
+
+export type ListOrganizationRuntimeEnvironmentSetsResponse = ListOrganizationRuntimeEnvironmentSetsResponses[keyof ListOrganizationRuntimeEnvironmentSetsResponses];
+
+export type ListOrganizationRuntimeSecretsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secrets';
+};
+
+export type ListOrganizationRuntimeSecretsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListOrganizationRuntimeSecretsError = ListOrganizationRuntimeSecretsErrors[keyof ListOrganizationRuntimeSecretsErrors];
+
+export type ListOrganizationRuntimeSecretsResponses = {
+    /**
+     * Безопасные описания секретов доступных проектов
+     */
+    200: RuntimeSecretPage;
+};
+
+export type ListOrganizationRuntimeSecretsResponse = ListOrganizationRuntimeSecretsResponses[keyof ListOrganizationRuntimeSecretsResponses];
+
+export type ListVfsNodesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        path?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/vfs/nodes';
+};
+
+export type ListVfsNodesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListVfsNodesError = ListVfsNodesErrors[keyof ListVfsNodesErrors];
+
+export type ListVfsNodesResponses = {
+    /**
+     * Разрешённые элементы виртуального каталога
+     */
+    200: VfsNodePage;
+};
+
+export type ListVfsNodesResponse = ListVfsNodesResponses[keyof ListVfsNodesResponses];
+
+export type SearchVfsData = {
+    body?: never;
+    path?: never;
+    query: {
+        projectRef?: OpaqueRef;
+        query: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/vfs/search';
+};
+
+export type SearchVfsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SearchVfsError = SearchVfsErrors[keyof SearchVfsErrors];
+
+export type SearchVfsResponses = {
+    /**
+     * Результаты поиска доступных виртуальных файлов
+     */
+    200: VfsNodePage;
+};
+
+export type SearchVfsResponse = SearchVfsResponses[keyof SearchVfsResponses];
 
 export type GetAgentData = {
     body?: never;
@@ -3409,6 +4247,37 @@ export type ListProviderDefinitionsResponses = {
 
 export type ListProviderDefinitionsResponse = ListProviderDefinitionsResponses[keyof ListProviderDefinitionsResponses];
 
+export type ListModelCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        providerDefinitionKey?: string;
+        providerAccountRef?: string;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/model-capabilities';
+};
+
+export type ListModelCapabilitiesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListModelCapabilitiesError = ListModelCapabilitiesErrors[keyof ListModelCapabilitiesErrors];
+
+export type ListModelCapabilitiesResponses = {
+    /**
+     * Авторитетный каталог моделей и reasoning capabilities доступных accounts
+     */
+    200: ModelCapabilityPage;
+};
+
+export type ListModelCapabilitiesResponse = ListModelCapabilitiesResponses[keyof ListModelCapabilitiesResponses];
+
 export type ListProviderAccountsData = {
     body?: never;
     path?: never;
@@ -3526,6 +4395,43 @@ export type GetProviderAccountResponses = {
 };
 
 export type GetProviderAccountResponse = GetProviderAccountResponses[keyof GetProviderAccountResponses];
+
+export type TranscribeOrganizationSpeechData = {
+    /**
+     * Одна audio part формата MP3, WAV, FLAC, WebM, Ogg или MP4/M4A; длительность проверяет STT при декодировании.
+     */
+    body: {
+        audio: Blob | File;
+    };
+    headers: {
+        'X-CSRF-Token': string;
+        /**
+         * Точный размер audio part; конфигурация STT может задавать меньший лимит.
+         */
+        'X-Audio-Size': number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/speech/transcriptions';
+};
+
+export type TranscribeOrganizationSpeechErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type TranscribeOrganizationSpeechError = TranscribeOrganizationSpeechErrors[keyof TranscribeOrganizationSpeechErrors];
+
+export type TranscribeOrganizationSpeechResponses = {
+    /**
+     * Текст и безопасный receipt завершённой транскрипции
+     */
+    200: SpeechTranscription;
+};
+
+export type TranscribeOrganizationSpeechResponse = TranscribeOrganizationSpeechResponses[keyof TranscribeOrganizationSpeechResponses];
 
 export type TranscribeSpeechData = {
     /**
@@ -3875,6 +4781,475 @@ export type PreviewPromptTemplateResponses = {
 };
 
 export type PreviewPromptTemplateResponse = PreviewPromptTemplateResponses[keyof PreviewPromptTemplateResponses];
+
+export type GetRuntimeSecretImpactData = {
+    body?: never;
+    path: {
+        secretRef: OpaqueRef;
+        revision: number;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact';
+};
+
+export type GetRuntimeSecretImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeSecretImpactError = GetRuntimeSecretImpactErrors[keyof GetRuntimeSecretImpactErrors];
+
+export type GetRuntimeSecretImpactResponses = {
+    /**
+     * Точные старые revisions и доступные consumers
+     */
+    200: RuntimeSecretImpact;
+};
+
+export type GetRuntimeSecretImpactResponse = GetRuntimeSecretImpactResponses[keyof GetRuntimeSecretImpactResponses];
+
+export type RebindRuntimeSecretData = {
+    body: RuntimeSecretRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        secretRef: OpaqueRef;
+        revision: number;
+    };
+    query?: never;
+    url: '/api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings';
+};
+
+export type RebindRuntimeSecretErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRuntimeSecretError = RebindRuntimeSecretErrors[keyof RebindRuntimeSecretErrors];
+
+export type RebindRuntimeSecretResponses = {
+    /**
+     * Безопасные квитанции публикации; полное окружение читается через getRuntimeEnvironmentSet
+     */
+    200: RuntimeSecretRebindResult;
+};
+
+export type RebindRuntimeSecretResponse = RebindRuntimeSecretResponses[keyof RebindRuntimeSecretResponses];
+
+export type GetEmailEffectReceiptData = {
+    body?: never;
+    path: {
+        invocationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-invocations/{invocationRef}/email-effect-receipt';
+};
+
+export type GetEmailEffectReceiptErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetEmailEffectReceiptError = GetEmailEffectReceiptErrors[keyof GetEmailEffectReceiptErrors];
+
+export type GetEmailEffectReceiptResponses = {
+    /**
+     * Безопасная квитанция без тела письма, адресатов и credentials
+     */
+    200: EmailEffectReceiptView;
+};
+
+export type GetEmailEffectReceiptResponse = GetEmailEffectReceiptResponses[keyof GetEmailEffectReceiptResponses];
+
+export type ReconcileEmailEffectData = {
+    body: EmailReconciliationInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        receiptRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/email-effect-receipts/{receiptRef}/reconciliation';
+};
+
+export type ReconcileEmailEffectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReconcileEmailEffectError = ReconcileEmailEffectErrors[keyof ReconcileEmailEffectErrors];
+
+export type ReconcileEmailEffectResponses = {
+    /**
+     * Отдельное решение владельца; ETag содержит версию решения, не квитанции
+     */
+    200: EmailReconciliationDecision;
+};
+
+export type ReconcileEmailEffectResponse = ReconcileEmailEffectResponses[keyof ReconcileEmailEffectResponses];
+
+export type ListInteractionIdentitiesData = {
+    body?: never;
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/integration-connections/{connectionRef}/interaction-identities';
+};
+
+export type ListInteractionIdentitiesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListInteractionIdentitiesError = ListInteractionIdentitiesErrors[keyof ListInteractionIdentitiesErrors];
+
+export type ListInteractionIdentitiesResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: InteractionIdentityPage;
+};
+
+export type ListInteractionIdentitiesResponse = ListInteractionIdentitiesResponses[keyof ListInteractionIdentitiesResponses];
+
+export type BindInteractionIdentityData = {
+    body: InteractionIdentityBindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        connectionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-connections/{connectionRef}/interaction-identities';
+};
+
+export type BindInteractionIdentityErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindInteractionIdentityError = BindInteractionIdentityErrors[keyof BindInteractionIdentityErrors];
+
+export type BindInteractionIdentityResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    201: InteractionIdentity;
+};
+
+export type BindInteractionIdentityResponse = BindInteractionIdentityResponses[keyof BindInteractionIdentityResponses];
+
+export type RevokeInteractionIdentityData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        identityRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/interaction-identities/{identityRef}';
+};
+
+export type RevokeInteractionIdentityErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeInteractionIdentityError = RevokeInteractionIdentityErrors[keyof RevokeInteractionIdentityErrors];
+
+export type RevokeInteractionIdentityResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: InteractionIdentity;
+};
+
+export type RevokeInteractionIdentityResponse = RevokeInteractionIdentityResponses[keyof RevokeInteractionIdentityResponses];
+
+export type GetRuntimeEnvironmentImpactData = {
+    body?: never;
+    path: {
+        environmentRef: OpaqueRef;
+        versionRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact';
+};
+
+export type GetRuntimeEnvironmentImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentImpactError = GetRuntimeEnvironmentImpactErrors[keyof GetRuntimeEnvironmentImpactErrors];
+
+export type GetRuntimeEnvironmentImpactResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: RuntimeEnvironmentImpact;
+};
+
+export type GetRuntimeEnvironmentImpactResponse = GetRuntimeEnvironmentImpactResponses[keyof GetRuntimeEnvironmentImpactResponses];
+
+export type RebindRuntimeEnvironmentData = {
+    body: RuntimeEnvironmentRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        environmentRef: OpaqueRef;
+        versionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings';
+};
+
+export type RebindRuntimeEnvironmentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRuntimeEnvironmentError = RebindRuntimeEnvironmentErrors[keyof RebindRuntimeEnvironmentErrors];
+
+export type RebindRuntimeEnvironmentResponses = {
+    /**
+     * Авторитетный результат control-plane
+     */
+    200: RuntimeEnvironmentRebindResult;
+};
+
+export type RebindRuntimeEnvironmentResponse = RebindRuntimeEnvironmentResponses[keyof RebindRuntimeEnvironmentResponses];
+
+export type CreateRuntimeEnvironmentDraftData = {
+    body: RuntimeEnvironmentDraftCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/runtime-environment-drafts';
+};
+
+export type CreateRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRuntimeEnvironmentDraftError = CreateRuntimeEnvironmentDraftErrors[keyof CreateRuntimeEnvironmentDraftErrors];
+
+export type CreateRuntimeEnvironmentDraftResponses = {
+    /**
+     * Серверный черновик окружения; опубликованная ревизия не изменена
+     */
+    201: RuntimeEnvironmentDraft;
+};
+
+export type CreateRuntimeEnvironmentDraftResponse = CreateRuntimeEnvironmentDraftResponses[keyof CreateRuntimeEnvironmentDraftResponses];
+
+export type DiscardRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type DiscardRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRuntimeEnvironmentDraftError = DiscardRuntimeEnvironmentDraftErrors[keyof DiscardRuntimeEnvironmentDraftErrors];
+
+export type DiscardRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик закрыт без изменения опубликованной ревизии
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type DiscardRuntimeEnvironmentDraftResponse = DiscardRuntimeEnvironmentDraftResponses[keyof DiscardRuntimeEnvironmentDraftResponses];
+
+export type GetRuntimeEnvironmentDraftData = {
+    body?: never;
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type GetRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetRuntimeEnvironmentDraftError = GetRuntimeEnvironmentDraftErrors[keyof GetRuntimeEnvironmentDraftErrors];
+
+export type GetRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик из авторитетного хранилища
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type GetRuntimeEnvironmentDraftResponse = GetRuntimeEnvironmentDraftResponses[keyof GetRuntimeEnvironmentDraftResponses];
+
+export type SaveRuntimeEnvironmentDraftData = {
+    body: RuntimeEnvironmentDraftSpecification;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}';
+};
+
+export type SaveRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRuntimeEnvironmentDraftError = SaveRuntimeEnvironmentDraftErrors[keyof SaveRuntimeEnvironmentDraftErrors];
+
+export type SaveRuntimeEnvironmentDraftResponses = {
+    /**
+     * Черновик сохранён, прежняя валидация сброшена
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type SaveRuntimeEnvironmentDraftResponse = SaveRuntimeEnvironmentDraftResponses[keyof SaveRuntimeEnvironmentDraftResponses];
+
+export type ValidateRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}/validation';
+};
+
+export type ValidateRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRuntimeEnvironmentDraftError = ValidateRuntimeEnvironmentDraftErrors[keyof ValidateRuntimeEnvironmentDraftErrors];
+
+export type ValidateRuntimeEnvironmentDraftResponses = {
+    /**
+     * Результат серверной проверки, включая INVALID и диагностические коды
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type ValidateRuntimeEnvironmentDraftResponse = ValidateRuntimeEnvironmentDraftResponses[keyof ValidateRuntimeEnvironmentDraftResponses];
+
+export type PublishRuntimeEnvironmentDraftData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        draftRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/runtime-environment-drafts/{draftRef}/publication';
+};
+
+export type PublishRuntimeEnvironmentDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRuntimeEnvironmentDraftError = PublishRuntimeEnvironmentDraftErrors[keyof PublishRuntimeEnvironmentDraftErrors];
+
+export type PublishRuntimeEnvironmentDraftResponses = {
+    /**
+     * Проверенный черновик опубликован; publishedEnvironmentRef указывает на результат
+     */
+    200: RuntimeEnvironmentDraft;
+};
+
+export type PublishRuntimeEnvironmentDraftResponse = PublishRuntimeEnvironmentDraftResponses[keyof PublishRuntimeEnvironmentDraftResponses];
 
 export type DeleteRuntimeEnvironmentData = {
     body?: never;
@@ -6205,6 +7580,10 @@ export type ListAssistantConversationsData = {
     path?: never;
     query?: {
         projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        state?: AssistantConversationState;
     };
     url: '/api/v1/assistant-conversations';
 };
@@ -6224,6 +7603,7 @@ export type ListAssistantConversationsResponses = {
      */
     200: {
         items: Array<AssistantConversation>;
+        nextPageToken?: string;
     };
 };
 
@@ -6260,6 +7640,38 @@ export type CreateAssistantConversationResponses = {
 };
 
 export type CreateAssistantConversationResponse = CreateAssistantConversationResponses[keyof CreateAssistantConversationResponses];
+
+export type ArchiveAssistantConversationData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        conversationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-conversations/{conversationRef}/archive';
+};
+
+export type ArchiveAssistantConversationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveAssistantConversationError = ArchiveAssistantConversationErrors[keyof ArchiveAssistantConversationErrors];
+
+export type ArchiveAssistantConversationResponses = {
+    /**
+     * Диалог архивирован владельцем без удаления истории
+     */
+    200: AssistantConversation;
+};
+
+export type ArchiveAssistantConversationResponse = ArchiveAssistantConversationResponses[keyof ArchiveAssistantConversationResponses];
 
 export type UpdateAssistantConversationTitleData = {
     body: {
@@ -6960,3 +8372,1757 @@ export type ListAuditEventsResponses = {
 };
 
 export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
+
+export type CreatePromptTemplateDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/drafts';
+};
+
+export type CreatePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreatePromptTemplateDraftError = CreatePromptTemplateDraftErrors[keyof CreatePromptTemplateDraftErrors];
+
+export type CreatePromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreatePromptTemplateDraftResponse = CreatePromptTemplateDraftResponses[keyof CreatePromptTemplateDraftResponses];
+
+export type SavePromptTemplateDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SavePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SavePromptTemplateDraftError = SavePromptTemplateDraftErrors[keyof SavePromptTemplateDraftErrors];
+
+export type SavePromptTemplateDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SavePromptTemplateDraftResponse = SavePromptTemplateDraftResponses[keyof SavePromptTemplateDraftResponses];
+
+export type DiscardPromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardPromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardPromptTemplateDraftError = DiscardPromptTemplateDraftErrors[keyof DiscardPromptTemplateDraftErrors];
+
+export type DiscardPromptTemplateDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardPromptTemplateDraftResponse = DiscardPromptTemplateDraftResponses[keyof DiscardPromptTemplateDraftResponses];
+
+export type ValidatePromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidatePromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidatePromptTemplateDraftError = ValidatePromptTemplateDraftErrors[keyof ValidatePromptTemplateDraftErrors];
+
+export type ValidatePromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidatePromptTemplateDraftResponse = ValidatePromptTemplateDraftResponses[keyof ValidatePromptTemplateDraftResponses];
+
+export type PublishPromptTemplateDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishPromptTemplateDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishPromptTemplateDraftError = PublishPromptTemplateDraftErrors[keyof PublishPromptTemplateDraftErrors];
+
+export type PublishPromptTemplateDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishPromptTemplateDraftResponse = PublishPromptTemplateDraftResponses[keyof PublishPromptTemplateDraftResponses];
+
+export type RebindPromptTemplateConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindPromptTemplateConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindPromptTemplateConsumersError = RebindPromptTemplateConsumersErrors[keyof RebindPromptTemplateConsumersErrors];
+
+export type RebindPromptTemplateConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindPromptTemplateConsumersResponse = RebindPromptTemplateConsumersResponses[keyof RebindPromptTemplateConsumersResponses];
+
+export type CreateRoleImageRevisionDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/role-image-configurations/drafts';
+};
+
+export type CreateRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateRoleImageRevisionDraftError = CreateRoleImageRevisionDraftErrors[keyof CreateRoleImageRevisionDraftErrors];
+
+export type CreateRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateRoleImageRevisionDraftResponse = CreateRoleImageRevisionDraftResponses[keyof CreateRoleImageRevisionDraftResponses];
+
+export type SaveRoleImageRevisionDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveRoleImageRevisionDraftError = SaveRoleImageRevisionDraftErrors[keyof SaveRoleImageRevisionDraftErrors];
+
+export type SaveRoleImageRevisionDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveRoleImageRevisionDraftResponse = SaveRoleImageRevisionDraftResponses[keyof SaveRoleImageRevisionDraftResponses];
+
+export type DiscardRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardRoleImageRevisionDraftError = DiscardRoleImageRevisionDraftErrors[keyof DiscardRoleImageRevisionDraftErrors];
+
+export type DiscardRoleImageRevisionDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardRoleImageRevisionDraftResponse = DiscardRoleImageRevisionDraftResponses[keyof DiscardRoleImageRevisionDraftResponses];
+
+export type ValidateRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateRoleImageRevisionDraftError = ValidateRoleImageRevisionDraftErrors[keyof ValidateRoleImageRevisionDraftErrors];
+
+export type ValidateRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateRoleImageRevisionDraftResponse = ValidateRoleImageRevisionDraftResponses[keyof ValidateRoleImageRevisionDraftResponses];
+
+export type PublishRoleImageRevisionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishRoleImageRevisionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishRoleImageRevisionDraftError = PublishRoleImageRevisionDraftErrors[keyof PublishRoleImageRevisionDraftErrors];
+
+export type PublishRoleImageRevisionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishRoleImageRevisionDraftResponse = PublishRoleImageRevisionDraftResponses[keyof PublishRoleImageRevisionDraftResponses];
+
+export type RebindRoleImageConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindRoleImageConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindRoleImageConsumersError = RebindRoleImageConsumersErrors[keyof RebindRoleImageConsumersErrors];
+
+export type RebindRoleImageConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindRoleImageConsumersResponse = RebindRoleImageConsumersResponses[keyof RebindRoleImageConsumersResponses];
+
+export type CreateIntegrationDefinitionDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/drafts';
+};
+
+export type CreateIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateIntegrationDefinitionDraftError = CreateIntegrationDefinitionDraftErrors[keyof CreateIntegrationDefinitionDraftErrors];
+
+export type CreateIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateIntegrationDefinitionDraftResponse = CreateIntegrationDefinitionDraftResponses[keyof CreateIntegrationDefinitionDraftResponses];
+
+export type SaveIntegrationDefinitionDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveIntegrationDefinitionDraftError = SaveIntegrationDefinitionDraftErrors[keyof SaveIntegrationDefinitionDraftErrors];
+
+export type SaveIntegrationDefinitionDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveIntegrationDefinitionDraftResponse = SaveIntegrationDefinitionDraftResponses[keyof SaveIntegrationDefinitionDraftResponses];
+
+export type DiscardIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardIntegrationDefinitionDraftError = DiscardIntegrationDefinitionDraftErrors[keyof DiscardIntegrationDefinitionDraftErrors];
+
+export type DiscardIntegrationDefinitionDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardIntegrationDefinitionDraftResponse = DiscardIntegrationDefinitionDraftResponses[keyof DiscardIntegrationDefinitionDraftResponses];
+
+export type ValidateIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateIntegrationDefinitionDraftError = ValidateIntegrationDefinitionDraftErrors[keyof ValidateIntegrationDefinitionDraftErrors];
+
+export type ValidateIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateIntegrationDefinitionDraftResponse = ValidateIntegrationDefinitionDraftResponses[keyof ValidateIntegrationDefinitionDraftResponses];
+
+export type PublishIntegrationDefinitionDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishIntegrationDefinitionDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishIntegrationDefinitionDraftError = PublishIntegrationDefinitionDraftErrors[keyof PublishIntegrationDefinitionDraftErrors];
+
+export type PublishIntegrationDefinitionDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishIntegrationDefinitionDraftResponse = PublishIntegrationDefinitionDraftResponses[keyof PublishIntegrationDefinitionDraftResponses];
+
+export type RebindIntegrationDefinitionConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindIntegrationDefinitionConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindIntegrationDefinitionConsumersError = RebindIntegrationDefinitionConsumersErrors[keyof RebindIntegrationDefinitionConsumersErrors];
+
+export type RebindIntegrationDefinitionConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindIntegrationDefinitionConsumersResponse = RebindIntegrationDefinitionConsumersResponses[keyof RebindIntegrationDefinitionConsumersResponses];
+
+export type CreateSystemSttConfigurationDraftData = {
+    body: ManagedConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configurations/drafts';
+};
+
+export type CreateSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSystemSttConfigurationDraftError = CreateSystemSttConfigurationDraftErrors[keyof CreateSystemSttConfigurationDraftErrors];
+
+export type CreateSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateSystemSttConfigurationDraftResponse = CreateSystemSttConfigurationDraftResponses[keyof CreateSystemSttConfigurationDraftResponses];
+
+export type SaveSystemSttConfigurationDraftData = {
+    body: ManagedConfigurationDraftSaveInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves';
+};
+
+export type SaveSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveSystemSttConfigurationDraftError = SaveSystemSttConfigurationDraftErrors[keyof SaveSystemSttConfigurationDraftErrors];
+
+export type SaveSystemSttConfigurationDraftResponses = {
+    /**
+     * Новый черновик; ETag содержит новую версию configuration
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type SaveSystemSttConfigurationDraftResponse = SaveSystemSttConfigurationDraftResponses[keyof SaveSystemSttConfigurationDraftResponses];
+
+export type DiscardSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardSystemSttConfigurationDraftError = DiscardSystemSttConfigurationDraftErrors[keyof DiscardSystemSttConfigurationDraftErrors];
+
+export type DiscardSystemSttConfigurationDraftResponses = {
+    /**
+     * Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type DiscardSystemSttConfigurationDraftResponse = DiscardSystemSttConfigurationDraftResponses[keyof DiscardSystemSttConfigurationDraftResponses];
+
+export type ValidateSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateSystemSttConfigurationDraftError = ValidateSystemSttConfigurationDraftErrors[keyof ValidateSystemSttConfigurationDraftErrors];
+
+export type ValidateSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type ValidateSystemSttConfigurationDraftResponse = ValidateSystemSttConfigurationDraftResponses[keyof ValidateSystemSttConfigurationDraftResponses];
+
+export type PublishSystemSttConfigurationDraftData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishSystemSttConfigurationDraftError = PublishSystemSttConfigurationDraftErrors[keyof PublishSystemSttConfigurationDraftErrors];
+
+export type PublishSystemSttConfigurationDraftResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type PublishSystemSttConfigurationDraftResponse = PublishSystemSttConfigurationDraftResponses[keyof PublishSystemSttConfigurationDraftResponses];
+
+export type RebindSystemSttConsumersData = {
+    body: ManagedConfigurationRebindInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings';
+};
+
+export type RebindSystemSttConsumersErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RebindSystemSttConsumersError = RebindSystemSttConsumersErrors[keyof RebindSystemSttConsumersErrors];
+
+export type RebindSystemSttConsumersResponses = {
+    /**
+     * Авторитетная конфигурация и ревизия
+     */
+    200: ManagedConfigurationResult;
+};
+
+export type RebindSystemSttConsumersResponse = RebindSystemSttConsumersResponses[keyof RebindSystemSttConsumersResponses];
+
+export type ListManagedConfigurationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        kind?: 'PROMPT_TEMPLATE' | 'ROLE_IMAGE' | 'INTEGRATION_DEFINITION' | 'SYSTEM_STT';
+    };
+    url: '/api/v1/managed-configurations';
+};
+
+export type ListManagedConfigurationsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedConfigurationsError = ListManagedConfigurationsErrors[keyof ListManagedConfigurationsErrors];
+
+export type ListManagedConfigurationsResponses = {
+    /**
+     * Каталог доступных конфигураций без содержимого ревизий
+     */
+    200: ManagedConfigurationPage;
+};
+
+export type ListManagedConfigurationsResponse = ListManagedConfigurationsResponses[keyof ListManagedConfigurationsResponses];
+
+export type ListManagedConfigurationHistoryData = {
+    body?: never;
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions';
+};
+
+export type ListManagedConfigurationHistoryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListManagedConfigurationHistoryError = ListManagedConfigurationHistoryErrors[keyof ListManagedConfigurationHistoryErrors];
+
+export type ListManagedConfigurationHistoryResponses = {
+    /**
+     * История неизменяемых ревизий
+     */
+    200: ManagedConfigurationHistory;
+};
+
+export type ListManagedConfigurationHistoryResponse = ListManagedConfigurationHistoryResponses[keyof ListManagedConfigurationHistoryResponses];
+
+export type GetManagedConfigurationImpactData = {
+    body?: never;
+    path: {
+        configurationRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact';
+};
+
+export type GetManagedConfigurationImpactErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetManagedConfigurationImpactError = GetManagedConfigurationImpactErrors[keyof GetManagedConfigurationImpactErrors];
+
+export type GetManagedConfigurationImpactResponses = {
+    /**
+     * Точные привязки потребителей и digest для выборочного обновления
+     */
+    200: ManagedConfigurationImpact;
+};
+
+export type GetManagedConfigurationImpactResponse = GetManagedConfigurationImpactResponses[keyof GetManagedConfigurationImpactResponses];
+
+export type DetachGitManagedConfigurationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/managed-configurations/{configurationRef}/detachment';
+};
+
+export type DetachGitManagedConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DetachGitManagedConfigurationError = DetachGitManagedConfigurationErrors[keyof DetachGitManagedConfigurationErrors];
+
+export type DetachGitManagedConfigurationResponses = {
+    /**
+     * Конфигурация переведена под управление UI
+     */
+    200: ManagedConfigurationDetachment;
+};
+
+export type DetachGitManagedConfigurationResponse = DetachGitManagedConfigurationResponses[keyof DetachGitManagedConfigurationResponses];
+
+export type CopyGitManagedConfigurationData = {
+    body: ManagedConfigurationCopyInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/managed-configurations/{configurationRef}/copies';
+};
+
+export type CopyGitManagedConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CopyGitManagedConfigurationError = CopyGitManagedConfigurationErrors[keyof CopyGitManagedConfigurationErrors];
+
+export type CopyGitManagedConfigurationResponses = {
+    /**
+     * Создана отдельная UI-конфигурация
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CopyGitManagedConfigurationResponse = CopyGitManagedConfigurationResponses[keyof CopyGitManagedConfigurationResponses];
+
+export type ListSkillBundlesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        agentRef?: OpaqueRef;
+        query?: string;
+        state?: ContextResourceState;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/skill-bundles';
+};
+
+export type ListSkillBundlesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListSkillBundlesError = ListSkillBundlesErrors[keyof ListSkillBundlesErrors];
+
+export type ListSkillBundlesResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundlePage;
+};
+
+export type ListSkillBundlesResponse = ListSkillBundlesResponses[keyof ListSkillBundlesResponses];
+
+export type GetSkillBundleData = {
+    body?: never;
+    path: {
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}';
+};
+
+export type GetSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSkillBundleError = GetSkillBundleErrors[keyof GetSkillBundleErrors];
+
+export type GetSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type GetSkillBundleResponse = GetSkillBundleResponses[keyof GetSkillBundleResponses];
+
+export type ListSkillBundleRevisionsData = {
+    body?: never;
+    path: {
+        bundleRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions';
+};
+
+export type ListSkillBundleRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListSkillBundleRevisionsError = ListSkillBundleRevisionsErrors[keyof ListSkillBundleRevisionsErrors];
+
+export type ListSkillBundleRevisionsResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundleRevisionPage;
+};
+
+export type ListSkillBundleRevisionsResponse = ListSkillBundleRevisionsResponses[keyof ListSkillBundleRevisionsResponses];
+
+export type ArchiveSkillBundleData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/archive';
+};
+
+export type ArchiveSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveSkillBundleError = ArchiveSkillBundleErrors[keyof ArchiveSkillBundleErrors];
+
+export type ArchiveSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type ArchiveSkillBundleResponse = ArchiveSkillBundleResponses[keyof ArchiveSkillBundleResponses];
+
+export type RestoreSkillBundleData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/restoration';
+};
+
+export type RestoreSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RestoreSkillBundleError = RestoreSkillBundleErrors[keyof RestoreSkillBundleErrors];
+
+export type RestoreSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type RestoreSkillBundleResponse = RestoreSkillBundleResponses[keyof RestoreSkillBundleResponses];
+
+export type PurgeSkillBundleData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/purge';
+};
+
+export type PurgeSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PurgeSkillBundleError = PurgeSkillBundleErrors[keyof PurgeSkillBundleErrors];
+
+export type PurgeSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type PurgeSkillBundleResponse = PurgeSkillBundleResponses[keyof PurgeSkillBundleResponses];
+
+export type UnbindAgentSkillBundleData = {
+    body: AgentContextBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/skill-bundles/{bundleRef}';
+};
+
+export type UnbindAgentSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UnbindAgentSkillBundleError = UnbindAgentSkillBundleErrors[keyof UnbindAgentSkillBundleErrors];
+
+export type UnbindAgentSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: AgentContextBinding;
+};
+
+export type UnbindAgentSkillBundleResponse = UnbindAgentSkillBundleResponses[keyof UnbindAgentSkillBundleResponses];
+
+export type BindAgentSkillBundleData = {
+    body: AgentContextBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+        bundleRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/skill-bundles/{bundleRef}';
+};
+
+export type BindAgentSkillBundleErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindAgentSkillBundleError = BindAgentSkillBundleErrors[keyof BindAgentSkillBundleErrors];
+
+export type BindAgentSkillBundleResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: AgentContextBinding;
+};
+
+export type BindAgentSkillBundleResponse = BindAgentSkillBundleResponses[keyof BindAgentSkillBundleResponses];
+
+export type ListMemoryRecordsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectRef?: OpaqueRef;
+        agentRef?: OpaqueRef;
+        query?: string;
+        state?: ContextResourceState;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/memory-records';
+};
+
+export type ListMemoryRecordsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListMemoryRecordsError = ListMemoryRecordsErrors[keyof ListMemoryRecordsErrors];
+
+export type ListMemoryRecordsResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: MemoryRecordPage;
+};
+
+export type ListMemoryRecordsResponse = ListMemoryRecordsResponses[keyof ListMemoryRecordsResponses];
+
+export type GetMemoryRecordData = {
+    body?: never;
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/memory-records/{recordRef}';
+};
+
+export type GetMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetMemoryRecordError = GetMemoryRecordErrors[keyof GetMemoryRecordErrors];
+
+export type GetMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: KodexMemoryRecord;
+};
+
+export type GetMemoryRecordResponse = GetMemoryRecordResponses[keyof GetMemoryRecordResponses];
+
+export type ListMemoryRecordRevisionsData = {
+    body?: never;
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/memory-records/{recordRef}/revisions';
+};
+
+export type ListMemoryRecordRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListMemoryRecordRevisionsError = ListMemoryRecordRevisionsErrors[keyof ListMemoryRecordRevisionsErrors];
+
+export type ListMemoryRecordRevisionsResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: MemoryRecordRevisionPage;
+};
+
+export type ListMemoryRecordRevisionsResponse = ListMemoryRecordRevisionsResponses[keyof ListMemoryRecordRevisionsResponses];
+
+export type ReviseMemoryRecordData = {
+    body: MemoryRecordSpecification;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/memory-records/{recordRef}/revisions';
+};
+
+export type ReviseMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReviseMemoryRecordError = ReviseMemoryRecordErrors[keyof ReviseMemoryRecordErrors];
+
+export type ReviseMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    201: KodexMemoryRecord;
+};
+
+export type ReviseMemoryRecordResponse = ReviseMemoryRecordResponses[keyof ReviseMemoryRecordResponses];
+
+export type ArchiveMemoryRecordData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/memory-records/{recordRef}/archive';
+};
+
+export type ArchiveMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveMemoryRecordError = ArchiveMemoryRecordErrors[keyof ArchiveMemoryRecordErrors];
+
+export type ArchiveMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: KodexMemoryRecord;
+};
+
+export type ArchiveMemoryRecordResponse = ArchiveMemoryRecordResponses[keyof ArchiveMemoryRecordResponses];
+
+export type RestoreMemoryRecordData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/memory-records/{recordRef}/restoration';
+};
+
+export type RestoreMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RestoreMemoryRecordError = RestoreMemoryRecordErrors[keyof RestoreMemoryRecordErrors];
+
+export type RestoreMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: KodexMemoryRecord;
+};
+
+export type RestoreMemoryRecordResponse = RestoreMemoryRecordResponses[keyof RestoreMemoryRecordResponses];
+
+export type PurgeMemoryRecordData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/memory-records/{recordRef}/purge';
+};
+
+export type PurgeMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PurgeMemoryRecordError = PurgeMemoryRecordErrors[keyof PurgeMemoryRecordErrors];
+
+export type PurgeMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: KodexMemoryRecord;
+};
+
+export type PurgeMemoryRecordResponse = PurgeMemoryRecordResponses[keyof PurgeMemoryRecordResponses];
+
+export type UnbindAgentMemoryRecordData = {
+    body: AgentContextBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/memory-records/{recordRef}';
+};
+
+export type UnbindAgentMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type UnbindAgentMemoryRecordError = UnbindAgentMemoryRecordErrors[keyof UnbindAgentMemoryRecordErrors];
+
+export type UnbindAgentMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: AgentContextBinding;
+};
+
+export type UnbindAgentMemoryRecordResponse = UnbindAgentMemoryRecordResponses[keyof UnbindAgentMemoryRecordResponses];
+
+export type BindAgentMemoryRecordData = {
+    body: AgentContextBindingInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        agentRef: OpaqueRef;
+        recordRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agentRef}/memory-records/{recordRef}';
+};
+
+export type BindAgentMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type BindAgentMemoryRecordError = BindAgentMemoryRecordErrors[keyof BindAgentMemoryRecordErrors];
+
+export type BindAgentMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: AgentContextBinding;
+};
+
+export type BindAgentMemoryRecordResponse = BindAgentMemoryRecordResponses[keyof BindAgentMemoryRecordResponses];
+
+export type CreateSkillBundleDraftData = {
+    body: SkillBundleDraftCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/skill-bundle-drafts';
+};
+
+export type CreateSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateSkillBundleDraftError = CreateSkillBundleDraftErrors[keyof CreateSkillBundleDraftErrors];
+
+export type CreateSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    201: SkillBundle;
+};
+
+export type CreateSkillBundleDraftResponse = CreateSkillBundleDraftResponses[keyof CreateSkillBundleDraftResponses];
+
+export type SaveSkillBundleDraftData = {
+    body: SkillBundleSpecification;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}';
+};
+
+export type SaveSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type SaveSkillBundleDraftError = SaveSkillBundleDraftErrors[keyof SaveSkillBundleDraftErrors];
+
+export type SaveSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type SaveSkillBundleDraftResponse = SaveSkillBundleDraftResponses[keyof SaveSkillBundleDraftResponses];
+
+export type ValidateSkillBundleDraftData = {
+    body: ContextRevisionDigestInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/validation';
+};
+
+export type ValidateSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ValidateSkillBundleDraftError = ValidateSkillBundleDraftErrors[keyof ValidateSkillBundleDraftErrors];
+
+export type ValidateSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type ValidateSkillBundleDraftResponse = ValidateSkillBundleDraftResponses[keyof ValidateSkillBundleDraftResponses];
+
+export type ReviewSkillBundleDraftData = {
+    body: SkillBundleReviewInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/review';
+};
+
+export type ReviewSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ReviewSkillBundleDraftError = ReviewSkillBundleDraftErrors[keyof ReviewSkillBundleDraftErrors];
+
+export type ReviewSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type ReviewSkillBundleDraftResponse = ReviewSkillBundleDraftResponses[keyof ReviewSkillBundleDraftResponses];
+
+export type PublishSkillBundleDraftData = {
+    body: ContextRevisionDigestInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/publication';
+};
+
+export type PublishSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PublishSkillBundleDraftError = PublishSkillBundleDraftErrors[keyof PublishSkillBundleDraftErrors];
+
+export type PublishSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type PublishSkillBundleDraftResponse = PublishSkillBundleDraftResponses[keyof PublishSkillBundleDraftResponses];
+
+export type DiscardSkillBundleDraftData = {
+    body: ContextRevisionDigestInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        bundleRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/discard';
+};
+
+export type DiscardSkillBundleDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DiscardSkillBundleDraftError = DiscardSkillBundleDraftErrors[keyof DiscardSkillBundleDraftErrors];
+
+export type DiscardSkillBundleDraftResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    200: SkillBundle;
+};
+
+export type DiscardSkillBundleDraftResponse = DiscardSkillBundleDraftResponses[keyof DiscardSkillBundleDraftResponses];
+
+export type CreateMemoryRecordData = {
+    body: MemoryRecordCreateInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/memory-records';
+};
+
+export type CreateMemoryRecordErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateMemoryRecordError = CreateMemoryRecordErrors[keyof CreateMemoryRecordErrors];
+
+export type CreateMemoryRecordResponses = {
+    /**
+     * Авторитетный context snapshot
+     */
+    201: KodexMemoryRecord;
+};
+
+export type CreateMemoryRecordResponse = CreateMemoryRecordResponses[keyof CreateMemoryRecordResponses];
+
+export type CreateTypedSystemSttConfigurationDraftData = {
+    body: SystemSttConfigurationDraftInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configurations/typed-drafts';
+};
+
+export type CreateTypedSystemSttConfigurationDraftErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateTypedSystemSttConfigurationDraftError = CreateTypedSystemSttConfigurationDraftErrors[keyof CreateTypedSystemSttConfigurationDraftErrors];
+
+export type CreateTypedSystemSttConfigurationDraftResponses = {
+    /**
+     * Черновик; далее используются существующие validation и publication endpoints
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CreateTypedSystemSttConfigurationDraftResponse = CreateTypedSystemSttConfigurationDraftResponses[keyof CreateTypedSystemSttConfigurationDraftResponses];
+
+export type GetSystemSttConfigurationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-stt-configuration';
+};
+
+export type GetSystemSttConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemSttConfigurationError = GetSystemSttConfigurationErrors[keyof GetSystemSttConfigurationErrors];
+
+export type GetSystemSttConfigurationResponses = {
+    /**
+     * Безопасная опубликованная конфигурация STT, не пользовательское разрешение на транскрипцию
+     */
+    200: SystemSttConfiguration;
+};
+
+export type GetSystemSttConfigurationResponse = GetSystemSttConfigurationResponses[keyof GetSystemSttConfigurationResponses];

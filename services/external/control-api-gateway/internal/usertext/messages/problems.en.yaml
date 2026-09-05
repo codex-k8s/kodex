@@ -724,3 +724,29 @@ SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: System exact permissions for sensitive operations
 SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
   other: System permissions for product backend lifecycles
+PERMISSION_PLATFORM_STT_USE_NAME:
+  other: Voice input
+PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
+  other: Convert speech to text through the configured transcription service
+RUNTIME_ENVIRONMENT_DRAFT_CHANGED:
+  other: Environment draft changed
+INTERACTION_DELIVERY_OUTCOME_UNKNOWN:
+  other: Interaction delivery outcome is unknown
+INTERACTION_DELIVERY_RECONCILIATION_REQUIRED:
+  other: Interaction delivery outcome requires reconciliation
+INTERACTION_IDENTITY_CHANGED:
+  other: External interaction identity binding changed
+RUNTIME_ENVIRONMENT_SELECTED_REBOUND:
+  other: Selected consumers rebound to a new environment version
+RUNTIME_SECRET_SELECTED_REBOUND:
+  other: Selected environments rebound to a new secret revision
+SCHEDULE_OCCURRENCE_FAILED:
+  other: Scheduled occurrence failed
+AGENT_CONTEXT_BINDING_CHANGED:
+  other: Agent context binding changed
+MEMORY_RECORD_CHANGED:
+  other: Memory record changed
+SKILL_BUNDLE_CHANGED:
+  other: Skill bundle changed
+SYSTEM_ROLE_STT_PERMISSION:
+  other: System permission for voice input

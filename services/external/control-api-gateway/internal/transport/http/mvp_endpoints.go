@@ -150,12 +150,28 @@ func writeFallbackAvatar(w http.ResponseWriter, ref string) error {
 }
 
 func (server *Server) ListProviderDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListProviderDefinitionsParams) {
+	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListProviderDefinitions(r.Context(), &controlplanev1.ListProviderDefinitionsRequest{
 		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
+	}
+	for _, definition := range response.GetDefinitions() {
+		if definition == nil {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+		for _, model := range definition.Models {
+			if _, valid := modelCapabilityView(model); !valid || model.ProviderDefinitionKey != definition.Key {
+				writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+				return
+			}
+		}
 	}
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }

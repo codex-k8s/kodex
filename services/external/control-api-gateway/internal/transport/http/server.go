@@ -104,7 +104,11 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 			secretRef = *body.Purpose.SecretRef
 		}
 		purpose = &boundary.SessionPurpose{
-			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: secretRef,
+			Kind: string(body.Purpose.Kind), ProjectRef: stringValue(body.Purpose.ProjectRef), SecretRef: secretRef,
+			ReceiptRef: stringValue(body.Purpose.ReceiptRef), ReceiptDigest: stringValue(body.Purpose.ReceiptDigest),
+		}
+		if body.Purpose.ReceiptVersion != nil {
+			purpose.ReceiptVersion = *body.Purpose.ReceiptVersion
 		}
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
@@ -357,10 +361,17 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 			return "", field.JSONName() == "safeEffectiveConfig"
 		case "controlplane.v1.ProviderAccount":
 			return "", field.JSONName() == "externalAccountMasked"
+		case "controlplane.v1.ModelCapability":
+			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.ProviderDefinition":
+			return "", field.JSONName() == "description" || field.JSONName() == "defaultModelId"
 		}
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
+	}
+	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "available" || field.JSONName() == "ready"
 	}
 	return nil, false
 }
@@ -465,7 +476,7 @@ var enumPrefixes = []string{
 	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_",
 	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
-	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_",
+	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_",
 	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",
 	"RUNTIME_SECRET_VALUE_TYPE_",
 	"SEARCH_RESULT_KIND_",

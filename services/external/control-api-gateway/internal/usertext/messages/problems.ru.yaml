@@ -724,3 +724,29 @@ SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: Системные точные полномочия для чувствительных операций
 SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
   other: Системные полномочия продуктовых backend lifecycle
+PERMISSION_PLATFORM_STT_USE_NAME:
+  other: Голосовой ввод
+PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
+  other: Преобразование речи в текст через настроенный сервис распознавания
+RUNTIME_ENVIRONMENT_DRAFT_CHANGED:
+  other: Черновик окружения изменён
+INTERACTION_DELIVERY_OUTCOME_UNKNOWN:
+  other: Результат доставки взаимодействия неизвестен
+INTERACTION_DELIVERY_RECONCILIATION_REQUIRED:
+  other: Требуется сверка результата доставки взаимодействия
+INTERACTION_IDENTITY_CHANGED:
+  other: Привязка пользователя внешнего взаимодействия изменена
+RUNTIME_ENVIRONMENT_SELECTED_REBOUND:
+  other: Выбранные потребители переведены на новую версию окружения
+RUNTIME_SECRET_SELECTED_REBOUND:
+  other: Выбранные окружения переведены на новую ревизию секрета
+SCHEDULE_OCCURRENCE_FAILED:
+  other: Не удалось выполнить запуск по расписанию
+AGENT_CONTEXT_BINDING_CHANGED:
+  other: Привязка контекста сотрудника изменена
+MEMORY_RECORD_CHANGED:
+  other: Запись памяти изменена
+SKILL_BUNDLE_CHANGED:
+  other: Набор навыков изменён
+SYSTEM_ROLE_STT_PERMISSION:
+  other: Системное разрешение на голосовой ввод

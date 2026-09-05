@@ -22,7 +22,7 @@ func (server *Server) GetBootstrapState(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("ETag", fmt.Sprintf("\"%d\"", identity.SessionRevision))
-	writeMessage(w, http.StatusOK, response, "state", "")
+	server.writeBootstrapState(w, r, response.GetState())
 }
 func (server *Server) GetOverview(w http.ResponseWriter, r *http.Request, p generated.GetOverviewParams) {
 	response, err := server.control.Query.GetOverview(r.Context(), &controlplanev1.GetOverviewRequest{ProjectRef: stringValue(p.ProjectRef)})
@@ -49,6 +49,14 @@ func (server *Server) ListRuntimeSelections(w http.ResponseWriter, r *http.Reque
 	writeMessage(w, http.StatusOK, response, "", "runtimes")
 }
 func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p generated.SearchPlatformParams) {
+	r, ok := catalogRequest(w, r, p.ProjectRef, &p.Query, nil, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchQuery(p.Query) || p.Limit != nil && (*p.Limit < 1 || *p.Limit > 50) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	limit := int32(20)
 	if p.Limit != nil {
 		limit = int32(*p.Limit)
@@ -60,7 +68,7 @@ func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p g
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "results")
+	writeSearchPage(w, response, stringValue(p.ProjectRef), int(limit))
 }
 func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p generated.ListProjectsParams) {
 	response, err := server.control.Query.ListProjects(r.Context(), &controlplanev1.ListProjectsRequest{Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
@@ -98,12 +106,12 @@ func (server *Server) ListPlatformMembershipCandidates(w http.ResponseWriter, r 
 	}
 	writeMessage(w, http.StatusOK, response, "", "users")
 }
-func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
-	r, ok := withProjectReference(w, r, ref)
+func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListProjectMembershipsParams) {
+	r, ok := catalogRequest(w, r, &ref, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Page: page(nil, nil)})
+	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

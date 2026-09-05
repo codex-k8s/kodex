@@ -28,6 +28,9 @@ const (
 	csrfTokenBytes = 32
 
 	ElevationKindRuntimeSecretReveal = "RUNTIME_SECRET_REVEAL"
+	ElevationKindEmailReconciliation = "EMAIL_EFFECT_RECONCILIATION"
+	MaximumElevationLifetime         = 2 * time.Minute
+	maximumReceiptVersion            = 1<<53 - 1
 )
 
 type Config struct {
@@ -59,10 +62,13 @@ type Claims struct {
 // Elevation связывает короткоживущее полномочие с точной чувствительной операцией.
 // Одноразовость обеспечивается авторитетным server-owned store по SessionID.
 type Elevation struct {
-	Kind       string `json:"kind"`
-	ProjectRef string `json:"project_ref"`
-	SecretRef  string `json:"secret_ref"`
-	ExpiresAt  int64  `json:"expires_at"`
+	Kind           string `json:"kind"`
+	ProjectRef     string `json:"project_ref,omitempty"`
+	SecretRef      string `json:"secret_ref,omitempty"`
+	ReceiptRef     string `json:"receipt_ref,omitempty"`
+	ReceiptVersion int64  `json:"receipt_version,omitempty"`
+	ReceiptDigest  string `json:"receipt_digest,omitempty"`
+	ExpiresAt      int64  `json:"expires_at"`
 }
 
 func New(config Config) (*Store, error) {
@@ -182,9 +188,26 @@ func validElevation(value *Elevation, now, sessionExpiry time.Time) bool {
 		return true
 	}
 	expires := time.Unix(value.ExpiresAt, 0).UTC()
-	return value.Kind == ElevationKindRuntimeSecretReveal &&
-		validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
-		expires.After(now) && !expires.After(sessionExpiry) && expires.Sub(now) <= 2*time.Minute
+	if !expires.After(now) || expires.After(sessionExpiry) || expires.Sub(now) > MaximumElevationLifetime {
+		return false
+	}
+	switch value.Kind {
+	case ElevationKindRuntimeSecretReveal:
+		return validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
+			value.ReceiptRef == "" && value.ReceiptVersion == 0 && value.ReceiptDigest == ""
+	case ElevationKindEmailReconciliation:
+		return value.ProjectRef == "" && value.SecretRef == "" && ValidEmailReceiptBinding(value.ReceiptRef, value.ReceiptVersion, value.ReceiptDigest)
+	default:
+		return false
+	}
+}
+
+func ValidEmailReceiptBinding(ref string, version int64, digest string) bool {
+	if !validOpaqueReference(ref) || version < 1 || version > maximumReceiptVersion || len(digest) != sha256.Size*2 || strings.ToLower(digest) != digest {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 func validOpaqueReference(value string) bool {
