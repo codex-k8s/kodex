@@ -80,8 +80,8 @@ func Run(ctx, background context.Context, version string) error {
 	}
 	defer client.Close()
 	owner := &authority.Client{API: client.Runtime}
-	service := &mail.Service{Ledger: repository, CompletionBase: background, Config: configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
-	reconciler := &reconciliation.Service{Repository: repository, Authority: owner, Interval: time.Duration(c.ReconciliationIntervalSeconds) * time.Second, Batch: c.ReconciliationBatch, Observer: businessMetrics, Barrier: func(probe context.Context) error {
+	service := &mail.Service{Reports: repository, Ledger: repository, CompletionBase: background, Config: configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+	reconciler := &reconciliation.Service{Reports: repository, Repository: repository, Authority: owner, Interval: time.Duration(c.ReconciliationIntervalSeconds) * time.Second, Batch: c.ReconciliationBatch, Observer: businessMetrics, Barrier: func(probe context.Context) error {
 		if err := repository.Ready(probe); err != nil {
 			return err
 		}
@@ -116,7 +116,7 @@ func Run(ctx, background context.Context, version string) error {
 	if e != nil {
 		return errors.New("HTTPS listener unavailable")
 	}
-	group := serviceruntime.StartWorkers(ctx, reconciler.Run, func(context.Context) error {
+	group := serviceruntime.StartWorkers(ctx, reconciler.Run, reconciler.RunReports, func(context.Context) error {
 		e := tech.Serve()
 		if e != nil {
 			stop()

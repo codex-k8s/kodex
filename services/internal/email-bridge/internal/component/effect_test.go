@@ -52,7 +52,7 @@ func TestOwnerBindingMustPersistBeforeProvider(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, sec, _ := service(t, f, "implicit", nil)
 	s.Ledger = failingLedger{}
-	if _, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture", send(api.OperationSend, "journal-failure")); !errors.Is(err, errs.Unavailable) || sec.reads.Load() != 0 {
+	if _, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture", send(api.OperationSend, "journal-failure")); !errors.Is(err, errs.Unavailable) || sec.reads.Load() != 0 {
 		t.Fatal("provider started without durable CP identity")
 	}
 }
@@ -62,7 +62,7 @@ func TestEmptyMailboxConfigurationFailsClosed(t *testing.T) {
 	s, sec, _ := service(t, f, "implicit", nil)
 	s.Config.Mailboxes = nil
 	for _, op := range []api.Operation{api.OperationHealth, api.OperationSend} {
-		if _, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture", send(op, "not-configured")); !errors.Is(err, errs.NotFound) || sec.reads.Load() != 0 {
+		if _, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture", send(op, "not-configured")); !errors.Is(err, errs.NotFound) || sec.reads.Load() != 0 {
 			t.Fatal("unconfigured mailbox reached provider")
 		}
 	}
@@ -107,7 +107,7 @@ func testDurableUnknown(t *testing.T, store port.Repository) {
 			if fail == "missing-client" {
 				s.Effects = nil
 			}
-			result, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", command)
+			result, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", command)
 			if fail == "none" && (err != nil || result.Status != "accepted" || calls != 2) {
 				t.Fatalf("report lifecycle failed: %v", err)
 			}
@@ -121,7 +121,7 @@ func testDurableUnknown(t *testing.T, store port.Repository) {
 			if fail == "terminal-report" {
 				// Восстановление CP допубликовывает receipt, но не повторяет SMTP.
 				s.Effects = effectFixture{}
-				replay, err := s.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", command)
+				replay, err := s.Execute(executionContext(t.Context()), httptransport.CallerSPIFFE, "fixture-token", command)
 				if err != nil || replay.Status != "accepted" || sec.reads.Load() != before {
 					t.Fatal("receipt recovery repeated provider effect")
 				}

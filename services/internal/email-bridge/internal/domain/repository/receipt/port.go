@@ -21,6 +21,7 @@ type Record struct {
 	Audit                                                         Audit
 	ID, Key, Digest, Status, Resource, UID, Folder, ContentDigest string
 	UIDValidity                                                   uint32
+	ReportVersion                                                 int64
 }
 
 func (r Record) Result() api.Result {

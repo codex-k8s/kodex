@@ -13,7 +13,7 @@ func New() *Metrics {
 
 func (m *Metrics) Reconciliation(outcome string) {
 	switch outcome {
-	case "committed", "replay", "none", "denied", "invalid", "barrier", "error":
+	case "committed", "replay", "reported", "none", "denied", "invalid", "barrier", "error":
 	default:
 		outcome = "error"
 	}
