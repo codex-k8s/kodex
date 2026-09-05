@@ -5276,46 +5276,46 @@ func (e TemplateVariableFieldValueType) Valid() bool {
 
 // Defines values for VFSNodeKind.
 const (
-	AGENT       VFSNodeKind = "AGENT"
-	AUTOMATION  VFSNodeKind = "AUTOMATION"
-	AVATAR      VFSNodeKind = "AVATAR"
-	DIRECTORY   VFSNodeKind = "DIRECTORY"
-	ENVIRONMENT VFSNodeKind = "ENVIRONMENT"
-	INPUT       VFSNodeKind = "INPUT"
-	MEMORY      VFSNodeKind = "MEMORY"
-	PROJECT     VFSNodeKind = "PROJECT"
-	RESULT      VFSNodeKind = "RESULT"
-	RUN         VFSNodeKind = "RUN"
-	SKILL       VFSNodeKind = "SKILL"
-	WORKFLOW    VFSNodeKind = "WORKFLOW"
+	VFSNodeKindAGENT       VFSNodeKind = "AGENT"
+	VFSNodeKindAUTOMATION  VFSNodeKind = "AUTOMATION"
+	VFSNodeKindAVATAR      VFSNodeKind = "AVATAR"
+	VFSNodeKindDIRECTORY   VFSNodeKind = "DIRECTORY"
+	VFSNodeKindENVIRONMENT VFSNodeKind = "ENVIRONMENT"
+	VFSNodeKindINPUT       VFSNodeKind = "INPUT"
+	VFSNodeKindMEMORY      VFSNodeKind = "MEMORY"
+	VFSNodeKindPROJECT     VFSNodeKind = "PROJECT"
+	VFSNodeKindRESULT      VFSNodeKind = "RESULT"
+	VFSNodeKindRUN         VFSNodeKind = "RUN"
+	VFSNodeKindSKILL       VFSNodeKind = "SKILL"
+	VFSNodeKindWORKFLOW    VFSNodeKind = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the VFSNodeKind enum.
 func (e VFSNodeKind) Valid() bool {
 	switch e {
-	case AGENT:
+	case VFSNodeKindAGENT:
 		return true
-	case AUTOMATION:
+	case VFSNodeKindAUTOMATION:
 		return true
-	case AVATAR:
+	case VFSNodeKindAVATAR:
 		return true
-	case DIRECTORY:
+	case VFSNodeKindDIRECTORY:
 		return true
-	case ENVIRONMENT:
+	case VFSNodeKindENVIRONMENT:
 		return true
-	case INPUT:
+	case VFSNodeKindINPUT:
 		return true
-	case MEMORY:
+	case VFSNodeKindMEMORY:
 		return true
-	case PROJECT:
+	case VFSNodeKindPROJECT:
 		return true
-	case RESULT:
+	case VFSNodeKindRESULT:
 		return true
-	case RUN:
+	case VFSNodeKindRUN:
 		return true
-	case SKILL:
+	case VFSNodeKindSKILL:
 		return true
-	case WORKFLOW:
+	case VFSNodeKindWORKFLOW:
 		return true
 	default:
 		return false
@@ -5922,6 +5922,24 @@ const (
 func (e ListProviderAccountsParamsDefinitionKey) Valid() bool {
 	switch e {
 	case ListProviderAccountsParamsDefinitionKeyOpenaiCodex:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRunsParamsTargetType.
+const (
+	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
+	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
+func (e ListRunsParamsTargetType) Valid() bool {
+	switch e {
+	case ListRunsParamsTargetTypeAGENT:
+		return true
+	case ListRunsParamsTargetTypeWORKFLOW:
 		return true
 	default:
 		return false
@@ -11242,12 +11260,22 @@ type ValidateRoleImageRevisionDraftParams struct {
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
-	ProjectRef *ProjectRefQuery        `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query                  `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	States     *[]ListRunsParamsStates `form:"states,omitempty" json:"states,omitempty"`
+	ProjectRef            *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query                 *Query           `form:"query,omitempty" json:"query,omitempty"`
+	PageSize              *PageSize        `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken             *PageToken       `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ResumableSessionsOnly *bool            `form:"resumableSessionsOnly,omitempty" json:"resumableSessionsOnly,omitempty"`
+
+	// TargetType Только вместе с targetRef в resumable режиме; без пары каталог охватывает все доступные targets.
+	TargetType *ListRunsParamsTargetType `form:"targetType,omitempty" json:"targetType,omitempty"`
+
+	// TargetRef Точный target, разрешаемый владельцем до поиска, distinct count и pagination.
+	TargetRef *string                 `form:"targetRef,omitempty" json:"targetRef,omitempty"`
+	States    *[]ListRunsParamsStates `form:"states,omitempty" json:"states,omitempty"`
 }
+
+// ListRunsParamsTargetType defines parameters for ListRuns.
+type ListRunsParamsTargetType string
 
 // ListRunsParamsStates defines parameters for ListRuns.
 type ListRunsParamsStates string
@@ -29873,6 +29901,45 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resumableSessionsOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resumableSessionsOnly", r.URL.Query(), &params.ResumableSessionsOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resumableSessionsOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resumableSessionsOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "targetType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "targetType", r.URL.Query(), &params.TargetType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "targetRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "targetRef", r.URL.Query(), &params.TargetRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetRef", Err: err})
 		}
 		return
 	}

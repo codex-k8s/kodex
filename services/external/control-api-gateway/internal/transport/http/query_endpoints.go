@@ -187,6 +187,13 @@ func (server *Server) ListRuns(w http.ResponseWriter, r *http.Request, p generat
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
+	resumable := boolValue(p.ResumableSessionsOnly)
+	targetType, targetRef := stringValue(p.TargetType), stringValue(p.TargetRef)
+	if resumable && p.States != nil || (p.TargetType == nil) != (p.TargetRef == nil) ||
+		p.TargetType != nil && (!resumable || !p.TargetType.Valid() || !effectiveCapabilityRef(targetRef)) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	states := []controlplanev1.RunState{}
 	if p.States != nil {
 		if len(*p.States) == 0 || len(*p.States) > 7 {
@@ -204,12 +211,13 @@ func (server *Server) ListRuns(w http.ResponseWriter, r *http.Request, p generat
 			states = append(states, controlplanev1.RunState(value))
 		}
 	}
-	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), States: states})
+	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), States: states, ResumableSessionsOnly: resumable, TargetType: targetType, TargetRef: targetRef})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	if response == nil || !validCountedCatalogPage(response.GetTotal(), len(response.GetRuns()), response.GetPage()) {
+	if response == nil || !validCountedCatalogPage(response.GetTotal(), len(response.GetRuns()), response.GetPage()) ||
+		resumable && !validResumableRunPage(response, stringValue(p.ProjectRef), targetType, targetRef, stringValue(p.PageToken), p.PageSize) {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}

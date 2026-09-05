@@ -2069,11 +2069,23 @@ paths:
     get:
       tags: [Runs]
       operationId: listRuns
+      description: Обычный каталог Run либо один последний доступный Run на каждую возобновляемую Session. В resumable режиме total считает Session, states запрещён; owner проверяет текущие ADD_TURN authority и runtime. Изменение снимка курсора возвращает 412, после которого требуется первая страница.
       parameters:
         - { $ref: '#/components/parameters/ProjectRefQuery' }
         - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
+        - name: resumableSessionsOnly
+          in: query
+          schema: { type: boolean, default: false }
+        - name: targetType
+          in: query
+          description: Только вместе с targetRef в resumable режиме; без пары каталог охватывает все доступные targets.
+          schema: { type: string, enum: [AGENT, WORKFLOW] }
+        - name: targetRef
+          in: query
+          description: Точный target, разрешаемый владельцем до поиска, distinct count и pagination.
+          schema: { type: string, minLength: 8, maxLength: 96, pattern: '^[A-Za-z0-9_-]+$' }
         - name: states
           in: query
           style: form

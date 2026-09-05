@@ -2019,6 +2019,9 @@ message ListRunsRequest {
   PageRequest page = 2;
   repeated RunState states = 3;
   string query = 4;
+  bool resumable_sessions_only = 5;
+  string target_type = 6;
+  string target_ref = 7;
 }
 message ListRunsResponse {
   repeated Run runs = 1;

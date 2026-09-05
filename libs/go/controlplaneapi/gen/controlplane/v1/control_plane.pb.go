@@ -16604,13 +16604,16 @@ func (x *ArchiveWorkflowResponse) GetWorkflow() *Workflow {
 }
 
 type ListRunsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectRef    string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
-	States        []RunState             `protobuf:"varint,3,rep,packed,name=states,proto3,enum=controlplane.v1.RunState" json:"states,omitempty"`
-	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ProjectRef            string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	Page                  *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	States                []RunState             `protobuf:"varint,3,rep,packed,name=states,proto3,enum=controlplane.v1.RunState" json:"states,omitempty"`
+	Query                 string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	ResumableSessionsOnly bool                   `protobuf:"varint,5,opt,name=resumable_sessions_only,json=resumableSessionsOnly,proto3" json:"resumable_sessions_only,omitempty"`
+	TargetType            string                 `protobuf:"bytes,6,opt,name=target_type,json=targetType,proto3" json:"target_type,omitempty"`
+	TargetRef             string                 `protobuf:"bytes,7,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ListRunsRequest) Reset() {
@@ -16667,6 +16670,27 @@ func (x *ListRunsRequest) GetStates() []RunState {
 func (x *ListRunsRequest) GetQuery() string {
 	if x != nil {
 		return x.Query
+	}
+	return ""
+}
+
+func (x *ListRunsRequest) GetResumableSessionsOnly() bool {
+	if x != nil {
+		return x.ResumableSessionsOnly
+	}
+	return false
+}
+
+func (x *ListRunsRequest) GetTargetType() string {
+	if x != nil {
+		return x.TargetType
+	}
+	return ""
+}
+
+func (x *ListRunsRequest) GetTargetRef() string {
+	if x != nil {
+		return x.TargetRef
 	}
 	return ""
 }
@@ -62461,13 +62485,18 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12!\n" +
 	"\fworkflow_ref\x18\x02 \x01(\tR\vworkflowRef\"P\n" +
 	"\x17ArchiveWorkflowResponse\x125\n" +
-	"\bworkflow\x18\x01 \x01(\v2\x19.controlplane.v1.WorkflowR\bworkflow\"\xad\x01\n" +
+	"\bworkflow\x18\x01 \x01(\v2\x19.controlplane.v1.WorkflowR\bworkflow\"\xa5\x02\n" +
 	"\x0fListRunsRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x120\n" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x121\n" +
 	"\x06states\x18\x03 \x03(\x0e2\x19.controlplane.v1.RunStateR\x06states\x12\x14\n" +
-	"\x05query\x18\x04 \x01(\tR\x05query\"\x81\x01\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\x126\n" +
+	"\x17resumable_sessions_only\x18\x05 \x01(\bR\x15resumableSessionsOnly\x12\x1f\n" +
+	"\vtarget_type\x18\x06 \x01(\tR\n" +
+	"targetType\x12\x1d\n" +
+	"\n" +
+	"target_ref\x18\a \x01(\tR\ttargetRef\"\x81\x01\n" +
 	"\x10ListRunsResponse\x12(\n" +
 	"\x04runs\x18\x01 \x03(\v2\x14.controlplane.v1.RunR\x04runs\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +

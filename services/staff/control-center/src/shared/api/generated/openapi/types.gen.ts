@@ -7340,6 +7340,15 @@ export type ListRunsData = {
         query?: string;
         pageSize?: number;
         pageToken?: string;
+        resumableSessionsOnly?: boolean;
+        /**
+         * Только вместе с targetRef в resumable режиме; без пары каталог охватывает все доступные targets.
+         */
+        targetType?: 'AGENT' | 'WORKFLOW';
+        /**
+         * Точный target, разрешаемый владельцем до поиска, distinct count и pagination.
+         */
+        targetRef?: string;
         states?: Array<'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'>;
     };
     url: '/api/v1/runs';
