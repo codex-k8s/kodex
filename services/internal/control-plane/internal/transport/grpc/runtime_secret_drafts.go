@@ -75,7 +75,7 @@ func (server *Server) PrepareValidateRuntimeSecretDraft(ctx context.Context, req
 	return &cp.PrepareValidateRuntimeSecretDraftResponse{Operation: operation}, nil
 }
 func (server *Server) PreparePublishRuntimeSecretDraft(ctx context.Context, request *cp.PreparePublishRuntimeSecretDraftRequest) (*cp.PreparePublishRuntimeSecretDraftResponse, error) {
-	operation, err := server.prepareSecretDraft(ctx, cp.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName, port.RuntimeSecretDraftPrepareInput{Kind: "PUBLISH", Mutation: mutation(request.GetMutation()), DraftRef: request.GetDraftRef(), ExpectedSecretVersion: request.GetExpectedSecretVersion()})
+	operation, err := server.prepareSecretDraft(ctx, cp.PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName, port.RuntimeSecretDraftPrepareInput{Kind: "PUBLISH", Mutation: mutation(request.GetMutation()), DraftRef: request.GetDraftRef(), ExpectedSecretVersion: request.GetExpectedSecretVersion(), ImpactPlanRef: request.GetImpactPlanRef(), SelectedItemRefs: request.GetSelectedItemRefs()})
 	if err != nil {
 		return nil, err
 	}

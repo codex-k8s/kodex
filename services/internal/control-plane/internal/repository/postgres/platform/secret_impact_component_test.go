@@ -144,4 +144,5 @@ WHERE secret_id=(SELECT id FROM control_plane.runtime_secrets WHERE ref=$1) AND 
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateRuntimeEnvironment, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "secret-impact-retired"}, Payload: environmentInput}); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("retired revision was bound: %v", err)
 	}
+	testSecretDraftImpactRebind(t, ctx, repository, service, owner, rotated)
 }

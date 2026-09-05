@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 57, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 58, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -310,7 +310,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	case "platform.provider-credentials.device-authorize.get":
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "FORBIDDEN"}
 	}
-	resource := operationID == "platform.query.runtime-revisions.diff" || strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+	resource := operationID == "platform.command.runtime-secret-drafts.impact.prepare" || operationID == "platform.query.runtime-revisions.diff" || strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
 		strings.Contains(operationID, ".save") || strings.Contains(operationID, ".discard") ||
 		strings.Contains(operationID, ".validate") || strings.Contains(operationID, ".publish") || strings.Contains(operationID, ".rebind") ||
 		strings.Contains(operationID, ".detach") || strings.Contains(operationID, ".copy") || strings.Contains(operationID, "device-")
