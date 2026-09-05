@@ -4,7 +4,7 @@ SELECT secret.ref, revision.revision, revision.namespace, revision.secret_name,
        revision.content_sha256
 FROM control_plane.runtime_secrets secret
 JOIN control_plane.runtime_secret_revisions revision
-  ON revision.secret_id = secret.id AND revision.revision = secret.current_revision
+  ON revision.secret_id = secret.id AND revision.state='ACTIVE'
 WHERE secret.organization_id = @organization_id::uuid
   AND secret.project_id = @project_id::uuid
   AND secret.state = 'ACTIVE'

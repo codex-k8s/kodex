@@ -45,3 +45,14 @@ func TestClosedModelCompatibility(t *testing.T) {
 		t.Fatal("catalog aliases mutable storage")
 	}
 }
+
+func TestDocumentedMiniSnapshotsKeepExactCompatibility(t *testing.T) {
+	for _, snapshot := range []string{"gpt-4o-mini-transcribe-2025-12-15", "gpt-4o-mini-transcribe-2025-03-20"} {
+		profile, ok := Lookup(snapshot)
+		if !ok || profile.Legacy != (snapshot == "gpt-4o-mini-transcribe-2025-03-20") ||
+			Validate(snapshot, "ru", Parameters{ChunkingStrategy: "auto"}) != nil ||
+			Validate(snapshot, "", Parameters{Languages: []string{"ru", "en"}}) == nil {
+			t.Fatal("совместимость документированного snapshot потеряна")
+		}
+	}
+}

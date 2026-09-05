@@ -9,6 +9,11 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1"
 // SpeechToTextService предоставляет только распознавание речи. TTS не входит
 // в текущую версию контракта.
 service SpeechToTextService {
+  // GetModelCatalog возвращает только возможности adapter по отдельному
+  // org-scoped system.configuration.manage authority. Доступен до первой
+  // конфигурации/credential и не подтверждает готовность распознавания.
+  rpc GetModelCatalog(GetModelCatalogRequest) returns (GetModelCatalogResponse);
+
   // Transcribe принимает metadata первым сообщением, ограниченные chunks и
   // commit последним сообщением. Полномочия и конфигурация задаются сервером.
   rpc Transcribe(stream TranscribeRequest) returns (TranscribeResponse);
@@ -88,6 +93,13 @@ enum TranscriptionStage {
 }
 
 message CheckReadinessRequest {}
+
+// Actor/organization назначаются проверенным transport context, не payload.
+message GetModelCatalogRequest {}
+
+message GetModelCatalogResponse {
+  TranscriptionModelCatalog catalog = 1;
+}
 
 message CheckReadinessResponse {
   bool ready = 1;

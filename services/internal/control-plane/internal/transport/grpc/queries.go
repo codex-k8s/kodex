@@ -156,11 +156,11 @@ func (server *Server) ListProjectMemberships(ctx context.Context, request *contr
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListMemberships(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_MANAGE_MEMBERS}}
+	response := &controlplanev1.ListProjectMembershipsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
 	for _, item := range items {
 		response.Memberships = append(response.Memberships, castMembership(item))
 	}
@@ -334,11 +334,15 @@ func (server *Server) ListOwnerGates(ctx context.Context, request *controlplanev
 	if request.GetState() != controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED {
 		state = enumSuffix(request.GetState(), "OWNER_GATE_STATE_")
 	}
-	items, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, Page: page(request.GetPage())})
+	states := make([]string, 0, len(request.GetStates()))
+	for _, item := range request.GetStates() {
+		states = append(states, enumSuffix(item, "OWNER_GATE_STATE_"))
+	}
+	items, total, next, err := server.service.ListOwnerGates(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), State: state, States: states, Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	response := &controlplanev1.ListOwnerGatesResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}, Total: total}
 	for _, item := range items {
 		response.Gates = append(response.Gates, castGate(item))
 	}

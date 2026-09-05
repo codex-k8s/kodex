@@ -91,6 +91,14 @@ func (store *providerCredentialStoreStub) CleanupProviderCredential(
 
 type providerAppServerStub struct{ starts int }
 
+func (store *providerCredentialStoreStub) ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
+	return nil, errors.New("unexpected credential read")
+}
+
+func (server *providerAppServerStub) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
+	return ModelCatalog{}, errors.New("unexpected model catalog observation")
+}
+
 func (server *providerAppServerStub) Check(context.Context) error { return nil }
 
 func (server *providerAppServerStub) StartDeviceAuthorization(

@@ -12,10 +12,12 @@ resources:
   - ../../overlays/production/role-image-builder
   - ../../overlays/production/runtime-controller
   - ../../base/runtime-workloads
+  - ../../base/runtime-secret-drafts
   - ../../overlays/production/integration-gateway
   - ../../overlays/production/automation-scheduler
   - ../../overlays/production/secret-broker
   - ../../overlays/production/stt-tts-service
+  - ../../overlays/production/email-bridge
   - ../../overlays/production/artifact-retention
   - ../../overlays/production/session-archive
   - ../../overlays/production/backup-controller

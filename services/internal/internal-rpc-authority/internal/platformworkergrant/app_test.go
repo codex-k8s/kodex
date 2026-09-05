@@ -97,9 +97,104 @@ func TestWriteAtomicRejectsSymlinkDirectory(t *testing.T) {
 
 func TestSupportedWorkloadsIncludeAuthorityCallers(t *testing.T) {
 	t.Parallel()
-	for _, workloadID := range []string{"control-plane", "session-archive"} {
+	for _, workloadID := range []string{"control-plane", "session-archive", "interaction-gateway", "email-bridge"} {
 		if _, ok := supportedWorkloads[workloadID]; !ok {
 			t.Fatalf("%s отсутствует в закрытом реестре platform worker", workloadID)
 		}
+	}
+}
+
+func TestOptionalWorkerGrantExactIdentityAndRotation(t *testing.T) {
+	for _, workload := range []string{"email-bridge", "interaction-gateway"} {
+		t.Run(workload, func(t *testing.T) {
+			key, err := internalrpcauth.GenerateES256Key(workload + "-platform-worker-g3")
+			if err != nil {
+				t.Fatal(err)
+			}
+			configuration := config{WorkloadID: workload, OutputFile: filepath.Join(t.TempDir(), "grant.jws")}
+			now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+			var previous claims
+			for i := 0; i < 2; i++ {
+				stamp := now.Add(time.Duration(i) * time.Minute)
+				if err := rotate(configuration, key, func() time.Time { return stamp }); err != nil {
+					t.Fatal(err)
+				}
+				value := readTestClaims(t, configuration.OutputFile, key)
+				if value.WorkloadID != workload || value.Issuer != "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/"+workload ||
+					value.Audience != "urn:kodex:platform-worker:"+workload || value.CallerSPIFFEID != "spiffe://kodex.local/ns/kodex-system/sa/"+workload ||
+					value.CredentialGeneration != 3 || value.Subject != "kodex-system-subject" || value.OrganizationID != "kodex-installation" || value.ProjectID != "" || value.TenantOwner ||
+					value.ExpiresAt-value.IssuedAt != int64(grantTTL/time.Second) || value.IssuedAt != stamp.Unix() || value.NotBefore != stamp.Unix() {
+					t.Fatal("worker grant binding differs")
+				}
+				if i > 0 && (value.Revision <= previous.Revision || value.JTI == previous.JTI) {
+					t.Fatal("rotation did not advance grant")
+				}
+				previous = value
+			}
+		})
+	}
+}
+
+func TestWorkerGrantRejectsUnknownWorkloadAndForeignKey(t *testing.T) {
+	for _, tc := range []struct{ workload, kid string }{
+		{"unknown-worker", "unknown-worker-platform-worker-g1"},
+		{"email-bridge", "interaction-gateway-platform-worker-g1"},
+		{"interaction-gateway", "email-bridge-platform-worker-g1"},
+		{"email-bridge", "email-bridge-platform-worker-g1-extra-g2"},
+	} {
+		t.Run(tc.workload+"-"+tc.kid, func(t *testing.T) {
+			key, err := internalrpcauth.GenerateES256Key(tc.kid)
+			if err != nil {
+				t.Fatal(err)
+			}
+			configuration := config{WorkloadID: tc.workload, OutputFile: filepath.Join(t.TempDir(), "grant.jws")}
+			if err := rotate(configuration, key, time.Now); err == nil {
+				t.Fatal("unregistered or foreign signing key accepted")
+			}
+			if _, err := os.Stat(configuration.OutputFile); !os.IsNotExist(err) {
+				t.Fatal("rejected grant was written")
+			}
+		})
+	}
+}
+
+func TestGrantReadbackRejectsSignedIdentityMismatch(t *testing.T) {
+	key, err := internalrpcauth.GenerateES256Key("email-bridge-platform-worker-g1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := config{WorkloadID: "email-bridge", OutputFile: filepath.Join(t.TempDir(), "grant.jws")}
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	if err := rotate(configuration, key, func() time.Time { return now }); err != nil {
+		t.Fatal(err)
+	}
+	exact := readTestClaims(t, configuration.OutputFile, key)
+	for _, tc := range []struct {
+		name   string
+		mutate func(*claims)
+	}{
+		{"issuer", func(c *claims) { c.Issuer = "foreign" }},
+		{"audience", func(c *claims) { c.Audience = "foreign" }},
+		{"spiffe", func(c *claims) { c.CallerSPIFFEID = "foreign" }},
+		{"actor", func(c *claims) { c.Subject = "foreign" }},
+		{"tenant", func(c *claims) { c.OrganizationID = "foreign" }},
+		{"project", func(c *claims) { c.ProjectID = "foreign" }},
+		{"owner", func(c *claims) { c.TenantOwner = true }},
+		{"version", func(c *claims) { c.Version = 2 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value := exact
+			tc.mutate(&value)
+			raw, err := internalrpcauth.SignCanonicalJSON(value, key, internalrpcauth.ProtectedHeaderExpectation{Type: grantType, KeyID: key.KeyID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := writeAtomic(configuration.OutputFile, []byte(raw)); err != nil {
+				t.Fatal(err)
+			}
+			if err := readBack(configuration, key, now); err == nil {
+				t.Fatal("signed grant identity mismatch accepted")
+			}
+		})
 	}
 }

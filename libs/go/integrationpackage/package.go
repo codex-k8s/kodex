@@ -431,6 +431,24 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 	return nil
 }
 
+// EMAIL проверяет approval по авторитетной mailbox policy перед каждым effect.
+func emailMailboxApproval(result *Package, capability Capability) bool {
+	if result.Metadata.Key != "email" || result.Metadata.Origin != "SHIPPED" ||
+		result.Spec.Adapter != "EMAIL_HTTPS" || result.Spec.AdapterOwner != "integration-gateway" ||
+		result.Spec.ExecutionRoute != "MANAGED_MCP" || capability.ResourceScope.Kind != "EMAIL_SENDER" ||
+		capability.ApprovalPolicy != "NONE" {
+		return false
+	}
+	switch capability.Operation {
+	case "email.message.send", "email.message.reply", "email.message.reply_all", "email.message.forward",
+		"email.message.delete", "email.message.mark_read", "email.message.mark_unread", "email.message.move",
+		"email.message.archive", "email.draft.create", "email.draft.update", "email.draft.delete":
+		return true
+	default:
+		return false
+	}
+}
+
 func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || result.Metadata.Origin != Origin ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
@@ -486,7 +504,8 @@ func validate(result *Package) error {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
 			!validRisk(capability.Risk) || !validApprovalPolicy(capability.ApprovalPolicy) ||
-			(capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") ||
+			((capability.Risk == "READ") != (capability.ApprovalPolicy == "NONE") &&
+				!emailMailboxApproval(result, capability)) ||
 			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
 			len(capability.InputFields) > 24 || len(capability.OutputFields) == 0 || len(capability.OutputFields) > 24 ||
