@@ -43,6 +43,7 @@ type mailboxRecorder struct {
 	mutate      func(*cp.EmailMailboxConfigurationView)
 	publication *cp.EmailMailboxPublication
 	preview     *cp.PreviewEmailMailboxConfigurationResponse
+	credentials []*cp.EmailMailboxCredential
 }
 
 func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
@@ -69,6 +70,9 @@ func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, resp
 		out.Page = &cp.PageInfo{NextPageToken: "fixture-page"}
 	case *cp.ListEmailMailboxCredentialsResponse:
 		out.Items = []*cp.EmailMailboxCredential{credential}
+		if c.credentials != nil {
+			out.Items = c.credentials
+		}
 		out.Total = 2
 		out.Page = &cp.PageInfo{NextPageToken: "fixture-page"}
 	case *cp.GetEmailMailboxCredentialReceiptResponse:
@@ -96,6 +100,27 @@ func (c *mailboxRecorder) Invoke(_ context.Context, method string, request, resp
 }
 func mailboxHandler(c *mailboxRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: cp.NewPlatformQueryServiceClient(c), Command: cp.NewPlatformCommandServiceClient(c)}})
+}
+
+func TestMailboxCredentialIdentityIncludesGeneration(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		first := &cp.EmailMailboxCredential{Name: "cred_fixture01", Generation: 9, Kind: cp.EmailMailboxCredentialKind_EMAIL_MAILBOX_CREDENTIAL_KIND_AUTH_SECRET, ConnectionRef: "conn_fixture01", ConnectionVersion: 9}
+		second := proto.Clone(first).(*cp.EmailMailboxCredential)
+		if !duplicate {
+			second.Generation = 10
+			second.ConnectionVersion = 10
+		}
+		c := &mailboxRecorder{credentials: []*cp.EmailMailboxCredential{first, second}}
+		w := httptest.NewRecorder()
+		mailboxHandler(c).ServeHTTP(w, managedTestRequest("GET", mailboxConnectionPath+"/credentials", ""))
+		expected := 200
+		if duplicate {
+			expected = 502
+		}
+		if w.Code != expected {
+			t.Fatalf("credential identity: duplicate=%v status=%d", duplicate, w.Code)
+		}
+	}
 }
 
 func TestMailboxRoutesPreserveTypedRPCAndIndependentOCC(t *testing.T) {
