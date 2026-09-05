@@ -15,6 +15,38 @@ updated: 2026-09-05
 acceptance. CP proto и authority policy принадлежат #1046; HTTP потребляет
 зафиксированные producer checkpoints. PWA использует сгенерированный SDK.
 
+## Каталог моделей и проверка полноты
+
+Сверка HTTP `5c32fa683` с CP `10266a2ef` не обнаружила расхождений Proto.
+MVP-UI-17/18: GET `/api/v1/model-capabilities`, SDK `listModelCapabilities`,
+вызывает `ListModelCapabilities` с providerDefinitionKey/providerAccountRef,
+query и bounded page. Actor/organization приходят из browser session и signed
+context; CP проверяет `organization.view` и видимость account. Query не authority.
+Ответ сохраняет exact model ID, supported/default reasoning effort, eligible
+account refs, available и blockers. Нет выбора модели по умолчанию в gateway,
+нового event, OCC либо mutation; source/read path принадлежит CP model catalog.
+Ошибки authorization и cursor проходят безопасный Problem mapping, malformed
+producer response закрыто даёт 502. ProviderDefinition.models получает ту же
+typed schema. Для неизвестного будущего ID не изобретается локальный allowlist.
+
+MVP-UI-37/53/54: search и VFS сохраняют project filter, тип/ref и opaque cursor;
+malformed/foreign-filter response не передаётся PWA. Это проверка согласованности
+ответа, не замена CP eligibility. Tests связывают публичные CP методы с HTTP
+handlers; GetPlatformEventCursor относится только к websocket resume.
+
+Producer gaps переданы root: архивирование assistant conversation и typed EMAIL
+safe configuration пока отсутствуют в публичном Proto; worker projection RPC
+не открываются браузеру. Live/сквозная приёмка этих сценариев остаётся NOT RUN.
+
+Локально после добавления каталога: focused race HTTP/security/app и strict
+generated SDK typecheck PASS. `TestPublicRPCSurfaceHasHTTPConsumer` сверяет
+217 RPC с authority profile и handwritten consumers, отдельно проверяет
+websocket cursor и отсутствие browser exposure worker EMAIL/credential RPC.
+Поведенческие tests проверяют model/account/cursor/effort/readiness, corrupt
+owner response, authorization errors и search/VFS project mismatch.
+Через Context7 проверен oapi-codegen: generated net/http binding не заменяет
+валидацию запросов/ответов; ограничения закреплены в handwritten adapters.
+
 ## Identity и environment impact
 
 Producer: `f8814bfec551afae5e72c5fafa1948fbbdc2e7bc` и его предшественники.

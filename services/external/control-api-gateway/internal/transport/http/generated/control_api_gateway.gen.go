@@ -6230,6 +6230,24 @@ type MemoryRecordSpecification struct {
 	Title          string     `json:"title"`
 }
 
+// ModelCapability defines model for ModelCapability.
+type ModelCapability struct {
+	Available                   bool        `json:"available"`
+	DefaultReasoningEffort      string      `json:"defaultReasoningEffort"`
+	EligibleProviderAccountRefs []OpaqueRef `json:"eligibleProviderAccountRefs"`
+	Id                          string      `json:"id"`
+	ProviderDefinitionKey       string      `json:"providerDefinitionKey"`
+	ReadinessBlockers           []string    `json:"readinessBlockers"`
+	ReasoningEfforts            []string    `json:"reasoningEfforts"`
+}
+
+// ModelCapabilityPage defines model for ModelCapabilityPage.
+type ModelCapabilityPage struct {
+	Items         []ModelCapability `json:"items"`
+	NextPageToken string            `json:"nextPageToken"`
+	Total         int64             `json:"total"`
+}
+
 // NextAction defines model for NextAction.
 type NextAction string
 
@@ -6580,6 +6598,7 @@ type ProviderDefinition struct {
 	Description          string                                   `json:"description"`
 	Key                  ProviderDefinitionKey                    `json:"key"`
 	ModelIds             []string                                 `json:"modelIds"`
+	Models               *[]ModelCapability                       `json:"models,omitempty"`
 	Name                 string                                   `json:"name"`
 	ReadinessBlockers    []string                                 `json:"readinessBlockers"`
 	Ready                bool                                     `json:"ready"`
@@ -8924,6 +8943,15 @@ type ReviseMemoryRecordParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// ListModelCapabilitiesParams defines parameters for ListModelCapabilities.
+type ListModelCapabilitiesParams struct {
+	ProviderDefinitionKey *string    `form:"providerDefinitionKey,omitempty" json:"providerDefinitionKey,omitempty"`
+	ProviderAccountRef    *string    `form:"providerAccountRef,omitempty" json:"providerAccountRef,omitempty"`
+	Query                 *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize              *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken             *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // CompleteOnboardingParams defines parameters for CompleteOnboarding.
 type CompleteOnboardingParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -10425,6 +10453,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/memory-records/{recordRef}/revisions)
 	ReviseMemoryRecord(w http.ResponseWriter, r *http.Request, recordRef MemoryRecordRef, params ReviseMemoryRecordParams)
+
+	// (GET /api/v1/model-capabilities)
+	ListModelCapabilities(w http.ResponseWriter, r *http.Request, params ListModelCapabilitiesParams)
 
 	// (POST /api/v1/onboarding/completion)
 	CompleteOnboarding(w http.ResponseWriter, r *http.Request, params CompleteOnboardingParams)
@@ -19315,6 +19346,97 @@ func (siw *ServerInterfaceWrapper) ReviseMemoryRecord(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReviseMemoryRecord(w, r, recordRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListModelCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) ListModelCapabilities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelCapabilitiesParams
+
+	// ------------- Optional query parameter "providerDefinitionKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "providerDefinitionKey", r.URL.Query(), &params.ProviderDefinitionKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "providerDefinitionKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerDefinitionKey", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "providerAccountRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "providerAccountRef", r.URL.Query(), &params.ProviderAccountRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "providerAccountRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModelCapabilities(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -31563,6 +31685,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/restoration", wrapper.RestoreMemoryRecord)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ListMemoryRecordRevisions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ReviseMemoryRecord)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/model-capabilities", wrapper.ListModelCapabilities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/overview", wrapper.GetOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates", wrapper.ListOwnerGates)

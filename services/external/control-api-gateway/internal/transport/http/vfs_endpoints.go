@@ -37,6 +37,10 @@ func (server *Server) ListVFSNodes(w http.ResponseWriter, r *http.Request, p gen
 		writeRPCProblem(w, err)
 		return
 	}
+	if response == nil || !vfsProjectPage(response.GetNodes(), stringValue(p.ProjectRef), int(page(p.PageSize, p.PageToken).PageSize)) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeVFSPage(w, response.GetNodes(), response.GetTotal(), response.GetPage().GetNextPageToken())
 }
 
@@ -56,7 +60,23 @@ func (server *Server) SearchVFS(w http.ResponseWriter, r *http.Request, p genera
 		writeRPCProblem(w, err)
 		return
 	}
+	if response == nil || !vfsProjectPage(response.GetNodes(), stringValue(p.ProjectRef), int(page(p.PageSize, p.PageToken).PageSize)) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeVFSPage(w, response.GetNodes(), response.GetTotal(), response.GetPage().GetNextPageToken())
+}
+
+func vfsProjectPage(nodes []*controlplanev1.VFSNode, project string, limit int) bool {
+	if len(nodes) > limit {
+		return false
+	}
+	for _, node := range nodes {
+		if node == nil || project != "" && node.ProjectRef != project {
+			return false
+		}
+	}
+	return true
 }
 
 func validVFSPath(value string) bool {
@@ -65,13 +85,16 @@ func validVFSPath(value string) bool {
 }
 
 func writeVFSPage(w http.ResponseWriter, nodes []*controlplanev1.VFSNode, total int64, next string) {
-	if len(nodes) > 100 || total < int64(len(nodes)) || total > maximumSafeJSONInteger || len(next) > 2048 {
+	if len(nodes) > 100 || total < int64(len(nodes)) || total > maximumSafeJSONInteger || len(next) > 2048 || !utf8.ValidString(next) {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	result := generated.VFSNodePage{Items: make([]generated.VFSNode, 0, len(nodes)), Total: total, NextPageToken: next}
 	for _, node := range nodes {
 		if node == nil || node.GetRef() == "" || len(node.GetRef()) > 1000 || !validVFSPath(node.GetPath()) ||
+			!utf8.ValidString(node.GetRef()) || !validSearchText(node.GetName(), 0, 1000) ||
+			!validSearchText(node.GetProjectRef(), 0, 128) || !validSearchText(node.GetEntityRef(), 0, 128) ||
+			!validSearchText(node.GetRunRef(), 0, 128) || !validSearchText(node.GetDigest(), 0, 128) ||
 			node.GetParentPath() != "" && !validVFSPath(node.GetParentPath()) ||
 			node.GetSizeBytes() < 0 || node.GetSizeBytes() > maximumSafeJSONInteger {
 			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
