@@ -34,12 +34,12 @@ func TestRunGateStateFilters(t *testing.T) {
 		state := cp.OwnerGateState(value)
 		client := &catalogRPCRecorder{response: &cp.ListOwnerGatesResponse{Page: &cp.PageInfo{NextPageToken: "next"}}}
 		w := httptest.NewRecorder()
-		catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/owner-gates?projectRef=prj_fixture01&pageSize=3&pageToken=first&state="+strings.TrimPrefix(state.String(), "OWNER_GATE_STATE_"), nil))
+		catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/owner-gates?projectRef=prj_fixture01&query=search&pageSize=3&pageToken=first&state="+strings.TrimPrefix(state.String(), "OWNER_GATE_STATE_"), nil))
 		if w.Code != 200 || client.method != cp.PlatformQueryService_ListOwnerGates_FullMethodName {
 			t.Fatalf("gate filter %s: %d", state, w.Code)
 		}
 		q := client.request.(*cp.ListOwnerGatesRequest)
-		if q.State != state || q.ProjectRef != "prj_fixture01" || q.Page.PageSize != 3 || q.Page.PageToken != "first" || !strings.Contains(w.Body.String(), `"nextPageToken":"next"`) {
+		if q.State != state || q.Query != "search" || q.ProjectRef != "prj_fixture01" || q.Page.PageSize != 3 || q.Page.PageToken != "first" || !strings.Contains(w.Body.String(), `"nextPageToken":"next"`) {
 			t.Fatal("gate filter or cursor lost")
 		}
 	}
@@ -60,7 +60,7 @@ func TestRunGateFiltersRejectMalformed(t *testing.T) {
 }
 
 func TestRunGateFilterOwnerErrors(t *testing.T) {
-	for _, path := range []string{"runs?states=RUNNING", "owner-gates?state=OPEN"} {
+	for _, path := range []string{"runs?states=RUNNING", "owner-gates?state=OPEN", "owner-gates?query=review&states=APPROVED&states=REJECTED&pageToken=stale_snapshot"} {
 		for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.InvalidArgument: 400, codes.Unavailable: 503} {
 			client := &catalogRPCRecorder{failure: status.Error(code, "private upstream detail")}
 			w := httptest.NewRecorder()
