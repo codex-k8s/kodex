@@ -4,7 +4,7 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-05
 ---
 
@@ -82,38 +82,48 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 
 ## Текущий состав интеграции
 
-На `b1882ba4fa1f5ba728a50db21b7695b3c135b23c` включены следующие
+На `b4ef7be2976e528855c2a3f94e7094d28a1d00af` включены следующие
 проверяемые зависимости. Это промежуточная интеграция полного scope,
 а не завершённый `main` или допуск стенда.
 
 | Unit | Включённый exact SHA | Граница checkpoint |
 | --- | --- | --- |
-| Control-plane #1046 | `78d700683095dadc3daf5f1e56b76b34b9d054a5` | D1/D2/D3/D4/D6/impact и policy 59; D5 typed contracts и authority registration. Полная owner delivery D5 ещё не включена. |
+| Control-plane #1046 | `a29f9c64000d6180b5e423036e6bd7acfe55d3e5` | D1/D2/D3/D4/D6/impact, policy 60 и исполняемая D5 owner delivery UI/Git до callback, всех реплик и атомарного READY. Остальные producer gaps открыты. |
 | Secret Broker #1068, PR #1069 | `8b958323e6e97213aa62d67fd420d477016c6cb6` | Encrypted staged lifecycle, durable keyring guard, fenced effects/recovery и bootstrap. |
 | EMAIL #1037, PR #1062 | `f977638e10509d83ce1f27c8b386fa9bd7472842` | Managed exact pins и protected callback до публикации нового serving snapshot. |
-| Egress #1029, PR #1065 | `eaf23ce2c0596c63502c636ed01a1a65d92964c4` | Общие mail policy и DNS producer, ограниченная admission boundary, exact network pins. |
-| HTTP/SDK #1045, PR #1066 | `12e640be74b516b120f25926842e95f7880e8dc1` | Typed D5 и D6; более новый полный HTTP checkpoint ожидает включения. PWA dependency дополнительно включает closed D5 failure codes/history. |
-| PWA #1022, PR #1067 | `6931d7d52ff75017574fde2e6b3f933b844caa23` | D6 UI, credential recovery и исправления интеграционной сборки; основной D5 editor ещё не включён. |
+| Egress #1029, PR #1065 | `5d8b177054dcf094830e32dceb7f9290d633920b` | Общие mail policy/DNS, admission и отзыв сетевых pins выключенного mailbox без потери общих активных endpoints. |
+| HTTP/SDK #1045, PR #1066 | `185a3e9995b0c234503a0f13b32908ecfd5a00fb` | Полный typed D5/D6, STT admin catalog, exact issuer path и согласованные ограничения policy. |
+| PWA #1022, PR #1067 | `ee685f10a58ebdda59f63eb19f5fd24bc385143a` | D6 и полный D5 UI с девятью server nextActions, UI/YAML, bind/readback, copy/detach и credential recovery. |
+| STT #1020, PR #1070 | `6c23e653263643912e3e984802448b561a652615` | Administrative adapter catalog до configuration/credentials, policy 60, согласованные limits и актуальная STT model profile revision. |
 
 Сохранены включённые ранее controller `9aaf738a3`, runner `731f2a7c3`,
 integration `7253f43b8`, interaction `1ab0d09f1`, authority `0765f3dad`
 и исправление #1056. Исходные Proto/OpenAPI/policy объединены по семантике,
 generated Go/SDK/PWA validator получены повторной генерацией.
 
-На exact `b1882ba4fa1f5ba728a50db21b7695b3c135b23c` локально **PASS**:
+На exact `b4ef7be2976e528855c2a3f94e7094d28a1d00af` локально **PASS**:
 PWA `npm run build` с typecheck, Proto lint/build/clean replay,
 authority policy codegen, gateway AsyncAPI clean replay,
-internal RPC authority ABI render и web-only release checks.
+internal RPC authority ABI render, web-only release и оба EMAIL projection
+render. HTTP transport, STT client и security boundary прошли targeted race/vet.
 Ранее интеграционная сборка PWA была **FAIL** из-за неполных fixtures,
 несовместимых typed pins и schema/generator constraints; новый запуск после
 PWA `6931d7d52` подтверждает устранение этих ошибок. Безопасные логи текущих
-проверок: `integrated-pwa-build.log` и `integrated-contracts.log` в приватном
+проверок: `b4ef-integrated-pwa-build.log`, `b4ef-integrated-contracts.log` и
+`b4ef-integrated-http-adapters.log` в приватном
 локальном evidence-каталоге. Полный baseline, общий тройной review,
 merge, deploy и сквозная матрица остаются **NOT RUN**.
 
+Первый HTTP запуск ошибочно указал два несуществующих каталога adapter:
+результат **FAIL (setup)**, HTTP transport в нём прошёл. Повтор с фактическими
+`internal/sttclient` и `internal/security/boundary` прошёл. Сборка PWA сохраняет
+предупреждение о размере JS chunk более 500 kB; оно не скрыто.
+
 Результаты отдельных unit и synthetic fixtures не отмечают строки этой
-матрицы выполненными. Следующая интеграция обязана включить полную owner D5,
-актуальные HTTP/PWA и остальные незавершённые функции 01–61 и CFG-01/02/03.
+матрицы выполненными. Следующая интеграция обязана включить актуальные HTTP/PWA
+и остальные незавершённые функции 01–61 и CFG-01/02/03: account-specific model
+catalog и reasoning/TOML, exact prompt preview, effective capabilities, VFS,
+полный CFG execution, remaining impact plans и protocol-specific EMAIL readiness.
 
 ## Локальная подготовка EMAIL
 
