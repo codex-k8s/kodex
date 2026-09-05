@@ -1694,7 +1694,7 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")
 	}
-	if manageConnection && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
+	if manageConnection && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
 		actions = append(actions, "TEST")
 	}
 	if manageConnection {
@@ -1718,6 +1718,9 @@ func connectionAuthority(ctx context.Context, querier connectionQuerier, scope s
 }
 
 func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
+	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
+		return err
+	}
 	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.role, scope.actorID)
 	if err != nil {
 		return err

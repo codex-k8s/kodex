@@ -23,6 +23,7 @@ canonical="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/aut
 cmp -s "$generated" "$canonical" || fail 'generated policy differs from the canonical file'
 jq -e '
   def provider_operations: [
+    "platform.provider-accounts.model-catalog.observe",
     "platform.provider-credentials.api-key.materialize",
     "platform.provider-credentials.cleanup",
     "platform.provider-credentials.device-authorize.get",
@@ -31,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 60 and .policy.authority_abi_version == 2 and
+	.policy_revision == 61 and .policy.authority_abi_version == 2 and
 	(.policy.authority_proof_producers | length) == 15 and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "email-bridge") | .operation_id] | sort) ==
     ["platform.email.authorization.resolve", "platform.email.configuration.report", "platform.email.effect-receipts.report", "platform.email.reconciliation.resolve"] and
@@ -65,6 +66,11 @@ jq -e '
     (.request_profile.mode == "UNARY_PROTO_SHA256" or .request_profile.mode == "STREAM_SESSION")) and
   ([.policy.operation_bindings[] |
 		select(.authority_proof_producer_id == "secret-broker.provider-credential-materializer") | .operation_id] | sort) == provider_operations and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-accounts.model-catalog.observe" and
+    .permission == "platform.provider-accounts.model-catalog.observe" and
+    .full_method == "/controlplane.v1.ProviderCredentialMaterializerService/ObserveProviderModelCatalog" and
+    .project_required == false and .authority_sources == ["DOMAIN_STATE"] and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and
 	all(.policy.operation_bindings[] | select(.authority_proof_producer_id == "secret-broker.provider-credential-materializer");
 		.caller_workload_id == "control-plane" and
 		.caller_spiffe_id == "spiffe://kodex.local/ns/kodex-system/sa/control-plane" and

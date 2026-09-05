@@ -127,8 +127,7 @@ func IntegrationDefinitionKey(format, content string) (string, error) {
 	return definition.Metadata.Key, nil
 }
 
-// UI закрепляет тот же versioned package, который поставлен с adapter.
-// Произвольный новый профиль требует поставки его исполняемого adapter path.
+// Управляемый package может сужать исполняемый contract поставленного adapter.
 func IntegrationPackage(format, content string) (integrationpackage.Package, error) {
 	if format != "JSON" && format != "YAML" {
 		return integrationpackage.Package{}, ErrInvalid
@@ -143,7 +142,7 @@ func IntegrationPackage(format, content string) (integrationpackage.Package, err
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	profile, ok := registered[definition.Metadata.Key]
-	if !ok || profile.Digest != definition.Digest {
+	if !ok || integrationpackage.ValidateExecutableRevision(definition, profile) != nil {
 		return integrationpackage.Package{}, ErrInvalid
 	}
 	return definition, nil

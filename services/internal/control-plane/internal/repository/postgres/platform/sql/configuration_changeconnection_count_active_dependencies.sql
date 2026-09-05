@@ -7,7 +7,7 @@ SELECT
   + (SELECT count(*)
      FROM control_plane.integration_invocations invocation
      WHERE invocation.connection_id = @connection_id::uuid
-       AND invocation.state IN ('WAITING_APPROVAL', 'READY', 'RUNNING'))
+       AND invocation.state IN ('WAITING_APPROVAL', 'READY', 'RUNNING', 'UNKNOWN_OUTCOME'))
   + (SELECT count(*)
      FROM control_plane.interaction_deliveries delivery
      WHERE delivery.connection_id = @connection_id::uuid
