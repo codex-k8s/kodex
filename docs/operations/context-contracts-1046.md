@@ -156,6 +156,12 @@ Skill lifecycle Proto shape не изменён относительно `d97753
   artifact access. Публикация без review закрыто отклоняется.
 - Archive отключает bindings и завершает открытую draft как DISCARDED;
   restore не включает прежние bindings; purge необратим и удаляет file refs.
+- Exact artifact revision/digest удерживаются всеми revisions не-PURGED
+  bundle, кроме DISCARDED. Artifact DELETE/PURGE impact возвращает blocker
+  `ARTIFACT_USED_BY_SKILL`; общий DB trigger также закрывает обход через avatar
+  replacement или прямой lifecycle update. Архив сохраняет файлы для restore;
+  purge bundle снимает это удержание. Migration 00613 и targeted PostgreSQL
+  Skill lifecycle / role-image artifact promotion: PASS локально.
 - Команды атомарно сохраняют audit/receipt. Domain event отсутствует;
   авторитетный read path — GetSkillBundle/ListSkillBundles/ListSkillBundleRevisions.
 

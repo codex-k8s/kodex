@@ -50,6 +50,18 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 	if file := bundle.DraftRevision.Files[0]; file.Digest != artifact.Digest || file.SizeBytes != artifact.SizeBytes {
 		t.Fatal("client assigned file provenance")
 	}
+	impact, err := service.GetArtifactImpact(ctx, owner, artifact.Ref, "DELETE")
+	if err != nil || impact.Permitted || !containsString(impact.Blockers, "ARTIFACT_USED_BY_SKILL") {
+		t.Fatalf("skill artifact retention impact: permitted=%t blockers=%v err=%v", impact.Permitted, impact.Blockers, err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.DeleteArtifact, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "skill-retained-artifact-delete", ExpectedVersion: &artifact.Version},
+		Payload:  command.ArtifactLifecycleInput{ArtifactRef: artifact.Ref, ImpactDigest: impact.Digest}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("skill artifact deletion did not fail closed: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.artifacts SET lifecycle_state='DELETED',version=version+1 WHERE ref=$1`, artifact.Ref); err == nil {
+		t.Fatal("direct lifecycle update bypassed skill artifact retention")
+	}
 	if _, err := invoke(command.CreateSkillBundleDraft, "skill-double-draft", &bundle.Version, command.SkillBundleInput{ProjectRef: project.Project.Ref, BundleRef: bundle.Ref, Specification: spec}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("second draft: %v", err)
 	}
@@ -132,6 +144,10 @@ func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Reposit
 		}
 		bundle = result.SkillBundle
 		testContextVFS(t, ctx, service, owner, project.Project.Ref, bundle.Ref, "SKILL", bundle.CurrentRevision.Digest, bundle.State == "ACTIVE")
+		impact, err := service.GetArtifactImpact(ctx, owner, artifact.Ref, "DELETE")
+		if err != nil || impact.Permitted != (bundle.State == "PURGED") {
+			t.Fatalf("skill history retention %s: permitted=%t err=%v", bundle.State, impact.Permitted, err)
+		}
 	}
 	if bundle.State != "PURGED" || len(bundle.CurrentRevision.Files) != 0 {
 		t.Fatal("purged skill files remain visible")
