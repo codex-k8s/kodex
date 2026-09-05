@@ -16,6 +16,7 @@ import (
 )
 
 type Service struct {
+	Effects        receipt.EffectAuthority
 	CompletionBase context.Context
 	Config         api.Configuration
 	Authority      Authority
@@ -121,6 +122,7 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 		}
 	}
 	request := api.AuthorizationRequest{InvocationToken: token, CallerSpiffeId: caller, MailboxId: mailbox.Id, Sender: mailbox.Sender, Operation: command.Operation, InputSha256: api.Digest(command), EffectKey: command.EffectKey, ConfigurationRevision: mailbox.Revision, Folder: folder, DestinationFolder: destination}
+	request.ExecutionBinding = api.ExecutionFromContext(ctx)
 	decision, err := s.Authority.Resolve(ctx, request)
 	if err != nil {
 		return api.Result{}, err
@@ -181,7 +183,7 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	if !Mutation(command.Operation) {
 		return s.Provider.Read(ctx, mailbox, command)
 	}
-	if s.CompletionBase == nil || s.CompletionBase.Err() != nil {
+	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil {
 		return api.Result{}, errs.Unavailable
 	}
 	id := fmt.Sprintf("%x", randomID())
@@ -198,7 +200,13 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 		return api.Result{}, err
 	}
 	if !created {
+		if _, err := s.report(ctx, request.ExecutionBinding, scope, mailbox, r); err != nil {
+			return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
+		}
 		return r.Result(), nil
+	}
+	if _, err := s.report(ctx, request.ExecutionBinding, scope, mailbox, r); err != nil {
+		return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
 	}
 	status := "unknown"
 	if Sending(command.Operation) {
@@ -221,7 +229,23 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 		return api.Result{Status: "unknown", MessageId: r.ID}, nil
 	}
 	r.Status = status
+	if _, err := s.report(completion, request.ExecutionBinding, scope, mailbox, r); err != nil {
+		return api.Result{Status: "unknown", MessageId: r.ID}, errs.Unavailable
+	}
 	return r.Result(), nil
+}
+
+func (s *Service) report(ctx context.Context, binding *api.ExecutionBinding, scope receipt.Scope, mailbox api.Mailbox, r receipt.Record) (receipt.OwnerReceipt, error) {
+	invocation := ""
+	if binding != nil && binding.InvocationRef != nil {
+		invocation = *binding.InvocationRef
+	}
+	owner := receipt.OwnerReceipt{Invocation: invocation, ExternalRef: r.ID, ExternalDigest: r.ExternalDigest(scope), InputDigest: r.Digest, EffectKey: r.Key, Mailbox: scope.Mailbox, Connection: mailbox.ConnectionId, ConfigurationRevision: r.Audit.ConfigurationRevision, Outcome: r.Outcome()}
+	key := api.Digest(struct {
+		Digest  string
+		Outcome receipt.Outcome
+	}{owner.ExternalDigest, owner.Outcome})
+	return s.Effects.Report(ctx, receipt.Report{Binding: binding, Receipt: owner, IdempotencyKey: key})
 }
 
 func randomID() []byte {
@@ -232,7 +256,14 @@ func randomID() []byte {
 	return v
 }
 func authorize(m api.Mailbox, c api.Command, r api.AuthorizationRequest, d api.AuthorizationDecision) error {
-	if !d.Allowed || d.ActorId == "" || d.AgentId == "" || d.GrantId == "" || d.TenantId != m.TenantId || d.ConnectionId != m.ConnectionId || d.MailboxId != m.Id || d.Operation != c.Operation || d.InputSha256 != r.InputSha256 || d.EffectKey != c.EffectKey || d.ConfigurationRevision != m.Revision || d.CredentialGeneration != m.CredentialGeneration || d.ExpiresAt <= time.Now().Unix() || d.ExpiresAt > time.Now().Add(2*time.Minute).Unix() {
+	test := r.ExecutionBinding != nil && r.ExecutionBinding.ConnectionTestRef != nil
+	if test && (c.Operation != api.OperationHealth || d.AgentId != "") {
+		return errs.Denied
+	}
+	if r.ExecutionBinding != nil && api.Digest(r.ExecutionBinding) != api.Digest(d.ExecutionBinding) {
+		return errs.Denied
+	}
+	if !d.Allowed || d.ActorId == "" || (!test && d.AgentId == "") || d.GrantId == "" || d.TenantId != m.TenantId || d.ConnectionId != m.ConnectionId || d.MailboxId != m.Id || d.Operation != c.Operation || d.InputSha256 != r.InputSha256 || d.EffectKey != c.EffectKey || d.ConfigurationRevision != m.Revision || d.CredentialGeneration != m.CredentialGeneration || d.ExpiresAt <= time.Now().Unix() || d.ExpiresAt > time.Now().Add(2*time.Minute).Unix() {
 		return errs.Denied
 	}
 	policy := api.Deny
@@ -247,7 +278,11 @@ func authorize(m api.Mailbox, c api.Command, r api.AuthorizationRequest, d api.A
 	if !d.Policy.Valid() || policy == api.Deny || d.Policy == api.Deny {
 		return errs.Denied
 	}
-	for _, scope := range []api.Scope{d.UserScope, d.AgentScope, d.ConnectionScope, d.ResourceScope} {
+	scopes := []api.Scope{d.UserScope, d.ConnectionScope, d.ResourceScope}
+	if !test {
+		scopes = append(scopes, d.AgentScope)
+	}
+	for _, scope := range scopes {
 		if scope.MailboxId != m.Id || scope.Sender != m.Sender || !slices.Contains(scope.Operations, c.Operation) || (c.Operation != api.OperationMailboxes && !slices.Contains(scope.Folders, r.Folder)) || (r.DestinationFolder != "" && !slices.Contains(scope.Folders, r.DestinationFolder)) {
 			return errs.Denied
 		}

@@ -124,11 +124,6 @@
                 "readOnly": true
               },
               {
-                "name": "authority",
-                "mountPath": "/var/run/email/authority",
-                "readOnly": true
-              },
-              {
                 "name": "mail",
                 "mountPath": "/var/run/email/mail",
                 "readOnly": true
@@ -159,13 +154,6 @@
             "name": "database",
             "secret": {
               "secretName": "email-bridge-runtime-database",
-              "defaultMode": 288
-            }
-          },
-          {
-            "name": "authority",
-            "secret": {
-              "secretName": "email-bridge-authority",
               "defaultMode": 288
             }
           },

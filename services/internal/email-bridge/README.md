@@ -20,8 +20,12 @@ message/rfc822. Bcc не записывается в MIME headers. Accepted оз
 SMTP-сервером, не доставку конечному адресату.
 
 Обе стороны используют TLS. Bridge требует exact mTLS SPIFFE integration-gateway
-и bearer invocation token. Online `ResolveEmailAuthorization` принадлежит #1046;
-он проверяет актуальные authority/grant/gate и возвращает четыре scopes.
+и bearer, равный exact lease fence. Заголовок `X-Kodex-Email-Execution` содержит
+typed JSON `invocation_ref|connection_test_ref` и исходный `WorkLease`.
+Online `ResolveEmailAuthorization` вызывается по generated gRPC #1046 через
+mTLS, application worker grant и local authority proof. Он проверяет актуальные
+authority/grant/gate и возвращает четыре scopes; connection test допускает
+только HEALTH без выдуманного agent scope.
 Bridge сверяет input digest, tenant, mailbox, operation, effect, config revision,
 credential generation и ограничивает I/O сроком grant до чтения descriptors.
 
@@ -51,7 +55,11 @@ bootstrap configuration намеренно не READY, пока владелец
 Отдельная БД email_bridge, отдельные runtime/migrator principals. Receipt хранит
 tenant/mailbox, ключ, digest входа, ID и outcome, provider UID/UIDVALIDITY/folder
 и content digest без писем и секретов. Атомарная
-reserve записывает unknown до внешней mutation. Конкурентный запрос получает
+reserve записывает unknown, затем `ReportEmailEffectReceipt` должен подтвердить
+exact CP UNKNOWN до чтения provider credentials и внешней mutation.
+После локальной completion публикуется известный outcome. Отказ публикации
+возвращает unknown; повтор вызова может допубликовать receipt, но не повторяет
+mail effect. Конкурентный запрос получает
 ту же запись; смена входа при том же key возвращает CONFLICT. Сбой процесса,
 таймаут final SMTP response либо POP QUIT не запускает автоматический повтор.
 Успешная SMTP final response переводит receipt в accepted; успешный DELE/QUIT
@@ -74,7 +82,11 @@ BODY.PEEK не выставляет read flag; UID EXPUNGE не удаляет �
 - `make test-email-bridge-render`: isolated staging render с fixture digests.
 
 Реальные mailbox credentials и staging E2E #1031 проверяются root отдельно.
-Typed gRPC authority #1046 и утверждённый mail route ещё требуют стыковки до
+Typed gRPC consumer использует checkpoint #1046 `d31cd4c70`; наличие generated
+RPC не доказывает CP SQL, worker trust или key delivery. Local `/readyz`
+проверяет PostgreSQL/configuration и local issuer, не полный protected path.
+Полная проверка выполняется HEALTH с настоящим owner connection-test claim.
+Материализация owner reconciliation и утверждённый mail route требуют стыковки до
 финального SHA: существующий egress не разрешает mail mode. Зависимости не обходятся
 локальным allow-all или прямым dial. Список доказательств и ограничений:
 `docs/operations/email-bridge-1037.md`; действия владельца:

@@ -3,8 +3,6 @@ package component
 import (
 	"context"
 	"errors"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
-	repository "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/repository/postgres/receipt"
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type cancellingProvider struct {
@@ -67,7 +63,7 @@ func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 		}
 		store := &memory{rows: map[string]port.Record{}}
 		provider := &cancellingProvider{cancel: func() {}}
-		service := &mail.Service{CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Provider: provider, Receipts: store}
+		service := &mail.Service{CompletionBase: base, Config: configuration("implicit"), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
 		_, err := service.Execute(t.Context(), httptransport.CallerSPIFFE, "fixture-token", send(api.OperationSend, "missing-cleanup"))
 		if !errors.Is(err, errs.Unavailable) || provider.calls != 0 || len(store.rows) != 0 {
 			t.Fatal("mutation started without a completion lifecycle")
@@ -76,24 +72,7 @@ func TestMutationRequiresCompletionLifecycle(t *testing.T) {
 }
 
 func TestPostgresReceiptCompletionAfterCancellation(t *testing.T) {
-	dsn := os.Getenv("EMAIL_BRIDGE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("disposable PostgreSQL not configured")
-	}
-	u, err := url.Parse(dsn)
-	if err != nil || u.Hostname() != "127.0.0.1" || u.User == nil || u.User.Username() != "email_bridge_runtime" {
-		t.Fatal("unsafe fixture DSN")
-	}
-	pool, err := pgxpool.New(t.Context(), dsn)
-	if err != nil {
-		t.Fatal("fixture pool unavailable")
-	}
-	defer pool.Close()
-	store := &repository.Repository{Pool: pool}
-	if err := store.Ready(t.Context()); err != nil {
-		t.Fatal("fixture schema unavailable")
-	}
-	testReceiptCompletion(t, store)
+	testReceiptCompletion(t, postgresFixture(t))
 }
 
 func testReceiptCompletion(t *testing.T, durable port.Repository) {
@@ -108,8 +87,7 @@ func testReceiptCompletion(t *testing.T, durable port.Repository) {
 			}
 			store := &completionStore{Repository: base, t: t, fail: scenario == "store-failure"}
 			provider := &cancellingProvider{cancel: cancel}
-			service := &mail.Service{CompletionBase: t.Context(), Config: configuration("implicit"), Authority: &authorityFixture{}, Provider: provider, Receipts: store}
-			service.Config.Mailboxes[0].ReceiveProtocol = "imap"
+			service := &mail.Service{CompletionBase: t.Context(), Config: receiptConfiguration(), Authority: &authorityFixture{}, Effects: effectFixture{}, Provider: provider, Receipts: store}
 			command := send(api.OperationSend, "completion-key")
 			want := "accepted"
 			if scenario == "imap-partial" {

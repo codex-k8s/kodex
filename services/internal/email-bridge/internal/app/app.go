@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	"github.com/codex-k8s/kodex/libs/go/observability"
@@ -72,16 +73,13 @@ func Run(ctx, background context.Context, version string) error {
 	if metrics.Register(businessMetrics.Operations) != nil {
 		return errors.New("metrics unavailable")
 	}
-	clientTLS := transportTLS.Clone()
-	clientTLS.ClientAuth = tls.NoClientCert
-	clientTLS.ServerName = "control-plane.kodex-system.svc.cluster.local"
-	clientHTTP := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: clientTLS, MaxResponseHeaderBytes: 16384, MaxConnsPerHost: 16}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect forbidden") }}
-	defer clientHTTP.CloseIdleConnections()
-	client, e := api.NewClient(c.AuthorityURL, api.WithHTTPClient(clientHTTP))
+	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
 	if e != nil {
 		return errors.New("authority client invalid")
 	}
-	service := &mail.Service{CompletionBase: background, Config: configuration, Authority: &authority.Client{API: client, BearerFile: c.AuthorityBearerFile}, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
+	defer client.Close()
+	owner := &authority.Client{API: client.Runtime}
+	service := &mail.Service{CompletionBase: background, Config: configuration, Authority: owner, Effects: owner, Provider: &mailtransport.Provider{Secrets: mailtransport.Files{Root: c.SecretsRoot}, Dialer: mailtransport.Tunnel{Address: c.EgressAddress}}, Receipts: repository}
 	readiness := serviceruntime.NewReadiness()
 	tech, e := httpserver.New(httpserver.Config{Address: c.Technical, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 16384, MaximumConnections: 64}, readiness, metrics.PrometheusHandler())
 	if e != nil {
@@ -128,18 +126,11 @@ func Run(ctx, background context.Context, version string) error {
 		defer ticker.Stop()
 		for {
 			probe, stop := context.WithTimeout(worker, 10*time.Second)
-			ok := repository.Ready(probe) == nil
-			token, e := securefile.Read(c.HealthTokenFile, 16384)
-			if e != nil {
-				ok = false
-			}
+			ok := repository.Ready(probe) == nil && client.CheckLocalAuthority(probe) == nil && repository.Configuration(probe, configuration, api.Digest(configuration)) == nil
 			active := 0
 			for _, m := range configuration.Mailboxes {
 				if m.Enabled {
 					active++
-					if result, err := service.Execute(probe, "spiffe://kodex.local/ns/kodex-system/sa/email-bridge", string(token), api.Command{Operation: api.OperationHealth, MailboxId: m.Id}); err != nil || result.Status != "ready" {
-						ok = false
-					}
 				}
 			}
 			stop()

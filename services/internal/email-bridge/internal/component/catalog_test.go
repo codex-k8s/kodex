@@ -38,7 +38,13 @@ func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service) func(string
 			t.Fatal(err)
 		}
 		response, err := client.ExecuteMailboxOperation(t.Context(), command, func(_ context.Context, request *http.Request) error {
-			request.Header.Set("Authorization", "Bearer fixture")
+			binding := executionFixture()
+			header, err := api.ExecutionHeaderValue(binding)
+			if err != nil {
+				return err
+			}
+			request.Header.Set("Authorization", "Bearer "+binding.Lease.Fence)
+			request.Header.Set(api.ExecutionHeader, header)
 			return nil
 		})
 		if err != nil {

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Email bridge",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "HTTPS bridge #1037; SMTP/POP, authority и durable receipts. Body и query не являются источником полномочий."
   },
   "servers": [
@@ -12,7 +12,8 @@
   ],
   "security": [
     {
-      "bridgeToken": []
+      "bridgeToken": [],
+      "executionBinding": []
     }
   ],
   "paths": {
@@ -246,46 +247,6 @@
           }
         }
       }
-    },
-    "/internal/v1/email-authorizations/resolve": {
-      "post": {
-        "operationId": "resolveEmailAuthorization",
-        "description": "Producer #1046, не email-bridge. mTLS email-bridge плюс отдельный service bearer. Проверяет живой grant, actor, tenant, input, policy/gate и credential revocation; никаких секретов в ответе.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthorizationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Типизированный результат в проверенной mailbox boundary.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizationDecision"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Неверный запрос"
-          },
-          "403": {
-            "description": "Нет допуска либо требуется Human Gate"
-          },
-          "409": {
-            "description": "Конфликт ключа или курсора"
-          },
-          "503": {
-            "description": "Зависимость не готова; mutation не повторяется"
-          }
-        }
-      }
     }
   },
   "components": {
@@ -293,6 +254,12 @@
       "bridgeToken": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "executionBinding": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Kodex-Email-Execution",
+        "description": "JSON ExecutionBinding из server-owned claim. Проверяется CP по mTLS/worker grant/authority proof; не входит в semantic command digest. Bearer равен exact lease fence, а не connection credential."
       }
     },
     "schemas": {
@@ -1072,6 +1039,9 @@
           "destination_folder": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "execution_binding": {
+            "$ref": "#/components/schemas/ExecutionBinding"
           }
         },
         "required": [
@@ -1211,6 +1181,9 @@
           "gate_approved": {
             "type": "boolean",
             "x-go-type-skip-optional-pointer": true
+          },
+          "execution_binding": {
+            "$ref": "#/components/schemas/ExecutionBinding"
           }
         },
         "required": [
@@ -1432,6 +1405,59 @@
             ]
           }
         }
+      },
+      "ExecutionBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "invocation_ref": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "connection_test_ref": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "lease": {
+            "$ref": "#/components/schemas/ExecutionLease"
+          }
+        },
+        "required": [
+          "lease"
+        ],
+        "description": "Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health."
+      },
+      "ExecutionLease": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "fence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "ref",
+          "fence",
+          "generation",
+          "expires_at"
+        ]
       }
     }
   }

@@ -24,7 +24,7 @@ updated: 2026-09-05
 | email-bridge-postgresql-bootstrap | admin-password, runtime-password, migration-password; только database bootstrap |
 | email-bridge-runtime-database | dsn; email_bridge_runtime, verify-full, exact PostgreSQL hostname, sslrootcert=/var/run/email/tls/ca.crt |
 | email-bridge-migration-database | dsn; отдельный email_bridge_migrator, verify-full и тот же CA path |
-| email-bridge-authority | service-bearer для online owner API; health-token с разрешением только health для workload email-bridge |
+| Application grant projection | worker grant в `/var/run/secrets/kodex/email-bridge/application-grant/application-grant.jws`; выдача owner #1046 и exact trust должны быть материализованы до запуска |
 | email-bridge-mailbox-projection | immutable CA/username/secret generations, items отображаются на name/generation из Configuration |
 | email-bridge-tls | cert-manager workload certificate/key/CA, mTLS SPIFFE и exact DNS |
 | email-bridge-postgresql-tls | cert-manager server certificate/key/CA |
@@ -38,16 +38,18 @@ watermark, письма не сохраняются. PVC включается в
 
 ## Проверка готовности
 
-Local /readyz отражает bounded online authority, PostgreSQL role/schema и
-SMTP AUTH/NOOP и IMAP authentication/SELECT разрешённых folders; POP AUTH/UIDL
-проверяется отдельно при наличии compatibility endpoint. Typed health возвращает
+Local /readyz отражает только PostgreSQL role/schema, configuration watermark,
+наличие включённой mailbox и локальный issuer. Это не доказательство CP SQL,
+worker trust, mail credentials или доступности внешнего транспорта.
+Protected HEALTH требует исходный owner connection-test claim с lease fence,
+online typed CP authorization и SMTP AUTH/NOOP, IMAP authentication/SELECT;
+POP AUTH/UIDL проверяется отдельно при наличии compatibility endpoint.
+Typed health возвращает
 `protocol_readiness.smtp/imap/pop3`: ready, not_ready или not_configured.
 Отказ optional POP не выключает исправный основной SMTP+IMAP профиль.
-Health использует отдельный owner-issued token,
-тот же authorization API и provider transport. Пустая конфигурация, отсутствующий
-credential, TLS mismatch или недоступный owner/egress дают NOT READY.
-Отказ одной mailbox означает NOT READY bridge, остальные вызовы всё равно
-проверяются по собственной mailbox policy.
+Самовыданный health-token отсутствует. Пустая конфигурация закрывает local
+readiness; недоступный owner, credential или egress закрывает protected HEALTH.
+Остальные вызовы всегда проверяются по собственной mailbox policy.
 
 Владелец проверяет три policy: read allow/send gate, все gate, все allow.
 Pending/rejected gate не читает почтовые credentials. Подтверждение относится
@@ -95,7 +97,7 @@ Shutdown отменяет protocol contexts и ждёт HTTP/worker join до з
 фиксированные сообщения; адреса, headers, body, attachments и secrets запрещены.
 
 После остановки protocol I/O handler имеет отдельный бюджет 3 секунды только
-для completion уже зарезервированной receipt. Подтверждённый final response
+для completion уже зарезервированной receipt и bounded CP report. Подтверждённый final response
 сохраняется даже при отмене HTTP; известные UID частичного IMAP сохраняются
 вместе с unknown. Ошибка completion не разрешает повтор, а оставляет исходную
 unknown receipt. Этот cleanup не продлевает grant и не выполняет mail I/O.

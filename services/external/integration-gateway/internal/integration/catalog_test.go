@@ -179,7 +179,11 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 						synthetic.ServeHTTP(w, r)
 						return
 					}
-					if r.Header.Get("Authorization") != "Bearer test-token" {
+					expectedToken := "Bearer test-token"
+					if key == "email" {
+						expectedToken = "Bearer fixture-fence"
+					}
+					if r.Header.Get("Authorization") != expectedToken {
 						t.Error("missing authorization")
 					}
 					body := catalogResponse(t, key, capability.Operation, r)

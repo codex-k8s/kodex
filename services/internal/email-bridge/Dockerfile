@@ -3,6 +3,8 @@ FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265
 ENV GOTOOLCHAIN=local
 WORKDIR /workspace
 COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
+COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
+COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/httpserver/ libs/go/httpserver/

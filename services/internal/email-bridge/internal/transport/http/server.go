@@ -32,6 +32,16 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errs.Denied)
 		return
 	}
+	if len(r.Header.Values(api.ExecutionHeader)) != 1 {
+		writeError(w, errs.Denied)
+		return
+	}
+	binding, err := api.ParseExecutionHeader(r.Header.Get(api.ExecutionHeader))
+	if err != nil || r.Header.Get("Authorization") != "Bearer "+binding.Lease.Fence {
+		writeError(w, errs.Denied)
+		return
+	}
+	r = r.WithContext(api.WithExecutionBinding(r.Context(), binding))
 	cmd, legacy, e := casters.Command(r, h.Service.Config)
 	if e != nil {
 		writeError(w, e)

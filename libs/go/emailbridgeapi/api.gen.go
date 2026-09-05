@@ -12,12 +12,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 )
 
 const (
-	BridgeTokenScopes bridgeTokenContextKey = "bridgeToken.Scopes"
+	BridgeTokenScopes      bridgeTokenContextKey      = "bridgeToken.Scopes"
+	ExecutionBindingScopes executionBindingContextKey = "executionBinding.Scopes"
 )
 
 // Defines values for ConfigurationManagedBy.
@@ -359,39 +361,45 @@ type Attachments = []Attachment
 
 // AuthorizationDecision defines model for AuthorizationDecision.
 type AuthorizationDecision struct {
-	ActorId               string    `json:"actor_id"`
-	AgentId               string    `json:"agent_id"`
-	AgentScope            Scope     `json:"agent_scope"`
-	Allowed               bool      `json:"allowed"`
-	ConfigurationRevision int64     `json:"configuration_revision"`
-	ConnectionId          string    `json:"connection_id"`
-	ConnectionScope       Scope     `json:"connection_scope"`
-	CredentialGeneration  int64     `json:"credential_generation"`
-	EffectKey             string    `json:"effect_key"`
-	ExpiresAt             int64     `json:"expires_at"`
-	GateApproved          bool      `json:"gate_approved"`
-	GrantId               string    `json:"grant_id"`
-	InputSha256           string    `json:"input_sha256"`
-	MailboxId             string    `json:"mailbox_id"`
-	Operation             Operation `json:"operation"`
-	Policy                Policy    `json:"policy"`
-	ResourceScope         Scope     `json:"resource_scope"`
-	TenantId              string    `json:"tenant_id"`
-	UserScope             Scope     `json:"user_scope"`
+	ActorId               string `json:"actor_id"`
+	AgentId               string `json:"agent_id"`
+	AgentScope            Scope  `json:"agent_scope"`
+	Allowed               bool   `json:"allowed"`
+	ConfigurationRevision int64  `json:"configuration_revision"`
+	ConnectionId          string `json:"connection_id"`
+	ConnectionScope       Scope  `json:"connection_scope"`
+	CredentialGeneration  int64  `json:"credential_generation"`
+	EffectKey             string `json:"effect_key"`
+
+	// ExecutionBinding Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health.
+	ExecutionBinding *ExecutionBinding `json:"execution_binding,omitempty"`
+	ExpiresAt        int64             `json:"expires_at"`
+	GateApproved     bool              `json:"gate_approved"`
+	GrantId          string            `json:"grant_id"`
+	InputSha256      string            `json:"input_sha256"`
+	MailboxId        string            `json:"mailbox_id"`
+	Operation        Operation         `json:"operation"`
+	Policy           Policy            `json:"policy"`
+	ResourceScope    Scope             `json:"resource_scope"`
+	TenantId         string            `json:"tenant_id"`
+	UserScope        Scope             `json:"user_scope"`
 }
 
 // AuthorizationRequest defines model for AuthorizationRequest.
 type AuthorizationRequest struct {
-	CallerSpiffeId        string    `json:"caller_spiffe_id"`
-	ConfigurationRevision int64     `json:"configuration_revision"`
-	DestinationFolder     string    `json:"destination_folder,omitempty"`
-	EffectKey             string    `json:"effect_key"`
-	Folder                string    `json:"folder,omitempty"`
-	InputSha256           string    `json:"input_sha256"`
-	InvocationToken       string    `json:"invocation_token"`
-	MailboxId             string    `json:"mailbox_id"`
-	Operation             Operation `json:"operation"`
-	Sender                string    `json:"sender"`
+	CallerSpiffeId        string `json:"caller_spiffe_id"`
+	ConfigurationRevision int64  `json:"configuration_revision"`
+	DestinationFolder     string `json:"destination_folder,omitempty"`
+	EffectKey             string `json:"effect_key"`
+
+	// ExecutionBinding Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health.
+	ExecutionBinding *ExecutionBinding `json:"execution_binding,omitempty"`
+	Folder           string            `json:"folder,omitempty"`
+	InputSha256      string            `json:"input_sha256"`
+	InvocationToken  string            `json:"invocation_token"`
+	MailboxId        string            `json:"mailbox_id"`
+	Operation        Operation         `json:"operation"`
+	Sender           string            `json:"sender"`
 }
 
 // Command defines model for Command.
@@ -459,6 +467,21 @@ type Error struct {
 
 // ErrorCode defines model for Error.Code.
 type ErrorCode string
+
+// ExecutionBinding Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health.
+type ExecutionBinding struct {
+	ConnectionTestRef *string        `json:"connection_test_ref,omitempty"`
+	InvocationRef     *string        `json:"invocation_ref,omitempty"`
+	Lease             ExecutionLease `json:"lease"`
+}
+
+// ExecutionLease defines model for ExecutionLease.
+type ExecutionLease struct {
+	ExpiresAt  time.Time `json:"expires_at"`
+	Fence      string    `json:"fence"`
+	Generation int64     `json:"generation"`
+	Ref        string    `json:"ref"`
+}
 
 // Health defines model for Health.
 type Health struct {
@@ -642,6 +665,9 @@ type Scope struct {
 // bridgeTokenContextKey is the context key for bridgeToken security scheme
 type bridgeTokenContextKey string
 
+// executionBindingContextKey is the context key for executionBinding security scheme
+type executionBindingContextKey string
+
 // GetHealthParams defines parameters for GetHealth.
 type GetHealthParams struct {
 	Sender string `form:"sender" json:"sender"`
@@ -662,9 +688,6 @@ type ReconcileMessageParams struct {
 type GetMessageStatusParams struct {
 	Sender string `form:"sender" json:"sender"`
 }
-
-// ResolveEmailAuthorizationJSONRequestBody defines body for ResolveEmailAuthorization for application/json ContentType.
-type ResolveEmailAuthorizationJSONRequestBody = AuthorizationRequest
 
 // ExecuteMailboxOperationJSONRequestBody defines body for ExecuteMailboxOperation for application/json ContentType.
 type ExecuteMailboxOperationJSONRequestBody = Command
@@ -745,11 +768,6 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// ResolveEmailAuthorizationWithBody request with any body
-	ResolveEmailAuthorizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	ResolveEmailAuthorization(ctx context.Context, body ResolveEmailAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetHealth request
 	GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -768,30 +786,6 @@ type ClientInterface interface {
 
 	// GetMessageStatus request
 	GetMessageStatus(ctx context.Context, messageId string, params *GetMessageStatusParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-}
-
-func (c *Client) ResolveEmailAuthorizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewResolveEmailAuthorizationRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ResolveEmailAuthorization(ctx context.Context, body ResolveEmailAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewResolveEmailAuthorizationRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
 }
 
 func (c *Client) GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -876,46 +870,6 @@ func (c *Client) GetMessageStatus(ctx context.Context, messageId string, params 
 		return nil, err
 	}
 	return c.Client.Do(req)
-}
-
-// NewResolveEmailAuthorizationRequest calls the generic ResolveEmailAuthorization builder with application/json body
-func NewResolveEmailAuthorizationRequest(server string, body ResolveEmailAuthorizationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewResolveEmailAuthorizationRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewResolveEmailAuthorizationRequestWithBody generates requests for ResolveEmailAuthorization with any type of body
-func NewResolveEmailAuthorizationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/internal/v1/email-authorizations/resolve")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
 }
 
 // NewGetHealthRequest generates requests for GetHealth
@@ -1241,11 +1195,6 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// ResolveEmailAuthorizationWithBodyWithResponse request with any body
-	ResolveEmailAuthorizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolveEmailAuthorizationResponse, error)
-
-	ResolveEmailAuthorizationWithResponse(ctx context.Context, body ResolveEmailAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolveEmailAuthorizationResponse, error)
-
 	// GetHealthWithResponse request
 	GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
@@ -1264,36 +1213,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetMessageStatusWithResponse request
 	GetMessageStatusWithResponse(ctx context.Context, messageId string, params *GetMessageStatusParams, reqEditors ...RequestEditorFn) (*GetMessageStatusResponse, error)
-}
-
-type ResolveEmailAuthorizationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *AuthorizationDecision
-}
-
-// Status returns HTTPResponse.Status
-func (r ResolveEmailAuthorizationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ResolveEmailAuthorizationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ResolveEmailAuthorizationResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
 }
 
 type GetHealthResponse struct {
@@ -1446,23 +1365,6 @@ func (r GetMessageStatusResponse) ContentType() string {
 	return ""
 }
 
-// ResolveEmailAuthorizationWithBodyWithResponse request with arbitrary body returning *ResolveEmailAuthorizationResponse
-func (c *ClientWithResponses) ResolveEmailAuthorizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolveEmailAuthorizationResponse, error) {
-	rsp, err := c.ResolveEmailAuthorizationWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseResolveEmailAuthorizationResponse(rsp)
-}
-
-func (c *ClientWithResponses) ResolveEmailAuthorizationWithResponse(ctx context.Context, body ResolveEmailAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolveEmailAuthorizationResponse, error) {
-	rsp, err := c.ResolveEmailAuthorization(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseResolveEmailAuthorizationResponse(rsp)
-}
-
 // GetHealthWithResponse request returning *GetHealthResponse
 func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
 	rsp, err := c.GetHealth(ctx, params, reqEditors...)
@@ -1522,32 +1424,6 @@ func (c *ClientWithResponses) GetMessageStatusWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseGetMessageStatusResponse(rsp)
-}
-
-// ParseResolveEmailAuthorizationResponse parses an HTTP response from a ResolveEmailAuthorizationWithResponse call
-func ParseResolveEmailAuthorizationResponse(rsp *http.Response) (*ResolveEmailAuthorizationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ResolveEmailAuthorizationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AuthorizationDecision
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
 }
 
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call

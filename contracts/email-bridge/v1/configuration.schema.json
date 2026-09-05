@@ -778,6 +778,9 @@
         "destination_folder": {
           "type": "string",
           "x-go-type-skip-optional-pointer": true
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/ExecutionBinding"
         }
       },
       "required": [
@@ -917,6 +920,9 @@
         "gate_approved": {
           "type": "boolean",
           "x-go-type-skip-optional-pointer": true
+        },
+        "execution_binding": {
+          "$ref": "#/$defs/ExecutionBinding"
         }
       },
       "required": [
@@ -1138,6 +1144,59 @@
           ]
         }
       }
+    },
+    "ExecutionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "invocation_ref": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "connection_test_ref": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "lease": {
+          "$ref": "#/$defs/ExecutionLease"
+        }
+      },
+      "required": [
+        "lease"
+      ],
+      "description": "Ровно один invocation_ref либо connection_test_ref. Connection test допускает только health."
+    },
+    "ExecutionLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "fence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "generation": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ref",
+        "fence",
+        "generation",
+        "expires_at"
+      ]
     }
   }
 }

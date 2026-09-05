@@ -40,5 +40,6 @@ env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli up
 env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli status
 env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli up
 EMAIL_BRIDGE_TEST_DSN="postgresql://email_bridge_runtime@127.0.0.1:${port}/email_bridge?sslmode=disable" \
+  EMAIL_BRIDGE_TEST_ADMIN_DSN="postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable" \
   env -u GOFLAGS GOENV=off GOWORK=off go test -race -count=1 -timeout=90s -v ./internal/component -run "$test_filter"
 printf 'Email bridge PostgreSQL and protocol component tests passed\n'

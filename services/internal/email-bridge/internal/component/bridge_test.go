@@ -31,7 +31,6 @@ import (
 	"time"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
-	authorityclient "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/authority"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/mailtransport"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/repository/receipt"
@@ -39,7 +38,6 @@ import (
 	repository "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/repository/postgres/receipt"
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 	"github.com/emersion/go-sasl"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type providerFixture struct {
@@ -331,6 +329,7 @@ func (a *authorityFixture) Resolve(_ context.Context, r api.AuthorizationRequest
 	if a.mutate != nil {
 		a.mutate(&d)
 	}
+	d.ExecutionBinding = r.ExecutionBinding
 	return d, nil
 }
 
@@ -391,6 +390,16 @@ func configuration(mode string) api.Configuration {
 	}
 	return api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "fixture", Mailboxes: []api.Mailbox{box}}
 }
+
+// Одна disposable БД использует один immutable configuration digest во всех tests.
+func receiptConfiguration() api.Configuration {
+	c := configuration("implicit")
+	c.Mailboxes[0].ReceiveProtocol = "imap"
+	endpoint := c.Mailboxes[0].Smtp
+	endpoint.Port = 993
+	c.Mailboxes[0].Imap = &endpoint
+	return c
+}
 func service(t *testing.T, f *providerFixture, mode string, store port.Repository) (*mail.Service, *secrets, *authorityFixture) {
 	t.Helper()
 	sec := &secrets{ca: f.ca}
@@ -398,7 +407,7 @@ func service(t *testing.T, f *providerFixture, mode string, store port.Repositor
 	if store == nil {
 		store = &memory{rows: map[string]port.Record{}}
 	}
-	s := &mail.Service{CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
+	s := &mail.Service{CompletionBase: t.Context(), Config: configuration(mode), Authority: auth, Effects: effectFixture{}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: store}
 	return s, sec, auth
 }
 func send(op api.Operation, key string) api.Command {
@@ -597,7 +606,10 @@ func TestHTTPSBoundary(t *testing.T) {
 	raw, _ := json.Marshal(send(api.OperationSend, "https").Message)
 	request, _ := http.NewRequestWithContext(t.Context(), "POST", server.URL+"/v1/messages?sender=sender%40example.test", bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer fixture")
+	binding := executionFixture()
+	header, _ := api.ExecutionHeaderValue(binding)
+	request.Header.Set("Authorization", "Bearer "+binding.Lease.Fence)
+	request.Header.Set(api.ExecutionHeader, header)
 	request.Header.Set("Idempotency-Key", "https")
 	response, e := client.Do(request)
 	if e != nil {
@@ -623,25 +635,12 @@ func TestHTTPSBoundary(t *testing.T) {
 }
 
 func TestPostgresEffects(t *testing.T) {
-	dsn := os.Getenv("EMAIL_BRIDGE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("disposable PostgreSQL not configured")
-	}
-	u, e := url.Parse(dsn)
-	if e != nil || u.Hostname() != "127.0.0.1" || u.User.Username() != "email_bridge_runtime" {
-		t.Fatal("unsafe fixture DSN")
-	}
-	pool, e := pgxpool.New(t.Context(), dsn)
-	if e != nil {
-		t.Fatal("pool")
-	}
-	defer pool.Close()
-	store := &repository.Repository{Pool: pool}
-	if e = store.Ready(t.Context()); e != nil {
-		t.Fatal(e)
-	}
+	store := postgresFixture(t)
+	pool := store.Pool
+	var e error
 	f := newFixture(t, "implicit")
 	s, _, _ := service(t, f, "implicit", store)
+	s.Config = receiptConfiguration()
 	cmd := send(api.OperationSend, "concurrent")
 	var wg sync.WaitGroup
 	for range 12 {
@@ -666,6 +665,7 @@ func TestPostgresEffects(t *testing.T) {
 		t.Fatal("unknown")
 	}
 	replacement, _, _ := service(t, f, "implicit", &repository.Repository{Pool: pool})
+	replacement.Config = receiptConfiguration()
 	if execute(t, replacement, send(api.OperationSend, "crash")).MessageId != r.MessageId {
 		t.Fatal("durable unknown")
 	}
@@ -731,54 +731,6 @@ func TestProjectedCredentialRevocation(t *testing.T) {
 	d.Name = "../escape"
 	if _, e := files.Read(t.Context(), d); e == nil {
 		t.Fatal("descriptor traversal")
-	}
-}
-
-func TestOwnerHTTPSClient(t *testing.T) {
-	f := newFixture(t, "implicit")
-	sec := &secrets{ca: f.ca}
-	authorityState := &authorityFixture{}
-	owner := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/v1/email-authorizations/resolve" || r.Header.Get("Authorization") != "Bearer fixture-service" {
-			w.WriteHeader(403)
-			return
-		}
-		var input api.AuthorizationRequest
-		b, _ := io.ReadAll(r.Body)
-		if api.Decode(b, &input) != nil {
-			w.WriteHeader(400)
-			return
-		}
-		d, e := authorityState.Resolve(r.Context(), input)
-		if e != nil {
-			w.WriteHeader(403)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(d)
-	}))
-	roots := x509.NewCertPool()
-	roots.AppendCertsFromPEM(f.ca)
-	owner.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: roots, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
-	owner.StartTLS()
-	defer owner.Close()
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12}}, Timeout: time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errs.Denied }}
-	defer httpClient.CloseIdleConnections()
-	client, e := api.NewClient(owner.URL, api.WithHTTPClient(httpClient))
-	if e != nil {
-		t.Fatal(e)
-	}
-	file := filepath.Join(t.TempDir(), "token")
-	if os.WriteFile(file, []byte("fixture-service"), 0400) != nil {
-		t.Fatal("write fixture")
-	}
-	s := &mail.Service{CompletionBase: t.Context(), Config: configuration("implicit"), Authority: &authorityclient.Client{API: client, BearerFile: file}, Provider: &mailtransport.Provider{Secrets: sec, Dialer: dialFixture{f.smtp, f.pop}}, Receipts: &memory{rows: map[string]port.Record{}}}
-	if execute(t, s, send(api.OperationSend, "owner-http")).Status != "accepted" {
-		t.Fatal("owner-authorized send")
-	}
-	before := sec.reads.Load()
-	authorityState.revoked = true
-	if _, e = s.Execute(t.Context(), httptransport.CallerSPIFFE, "token", send(api.OperationSend, "revoked-http")); !errors.Is(e, errs.Denied) || sec.reads.Load() != before {
-		t.Fatal("owner revocation did not precede projection")
 	}
 }
 

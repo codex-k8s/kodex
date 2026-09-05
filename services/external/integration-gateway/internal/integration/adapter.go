@@ -19,6 +19,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
+	emailapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/google/go-github/v74/github"
 	"github.com/google/uuid"
@@ -44,6 +45,7 @@ type CredentialRevision struct {
 }
 
 type Request struct {
+	EmailExecution                                                    *emailapi.ExecutionBinding
 	DefinitionKey, DefinitionVersion, DefinitionDigest, ConnectionRef string
 	CapabilityKey, Operation, Risk, ApprovalPolicy                    string
 	ResourceKind, ResourceScopeDigest, EffectKey, InputDigest         string
@@ -148,7 +150,8 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 		configuration = claim.GetPublicConfiguration().AsMap()
 	}
 	return Request{
-		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		EmailExecution: emailExecutionBinding("", claim.GetTestRef(), claim.GetLease()),
+		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		Configuration: configuration, Credential: credentialFromProto(claim.GetCredentialRevision()),
 	}
@@ -170,7 +173,8 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		resourceScopeDigest = scope.GetDigest()
 	}
 	return Request{
-		DefinitionKey: claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
+		EmailExecution: emailExecutionBinding(claim.GetInvocationRef(), "", claim.GetLease()),
+		DefinitionKey:  claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
 		DefinitionDigest: claim.GetDefinitionDigest(), ConnectionRef: claim.GetConnectionRef(),
 		CapabilityKey: claim.GetCapabilityKey(), Operation: claim.GetOperation(),
 		Risk:           strings.TrimPrefix(claim.GetRisk().String(), "INTEGRATION_RISK_"),

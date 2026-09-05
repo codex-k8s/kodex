@@ -35,6 +35,9 @@ spec:
             - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
               value: issuer
           volumeMounts:
+            - name: application-grant
+              mountPath: /var/run/secrets/kodex/email-bridge/application-grant
+              readOnly: true
             - name: internal-rpc-authority-sockets
               mountPath: /run/kodex
               readOnly: true

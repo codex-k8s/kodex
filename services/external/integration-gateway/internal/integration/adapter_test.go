@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/credentialfs"
+	emailapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integrationfixture"
 )
@@ -205,8 +206,11 @@ func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	requests := 0
 	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
-		if request.URL.String() != emailOrigin+"/v1/mailbox-operations" || request.Header.Get("Authorization") != "Bearer email-token" || request.Method != http.MethodPost {
-			t.Fatalf("unexpected provider request: %s %q", request.URL, request.Header.Get("Authorization"))
+		if request.URL.String() != emailOrigin+"/v1/mailbox-operations" || request.Header.Get("Authorization") != "Bearer fixture-fence" || request.Method != http.MethodPost {
+			t.Fatal("unexpected provider request")
+		}
+		if _, err := emailapi.ParseExecutionHeader(request.Header.Get(emailapi.ExecutionHeader)); err != nil {
+			t.Fatal("missing execution binding")
 		}
 		status, body := http.StatusOK, `{"status":"ready"}`
 		var command map[string]any
@@ -335,8 +339,10 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	for key, value := range configuration {
 		configurationAny[key] = value
 	}
+	invocation := "inv_fixture01"
 	return Request{
-		DefinitionKey: definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
+		EmailExecution: &emailapi.ExecutionBinding{InvocationRef: &invocation, Lease: emailapi.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}},
+		DefinitionKey:  definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
 		DefinitionDigest: definition.Digest, ConnectionRef: "int_test", CapabilityKey: capability.Key,
 		Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
 		ResourceKind: capability.ResourceScope.Kind, ResourceScope: scope,

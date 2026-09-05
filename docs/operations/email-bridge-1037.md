@@ -149,7 +149,7 @@ UIDL/LIST snapshot не используется для RETR или удален
 [RFC5321](https://www.rfc-editor.org/rfc/rfc5321),
 [RFC8314](https://www.rfc-editor.org/rfc/rfc8314).
 
-## Передача 2026-09-05
+## Исходная передача 2026-09-05
 
 Пакет Beauvoir на основе `8571f194f` сохранён без сброса. Дополнительно исправлены
 запись receipt после отмены запроса и немедленное закрытие ожидающего CONNECT.
@@ -179,3 +179,92 @@ authorization/reconciliation, issuer/key delivery и сквозной protected 
 ещё не подключены; старый HTTP authority client не является работающим CP API.
 Нельзя объявлять полную готовность #1037 по protocol fixture или render.
 Live mail, cluster/remote/deploy и новые сетевые разрешения: NOT RUN.
+
+## Typed CP consumer и UNKNOWN-before-effect
+
+Следующее состояние заменяет ограничения исходной передачи в части HTTP stub.
+Потреблён exact checkpoint `d31cd4c7015e0513db7ca1afeacc12a7a6e155ac`:
+Proto/generated/operation profile и policy revision 52. Предшествующие CP
+contract additions сохранены; CP SQL/domain ownership не изменялось.
+Main `8026633a9` с новым vendor catalog сохранён отдельным merge checkpoint.
+
+- `X-Kodex-Email-Execution` несёт JSON ExecutionBinding с одним источником
+  invocation либо connection test и exact исходным lease. Bearer равен fence,
+  connection credential больше не используется как invocation authority.
+  Binding не входит в semantic command digest.
+- Рабочий CP client использует generated gRPC, mTLS, application worker grant
+  и local issuer proof. Старый HTTP authorization endpoint удалён из OpenAPI
+  и consumer. Connection test разрешает только HEALTH без фиктивного agent.
+- Локальная durable reserve предшествует typed `ReportEmailEffectReceipt`
+  UNKNOWN. Любой отказ CP/readback закрывает путь до provider credentials.
+  После protocol effect сначала сохраняется локальный outcome, затем report.
+  Отказ после reserve возвращает UNAVAILABLE/unknown, включая revoked grant:
+  его нельзя превратить в безопасный для повтора HTTP 403.
+- Повтор исходного command допубликовывает локально известный receipt, но не
+  вызывает provider повторно. Idempotency report привязана к immutable receipt
+  digest и outcome; mail effect не получает автоматический retry.
+- Typed `ResolveEmailReconciliation` adapter проверяет exact receipt/version,
+  external ref/digest, invocation, decision/version, actor/grant, freshness и
+  закрытый outcome. Он не снимает local source lock сам по себе и не заменяет
+  ещё не материализованный owner-decision consumer.
+
+### Канонический external receipt digest
+
+Consumer-кандидат `kodex.email.receipt.v1` реализован и закреплён golden test.
+Требуется подтверждение Bohr до полного handoff; прямой `send_input` отсутствует
+в доступных инструментах этой сессии. CP сохраняет и сверяет digest как exact
+opaque commitment, а не пересчитывает его из public HTTP view.
+
+SHA256 вычисляется по UTF-8 JSON `encoding/json.Marshal` следующего фиксированного
+struct, в указанном порядке полей, без отступов и завершающего LF:
+`schema`, `tenant`, `mailbox`, `id`, `effect_key`, `semantic_input_digest`,
+`resource_digest`, `actor`, `agent`, `grant`, `operation`,
+`configuration_revision`, `credential_generation`, `gate_approved`.
+Все поля присутствуют, включая пустой resource_digest; schema всегда
+`kodex.email.receipt.v1`. Целые revision/generation записываются десятичными
+JSON numbers, gate_approved — boolean. Остальные поля — strings с обычным
+escaping Go JSON encoder. Результат — bare lowercase hex64.
+
+ID — random16bytes, lowercase hex32. Immutable audit берётся из сохранённой
+receipt, не из нового authorization response. Outcome, UID/UIDVALIDITY, folder,
+content digest и timestamps не входят в commitment: UNKNOWN → confirmed
+не меняет identity. Тело, адреса и credentials в snapshot отсутствуют.
+Golden fixture digest:
+`6dfdb1521d14b99bec6fac759edeb2a11ce30120cbeb1489ab7baa0d5150e41e`.
+
+### Проверки и блокеры
+
+Локальный EMAIL `go test -race ./...`: PASS, включая 21-operation protocol
+fixtures; PostgreSQL tests этого запуска пропущены без DSN. Отдельный
+`email-bridge-test.sh '^TestPostgresDurableUnknownBeforeCPAndProvider$'`: PASS
+с disposable PostgreSQL, migration up/status/up и race. API/schema race,
+focused integration-gateway email race, vet EMAIL, codegen readback,
+policy-codegen invariants и isolated staging render: PASS.
+Docker runtime target собран локально; runtime и migration binaries собраны
+Go 1.26.6 из Dockerfile. Это не registry publish или deployment.
+
+Полный `email-bridge-test.sh` первоначально завершился FAIL: прежний
+TestPostgresEffects повышал общий configuration watermark и нарушал изоляцию
+следующих PG fixtures. Исправлена только оснастка: каждый PG test получает
+отдельную БД, клонированную из мигрированного disposable template. Имена
+генерируются случайно, доступ ограничен loopback fixture; runtime RLS role,
+rollback policy и monotonic watermark не ослаблены. Повтор всего runner:
+PASS, включая все protocol и PostgreSQL scenarios под race.
+
+Проверенный CP WT `ac62c263c` не содержит реализаций трёх EMAIL RPC в app/transport.
+Note `10132529a` явно оставляет SQL/RPC handlers незавершёнными.
+CP WorkerGrantTrustFiles не содержит email-bridge. Registry workloads
+`internal-rpc-authority/internal/platformworkergrant/app.go` также не включает
+email-bridge. Собственный grant mount настроен, но наличие mount/Secret name
+не доказывает выпуск ключа, trust registration, readback или restore.
+
+Нужны от Bohr/root: подтверждение digest; точный producer checkpoint SQL/RPC;
+worker grant/trust/key-delivery registration; исполняемая доставка owner
+decision_ref с receipt_ref/version к EMAIL consumer (его actor/lease и retry
+policy). Последний путь нужен для атомарного local audit и снятия resource lock
+без изменения исходного UNKNOWN receipt. Status GET этого не делает.
+Shared CP/security ownership без согласования не изменяется.
+
+Full protected issuer→CP SQL→EMAIL reconciliation: NOT RUN и не READY.
+Полный #1037 остаётся незавершённым. Mail route/ports, live mail, cluster,
+staging, deploy, push и PR: NOT RUN; запреты владельца сохранены.

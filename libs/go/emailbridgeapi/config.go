@@ -34,6 +34,8 @@ func validateDocument(data any, target any) error {
 		name = "Configuration"
 	case *Command:
 		name = "Command"
+	case *ExecutionBinding:
+		name = "ExecutionBinding"
 	case *MessageInput:
 		name = "MessageInput"
 	case *AuthorizationDecision:
@@ -61,7 +63,7 @@ func validateDocument(data any, target any) error {
 			return
 		}
 		schemas = map[string]*jsonschema.Schema{}
-		for _, n := range []string{"Configuration", "Command", "MessageInput", "AuthorizationDecision", "AuthorizationRequest", "IntegrationInput", "Attachments", "Recipients", "Result"} {
+		for _, n := range []string{"Configuration", "Command", "ExecutionBinding", "MessageInput", "AuthorizationDecision", "AuthorizationRequest", "IntegrationInput", "Attachments", "Recipients", "Result"} {
 			schemas[n], schemasError = compiler.Compile("https://kodex.invalid/email.schema.json#/$defs/" + n)
 			if schemasError != nil {
 				return

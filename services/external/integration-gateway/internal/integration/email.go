@@ -11,12 +11,27 @@ import (
 	"strings"
 	"time"
 
+	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
 const emailOrigin = "https://email-bridge.kodex-system.svc.cluster.local"
+
+func emailExecutionBinding(invocation, test string, lease *cp.WorkLease) *api.ExecutionBinding {
+	if lease == nil || lease.ExpiresAt == nil || lease.ExpiresAt.CheckValid() != nil {
+		return nil
+	}
+	b := &api.ExecutionBinding{Lease: api.ExecutionLease{Ref: lease.Ref, Fence: lease.Fence, Generation: lease.Generation, ExpiresAt: lease.ExpiresAt.AsTime()}}
+	if invocation != "" {
+		b.InvocationRef = &invocation
+	}
+	if test != "" {
+		b.ConnectionTestRef = &test
+	}
+	return b
+}
 
 func newEmailClient(config Config) (*http.Client, error) {
 	if config.EmailCAFile == "" && config.EmailCertificateFile == "" && config.EmailPrivateKeyFile == "" {
@@ -58,18 +73,18 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 	if e != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	// Mail credentials принадлежат bridge. Здесь читается только owner-issued invocation credential.
-	token, e := adapter.readCredential(ctx, request.Credential)
-	if e != nil {
-		return Result{}, e
+	// Connection credential не доказывает claim. Fence проверяет CP по exact binding.
+	execution, e := api.ExecutionHeaderValue(request.EmailExecution)
+	if e != nil || !request.EmailExecution.Lease.ExpiresAt.After(time.Now()) {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	defer clear(token)
 	client, e := api.NewClient(emailOrigin, api.WithHTTPClient(adapter.emailHTTPClient))
 	if e != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 	}
 	response, e := client.ExecuteMailboxOperation(ctx, command, func(_ context.Context, r *http.Request) error {
-		r.Header.Set("Authorization", "Bearer "+string(token))
+		r.Header.Set("Authorization", "Bearer "+request.EmailExecution.Lease.Fence)
+		r.Header.Set(api.ExecutionHeader, execution)
 		r.GetBody = nil
 		return nil
 	})
