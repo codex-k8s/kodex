@@ -16,6 +16,73 @@ async function dictate(section: Locator): Promise<void> {
 }
 
 for (const width of [1440, 390]) {
+  test(`synthetic: блокировка managed voice во время записи ${String(width)}px`, async ({
+    page,
+    context,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 1080 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (["warning", "error"].includes(message.type()))
+        errors.push(message.text());
+    });
+    page.on("requestfailed", (request) => errors.push(request.url()));
+    await context.grantPermissions(["microphone"], {
+      origin: "http://127.0.0.1:43122",
+    });
+    await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
+    await page
+      .getByRole("button", { name: "Показать конфигурацию", exact: true })
+      .click();
+    const fields = page.getByTestId("managed-fields");
+    const textareas = fields.locator("textarea");
+    await expect(textareas).toHaveCount(4);
+    await expect(fields.locator(".voice-input button")).toHaveCount(4);
+    const original = await textareas.evaluateAll((items) =>
+      items.map((item) => (item as HTMLTextAreaElement).value),
+    );
+    const firstVoice = fields.locator(".voice-input").first();
+    await firstVoice.locator("button").click();
+    await expect(firstVoice).toHaveAttribute("data-state", "recording");
+    await fields.getByLabel("Блокировка конфигурации", { exact: true }).check();
+    await expect(fields.locator(".voice-input button")).toHaveCount(0);
+    await expect(fields.locator('[data-state="recording"]')).toHaveCount(0);
+    for (const textarea of await textareas.all())
+      await expect(textarea).toBeDisabled();
+    await expect(page.getByTestId("calls")).toHaveText("0");
+    expect(
+      await textareas.evaluateAll((items) =>
+        items.map((item) => (item as HTMLTextAreaElement).value),
+      ),
+    ).toEqual(original);
+    await fields
+      .getByLabel("Блокировка конфигурации", { exact: true })
+      .uncheck();
+    await expect(fields.locator(".voice-input button")).toHaveCount(4);
+    const description = textareas.first();
+    await description.focus();
+    await description.evaluate((element) =>
+      (element as HTMLTextAreaElement).setSelectionRange(7, 7),
+    );
+    await dictate(fields.locator(".voice-textarea").first());
+    await expect(description).toHaveValue("Начало диктовка конец");
+    await expect(page.getByTestId("calls")).toHaveText("1");
+    await page.getByLabel("Доступность", { exact: true }).uncheck();
+    await expect(fields.locator(".voice-input button")).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await fields.screenshot({
+      path: testInfo.outputPath(`managed-voice-${String(width)}.png`),
+    });
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const width of [1440, 390]) {
   test(`synthetic: голосовой ввод, курсор и undo ${String(width)}px`, async ({
     page,
     context,

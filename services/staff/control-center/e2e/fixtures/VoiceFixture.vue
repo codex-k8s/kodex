@@ -4,6 +4,7 @@ import VoiceTextarea from "../../src/shared/ui/VoiceTextarea.vue";
 import CodeEditor from "../../src/shared/ui/CodeEditor.vue";
 import CodeDiff from "../../src/shared/ui/CodeDiff.vue";
 import AsyncEntityPicker from "../../src/shared/ui/AsyncEntityPicker.vue";
+import ConfigurationFields from "../../src/features/managed-configurations/ConfigurationFields.vue";
 import type {
   AsyncEntityOptionPage,
   AsyncEntityLoader,
@@ -23,6 +24,21 @@ const inlineVisible = ref(false);
 const inlineDisabled = ref(true);
 const inlineSelected = ref<string | null | readonly string[]>([]);
 const inlineCalls = ref(0);
+const managedVisible = ref(false);
+const managedDisabled = ref(false);
+const managedContent = ref(
+  JSON.stringify({
+    name: "STT",
+    description: "Начало конец",
+    stt: {
+      parameters: {
+        languages: ["ru"],
+        keywords: ["Kodex"],
+        prompt: "Контекст",
+      },
+    },
+  }),
+);
 const loadInline: AsyncEntityLoader<AsyncEntityPickerItem> = async (
   request,
 ) => {
@@ -152,6 +168,22 @@ provide(voiceContextKey, {
     <fieldset :disabled="disabled" data-testid="fieldset">
       <VoiceTextarea v-model="sensitive" aria-label="Внутри fieldset" />
     </fieldset>
+    <button type="button" @click="managedVisible = !managedVisible">
+      {{ managedVisible ? "Скрыть конфигурацию" : "Показать конфигурацию" }}
+    </button>
+    <section v-if="managedVisible" data-testid="managed-fields">
+      <label
+        ><input v-model="managedDisabled" type="checkbox" />Блокировка
+        конфигурации</label
+      >
+      <ConfigurationFields
+        v-model="managedContent"
+        kind="SYSTEM_STT"
+        name="STT"
+        format="JSON"
+        :disabled="managedDisabled"
+      />
+    </section>
   </main>
 </template>
 <style scoped>
