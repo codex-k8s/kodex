@@ -1,4 +1,4 @@
--- name: RuntimeContextMemories :many
+-- name: runtime_context_memories :many
 SELECT binding.ref,binding.version,record.ref,control_plane.memory_revision_projection(revision.id)
 FROM control_plane.agent_context_bindings binding
 JOIN control_plane.agents agent ON agent.id=binding.agent_id AND agent.project_id=binding.project_id

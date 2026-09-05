@@ -19,11 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SecretBrokerService_CreateSecret_FullMethodName   = "/secretbroker.v1.SecretBrokerService/CreateSecret"
-	SecretBrokerService_RotateSecret_FullMethodName   = "/secretbroker.v1.SecretBrokerService/RotateSecret"
-	SecretBrokerService_RevealSecret_FullMethodName   = "/secretbroker.v1.SecretBrokerService/RevealSecret"
-	SecretBrokerService_RevokeSecret_FullMethodName   = "/secretbroker.v1.SecretBrokerService/RevokeSecret"
-	SecretBrokerService_CheckReadiness_FullMethodName = "/secretbroker.v1.SecretBrokerService/CheckReadiness"
+	SecretBrokerService_CreateSecret_FullMethodName              = "/secretbroker.v1.SecretBrokerService/CreateSecret"
+	SecretBrokerService_RotateSecret_FullMethodName              = "/secretbroker.v1.SecretBrokerService/RotateSecret"
+	SecretBrokerService_RevealSecret_FullMethodName              = "/secretbroker.v1.SecretBrokerService/RevealSecret"
+	SecretBrokerService_RevokeSecret_FullMethodName              = "/secretbroker.v1.SecretBrokerService/RevokeSecret"
+	SecretBrokerService_CheckReadiness_FullMethodName            = "/secretbroker.v1.SecretBrokerService/CheckReadiness"
+	SecretBrokerService_SaveSecretDraft_FullMethodName           = "/secretbroker.v1.SecretBrokerService/SaveSecretDraft"
+	SecretBrokerService_ValidateSecretDraft_FullMethodName       = "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft"
+	SecretBrokerService_PublishSecretDraft_FullMethodName        = "/secretbroker.v1.SecretBrokerService/PublishSecretDraft"
+	SecretBrokerService_DiscardSecretDraft_FullMethodName        = "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft"
+	SecretBrokerService_CheckSecretDraftReadiness_FullMethodName = "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness"
 )
 
 // SecretBrokerServiceClient is the client API for SecretBrokerService service.
@@ -38,6 +43,11 @@ type SecretBrokerServiceClient interface {
 	RevealSecret(ctx context.Context, in *RevealSecretRequest, opts ...grpc.CallOption) (*RevealSecretResponse, error)
 	RevokeSecret(ctx context.Context, in *RevokeSecretRequest, opts ...grpc.CallOption) (*RevokeSecretResponse, error)
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
+	SaveSecretDraft(ctx context.Context, in *SaveSecretDraftRequest, opts ...grpc.CallOption) (*SaveSecretDraftResponse, error)
+	ValidateSecretDraft(ctx context.Context, in *ValidateSecretDraftRequest, opts ...grpc.CallOption) (*ValidateSecretDraftResponse, error)
+	PublishSecretDraft(ctx context.Context, in *PublishSecretDraftRequest, opts ...grpc.CallOption) (*PublishSecretDraftResponse, error)
+	DiscardSecretDraft(ctx context.Context, in *DiscardSecretDraftRequest, opts ...grpc.CallOption) (*DiscardSecretDraftResponse, error)
+	CheckSecretDraftReadiness(ctx context.Context, in *CheckSecretDraftReadinessRequest, opts ...grpc.CallOption) (*CheckSecretDraftReadinessResponse, error)
 }
 
 type secretBrokerServiceClient struct {
@@ -98,6 +108,56 @@ func (c *secretBrokerServiceClient) CheckReadiness(ctx context.Context, in *Chec
 	return out, nil
 }
 
+func (c *secretBrokerServiceClient) SaveSecretDraft(ctx context.Context, in *SaveSecretDraftRequest, opts ...grpc.CallOption) (*SaveSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveSecretDraftResponse)
+	err := c.cc.Invoke(ctx, SecretBrokerService_SaveSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *secretBrokerServiceClient) ValidateSecretDraft(ctx context.Context, in *ValidateSecretDraftRequest, opts ...grpc.CallOption) (*ValidateSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateSecretDraftResponse)
+	err := c.cc.Invoke(ctx, SecretBrokerService_ValidateSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *secretBrokerServiceClient) PublishSecretDraft(ctx context.Context, in *PublishSecretDraftRequest, opts ...grpc.CallOption) (*PublishSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishSecretDraftResponse)
+	err := c.cc.Invoke(ctx, SecretBrokerService_PublishSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *secretBrokerServiceClient) DiscardSecretDraft(ctx context.Context, in *DiscardSecretDraftRequest, opts ...grpc.CallOption) (*DiscardSecretDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiscardSecretDraftResponse)
+	err := c.cc.Invoke(ctx, SecretBrokerService_DiscardSecretDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *secretBrokerServiceClient) CheckSecretDraftReadiness(ctx context.Context, in *CheckSecretDraftReadinessRequest, opts ...grpc.CallOption) (*CheckSecretDraftReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckSecretDraftReadinessResponse)
+	err := c.cc.Invoke(ctx, SecretBrokerService_CheckSecretDraftReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SecretBrokerServiceServer is the server API for SecretBrokerService service.
 // All implementations must embed UnimplementedSecretBrokerServiceServer
 // for forward compatibility.
@@ -110,6 +170,11 @@ type SecretBrokerServiceServer interface {
 	RevealSecret(context.Context, *RevealSecretRequest) (*RevealSecretResponse, error)
 	RevokeSecret(context.Context, *RevokeSecretRequest) (*RevokeSecretResponse, error)
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
+	SaveSecretDraft(context.Context, *SaveSecretDraftRequest) (*SaveSecretDraftResponse, error)
+	ValidateSecretDraft(context.Context, *ValidateSecretDraftRequest) (*ValidateSecretDraftResponse, error)
+	PublishSecretDraft(context.Context, *PublishSecretDraftRequest) (*PublishSecretDraftResponse, error)
+	DiscardSecretDraft(context.Context, *DiscardSecretDraftRequest) (*DiscardSecretDraftResponse, error)
+	CheckSecretDraftReadiness(context.Context, *CheckSecretDraftReadinessRequest) (*CheckSecretDraftReadinessResponse, error)
 	mustEmbedUnimplementedSecretBrokerServiceServer()
 }
 
@@ -134,6 +199,21 @@ func (UnimplementedSecretBrokerServiceServer) RevokeSecret(context.Context, *Rev
 }
 func (UnimplementedSecretBrokerServiceServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedSecretBrokerServiceServer) SaveSecretDraft(context.Context, *SaveSecretDraftRequest) (*SaveSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSecretDraft not implemented")
+}
+func (UnimplementedSecretBrokerServiceServer) ValidateSecretDraft(context.Context, *ValidateSecretDraftRequest) (*ValidateSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateSecretDraft not implemented")
+}
+func (UnimplementedSecretBrokerServiceServer) PublishSecretDraft(context.Context, *PublishSecretDraftRequest) (*PublishSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishSecretDraft not implemented")
+}
+func (UnimplementedSecretBrokerServiceServer) DiscardSecretDraft(context.Context, *DiscardSecretDraftRequest) (*DiscardSecretDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardSecretDraft not implemented")
+}
+func (UnimplementedSecretBrokerServiceServer) CheckSecretDraftReadiness(context.Context, *CheckSecretDraftReadinessRequest) (*CheckSecretDraftReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckSecretDraftReadiness not implemented")
 }
 func (UnimplementedSecretBrokerServiceServer) mustEmbedUnimplementedSecretBrokerServiceServer() {}
 func (UnimplementedSecretBrokerServiceServer) testEmbeddedByValue()                             {}
@@ -246,6 +326,96 @@ func _SecretBrokerService_CheckReadiness_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SecretBrokerService_SaveSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretBrokerServiceServer).SaveSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretBrokerService_SaveSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretBrokerServiceServer).SaveSecretDraft(ctx, req.(*SaveSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SecretBrokerService_ValidateSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretBrokerServiceServer).ValidateSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretBrokerService_ValidateSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretBrokerServiceServer).ValidateSecretDraft(ctx, req.(*ValidateSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SecretBrokerService_PublishSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretBrokerServiceServer).PublishSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretBrokerService_PublishSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretBrokerServiceServer).PublishSecretDraft(ctx, req.(*PublishSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SecretBrokerService_DiscardSecretDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardSecretDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretBrokerServiceServer).DiscardSecretDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretBrokerService_DiscardSecretDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretBrokerServiceServer).DiscardSecretDraft(ctx, req.(*DiscardSecretDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SecretBrokerService_CheckSecretDraftReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckSecretDraftReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SecretBrokerServiceServer).CheckSecretDraftReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SecretBrokerService_CheckSecretDraftReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SecretBrokerServiceServer).CheckSecretDraftReadiness(ctx, req.(*CheckSecretDraftReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SecretBrokerService_ServiceDesc is the grpc.ServiceDesc for SecretBrokerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,6 +442,26 @@ var SecretBrokerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckReadiness",
 			Handler:    _SecretBrokerService_CheckReadiness_Handler,
+		},
+		{
+			MethodName: "SaveSecretDraft",
+			Handler:    _SecretBrokerService_SaveSecretDraft_Handler,
+		},
+		{
+			MethodName: "ValidateSecretDraft",
+			Handler:    _SecretBrokerService_ValidateSecretDraft_Handler,
+		},
+		{
+			MethodName: "PublishSecretDraft",
+			Handler:    _SecretBrokerService_PublishSecretDraft_Handler,
+		},
+		{
+			MethodName: "DiscardSecretDraft",
+			Handler:    _SecretBrokerService_DiscardSecretDraft_Handler,
+		},
+		{
+			MethodName: "CheckSecretDraftReadiness",
+			Handler:    _SecretBrokerService_CheckSecretDraftReadiness_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

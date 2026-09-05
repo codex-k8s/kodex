@@ -9,6 +9,7 @@
     }
   },
   "data": {
+    "EMAIL_BRIDGE_CONFIGURATION_MODE": "bootstrap",
     "EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS": "15",
     "EMAIL_BRIDGE_RECONCILIATION_BATCH": "16",
     "EMAIL_BRIDGE_SECRETS_ROOT": "/var/run/email/mail",

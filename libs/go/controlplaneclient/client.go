@@ -73,6 +73,7 @@ type Client struct {
 	Assistant           controlplanev1.SystemAssistantServiceClient
 	Runtime             controlplanev1.RuntimeWorkServiceClient
 	RuntimeSecrets      controlplanev1.RuntimeSecretWorkServiceClient
+	RuntimeSecretDrafts controlplanev1.RuntimeSecretDraftWorkServiceClient
 	SessionArchive      controlplanev1.SessionArchiveWorkServiceClient
 	Interaction         controlplanev1.InteractionWorkServiceClient
 	RoleImages          controlplanev1.RoleImageServiceClient
@@ -158,6 +159,7 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	client.Assistant = controlplanev1.NewSystemAssistantServiceClient(protected)
 	client.Runtime = controlplanev1.NewRuntimeWorkServiceClient(protected)
 	client.RuntimeSecrets = controlplanev1.NewRuntimeSecretWorkServiceClient(protected)
+	client.RuntimeSecretDrafts = controlplanev1.NewRuntimeSecretDraftWorkServiceClient(protected)
 	client.SessionArchive = controlplanev1.NewSessionArchiveWorkServiceClient(protected)
 	client.Interaction = controlplanev1.NewInteractionWorkServiceClient(protected)
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)

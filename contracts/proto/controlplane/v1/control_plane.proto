@@ -12,6 +12,14 @@ option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/cont
 // context и никогда не выбираются полями этих запросов.
 
 service PlatformQueryService {
+  rpc ListEmailMailboxConfigurations(ListEmailMailboxConfigurationsRequest) returns (ListEmailMailboxConfigurationsResponse);
+  rpc GetEmailMailboxConfiguration(GetEmailMailboxConfigurationRequest) returns (GetEmailMailboxConfigurationResponse);
+  rpc ListEmailMailboxCredentials(ListEmailMailboxCredentialsRequest) returns (ListEmailMailboxCredentialsResponse);
+  rpc GetEmailMailboxCredentialReceipt(GetEmailMailboxCredentialReceiptRequest) returns (GetEmailMailboxCredentialReceiptResponse);
+  rpc PreviewEmailMailboxConfiguration(PreviewEmailMailboxConfigurationRequest) returns (PreviewEmailMailboxConfigurationResponse);
+  rpc GetRuntimeSecretDraftImpact(GetRuntimeSecretDraftImpactRequest) returns (GetRuntimeSecretDraftImpactResponse);
+  rpc GetRuntimeSecretDraft(GetRuntimeSecretDraftRequest) returns (GetRuntimeSecretDraftResponse);
+  rpc GetRuntimeRevisionDiff(GetRuntimeRevisionDiffRequest) returns (GetRuntimeRevisionDiffResponse);
   rpc GetEmailEffectReceipt(GetEmailEffectReceiptRequest) returns (GetEmailEffectReceiptResponse);
   rpc ListSkillBundles(ListSkillBundlesRequest) returns (ListSkillBundlesResponse);
   rpc GetSkillBundle(GetSkillBundleRequest) returns (GetSkillBundleResponse);
@@ -88,6 +96,18 @@ service PlatformQueryService {
 }
 
 service PlatformCommandService {
+  rpc CreateEmailMailboxDraft(CreateEmailMailboxDraftRequest) returns (CreateEmailMailboxDraftResponse);
+  rpc SaveEmailMailboxDraft(SaveEmailMailboxDraftRequest) returns (SaveEmailMailboxDraftResponse);
+  rpc ValidateEmailMailboxDraft(ValidateEmailMailboxDraftRequest) returns (ValidateEmailMailboxDraftResponse);
+  rpc PublishEmailMailboxDraft(PublishEmailMailboxDraftRequest) returns (PublishEmailMailboxDraftResponse);
+  rpc DiscardEmailMailboxDraft(DiscardEmailMailboxDraftRequest) returns (DiscardEmailMailboxDraftResponse);
+  rpc BindEmailMailboxConfiguration(BindEmailMailboxConfigurationRequest) returns (BindEmailMailboxConfigurationResponse);
+  rpc UnbindEmailMailboxConfiguration(UnbindEmailMailboxConfigurationRequest) returns (UnbindEmailMailboxConfigurationResponse);
+  rpc PrepareRuntimeSecretDraftImpact(PrepareRuntimeSecretDraftImpactRequest) returns (PrepareRuntimeSecretDraftImpactResponse);
+  rpc PrepareSaveRuntimeSecretDraft(PrepareSaveRuntimeSecretDraftRequest) returns (PrepareSaveRuntimeSecretDraftResponse);
+  rpc PrepareValidateRuntimeSecretDraft(PrepareValidateRuntimeSecretDraftRequest) returns (PrepareValidateRuntimeSecretDraftResponse);
+  rpc PreparePublishRuntimeSecretDraft(PreparePublishRuntimeSecretDraftRequest) returns (PreparePublishRuntimeSecretDraftResponse);
+  rpc PrepareDiscardRuntimeSecretDraft(PrepareDiscardRuntimeSecretDraftRequest) returns (PrepareDiscardRuntimeSecretDraftResponse);
   rpc SavePromptTemplateDraft(SavePromptTemplateDraftRequest) returns (SavePromptTemplateDraftResponse);
   rpc DiscardPromptTemplateDraft(DiscardPromptTemplateDraftRequest) returns (DiscardPromptTemplateDraftResponse);
   rpc SaveRoleImageRevisionDraft(SaveRoleImageRevisionDraftRequest) returns (SaveRoleImageRevisionDraftResponse);
@@ -233,6 +253,17 @@ service PlatformCommandService {
 
 // RuntimeSecretWorkService доступен только secret-broker workload. Одноразовый
 // grant связывает actor, Проект, вид операции и exact Secret revision.
+// Единственный consumer — secret-broker. Ни plaintext, ни ciphertext не проходят CP.
+service RuntimeSecretDraftWorkService {
+  rpc CheckRuntimeSecretDraftWorkReadiness(CheckRuntimeSecretDraftWorkReadinessRequest) returns (CheckRuntimeSecretDraftWorkReadinessResponse);
+  rpc ConsumeRuntimeSecretDraftOperation(ConsumeRuntimeSecretDraftOperationRequest) returns (ConsumeRuntimeSecretDraftOperationResponse);
+  rpc CompleteRuntimeSecretDraftOperation(CompleteRuntimeSecretDraftOperationRequest) returns (CompleteRuntimeSecretDraftOperationResponse);
+  rpc FailRuntimeSecretDraftOperation(FailRuntimeSecretDraftOperationRequest) returns (FailRuntimeSecretDraftOperationResponse);
+  rpc ListRuntimeSecretDraftRecoveryWork(ListRuntimeSecretDraftRecoveryWorkRequest) returns (ListRuntimeSecretDraftRecoveryWorkResponse);
+  rpc RecoverRuntimeSecretDraftMaterialization(RecoverRuntimeSecretDraftMaterializationRequest) returns (RecoverRuntimeSecretDraftMaterializationResponse);
+  rpc CompleteRuntimeSecretDraftCleanup(CompleteRuntimeSecretDraftCleanupRequest) returns (CompleteRuntimeSecretDraftCleanupResponse);
+}
+
 service RuntimeSecretWorkService {
   rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
   rpc CheckCredentialProjectionWorkReadiness(CheckCredentialProjectionWorkReadinessRequest) returns (CheckCredentialProjectionWorkReadinessResponse);
@@ -262,6 +293,7 @@ service SystemAssistantService {
 }
 
 service RuntimeWorkService {
+  rpc ReportEmailConfigurationReadback(ReportEmailConfigurationReadbackRequest) returns (ReportEmailConfigurationReadbackResponse);
   rpc ResolveEmailAuthorization(ResolveEmailAuthorizationRequest) returns (ResolveEmailAuthorizationResponse);
   rpc ReportEmailEffectReceipt(ReportEmailEffectReceiptRequest) returns (ReportEmailEffectReceiptResponse);
   rpc ResolveEmailReconciliation(ResolveEmailReconciliationRequest) returns (ResolveEmailReconciliationResponse);
@@ -2524,6 +2556,56 @@ message ListAuditEventsResponse {
   PageInfo page = 2;
 }
 
+// Публичная проекция не содержит рабочего snapshot, значений или локаторов.
+message PublicRuntimeRevisionIdentity {
+  string ref = 1;
+  int64 version = 2;
+  string run_ref = 3;
+  string session_ref = 4;
+  string turn_ref = 5;
+  int32 attempt = 6;
+  string revision_digest = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+enum RuntimeRevisionDiffComponent {
+  RUNTIME_REVISION_DIFF_COMPONENT_UNSPECIFIED = 0;
+  RUNTIME_REVISION_DIFF_COMPONENT_PROVIDER = 1;
+  RUNTIME_REVISION_DIFF_COMPONENT_MODEL = 2;
+  RUNTIME_REVISION_DIFF_COMPONENT_RUNTIME_PROFILE = 3;
+  RUNTIME_REVISION_DIFF_COMPONENT_RUNTIME_CONFIGURATION = 4;
+  RUNTIME_REVISION_DIFF_COMPONENT_PROVIDER_POLICY = 5;
+  RUNTIME_REVISION_DIFF_COMPONENT_CONFIG_OVERLAY = 6;
+  RUNTIME_REVISION_DIFF_COMPONENT_ENVIRONMENT = 7;
+  RUNTIME_REVISION_DIFF_COMPONENT_ENVIRONMENT_BINDING = 8;
+  RUNTIME_REVISION_DIFF_COMPONENT_INSTRUCTION = 9;
+  RUNTIME_REVISION_DIFF_COMPONENT_INTEGRATION_GRANTS = 10;
+  RUNTIME_REVISION_DIFF_COMPONENT_IMAGE = 11;
+}
+
+message RuntimeRevisionDiffValue {
+  string ref = 1;
+  int64 version = 2;
+  string digest = 3;
+  string revision = 4;
+}
+message RuntimeRevisionDiffChange {
+  RuntimeRevisionDiffComponent component = 1;
+  RuntimeRevisionDiffValue previous = 2;
+  RuntimeRevisionDiffValue current = 3;
+}
+message GetRuntimeRevisionDiffRequest {
+  string run_ref = 1;
+  // Пустое значение выбирает последнюю сохранённую ревизию данного Run.
+  string current_revision_ref = 2;
+}
+message GetRuntimeRevisionDiffResponse {
+  PublicRuntimeRevisionIdentity current = 1;
+  // Сервер выбирает непосредственно предшествующую ревизию той же Session.
+  PublicRuntimeRevisionIdentity previous = 2;
+  repeated RuntimeRevisionDiffChange changes = 3;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -3513,6 +3595,176 @@ enum RuntimeSecretValueType {
   RUNTIME_SECRET_VALUE_TYPE_JSON = 3;
 }
 
+enum RuntimeSecretDraftState {
+  RUNTIME_SECRET_DRAFT_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_STATE_PREPARING = 1;
+  RUNTIME_SECRET_DRAFT_STATE_DRAFT = 2;
+  RUNTIME_SECRET_DRAFT_STATE_VALID = 3;
+  RUNTIME_SECRET_DRAFT_STATE_PUBLISHING = 4;
+  RUNTIME_SECRET_DRAFT_STATE_PUBLISHED = 5;
+  RUNTIME_SECRET_DRAFT_STATE_DISCARDED = 6;
+  RUNTIME_SECRET_DRAFT_STATE_EXPIRED = 7;
+  RUNTIME_SECRET_DRAFT_STATE_FAILED = 8;
+}
+enum RuntimeSecretDraftOperationKind {
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_SAVE = 1;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_VALIDATE = 2;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_PUBLISH = 3;
+  RUNTIME_SECRET_DRAFT_OPERATION_KIND_DISCARD = 4;
+}
+
+// Безопасная публичная metadata, без digest значения, hint, ключей и локаторов.
+message RuntimeSecretDraft {
+  string ref = 1;
+  int64 version = 2;
+  int64 generation = 3;
+  string project_ref = 4;
+  string secret_ref = 5;
+  string name = 6;
+  string description = 7;
+  RuntimeSecretValueType value_type = 8;
+  RuntimeSecretDraftState state = 9;
+  int64 published_revision = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  google.protobuf.Timestamp expires_at = 13;
+  // Текущая owner version Secret из того же read/lock, включая PROVISIONING.
+  int64 secret_version = 14;
+}
+
+// Внутренний exact readback immutable ciphertext; не выдаётся browser.
+message RuntimeSecretDraftEncryptedDescriptor {
+  string namespace = 1;
+  string secret_name = 2;
+  string secret_key = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+  string ciphertext_sha256 = 6;
+  string encryption_key_id = 7;
+  int64 encryption_key_generation = 8;
+}
+
+message GetRuntimeSecretDraftRequest { string draft_ref = 1; }
+message GetRuntimeSecretDraftResponse { RuntimeSecretDraft draft = 1; }
+
+message PrepareSaveRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string secret_ref = 2;
+  string project_ref = 3;
+  string name = 4;
+  string description = 5;
+  RuntimeSecretValueType value_type = 6;
+  string expected_content_sha256 = 7;
+}
+message PrepareSaveRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PrepareValidateRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareValidateRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PreparePublishRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+  int64 expected_secret_version = 3;
+  string impact_plan_ref = 4;
+  repeated string selected_item_refs = 5;
+}
+message PreparePublishRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+message PrepareDiscardRuntimeSecretDraftRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareDiscardRuntimeSecretDraftResponse { RuntimeSecretDraftOperationReceipt operation = 1; }
+
+message RuntimeSecretDraftOperationReceipt {
+  string operation_grant = 1;
+  string operation_ref = 2;
+  RuntimeSecretOperationState state = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  RuntimeSecretDraft draft = 5;
+  RuntimeSecret terminal_secret = 6;
+  RuntimeSecretFailureCode failure_code = 7;
+}
+
+// Точное поручение broker. AEAD AAD связывает draft ref/generation,
+// project/secret/value type/expected digest из этого проверенного ответа.
+message RuntimeSecretDraftWork {
+  string operation_ref = 1;
+  RuntimeSecretDraftOperationKind kind = 2;
+  RuntimeSecretDraft draft = 3;
+  string expected_content_sha256 = 4;
+  string namespace = 5;
+  string staged_secret_name = 6;
+  string staged_secret_key = 7;
+  int64 target_revision = 8;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 9;
+  string claimant_id = 10;
+  int64 claim_generation = 11;
+  google.protobuf.Timestamp lease_deadline = 12;
+  google.protobuf.Timestamp expires_at = 13;
+  // Staging принадлежит namespace broker; namespace=5 — runtime publication.
+  string staged_namespace = 14;
+  // Durable cleanup intent сохраняет exact UID/RV после удаления и потерянного ACK.
+  RuntimeSecretMaterialization recovery_materialization = 15;
+  RuntimeSecretDraftEncryptedDescriptor recovery_encrypted = 16;
+}
+
+message CheckRuntimeSecretDraftWorkReadinessRequest {}
+message CheckRuntimeSecretDraftWorkReadinessResponse { bool ready = 1; }
+message ConsumeRuntimeSecretDraftOperationRequest {
+  string operation_grant = 1;
+  string claimant_id = 2;
+}
+message ConsumeRuntimeSecretDraftOperationResponse { RuntimeSecretDraftWork work = 1; }
+message CompleteRuntimeSecretDraftOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message CompleteRuntimeSecretDraftOperationResponse {
+  RuntimeSecretDraft draft = 1;
+  RuntimeSecret secret = 2;
+}
+message FailRuntimeSecretDraftOperationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretFailureCode failure_code = 4;
+}
+message FailRuntimeSecretDraftOperationResponse {
+  RuntimeSecretOperationState state = 1;
+  RuntimeSecretDraft draft = 2;
+}
+message ListRuntimeSecretDraftRecoveryWorkRequest { PageRequest page = 1; }
+message ListRuntimeSecretDraftRecoveryWorkResponse {
+  repeated RuntimeSecretDraftWork operations = 1;
+  PageInfo page = 2;
+}
+message RecoverRuntimeSecretDraftMaterializationRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message RecoverRuntimeSecretDraftMaterializationResponse {
+  RuntimeSecretRecoveryAction encrypted_action = 1;
+  RuntimeSecretRecoveryAction materialization_action = 2;
+  RuntimeSecretDraft draft = 3;
+  RuntimeSecretOperationState operation_state = 4;
+}
+message CompleteRuntimeSecretDraftCleanupRequest {
+  string operation_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  RuntimeSecretDraftEncryptedDescriptor encrypted = 4;
+  RuntimeSecretMaterialization materialization = 5;
+}
+message CompleteRuntimeSecretDraftCleanupResponse { bool completed = 1; }
+
 enum RuntimeSecretOperationKind {
   RUNTIME_SECRET_OPERATION_KIND_UNSPECIFIED = 0;
   RUNTIME_SECRET_OPERATION_KIND_CREATE = 1;
@@ -3950,6 +4202,58 @@ message RuntimeEnvironmentValue {
   string value = 2;
 }
 
+enum RuntimeSecretDraftImpactState {
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_PREPARED = 1;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_APPLIED = 2;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_EXPIRED = 3;
+  RUNTIME_SECRET_DRAFT_IMPACT_STATE_CANCELLED = 4;
+}
+enum RuntimeSecretDraftImpactOutcome {
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_UNSPECIFIED = 0;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_PENDING = 1;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_APPLIED = 2;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_CONFLICT = 3;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_FORBIDDEN = 4;
+  RUNTIME_SECRET_DRAFT_IMPACT_OUTCOME_NOT_SELECTED = 5;
+}
+message RuntimeSecretDraftImpactPlan {
+  string ref = 1;
+  string draft_ref = 2;
+  int64 draft_version = 3;
+  string secret_ref = 4;
+  int64 secret_version = 5;
+  int64 source_revision = 6;
+  string digest = 7;
+  int64 total = 8;
+  google.protobuf.Timestamp expires_at = 9;
+  RuntimeSecretDraftImpactState state = 10;
+}
+message RuntimeSecretDraftImpactItem {
+  string ref = 1;
+  RuntimeSecretImpactConsumer consumer = 2;
+  RuntimeSecretDraftImpactOutcome outcome = 3;
+  string result_environment_version_ref = 4;
+  string result_binding_ref = 5;
+  int64 result_binding_version = 6;
+}
+message PrepareRuntimeSecretDraftImpactRequest {
+  MutationContext mutation = 1;
+  string draft_ref = 2;
+}
+message PrepareRuntimeSecretDraftImpactResponse { RuntimeSecretDraftImpactPlan plan = 1; }
+message GetRuntimeSecretDraftImpactRequest {
+  string plan_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message GetRuntimeSecretDraftImpactResponse {
+  RuntimeSecretDraftImpactPlan plan = 1;
+  repeated RuntimeSecretDraftImpactItem items = 2;
+  int64 total = 3;
+  PageInfo page = 4;
+}
+
 message RuntimeSecretImpactConsumer {
   string environment_ref = 1;
   int64 environment_version = 2;
@@ -4276,12 +4580,19 @@ message ListModelCapabilitiesRequest {
   string provider_account_ref = 2;
   string query = 3;
   PageRequest page = 4;
+  // Exact pin снимка CP; обе части либо заданы вместе, либо отсутствуют.
+  string expected_catalog_revision = 5;
+  string expected_catalog_digest = 6;
 }
 
 message ListModelCapabilitiesResponse {
   repeated ModelCapability models = 1;
   int64 total = 2;
   PageInfo page = 3;
+  // Content-addressed revision всего eligible каталога до query/page.
+  string catalog_revision = 4;
+  // SHA-256 канонического снимка, lowercase hex без префикса.
+  string catalog_digest = 5;
 }
 
 message RoleImageRecipeRevision {
@@ -4571,6 +4882,7 @@ enum ManagedConfigurationKind {
   MANAGED_CONFIGURATION_KIND_ROLE_IMAGE = 2;
   MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION = 3;
   MANAGED_CONFIGURATION_KIND_SYSTEM_STT = 4;
+  MANAGED_CONFIGURATION_KIND_EMAIL_MAILBOX = 5;
 }
 enum ManagedConfigurationState {
   MANAGED_CONFIGURATION_STATE_UNSPECIFIED = 0;
@@ -4955,6 +5267,133 @@ enum EmailOperation {
   EMAIL_OPERATION_DRAFT_UPDATE = 20;
   EMAIL_OPERATION_DRAFT_DELETE = 21;
 }
+
+enum EmailMailboxReceiveProtocol {
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_IMAP = 1;
+  EMAIL_MAILBOX_RECEIVE_PROTOCOL_POP3 = 2;
+}
+enum EmailMailboxTLSMode {
+  EMAIL_MAILBOX_TLS_MODE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_TLS_MODE_IMPLICIT = 1;
+  EMAIL_MAILBOX_TLS_MODE_STARTTLS = 2;
+}
+enum EmailMailboxAuthMethod {
+  EMAIL_MAILBOX_AUTH_METHOD_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_AUTH_METHOD_PASSWORD = 1;
+  EMAIL_MAILBOX_AUTH_METHOD_OAUTHBEARER = 2;
+}
+message EmailMailboxCredentialReference { string name = 1; int64 generation = 2; }
+message EmailMailboxEndpoint {
+  string host = 1;
+  int32 port = 2;
+  string server_name = 3;
+  EmailMailboxTLSMode tls_mode = 4;
+  EmailMailboxAuthMethod auth_method = 5;
+  EmailMailboxCredentialReference ca = 6;
+  EmailMailboxCredentialReference username = 7;
+  EmailMailboxCredentialReference secret = 8;
+}
+message EmailMailboxLimits {
+  int64 attachment_bytes = 1;
+  int32 max_attachments = 2;
+  int32 max_recipients = 3;
+  int64 message_bytes = 4;
+  int32 page_size = 5;
+  int32 scan_messages = 6;
+  int32 timeout_seconds = 7;
+}
+message EmailMailboxOperationPolicy {
+  EmailOperation operation = 1;
+  EmailApprovalPolicy policy = 2;
+  repeated string folders = 3;
+}
+// Только редактируемые поля; tenant/connection/lineage назначает owner.
+message EmailMailboxSpecification {
+  bool enabled = 1;
+  EmailMailboxReceiveProtocol receive_protocol = 2;
+  repeated string allowed_folders = 3;
+  string archive_folder = 4;
+  string drafts_folder = 5;
+  string folder = 6;
+  string sender = 7;
+  string reply_to = 8;
+  repeated string recipients = 9;
+  string hello_name = 10;
+  EmailMailboxEndpoint smtp = 11;
+  EmailMailboxEndpoint imap = 12;
+  EmailMailboxEndpoint pop = 13;
+  EmailMailboxLimits limits = 14;
+  repeated EmailMailboxOperationPolicy policies = 15;
+}
+message EmailMailboxDraftContent {
+  oneof content {
+    EmailMailboxSpecification specification = 1;
+    string yaml = 2;
+  }
+}
+message EmailMailboxDiagnostic {
+  string code = 1;
+  string path = 2;
+  string message = 3;
+  int32 line = 4;
+  int32 column = 5;
+}
+enum EmailMailboxPublicationState {
+  EMAIL_MAILBOX_PUBLICATION_STATE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_PUBLICATION_STATE_PENDING = 1;
+  EMAIL_MAILBOX_PUBLICATION_STATE_READY = 2;
+  EMAIL_MAILBOX_PUBLICATION_STATE_FAILED = 3;
+  EMAIL_MAILBOX_PUBLICATION_STATE_SUPERSEDED = 4;
+}
+message EmailMailboxPublication {
+  string ref = 1;
+  int64 revision = 2;
+  string digest = 3;
+  EmailMailboxPublicationState state = 4;
+  string configuration_revision_ref = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp ready_at = 7;
+  string failure_code = 8;
+}
+message EmailMailboxConfigurationView {
+  string connection_ref = 1;
+  int64 connection_version = 2;
+  string mailbox_ref = 3;
+  ManagedConfigurationSet configuration = 4;
+  ManagedConfigurationRevision revision = 5;
+  EmailMailboxSpecification specification = 6;
+  EmailMailboxPublication publication = 7;
+  string bound_revision_ref = 8;
+  repeated EmailMailboxDiagnostic diagnostics = 9;
+}
+message ListEmailMailboxConfigurationsRequest { string connection_ref = 1; string query = 2; PageRequest page = 3; }
+message ListEmailMailboxConfigurationsResponse { repeated EmailMailboxConfigurationView items = 1; int64 total = 2; PageInfo page = 3; }
+message GetEmailMailboxConfigurationRequest { string connection_ref = 1; string configuration_ref = 2; string revision_ref = 3; }
+message GetEmailMailboxConfigurationResponse { EmailMailboxConfigurationView configuration = 1; }
+message ListEmailMailboxCredentialsRequest { string connection_ref = 1; EmailMailboxCredentialKind kind = 2; PageRequest page = 3; }
+message ListEmailMailboxCredentialsResponse { repeated EmailMailboxCredential items = 1; int64 total = 2; PageInfo page = 3; }
+message GetEmailMailboxCredentialReceiptRequest { string connection_ref = 1; string idempotency_key = 2; }
+message GetEmailMailboxCredentialReceiptResponse { EmailMailboxCredential credential = 1; }
+message PreviewEmailMailboxConfigurationRequest { string connection_ref = 1; EmailMailboxDraftContent content = 2; }
+message PreviewEmailMailboxConfigurationResponse { EmailMailboxSpecification specification = 1; string canonical_yaml = 2; repeated EmailMailboxDiagnostic diagnostics = 3; bool valid = 4; }
+message CreateEmailMailboxDraftRequest { MutationContext mutation = 1; string connection_ref = 2; string configuration_ref = 3; string name = 4; EmailMailboxDraftContent content = 5; }
+message CreateEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message SaveEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; EmailMailboxDraftContent content = 4; }
+message SaveEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message ValidateEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message ValidateEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message PublishEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message PublishEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message DiscardEmailMailboxDraftRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; }
+message DiscardEmailMailboxDraftResponse { EmailMailboxConfigurationView configuration = 1; }
+message BindEmailMailboxConfigurationRequest { MutationContext mutation = 1; string configuration_ref = 2; string revision_ref = 3; string connection_ref = 4; int64 expected_connection_version = 5; }
+message BindEmailMailboxConfigurationResponse { EmailMailboxConfigurationView configuration = 1; }
+message UnbindEmailMailboxConfigurationRequest { MutationContext mutation = 1; string connection_ref = 2; }
+message UnbindEmailMailboxConfigurationResponse { EmailMailboxPublication publication = 1; int64 connection_version = 2; }
+// Подтверждает только фактически принятый EMAIL snapshot; не provider health.
+message ReportEmailConfigurationReadbackRequest { int64 revision = 1; string digest = 2; }
+message ReportEmailConfigurationReadbackResponse { bool accepted = 1; }
 
 enum EmailMailboxCredentialKind {
   EMAIL_MAILBOX_CREDENTIAL_KIND_UNSPECIFIED = 0;

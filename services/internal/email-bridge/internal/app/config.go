@@ -28,6 +28,9 @@ type Config struct {
 	ApplicationGrantFile          string `env:"EMAIL_BRIDGE_APPLICATION_GRANT_FILE,required,notEmpty"`
 	EgressAddress                 string `env:"EMAIL_BRIDGE_EGRESS_ADDRESS"`
 	EgressPolicyDigest            string `env:"EMAIL_BRIDGE_EGRESS_POLICY_DIGEST,required,notEmpty"`
+	ConfigurationMode             string `env:"EMAIL_BRIDGE_CONFIGURATION_MODE,required,notEmpty"`
+	ExpectedConfigurationRevision int64  `env:"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION"`
+	ExpectedConfigurationDigest   string `env:"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST"`
 	Environment                   string `env:"DEPLOYMENT_ENVIRONMENT,required,notEmpty"`
 	OTLPEndpoint                  string `env:"OTEL_EXPORTER_OTLP_ENDPOINT,required,notEmpty"`
 	OTLPServerName                string `env:"OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,required,notEmpty"`
@@ -45,12 +48,19 @@ func loadConfig() (Config, error) {
 	if c.AuthorityTarget != "control-plane.kodex-system.svc.cluster.local:8443" || c.EgressAddress != mailEgressAddress || !mailtransport.ValidEgressDigest(c.EgressPolicyDigest) {
 		return c, errors.New("invalid email bridge destinations")
 	}
+	if !c.configurationPins().valid() {
+		return c, errors.New(configurationPinError)
+	}
 	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
 			return c, errors.New("invalid email bridge file path")
 		}
 	}
 	return c, nil
+}
+
+func (c Config) configurationPins() configurationPins {
+	return configurationPins{mode: c.ConfigurationMode, revision: c.ExpectedConfigurationRevision, digest: c.ExpectedConfigurationDigest}
 }
 func tlsConfig(c Config) (*tls.Config, error) {
 	cert, e := securefile.Read(c.CertificateFile, 1<<20)

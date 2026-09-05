@@ -58,6 +58,8 @@ spec:
               value: /var/run/config/kodex/control-plane/observability/otel-ca.pem
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.1"
+            - name: CONTROL_PLANE_RUNTIME_SECRET_STAGING_NAMESPACE
+              value: kodex-secret-drafts
             - name: CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT
               valueFrom: {secretKeyRef: {name: kodex-external-s3, key: endpoint}}
             - name: CONTROL_PLANE_OBJECT_STORAGE_REGION

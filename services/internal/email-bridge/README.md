@@ -1,3 +1,13 @@
+---
+id: SERVICE-EMAIL-1037
+title: Email bridge
+type: service
+status: approved
+owner: developer
+version: 1.2.0
+updated: 2026-09-05
+---
+
 # Email bridge #1037
 
 Самостоятельный HTTPS deployable для SMTP и IMAP; POP3/POP3S только compatibility.
@@ -42,15 +52,28 @@ timeout и limits. Поля allowed_folders, folder, drafts_folder, archive_fold
 reply_to, sender,
 envelope_from, hello_name и recipients задают точный envelope scope. Значений
 секретов в schema нет. Каждый descriptor `{name,generation}` разрешается только
-в read-only mount `<root>/<name>/<generation>` через securefile; повторное чтение
-не кэшируется. Отзыв grant проверяет owner, удаление projected credential
-отклоняется до protocol authentication.
+в read-only AtomicWriter mount `<root>/<name>.<generation>` через securefile.
+Один pinned `..data` содержит `mailboxes.json` и все credential bytes snapshot;
+смена symlink не смешивает поколения. Отзыв grant проверяет owner.
 
-Конфигурация загружается при старте. Новая revision требует rollout; PostgreSQL
-watermark запрещает обслуживать прежнюю revision после запуска новой. Пустая
-bootstrap configuration допускает только инфраструктурную local readiness:
-PostgreSQL/configuration и issuer. Неподключённая mailbox всегда отклоняется
-до credentials/provider; local readiness не означает доступный mail route.
+Конфигурация загружается при старте и каждые 15 секунд одним bounded monitor.
+В режиме `EMAIL_BRIDGE_CONFIGURATION_MODE=managed` Deployment закрепляет
+`EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION` и
+`EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST`; несовпадение отклоняется до записи
+watermark. После durable приёма и построения сервиса bridge подтверждает точные
+revision/digest через защищённый `ReportEmailConfigurationReadback` у CP.
+До ACK новый snapshot не обслуживает запросы. Отказ callback закрывает readiness;
+следующий цикл повторяет только идемпотентное подтверждение, без mail effect.
+CP должен принимать точный PENDING snapshot до READY; его отдельный readback
+Deployment доказывает готовность всех реплик и исключает цикл ожидания.
+
+Новая managed revision меняет Deployment pins вместе с egress policy digest и
+требует rollout. Старый in-flight запрос сохраняет прежний immutable snapshot;
+новые запросы отклоняются при несовпадении pins либо rollback. PostgreSQL
+watermark переживает restart. Режим `bootstrap` допускает только пустой shipped
+seed: revision 1, managed_by=git, source=release-bootstrap. Он не отправляет ACK
+и не доказывает приём owner-публикации. Неподключённая mailbox отклоняется до
+credentials/provider; local readiness не означает доступный mail route.
 
 ## Состояние
 
@@ -91,7 +114,8 @@ BODY.PEEK не выставляет read flag; UID EXPUNGE не удаляет �
 Реальные mailbox credentials и staging E2E #1031 проверяются root отдельно.
 Typed gRPC consumer использует checkpoint #1046 `d31cd4c70`; наличие generated
 RPC не доказывает CP SQL, worker trust или key delivery. Local `/readyz`
-проверяет PostgreSQL/configuration и local issuer, не полный protected path.
+проверяет PostgreSQL/configuration, Deployment pins, local issuer и managed
+owner ACK; provider readiness отдельно проверяется авторизованным HEALTH.
 Полная проверка выполняется HEALTH с настоящим owner connection-test claim.
 Owner reconciliation consumer проверен с fake CP и disposable PostgreSQL;
 реальные CP producer/#1059 key delivery требуют сквозной проверки до

@@ -17,6 +17,7 @@ authority:
   transport: grpc
   endpoint: control-plane.kodex-system.svc.cluster.local:8443
   methods:
+    - /controlplane.v1.RuntimeWorkService/ReportEmailConfigurationReadback
     - /controlplane.v1.RuntimeWorkService/ResolveEmailAuthorization
     - /controlplane.v1.RuntimeWorkService/ReportEmailEffectReceipt
     - /controlplane.v1.RuntimeWorkService/ResolveEmailReconciliation
@@ -27,7 +28,7 @@ authority:
 readiness:
   local: /readyz
   authenticated: /v1/health
-  local_requires: [configuration-watermark, runtime-postgresql-role, local-issuer]
+  local_requires: [configuration-watermark, deployment-configuration-pin, managed-owner-readback, runtime-postgresql-role, local-issuer]
   authenticated_requires: [execution-binding, owner-authorization, smtp-auth-noop, configured-pop-or-imap-read]
   unavailable: fail-closed
 egress:
