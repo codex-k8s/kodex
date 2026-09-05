@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "$*" in
+  'config current-context') printf 'fixture-local\n' ;;
+  'get --raw=/readyz') exit 0 ;;
+  'get namespace '*) exit 1 ;;
+  'delete validatingadmissionpolicybindings.admissionregistration.k8s.io '*|\
+  'delete validatingadmissionpolicies.admissionregistration.k8s.io '*)
+    [[ "${KODEX_TEST_LOCAL_DOWN_FAIL:-false}" != true ]]
+    ;;
+  *) printf 'Unexpected fixture Kubernetes command\n' >&2; exit 2 ;;
+esac

@@ -54,7 +54,7 @@ const sourceIcon = computed(() => {
     :class="{ 'run-work-item--compact': compact }"
   >
     <div class="run-work-item__body">
-      <h3>{{ run.title }}</h3>
+      <h3 :title="run.title">{{ run.title }}</h3>
       <SafeSummary
         :content="run.currentActivity ?? run.resultSummary"
         :fallback="run.target.displayName"
@@ -62,17 +62,21 @@ const sourceIcon = computed(() => {
       <dl class="run-work-item__actors">
         <div>
           <dt>{{ $t("workboard.executor") }}</dt>
-          <dd>{{ executor ?? $t("workboard.executorUnavailable") }}</dd>
+          <dd :title="executor">
+            {{ executor ?? $t("workboard.executorUnavailable") }}
+          </dd>
         </div>
         <div>
           <dt>{{ $t("workboard.initiator") }}</dt>
-          <dd>{{ run.initiator.displayName }}</dd>
+          <dd :title="run.initiator.displayName">
+            {{ run.initiator.displayName }}
+          </dd>
         </div>
         <div class="run-work-item__source">
           <dt>{{ $t("common.source") }}</dt>
           <dd
             :title="
-              $t('workboard.sourceHint', {
+              $t('common.sourceHint', {
                 source: $t(`runs.source.${run.source}`),
               })
             "

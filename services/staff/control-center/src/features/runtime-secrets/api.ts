@@ -2,6 +2,7 @@ import { requestSignal } from "@/shared/api/client";
 import {
   createRuntimeSecret as createRuntimeSecretRequest,
   listRuntimeSecrets,
+  getRuntimeSecret,
   revealRuntimeSecret as revealRuntimeSecretRequest,
   revokeRuntimeSecret as revokeRuntimeSecretRequest,
   rotateRuntimeSecret as rotateRuntimeSecretRequest,
@@ -21,6 +22,23 @@ import type {
   RuntimeSecretReveal,
   RuntimeSecretRotateInput,
 } from "./model";
+import { normalizeSecretPage } from "./model";
+
+export async function readRuntimeSecret(
+  secretRef: string,
+  projectRef: string,
+  signal: AbortSignal,
+): Promise<RuntimeSecret> {
+  const result = (
+    await unwrap(
+      getRuntimeSecret({ path: { secretRef }, signal: requestSignal(signal) }),
+    )
+  ).data;
+  const secret = normalizeSecretPage({ items: [result] }).items[0];
+  if (!secret || secret.ref !== secretRef || secret.projectRef !== projectRef)
+    throw new Error("Runtime secret link scope mismatch");
+  return secret;
+}
 
 function mutationHeaders(headers: MutationHeaders): {
   "Idempotency-Key": string;

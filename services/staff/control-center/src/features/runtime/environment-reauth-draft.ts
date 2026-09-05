@@ -92,9 +92,31 @@ function parseSecretBindings(
   value: unknown,
 ): RuntimeSecretBinding[] | undefined {
   if (!Array.isArray(value) || value.length > 128) return undefined;
-  if (!value.every((item) => isStringRecord(item, ["name", "secretRef"])))
-    return undefined;
-  return value as RuntimeSecretBinding[];
+  const result: RuntimeSecretBinding[] = [];
+  for (const item of value) {
+    if (
+      !isRecord(item) ||
+      !hasExactKeys(
+        item,
+        "revision" in item
+          ? ["name", "revision", "secretRef"]
+          : ["name", "secretRef"],
+      ) ||
+      typeof item.name !== "string" ||
+      typeof item.secretRef !== "string" ||
+      ("revision" in item &&
+        (typeof item.revision !== "number" ||
+          !Number.isSafeInteger(item.revision) ||
+          item.revision < 0))
+    )
+      return undefined;
+    result.push({
+      name: item.name,
+      secretRef: item.secretRef,
+      ...(typeof item.revision === "number" ? { revision: item.revision } : {}),
+    });
+  }
+  return result;
 }
 
 function parseVolumes(value: unknown): RuntimeVolumeInput[] | undefined {

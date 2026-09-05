@@ -1,10 +1,37 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeProblem, setUnauthorizedHandler, unwrap } from "./problem";
+import { resetOwnerRequests } from "./owner-lifetime";
 
 afterEach(() => setUnauthorizedHandler(null));
 
 describe("authoritative session invalidation", () => {
+  it("не применяет старый HTTP 401 к новой owner сессии", async () => {
+    const invalidate = vi.fn();
+    setUnauthorizedHandler(invalidate);
+    let complete!: (value: {
+      error: { code: string; status: number };
+      response: Response;
+    }) => void;
+    const pending = unwrap(
+      new Promise<{
+        error: { code: string; status: number };
+        response: Response;
+      }>((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const rejection = expect(pending).rejects.toMatchObject({
+      name: "OwnerContextChangedError",
+    });
+    resetOwnerRequests();
+    complete({
+      error: { code: "UNAUTHENTICATED", status: 401 },
+      response: new Response(null, { status: 401 }),
+    });
+    await rejection;
+    expect(invalidate).not.toHaveBeenCalled();
+  });
   it("инвалидирует сессию при общем HTTP 401", async () => {
     const invalidate = vi.fn();
     setUnauthorizedHandler(invalidate);

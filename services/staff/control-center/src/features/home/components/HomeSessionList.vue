@@ -53,6 +53,10 @@ function formatDate(run: Run): string {
 </template>
 
 <style scoped>
+.home-session-list {
+  max-height: 468px;
+  overflow: auto;
+}
 .home-session-list__item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

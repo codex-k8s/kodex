@@ -30,9 +30,12 @@ type confluencePage struct {
 }
 
 func (adapter *Adapter) testConfluence(ctx context.Context, request Request, configuration map[string]string) error {
-	definition := adapter.definitions["confluence"]
+	definition, err := adapter.validateDefinition(request)
+	if err != nil {
+		return err
+	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
-	_, err := adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet,
+	_, err = adapter.confluenceJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/wiki/api/v2/spaces/"+url.PathEscape(configuration["space_id"]), nil, nil, "")
 	return err
 }

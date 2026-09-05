@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { computed } from "vue";
 
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
@@ -214,8 +215,11 @@ function parseStructuredResult(source: string): object | undefined {
 
 const structuredResult = computed(() => parseStructuredResult(props.content));
 const blocks = computed(() =>
-  structuredResult.value === undefined ? parseBlocks(props.content) : [],
+  structuredResult.value === undefined
+    ? parseBlocks(serverMessage(props.content))
+    : [],
 );
+const serverMessage = useServerMessage();
 </script>
 
 <template>

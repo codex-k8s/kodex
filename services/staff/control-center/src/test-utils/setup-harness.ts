@@ -14,15 +14,16 @@ type SetupComponent = Component & {
 };
 
 export async function captureSetupState(
-  component: SetupComponent,
+  component: Component,
   configure?: (app: App) => void,
+  props: Record<string, unknown> = {},
 ): Promise<SetupState> {
-  const originalSetup = component.setup;
+  const originalSetup = (component as SetupComponent).setup;
   if (!originalSetup) throw new Error("Component setup is not defined");
   let captured: SetupState | undefined;
   const harness = defineComponent({
     setup(_props, context) {
-      const result = originalSetup({}, context);
+      const result = originalSetup(props as Record<string, never>, context);
       if (result instanceof Promise) {
         throw new Error(
           "Async component setup is not supported by this harness",

@@ -230,14 +230,44 @@ jq -e '
     "secret-broker-verifier-restore-ack")
 ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
   fail 'provider credential authority material projections are incomplete'
-for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1; do
+for workload in email-bridge interaction-gateway; do
+  jq -e --arg workload "$workload" '
+    .secrets as $secrets |
+    (if $workload == "email-bridge" then "control-plane-application-grants"
+     else "control-plane-interaction-grant-trust" end) as $trust |
+    def projection($name): [$secrets[] | select(.name == $name)];
+    def exact_source($name; $type; $ref):
+      projection($name) as $items |
+      ($items | length) == 1 and
+      all($items[0].items[]; .source.type == $type and .source.ref == $ref) and
+      ($items[0].dynamic // false) == ($type == "authority");
+    exact_source($workload + "-platform-worker-grant-signer"; "material";
+      "kodex/platform-worker-grants/" + $workload) and
+    exact_source("internal-rpc-authority-" + $workload + "-issuer-postgresql";
+      "database"; "ira_" + ($workload | gsub("-"; "_")) + "_issuer_g1") and
+    all(["issuer-key", "manifest-trust", "proof-trust"][];
+      . as $suffix | exact_source("internal-rpc-authority-" + $workload + "-" + $suffix;
+        "authority"; "internal-rpc-authority-" + $workload + "-" + $suffix)) and
+    all(["readback-credential", "readback-possession", "restore-credential", "restore-ack"][];
+      . as $suffix | exact_source("internal-rpc-authority-" + $workload + "-issuer-" + $suffix;
+        "authority"; $workload + "-issuer-" +
+          (if $suffix == "readback-possession" then "readback-key" else $suffix end))) and
+    (projection($trust) | length) == 1 and
+    ([$secrets[] | select(.name == $trust) | .items[] |
+      select(.key == $workload + ".platform-worker.public.jwk" and
+        .source.type == "material" and .source.field == "public-jwk" and
+        .source.ref == "kodex/platform-worker-grants/" + $workload)] | length) == 1
+  ' "$repository_root/tools/install/secret-projections.json" >/dev/null ||
+    fail "optional worker authority projection chain is incomplete: $workload"
+done
+for role in ira_control_plane_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1 ira_email_bridge_issuer_g1 ira_interaction_gateway_issuer_g1; do
   rg -Fq "$role" "$repository_root/tools/install/generate-material.sh" ||
     fail "fresh install does not generate PostgreSQL credential: $role"
   rg -Fq "$role" \
     "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" ||
     fail "PostgreSQL credential reconciler omits runtime principal: $role"
 done
-[[ $(rg -F -- '-eq 21' \
+[[ $(rg -F -- '-eq 22' \
   "$repository_root/deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh" | wc -l) -eq 2 ]] ||
   fail 'PostgreSQL credential startup and SCRAM readback counts differ from the exact role registry'
 rg -Fq '[.items[].key]' "$repository_root/tools/install/deploy-platform.sh" ||

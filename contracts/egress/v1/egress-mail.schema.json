@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/codex-k8s/kodex/contracts/egress/v1/egress-mail.schema.json",
+  "title": "Проекция точных почтовых назначений",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "configurationRevision", "configurationDigest", "gatewayPolicyDigest", "destinations"],
+  "properties": {
+    "schema": {"const": "egress-mail/v1"},
+    "configurationRevision": {"type": "integer", "minimum": 1},
+    "configurationDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "gatewayPolicyDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "destinations": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["hostname", "port", "protocol", "tlsMode", "addresses"],
+        "properties": {
+          "hostname": {"type": "string", "minLength": 4, "maxLength": 253, "pattern": "^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"},
+          "port": {"enum": [465, 587, 995, 110, 993, 143]},
+          "protocol": {"enum": ["smtp", "pop3", "imap"]},
+          "tlsMode": {"enum": ["implicit", "starttls"]},
+          "addresses": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string", "minLength": 3, "maxLength": 39}}
+        },
+        "oneOf": [
+          {"properties": {"protocol": {"const": "smtp"}, "port": {"const": 465}, "tlsMode": {"const": "implicit"}}},
+          {"properties": {"protocol": {"const": "smtp"}, "port": {"const": 587}, "tlsMode": {"const": "starttls"}}},
+          {"properties": {"protocol": {"const": "pop3"}, "port": {"const": 995}, "tlsMode": {"const": "implicit"}}},
+          {"properties": {"protocol": {"const": "pop3"}, "port": {"const": 110}, "tlsMode": {"const": "starttls"}}},
+          {"properties": {"protocol": {"const": "imap"}, "port": {"const": 993}, "tlsMode": {"const": "implicit"}}},
+          {"properties": {"protocol": {"const": "imap"}, "port": {"const": 143}, "tlsMode": {"const": "starttls"}}}
+        ]
+      }
+    }
+  }
+}

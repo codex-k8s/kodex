@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	authorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -55,21 +56,33 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	connection, err := protectedConnection(config.Target, transport, issuer.Issuer(), config.Proofs)
+	if err != nil {
+		_ = issuer.Close()
+		return nil, err
+	}
+	return &Client{Speech: sttv1.NewSpeechToTextServiceClient(connection), connection: connection, issuer: issuer}, nil
+}
+
+func protectedConnection(target string, transport credentials.TransportCredentials, issuer authorityv1.AuthorizationIssuerServiceClient, proofs authorityclient.ProofProvider) (*grpc.ClientConn, error) {
+	if issuer == nil || proofs == nil || transport == nil {
+		return nil, errors.New("STT client authority dependencies are missing")
+	}
 	operations := make(operationSet, len(controlplaneclient.STTGatewayOperations()))
 	for operation, method := range controlplaneclient.STTGatewayOperations() {
 		operations[method] = operation
 	}
 	connection, err := grpc.NewClient(
-		config.Target,
+		target,
 		grpc.WithTransportCredentials(transport),
-		grpc.WithChainStreamInterceptor(authorityclient.IssuerStreamClientInterceptor(issuer.Issuer(), operations, config.Proofs)),
+		grpc.WithChainUnaryInterceptor(authorityclient.IssuerUnaryClientInterceptor(issuer, operations, proofs)),
+		grpc.WithChainStreamInterceptor(authorityclient.IssuerStreamClientInterceptor(issuer, operations, proofs)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(65<<10), grpc.MaxCallRecvMsgSize(1<<20)),
 	)
 	if err != nil {
-		_ = issuer.Close()
 		return nil, errors.New("create STT connection")
 	}
-	return &Client{Speech: sttv1.NewSpeechToTextServiceClient(connection), connection: connection, issuer: issuer}, nil
+	return connection, nil
 }
 
 func (client *Client) Close() error {

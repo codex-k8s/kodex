@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	SessionCookieName             = "__Host-kodex-session"
-	CSRFCookieName                = "__Host-kodex-csrf"
-	ProjectReferenceHeader        = "X-Kodex-Project-ID"
-	freshAuthenticationWindow     = 2 * time.Minute
-	freshAuthenticationFutureSkew = 30 * time.Second
+	SessionCookieName              = "__Host-kodex-session"
+	CSRFCookieName                 = "__Host-kodex-csrf"
+	ProjectReferenceHeader         = "X-Kodex-Project-ID"
+	freshAuthenticationWindow      = 2 * time.Minute
+	emailFreshAuthenticationWindow = 5 * time.Minute
+	freshAuthenticationFutureSkew  = 30 * time.Second
 )
 
 var (
@@ -31,9 +32,9 @@ var (
 	ErrUnauthenticated              = errors.New("owner credential cannot establish session")
 	ErrSessionPurposeInvalid        = errors.New("owner session purpose is invalid")
 	ErrFreshAuthenticationRequired  = errors.New("fresh owner authentication is required")
-	ErrElevationRequired            = errors.New("runtime secret reveal elevation is required")
-	ErrElevationConsumed            = errors.New("runtime secret reveal elevation is already consumed")
-	ErrElevationUnavailable         = errors.New("runtime secret reveal elevation store is unavailable")
+	ErrElevationRequired            = errors.New("owner operation elevation is required")
+	ErrElevationConsumed            = errors.New("owner operation elevation is already consumed")
+	ErrElevationUnavailable         = errors.New("owner operation elevation store is unavailable")
 	ErrSessionValidationUnavailable = errors.New("owner session validation store is unavailable")
 )
 
@@ -55,9 +56,12 @@ type authenticatedSession struct {
 }
 
 type SessionPurpose struct {
-	Kind       string
-	ProjectRef string
-	SecretRef  string
+	Kind           string
+	ProjectRef     string
+	SecretRef      string
+	ReceiptRef     string
+	ReceiptVersion int64
+	ReceiptDigest  string
 }
 
 type Identity struct {
@@ -390,22 +394,42 @@ func (boundary *Boundary) IssueSession(principal oidcauth.Principal, bearer stri
 	if purpose == nil {
 		return boundary.sessions.Issue(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt)
 	}
-	if purpose.Kind != session.ElevationKindRuntimeSecretReveal || !validOpaqueReference(purpose.ProjectRef) || !validOpaqueReference(purpose.SecretRef) {
+	window := freshAuthenticationWindow
+	switch purpose.Kind {
+	case session.ElevationKindRuntimeSecretReveal:
+		if !validOpaqueReference(purpose.ProjectRef) || !validOpaqueReference(purpose.SecretRef) ||
+			purpose.ReceiptRef != "" || purpose.ReceiptVersion != 0 || purpose.ReceiptDigest != "" {
+			return session.Claims{}, "", "", ErrSessionPurposeInvalid
+		}
+	case session.ElevationKindEmailReconciliation:
+		if purpose.ProjectRef != "" || purpose.SecretRef != "" || !session.ValidEmailReceiptBinding(purpose.ReceiptRef, purpose.ReceiptVersion, purpose.ReceiptDigest) {
+			return session.Claims{}, "", "", ErrSessionPurposeInvalid
+		}
+		window = emailFreshAuthenticationWindow
+		interactive := false
+		for _, method := range principal.AMR {
+			interactive = interactive || strings.TrimSpace(method) != ""
+		}
+		if strings.TrimSpace(principal.ACR) == "" || !interactive {
+			return session.Claims{}, "", "", ErrFreshAuthenticationRequired
+		}
+	default:
 		return session.Claims{}, "", "", ErrSessionPurposeInvalid
 	}
 	if principal.AuthenticatedAt.IsZero() || principal.AuthenticatedAt.After(now.Add(freshAuthenticationFutureSkew)) ||
-		now.Sub(principal.AuthenticatedAt) > freshAuthenticationWindow {
+		now.Sub(principal.AuthenticatedAt) >= window {
 		return session.Claims{}, "", "", ErrFreshAuthenticationRequired
 	}
-	elevationExpiry := principal.AuthenticatedAt.Add(freshAuthenticationWindow).UTC()
-	if maximumExpiry := now.Add(freshAuthenticationWindow); elevationExpiry.After(maximumExpiry) {
+	elevationExpiry := principal.AuthenticatedAt.Add(window).UTC()
+	if maximumExpiry := now.Add(session.MaximumElevationLifetime); elevationExpiry.After(maximumExpiry) {
 		elevationExpiry = maximumExpiry
 	}
 	if elevationExpiry.After(principal.ExpiresAt) {
 		elevationExpiry = principal.ExpiresAt.UTC()
 	}
 	return boundary.sessions.IssueWithElevation(principal.Subject, principal.OrganizationID, principal.SessionID, principal.SessionRevision, bearer, principal.ExpiresAt, &session.Elevation{
-		Kind: purpose.Kind, ProjectRef: purpose.ProjectRef, SecretRef: purpose.SecretRef, ExpiresAt: elevationExpiry.Unix(),
+		Kind: purpose.Kind, ProjectRef: purpose.ProjectRef, SecretRef: purpose.SecretRef,
+		ReceiptRef: purpose.ReceiptRef, ReceiptVersion: purpose.ReceiptVersion, ReceiptDigest: purpose.ReceiptDigest, ExpiresAt: elevationExpiry.Unix(),
 	})
 }
 
@@ -420,6 +444,24 @@ func (boundary *Boundary) ConsumeRuntimeSecretReveal(ctx context.Context, writer
 		!boundary.now().UTC().Before(time.Unix(identity.Elevation.ExpiresAt, 0).UTC()) {
 		return ErrElevationRequired
 	}
+	return boundary.consumeElevation(ctx, writer, identity, authenticated)
+}
+
+func (boundary *Boundary) ConsumeEmailReconciliation(ctx context.Context, writer http.ResponseWriter, receiptRef string, version int64, digest string) error {
+	identity, identityOK := IdentityFromContext(ctx)
+	authenticated, sessionOK := ctx.Value(authenticatedSessionContextKey{}).(authenticatedSession)
+	if !identityOK || !sessionOK || identity.Elevation == nil ||
+		identity.Elevation.Kind != session.ElevationKindEmailReconciliation ||
+		identity.Elevation.ProjectRef != "" || identity.Elevation.SecretRef != "" ||
+		identity.Elevation.ReceiptRef != receiptRef || identity.Elevation.ReceiptVersion != version || identity.Elevation.ReceiptDigest != digest ||
+		!session.ValidEmailReceiptBinding(receiptRef, version, digest) ||
+		!boundary.now().UTC().Before(time.Unix(identity.Elevation.ExpiresAt, 0).UTC()) {
+		return ErrElevationRequired
+	}
+	return boundary.consumeElevation(ctx, writer, identity, authenticated)
+}
+
+func (boundary *Boundary) consumeElevation(ctx context.Context, writer http.ResponseWriter, identity Identity, authenticated authenticatedSession) error {
 	won, err := boundary.revocations.ConsumeOnce(ctx, identity.BrowserSessionID)
 	if err != nil {
 		return ErrElevationUnavailable

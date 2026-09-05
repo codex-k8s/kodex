@@ -1,5 +1,9 @@
 import { defineStore } from "pinia";
 import { computed, reactive, ref } from "vue";
+import {
+  invalidSearchResult,
+  isSearchResult,
+} from "@/shared/api/search-result";
 
 import { requestSignal } from "@/shared/api/client";
 import {
@@ -142,6 +146,10 @@ import {
 } from "@/shared/api/problem";
 import { readWithRetry } from "@/shared/api/read-retry";
 import {
+  ownerRequestSignal,
+  resetOwnerRequests,
+} from "@/shared/api/owner-lifetime";
+import {
   mergeRunGraph,
   reduceRunEvent,
   type RunEventOutcome,
@@ -250,18 +258,21 @@ export const usePlatformStore = defineStore("platform", () => {
     request: () => Promise<T>,
     apply: (value: T) => void,
   ): Promise<void> {
+    const ownerScope = ownerRequestSignal();
     const current = (generation.get(key) ?? 0) + 1;
     generation.set(key, current);
     loading[key] = true;
     Reflect.deleteProperty(problems, key);
     try {
       const value = await readWithRetry(request);
-      if (generation.get(key) !== current) return;
+      if (ownerScope.aborted || generation.get(key) !== current) return;
       apply(value);
     } catch (error) {
-      if (generation.get(key) === current) problems[key] = asProblem(error);
+      if (!ownerScope.aborted && generation.get(key) === current)
+        problems[key] = asProblem(error);
     } finally {
-      if (generation.get(key) === current) loading[key] = false;
+      if (!ownerScope.aborted && generation.get(key) === current)
+        loading[key] = false;
     }
   }
 
@@ -378,12 +389,26 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
+  let searchController: AbortController | undefined;
+
+  function cancelSearch(): void {
+    searchController?.abort();
+    searchController = undefined;
+    generation.set("search", (generation.get("search") ?? 0) + 1);
+    loading.search = false;
+    searchResults.value = [];
+    Reflect.deleteProperty(problems, "search");
+  }
+
   async function search(term: string): Promise<void> {
+    cancelSearch();
     const normalized = term.trim();
     if (normalized.length < 2) {
       searchResults.value = [];
       return;
     }
+    const controller = new AbortController();
+    searchController = controller;
     await query(
       "search",
       async () =>
@@ -391,11 +416,13 @@ export const usePlatformStore = defineStore("platform", () => {
           await unwrap(
             searchPlatform({
               query: { query: normalized, limit: 20 },
-              signal: requestSignal(),
+              signal: requestSignal(controller.signal),
             }),
           )
         ).data,
       (value) => {
+        if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
+          throw invalidSearchResult();
         searchResults.value = value.items;
       },
     );
@@ -1829,6 +1856,8 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function clearOwnerState(): void {
+    resetOwnerRequests();
+    cancelSearch();
     platformReloadPromise = undefined;
     generation.clear();
     for (const target of [
@@ -1926,6 +1955,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadBootstrap,
     loadOverview,
     search,
+    cancelSearch,
     loadProjects,
     loadProject,
     loadAgents,

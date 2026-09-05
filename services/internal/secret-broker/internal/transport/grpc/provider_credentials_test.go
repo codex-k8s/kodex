@@ -24,6 +24,10 @@ type cleanupProviderCredentialMaterializerStub struct {
 
 func (stub *cleanupProviderCredentialMaterializerStub) Check(context.Context) error { return nil }
 
+func (stub *cleanupProviderCredentialMaterializerStub) ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error) {
+	return providercredential.ModelCatalog{}, errors.New("unexpected catalog observation")
+}
+
 func (stub *cleanupProviderCredentialMaterializerStub) StartDeviceAuthorization(
 	context.Context,
 	string,

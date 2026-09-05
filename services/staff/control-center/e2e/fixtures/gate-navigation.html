@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка ссылок на решения</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import { createPinia } from "pinia";
+      import {
+        createRouter,
+        createMemoryHistory,
+        RouterView,
+      } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import DecisionsPage from "../../src/pages/DecisionsPage.vue";
+      import HomeGateCatalog from "../../src/features/home/components/HomeGateCatalog.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/decisions", component: DecisionsPage },
+          { path: "/home-gates", component: HomeGateCatalog },
+        ],
+      });
+      const app = createApp({
+        render: () =>
+          h("main", { style: "padding:16px;max-width:1800px;margin:auto" }, [
+            h("nav", [
+              h(
+                "button",
+                { onClick: () => router.push("/home-gates") },
+                "Home Gates",
+              ),
+              h(
+                "button",
+                {
+                  onClick: () => {
+                    i18n.global.locale.value = "en";
+                  },
+                },
+                "English",
+              ),
+              h(
+                "button",
+                {
+                  onClick: () => router.push("/decisions?gateRef=gate_history"),
+                },
+                "Открыть адресованную историю",
+              ),
+              h(
+                "button",
+                {
+                  onClick: () => router.push("/decisions?gateRef=gate_hidden"),
+                },
+                "Открыть скрытое решение",
+              ),
+            ]),
+            h(RouterView),
+          ]),
+      });
+      app.use(createPinia()).use(i18n).use(router);
+      await router.push("/decisions?gateRef=gate_addressed");
+      await router.isReady();
+      app.mount("#app");
+    </script>
+  </body>
+</html>

@@ -42,6 +42,17 @@ func (repository *Repository) GetBootstrapState(ctx context.Context, principal v
 	state.Assistant = assistant
 	state.Actor = entity.User{Ref: scope.actorRef, DisplayName: scope.actorName, Active: true}
 	state.PlatformRole = scope.role
+	state.SpeechTranscription.Reason = "STT_NOT_CONFIGURED"
+	configuration, configurationErr := repository.GetSystemSTTConfiguration(ctx, principal)
+	if configurationErr == nil {
+		state.SpeechTranscription.Eligible = configuration.Ready
+		state.SpeechTranscription.Reason = "STT_RUNTIME_UNVERIFIED"
+		if len(configuration.ReadinessBlockers) != 0 {
+			state.SpeechTranscription.Reason = configuration.ReadinessBlockers[0]
+		}
+	} else if !errors.Is(configurationErr, errs.ErrNotFound) {
+		state.SpeechTranscription.Reason = "STT_CONFIGURATION_UNAVAILABLE"
+	}
 	if !state.OnboardingCompleted && (scope.role == "OWNER" || scope.role == "ADMINISTRATOR") {
 		state.NextActions = []string{"COMPLETE_ONBOARDING"}
 	}
@@ -66,15 +77,15 @@ func (repository *Repository) GetOverview(ctx context.Context, principal value.P
 		return platformrepo.Overview{}, err
 	}
 	filter := query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}}
-	runs, _, err := repository.ListRuns(ctx, principal, filter)
+	runs, _, _, err := repository.ListRuns(ctx, principal, filter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	gates, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
+	gates, _, _, err := repository.ListOwnerGates(ctx, principal, query.Filter{ProjectRef: projectRef, State: "OPEN", Page: query.Page{Size: 20}})
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
-	artifacts, _, err := repository.ListArtifacts(ctx, principal, filter)
+	artifacts, _, _, err := repository.ListArtifacts(ctx, principal, filter)
 	if err != nil {
 		return platformrepo.Overview{}, err
 	}
@@ -458,30 +469,32 @@ func (repository *Repository) ListMemberships(ctx context.Context, principal val
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryProjectMembershipList, pgx.StrictNamedArgs{
-		"organization_id":     scope.organizationID,
-		"project_ref":         filter.ProjectRef,
-		"actor_platform_role": scope.role,
-		"actor_id":            scope.actorID,
-		"page_size":           boundedPage(filter.Page),
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.Membership
-	for rows.Next() {
-		var item entity.Membership
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		item.NextActions = projectMembershipActions(scope, item)
-		result = append(result, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	return result, "", nil
+	return authorizedCatalog(ctx, repository, scope, "MEMBERSHIP", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Membership, error) {
+			rows, err := tx.Query(ctx, queryProjectMembershipList, pgx.StrictNamedArgs{
+				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
+				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef,
+				"query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.Membership
+			for rows.Next() {
+				var item entity.Membership
+				if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.User.Ref, &item.User.DisplayName, &item.User.EmailMasked, &item.User.Active, &item.Role, &item.Permissions, &item.Active, &item.Version); err != nil {
+					return nil, errs.ErrUnavailable
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.Membership) entity.AccessScope {
+			return entity.AccessScope{ResourceKind: "MEMBERSHIP", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Membership, _ func(string) bool) error {
+			item.NextActions = projectMembershipActions(scope, *item)
+			return nil
+		})
 }
 
 func (repository *Repository) ListMembershipCandidates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.User, string, error) {
@@ -545,32 +558,43 @@ func (repository *Repository) ListAgents(ctx context.Context, principal value.Pr
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
+	result, next, err := authorizedCatalog(ctx, repository, scope, "AGENT", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Agent, error) {
+			rows, err := tx.Query(ctx, queryQueriesListagentsSelectAgentsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor, scope.authorityProjectID)
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var result []entity.Agent
+			for rows.Next() {
+				var item entity.Agent
+				var canManage, canLaunch bool
+				if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
+					return nil, errs.ErrUnavailable
+				}
+				setAgentAvatarReadback(&item)
+				result = append(result, item)
+			}
+			if rows.Err() != nil {
+				return nil, errs.ErrUnavailable
+			}
+			return result, nil
+		}, func(item entity.Agent) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "AGENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(tx pgx.Tx, item *entity.Agent, allowed func(string) bool) error {
+			if err := repository.attachInstructionsFrom(ctx, tx, scope, item); err != nil {
+				return errs.ErrUnavailable
+			}
+			if err := repository.attachAgentGrantsFrom(ctx, tx, scope, item); err != nil {
+				return errs.ErrUnavailable
+			}
+			item.NextActions = agentActions(*item, allowed("agent.manage"), allowed("agent.launch"))
+			return nil
+		})
 	if err != nil {
-		return nil, "", errs.ErrUnavailable
+		return nil, "", err
 	}
-	defer rows.Close()
-	var result []entity.Agent
-	for rows.Next() {
-		var item entity.Agent
-		var canManage, canLaunch bool
-		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.RoleDefinitionRef, &item.RoleDefinitionName, &item.SystemKey, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.Avatar.ArtifactRef, &item.Avatar.ArtifactRevision, &item.State, &item.Enabled, &item.Version, &item.RuntimeKey, &item.RuntimeName, &item.Provider, &item.Model, &item.RuntimeRevision, &item.Capabilities, &item.KnowledgeArtifactRefs, &item.CreatedAt, &item.UpdatedAt, &canManage, &canLaunch); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		setAgentAvatarReadback(&item)
-		item.NextActions = agentActions(item, canManage, canLaunch)
-		result = append(result, item)
-	}
-	for index := range result {
-		if err := repository.attachInstructions(ctx, scope, &result[index]); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		result[index].NextActions = agentActions(result[index], canManageAgent(result[index].NextActions), canLaunchAgent(result[index].NextActions))
-		if err := repository.attachAgentGrants(ctx, scope, &result[index]); err != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-	}
-	return result, "", rows.Err()
+	return result, next, nil
 }
 
 func (repository *Repository) GetAgent(ctx context.Context, principal value.Principal, ref string) (entity.Agent, error) {
@@ -649,7 +673,11 @@ func canLaunchAgent(actions []string) bool {
 }
 
 func (repository *Repository) attachInstructions(ctx context.Context, scope scope, agent *entity.Agent) error {
-	rows, err := repository.pool.Query(ctx, queryQueriesAttachinstructionsSelectInstructionVersionsOrganizationIdAgentIdRef, scope.organizationID, agent.Ref)
+	return repository.attachInstructionsFrom(ctx, repository.pool, scope, agent)
+}
+
+func (repository *Repository) attachInstructionsFrom(ctx context.Context, runner queryRunner, scope scope, agent *entity.Agent) error {
+	rows, err := runner.Query(ctx, queryQueriesAttachinstructionsSelectInstructionVersionsOrganizationIdAgentIdRef, scope.organizationID, agent.Ref)
 	if err != nil {
 		return err
 	}
@@ -676,7 +704,11 @@ func (repository *Repository) attachInstructions(ctx context.Context, scope scop
 }
 
 func (repository *Repository) attachAgentGrants(ctx context.Context, scope scope, agent *entity.Agent) error {
-	rows, err := repository.pool.Query(ctx, queryQueriesAttachagentgrantsSelectIntegrationGrantsOrganizationIdTargetKindTargetRef, scope.organizationID, agent.Ref)
+	return repository.attachAgentGrantsFrom(ctx, repository.pool, scope, agent)
+}
+
+func (repository *Repository) attachAgentGrantsFrom(ctx context.Context, runner queryRunner, scope scope, agent *entity.Agent) error {
+	rows, err := runner.Query(ctx, queryQueriesAttachagentgrantsSelectIntegrationGrantsOrganizationIdTargetKindTargetRef, scope.organizationID, agent.Ref)
 	if err != nil {
 		return err
 	}
@@ -696,20 +728,31 @@ func (repository *Repository) ListWorkflows(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListworkflowsSelectWorkflowsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, boundedPage(filter.Page))
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.Workflow
-	for rows.Next() {
-		item, scanErr := scanWorkflow(rows, true)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	return result, "", rows.Err()
+	return authorizedCatalog(ctx, repository, scope, "WORKFLOW", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Workflow, error) {
+			rows, err := tx.Query(ctx, queryQueriesListworkflowsSelectWorkflowsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), filter.State, limit, cursor, scope.authorityProjectID)
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.Workflow
+			for rows.Next() {
+				item, err := scanWorkflow(rows, true)
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, item)
+			}
+			if rows.Err() != nil {
+				return nil, errs.ErrUnavailable
+			}
+			return items, nil
+		}, func(item entity.Workflow) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "WORKFLOW", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Workflow, allowed func(string) bool) error {
+			item.NextActions = workflowActions(*item, allowed("workflow.manage"), allowed("workflow.launch"))
+			return nil
+		})
 }
 
 type rowScanner interface{ Scan(...any) error }
@@ -778,27 +821,50 @@ func (repository *Repository) GetWorkflow(ctx context.Context, principal value.P
 	return scanWorkflow(row, true)
 }
 
-func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, string, error) {
+func (repository *Repository) ListRuns(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Run, int64, string, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
+	filter.States = append([]string{}, filter.States...)
+	sort.Strings(filter.States)
+	for i, state := range filter.States {
+		if !slices.Contains([]string{"QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING", "SUCCEEDED", "FAILED", "CANCELLED"}, state) || (i > 0 && state == filter.States[i-1]) {
+			return nil, 0, "", errs.ErrInvalid
+		}
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page))
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.Run
-	for rows.Next() {
-		item, scanErr := scanRun(rows, true)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		if len(filter.States) == 0 || contains(filter.States, item.State) {
-			result = append(result, item)
-		}
-	}
-	return result, "", rows.Err()
+	return authorizedCatalogWithTotal(ctx, repository, scope, "RUN", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Run, error) {
+			rows, err := tx.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef,
+				scope.role, scope.actorID, strings.TrimSpace(filter.Query), limit, cursor, append([]string{}, filter.States...), scope.authorityProjectID)
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.Run
+			for rows.Next() {
+				item, err := scanRun(rows, true)
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.Run) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Run, allowed func(string) bool) error {
+			item.NextActions = runActions(item.State, allowed("run.cancel") || allowed("run.cancel.own"), false)
+			return nil
+		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
+			var total int64
+			err := tx.QueryRow(ctx, queryCatalogRunsCount, scope.organizationID, filter.ProjectRef, scope.actorID, filter.Query, filter.States, scope.authorityProjectID).Scan(&total)
+			if err != nil {
+				return 0, errs.ErrUnavailable
+			}
+			return total, nil
+		})
 }
 
 func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
@@ -1051,11 +1117,11 @@ func (repository *Repository) readRunWithIncidents(ctx context.Context, runner q
 	for rows.Next() {
 		var incident entity.Incident
 		var deliveryState string
-		var attempt int
-		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
+		var attempt, maximumAttempts int
+		if err := rows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &maximumAttempts, &incident.CreatedAt); err != nil {
 			return entity.Run{}, errs.ErrUnavailable
 		}
-		incident = projectInteractionIncident(incident, deliveryState, attempt)
+		incident = projectInteractionIncident(incident, deliveryState, attempt, maximumAttempts)
 		item.Incidents = append(item.Incidents, incident)
 	}
 	if err := rows.Err(); err != nil {
@@ -1196,27 +1262,6 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	return result, run.EventSequence, complete, nil
 }
 
-func (repository *Repository) ListOwnerGates(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.OwnerGate, string, error) {
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return nil, "", err
-	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListownergatesSelectOwnerGatesOrganizationIdRefState, scope.organizationID, filter.ProjectRef, filter.State, scope.role, scope.actorID, boundedPage(filter.Page))
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.OwnerGate
-	for rows.Next() {
-		item, scanErr := scanGate(rows, true)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	return result, "", rows.Err()
-}
-
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
@@ -1249,72 +1294,105 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	return scanGate(repository.pool.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 }
 
-func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, string, error) {
+func (repository *Repository) ListArtifacts(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Artifact, int64, string, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	lifecycleState := strings.TrimSpace(filter.State)
 	if lifecycleState == "" {
 		lifecycleState = "ACTIVE"
 	}
 	if !contains([]string{"ACTIVE", "DELETED", "PURGE_PENDING", "PURGED"}, lifecycleState) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	artifactType := strings.TrimSpace(filter.ArtifactType)
 	if artifactType != "" && !contains([]string{"TEXT", "DOCUMENT", "IMAGE"}, artifactType) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	scanState := strings.TrimSpace(filter.ScanState)
 	if scanState != "" && !contains([]string{"PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"}, scanState) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
 	sourceKind := strings.TrimSpace(filter.SourceKind)
 	if sourceKind != "" && !contains([]string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"}, sourceKind) {
-		return nil, "", errs.ErrInvalid
+		return nil, 0, "", errs.ErrInvalid
 	}
-	cursorCreatedAt, cursorRef, err := decodeArtifactCursor(filter.Page.Token)
-	if err != nil {
-		return nil, "", err
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID,
-		"project_ref":     strings.TrimSpace(filter.ProjectRef),
-		"run_ref":         strings.TrimSpace(filter.ResourceRef),
-		"role":            scope.role,
-		"actor_id":        scope.actorID,
-		"query":           strings.TrimSpace(filter.Query),
-		"lifecycle_state": lifecycleState,
-		"artifact_type":   artifactType,
-		"scan_state":      scanState,
-		"source_kind":     sourceKind,
-		"cursor_created":  cursorCreatedAt,
-		"cursor_ref":      cursorRef,
-		"limit":           limit + 1,
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	var result []entity.Artifact
-	for rows.Next() {
-		item, scanErr := scanArtifact(rows)
-		if scanErr != nil {
-			return nil, "", scanErr
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(result) > int(limit) {
-		result = result[:limit]
-		last := result[len(result)-1]
-		next = encodeArtifactCursor(last.CreatedAt, last.Ref)
-	}
-	return result, next, nil
+	filter.ProjectRef = strings.TrimSpace(filter.ProjectRef)
+	filter.ResourceRef = strings.TrimSpace(filter.ResourceRef)
+	filter.Query = strings.TrimSpace(filter.Query)
+	filter.State, filter.ArtifactType, filter.ScanState, filter.SourceKind = lifecycleState, artifactType, scanState, sourceKind
+	return authorizedCatalogWithTotal(ctx, repository, scope, "ARTIFACT", filter,
+		func(ctx context.Context, tx pgx.Tx, cursorRef string, limit int32) ([]entity.Artifact, error) {
+			rows, err := tx.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
+				"authority_project": scope.authorityProjectID,
+				"organization_id":   scope.organizationID,
+				"project_ref":       strings.TrimSpace(filter.ProjectRef),
+				"run_ref":           strings.TrimSpace(filter.ResourceRef),
+				"role":              scope.role,
+				"actor_id":          scope.actorID,
+				"query":             strings.TrimSpace(filter.Query),
+				"lifecycle_state":   lifecycleState,
+				"artifact_type":     artifactType,
+				"scan_state":        scanState,
+				"source_kind":       sourceKind,
+				"cursor_ref":        cursorRef,
+				"limit":             limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var result []entity.Artifact
+			for rows.Next() {
+				item, scanErr := scanArtifact(rows)
+				if scanErr != nil {
+					return nil, scanErr
+				}
+				result = append(result, item)
+			}
+			if rows.Err() != nil {
+				return nil, errs.ErrUnavailable
+			}
+			return result, nil
+		}, func(item entity.Artifact) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "ARTIFACT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Artifact, allowed func(string) bool) error {
+			item.NextActions = nil
+			if item.LifecycleState == "DELETED" {
+				if allowed("artifact.restore") {
+					item.NextActions = append(item.NextActions, "RESTORE")
+				}
+				if allowed("artifact.purge") {
+					item.NextActions = append(item.NextActions, "PURGE")
+				}
+			} else if item.LifecycleState == "ACTIVE" {
+				if item.ScanState == "CLEAN" {
+					if allowed("artifact.download") {
+						item.NextActions = append(item.NextActions, "DOWNLOAD")
+					}
+					if allowed("artifact.bind") {
+						item.NextActions = append(item.NextActions, "BIND")
+					}
+				}
+				if allowed("artifact.delete") {
+					item.NextActions = append(item.NextActions, "DELETE")
+				}
+			}
+			return nil
+		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
+			var total int64
+			err := tx.QueryRow(ctx, queryCatalogArtifactsCount, pgx.StrictNamedArgs{
+				"authority_project": scope.authorityProjectID, "organization_id": scope.organizationID,
+				"project_ref": filter.ProjectRef, "run_ref": filter.ResourceRef, "actor_id": scope.actorID,
+				"query": filter.Query, "lifecycle_state": lifecycleState, "artifact_type": artifactType,
+				"scan_state": scanState, "source_kind": sourceKind,
+			}).Scan(&total)
+			if err != nil {
+				return 0, errs.ErrUnavailable
+			}
+			return total, nil
+		})
 }
 
 const artifactCursorVersion = "v1"
@@ -1396,44 +1474,32 @@ func (repository *Repository) ListSchedules(ctx context.Context, principal value
 	if err != nil {
 		return nil, "", err
 	}
-	cursorTime, cursorRef, err := decodeMVPCursor("schedule", filter.Page.Token)
-	if err != nil {
-		return nil, "", err
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId,
-		pgx.StrictNamedArgs{
-			"organization_id": scope.organizationID,
-			"project_ref":     filter.ProjectRef,
-			"role":            scope.role,
-			"actor_id":        scope.actorID,
-			"search_query":    strings.TrimSpace(filter.Query),
-			"cursor_time":     cursorTime,
-			"cursor_ref":      cursorRef,
-			"page_size":       limit + 1,
+	return authorizedCatalog(ctx, repository, scope, "SCHEDULE", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Schedule, error) {
+			rows, err := tx.Query(ctx, queryQueriesListschedulesSelectSchedulesOrganizationIdRefProjectId, pgx.StrictNamedArgs{
+				"authority_project": scope.authorityProjectID,
+				"organization_id":   scope.organizationID, "project_ref": filter.ProjectRef, "role": scope.role, "actor_id": scope.actorID,
+				"search_query": strings.TrimSpace(filter.Query), "cursor_ref": cursor, "page_size": limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.Schedule
+			for rows.Next() {
+				item, err := scanSchedule(rows)
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.Schedule) entity.AccessScope {
+			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SCHEDULE", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, item *entity.Schedule, allowed func(string) bool) error {
+			item.NextActions = scheduleActions(*item, allowed("schedule.manage"))
+			return nil
 		})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	result := make([]entity.Schedule, 0, limit+1)
-	for rows.Next() {
-		item, err := scanSchedule(rows)
-		if err != nil {
-			return nil, "", err
-		}
-		result = append(result, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(result) > int(limit) {
-		result = result[:limit]
-		last := result[len(result)-1]
-		next = encodeMVPCursor("schedule", last.UpdatedAt, last.Ref)
-	}
-	return result, next, nil
 }
 
 func (repository *Repository) GetSchedule(ctx context.Context, principal value.Principal, ref string) (entity.Schedule, error) {
@@ -1660,7 +1726,7 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")
 	}
-	if manageConnection && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
+	if manageConnection && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {
 		actions = append(actions, "TEST")
 	}
 	if manageConnection {
@@ -1684,6 +1750,9 @@ func connectionAuthority(ctx context.Context, querier connectionQuerier, scope s
 }
 
 func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
+	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
+		return err
+	}
 	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.role, scope.actorID)
 	if err != nil {
 		return err
@@ -1754,11 +1823,40 @@ func (repository *Repository) GetSystemAssistant(ctx context.Context, principal 
 }
 
 func (repository *Repository) ListAssistantConversations(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.AssistantConversation, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	filter.Query = strings.TrimSpace(filter.Query)
+	if filter.State == "" {
+		filter.State = "ACTIVE"
+	}
+	if len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || (filter.State != "ACTIVE" && filter.State != "CLOSED" && filter.State != "ARCHIVED") {
+		return nil, "", errs.ErrInvalid
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, "", err
 	}
-	rows, err := repository.pool.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, scope.organizationID, filter.ProjectRef, boundedPage(filter.Page))
+	cursor, err := decodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter)
+	if err != nil {
+		return nil, "", err
+	}
+	var cursorAt time.Time
+	var cursorRef string
+	if cursor != "" {
+		at, ref, ok := strings.Cut(cursor, "|")
+		if !ok {
+			return nil, "", errs.ErrInvalid
+		}
+		cursorAt, err = time.Parse(time.RFC3339Nano, at)
+		if err != nil || ref == "" {
+			return nil, "", errs.ErrInvalid
+		}
+		cursorRef = ref
+	}
+	limit := boundedPage(filter.Page)
+	rows, err := repository.pool.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID, "project_ref": filter.ProjectRef, "authority_project": scope.authorityProjectID,
+		"query": filter.Query, "state": filter.State, "evaluated_at": time.Now().UTC(), "cursor_at": cursorAt, "cursor_ref": cursorRef, "page_size": limit + 1})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}
@@ -1772,12 +1870,24 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 			&item.Context.AllowedOperations, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
-		if err := repository.attachConversation(ctx, scope, &item); err != nil {
-			return nil, "", err
-		}
 		result = append(result, item)
 	}
-	return result, "", rows.Err()
+	rows.Close()
+	if rows.Err() != nil {
+		return nil, "", errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeCatalogCursor(scope, "ASSISTANT_CONVERSATIONS", filter, last.CreatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
+	}
+	for index := range result {
+		if err := repository.attachConversation(ctx, scope, &result[index]); err != nil {
+			return nil, "", err
+		}
+	}
+	return result, next, nil
 }
 func (repository *Repository) attachConversation(ctx context.Context, scope scope, item *entity.AssistantConversation) error {
 	rows, err := repository.pool.Query(ctx, queryQueriesAttachconversationSelectSessionTurnsOrganizationIdSessionIdRef, scope.organizationID, item.Ref)
@@ -1843,11 +1953,11 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	for incidentRows.Next() {
 		var incident entity.Incident
 		var deliveryState string
-		var attempt int
-		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &incident.CreatedAt); err != nil {
+		var attempt, maximumAttempts int
+		if err := incidentRows.Scan(&incident.Ref, &incident.ProjectRef, &incident.RunRef, &deliveryState, &attempt, &maximumAttempts, &incident.CreatedAt); err != nil {
 			return platformrepo.Administration{}, errs.ErrUnavailable
 		}
-		incident = projectInteractionIncident(incident, deliveryState, attempt)
+		incident = projectInteractionIncident(incident, deliveryState, attempt, maximumAttempts)
 		result.Incidents = append(result.Incidents, incident)
 	}
 	if err := incidentRows.Err(); err != nil {

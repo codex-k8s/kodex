@@ -35,11 +35,13 @@ type DeviceAuthorizationSession interface {
 type AppServer interface {
 	Check(context.Context) error
 	StartDeviceAuthorization(context.Context, string, string) (DeviceAuthorizationSession, error)
+	ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error)
 }
 
 type AppServerProcess struct {
-	binary string
-	root   string
+	binary      string
+	root        string
+	catalogHTTP modelCatalogHTTPClient
 }
 
 func NewAppServerProcess(binary, root string) (*AppServerProcess, error) {
@@ -49,7 +51,7 @@ func NewAppServerProcess(binary, root string) (*AppServerProcess, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, errors.New("create Codex app-server state root")
 	}
-	return &AppServerProcess{binary: binary, root: root}, nil
+	return &AppServerProcess{binary: binary, root: root, catalogHTTP: newModelCatalogHTTPClient()}, nil
 }
 
 func (process *AppServerProcess) Check(_ context.Context) error {
@@ -148,17 +150,16 @@ type appServer struct {
 	nextID      int64
 	closeOnce   sync.Once
 	closeErr    error
+	readerStop  chan struct{}
+	readerDone  chan struct{}
 }
 
 func startAppServer(binary, home string) (*appServer, error) {
 	command := exec.Command(binary, "app-server", "--strict-config", "--listen", "stdio://")
+	command.WaitDelay = processShutdownTimeout
 	command.Dir = home
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "CODEX_HOME=" + home}
-	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} {
-		if value, ok := os.LookupEnv(name); ok && value != "" {
-			command.Env = append(command.Env, name+"="+value)
-		}
-	}
+	command.Env = append(command.Env, "HTTP_PROXY="+providerEgressProxyURL, "HTTPS_PROXY="+providerEgressProxyURL)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -176,7 +177,8 @@ func startAppServer(binary, home string) (*appServer, error) {
 		return nil, errors.New("start Codex app-server process")
 	}
 	messages := make(chan streamEvent, 64)
-	go readAppServerMessages(stdout, messages)
+	readerStop, readerDone := make(chan struct{}), make(chan struct{})
+	go readAppServerMessages(stdout, messages, readerStop, readerDone)
 	diagnostics := make(chan error, 1)
 	go func() {
 		written, copyErr := io.Copy(io.Discard, io.LimitReader(stderr, maximumAppServerLineBytes+1))
@@ -188,18 +190,27 @@ func startAppServer(binary, home string) (*appServer, error) {
 	}()
 	wait := make(chan error, 1)
 	go func() { wait <- command.Wait() }()
-	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics}, nil
+	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics, readerStop: readerStop, readerDone: readerDone}, nil
 }
 
-func readAppServerMessages(reader io.Reader, events chan<- streamEvent) {
+func readAppServerMessages(reader io.Reader, events chan<- streamEvent, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
 	defer close(events)
+	send := func(event streamEvent) bool {
+		select {
+		case events <- event:
+			return true
+		case <-stop:
+			return false
+		}
+	}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64<<10), maximumAppServerLineBytes)
 	count := 0
 	for scanner.Scan() {
 		count++
 		if count > maximumAppServerMessages || len(scanner.Bytes()) == 0 {
-			events <- streamEvent{err: errors.New("Codex app-server message budget exceeded")}
+			send(streamEvent{err: errors.New("Codex app-server message budget exceeded")})
 			return
 		}
 		var message wireMessage
@@ -207,13 +218,15 @@ func readAppServerMessages(reader io.Reader, events chan<- streamEvent) {
 			(message.Method == "" && len(message.ID) == 0) ||
 			(message.Method != "" && len(message.Result) != 0) ||
 			(len(message.Result) != 0 && len(message.Error) != 0) {
-			events <- streamEvent{err: errors.New("Codex app-server JSON-RPC message is invalid")}
+			send(streamEvent{err: errors.New("Codex app-server JSON-RPC message is invalid")})
 			return
 		}
-		events <- streamEvent{message: message}
+		if !send(streamEvent{message: message}) {
+			return
+		}
 	}
 	if scanner.Err() != nil {
-		events <- streamEvent{err: errors.New("read Codex app-server response stream")}
+		send(streamEvent{err: errors.New("read Codex app-server response stream")})
 	}
 }
 
@@ -237,6 +250,9 @@ func (server *appServer) call(ctx context.Context, method string, params any) (j
 			if event.message.Method != "" {
 				if len(event.message.ID) != 0 {
 					_ = server.write(map[string]any{"id": event.message.ID, "error": map[string]any{"code": -32000, "message": "Server requests are not authorized"}})
+					if method != "account/login/start" && event.message.Method == "account/chatgptAuthTokens/refresh" {
+						return nil, errModelCatalogAuthorization
+					}
 					return nil, errors.New("Codex app-server requested unsupported authority")
 				}
 				continue
@@ -255,6 +271,7 @@ func (server *appServer) call(ctx context.Context, method string, params any) (j
 
 func (server *appServer) write(message any) error {
 	raw, err := json.Marshal(message)
+	defer clear(raw)
 	if err != nil || len(raw) == 0 || len(raw) > maximumAppServerRequest {
 		return errors.New("encode Codex app-server request")
 	}
@@ -267,6 +284,7 @@ func (server *appServer) write(message any) error {
 
 func (server *appServer) terminate() error {
 	server.closeOnce.Do(func() {
+		close(server.readerStop)
 		_ = server.stdin.Close()
 		timer := time.NewTimer(processShutdownTimeout)
 		defer timer.Stop()
@@ -292,6 +310,7 @@ func (server *appServer) terminate() error {
 			}
 			force.Stop()
 		}
+		<-server.readerDone
 		select {
 		case diagnosticErr := <-server.diagnostics:
 			server.closeErr = errors.Join(server.closeErr, diagnosticErr)

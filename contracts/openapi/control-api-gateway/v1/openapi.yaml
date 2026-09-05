@@ -228,6 +228,7 @@ paths:
     get:
       tags: [Projects]
       operationId: listProjectMemberships
+      parameters: [{ $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Участники Проекта
@@ -239,6 +240,7 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/Membership' } }
                   nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+                  nextPageToken: { type: string, maxLength: 512 }
         default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [Projects]
@@ -420,6 +422,124 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Agent' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/project-memberships:
+    get:
+      tags: [Projects]
+      operationId: listOrganizationProjectMemberships
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Участники доступных проектов
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextActions]
+                properties:
+                  items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Membership' } }
+                  nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+                  nextPageToken: { type: string, maxLength: 512 }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/agents:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationAgents
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: ИИ-сотрудники доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/workflows:
+    get:
+      tags: [Workflows]
+      operationId: listOrganizationWorkflows
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Процессы доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkflowPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/schedules:
+    get:
+      tags: [Automations]
+      operationId: listOrganizationSchedules
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Автоматизации доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulePage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/runtime-environments:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationRuntimeEnvironmentSets
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Окружения доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeEnvironmentPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/runtime-secrets:
+    get:
+      tags: [Agents]
+      operationId: listOrganizationRuntimeSecrets
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасные описания секретов доступных проектов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /api/v1/vfs/nodes:
+    get:
+      tags: [Artifacts]
+      operationId: listVFSNodes
+      description: Путь выбирает виртуальный каталог и не является полномочием или путём object storage.
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { name: path, in: query, required: false, schema: { type: string, maxLength: 1000, default: /projects } }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/VFSPageToken' }
+      responses:
+        '200':
+          description: Разрешённые элементы виртуального каталога
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VFSNodePage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/vfs/search:
+    get:
+      tags: [Artifacts]
+      operationId: searchVFS
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { name: query, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 200 } }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/VFSPageToken' }
+      responses:
+        '200':
+          description: Результаты поиска доступных виртуальных файлов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VFSNodePage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}:
     parameters: [{ $ref: '#/components/parameters/AgentRef' }]
     get:
@@ -583,6 +703,31 @@ paths:
               schema: { $ref: '#/components/schemas/Agent' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/agents/{agentRef}/effective-capabilities:
+    get:
+      tags: [Agents]
+      operationId: getAgentEffectiveCapabilities
+      description: Текущие полномочия actor пересекаются с Agent, exact integration grants и необязательным опубликованным этапом Workflow. WorkflowRef и stepKey передаются вместе; cursor закреплён за actor и digest проекции.
+      parameters:
+        - { $ref: '#/components/parameters/AgentRef' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - name: pageToken
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 2048 }
+        - name: workflowRef
+          in: query
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+        - name: stepKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 96 }
+      responses:
+        '200':
+          description: Безопасная проекция текущих возможностей и стабильных причин отказа
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEffectiveCapabilityPage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/runtime-configuration:
     parameters: [{ $ref: '#/components/parameters/AgentRef' }]
     get:
@@ -624,6 +769,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentRuntimeConfigurationPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/config-overlay/revisions:
+    get:
+      tags: [Agents]
+      operationId: listConfigOverlayRevisions
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Доступная история опубликованных overlay, максимум 20 записей на странице
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigOverlayRevisionPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/config-overlay/revisions/{revisionRef}:
+    get:
+      tags: [Agents]
+      operationId: getConfigOverlayRevision
+      parameters:
+        - { $ref: '#/components/parameters/AgentRef' }
+        - name: revisionRef
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Точная опубликованная ревизия и ограниченный TOML preview
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigOverlayVersion' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/agents/{agentRef}/config-overlay-drafts:
     post:
@@ -740,7 +915,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Server-owned cursor-каталог безопасных template variables
@@ -757,6 +932,33 @@ paths:
         '200':
           description: Безопасный server-owned каталог providers и способов авторизации
           content: { application/json: { schema: { $ref: '#/components/schemas/ProviderDefinitionPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/model-capabilities:
+    get:
+      tags: [Agents]
+      operationId: listModelCapabilities
+      parameters:
+        - name: expectedCatalogRevision
+          in: query
+          description: Точный снимок каталога; задаётся вместе с expectedCatalogDigest.
+          schema: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        - name: expectedCatalogDigest
+          in: query
+          description: SHA-256 снимка; задаётся вместе с expectedCatalogRevision.
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+        - name: providerDefinitionKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z][a-z0-9_-]*$' }
+        - name: providerAccountRef
+          in: query
+          schema: { type: string, minLength: 8, maxLength: 96, pattern: '^pacc_[A-Za-z0-9_-]+$' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Авторитетный каталог моделей и reasoning capabilities доступных accounts
+          content: { application/json: { schema: { $ref: '#/components/schemas/ModelCapabilityPage' } } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/provider-accounts:
     get:
@@ -809,10 +1011,41 @@ paths:
               schema: { $ref: '#/components/schemas/ProviderAccount' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/speech/transcriptions:
+    post:
+      tags: [Speech]
+      operationId: transcribeOrganizationSpeech
+      description: Голосовой ввод с проверенными полномочиями пользователя в организации; выбор проекта не требуется.
+      parameters:
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - name: X-Audio-Size
+          in: header
+          required: true
+          description: Точный размер audio part; конфигурация STT может задавать меньший лимит.
+          schema: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
+      requestBody:
+        required: true
+        description: Одна audio part формата MP3, WAV, FLAC, WebM, Ogg или MP4/M4A; длительность проверяет STT при декодировании.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+      responses:
+        '200':
+          description: Текст и безопасный receipt завершённой транскрипции
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SpeechTranscription' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/projects/{projectRef}/speech/transcriptions:
     post:
       tags: [Speech]
       operationId: transcribeSpeech
+      description: Совместимый маршрут голосового ввода; полномочия STT принадлежат организации, а не проекту в URL.
       parameters:
         - { $ref: '#/components/parameters/ProjectRef' }
         - { $ref: '#/components/parameters/CsrfToken' }
@@ -925,7 +1158,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listPromptTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Типизированный каталог разрешённых Go template namespaces без secrets
@@ -956,6 +1189,192 @@ paths:
         '200':
           description: Synthetic safe preview; полный prompt только с exact prompt.full.view
           content: { application/json: { schema: { $ref: '#/components/schemas/PromptTemplatePreview' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/impact:
+    get:
+      tags: [Agents]
+      operationId: getRuntimeSecretImpact
+      description: Влияние точной secret revision; secret.rotate и eligibility окружений проверяет CP. ETag содержит secret version. Значения секрета не возвращаются.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Точные старые revisions и доступные consumers
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretImpact' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/revisions/{revision}/consumer-bindings:
+    post:
+      tags: [Agents]
+      operationId: rebindRuntimeSecret
+      description: Публикует новые environment revisions и выборочно меняет bindings атомарно в CP. If-Match содержит secret version; текущие исполнения неизменны.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/RuntimeSecretRevision' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretRebindInput' } } }
+      responses:
+        '200':
+          description: Безопасные квитанции публикации; полное окружение читается через getRuntimeEnvironmentSet
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeSecretRebindResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-invocations/{invocationRef}/email-effect-receipt:
+    get:
+      tags: [Integrations]
+      operationId: getEmailEffectReceipt
+      description: Авторитетная квитанция почтовой операции и решение владельца. CP проверяет видимость invocation; чтение не разрешает повторную отправку. ETag содержит версию квитанции.
+      parameters: [{ $ref: '#/components/parameters/IntegrationInvocationRef' }]
+      responses:
+        '200':
+          description: Безопасная квитанция без тела письма, адресатов и credentials
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/EmailEffectReceiptView' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-effect-receipts/{receiptRef}/reconciliation:
+    post:
+      tags: [Integrations]
+      operationId: reconcileEmailEffect
+      description: Подтверждённое решение владельца для точной квитанции. Требуется одноразовая session purpose EMAIL_EFFECT_RECONCILIATION с совпадающими receiptRef, receiptVersion и receiptDigest, расходуемая до RPC. CP повторно проверяет свежую авторизацию и полномочия. If-Match содержит версию квитанции; прежний неопределённый исход сохраняется для аудита. Команда сама не повторяет почтовую операцию.
+      parameters: [{ $ref: '#/components/parameters/EmailEffectReceiptRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EmailReconciliationInput' } } }
+      responses:
+        '200':
+          description: Отдельное решение владельца; ETag содержит версию решения, не квитанции
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/EmailReconciliationDecision' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/interaction-identities:
+    get:
+      tags: [Integrations]
+      operationId: listInteractionIdentities
+      description: Список привязок; CP проверяет access.manage организации.
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный результат control-plane
+          content: { application/json: { schema: { $ref: '#/components/schemas/InteractionIdentityPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Integrations]
+      operationId: bindInteractionIdentity
+      description: Привязка; integration.manage, If-Match содержит версию connection. Actor и организация назначаются сессией.
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InteractionIdentityBindInput' } } }
+      responses:
+        '201':
+          description: Авторитетный результат control-plane
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/InteractionIdentity' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/interaction-identities/{identityRef}:
+    delete:
+      tags: [Integrations]
+      operationId: revokeInteractionIdentity
+      description: Отзыв; integration.manage, If-Match содержит версию identity. CP разрешает владельца до OCC.
+      parameters: [{ $ref: '#/components/parameters/InteractionIdentityRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный результат control-plane
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/InteractionIdentity' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/impact:
+    get:
+      tags: [Agents]
+      operationId: getRuntimeEnvironmentImpact
+      description: Влияние целевой версии; CP фильтрует consumers по полномочиям. ETag содержит версию environment.
+      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentRef' }, { $ref: '#/components/parameters/RuntimeEnvironmentVersionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный результат control-plane
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentImpact' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-environments/{environmentRef}/versions/{versionRef}/consumer-bindings:
+    post:
+      tags: [Agents]
+      operationId: rebindRuntimeEnvironment
+      description: Выборочная перепривязка; If-Match содержит версию environment. CP проверяет agent.manage и прежние версии каждого consumer; текущие исполнения не изменяются.
+      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentRef' }, { $ref: '#/components/parameters/RuntimeEnvironmentVersionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетный результат control-plane
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentRebindResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/runtime-environment-drafts:
+    post:
+      tags: [Agents]
+      operationId: createRuntimeEnvironmentDraft
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraftCreateInput' } } }
+      responses:
+        '201':
+          description: Серверный черновик окружения; опубликованная ревизия не изменена
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-environment-drafts/{draftRef}:
+    parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentDraftRef' }]
+    get:
+      tags: [Agents]
+      operationId: getRuntimeEnvironmentDraft
+      responses:
+        '200':
+          description: Черновик из авторитетного хранилища
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [Agents]
+      operationId: saveRuntimeEnvironmentDraft
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraftSpecification' } } }
+      responses:
+        '200':
+          description: Черновик сохранён, прежняя валидация сброшена
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Agents]
+      operationId: discardRuntimeEnvironmentDraft
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Черновик закрыт без изменения опубликованной ревизии
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-environment-drafts/{draftRef}/validation:
+    post:
+      tags: [Agents]
+      operationId: validateRuntimeEnvironmentDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Результат серверной проверки, включая INVALID и диагностические коды
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-environment-drafts/{draftRef}/publication:
+    post:
+      tags: [Agents]
+      operationId: publishRuntimeEnvironmentDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeEnvironmentDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Проверенный черновик опубликован; publishedEnvironmentRef указывает на результат
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeEnvironmentDraft' } } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/runtime-environments/{environmentRef}:
     get:
@@ -1133,6 +1552,296 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RuntimeSecret' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/runtime-secret-drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: createRuntimeSecretDraft
+      description: Сохранить зашифрованный черновик нового Secret без публикации; повтор неизвестного результата использует прежние Idempotency-Key и тело.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretCreateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без активации Secret
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secrets/{secretRef}/drafts:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: saveRuntimeSecretDraft
+      description: Сохранить отдельный зашифрованный черновик существующего Secret; If-Match относится к Secret.
+      parameters: [{ $ref: '#/components/parameters/SecretRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretRotateInput' }
+      responses:
+        '201':
+          description: Черновик сохранён без изменения активной revision
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }]
+      responses:
+        '200':
+          description: Авторитетное состояние черновика без значений и storage descriptors
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/impact-plans:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: prepareRuntimeSecretDraftImpact
+      description: Зафиксировать immutable план влияния до публикации; If-Match относится к проверенному Draft.
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '201':
+          description: Owner план с exact Draft/Secret pins без изменения активного Secret
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPlan' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-draft-impact-plans/{planRef}:
+    get:
+      tags: [RuntimeSecrets]
+      operationId: getRuntimeSecretDraftImpact
+      description: Авторитетная страница immutable плана с результатами выбранных замен после публикации; фильтрация и eligibility выполняются сервером.
+      parameters:
+        - { name: planRef, in: path, required: true, schema: { $ref: '#/components/schemas/OpaqueRef' } }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Страница owner плана без credential descriptors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configurations:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxConfigurations
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/configuration:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: configurationRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }, { name: revisionRef, in: query, schema: { $ref: '#/components/schemas/OpaqueRef' } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credentials:
+    get:
+      tags: [EmailMailbox]
+      operationId: listEmailMailboxCredentials
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: kind, in: query, schema: { $ref: '#/components/schemas/EmailMailboxCredentialKind' } }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredentialPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxCredentialReceipt
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { name: idempotencyKey, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredential' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/preview:
+    post:
+      tags: [EmailMailbox]
+      operationId: previewEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxPreview' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/drafts:
+    post:
+      tags: [EmailMailbox]
+      operationId: createEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { name: If-Match, in: header, schema: { type: string, maxLength: 24 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftInput' }
+      responses:
+        '201':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [EmailMailbox]
+      operationId: saveEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [EmailMailbox]
+      operationId: validateEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [EmailMailbox]
+      operationId: publishEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [EmailMailbox]
+      operationId: discardEmailMailboxDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/email-mailbox-configurations/{configurationRef}/revisions/{revisionRef}/binding:
+    post:
+      tags: [EmailMailbox]
+      operationId: bindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxBindingInput' }
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxConfigurationView' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/binding:
+    delete:
+      tags: [EmailMailbox]
+      operationId: unbindEmailMailboxConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Безопасный owner readback
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxUnbinding' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/validate:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: validateRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Сохранённое значение расшифровано и проверено broker
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/publish:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: publishRuntimeSecretDraft
+      description: Опубликовать VALID черновик; If-Match относится к Draft, expectedSecretVersion к назначенной сервером версии Secret.
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublishInput' }
+      responses:
+        '200':
+          description: Immutable revision активирована владельцем после exact readback
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraftPublication' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runtime-secret-drafts/{draftRef}/discard:
+    post:
+      tags: [RuntimeSecrets]
+      operationId: discardRuntimeSecretDraft
+      parameters: [{ $ref: '#/components/parameters/RuntimeSecretDraftRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Черновик закрыт, ciphertext удалён с exact preconditions
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeSecretDraft' }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/runtime-secrets/{secretRef}/reveal:
     post:
@@ -1353,7 +2062,21 @@ paths:
     get:
       tags: [Runs]
       operationId: listRuns
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: states
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 7
+            uniqueItems: true
+            items: { type: string, enum: [QUEUED, RUNNING, WAITING_HUMAN, CANCELLING, SUCCEEDED, FAILED, CANCELLED] }
       responses:
         '200':
           description: Доступные запуски
@@ -1376,6 +2099,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RunWorkspace' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/runs/{runRef}/runtime-revision-diff:
+    get:
+      tags: [Runs]
+      operationId: getRuntimeRevisionDiff
+      parameters:
+        - { $ref: '#/components/parameters/RunRef' }
+        - name: currentRevisionRef
+          in: query
+          description: Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
+          schema: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Безопасные изменения относительно предыдущей ревизии той же сессии; значения, prompts и worker snapshot отсутствуют.
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRevisionDiff' } } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/runs/{runRef}:
     get:
@@ -1467,7 +2205,33 @@ paths:
     get:
       tags: [Decisions]
       operationId: listOwnerGates
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      description: >-
+        Доступные actor решения в серверном порядке createdAt/ref DESC.
+        query ищет literal substring в title, prompt и contextSummary без учёта регистра.
+        state и states взаимоисключающие; без них выдаются все доступные состояния.
+        CP считает total до pagination в том же snapshot, что и страницу.
+        Cursor связан с actor, организацией, project, query и нормализованными states;
+        смена scope требует первой страницы. Чтение не создаёт событие и не меняет lifecycle Gate.
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: state
+          in: query
+          description: Одно состояние; не передаётся совместно со states.
+          schema: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
+        - name: states
+          in: query
+          description: Явный набор состояний, включая terminal history; не передаётся совместно со state.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 6
+            uniqueItems: true
+            items: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
       responses:
         '200':
           description: Human Gates
@@ -1475,10 +2239,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, nextPageToken]
+                required: [items, nextPageToken, total]
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/OwnerGate' } }
                   nextPageToken: { type: string, maxLength: 512 }
+                  total:
+                    type: integer
+                    format: int64
+                    minimum: 0
+                    maximum: 9007199254740991
+                    description: Полное server-owned количество доступных решений после query/state/project фильтров, до pagination.
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/owner-gates/{gateRef}:
     get:
@@ -1667,7 +2437,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/ArtifactLifecycleStateQuery' }, { $ref: '#/components/parameters/ArtifactTypeQuery' }, { $ref: '#/components/parameters/ArtifactScanStateQuery' }, { $ref: '#/components/parameters/ArtifactSourceKindQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
-          description: Файлы организационного помощника текущего владельца
+          description: Общий каталог всех доступных файлов проектов и личной области без обхода проектов клиентом
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ArtifactPage' }
@@ -2017,6 +2787,27 @@ paths:
           description: Connection disabled and terminally deleted; grants revoked
           content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationConnection' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/credential:
+    put:
+      tags: [Integrations]
+      operationId: configureEmailMailboxCredential
+      parameters: [{ $ref: '#/components/parameters/ConnectionRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailMailboxCredentialInput' }
+      responses:
+        '200':
+          description: Immutable credential материализован без публикации mailbox configuration
+          headers:
+            ETag:
+              description: Новая версия integration connection
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailMailboxCredential' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-connections/{connectionRef}/credential:
     put:
       tags: [Integrations]
@@ -2126,7 +2917,14 @@ paths:
     get:
       tags: [Assistant]
       operationId: listAssistantConversations
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }]
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/AssistantConversationState' }
       responses:
         '200':
           description: Долговечная история помощника
@@ -2135,7 +2933,9 @@ paths:
               schema:
                 type: object
                 required: [items]
-                properties: { items: { type: array, items: { $ref: '#/components/schemas/AssistantConversation' } } }
+                properties:
+                  items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AssistantConversation' } }
+                  nextPageToken: { type: string, maxLength: 512 }
         default: { $ref: '#/components/responses/Problem' }
     post:
       tags: [Assistant]
@@ -2154,6 +2954,20 @@ paths:
       responses:
         '201':
           description: Диалог создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantConversation' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-conversations/{conversationRef}/archive:
+    post:
+      tags: [Assistant]
+      operationId: archiveAssistantConversation
+      parameters: [{ $ref: '#/components/parameters/ConversationRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Диалог архивирован владельцем без удаления истории
+          headers:
+            ETag: { schema: { type: string } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AssistantConversation' }
@@ -2571,6 +3385,792 @@ paths:
                   nextPageToken: { type: string, maxLength: 512 }
         default: { $ref: '#/components/responses/Problem' }
 
+  /api/v1/prompt-template-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createPromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: savePromptTemplateDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardPromptTemplateDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validatePromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishPromptTemplateDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/prompt-template-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindPromptTemplateConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/git-source:
+    post:
+      tags: [Administration]
+      operationId: configureRoleImageGitSource
+      description: >-
+        Назначить Git source существующей конфигурации и поставить синхронизацию в очередь.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageGitSourceInput' } } }
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/git-source/refresh:
+    post:
+      tags: [Administration]
+      operationId: refreshRoleImageGitSource
+      description: >-
+        Повторно поставить сохранённый Git source в очередь из READY либо SYNC_BLOCKED.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/git-source:
+    post:
+      tags: [Administration]
+      operationId: configureIntegrationDefinitionGitSource
+      description: >-
+        Назначить Git source существующей конфигурации и поставить синхронизацию в очередь.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionGitSourceInput' } } }
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh:
+    post:
+      tags: [Administration]
+      operationId: refreshIntegrationDefinitionGitSource
+      description: >-
+        Повторно поставить сохранённый Git source в очередь из READY либо SYNC_BLOCKED.
+        Actor и область выводятся из verified session и owner configuration; If-Match относится к конфигурации.
+        Команда сохраняет durable idempotency receipt и audit, не создаёт событие.
+        Результат QUEUED не означает публикацию; чтение через listManagedConfigurationHistory.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Безопасные метаданные конфигурации и Git source без содержимого ревизий
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationSummary' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveRoleImageRevisionDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardRoleImageRevisionDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishRoleImageRevisionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindRoleImageConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveIntegrationDefinitionDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardIntegrationDefinitionDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishIntegrationDefinitionDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindIntegrationDefinitionConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/drafts:
+    post:
+      tags: [Administration]
+      operationId: createSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/saves:
+    post:
+      tags: [Administration]
+      operationId: saveSystemSTTConfigurationDraft
+      description: Сохраняет новую неизменяемую ревизию DRAFT, отменяя прежний черновик. If-Match содержит версию configuration; UI должен перейти к возвращённому revision.ref. CP проверяет owner и запрет записи в Git-owned configuration.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDraftSaveInput' } } }
+      responses:
+        '200':
+          description: Новый черновик; ETag содержит новую версию configuration
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Administration]
+      operationId: discardSystemSTTConfigurationDraft
+      description: Терминальная отмена черновика без изменения опубликованной ревизии. If-Match содержит версию configuration. CP проверяет owner и Git write guard.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Отменённый черновик с сохранённым содержимым; ETag = configuration.version
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Administration]
+      operationId: validateSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Administration]
+      operationId: publishSystemSTTConfigurationDraft
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/{configurationRef}/revisions/{revisionRef}/consumer-bindings:
+    post:
+      tags: [Administration]
+      operationId: rebindSystemSTTConsumers
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationRebindInput' } } }
+      responses:
+        '200':
+          description: Авторитетная конфигурация и ревизия
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations:
+    get:
+      tags: [Administration]
+      operationId: listManagedConfigurations
+      parameters:
+        - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+        - name: kind
+          in: query
+          schema: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
+      responses:
+        '200':
+          description: Каталог доступных конфигураций без содержимого ревизий
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/revisions:
+    get:
+      tags: [Administration]
+      operationId: listManagedConfigurationHistory
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: История неизменяемых ревизий
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationHistory' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/revisions/{revisionRef}/impact:
+    get:
+      tags: [Administration]
+      operationId: getManagedConfigurationImpact
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/ConfigurationRevisionRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Точные привязки потребителей и digest для выборочного обновления
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationImpact' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/detachment:
+    post:
+      tags: [Administration]
+      operationId: detachGitManagedConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Конфигурация переведена под управление UI
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDetachment' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/managed-configurations/{configurationRef}/copies:
+    post:
+      tags: [Administration]
+      operationId: copyGitManagedConfiguration
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationCopyInput' } } }
+      responses:
+        '201':
+          description: Создана отдельная UI-конфигурация
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles:
+    get:
+      tags: [Agents]
+      operationId: listSkillBundles
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/ContextAgentRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/ContextResourceStateQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundlePage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}:
+    get:
+      tags: [Agents]
+      operationId: getSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions:
+    get:
+      tags: [Agents]
+      operationId: listSkillBundleRevisions
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleRevisionPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/archive:
+    post:
+      tags: [Agents]
+      operationId: archiveSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/restoration:
+    post:
+      tags: [Agents]
+      operationId: restoreSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/purge:
+    post:
+      tags: [Agents]
+      operationId: purgeSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/skill-bundles/{bundleRef}:
+    put:
+      tags: [Agents]
+      operationId: bindAgentSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Agents]
+      operationId: unbindAgentSkillBundle
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records:
+    get:
+      tags: [Agents]
+      operationId: listMemoryRecords
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/ContextAgentRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/ContextResourceStateQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}:
+    get:
+      tags: [Agents]
+      operationId: getMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/revisions:
+    get:
+      tags: [Agents]
+      operationId: listMemoryRecordRevisions
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordRevisionPage' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [Agents]
+      operationId: reviseMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordSpecification' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/archive:
+    post:
+      tags: [Agents]
+      operationId: archiveMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/restoration:
+    post:
+      tags: [Agents]
+      operationId: restoreMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/memory-records/{recordRef}/purge:
+    post:
+      tags: [Agents]
+      operationId: purgeMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/agents/{agentRef}/memory-records/{recordRef}:
+    put:
+      tags: [Agents]
+      operationId: bindAgentMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Agents]
+      operationId: unbindAgentMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/AgentRef' }, { $ref: '#/components/parameters/MemoryRecordRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBindingInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/AgentContextBinding' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/skill-bundle-drafts:
+    post:
+      tags: [Agents]
+      operationId: createSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleDraftCreateInput' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}:
+    put:
+      tags: [Agents]
+      operationId: saveSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleSpecification' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/validation:
+    post:
+      tags: [Agents]
+      operationId: validateSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/review:
+    post:
+      tags: [Agents]
+      operationId: reviewSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundleReviewInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/publication:
+    post:
+      tags: [Agents]
+      operationId: publishSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/skill-bundles/{bundleRef}/revisions/{revisionRef}/discard:
+    post:
+      tags: [Agents]
+      operationId: discardSkillBundleDraft
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/SkillBundleRef' }, { $ref: '#/components/parameters/ContextRevisionRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ContextRevisionDigestInput' } } }
+      responses:
+        '200':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillBundle' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/memory-records:
+    post:
+      tags: [Agents]
+      operationId: createMemoryRecord
+      description: Типизированный context lifecycle; actor/provenance и eligibility назначает CP. OCC относится к aggregate, у agent binding к agent; effect не означает runtime materialization.
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MemoryRecordCreateInput' } } }
+      responses:
+        '201':
+          description: Авторитетный context snapshot
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KodexMemoryRecord' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configurations/typed-drafts:
+    post:
+      tags: [Administration]
+      operationId: createTypedSystemSTTConfigurationDraft
+      description: Типизированная спецификация сериализуется в immutable managed JSON. Authority, validation и publication принадлежат CP; upload overrides отсутствуют.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatchOptional' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SystemSTTConfigurationDraftInput' } } }
+      responses:
+        '201':
+          description: Черновик; далее используются существующие validation и publication endpoints
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt/model-catalog:
+    get:
+      tags: [Administration]
+      operationId: getSystemSTTModelCatalog
+      description: Защищённый каталог совместимости исполняемого adapter для system.configuration.manage. Доступен до первой конфигурации; не подтверждает credential, provider probe или право на диктовку.
+      responses:
+        '200':
+          description: Версия и дата проверки adapter catalog, без credential и readiness
+          content: { application/json: { schema: { $ref: '#/components/schemas/STTModelCatalog' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/system-stt-configuration:
+    get:
+      tags: [Administration]
+      operationId: getSystemSTTConfiguration
+      responses:
+        '200':
+          description: Безопасная опубликованная конфигурация STT, не пользовательское разрешение на транскрипцию
+          content: { application/json: { schema: { $ref: '#/components/schemas/SystemSTTConfiguration' } } }
+        default: { $ref: '#/components/responses/Problem' }
+
 components:
   securitySchemes:
     oidcBearer:
@@ -2586,6 +4186,41 @@ components:
       description: Версия авторитетного агрегата
       schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
   parameters:
+    SkillBundleRef:
+      name: bundleRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    MemoryRecordRef:
+      name: recordRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextRevisionRef:
+      name: revisionRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextAgentRefQuery:
+      name: agentRef
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ContextResourceStateQuery:
+      name: state
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/ContextResourceState' }
+    ConfigurationRef:
+      name: configurationRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    ConfigurationRevisionRef:
+      name: revisionRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     CsrfToken:
       name: X-CSRF-Token
       in: header
@@ -2638,6 +4273,41 @@ components:
       schema: { $ref: '#/components/schemas/OpaqueRef' }
     RuntimeEnvironmentRef:
       name: environmentRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeSecretDraftRef:
+      name: draftRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeEnvironmentDraftRef:
+      name: draftRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeEnvironmentVersionRef:
+      name: versionRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeSecretRevision:
+      name: revision
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    IntegrationInvocationRef:
+      name: invocationRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    EmailEffectReceiptRef:
+      name: receiptRef
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    InteractionIdentityRef:
+      name: identityRef
       in: path
       required: true
       schema: { $ref: '#/components/schemas/OpaqueRef' }
@@ -2758,6 +4428,14 @@ components:
       in: query
       required: false
       schema: { type: string, maxLength: 200 }
+    TemplateAgentRef:
+      name: agentRef
+      in: query
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    TemplateRuntimeRevisionRef:
+      name: runtimeRevisionRef
+      in: query
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     PageSize:
       name: pageSize
       in: query
@@ -2768,6 +4446,11 @@ components:
       in: query
       required: false
       schema: { type: string, maxLength: 512 }
+    VFSPageToken:
+      name: pageToken
+      in: query
+      required: false
+      schema: { type: string, maxLength: 2048 }
   responses:
     Problem:
       description: Безопасная ошибка API
@@ -2788,15 +4471,20 @@ components:
     OwnerSessionPurpose:
       type: object
       additionalProperties: false
-      required: [kind, projectRef]
+      required: [kind]
       properties:
         kind:
           type: string
-          enum: [RUNTIME_SECRET_CREATE, RUNTIME_SECRET_ROTATE, RUNTIME_SECRET_REVOKE, RUNTIME_SECRET_REVEAL]
+          enum: [RUNTIME_SECRET_CREATE, RUNTIME_SECRET_ROTATE, RUNTIME_SECRET_REVOKE, RUNTIME_SECRET_REVEAL, EMAIL_EFFECT_RECONCILIATION]
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         secretRef:
           allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
           description: Обязателен для ROTATE, REVOKE и REVEAL; отсутствует для CREATE
+        receiptRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Только EMAIL_EFFECT_RECONCILIATION; обязательна точная квитанция, projectRef и secretRef запрещены
+        receiptVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
     Timestamp:
       type: string
       format: date-time
@@ -3135,7 +4823,7 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, platformRole, nextActions]
+      required: [initialized, onboardingComplete, webOnlyReady, assistant, currentUser, platformRole, nextActions, speechTranscription]
       properties:
         initialized: { type: boolean }
         onboardingComplete: { type: boolean }
@@ -3144,6 +4832,471 @@ components:
         currentUser: { $ref: '#/components/schemas/UserSummary' }
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+        speechTranscription: { $ref: '#/components/schemas/SpeechTranscriptionAvailability' }
+    STTModelCatalog:
+      type: object
+      additionalProperties: false
+      required: [version, observedAt, models, recommendedModel, recommendedMaximumAudioBytes, recommendedMaximumAudioDurationMilliseconds, responseFormat]
+      properties:
+        version: { type: string, minLength: 1, maxLength: 160 }
+        observedAt: { $ref: '#/components/schemas/Timestamp' }
+        models: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/STTModelProfile' } }
+        recommendedModel: { type: string, minLength: 1, maxLength: 160 }
+        recommendedMaximumAudioBytes: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        recommendedMaximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        responseFormat: { type: string, minLength: 1, maxLength: 64 }
+    STTModelProfile:
+      type: object
+      additionalProperties: false
+      required: [model, legacy, parameterNames, chunkingStrategies, fileStreamSupported, streamEnabled, maximumPromptBytes, maximumKeywords, maximumKeywordBytes, minimumTemperature, maximumTemperature]
+      properties:
+        model: { type: string, minLength: 1, maxLength: 160 }
+        legacy: { type: boolean }
+        parameterNames: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 64 } }
+        chunkingStrategies: { type: array, maxItems: 32, uniqueItems: true, items: { type: string, maxLength: 64 } }
+        fileStreamSupported: { type: boolean }
+        streamEnabled: { type: boolean }
+        maximumPromptBytes: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        maximumKeywords: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        maximumKeywordBytes: { type: integer, format: int64, minimum: 0, maximum: 4294967295 }
+        minimumTemperature: { type: number, format: double }
+        maximumTemperature: { type: number, format: double }
+    SpeechTranscriptionAvailability:
+      type: object
+      additionalProperties: false
+      required: [available, reason]
+      properties:
+        available: { type: boolean }
+        reason: { type: string, enum: [READY, STT_NOT_CONFIGURED, STT_DISABLED, STT_PERMISSION_DENIED, STT_PERMISSION_INVALID, STT_PROVIDER_ACCOUNT_INELIGIBLE, STT_PROVIDER_CREDENTIAL_UNSUPPORTED, STT_PROVIDER_DISABLED, STT_MODEL_UNSUPPORTED, STT_CONFIGURATION_UNAVAILABLE, STT_SERVICE_UNAVAILABLE, STT_CREDENTIAL_UNAVAILABLE, STT_EGRESS_UNAVAILABLE, STT_PROVIDER_UNAVAILABLE] }
+        validUntil: { $ref: '#/components/schemas/Timestamp' }
+    ManagedConfigurationDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, contentFormat, content]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content: { type: string, minLength: 1, maxLength: 262144 }
+    ManagedConfigurationDraftSaveInput:
+      type: object
+      additionalProperties: false
+      required: [contentFormat, content]
+      properties:
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content:
+          type: string
+          maxLength: 262144
+          description: Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
+          x-go-type: '*string'
+    ManagedConfigurationCopyInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+    ManagedConfigurationConsumer:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, revisionRef, version]
+      properties:
+        kind: { type: string, enum: [AGENT, WORKFLOW, SCHEDULE, RUNTIME_ENVIRONMENT, INTEGRATION_CONNECTION, STT_SERVICE] }
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    ManagedConfigurationRebindInput:
+      type: object
+      additionalProperties: false
+      required: [impactDigest, consumers]
+      properties:
+        impactDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        consumers: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/ManagedConfigurationConsumer' } }
+    ManagedConfigurationRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, state, contentFormat, content, digest, validationDiagnostics, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED, DISCARDED] }
+        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        content: { type: string, maxLength: 262144 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        validationDiagnostics: { type: array, items: { type: string } }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        validatedAt: { $ref: '#/components/schemas/Timestamp' }
+        publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    RoleImageGitSourceInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion, repositoryRef, refName, path, contentFormat]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256, description: 'Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.' }
+        refName: { type: string, minLength: 1, maxLength: 256, description: 'Git ref без управляющих символов; максимум 256 UTF-8 bytes.' }
+        path: { type: string, minLength: 1, maxLength: 512, description: 'Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.' }
+        contentFormat: { type: string, enum: [JSON, YAML] }
+    IntegrationDefinitionGitSourceInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion, repositoryRef, refName, path, contentFormat]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256, description: 'Точный repository из connection; owner проверяет соответствие. Максимум 256 UTF-8 bytes.' }
+        refName: { type: string, minLength: 1, maxLength: 256, description: 'Git ref без управляющих символов; максимум 256 UTF-8 bytes.' }
+        path: { type: string, minLength: 1, maxLength: 512, description: 'Канонический относительный путь файла без traversal; максимум 512 UTF-8 bytes.' }
+        contentFormat: { type: string, enum: [JSON, YAML] }
+    ManagedConfigurationGitSource:
+      type: object
+      additionalProperties: false
+      description: >-
+        Безопасная owner-проекция без credential, SourceWork, package и lease.
+        READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin.
+        SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта.
+        failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
+      required: [ref, version, generation, connectionRef, providerKey, repositoryRef, refName, path, state]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        providerKey: { type: string, enum: [github, gitlab] }
+        repositoryRef: { type: string, minLength: 1, maxLength: 256 }
+        refName: { type: string, minLength: 1, maxLength: 256 }
+        path: { type: string, minLength: 1, maxLength: 512 }
+        state: { type: string, enum: [QUEUED, CLAIMED, READY, SYNC_BLOCKED, DETACHED] }
+        acceptedCommitSha: { type: string, pattern: '^([a-f0-9]{40}|[a-f0-9]{64})$' }
+        acceptedContentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        acceptedRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        syncedAt: { $ref: '#/components/schemas/Timestamp' }
+        failureCode: { type: string, enum: [UNAVAILABLE, CREDENTIAL_REJECTED, ACCESS_DENIED, NOT_FOUND, DIVERGED, CONTENT_INVALID, RESPONSE_INVALID] }
+    ManagedConfiguration:
+      type: object
+      additionalProperties: false
+      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        managedBy: { type: string, enum: [UI, GIT] }
+        source: { type: string, maxLength: 2000 }
+        sourceRevision: { type: string, maxLength: 2000 }
+        currentRevision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        gitSource: { $ref: '#/components/schemas/ManagedConfigurationGitSource' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    ManagedConfigurationSummary:
+      type: object
+      additionalProperties: false
+      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        kind: { type: string, enum: [PROMPT_TEMPLATE, ROLE_IMAGE, INTEGRATION_DEFINITION, SYSTEM_STT, EMAIL_MAILBOX] }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        managedBy: { type: string, enum: [UI, GIT] }
+        source: { type: string, maxLength: 2000 }
+        sourceRevision: { type: string, maxLength: 2000 }
+        gitSource: { $ref: '#/components/schemas/ManagedConfigurationGitSource' }
+        currentRevision:
+          type: object
+          additionalProperties: false
+          required: [ref, revision, state, digest]
+          properties:
+            ref: { $ref: '#/components/schemas/OpaqueRef' }
+            revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+            state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, SUPERSEDED, DISCARDED] }
+            digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    ManagedConfigurationPage:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ManagedConfigurationSummary' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    ManagedConfigurationResult:
+      type: object
+      additionalProperties: false
+      required: [configuration, revision]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        revision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+    ManagedConfigurationDetachment:
+      type: object
+      additionalProperties: false
+      required: [configuration]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+    ManagedConfigurationHistory:
+      type: object
+      additionalProperties: false
+      required: [configuration, items, total]
+      properties:
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/ManagedConfigurationRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    ManagedConfigurationImpact:
+      type: object
+      additionalProperties: false
+      required: [configurationRef, targetRevisionRef, consumers, digest, total]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        targetRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ManagedConfigurationConsumer' } }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    ContextResourceState:
+      type: string
+      enum: [ACTIVE, ARCHIVED, EXPIRED, PURGED]
+    ContextProvenance:
+      type: object
+      additionalProperties: false
+      required: [actorRef, sourceKind, digest, createdAt]
+      properties:
+        actorRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sourceKind: { type: string, maxLength: 64 }
+        sourceRef: { type: string, maxLength: 128 }
+        sourceRevision: { type: string, maxLength: 128 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    SkillBundleFileInput:
+      type: object
+      additionalProperties: false
+      required: [path, artifactRef, artifactRevision]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 240, description: 'Относительный canonical manifest path, не более 240 UTF-8 bytes; ограничения структуры проверяет сервер.' }
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    SkillBundleFile:
+      type: object
+      additionalProperties: false
+      required: [path, artifactRef, artifactRevision, digest, sizeBytes]
+      properties:
+        path: { type: string, minLength: 1, maxLength: 240, description: 'Относительный canonical manifest path, не более 240 UTF-8 bytes.' }
+        artifactRef: { $ref: '#/components/schemas/OpaqueRef' }
+        artifactRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 33554432 }
+    SkillBundleSpecification:
+      type: object
+      additionalProperties: false
+      required: [name, description, files]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        files: { type: array, minItems: 1, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFileInput' } }
+    SkillBundleDraftCreateInput:
+      type: object
+      additionalProperties: false
+      required: [specification]
+      properties:
+        bundleRef: { $ref: '#/components/schemas/OpaqueRef' }
+        specification: { $ref: '#/components/schemas/SkillBundleSpecification' }
+    ContextRevisionDigestInput:
+      type: object
+      additionalProperties: false
+      required: [expectedDigest]
+      properties:
+        expectedDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SkillBundleReviewInput:
+      type: object
+      additionalProperties: false
+      required: [expectedDigest, decision, comment]
+      properties:
+        expectedDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        comment: { type: string, maxLength: 4000 }
+    SkillBundleRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, state, name, description, files, digest, provenance, scanState, diagnostics]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        state: { type: string, enum: [DRAFT, INVALID, VALIDATED, APPROVED, REJECTED, PUBLISHED, DISCARDED] }
+        name: { type: string, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        files: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/SkillBundleFile' } }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        provenance: { $ref: '#/components/schemas/ContextProvenance' }
+        scanState: { type: string, enum: [PENDING, CLEAN, INFECTED, ERROR] }
+        scanEngine: { type: string, maxLength: 128 }
+        scanDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        scannedAt: { $ref: '#/components/schemas/Timestamp' }
+        reviewedBy: { $ref: '#/components/schemas/OpaqueRef' }
+        reviewedAt: { $ref: '#/components/schemas/Timestamp' }
+        diagnostics: { type: array, maxItems: 128, items: { type: string, maxLength: 2000 } }
+    SkillBundle:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, state, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { $ref: '#/components/schemas/ContextResourceState' }
+        currentRevision: { $ref: '#/components/schemas/SkillBundleRevision' }
+        draftRevision: { $ref: '#/components/schemas/SkillBundleRevision' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    MemoryRecordSpecification:
+      type: object
+      additionalProperties: false
+      required: [title, summary, retentionUntil]
+      properties:
+        title: { type: string, maxLength: 160 }
+        summary: { type: string, maxLength: 65536 }
+        sourceRunRef: { $ref: '#/components/schemas/OpaqueRef' }
+        retentionUntil: { $ref: '#/components/schemas/Timestamp' }
+    MemoryRecordCreateInput:
+      type: object
+      additionalProperties: false
+      required: [specification]
+      properties:
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        specification: { $ref: '#/components/schemas/MemoryRecordSpecification' }
+    MemoryRecordRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, title, summary, digest, provenance, retentionUntil, redacted]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        title: { type: string, maxLength: 160 }
+        summary: { type: string, maxLength: 65536 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        parentRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        provenance: { $ref: '#/components/schemas/ContextProvenance' }
+        retentionUntil: { $ref: '#/components/schemas/Timestamp' }
+        redacted: { type: boolean }
+    KodexMemoryRecord:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, state, currentRevision, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { $ref: '#/components/schemas/ContextResourceState' }
+        currentRevision: { $ref: '#/components/schemas/MemoryRecordRevision' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    AgentContextBindingInput:
+      type: object
+      additionalProperties: false
+      required: [revisionRef, expectedBindingVersion]
+      properties:
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedBindingVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    AgentContextBinding:
+      type: object
+      additionalProperties: false
+      required: [ref, version, agentRef, resourceRef, revisionRef, digest]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resourceRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SkillBundlePage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/SkillBundle' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    MemoryRecordPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/KodexMemoryRecord' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    SkillBundleRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/SkillBundleRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    MemoryRecordRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/MemoryRecordRevision' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    SystemSTTParameters:
+      type: object
+      additionalProperties: false
+      required: [languages, keywords, prompt, temperature, chunkingStrategy, stream]
+      properties:
+        languages: { type: array, maxItems: 8, uniqueItems: true, items: { type: string, pattern: '^[a-z]{2}$' } }
+        keywords: { type: array, maxItems: 64, items: { type: string, minLength: 1, maxLength: 128 } }
+        prompt: { type: string, maxLength: 896, description: Дополнительно ограничен 896 UTF-8 bytes общим modelprofile. }
+        temperature: { type: number, format: double, minimum: 0, maximum: 1 }
+        chunkingStrategy: { type: string, enum: ['', auto] }
+        stream: { type: boolean, enum: [false], description: Синхронная диктовка; stream=true закрыто отклоняется. }
+    SystemSTTSpecification:
+      type: object
+      additionalProperties: false
+      required: [enabled, providerAccountRef, model, language, permissionKey, parameters, maximumAudioBytes, maximumAudioDurationMilliseconds, providerTimeoutMilliseconds]
+      properties:
+        enabled: { type: boolean }
+        providerAccountRef: { $ref: '#/components/schemas/OpaqueRef' }
+        model: { type: string, minLength: 1, maxLength: 160, description: 'Проверяется общим исполняемым modelprofile, не произвольным LLM catalog.' }
+        language: { type: string, maxLength: 2 }
+        permissionKey: { type: string, enum: [platform.stt.use] }
+        parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400, default: 10485760 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000, default: 120000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000, default: 15000 }
+    SystemSTTConfigurationDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, specification]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        specification: { $ref: '#/components/schemas/SystemSTTSpecification' }
+    SystemSTTConfiguration:
+      type: object
+      additionalProperties: false
+      required: [configurationRef, revisionRef, revision, digest, providerAccountRef, model, language, permissionKey, ready, readinessBlockers, providerCredentialGeneration, enabled, parameters, maximumAudioBytes, maximumAudioDurationMilliseconds, providerTimeoutMilliseconds]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revisionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerAccountRef: { $ref: '#/components/schemas/OpaqueRef' }
+        model: { type: string, minLength: 1, maxLength: 160 }
+        language: { type: string, maxLength: 16 }
+        permissionKey: { type: string, enum: [platform.stt.use] }
+        ready: { type: boolean }
+        readinessBlockers: { type: array, items: { type: string } }
+        providerCredentialGeneration: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        enabled: { type: boolean }
+        parameters: { $ref: '#/components/schemas/SystemSTTParameters' }
+        maximumAudioBytes: { type: integer, format: int64, minimum: 1024, maximum: 26214400 }
+        maximumAudioDurationMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 1800000 }
+        providerTimeoutMilliseconds: { type: integer, format: int64, minimum: 1000, maximum: 15000 }
     Project:
       type: object
       additionalProperties: false
@@ -3202,7 +5355,7 @@ components:
         authoritySourceRevision: { type: integer, format: int64, minimum: 1 }
         configRevision: { type: integer, format: int64, minimum: 1 }
         model: { type: string, minLength: 1, maxLength: 160 }
-        language: { type: string, minLength: 1, maxLength: 35 }
+        language: { type: string, maxLength: 2, pattern: '^([a-z]{2})?$', description: 'Исходный singular hint; пуст при auto-detect или parameters.languages. Не является обнаруженным языком.' }
         completedStage: { type: string, enum: [PROVIDER_COMPLETED] }
     ProjectInput:
       type: object
@@ -3226,6 +5379,9 @@ components:
       required: [ref, version, user, platformRole, permissions, active, nextActions]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Проект участника; отсутствует у участника платформы
         version: { type: integer, format: int64, minimum: 1 }
         user: { $ref: '#/components/schemas/UserSummary' }
         platformRole: { type: string, enum: [OWNER, ADMINISTRATOR, OPERATOR, MEMBER, AUDITOR] }
@@ -3374,6 +5530,38 @@ components:
       properties:
         action: { type: string, enum: [VALIDATE, PUBLISH, ROLLBACK] }
         publishedInstructionRef: { $ref: '#/components/schemas/OpaqueRef' }
+    VFSNode:
+      type: object
+      additionalProperties: false
+      required: [ref, path, parentPath, name, kind, directory, projectRef, entityRef, runRef, sizeBytes, digest]
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 1000 }
+        path: { type: string, minLength: 1, maxLength: 1000 }
+        parentPath: { type: string, maxLength: 1000 }
+        name: { type: string, maxLength: 1000 }
+        kind: { type: string, enum: [DIRECTORY, PROJECT, AGENT, WORKFLOW, RUN, INPUT, RESULT, SKILL, MEMORY, AUTOMATION, ENVIRONMENT, AVATAR] }
+        directory: { type: boolean }
+        projectRef: { type: string, maxLength: 128 }
+        entityRef: { type: string, maxLength: 128 }
+        runRef: { type: string, maxLength: 128 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        digest: { type: string, maxLength: 128 }
+        modifiedAt: { $ref: '#/components/schemas/Timestamp' }
+    VFSNodePage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/VFSNode' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 2048 }
+    SchedulePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Schedule' } }
+        nextPageToken: { type: string, maxLength: 512 }
     AgentPage:
       type: object
       additionalProperties: false
@@ -3384,10 +5572,24 @@ components:
     ProviderAccountCandidate:
       type: object
       additionalProperties: false
-      required: [accountRef, weight]
+      required: [accountRef, weight, defaultReasoningEffort]
       properties:
         accountRef: { $ref: '#/components/schemas/OpaqueRef' }
         weight: { type: integer, minimum: 1, maximum: 100 }
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerDefinitionKey: { type: string, pattern: '^[a-z][a-z0-9_-]{0,79}$' }
+        defaultReasoningEffort: { type: string, maxLength: 64 }
+    ProviderAccountCandidateInput:
+      type: object
+      additionalProperties: false
+      required: [accountRef, weight, catalogRevision, catalogDigest, providerDefinitionKey]
+      properties:
+        accountRef: { $ref: '#/components/schemas/OpaqueRef' }
+        weight: { type: integer, minimum: 1, maximum: 100 }
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        providerDefinitionKey: { type: string, pattern: '^[a-z][a-z0-9_-]{0,79}$' }
     ProviderAccountPolicyVersion:
       type: object
       additionalProperties: false
@@ -3421,7 +5623,15 @@ components:
         runtimeProfileRef: { $ref: '#/components/schemas/OpaqueRef' }
         model: { type: string, minLength: 1, maxLength: 160 }
         providerPolicyMode: { type: string, enum: [FIXED, LEAST_USED, WEIGHTED] }
-        providerAccounts: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/ProviderAccountCandidate' } }
+        providerAccounts: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/ProviderAccountCandidateInput' } }
+    ConfigOverlayRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/ConfigOverlayVersion' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
     ConfigOverlayVersion:
       type: object
       additionalProperties: false
@@ -3434,8 +5644,42 @@ components:
         content: { type: string, maxLength: 65536 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
         validationMessages: { type: array, maxItems: 100, items: { type: string, maxLength: 300 } }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/ConfigOverlayDiagnostic' } }
+        schemaRevision: { type: string, pattern: '^cos_[a-f0-9]{64}$' }
+        schemaDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         publishedAt: { $ref: '#/components/schemas/Timestamp' }
+    ConfigOverlayDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [code, key, line, column, message]
+      properties:
+        code: { type: string, enum: [CONFIG_OVERLAY_SYNTAX_INVALID, CONFIG_OVERLAY_KEY_FORBIDDEN, CONFIG_OVERLAY_VALUE_INVALID, CONFIG_OVERLAY_EFFORT_UNSUPPORTED] }
+        key: { type: string, maxLength: 128 }
+        line: { type: integer, minimum: 0, maximum: 65537, description: Номер строки с 1; 0 означает неприменимо }
+        column: { type: integer, minimum: 0, maximum: 65537, description: Позиция UTF-8 byte с 1 внутри строки; 0 означает неприменимо }
+        message: { type: string, maxLength: 256 }
+    ConfigOverlayField:
+      type: object
+      additionalProperties: false
+      required: [key, valueType, allowedValues, defaultValue, description, completion, hover]
+      properties:
+        key: { type: string, enum: [model_reasoning_effort, personality, allow_login_shell, history.persistence] }
+        valueType: { type: string, enum: [string, boolean] }
+        allowedValues: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, maxLength: 64 } }
+        defaultValue: { type: string, maxLength: 64 }
+        description: { type: string, maxLength: 512 }
+        completion: { type: string, maxLength: 256 }
+        hover: { type: string, maxLength: 1024 }
+    ConfigOverlaySchema:
+      type: object
+      additionalProperties: false
+      required: [revision, digest, fields, maximumBytes]
+      properties:
+        revision: { type: string, pattern: '^cos_[a-f0-9]{64}$' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        maximumBytes: { type: integer, enum: [65536] }
+        fields: { type: array, minItems: 4, maxItems: 4, items: { $ref: '#/components/schemas/ConfigOverlayField' } }
     ConfigOverlayDraftInput:
       type: object
       additionalProperties: false
@@ -3482,6 +5726,75 @@ components:
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraft:
+      type: object
+      additionalProperties: false
+      required: [ref, version, generation, projectRef, secretRef, secretVersion, name, description, valueType, state, publishedRevision, createdAt, updatedAt, expiresAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Версия Secret из owner readback; для новой операции после replay требуется свежий GetDraft. }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        valueType: { $ref: '#/components/schemas/RuntimeSecretValueType' }
+        state: { type: string, enum: [PREPARING, DRAFT, VALID, PUBLISHING, PUBLISHED, DISCARDED, EXPIRED, FAILED] }
+        publishedRevision: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretDraftPublishInput:
+      type: object
+      additionalProperties: false
+      required: [expectedSecretVersion, impactPlanRef, selectedItemRefs]
+      properties:
+        expectedSecretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        impactPlanRef: { $ref: '#/components/schemas/OpaqueRef' }
+        selectedItemRefs: { type: array, maxItems: 1000, uniqueItems: true, items: { $ref: '#/components/schemas/OpaqueRef' }, description: Пустой список публикует без замены потребителей. }
+    RuntimeSecretDraftImpactPlan:
+      type: object
+      additionalProperties: false
+      required: [ref, draftRef, draftVersion, secretRef, secretVersion, sourceRevision, digest, total, expiresAt, state]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        draftRef: { $ref: '#/components/schemas/OpaqueRef' }
+        draftVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceRevision: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        state: { type: string, enum: [PREPARED, APPLIED, EXPIRED, CANCELLED] }
+    RuntimeSecretDraftImpactItem:
+      type: object
+      additionalProperties: false
+      required: [ref, consumer, outcome]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        consumer: { $ref: '#/components/schemas/RuntimeSecretImpactConsumer' }
+        outcome: { type: string, enum: [PENDING, APPLIED, CONFLICT, FORBIDDEN, NOT_SELECTED] }
+        resultEnvironmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resultBindingRef: { $ref: '#/components/schemas/OpaqueRef' }
+        resultBindingVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    RuntimeSecretDraftImpactPage:
+      type: object
+      additionalProperties: false
+      required: [plan, items, total, nextPageToken]
+      properties:
+        plan: { $ref: '#/components/schemas/RuntimeSecretDraftImpactPlan' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSecretDraftImpactItem' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeSecretDraftPublication:
+      type: object
+      additionalProperties: false
+      required: [draft, secret]
+      properties:
+        draft: { $ref: '#/components/schemas/RuntimeSecretDraft' }
+        secret: { $ref: '#/components/schemas/RuntimeSecret' }
     RuntimeSecretPage:
       type: object
       additionalProperties: false
@@ -3516,7 +5829,7 @@ components:
       type: object
       additionalProperties: false
       description: Descriptor immutable Kubernetes Secret revision; значение Secret запрещено.
-      required: [name, secretRef, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
+      required: [name, secretRef, revision, secretName, secretKey, secretUid, secretResourceVersion, contentSha256]
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
@@ -3525,6 +5838,7 @@ components:
         secretUid: { type: string, minLength: 1, maxLength: 128 }
         secretResourceVersion: { type: string, minLength: 1, maxLength: 128 }
         contentSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     RuntimeSecretBinding:
       type: object
       additionalProperties: false
@@ -3532,6 +5846,12 @@ components:
       properties:
         name: { type: string, pattern: '^[A-Z_][A-Z0-9_]{0,126}$' }
         secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Точная опубликованная revision; отсутствие или 0 выбирает current при owner materialization.
     RuntimeEnvironmentVersion:
       type: object
       additionalProperties: false
@@ -3683,6 +6003,226 @@ components:
         ready: { type: boolean }
         blockers: { type: array, maxItems: 32, items: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 } }
         observedAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeSecretImpactConsumer:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, environmentVersion, environmentVersionRef, projectRef, secretRevisions]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        environmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretRevisions: { type: array, minItems: 1, maxItems: 128, uniqueItems: true, items: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 } }
+        consumer:
+          allOf: [{ $ref: '#/components/schemas/RuntimeEnvironmentConsumer' }]
+          description: Отсутствует у окружения без agent binding; сама environment revision остаётся доступна для публикации.
+    RuntimeSecretImpact:
+      type: object
+      additionalProperties: false
+      required: [secretRef, secretVersion, targetRevision, consumers, total, nextPageToken]
+      properties:
+        secretRef: { $ref: '#/components/schemas/OpaqueRef' }
+        secretVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        targetRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeSecretImpactConsumer' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeSecretRebindSelection:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, expectedEnvironmentVersion, sourceVersionRef, consumers]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedEnvironmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeEnvironmentConsumer' } }
+    RuntimeSecretRebindInput:
+      type: object
+      additionalProperties: false
+      required: [selections]
+      properties:
+        selections:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: Уникальные environments; суммарно не более 100 consumers.
+          items: { $ref: '#/components/schemas/RuntimeSecretRebindSelection' }
+    RuntimeSecretReboundEnvironment:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, environmentVersion, projectRef, versionRef, digest]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        versionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    RuntimeSecretRebindResult:
+      type: object
+      additionalProperties: false
+      required: [environments, bindings]
+      properties:
+        environments: { type: array, minItems: 1, maxItems: 32, items: { $ref: '#/components/schemas/RuntimeSecretReboundEnvironment' } }
+        bindings: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' } }
+    EmailEffectOutcome:
+      type: string
+      enum: [UNKNOWN_OUTCOME, EFFECT_CONFIRMED, NO_EFFECT_CONFIRMED]
+    EmailReconciliationOutcome:
+      type: string
+      enum: [EFFECT_CONFIRMED, NO_EFFECT_CONFIRMED]
+    EmailEffectReceipt:
+      type: object
+      additionalProperties: false
+      required: [ref, version, invocationRef, externalReceiptDigest, semanticInputDigest, outcome, mailboxRef, configurationRevision, connectionRef, projectRef, createdAt, updatedAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        invocationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        externalReceiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        semanticInputDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        outcome: { $ref: '#/components/schemas/EmailEffectOutcome' }
+        mailboxRef: { type: string, minLength: 1, maxLength: 128 }
+        configurationRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EmailReconciliationDecision:
+      type: object
+      additionalProperties: false
+      required: [ref, version, receiptRef, receiptVersion, receiptDigest, invocationRef, outcome, actorRef, createdAt, expiresAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptRef: { $ref: '#/components/schemas/OpaqueRef' }
+        receiptVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        receiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        invocationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        outcome: { $ref: '#/components/schemas/EmailReconciliationOutcome' }
+        actorRef: { $ref: '#/components/schemas/OpaqueRef' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    EmailEffectReceiptView:
+      type: object
+      additionalProperties: false
+      required: [receipt]
+      properties:
+        receipt: { $ref: '#/components/schemas/EmailEffectReceipt' }
+        decision: { $ref: '#/components/schemas/EmailReconciliationDecision' }
+    EmailReconciliationInput:
+      type: object
+      additionalProperties: false
+      required: [expectedReceiptDigest, outcome]
+      properties:
+        expectedReceiptDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        outcome: { $ref: '#/components/schemas/EmailReconciliationOutcome' }
+        note: { type: string, maxLength: 2000 }
+    InteractionIdentityBindInput:
+      type: object
+      additionalProperties: false
+      required: [externalTeamRef, externalChannelRef, externalUserDigest, subjectRef]
+      properties:
+        externalTeamRef: { type: string, minLength: 1, maxLength: 128 }
+        externalChannelRef: { type: string, minLength: 1, maxLength: 128 }
+        externalUserDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+    InteractionIdentity:
+      type: object
+      additionalProperties: false
+      required: [ref, version, connectionRef, connectionVersion, externalTeamRef, externalChannelRef, externalUserDigest, subjectRef, state]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        externalTeamRef: { type: string, minLength: 1, maxLength: 128 }
+        externalChannelRef: { type: string, minLength: 1, maxLength: 128 }
+        externalUserDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        subjectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        state: { type: string, enum: [ACTIVE, REVOKED] }
+    InteractionIdentityPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/InteractionIdentity' } }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeEnvironmentConsumer:
+      type: object
+      additionalProperties: false
+      required: [agentRef, agentVersion, bindingRef, bindingVersion, versionRef, projectRef]
+      properties:
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        bindingRef: { $ref: '#/components/schemas/OpaqueRef' }
+        bindingVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        versionRef:
+          allOf: [{ $ref: '#/components/schemas/OpaqueRef' }]
+          description: Прежняя версия окружения в binding; не целевая версия из path.
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+    RuntimeEnvironmentImpact:
+      type: object
+      additionalProperties: false
+      required: [environmentRef, environmentVersion, targetVersionRef, targetDigest, consumers, total, nextPageToken]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        targetVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        targetDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        consumers: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeEnvironmentConsumer' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    RuntimeEnvironmentRebindInput:
+      type: object
+      additionalProperties: false
+      required: [consumers]
+      properties:
+        consumers: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeEnvironmentConsumer' } }
+    RuntimeEnvironmentRebindResult:
+      type: object
+      additionalProperties: false
+      required: [bindings]
+      properties:
+        bindings: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' } }
+    RuntimeEnvironmentDraftCreateInput:
+      type: object
+      additionalProperties: false
+      required: [specification]
+      properties:
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedEnvironmentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        specification: { $ref: '#/components/schemas/RuntimeEnvironmentDraftSpecification' }
+    RuntimeEnvironmentDraftSpecification:
+      type: object
+      additionalProperties: false
+      description: Незавершённое окружение сохраняется отдельно; готовность проверяется командой validation
+      required: [name, description, imageArtifactRef, tools, values, secretBindings]
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        imageArtifactRef: { type: string, maxLength: 96 }
+        tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentTool' } }
+        values: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeEnvironmentValue' } }
+        secretBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RuntimeSecretBinding' } }
+        policy: { $ref: '#/components/schemas/RuntimeEnvironmentPolicyInput' }
+    RuntimeEnvironmentDraft:
+      type: object
+      additionalProperties: false
+      required: [ref, version, projectRef, expectedEnvironmentVersion, state, specification, diagnostics]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedEnvironmentVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        baseVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        baseRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Immutable published revision при создании draft; пара отсутствует для нового окружения или неизвестной legacy базы }
+        savedAt: { type: string, format: date-time, description: 'Время последнего create/save; может отсутствовать в историческом idempotency receipt, для восстановления нужен GET draft' }
+        state: { type: string, enum: [DRAFT, VALID, INVALID, PUBLISHED, DISCARDED] }
+        specification: { $ref: '#/components/schemas/RuntimeEnvironmentDraftSpecification' }
+        validationDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        diagnostics: { type: array, maxItems: 64, items: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 100 } }
+        publishedEnvironmentRef: { $ref: '#/components/schemas/OpaqueRef' }
     RuntimeEnvironmentInput:
       type: object
       additionalProperties: false
@@ -3710,6 +6250,7 @@ components:
         version: { type: integer, format: int64, minimum: 1 }
         agentRef: { $ref: '#/components/schemas/OpaqueRef' }
         environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        versionRef: { $ref: '#/components/schemas/OpaqueRef' }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
     RuntimeEnvironmentBindingInput:
       type: object
@@ -3717,10 +6258,49 @@ components:
       required: [environmentRef]
       properties:
         environmentRef: { $ref: '#/components/schemas/OpaqueRef' }
+    AgentEffectiveCapability:
+      type: object
+      additionalProperties: false
+      required: [key, name, description, source, reason, requested, required, effective, grantable]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z][a-z0-9_.-]+$' }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 4000 }
+        source: { type: string, enum: [PLATFORM, INTEGRATION, WORKFLOW] }
+        reason: { type: string, enum: [AVAILABLE, ACTOR_PERMISSION_REQUIRED, AGENT_CAPABILITY_REQUIRED, RUNTIME_NOT_READY, WORKFLOW_CAPABILITY_NOT_REQUIRED, INTEGRATION_GRANT_UNAVAILABLE, INTEGRATION_REVISION_UNAVAILABLE] }
+        requested: { type: boolean }
+        required: { type: boolean }
+        effective: { type: boolean }
+        grantable: { type: boolean }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        grantRef: { $ref: '#/components/schemas/OpaqueRef' }
+        grantVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        definitionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    AgentEffectiveCapabilityPage:
+      type: object
+      additionalProperties: false
+      required: [agentRef, agentVersion, runtimeConfigurationRef, runtimeConfigurationVersion, environmentVersionRef, digest, evaluatedAt, runtimeReady, items, total]
+      properties:
+        agentRef: { $ref: '#/components/schemas/OpaqueRef' }
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        agentVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        runtimeConfigurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        runtimeConfigurationVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        environmentVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
+        workflowVersionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        stepKey: { type: string, minLength: 1, maxLength: 96 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        evaluatedAt: { type: string, format: date-time }
+        runtimeReady: { type: boolean }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AgentEffectiveCapability' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, minLength: 1, maxLength: 2048 }
     AgentRuntimeConfigurationView:
       type: object
       additionalProperties: false
-      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion]
+      required: [configuration, publishedOverlay, environmentBinding, environment, safeEffectiveConfig, agentVersion, skillBindings, memoryBindings, overlaySchema]
       properties:
         configuration: { $ref: '#/components/schemas/AgentRuntimeConfiguration' }
         publishedOverlay: { $ref: '#/components/schemas/ConfigOverlayVersion' }
@@ -3728,7 +6308,10 @@ components:
         environmentBinding: { $ref: '#/components/schemas/AgentRuntimeEnvironmentBinding' }
         environment: { $ref: '#/components/schemas/RuntimeEnvironmentSet' }
         safeEffectiveConfig: { type: string, maxLength: 262144 }
+        overlaySchema: { $ref: '#/components/schemas/ConfigOverlaySchema' }
         agentVersion: { type: integer, format: int64, minimum: 1 }
+        skillBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
+        memoryBindings: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/AgentContextBinding' } }
     AgentRuntimeConfigurationPage:
       type: object
       additionalProperties: false
@@ -3750,18 +6333,23 @@ components:
       properties:
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/RuntimeEnvironmentVersion' } }
         nextPageToken: { type: string, maxLength: 512 }
+    TemplateVariableAvailabilityReason:
+      type: string
+      enum: [AVAILABLE, PROJECT_CONTEXT_REQUIRED, AGENT_CONTEXT_REQUIRED, RUNTIME_CONTEXT_REQUIRED, NOT_MATERIALIZED]
     TemplateVariable:
       type: object
       additionalProperties: false
-      required: [name, valueType, description, example, source, collection, itemFields]
+      required: [name, valueType, description, example, source, collection, itemFields, available, reason]
       properties:
         name: { type: string, minLength: 1, maxLength: 160 }
         valueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT, COLLECTION] }
         description: { type: string, maxLength: 500 }
         example: { type: string, maxLength: 500 }
-        source: { type: string, enum: [SYSTEM, USER, ORGANIZATION, PROJECT, AGENT, ENVIRONMENT, RUNTIME, TOOLS, INPUT_FILES, SESSION_FILES, RUN_FILES, WORKFLOW_FILES, PROJECT_FILES] }
+        source: { type: string, enum: [SYSTEM, USER, ORGANIZATION, PROJECT, AGENT, ENVIRONMENT, RUNTIME, TOOLS, INPUT_FILES, SESSION_FILES, RUN_FILES, WORKFLOW_FILES, PROJECT_FILES, AUTOMATION, GATE, INPUT, RUN, SESSION, WORKFLOW] }
         collection: { type: boolean }
-        itemValueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT] }
+        available: { type: boolean }
+        reason: { $ref: '#/components/schemas/TemplateVariableAvailabilityReason' }
+        itemValueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP, OBJECT, FILE_DESCRIPTOR, TOOL_DESCRIPTOR] }
         itemFields: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/TemplateVariableField' } }
         rangeExample: { type: string, maxLength: 500 }
     TemplateVariableField:
@@ -3769,16 +6357,50 @@ components:
       additionalProperties: false
       required: [name, valueType, description]
       properties:
-        name: { type: string, pattern: '^[a-z][a-zA-Z0-9]*$', maxLength: 80 }
+        name: { type: string, pattern: '^[a-z][a-zA-Z0-9_]*$', maxLength: 80 }
         valueType: { type: string, enum: [STRING, OPAQUE_REF, INTEGER, BOOLEAN, TIMESTAMP] }
         description: { type: string, maxLength: 300 }
     TemplateVariablePage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/TemplateVariable' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string, maxLength: 512 }
+    ModelCapability:
+      type: object
+      additionalProperties: false
+      required: [id, providerDefinitionKey, reasoningEfforts, defaultReasoningEffort, available, eligibleProviderAccountRefs, readinessBlockers]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 160 }
+        providerDefinitionKey: { type: string, minLength: 1, maxLength: 80 }
+        reasoningEfforts: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 80 } }
+        defaultReasoningEffort: { type: string, maxLength: 80 }
+        available: { type: boolean }
+        eligibleProviderAccountRefs: { type: array, items: { $ref: '#/components/schemas/OpaqueRef' } }
+        readinessBlockers: { type: array, maxItems: 16, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 80, pattern: '^[A-Z0-9_]+$' } }
+    ModelCapabilityPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken, catalogRevision, catalogDigest]
+      properties:
+        catalogRevision: { type: string, pattern: '^mcat_[a-f0-9]{64}$' }
+        catalogDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        catalogStatus: { $ref: '#/components/schemas/ProviderModelCatalogStatus' }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ModelCapability' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    ProviderModelCatalogStatus:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: { type: string, enum: [PENDING, READY, FAILED, EXPIRED] }
+        observedAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        source: { type: string, enum: [REMOTE_API, REMOTE_CODEX] }
+        failure: { type: string, enum: [NONE, UNAVAILABLE, UNVERIFIED_SOURCE, AUTHORIZATION_REJECTED] }
     ProviderDefinition:
       type: object
       additionalProperties: false
@@ -3790,6 +6412,7 @@ components:
         authorizationMethods: { type: array, uniqueItems: true, items: { type: string, enum: [DEVICE_CODE, API_KEY] } }
         modelIds: { type: array, uniqueItems: true, maxItems: 64, items: { type: string, maxLength: 160 } }
         defaultModelId: { type: string, maxLength: 160 }
+        models: { type: array, items: { $ref: '#/components/schemas/ModelCapability' } }
         available: { type: boolean }
         ready: { type: boolean }
         readinessBlockers: { type: array, maxItems: 16, items: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 80 } }
@@ -4321,6 +6944,44 @@ components:
         sequence: { type: integer, format: int64, minimum: 1 }
         nodes: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/RunNode' } }
         edges: { type: array, maxItems: 4000, items: { $ref: '#/components/schemas/RunEdge' } }
+    PublicRuntimeRevisionIdentity:
+      type: object
+      additionalProperties: false
+      required: [ref, version, runRef, sessionRef, attempt, revisionDigest, createdAt]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        attempt: { type: integer, minimum: 1, maximum: 2147483647 }
+        revisionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    RuntimeRevisionDiffValue:
+      type: object
+      additionalProperties: false
+      description: Только безопасные поля компонента; пустой объект означает отсутствие компонента. PROVIDER/MODEL используют ref как символический ключ; IMAGE содержит только digest манифеста.
+      properties:
+        ref: { type: string, minLength: 1, maxLength: 160 }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^(sha256:)?[a-f0-9]{64}$' }
+        revision: { type: string, minLength: 1, maxLength: 160 }
+    RuntimeRevisionDiffChange:
+      type: object
+      additionalProperties: false
+      required: [component, current]
+      properties:
+        component: { type: string, enum: [PROVIDER, MODEL, RUNTIME_PROFILE, RUNTIME_CONFIGURATION, PROVIDER_POLICY, CONFIG_OVERLAY, ENVIRONMENT, ENVIRONMENT_BINDING, INSTRUCTION, INTEGRATION_GRANTS, IMAGE] }
+        previous: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+        current: { $ref: '#/components/schemas/RuntimeRevisionDiffValue' }
+    RuntimeRevisionDiff:
+      type: object
+      additionalProperties: false
+      required: [current, changes]
+      properties:
+        current: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        previous: { $ref: '#/components/schemas/PublicRuntimeRevisionIdentity' }
+        changes: { type: array, maxItems: 11, items: { $ref: '#/components/schemas/RuntimeRevisionDiffChange' } }
     RunWorkspace:
       type: object
       additionalProperties: false
@@ -4360,9 +7021,10 @@ components:
     RunPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Run' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string }
     RunEventPage:
       type: object
@@ -4471,9 +7133,10 @@ components:
     ArtifactPage:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, total]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Artifact' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
         nextPageToken: { type: string }
     AttachmentSetPurpose:
       type: string
@@ -4745,6 +7408,10 @@ components:
         definitionKey: { type: string, enum: [openai-codex] }
         name: { type: string, minLength: 1, maxLength: 160 }
         externalAccountMasked: { type: string, maxLength: 200 }
+        safeStatusReason:
+          type: string
+          enum: [AUTHORIZED, ACCOUNT_DISABLED, ACCOUNT_REVOKED, REAUTHORIZATION_REQUIRED, DEVICE_AUTHORIZATION_PENDING, CREDENTIAL_CONFIGURATION_REQUIRED, ACCOUNT_STATE_UNKNOWN, DEVICE_AUTHORIZATION_EXPIRED, DEVICE_AUTHORIZATION_FAILED, CREDENTIAL_MATERIALIZATION_FAILED]
+          description: Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
         state: { type: string, enum: [PENDING_AUTHORIZATION, AUTHORIZED, REAUTHORIZATION_REQUIRED, REVOKED, DISABLED] }
         enabled: { type: boolean }
         ready: { type: boolean }
@@ -4787,6 +7454,8 @@ components:
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConfigurationField:
       type: object
       additionalProperties: false
@@ -4836,6 +7505,198 @@ components:
           maxProperties: 8
           additionalProperties: { type: string, maxLength: 2048 }
         digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    EmailMailboxReceiveProtocol: { type: string, enum: [IMAP, POP3] }
+    EmailMailboxTLSMode: { type: string, enum: [IMPLICIT, STARTTLS] }
+    EmailMailboxAuthMethod: { type: string, enum: [PASSWORD, OAUTHBEARER] }
+    EmailMailboxOperation: { type: string, enum: [HEALTH, MAILBOXES, LIST, SEARCH, FETCH, DOWNLOAD, SEND, REPLY, REPLY_ALL, FORWARD, DELETE, RECEIPT, THREAD, ATTACHMENTS, MARK_READ, MARK_UNREAD, MOVE, ARCHIVE, DRAFT_CREATE, DRAFT_UPDATE, DRAFT_DELETE] }
+    EmailMailboxApprovalPolicy: { type: string, enum: [DENY, ALLOW, HUMAN_GATE] }
+    EmailMailboxCredentialReference:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 262144 }
+        generation: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+    EmailMailboxEndpoint:
+      type: object
+      additionalProperties: false
+      properties:
+        host: { type: string, maxLength: 262144 }
+        port: { type: integer, format: int32 }
+        serverName: { type: string, maxLength: 262144 }
+        tlsMode: { $ref: '#/components/schemas/EmailMailboxTLSMode' }
+        authMethod: { $ref: '#/components/schemas/EmailMailboxAuthMethod' }
+        ca: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        username: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+        secret: { $ref: '#/components/schemas/EmailMailboxCredentialReference' }
+    EmailMailboxLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        attachmentBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        maxAttachments: { type: integer, format: int32 }
+        maxRecipients: { type: integer, format: int32 }
+        messageBytes: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        pageSize: { type: integer, format: int32 }
+        scanMessages: { type: integer, format: int32 }
+        timeoutSeconds: { type: integer, format: int32 }
+    EmailMailboxOperationPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        operation: { $ref: '#/components/schemas/EmailMailboxOperation' }
+        policy: { $ref: '#/components/schemas/EmailMailboxApprovalPolicy' }
+        folders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+    EmailMailboxSpecification:
+      type: object
+      additionalProperties: false
+      description: Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
+      properties:
+        enabled: { type: boolean }
+        receiveProtocol: { $ref: '#/components/schemas/EmailMailboxReceiveProtocol' }
+        allowedFolders: { type: array, maxItems: 100, items: { type: string, maxLength: 262144 } }
+        archiveFolder: { type: string, maxLength: 262144 }
+        draftsFolder: { type: string, maxLength: 262144 }
+        folder: { type: string, maxLength: 262144 }
+        sender: { type: string, maxLength: 262144 }
+        replyTo: { type: string, maxLength: 262144 }
+        recipients: { type: array, maxItems: 1000, items: { type: string, maxLength: 262144 } }
+        helloName: { type: string, maxLength: 262144 }
+        smtp: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        imap: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        pop: { $ref: '#/components/schemas/EmailMailboxEndpoint' }
+        limits: { $ref: '#/components/schemas/EmailMailboxLimits' }
+        policies: { type: array, maxItems: 21, items: { $ref: '#/components/schemas/EmailMailboxOperationPolicy' } }
+    EmailMailboxDraftContent:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      maxProperties: 1
+      description: Ровно один источник specification либо yaml; owner строго отклоняет неизвестные поля и сохраняет canonical typed JSON.
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        yaml: { type: string, maxLength: 262144 }
+    EmailMailboxDraftInput:
+      type: object
+      additionalProperties: false
+      required: [name, content]
+      properties:
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        content: { $ref: '#/components/schemas/EmailMailboxDraftContent' }
+    EmailMailboxBindingInput:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, expectedConnectionVersion]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    EmailMailboxDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [code, path, message, line, column]
+      properties:
+        code: { type: string, enum: [EMAIL_MAILBOX_SYNTAX_INVALID, EMAIL_MAILBOX_CONFIGURATION_INVALID, EMAIL_MAILBOX_CREDENTIAL_MISMATCH] }
+        path: { type: string, maxLength: 128 }
+        message: { type: string, maxLength: 256 }
+        line: { type: integer, format: int32, minimum: 0 }
+        column: { type: integer, format: int32, minimum: 0 }
+    EmailMailboxPublication:
+      type: object
+      additionalProperties: false
+      required: [ref, revision, digest, state, configurationRevisionRef, createdAt, failureCode]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        state: { type: string, enum: [PENDING, READY, FAILED, SUPERSEDED] }
+        configurationRevisionRef: { type: string, maxLength: 96 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        readyAt: { $ref: '#/components/schemas/Timestamp' }
+        failureCode:
+          type: string
+          enum: ['', EMAIL_MAILBOX_DELIVERY_EXPIRED, EMAIL_MAILBOX_CONNECTION_CHANGED, EMAIL_MAILBOX_DELIVERY_REJECTED]
+          description: Непустой код допускается только для FAILED.
+    EmailMailboxActionAvailability:
+      type: object
+      additionalProperties: false
+      required: [action, enabled, reason]
+      properties:
+        action: { type: string, enum: [CREATE_DRAFT, SAVE, VALIDATE, PUBLISH, DISCARD, BIND, UNBIND, DETACH, COPY] }
+        enabled: { type: boolean }
+        reason: { type: string, enum: [NONE, STATE, GIT_MANAGED, DELIVERY_PENDING, NO_BINDING, CONNECTION_DISABLED] }
+    EmailMailboxConfigurationView:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, connectionVersion, mailboxRef, configuration, revision, specification, boundRevisionRef, diagnostics, nextActions]
+      properties:
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        mailboxRef: { $ref: '#/components/schemas/OpaqueRef' }
+        configuration: { $ref: '#/components/schemas/ManagedConfiguration' }
+        revision: { $ref: '#/components/schemas/ManagedConfigurationRevision' }
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        boundRevisionRef: { type: string, maxLength: 96 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        nextActions: { type: array, minItems: 9, maxItems: 9, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
+    EmailMailboxConfigurationPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken, nextActions]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxConfigurationView' } }
+        nextActions: { type: array, minItems: 1, maxItems: 1, items: { $ref: '#/components/schemas/EmailMailboxActionAvailability' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxCredentialPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, nextPageToken]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/EmailMailboxCredential' } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string, maxLength: 512 }
+    EmailMailboxPreview:
+      type: object
+      additionalProperties: false
+      required: [canonicalYaml, diagnostics, valid]
+      properties:
+        specification: { $ref: '#/components/schemas/EmailMailboxSpecification' }
+        canonicalYaml: { type: string, maxLength: 262144 }
+        diagnostics: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/EmailMailboxDiagnostic' } }
+        valid: { type: boolean }
+    EmailMailboxUnbinding:
+      type: object
+      additionalProperties: false
+      required: [publication, connectionVersion]
+      properties:
+        publication: { $ref: '#/components/schemas/EmailMailboxPublication' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+    EmailMailboxCredentialKind:
+      type: string
+      enum: [CA_CERTIFICATE, USERNAME, AUTH_SECRET]
+    EmailMailboxCredentialInput:
+      type: object
+      additionalProperties: false
+      required: [kind, value]
+      properties:
+        kind: { $ref: '#/components/schemas/EmailMailboxCredentialKind' }
+        value:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          writeOnly: true
+          description: UTF-8 без обрезания пробелов; CA до 65536 bytes, username до 320, auth secret до 16384. PEM проверяет CP.
+    EmailMailboxCredential:
+      type: object
+      additionalProperties: false
+      required: [name, generation, kind, connectionRef, connectionVersion]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9_-]+$' }
+        generation: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        kind: { $ref: '#/components/schemas/EmailMailboxCredentialKind' }
+        connectionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
     IntegrationCredentialInput:
       type: object
       additionalProperties: false
@@ -4857,6 +7718,8 @@ components:
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
         resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
+        inputSchema: { type: string, minLength: 2, maxLength: 262144 }
+        inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     IntegrationConnection:
       type: object
       additionalProperties: false
@@ -4972,14 +7835,18 @@ components:
         plan: { $ref: '#/components/schemas/AssistantPlan' }
         attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+    AssistantConversationState:
+      type: string
+      enum: [ACTIVE, CLOSED, ARCHIVED]
     AssistantConversation:
       type: object
       additionalProperties: false
-      required: [ref, version, title, titleSource, titleRevision, context, turns, updatedAt]
+      required: [ref, version, title, titleSource, titleRevision, context, turns, updatedAt, state]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         title: { type: string, maxLength: 160 }
+        state: { $ref: '#/components/schemas/AssistantConversationState' }
         titleSource: { type: string, enum: [SERVER_DEFAULT, AGENT_PROPOSED, USER_EDITED] }
         titleRevision: { type: integer, format: int64, minimum: 1 }
         context: { $ref: '#/components/schemas/AssistantContextDescriptor' }

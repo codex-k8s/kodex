@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpenCheck, PlugZap, ShieldCheck } from "@lucide/vue";
+import { BookOpenCheck, Brain, PlugZap, ShieldCheck } from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -13,6 +13,8 @@ const props = defineProps<{
   knowledgeCount: number;
   canManage: boolean;
   busyKey: string;
+  projectRef?: string;
+  agentRef?: string;
 }>();
 const emit = defineEmits<{ toggle: [key: string] }>();
 const { locale } = useI18n();
@@ -27,7 +29,6 @@ const granted = computed(() => new Set(props.grantedKeys));
         <ShieldCheck :size="19" aria-hidden="true" />
         <div>
           <h2>{{ $t("agents.capabilities") }}</h2>
-          <p>{{ $t("agents.capabilitiesHelp") }}</p>
         </div>
       </div>
       <div class="access-panel__list">
@@ -72,6 +73,24 @@ const granted = computed(() => new Set(props.grantedKeys));
         </div>
         <strong class="access-summary__count">{{ knowledgeCount }}</strong>
         <p>{{ copy.access.knowledgeBindings }}</p>
+        <nav v-if="projectRef && agentRef" class="context-links">
+          <RouterLink
+            :to="{
+              path: `/projects/${encodeURIComponent(projectRef)}/files`,
+              query: { view: 'skills', agentRef },
+            }"
+            ><BookOpenCheck :size="18" />{{
+              $t("contextResources.skills")
+            }}</RouterLink
+          >
+          <RouterLink
+            :to="{
+              path: `/projects/${encodeURIComponent(projectRef)}/files`,
+              query: { view: 'memory', agentRef },
+            }"
+            ><Brain :size="18" />{{ $t("contextResources.memory") }}</RouterLink
+          >
+        </nav>
       </section>
     </aside>
   </div>
@@ -83,6 +102,16 @@ const granted = computed(() => new Set(props.grantedKeys));
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
   gap: 16px;
   align-items: start;
+}
+.context-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.context-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .access-panel {
   display: grid;

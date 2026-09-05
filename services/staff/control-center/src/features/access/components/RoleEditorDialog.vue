@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { computed, reactive, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -122,7 +123,7 @@ watch(() => props.role, reset, { immediate: true });
       </label>
       <label class="field">
         <span>{{ $t("access.roleEditor.description") }}</span>
-        <textarea
+        <VoiceTextarea
           v-model="form.description"
           maxlength="2000"
           :disabled="busy"

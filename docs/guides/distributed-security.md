@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.9
-updated: 2026-09-03
+version: 1.4.11
+updated: 2026-09-05
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -77,6 +77,15 @@ Gateway не восполняет отсутствующую доменную п
 модерация и полнота могут образовывать eligibility rule только после явного
 решения и должны одинаково трактоваться всеми read/event paths.
 
+Проекция возможностей, preview и новая runtime materialization используют
+текущие direct/group access bindings с их сроками и exact resource scope.
+Историческая platform role или membership не подменяет прикладные permissions.
+Запрошенная capability агента не расширяет полномочия root initiator. Для
+интеграции проверяются конкретные connection/grant/version/digest и фактически
+закреплённый immutable package; совпадение capability key у двух подключений
+не переносит разрешение между ними. Shipped schema не заменяет более узкую
+UI/Git revision. Выдача capability проверяет полномочия до OCC и receipt replay.
+
 ## Browser SSO и API session
 
 OAuth2 browser cookie, Keycloak SSO session, OIDC access token и прикладная API
@@ -135,6 +144,28 @@ Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SS
 читается одним descriptor с `O_NOFOLLOW`, проверкой `fstat`, owner/mode,
 ограничением размера и закрытой schema; запись выполняется через exclusive
 temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
+
+## Наблюдение внешних возможностей с credential
+
+Список возможностей SDK, встроенный fallback и успешный локальный запуск не
+доказывают доступность provider для конкретной учётной записи. Наблюдение
+связывается с назначенной владельцем задачей, текущей credential generation и
+точным digest запроса до чтения секрета. В ответ попадает только закрытая
+безопасная модель возможностей. Provider payload, prompt metadata и credentials
+не становятся публичным каталогом или диагностикой.
+
+Для SDK с неявным fallback требуется отдельное доказательство свежего успешного
+ответа provider в изолированном состоянии текущего наблюдения. Старый кэш,
+ошибка обновления и неизвестное происхождение закрыто отклоняются; пустой
+подтверждённый каталог не заменяется встроенным. Свежесть наблюдения проверяется
+отдельно от content digest, чтобы неизменный успешный refresh не менял pin.
+
+Чтение каталога не получает право ротации credential. Если SDK умеет обновлять
+OAuth автоматически, наблюдатель получает только externally managed access
+token, а запрос нового токена закрыто отклоняется. Refresh token остаётся у
+владельца соответствующего жизненного цикла. Дочерний процесс имеет закрытый
+env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
+временного credential state; inherited proxy bypass и прямой fallback запрещены.
 
 ## Многоуровневая межсервисная авторизация
 
@@ -197,6 +228,15 @@ grant. Идентификаторы из полезной нагрузки RPC �
 доверенного ключа, остаётся неизменным при таком обновлении и связывает claim,
 renew и complete одной работы. Ротация ключа меняет поколение и закрыто
 отклоняет продолжение работы, заявленной предыдущим credential.
+
+Локальный signer связывает полный key ID с точными workload и поколением,
+а не только с совпавшим префиксом. Его readback проверяет подпись и весь
+назначенный сервером набор identity claims. Добавление workload одновременно
+охватывает закрытый signer registry, индивидуальные ключи fresh install,
+публичный trust потребителя, issuer profile, PostgreSQL LOGIN/CONNECT/SET,
+реестр доставки, точные Secrets/RBAC и оба направления сетевого пути.
+Проверки итоговых профилей сохраняют изоляцию optional consumer; наличие
+только декларации операции либо Secret mount не доказывает рабочую выдачу.
 
 Ресурс, который выдаёт полномочия либо управляет исполнением, не изменяется
 универсальным CRUD. Специализированная команда назначает owner и начальное
@@ -424,6 +464,15 @@ OPTION` или право менять пароль другого principal.
 частичного набора после смены лидера; хэш либо количество без состава набора
 недостаточны.
 
+Внешняя операция без документированной провайдером идемпотентности не становится
+безопасной для повтора от локального idempotency key. После возможной отправки
+тайм-аут, неполный ответ, потеря completion receipt и истечение lease переводят
+попытку в устойчивый `UNKNOWN_OUTCOME`; автоматическая повторная отправка
+запрещена. Повтор допустим только при доказанном отсутствии внешнего эффекта
+либо через сверку точного provider receipt. Completion связывается с конкретными
+lease, fence и поколением, а срок внешнего вызова оставляет время для записи
+исхода. Это правило одинаково для сообщений, почты и остальных write adapters.
+
 ## Ротация, пропуск обновлений и однонаправленное восстановление
 
 Ротация является протоколом, а не заменой файла. Он обязан закрывать:
@@ -486,6 +535,15 @@ Projected secret file считается допустимым только пр�
   размер, не разрешает symlink выйти из mount boundary и отклоняет любые права
   записи/исполнения;
 - путь, metadata и содержимое credential не попадают в логи и внешние ошибки.
+
+Если документ конфигурации и credentials поставляются одним обновляемым
+Secret, consumer читает их из одного закреплённого поколения AtomicWriter,
+а не разрешает `..data` отдельно для каждого файла. Обслуживаемый snapshot
+заменяется целиком только после строгой проверки и durable revision/digest
+watermark. Ошибка загрузки или rollback закрывает новые операции; старый
+snapshot не превращается в обход проверки свежести у авторитетного владельца.
+Mount с `subPath` не подходит для этого lifecycle, поскольку не получает
+обновления Secret.
 
 Projected ServiceAccount token проверяется отдельным API. Kubelet вправе
 публиковать его с mode `0640` как root-owned либо принадлежащий UID/GID
@@ -563,6 +621,22 @@ rollout; пропуск обновления по локальному подг�
   snapshot и повторно проверяет каждый literal address. Consumer не получает
   прямой внешний `443`, а gateway не получает application credentials,
   ServiceAccount token, host access или TLS termination.
+- DNS snapshot не живёт дольше минимального авторитетного TTL всей A/AAAA/CNAME
+  цепочки. Нижний cache TTL не продлевает этот срок: короткий snapshot не
+  кэшируется. Отмена или истечение TTL во время resolution закрывает выдачу;
+  producer и consumer используют один resolver и проверку публичных адресов.
+- Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
+  Он не получает direct outbound: producer из того же version-pinned typed
+  mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.
+  Runtime policy и CNI `/32`/`/128` pins создаются вместе; destination-less
+  mail egress запрещён. Закрытый набор: SMTP `465/implicit`, `587/starttls`,
+  POP3 `995/implicit`, `110/starttls`, IMAP `993/implicit`, `143/starttls`.
+  Implicit TLS сохраняет проверку ClientHello до dial. Для STARTTLS greeting
+  предшествует TLS, поэтому gateway после exact policy/DNS проверки создаёт
+  opaque tunnel без TLS termination или разбора почтовых команд. Обязательные
+  TLS upgrade, exact hostname/CA и запрет credentials до TLS принадлежат
+  email-bridge. Изменение DNS вне pins закрывает доступ до новой согласованной
+  проекции; фильтрация небезопасной части ответа и fallback запрещены.
 - Отдельный сетевой профиль связывает immutable workload/operation/destination
   с принадлежащим серверу listener и точными CNI selectors; caller header не
   назначает профиль. Readiness и CONNECT возвращают фактически обслуживаемые

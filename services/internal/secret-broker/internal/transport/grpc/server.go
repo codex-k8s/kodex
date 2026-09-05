@@ -58,6 +58,7 @@ type Server struct {
 	store               Store
 	recovery            Recovery
 	providerCredentials ProviderCredentialMaterializer
+	drafts              DraftCommands
 	namespace           string
 	maximumSize         int
 }
@@ -69,6 +70,7 @@ type ProviderCredentialMaterializer interface {
 	MaterializeAPIKey(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
 	Discard(context.Context, providercredential.DiscardMaterialization) error
 	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (string, error)
+	ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error)
 }
 
 type Option func(*Server)

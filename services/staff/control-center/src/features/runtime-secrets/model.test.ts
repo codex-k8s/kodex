@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canRuntimeSecretAction,
   maskedSecretHint,
+  normalizeSecretPage,
   validateSecretValue,
   type RuntimeSecret,
 } from "./model";
@@ -22,6 +23,40 @@ const secret: RuntimeSecret = {
 };
 
 describe("runtime secret model", () => {
+  it("нормализует пустой cursor и отклоняет поврежденные страницы до публикации", () => {
+    expect(normalizeSecretPage({ items: [secret] }).nextPageToken).toBe("");
+    for (const page of [
+      null,
+      {},
+      { items: {} },
+      { items: [null] },
+      { items: [secret, secret] },
+      { items: [{ ...secret, displayHint: { prefix: 42 } }] },
+      { items: [{ ...secret, createdAt: "invalid" }] },
+      { items: [{ ...secret, updatedAt: "invalid" }] },
+      { items: [{ ...secret, projectRef: "" }] },
+      { items: [secret], nextPageToken: 1 },
+    ]) {
+      expect(() => normalizeSecretPage(page)).toThrow();
+    }
+  });
+
+  it("не переносит неизвестные поля ответа в metadata state", () => {
+    const result = normalizeSecretPage({
+      items: [
+        { ...secret, value: "private", credentials: { token: "private" } },
+      ],
+    });
+    expect(result.items).toEqual([secret]);
+    expect(JSON.stringify(result)).not.toContain("private");
+  });
+
+  it("принимает только канонический Base64 без пробелов и неявного padding", () => {
+    for (const value of ["Zg==", "Zm8=", "Zm9v"])
+      expect(validateSecretValue("BINARY", value)).toBeUndefined();
+    for (const value of ["Zg", "Zg=", "Zh==", "Z g==", "____", "===="])
+      expect(validateSecretValue("BINARY", value)).toBe("invalid-base64");
+  });
   it("показывает только серверную маску и не пытается восстановить значение", () => {
     expect(
       maskedSecretHint({

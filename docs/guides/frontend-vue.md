@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-07-31
+version: 1.2.0
+updated: 2026-09-05
 ---
 
 # PWA на Vue и TypeScript
@@ -92,6 +92,13 @@ Feature:
 - не экспортирует внутреннюю структуру без необходимости;
 - отделяет API DTO от UI model;
 - отменяет или игнорирует устаревший async result;
+- связывает запрос, каждый retry и применение readback с одним временем жизни
+  owner-контекста. Logout/invalidation отменяет этот контекст до очистки store;
+  повторный вход создаёт новый. Сброс локального счётчика запроса не допускает
+  повторного принятия старого ACK: старые данные, ошибки и HTTP 401 не изменяют
+  состояние новой сессии. Уже выполненная mutation не объявляется отменённой
+  на сервере из-за локального abort; её восстановление использует утверждённый
+  idempotency/receipt path;
 - нормализует ошибки через `shared/api/errors`;
 - имеет явные loading, empty, error, forbidden и ready states, если они
   применимы.

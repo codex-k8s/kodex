@@ -121,6 +121,8 @@ updated: 2026-07-28
 | `GO-DOC-004`       | `docs/guides/event-delivery-go.md`                          |
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
+| `GO-LIB-MAIL-POLICY-001` | `libs/go/mailpolicy/README.md` |
+| `GO-LIB-DNS-RESOLVER-001` | `libs/go/dnsresolver/README.md` |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |
 | `SVC-MC-017`       | `services/jobs/agent-runner/README.md`                      |
 | `JOB-MC-003`       | `services/jobs/backup-controller/README.md`                 |
@@ -137,6 +139,10 @@ updated: 2026-07-28
 | `RUN-MC-007`       | `docs/runbooks/control-plane.md`                            |
 | `RUN-MC-012`       | `docs/runbooks/integration-gateway.md`                      |
 | `OPS-INT-1028`     | `docs/operations/integration-gateway-1028.md`               |
+| `OPS-EMAIL-1037`   | `docs/operations/email-bridge-1037.md`                      |
+| `OPS-SECRET-DRAFTS-1068` | `docs/operations/secret-drafts-1068.md`                |
+| `OPS-SECRET-DRAFT-GUARD-1068` | `services/internal/secret-broker/internal/integration/stagingguard/README.md` |
+| `RUN-EMAIL-1037`   | `docs/runbooks/email-bridge.md`                            |
 | `RUN-MC-016`       | `docs/runbooks/automation-scheduler.md`                     |
 | `RUN-MC-022`       | `docs/runbooks/interaction-gateway.md`                      |
 | `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |

@@ -5,12 +5,33 @@ import {
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
   emptySecretBinding,
+  normalizeRuntimeEnvironmentInput,
   runtimeEnvironmentCollectionLimit,
   setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 
 describe("runtime environment form", () => {
+  it("сохранение иных полей сохраняет точный Secret pin и отклоняет повреждённую revision", () => {
+    const input = {
+      name: "Changed",
+      description: "",
+      imageArtifactRef: "image",
+      tools: [],
+      values: [],
+      secretBindings: [{ name: "TOKEN", secretRef: "secret", revision: 7 }],
+      policy: defaultRuntimeEnvironmentPolicy(),
+    };
+    expect(normalizeRuntimeEnvironmentInput(input).secretBindings).toEqual(
+      input.secretBindings,
+    );
+    input.secretBindings = [
+      { name: "TOKEN", secretRef: "secret", revision: -1 },
+    ];
+    expect(
+      validateEnvironmentInput(input).map((problem) => problem.message),
+    ).toContain("runtime.errors.secretRevision");
+  });
   it("принимает несекретные значения и ссылку на runtime secret", () => {
     expect(
       validateEnvironmentInput({
@@ -93,6 +114,7 @@ describe("runtime environment form", () => {
           secretKey: "value",
           secretUid: "4ea063ab-b3ee-49fd-b6d2-d0f44fd85bb1",
           secretResourceVersion: "128",
+          revision: 7,
           contentSha256: "a".repeat(64),
         },
       ]),
@@ -100,6 +122,7 @@ describe("runtime environment form", () => {
       {
         name: "PROVIDER_TOKEN",
         secretRef: "secret_provider_token",
+        revision: 7,
       },
     ]);
   });

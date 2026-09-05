@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { computed, onMounted, ref } from "vue";
 
 import { assistantEffectiveRuntimeState } from "@/features/assistant/model";
@@ -66,7 +67,21 @@ onMounted(() => void load());
       @retry="load"
     >
       <template v-if="state"
-        ><div class="metric-grid">
+        ><nav class="configuration-links" :aria-label="$t('managed.title')">
+          <RouterLink
+            v-for="kind in [
+              'PROMPT_TEMPLATE',
+              'ROLE_IMAGE',
+              'INTEGRATION_DEFINITION',
+              'SYSTEM_STT',
+            ]"
+            :key="kind"
+            class="button"
+            :to="`/configurations/${kind}`"
+            >{{ $t(`managed.kinds.${kind}`) }}</RouterLink
+          >
+        </nav>
+        <div class="metric-grid">
           <article class="metric-card">
             <span>{{ $t("administration.profile") }}</span
             ><strong class="metric-text">{{
@@ -95,7 +110,10 @@ onMounted(() => void load());
           <section class="panel">
             <h2>{{ $t("administration.ownerInstructions") }}</h2>
             <p>{{ $t("administration.corePromptProtected") }}</p>
-            <textarea v-model="ownerInstructions" maxlength="32768" /><button
+            <VoiceTextarea
+              v-model="ownerInstructions"
+              maxlength="32768"
+            /><button
               v-if="state.assistant.nextActions.includes('EDIT')"
               class="button button--primary"
               type="button"
@@ -160,12 +178,18 @@ onMounted(() => void load());
 </template>
 
 <style scoped>
+.configuration-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
 .administration-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
   gap: 16px;
 }
-.panel textarea {
+.panel :deep(textarea) {
   margin: 12px 0;
 }
 .metric-text {

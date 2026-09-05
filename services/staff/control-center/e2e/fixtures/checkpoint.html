@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка D3 и D5</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import CheckpointFixture from "./CheckpointFixture.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      createApp(CheckpointFixture).use(i18n).mount("#app");
+    </script>
+  </body>
+</html>

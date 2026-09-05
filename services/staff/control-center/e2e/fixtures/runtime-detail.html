@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка редактора выполнения</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import {
+        createRouter,
+        createMemoryHistory,
+        RouterView,
+      } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import RuntimeDetailFixture from "./RuntimeDetailFixture.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/", component: RuntimeDetailFixture }],
+      });
+      await router.push("/");
+      await router.isReady();
+      createApp({ render: () => h(RouterView) })
+        .use(router)
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

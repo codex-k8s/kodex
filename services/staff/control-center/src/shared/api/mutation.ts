@@ -1,4 +1,5 @@
 import { asProblem, unwrap, type ApiReadback } from "@/shared/api/problem";
+import { assertOwnerRequest, ownerRequestSignal } from "./owner-lifetime";
 
 const mutationRetryDelaysMs = [0, 200, 600] as const;
 
@@ -80,6 +81,7 @@ export async function mutateWithRetry<T>(
   version?: number,
   requestIdempotencyKey = idempotencyKey(),
 ): Promise<ApiReadback<NonNullable<T>>> {
+  const scope = ownerRequestSignal();
   const headers = mutationHeaders(version, requestIdempotencyKey);
   for (const delayMs of mutationRetryDelaysMs) {
     if (delayMs > 0) {
@@ -88,8 +90,10 @@ export async function mutateWithRetry<T>(
       );
     }
     try {
+      assertOwnerRequest(scope);
       return await executeMutation(request, headers);
     } catch (error) {
+      assertOwnerRequest(scope);
       const problem = asProblem(error);
       if (!problem.retryable || delayMs === mutationRetryDelaysMs.at(-1)) {
         throw problem;

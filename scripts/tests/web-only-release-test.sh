@@ -7,6 +7,26 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render="$temporary_directory/render.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
+optional_render="$temporary_directory/with-mattermost.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/profiles/web-with-mattermost" >"$optional_render"
+yq -o=json -I=0 '.' "$render" | jq -s '.' >"$temporary_directory/base.json"
+yq -o=json -I=0 '.' "$optional_render" | jq -s '.' >"$temporary_directory/optional.json"
+jq -n -e --slurpfile base "$temporary_directory/base.json" \
+  --slurpfile optional "$temporary_directory/optional.json" '
+  def identities: map(select(.kind != null) |
+    [.apiVersion, .kind, (.metadata.namespace // ""), .metadata.name]);
+  (($base[0] | identities) - ($optional[0] | identities) | length) == 0
+' >/dev/null || fail 'optional profile omits common deployment resources'
+for profile_render in "$render" "$optional_render"; do
+  yq -r 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+    .data."key-delivery-targets.yaml"' "$profile_render" |
+    yq -o=json -I=0 '.' >"$profile_render.targets.json"
+done
+jq -n -e --slurpfile base "$render.targets.json" \
+  --slurpfile optional "$optional_render.targets.json" '
+  ($base[0].targets - $optional[0].targets | length) == 0 and
+  ($base[0] | del(.targets)) == ($optional[0] | del(.targets))
+' >/dev/null || fail 'optional profile changes or omits common authority targets'
 
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   map(select(.kind != null)) as $resources |
@@ -24,9 +44,9 @@ yq -e 'select(.apiVersion == "cert-manager.io/v1" and .kind == "Certificate" and
   .metadata.labels["kodex.dev/owner-intent"] == "true" and
   .spec.secretName == "staff-control-center-public-tls"' "$render" >/dev/null ||
   fail 'public TLS Certificate disagrees with the installer ownership contract'
-[[ $(yq -N -r 'select(.kind == "StatefulSet") | .metadata.name' "$render" | sort -u | wc -l) -eq 2 ]] ||
+[[ $(yq -N -r 'select(.kind == "StatefulSet") | .metadata.name' "$render" | sort -u | wc -l) -eq 3 ]] ||
   fail 'web-only stateful dependency count is invalid'
-for workload in kodex-postgresql kodex-nats; do
+for workload in kodex-postgresql kodex-nats email-bridge-postgresql; do
   WORKLOAD_NAME="$workload" yq -e \
     'select(.kind == "StatefulSet" and .metadata.name == strenv(WORKLOAD_NAME))' "$render" >/dev/null ||
     fail "stateful dependency is absent: $workload"
@@ -180,7 +200,7 @@ yq -N -r '
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["key-delivery-targets.yaml"]
 ' "$render" | yq -e '
-  .source_revision == 6 and
+  .source_revision == 7 and
   ([.targets[] | select(.workload_id == "control-plane" and
     .role == "AUTHORIZATION_ISSUER" and
     .database_identity.login_principal == "ira_control_plane_issuer_g1" and
@@ -197,12 +217,25 @@ yq -N -r '
     .restore_coordination.role_credential_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-credential" and
     .restore_coordination.ack_key_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | length) == 1
 ' >/dev/null || fail 'provider credential publisher delivery targets are incomplete'
+expected_policy_revision=$(jq -er '.policy_revision' \
+  "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json")
 yq -N -r '
   select(.kind == "ConfigMap" and
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
-' "$render" | jq -e '
-  .policy_revision == 44 and
+' "$render" | jq -e --argjson expected_revision "$expected_policy_revision" '
+  .policy_revision == $expected_revision and
+  ([.policy.operation_bindings[] |
+    select(.operation_id | startswith("platform.runtime-secret-drafts.")) |
+    select(.caller_workload_id == "control-api-gateway" and
+      .target_workload_id == "secret-broker" and
+      .authority_proof_producer_id == "control-plane.oidc-secret-draft") |
+    .full_method] | sort) == ([
+      "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness"] | sort) and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
@@ -229,14 +262,21 @@ yq -N -r '
       .project_required == true and
       .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials")] | length) == 1 and
   ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.runtime.credentials.system-assistant.materialize" and
+      .caller_workload_id == "runtime-controller" and
+      .target_workload_id == "secret-broker" and
+      .project_required == false and
+      .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials")] | length) == 1 and
+  ([.policy.operation_bindings[] |
     select(.operation_id == "platform.stt.credential.project" and
       .caller_workload_id == "stt-tts-service" and
       .target_workload_id == "secret-broker" and
-      .project_required == true and
+      .project_required == false and
       .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
 ' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  email-bridge-migration; do
   JOB_NAME="$job" yq -e 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >/dev/null || fail "release Job is absent: $job"
 done

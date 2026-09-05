@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
@@ -263,6 +265,10 @@ const turnAttachmentState = ref<AttachmentComposerState>({
 const gateAttachmentStates = ref<Record<string, AttachmentComposerState>>({});
 const gateAttachmentComposers = new Map<string, AttachmentComposerHandle>();
 const busy = ref(false);
+let mutationGeneration = 0;
+function mutationCurrent(generation: number, ref: string): boolean {
+  return generation === mutationGeneration && runRef.value === ref;
+}
 const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const activityOpen = ref(false);
@@ -329,48 +335,61 @@ async function load(ref = runRef.value): Promise<void> {
   await refreshScheduler.request(ref);
 }
 async function command(action: "CANCEL" | "RETRY") {
-  if (!run.value?.nextActions.includes(action)) return;
+  const current = run.value;
+  if (busy.value || !current?.nextActions.includes(action)) return;
+  const generation = mutationGeneration;
+  const project = routeProjectRef.value ?? current.projectRef;
   busy.value = true;
   problem.value = undefined;
   try {
-    const next = await platform.changeRun(run.value, { action });
+    const next = await platform.changeRun(current, { action });
+    if (!mutationCurrent(generation, current.ref)) return;
     if (action === "RETRY" && next.ref !== runRef.value)
-      await router.replace(
-        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
-      );
+      await router.replace(runPath(next.ref, project));
   } catch (error) {
-    problem.value = asProblem(error);
+    if (mutationCurrent(generation, current.ref))
+      problem.value = asProblem(error);
   } finally {
-    busy.value = false;
+    if (mutationCurrent(generation, current.ref)) busy.value = false;
   }
 }
 async function continueRun() {
+  const current = run.value;
   if (
-    !run.value?.nextActions.includes("ADD_TURN") ||
+    busy.value ||
+    !current?.nextActions.includes("ADD_TURN") ||
     !turn.value.trim() ||
     !turnAttachmentState.value.ready
   )
     return;
+  const generation = mutationGeneration;
+  const project = routeProjectRef.value ?? current.projectRef;
+  const composer = turnAttachmentComposer.value;
+  const sessionRef = current.sessionRef;
+  const input = {
+    runRef: current.ref,
+    nodeRef: selectedNode.value?.ref,
+    task: turn.value.trim(),
+  };
   busy.value = true;
   problem.value = undefined;
   try {
-    const attachmentSetRef = await turnAttachmentComposer.value?.finalize();
-    const next = await platform.continueSession(run.value.sessionRef, {
-      runRef: run.value.ref,
-      nodeRef: selectedNode.value?.ref,
-      task: turn.value.trim(),
+    const attachmentSetRef = await composer?.finalize();
+    if (!mutationCurrent(generation, current.ref)) return;
+    const next = await platform.continueSession(sessionRef, {
+      ...input,
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
+    if (!mutationCurrent(generation, current.ref)) return;
     turn.value = "";
-    turnAttachmentComposer.value?.clear();
+    composer?.clear();
     if (next.ref !== runRef.value)
-      await router.replace(
-        runPath(next.ref, routeProjectRef.value ?? next.projectRef),
-      );
+      await router.replace(runPath(next.ref, project));
   } catch (error) {
-    problem.value = asProblem(error);
+    if (mutationCurrent(generation, current.ref))
+      problem.value = asProblem(error);
   } finally {
-    busy.value = false;
+    if (mutationCurrent(generation, current.ref)) busy.value = false;
   }
 }
 async function decide(
@@ -378,28 +397,37 @@ async function decide(
   decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES" | "CANCEL",
 ) {
   if (
+    busy.value ||
     !gate.nextActions.includes("RESOLVE_GATE") ||
     !gate.allowedDecisions.includes(decision)
   )
     return;
+  const generation = mutationGeneration;
+  const project = run.value?.projectRef;
+  const scopeRef = runRef.value;
+  const rootRun = run.value?.rootRunRef;
+  const comment = comments.value[gate.ref]?.trim() || undefined;
+  const composer = gateAttachmentComposers.get(gate.ref);
+  const currentGate = { ...gate };
   busy.value = true;
   problem.value = undefined;
   try {
-    const attachmentSetRef = await gateAttachmentComposers
-      .get(gate.ref)
-      ?.finalize();
-    await platform.decide(gate, {
+    const attachmentSetRef = await composer?.finalize();
+    if (!mutationCurrent(generation, scopeRef)) return;
+    await platform.decide(currentGate, {
       decision,
-      comment: comments.value[gate.ref]?.trim() || undefined,
+      comment,
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
+    if (!mutationCurrent(generation, scopeRef)) return;
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(gateAttachmentStates.value, gate.ref);
   } catch (error) {
+    if (!mutationCurrent(generation, scopeRef)) return;
     problem.value = asProblem(error);
-    await platform.loadGates(run.value?.projectRef, run.value?.rootRunRef);
+    await platform.loadGates(project, rootRun);
   } finally {
-    busy.value = false;
+    if (mutationCurrent(generation, scopeRef)) busy.value = false;
   }
 }
 function setGateAttachmentComposer(
@@ -495,6 +523,9 @@ watch(
   },
 );
 watch(runRef, async (next, previous) => {
+  mutationGeneration++;
+  busy.value = false;
+  problem.value = undefined;
   refreshScheduler.cancel();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
   else realtime.closeRun(previous);
@@ -518,9 +549,11 @@ onMounted(async () => {
   if (runRef.value === initialRef) openCurrentStream();
 });
 onBeforeUnmount(() => {
+  mutationGeneration++;
   refreshScheduler.dispose();
   if (openedStreamRef.value) realtime.closeRun(openedStreamRef.value);
 });
+const serverMessage = useServerMessage();
 </script>
 <template>
   <PageFrame
@@ -664,7 +697,7 @@ onBeforeUnmount(() => {
             <article v-for="gate in openGateList" :key="gate.ref">
               <div class="gate-question">
                 <p class="eyebrow">{{ $t("decisions.question") }}</p>
-                <h2>{{ gate.title }}</h2>
+                <h2>{{ serverMessage(gate.title) }}</h2>
                 <dl>
                   <div>
                     <dt>{{ $t("decisions.requestedBy") }}</dt>
@@ -691,7 +724,11 @@ onBeforeUnmount(() => {
               <div class="gate-response">
                 <label class="field"
                   ><span>{{ $t("decisions.comment") }}</span
-                  ><textarea v-model="comments[gate.ref]" maxlength="1000" />
+                  ><VoiceTextarea
+                    v-model="comments[gate.ref]"
+                    :disabled="busy"
+                    maxlength="1000"
+                  />
                 </label>
                 <AttachmentComposer
                   :ref="
@@ -783,7 +820,11 @@ onBeforeUnmount(() => {
               <form class="run-continuation" @submit.prevent="continueRun">
                 <label class="field">
                   <span>{{ $t("runs.continueTask") }}</span>
-                  <textarea v-model="turn" maxlength="8000" />
+                  <VoiceTextarea
+                    v-model="turn"
+                    :disabled="busy"
+                    maxlength="8000"
+                  />
                 </label>
                 <AttachmentComposer
                   ref="turnAttachmentComposer"
@@ -937,7 +978,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
 }
-.gate-response textarea {
+.gate-response :deep(textarea) {
   min-height: 92px;
 }
 .gate-actions {

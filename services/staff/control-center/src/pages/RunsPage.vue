@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { Search, RefreshCw, Plus } from "@lucide/vue";
 import { useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
 
 import { usePlatformStore } from "@/features/platform/store";
 import RunsBoard from "@/features/workboard/components/RunsBoard.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
-import {
-  filterRuns,
-  type RunFilter,
-  type RunView,
-} from "@/features/workboard/model";
+import { filterRuns, type RunFilter } from "@/features/workboard/model";
+import { useRunCatalogStore } from "@/features/workboard/run-catalog";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -27,19 +26,40 @@ const canCreateRun = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
 );
 const filter = ref<RunFilter>("ALL");
-const view = ref<RunView>(projectRef.value ? "KANBAN" : "LIST");
-const runsReady = ref(false);
+const catalog = useRunCatalogStore();
+const {
+  items: scopedRuns,
+  ready: runsReady,
+  pageToken,
+  loading,
+  problem,
+} = storeToRefs(catalog);
 const projectReady = ref(!projectRef.value || Boolean(project.value));
-const scopedRuns = computed(() =>
-  platform.runList.filter(
-    (run) => !projectRef.value || run.projectRef === projectRef.value,
+const search = ref("");
+const query = ref("");
+let timer: ReturnType<typeof setTimeout> | undefined;
+const list = computed(() =>
+  filterRuns(
+    scopedRuns.value.map((run) => {
+      const fresh = platform.runs[run.ref];
+      return fresh &&
+        fresh.projectRef === run.projectRef &&
+        fresh.version > run.version
+        ? fresh
+        : run;
+    }),
+    filter.value,
   ),
 );
-const list = computed(() => filterRuns(scopedRuns.value, filter.value));
 
 async function refreshRuns(): Promise<void> {
-  await platform.loadRuns(projectRef.value);
-  if (!platform.problems.runs) runsReady.value = true;
+  await loadRuns();
+}
+async function loadRuns(more = false): Promise<void> {
+  await catalog.load(
+    { projectRef: projectRef.value, query: query.value, filter: filter.value },
+    more,
+  );
 }
 
 async function refreshProject(): Promise<void> {
@@ -48,26 +68,58 @@ async function refreshProject(): Promise<void> {
   if (!platform.problems.project) projectReady.value = true;
 }
 
-const refreshing = computed(() => runsReady.value && platform.loading.runs);
+const refreshing = computed(() => runsReady.value && loading.value);
 
 async function refresh(): Promise<void> {
   await Promise.all([refreshRuns(), refreshProject()]);
 }
 
-onMounted(() => void refresh());
-
-watch(projectRef, (next) => {
-  runsReady.value = false;
-  projectReady.value = !next || Boolean(project.value);
-  view.value = next ? "KANBAN" : "LIST";
-  void refresh();
+watch(
+  projectRef,
+  (next) => {
+    runsReady.value = false;
+    projectReady.value = !next || Boolean(project.value);
+    void refresh();
+  },
+  { immediate: true },
+);
+watch(search, () => {
+  clearTimeout(timer);
+  catalog.reset();
+  timer = setTimeout(() => {
+    query.value = search.value.trim();
+    void refreshRuns();
+  }, 500);
+});
+watch(filter, () => {
+  clearTimeout(timer);
+  query.value = search.value.trim();
+  void refreshRuns();
+});
+watch(
+  () =>
+    Object.values(platform.runs)
+      .filter((run) => !projectRef.value || run.projectRef === projectRef.value)
+      .map((run) => `${run.ref}:${String(run.version)}`)
+      .sort()
+      .join("|"),
+  () =>
+    catalog.invalidate({
+      projectRef: projectRef.value,
+      query: query.value,
+      filter: filter.value,
+    }),
+);
+onBeforeUnmount(() => {
+  clearTimeout(timer);
+  catalog.reset();
 });
 </script>
 
 <template>
   <PageFrame
     :title="$t('runs.title')"
-    :subtitle="project?.name ?? $t('runs.subtitle')"
+    :subtitle="project?.name"
     :eyebrow="project ? $t('app.project') : undefined"
   >
     <template #actions>
@@ -76,6 +128,7 @@ watch(projectRef, (next) => {
         class="button button--primary"
         :to="`/projects/${projectRef}/runs/new`"
       >
+        <Plus :size="18" />
         {{ $t("runs.new") }}
       </RouterLink>
     </template>
@@ -87,6 +140,21 @@ watch(projectRef, (next) => {
     />
 
     <div class="runs-controls" role="group" :aria-label="$t('common.status')">
+      <label class="runs-search"
+        ><Search :size="18" /><input
+          v-model="search"
+          :aria-label="$t('runs.search')"
+          :placeholder="$t('runs.search')"
+      /></label>
+      <button
+        class="icon-button"
+        :disabled="loading"
+        :title="$t('common.refresh')"
+        :aria-label="$t('common.refresh')"
+        @click="refreshRuns"
+      >
+        <RefreshCw :size="18" />
+      </button>
       <button
         v-for="value in ['ALL', 'ACTIVE', 'TERMINAL'] as const"
         :key="value"
@@ -103,20 +171,30 @@ watch(projectRef, (next) => {
     <WorkboardSection
       :title="project ? $t('workboard.projectRuns') : $t('runs.title')"
       :count="list.length"
-      :loading="platform.loading.runs"
+      :loading="loading"
       :refreshing="refreshing"
       :ready="runsReady"
-      :problem="platform.problems.runs"
+      :problem="problem"
       :empty="list.length === 0"
       :empty-text="$t('workboard.noRuns')"
       @retry="refreshRuns"
     >
       <RunsBoard
-        v-model:view="view"
         :runs="list"
+        :has-more="Boolean(pageToken)"
+        :loading-more="loading"
+        @more="loadRuns(true)"
         :preserve-project="Boolean(projectRef)"
       />
     </WorkboardSection>
+    <button
+      v-if="pageToken"
+      class="button"
+      :disabled="loading"
+      @click="loadRuns(true)"
+    >
+      {{ $t("common.loadMore") }}
+    </button>
   </PageFrame>
 </template>
 
@@ -127,6 +205,16 @@ watch(projectRef, (next) => {
   margin-bottom: 16px;
   overflow-x: auto;
   padding-bottom: 2px;
+}
+.runs-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+}
+.runs-search input {
+  width: 100%;
+  min-width: 0;
 }
 .runs-controls .button {
   flex: 0 0 auto;

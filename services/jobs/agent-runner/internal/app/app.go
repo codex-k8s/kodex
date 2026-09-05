@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/contextfiles"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
@@ -38,6 +39,7 @@ const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 type health struct {
 	live, ready atomic.Bool
 	input       model.Input
+	workspace   atomic.Pointer[workspaceHealth]
 }
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
@@ -45,7 +47,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" {
+	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
 		return errors.New("agent-runner mode is invalid")
 	}
 	if err := security.VerifyInvocation(args, mode); err != nil {
@@ -58,22 +60,41 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	if err != nil {
 		return err
 	}
+	if mode == workspaceCanaryMode {
+		err := workspacepolicy.RunCanary(lifecycleContext, input.WorkspaceRoot, input.WorkspacePolicy)
+		result := "OK"
+		if err != nil {
+			result = workspacepolicy.DenialReason(err)
+		}
+		_, writeErr := io.WriteString(os.Stdout, result)
+		return writeErr
+	}
 	if mode == "runtime-provider-credential-relay" {
 		return credentialrelay.Serve(lifecycleContext, input)
 	}
 	if mode == "runtime-init-workspace" {
-		if err := materializeWorkspace(input); err != nil {
+		snapshot, err := input.RequiredContextSnapshot(time.Now())
+		if err != nil {
+			return err
+		}
+		if err := materializeWorkspace(lifecycleContext, input); err != nil {
 			return err
 		}
 		if input.Mode == runtimecontract.RunnerModeWarm {
-			return materializeInputArtifacts(lifecycleContext, input, nil)
+			if err := materializeInputArtifacts(lifecycleContext, input, nil); err != nil {
+				return err
+			}
+			return contextfiles.Materialize(lifecycleContext, input, snapshot, nil)
 		}
 		client, err := callback.New(input)
 		if err != nil {
 			return err
 		}
 		defer client.Close()
-		return materializeInputArtifacts(lifecycleContext, input, client)
+		if err := materializeInputArtifacts(lifecycleContext, input, client); err != nil {
+			return err
+		}
+		return contextfiles.Materialize(lifecycleContext, input, snapshot, client)
 	}
 	if os.Geteuid() != 10001 {
 		return errors.New("agent-runner runtime UID is invalid")
@@ -101,6 +122,8 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}()
 	state := &health{input: input}
 	state.live.Store(true)
+	stopWorkspaceMonitor := startWorkspaceMonitor(lifecycleContext, state, checkWorkspaceProcess)
+	defer stopWorkspaceMonitor()
 	server, serverErrors := startHealthServer(lifecycleContext, state)
 	defer func() {
 		state.ready.Store(false)
@@ -116,6 +139,13 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	if mode == "runtime-session" {
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) })
 		return resultErr
+	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return err
+	}
+	if err := contextfiles.Verify(input, snapshot); err != nil {
+		return err
 	}
 	state.ready.Store(true)
 	for {
@@ -143,7 +173,13 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return errors.New("runtime turn input is invalid")
 	}
-	if err := materializeWorkspace(input); err != nil {
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil || contextfiles.Verify(input, snapshot) != nil {
+		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
+	if err := materializeWorkspace(ctx, input); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
 	if err := verifyInputArtifacts(input); err != nil {
@@ -178,7 +214,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if err != nil {
 		return completeFailure(ctx, input, client, runtimeExecutionFailureCode(err))
 	}
-	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+	if err := checkWorkspaceProcess(ctx); err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_WORKSPACE_INVALID")
 	}
 	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
@@ -298,6 +334,8 @@ func safeFailureCode(code string) string {
 
 func runtimeExecutionFailureCode(err error) string {
 	switch {
+	case errors.Is(err, runtimecontract.ErrRuntimeContext), errors.Is(err, contextfiles.ErrContextFiles):
+		return "RUNTIME_INPUT_INVALID"
 	case errors.Is(err, codex.ErrProviderAuthentication):
 		return "PROVIDER_AUTH_REJECTED"
 	case errors.Is(err, codex.ErrAuthorityRequestUnsupported):
@@ -311,13 +349,13 @@ func runtimeExecutionFailureCode(err error) string {
 	}
 }
 
-func materializeWorkspace(input model.Input) error {
+func materializeWorkspace(ctx context.Context, input model.Input) error {
 	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
 	}
-	if err := workspacepolicy.RunCanary(input.WorkspaceRoot, input.WorkspacePolicy); err != nil {
+	if err := checkWorkspaceProcess(ctx); err != nil {
 		return err
 	}
 	if err := validateMaterializedInstructions(input); err != nil {
@@ -356,8 +394,7 @@ func buildPrompt(input model.Input) ([]byte, error) {
 }
 
 func appendContinuationRevision(builder *strings.Builder, input model.Input) error {
-	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	if err != nil {
+	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return errors.New("continuation configuration is invalid")
 	}
 	toolNames := make([]string, 0, len(input.EnvironmentTools))
@@ -379,7 +416,8 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 	builder.WriteString("\n<runtime-revision-delta>\n")
 	builder.WriteString("revision=" + input.RuntimeRevisionRef + ":" + strconv.FormatInt(input.RuntimeRevisionVersion, 10) + ":" + input.RuntimeRevisionDigest + "\n")
 	builder.WriteString("attempt=" + strconv.FormatInt(int64(input.Attempt), 10) + "\n")
-	builder.WriteString("model=" + input.Model + "\nreasoning=" + overlay.ModelReasoningEffort + "\n")
+	builder.WriteString("model=" + input.Model + "\nreasoning=" + input.EffectiveReasoningEffort + "\n")
+	builder.WriteString("reasoning-mode=" + input.ReasoningMode + "\n")
 	builder.WriteString("image=" + input.ImageReference + ":" + input.ImageManifestDigest + "\n")
 	builder.WriteString("tools=" + strings.Join(toolNames, ",") + "\n")
 	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + ":" + strings.Join(grants, ",") + "\n")
@@ -889,7 +927,7 @@ func healthHandler(state *health) http.Handler {
 			http.Error(writer, "runtime is not ready", http.StatusServiceUnavailable)
 			return
 		}
-		if err := workspacepolicy.RunCanary(state.input.WorkspaceRoot, state.input.WorkspacePolicy); err != nil {
+		if err := state.workspaceStatus(time.Now()); err != nil {
 			http.Error(writer, err.Error(), http.StatusServiceUnavailable)
 			return
 		}

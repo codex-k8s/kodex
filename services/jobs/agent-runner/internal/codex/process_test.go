@@ -14,12 +14,33 @@ import (
 
 func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 	for _, session := range []string{"", "existing-thread"} {
-		input := model.Input{Model: "gpt-6-astra", CodexSessionID: session, WorkspaceRoot: "/workspace",
+		input := model.Input{ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", Model: "gpt-6-astra", CodexSessionID: session, WorkspaceRoot: "/workspace",
 			CodexApprovalPolicy: "never", ConfigOverlay: "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n"}
+		input.OrganizationRef, input.ProjectRef, input.AgentRef = "org_abcdefgh", "proj_abcdefgh", "agt_abcdefgh"
+		snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
+		snapshot.Digest, _ = snapshot.ComputeDigest()
+		input.ContextSnapshot = &snapshot
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
 		if err != nil || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
+		}
+		input.ConfigOverlay, input.EffectiveReasoningEffort = "", "medium"
+		params, err = turnStartParams(input, "exact-thread", []byte("prompt"))
+		if err != nil || params["effort"] != "medium" {
+			t.Fatalf("server default not sent: %+v, %v", params, err)
+		}
+		input.EffectiveReasoningEffort = ""
+		if _, err := turnStartParams(input, "exact-thread", []byte("prompt")); err == nil {
+			t.Fatal("missing owner effort reached turn/start")
+		}
+		input.ReasoningMode = runtimecontract.ReasoningUnsupported
+		params, err = turnStartParams(input, "exact-thread", []byte("prompt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := params["effort"]; exists {
+			t.Fatal("non-reasoning model received invented effort")
 		}
 	}
 }

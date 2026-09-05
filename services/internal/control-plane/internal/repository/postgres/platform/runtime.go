@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -297,7 +297,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
+	codexSessionID, previousContextDigest                                                        string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -362,7 +362,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -401,6 +401,32 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
 			continue
+		}
+		configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, candidate.agentRef, candidate.runtimeConfigID)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if configuration.Model != candidate.model {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, candidate.sessionID, candidate.providerAccountRef, configuration, candidate.configOverlay)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if retainedPolicy != nil {
+			candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest = retainedPolicy.PolicyID, retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+		}
+		overlayConfiguration, err := runtimecontract.ParseConfigOverlay(candidate.configOverlay)
+		if err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		effectiveEffort := overlayConfiguration.ModelReasoningEffort
+		if effectiveEffort == "" {
+			effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+		}
+		reasoningMode := runtimecontract.ReasoningSupported
+		if effectiveEffort == "" {
+			reasoningMode = runtimecontract.ReasoningUnsupported
 		}
 		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
@@ -452,7 +478,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		var delegationTargets []map[string]string
 		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
 		var integrationGrants []map[string]string
-		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
+		if err := jsonUnmarshal(rawIntegrationGrants, &integrationGrants); err != nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		integrationGrants = callableIntegrationGrants(integrationGrants)
 		var artifacts []map[string]any
 		_ = jsonUnmarshal(rawArtifacts, &artifacts)
 		var attachmentSets []map[string]string
@@ -524,14 +553,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			targetKind = promptservice.TargetSessionContinuation
 			continuation = string(rawSessionContext)
 		}
+		initiatorCapabilityScope := scope
+		initiatorCapabilityScope.actorRef = candidate.initiatorRef
+		userCapabilities, permittedIntegrationGrants, err := repository.agentCapabilityAuthority(ctx, tx, initiatorCapabilityScope, projectRef, agentRef, capabilities)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		integrationGrants = permittedIntegrationGrants
 		connectionCapabilities := make([]string, 0, len(integrationGrants))
 		for _, grant := range integrationGrants {
 			if capability := grant["capabilityKey"]; capability != "" {
 				connectionCapabilities = append(connectionCapabilities, capability)
 			}
 		}
-		userCapabilities := promptUserCapabilities(candidate.userPlatformRole, candidate.userProjectPermissions,
-			capabilities, connectionCapabilities)
 		var workflowCapabilities []string
 		if candidate.workflowRef != "" {
 			workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
@@ -607,22 +641,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
 		sttConfiguration := entity.SystemSTTConfiguration{}
 		if capabilityEnabled(capabilities, "platform.stt.use") {
-			var eligible, providerEnabled bool
-			var rawProviderCapabilities []byte
-			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
-				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
-				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
-				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
-				&rawProviderCapabilities); err != nil {
+			actorScope := scope
+			if err := tx.QueryRow(ctx, querySTTRuntimeActor, scope.organizationID, runRef).Scan(
+				&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.organizationRef); err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			var providerCapabilities map[string]any
-			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
-				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
-				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+			sttConfiguration, err = repository.getSystemSTTConfigurationTx(ctx, tx, actorScope)
+			if err != nil || !sttConfiguration.Ready {
 				return commandOutcome{}, errs.ErrConflict
 			}
 		}
@@ -636,7 +661,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			"turnRef": turnRef, "attempt": attempt, "task": task,
 			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
-			"runtimeModel": model, "instructionRef": instructionRef,
+			"runtimeModel": model, "effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode, "instructionRef": instructionRef,
 			"providerAccountRef":               providerAccountRef,
 			"providerCredentialRevisionRef":    providerCredentialRef,
 			"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
@@ -690,13 +715,19 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if len(assistantContext) != 0 {
 			snapshot["assistantContext"] = assistantContext
 		}
+		contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		snapshot["contextSnapshot"] = contextSnapshot
+		snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
 		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
 		if err != nil {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		snapshot["revisionDigest"] = revisionDigestHex
 		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil || len(rawSnapshot) > 256<<10 {
+		if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var runtimeRevisionID string
@@ -875,38 +906,11 @@ func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credenti
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
 
-func promptUserCapabilities(platformRole string, projectPermissions, agentCapabilities, connectionCapabilities []string) []string {
-	eligible := promptservice.Union(agentCapabilities, connectionCapabilities)
-	if platformRole == "OWNER" || platformRole == "ADMINISTRATOR" {
-		return eligible
-	}
-	permissions := make(map[string]struct{}, len(projectPermissions))
-	for _, permission := range projectPermissions {
-		permissions[permission] = struct{}{}
-	}
-	connection := make(map[string]struct{}, len(connectionCapabilities))
-	for _, capability := range connectionCapabilities {
-		connection[capability] = struct{}{}
-	}
-	required := map[string]string{
-		"platform.project.manage":    "MANAGE",
-		"platform.agent.manage":      "MANAGE_AGENTS",
-		"platform.run.launch":        "LAUNCH_RUNS",
-		"platform.run.delegate":      "MANAGE_AGENTS",
-		"platform.gate.resolve":      "RESOLVE_GATES",
-		"platform.artifact.manage":   "MANAGE_ARTIFACTS",
-		"platform.schedule.manage":   "MANAGE_SCHEDULES",
-		"platform.integration.grant": "MANAGE_INTEGRATIONS",
-		"platform.stt.use":           "VIEW",
-	}
-	result := make([]string, 0, len(eligible))
-	for _, capability := range eligible {
-		permission := required[capability]
-		if _, ok := connection[capability]; ok {
-			permission = "MANAGE_INTEGRATIONS"
-		}
-		if _, ok := permissions[permission]; permission != "" && ok {
-			result = append(result, capability)
+func callableIntegrationGrants(grants []map[string]string) []map[string]string {
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if (integrationpackage.Capability{Operation: grant["operation"]}).CallableByAgent() {
+			result = append(result, grant)
 		}
 	}
 	return result
@@ -918,7 +922,7 @@ func filterIntegrationGrants(grants []map[string]string, capabilities []string) 
 		allowed[capability] = struct{}{}
 	}
 	result := make([]map[string]string, 0, len(grants))
-	for _, grant := range grants {
+	for _, grant := range callableIntegrationGrants(grants) {
 		if _, ok := allowed[grant["capabilityKey"]]; ok {
 			result = append(result, grant)
 		}
@@ -936,19 +940,16 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
 	policy := entity.RuntimeWorkspacePolicy{
-		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
-		Rules: []entity.RuntimeWorkspacePathRule{
-			{Path: "/workspace/input", Access: "READ_ONLY"},
-			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
-			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
-			{Path: "/workspace", Access: "WRITABLE"},
-		},
-		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
+		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
+		Rules:         make([]entity.RuntimeWorkspacePathRule, 0, len(shared.Rules)),
+		DenialReasons: append([]string(nil), shared.DenialReasons...),
 	}
-	raw, _ := json.Marshal(policy)
-	digest := sha256.Sum256(raw)
-	policy.Digest = hex.EncodeToString(digest[:])
+	for _, rule := range shared.Rules {
+		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
 	return policy
 }
 
@@ -981,7 +982,9 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		AttachmentSetRef: stringMap(values, "attachmentSetRef"), AttachmentSetManifestDigest: stringMap(values, "attachmentSetManifestDigest"),
 		AttachmentContext: stringMap(values, "attachmentContext"), Capabilities: runtimeRevisionStringSlice(values["capabilities"]),
 		Provider: stringMap(values, "runtimeProvider"), Model: stringMap(values, "runtimeModel"),
-		ProviderAccountRef: stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
+		EffectiveReasoningEffort: stringMap(values, "effectiveReasoningEffort"),
+		ReasoningMode:            stringMap(values, "reasoningMode"),
+		ProviderAccountRef:       stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
 		ProviderCredentialRevision: runtimeRevisionMapInt64(values, "providerCredentialRevisionNumber"),
 		ProviderCredentialSHA256:   stringMap(values, "providerCredentialSHA256"),
 		RuntimeConfigRef:           stringMap(values, "runtimeConfigRef"), RuntimeConfigVersion: runtimeRevisionMapInt64(values, "runtimeConfigVersion"), RuntimeConfigDigest: stringMap(values, "runtimeConfigDigest"),
@@ -1026,6 +1029,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
 	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if raw, ok := values["contextSnapshot"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var snapshot runtimecontract.RuntimeContextSnapshot
+		if json.Unmarshal(encoded, &snapshot) != nil {
+			return "", errs.ErrConflict
+		}
+		input.ContextSnapshot = &snapshot
+	}
 	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
 		context := &runtimecontract.RunnerAssistantContext{
 			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),
@@ -1548,6 +1562,9 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		"created_by":          initiatorID,
 	}).Scan(&childSessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, childSessionID, payload.TargetAgentRef); err != nil {
+		return commandOutcome{}, err
 	}
 	childTask := strings.TrimSpace(payload.Task)
 	if workflowInstructions != "" {

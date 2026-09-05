@@ -5,9 +5,15 @@ import {
   WebStorageStateStore,
 } from "oidc-client-ts";
 import { computed, onScopeDispose, ref } from "vue";
+import { environmentDraftReauthKey } from "@/features/runtime/environment-draft-reauth";
+import { emailAttemptStorageKey } from "@/features/integrations/email-attempt";
+import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-credential-recovery";
+import { gitSourceRecoveryKey } from "@/features/managed-configurations/git-source";
 
 import {
   consumeOidcIntent,
+  createEmailReconciliationIntent,
+  type EmailReconciliationIntent,
   createRuntimeEnvironmentPolicyIntent,
   createRuntimeSecretRevealIntent,
   oidcReauthIntentStorageKey,
@@ -50,13 +56,18 @@ export type SessionPhase =
 
 const sessionRevisionKey = "kodex.session.revision";
 const sessionRenewalIntervalMs = 5 * 60 * 1000;
+const sessionRenewalRetryDelaysMs = [1_000, 5_000, 15_000, 60_000] as const;
 const sessionProbeRetryDelaysMs = [250, 500, 1_000] as const;
 const ownerSessionRetryDelaysMs = [250, 500, 1_000] as const;
 const runtimeSecretRevealPendingLifetimeMs = 5 * 60 * 1000;
 const renewalChannelName = "kodex.session";
 
 export interface LoginCompletion {
-  readonly kind: "login" | "runtime-secret" | "runtime-environment-policy";
+  readonly kind:
+    | "login"
+    | "runtime-secret"
+    | "runtime-environment-policy"
+    | "email-reconciliation";
   readonly returnPath?: string;
 }
 
@@ -118,6 +129,10 @@ export const useSessionStore = defineStore("session", () => {
     Number.parseInt(window.sessionStorage.getItem(sessionRevisionKey) ?? "0"),
   );
   const pendingRuntimeSecretRevealState = ref<PendingRuntimeSecretReveal>();
+  const pendingEmailConfirmation = ref<{
+    intent: EmailReconciliationIntent;
+    expiresAt: number;
+  }>();
   let generation = 0;
   const loginFailed = ref(false);
   let loginRedirectRequest: Promise<void> | undefined;
@@ -126,6 +141,7 @@ export const useSessionStore = defineStore("session", () => {
   let renewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
   let renewalRetryTimer: number | undefined;
+  let renewalFailures = 0;
   let loggingOut = false;
   const tabId = crypto.randomUUID();
   const renewalChannel =
@@ -156,11 +172,16 @@ export const useSessionStore = defineStore("session", () => {
     generation += 1;
     revision.value = 0;
     window.sessionStorage.removeItem(sessionRevisionKey);
+    window.sessionStorage.removeItem(environmentDraftReauthKey);
+    window.sessionStorage.removeItem(emailAttemptStorageKey);
+    window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
+    window.sessionStorage.removeItem(gitSourceRecoveryKey);
     window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
     window.sessionStorage.removeItem(
       runtimeEnvironmentPolicyReauthCompletionStorageKey,
     );
     pendingRuntimeSecretRevealState.value = undefined;
+    pendingEmailConfirmation.value = undefined;
     loginFailed.value = false;
     phase.value = "unauthenticated";
   }
@@ -221,6 +242,7 @@ export const useSessionStore = defineStore("session", () => {
       runtimeEnvironmentPolicyReauthCompletionStorageKey,
     );
     pendingRuntimeSecretRevealState.value = undefined;
+    pendingEmailConfirmation.value = undefined;
     const pending = (async () => {
       try {
         await oidcManager().signinRedirect();
@@ -300,8 +322,68 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
+  async function beginEmailReconciliationReauth(
+    input: Pick<
+      EmailReconciliationIntent,
+      | "receiptRef"
+      | "receiptVersion"
+      | "receiptDigest"
+      | "connectionRef"
+      | "invocationRef"
+    >,
+  ): Promise<void> {
+    const intent = createEmailReconciliationIntent(input);
+    pendingEmailConfirmation.value = undefined;
+    await cancelRenewal();
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await oidcManager().signinRedirect({
+        max_age: 0,
+        prompt: "login",
+        state: intent,
+      });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      startRenewal();
+      throw error;
+    }
+  }
+  function hasPendingEmailConfirmation(
+    input: Pick<
+      EmailReconciliationIntent,
+      "receiptRef" | "receiptVersion" | "receiptDigest"
+    >,
+    now = Date.now(),
+  ): boolean {
+    const pending = pendingEmailConfirmation.value;
+    return (
+      !!pending &&
+      pending.expiresAt > now &&
+      pending.intent.receiptRef === input.receiptRef &&
+      pending.intent.receiptVersion === input.receiptVersion &&
+      pending.intent.receiptDigest === input.receiptDigest
+    );
+  }
+  function consumePendingEmailConfirmation(
+    input: Pick<
+      EmailReconciliationIntent,
+      "receiptRef" | "receiptVersion" | "receiptDigest"
+    >,
+  ): boolean {
+    if (!hasPendingEmailConfirmation(input)) return false;
+    pendingEmailConfirmation.value = undefined;
+    return true;
+  }
+  function finishEmailConfirmation(): void {
+    pendingEmailConfirmation.value = undefined;
+    if (phase.value === "authenticated") scheduleRenewal(0);
+  }
   async function performLoginCompletion(): Promise<LoginCompletion> {
     const current = ++generation;
+    pendingEmailConfirmation.value = undefined;
     phase.value = "checking";
     problem.value = undefined;
     const manager = oidcManager();
@@ -338,7 +420,16 @@ export const useSessionStore = defineStore("session", () => {
                       secretRef: intent.secretRef,
                     },
                   }
-                : undefined,
+                : intent.kind === "email-reconciliation"
+                  ? {
+                      purpose: {
+                        kind: "EMAIL_EFFECT_RECONCILIATION",
+                        receiptRef: intent.receiptRef,
+                        receiptVersion: intent.receiptVersion,
+                        receiptDigest: intent.receiptDigest,
+                      },
+                    }
+                  : undefined,
             client: oneUseClient,
             headers: { "Idempotency-Key": sessionIdempotencyKey },
             signal: requestSignal(),
@@ -352,8 +443,16 @@ export const useSessionStore = defineStore("session", () => {
       renewalBus.observeRevision(parsedRevision);
       window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
       phase.value = "authenticated";
-      startRenewal();
+      if (intent.kind !== "email-reconciliation") startRenewal();
       resetUnauthorizedNotification();
+      if (intent.kind === "email-reconciliation") {
+        pendingEmailConfirmation.value = {
+          intent,
+          expiresAt: Date.now() + 2 * 60_000,
+        };
+        scheduleRenewal(2 * 60_000);
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
       if (intent.kind === "runtime-secret") {
         pendingRuntimeSecretRevealState.value = {
           expiresAt: Date.now() + runtimeSecretRevealPendingLifetimeMs,
@@ -475,6 +574,7 @@ export const useSessionStore = defineStore("session", () => {
           }),
         );
         const completedAt = Date.now();
+        renewalFailures = 0;
         const nextRenewalAt = renewalCoordinator.complete(
           sessionRenewalIntervalMs,
         );
@@ -488,11 +588,19 @@ export const useSessionStore = defineStore("session", () => {
         if (controller.signal.aborted) return;
         const normalized = asProblem(error);
         if (normalized.kind === "unauthorized") setUnauthenticated();
-        else {
+        else if (normalized.retryable) {
+          const delay =
+            sessionRenewalRetryDelaysMs[
+              Math.min(renewalFailures, sessionRenewalRetryDelaysMs.length - 1)
+            ] ?? 60_000;
+          renewalFailures += 1;
           renewalRetryTimer = window.setTimeout(() => {
             renewalRetryTimer = undefined;
             void renew();
-          }, 1_000);
+          }, delay);
+        } else {
+          problem.value = normalized;
+          phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
         }
       } finally {
         renewalCoordinator.release();
@@ -525,6 +633,7 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   function cancelRenewal(): Promise<void> | undefined {
+    renewalFailures = 0;
     if (renewalTimer !== undefined) {
       window.clearTimeout(renewalTimer);
       renewalTimer = undefined;
@@ -547,6 +656,10 @@ export const useSessionStore = defineStore("session", () => {
     beginLogin,
     beginRuntimeSecretRevealReauth,
     beginRuntimeEnvironmentPolicyReauth,
+    beginEmailReconciliationReauth,
+    hasPendingEmailConfirmation,
+    consumePendingEmailConfirmation,
+    finishEmailConfirmation,
     completeLogin,
     pendingRuntimeSecretReveal,
     hasPendingRuntimeSecretReveal,

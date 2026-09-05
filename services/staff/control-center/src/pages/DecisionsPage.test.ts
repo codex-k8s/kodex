@@ -1,9 +1,23 @@
 import { createPinia } from "pinia";
-import { createSSRApp } from "vue";
+import { createSSRApp, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+vi.mock("@/features/workboard/gate-catalog", () => ({
+  useGateCatalog: () => ({
+    items: ref([gate]),
+    total: ref(91),
+    pageToken: ref(),
+    loading: ref(false),
+    problem: ref(),
+    load: vi.fn(),
+    invalidate: vi.fn(),
+    reset: vi.fn(),
+  }),
+}));
+import { i18n as applicationI18n } from "@/app/i18n";
 
 import { usePlatformStore } from "@/features/platform/store";
 import DecisionsPage from "@/pages/DecisionsPage.vue";
@@ -154,9 +168,11 @@ describe("DecisionsPage", () => {
             attempt: "Попытка {attempt}",
           },
           decisions: {
+            ...applicationI18n.global.getLocaleMessage("ru").decisions,
             title: "Решения",
             subtitle: "Вопросы, ожидающие ответа",
-            pending: "Ожидают ответа",
+            pending: "Ожидают",
+            pendingAccessible: "Решения, ожидающие ответа",
             history: "История",
             projectFilter: "Проект",
             allProjects: "Все Проекты",

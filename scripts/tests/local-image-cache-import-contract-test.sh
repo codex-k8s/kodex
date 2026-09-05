@@ -8,7 +8,7 @@ fail() {
   exit 1
 }
 
-for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh; do
+for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh; do
   path="$root/tools/dev/$builder"
   grep -Fq 'images import \' "$path" || fail "$builder does not import its cached OCI archive"
   grep -Fq -- '--base-name "$repository" "$archive"' "$path" ||
@@ -19,7 +19,7 @@ for builder in build-local-runner.sh build-local-session-archive.sh build-local-
     fail "$builder tags the exact digest before restoring its source tag"
 done
 
-for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-image-supply-chain.sh; do
+for builder in build-local-runner.sh build-local-session-archive.sh build-local-backup-controller.sh build-local-stt.sh build-local-image-supply-chain.sh; do
   path="$root/tools/dev/$builder"
   grep -Fq '"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"' "$path" ||
     fail "$builder does not repair the Buildx builder for the current Docker context"
@@ -32,6 +32,8 @@ grep -Fq 'docker context show' "$buildx_bootstrap" ||
   fail 'Buildx bootstrap does not bind a replacement to the current Docker context'
 
 dev_script="$root/dev.sh"
+[[ $(grep -Fc '"$repository_root/tools/dev/build-local-stt.sh"' "$dev_script") -eq 2 ]] ||
+  fail 'dev.sh must restore the STT image during up and e2e'
 [[ $(grep -Fc '"$repository_root/tools/dev/build-local-session-archive.sh"' "$dev_script") -eq 2 ]] ||
   fail 'dev.sh must restore the session archive worker image during up and e2e'
 e2e_restore_line=$(grep -Fn '"$repository_root/tools/dev/build-local-session-archive.sh"' "$dev_script" | head -1 | cut -d: -f1)

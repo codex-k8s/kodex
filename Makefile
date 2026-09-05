@@ -55,6 +55,17 @@ test-authority-policy-codegen:
 test-internal-rpc-authority-abi-render:
 	@./scripts/tests/internal-rpc-authority-abi-render-test.sh
 
+.PHONY: test-worker-authority-projections
+test-worker-authority-projections:
+	@./scripts/tests/worker-authority-projections-test.sh
+
+.PHONY: test-interaction-gateway-render test-interaction-gateway-postgres
+test-interaction-gateway-render:
+	@./scripts/tests/interaction-gateway-render-test.sh
+
+test-interaction-gateway-postgres:
+	@./scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(interaction|integration_connection_tests)'
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 
@@ -69,10 +80,12 @@ test-integration-synthetic:
 
 test-full-local-e2e-entrypoint:
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
+	@./scripts/tests/local-profile-selection-test.sh
 	@./scripts/tests/hot-reload-verifier-contract-test.sh
 	@./scripts/tests/integration-deployed-e2e-contract-test.sh
 	@./scripts/tests/local-kubernetes-e2e-diagnostics-contract-test.sh
 	@./scripts/tests/local-statefulset-rollout-contract-test.sh
+	@bash scripts/tests/local-mail-projection-contract-test.sh
 
 test-local-e2e-oidc-group-fixture-contract:
 	@./scripts/tests/local-e2e-oidc-group-fixture-test.sh
@@ -147,22 +160,38 @@ gen-integration-packages: check-go-toolchain
 		-contracts ../../../contracts/integrations/v1/definitions -output shipped_gen.go
 	@gofmt -w libs/go/integrationpackage/shipped_gen.go
 
-.PHONY: gen-email-bridge check-email-bridge-codegen
+.PHONY: gen-email-bridge check-email-bridge-codegen test-email-bridge test-email-bridge-unit test-email-bridge-render test-email-bridge-install
+test-email-bridge-unit: check-go-toolchain
+	@cd libs/go/emailbridgeapi && go test -race -timeout 60s ./...
+	@cd services/internal/email-bridge && go test -race -timeout 90s ./...
+	@cd services/external/integration-gateway && go test -race -timeout 60s ./internal/integration -run 'TestEmail|Test(EveryAdvertisedOperation|EveryMutationPreservesUnknownOutcome|ScopeDeniedBeforeCredentialRead|ReadOperationsHandleRateLimits)/email'
+
+test-email-bridge:
+	@bash scripts/tests/email-bridge-test.sh
+
+test-email-bridge-render:
+	@bash scripts/tests/email-bridge-render-test.sh
+
+.PHONY: test-email-projection-render
+test-email-projection-render:
+	@bash scripts/tests/email-projection-render-test.sh
+
+test-email-bridge-install:
+	@timeout 420 bash scripts/tests/email-bridge-install-test.sh
 .PHONY: test-integration-gateway-render
 .PHONY: test-integration-gateway-postgres
 test-integration-gateway-postgres:
-	@bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(provider_credential_refresh|integration|role_image|runtime_environment_lifecycle|managed_configuration)'
+	@bash scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(catalog_owner_probe|model_catalog_is_version_bound|provider_credential_refresh|integration|role_image|runtime_environment_lifecycle|managed_configuration)'
 
 test-integration-gateway-render:
 	@bash scripts/tests/integration-gateway-render-test.sh
 
 gen-email-bridge: check-openapi-toolchain
-	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o libs/go/emailbridgeapi/api.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	node tools/codegen/email-bridge-schema.mjs
 
 check-email-bridge-codegen: check-openapi-toolchain
-	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
-		oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o "$$tmp" contracts/openapi/email-bridge/v1/openapi.yaml; \
-		cmp services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go "$$tmp"
+	@bash scripts/tests/email-bridge-codegen-test.sh
 
 check-integration-package-codegen: check-go-toolchain
 	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
@@ -199,6 +228,14 @@ gen-openapi-ts:
 
 lint-proto: check-proto-toolchain
 	buf lint
+
+.PHONY: test-secret-broker-drafts
+test-secret-broker-drafts:
+	bash scripts/tests/secret-broker-drafts-test.sh
+
+.PHONY: test-provider-model-catalog-codex
+test-provider-model-catalog-codex:
+	python3 scripts/tests/provider-model-catalog-codex-test.py "$(KODEX_CATALOG_CODEX_TEST_IMAGE)"
 
 .PHONY: test-automation-scheduler
 test-automation-scheduler:

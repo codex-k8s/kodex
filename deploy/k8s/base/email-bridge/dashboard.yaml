@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: email-bridge-dashboard
+  namespace: kodex-system
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: email-bridge
+data:
+  email-bridge.json: |
+    {"uid":"kodex-email-bridge","title":"Kodex email-bridge","schemaVersion":39,"panels":[{"id":1,"type":"timeseries","title":"Результаты почтовых операций","gridPos":{"x":0,"y":0,"w":16,"h":8},"targets":[{"expr":"sum by (operation, outcome) (rate(kodex_email_bridge_operations_total[5m]))"}]},{"id":2,"type":"stat","title":"Неготовые экземпляры","gridPos":{"x":16,"y":0,"w":8,"h":8},"targets":[{"expr":"sum(kodex_email_bridge_readiness{ready=\"false\"}) or vector(0)"}]},{"id":3,"type":"timeseries","title":"Неопределённые исходы","gridPos":{"x":0,"y":8,"w":16,"h":8},"targets":[{"expr":"sum by (operation) (increase(kodex_email_bridge_operations_total{outcome=\"unknown\"}[10m]))"}]},{"id":4,"type":"timeseries","title":"Память процесса","gridPos":{"x":16,"y":8,"w":8,"h":8},"targets":[{"expr":"process_resident_memory_bytes{job=\"email-bridge\"}"}]}]}

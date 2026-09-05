@@ -7,10 +7,12 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  Maximize2,
+  ExternalLink,
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
@@ -19,12 +21,15 @@ import {
 } from "@/features/runtime/environment-capabilities";
 import type { RuntimeEnvironmentSet } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { invalidSearchResult } from "@/shared/api/search-result";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const route = useRoute();
+const router = useRouter();
+const registry = ref<HTMLElement>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const projectRef = computed(() => String(route.params.projectRef));
@@ -33,12 +38,11 @@ const items = ref<RuntimeEnvironmentSet[]>([]);
 const cursor = ref<string>();
 const loading = ref(false);
 const loadingMore = ref(false);
+const expanded = ref(false);
 const problem = ref<AppProblem>();
 const selectedRef = ref("");
-const selected = computed(
-  () =>
-    items.value.find((item) => item.ref === selectedRef.value) ??
-    items.value[0],
+const selected = computed(() =>
+  items.value.find((item) => item.ref === selectedRef.value),
 );
 const selectedReadiness = computed(() =>
   selected.value ? runtime.environmentReadiness[selected.value.ref] : undefined,
@@ -49,12 +53,21 @@ const selectedAgents = computed(() =>
 const actionRef = ref("");
 const deleteTarget = ref<RuntimeEnvironmentSet>();
 let generation = 0;
+let listController: AbortController | undefined;
+let inspectorController: AbortController | undefined;
+const visitedCursors = new Set<string>();
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function load(reset = true): Promise<void> {
   if (!reset && (!cursor.value || loadingMore.value)) return;
   const current = ++generation;
+  listController?.abort();
+  const controller = new AbortController();
+  listController = controller;
+  const requestedCursor = reset ? undefined : cursor.value;
   if (reset) {
+    visitedCursors.clear();
+    selectedRef.value = "";
     loading.value = true;
     cursor.value = undefined;
   } else {
@@ -65,9 +78,24 @@ async function load(reset = true): Promise<void> {
     const page = await runtime.searchEnvironmentPage(
       projectRef.value,
       query.value,
-      reset ? undefined : cursor.value,
+      requestedCursor,
+      controller.signal,
     );
-    if (generation !== current) return;
+    if (generation !== current || controller.signal.aborted) return;
+    if (
+      !Array.isArray(page.items) ||
+      page.items.some((item) => item.projectRef !== projectRef.value) ||
+      new Set(page.items.map((item) => item.ref)).size !== page.items.length ||
+      (page.nextPageToken &&
+        (page.nextPageToken === requestedCursor ||
+          visitedCursors.has(page.nextPageToken))) ||
+      (!reset &&
+        page.items.some((item) =>
+          items.value.some((existing) => existing.ref === item.ref),
+        ))
+    )
+      throw invalidSearchResult();
+    if (requestedCursor) visitedCursors.add(requestedCursor);
     if (reset) items.value = page.items;
     else {
       const merged = new Map(items.value.map((item) => [item.ref, item]));
@@ -79,9 +107,10 @@ async function load(reset = true): Promise<void> {
       !selectedRef.value ||
       !items.value.some((item) => item.ref === selectedRef.value)
     )
-      selectedRef.value = items.value[0]?.ref ?? "";
+      selectedRef.value = "";
   } catch (error) {
-    if (generation === current) problem.value = asProblem(error);
+    if (generation === current && !controller.signal.aborted)
+      problem.value = asProblem(error);
   } finally {
     if (generation === current) {
       loading.value = false;
@@ -96,10 +125,13 @@ function replaceItem(value: RuntimeEnvironmentSet): void {
   else items.value.push(value);
 }
 
-async function loadOperationalState(environmentRef: string): Promise<void> {
+async function loadOperationalState(
+  environmentRef: string,
+  signal: AbortSignal,
+): Promise<void> {
   await Promise.all([
-    runtime.loadEnvironmentReadiness(environmentRef),
-    runtime.loadEnvironmentAgents(environmentRef),
+    runtime.loadEnvironmentReadiness(environmentRef, signal),
+    runtime.loadEnvironmentAgents(environmentRef, true, signal),
   ]);
 }
 
@@ -128,6 +160,7 @@ async function remove(environment: RuntimeEnvironmentSet): Promise<void> {
   try {
     const saved = await runtime.removeEnvironment(environment);
     replaceItem(saved);
+    selectedRef.value = "";
     deleteTarget.value = undefined;
   } catch (error) {
     problem.value = asProblem(error);
@@ -146,29 +179,66 @@ function onScroll(event: Event): void {
 }
 
 watch(query, () => {
+  generation += 1;
+  listController?.abort();
+  selectedRef.value = "";
   if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => void load(), 300);
+  debounceTimer = setTimeout(() => void load(), 500);
 });
-watch(projectRef, () => void load());
+watch(projectRef, () => {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  void load();
+});
 watch(
   () => selected.value?.ref,
-  (value) => {
-    if (value) void loadOperationalState(value);
+  (value, _previous, onCleanup) => {
+    const controller = new AbortController();
+    inspectorController = controller;
+    onCleanup(() => controller.abort());
+    if (value) void loadOperationalState(value, controller.signal);
   },
   { immediate: true },
 );
-onMounted(() => void load());
+function dismissInspector(event: PointerEvent): void {
+  if (event.target instanceof Node && !registry.value?.contains(event.target))
+    selectedRef.value = "";
+}
+function toggleInspector(environmentRef: string): void {
+  selectedRef.value =
+    selectedRef.value === environmentRef ? "" : environmentRef;
+}
+function clickRow(
+  event: MouseEvent,
+  environmentRef: string,
+  open = false,
+): void {
+  if (
+    event.target instanceof Element &&
+    event.target.closest("a, button, input, select, textarea")
+  )
+    return;
+  if (open) openEditor(environmentRef);
+  else toggleInspector(environmentRef);
+}
+function openEditor(environmentRef: string): void {
+  void router.push(
+    `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(environmentRef)}`,
+  );
+}
+onMounted(() => {
+  void load();
+  document.addEventListener("pointerdown", dismissInspector);
+});
 onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", dismissInspector);
   generation += 1;
+  listController?.abort();
   if (debounceTimer) clearTimeout(debounceTimer);
 });
 </script>
 
 <template>
-  <PageFrame
-    :title="$t('runtime.environmentsTitle')"
-    :subtitle="$t('runtime.environmentsSubtitle')"
-  >
+  <PageFrame :title="$t('runtime.environmentsTitle')">
     <template #actions>
       <RouterLink
         class="button button--primary"
@@ -178,7 +248,13 @@ onBeforeUnmount(() => {
         {{ $t("runtime.newEnvironment") }}
       </RouterLink>
     </template>
-    <section class="environment-registry panel">
+    <component
+      :is="expanded ? ModalDialog : 'section'"
+      :class="expanded ? undefined : 'environment-registry'"
+      :title="expanded ? $t('runtime.environmentsTitle') : undefined"
+      size="full"
+      @close="expanded = false"
+    >
       <header class="environment-toolbar">
         <label>
           <Search :size="16" aria-hidden="true" />
@@ -190,11 +266,26 @@ onBeforeUnmount(() => {
           />
         </label>
         <span>{{ $t("runtime.pickerShown", { count: items.length }) }}</span>
+        <button
+          v-if="!expanded"
+          class="icon-button"
+          :title="$t('catalog.expand')"
+          :aria-label="$t('catalog.expand')"
+          @click="expanded = true"
+        >
+          <Maximize2 :size="16" />
+        </button>
       </header>
       <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
-      <div v-else class="environment-registry__content">
+      <div
+        ref="registry"
+        class="environment-registry__content"
+        :class="{ 'environment-registry__content--selected': selected }"
+        @keydown.esc="selectedRef = ''"
+      >
         <div
           class="environment-table-wrap"
+          :class="{ 'environment-table-wrap--expanded': expanded }"
           :aria-busy="loading || loadingMore"
           @scroll="onScroll"
         >
@@ -204,7 +295,6 @@ onBeforeUnmount(() => {
           <div v-else-if="!items.length" class="environment-state">
             <Layers3 :size="28" aria-hidden="true" />
             <strong>{{ $t("runtime.environmentsEmpty") }}</strong>
-            <p>{{ $t("runtime.environmentsEmptyHelp") }}</p>
           </div>
           <table v-else class="environment-table">
             <thead>
@@ -226,6 +316,8 @@ onBeforeUnmount(() => {
               <tr
                 v-for="environment in items"
                 :key="environment.ref"
+                @click="clickRow($event, environment.ref)"
+                @dblclick="clickRow($event, environment.ref, true)"
                 :class="{
                   'environment-table__row--selected':
                     environment.ref === selected?.ref,
@@ -235,7 +327,8 @@ onBeforeUnmount(() => {
                   <button
                     class="environment-name"
                     type="button"
-                    @click="selectedRef = environment.ref"
+                    @click="toggleInspector(environment.ref)"
+                    @dblclick="openEditor(environment.ref)"
                   >
                     <strong>{{ environment.name }}</strong>
                     <small>{{ environment.description }}</small>
@@ -261,10 +354,12 @@ onBeforeUnmount(() => {
                 <td>
                   <div class="environment-row-actions">
                     <RouterLink
-                      class="button"
+                      class="icon-button"
+                      :title="$t('runtime.openEditor')"
+                      :aria-label="$t('runtime.openEditor')"
                       :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(environment.ref)}`"
                     >
-                      {{ $t("common.open") }}
+                      <ExternalLink :size="16" />
                     </RouterLink>
                     <button
                       v-if="hasEnvironmentAction(environment, 'DISABLE')"
@@ -307,12 +402,14 @@ onBeforeUnmount(() => {
           <p v-if="loadingMore" class="environment-loading" role="status">
             {{ $t("common.loading") }}
           </p>
-          <p
+          <button
             v-else-if="cursor"
-            class="environment-loading environment-loading--hint"
+            class="button environment-loading"
+            type="button"
+            @click="load(false)"
           >
-            {{ $t("runtime.pickerScroll") }}
-          </p>
+            {{ $t("roleImages.loadMore") }}
+          </button>
         </div>
         <aside v-if="selected" class="environment-inspector">
           <div class="section-header">
@@ -424,15 +521,37 @@ onBeforeUnmount(() => {
           </section>
           <section class="environment-lifecycle">
             <h3>{{ $t("runtime.readiness") }}</h3>
+            <p
+              v-if="runtime.loading[`environment-readiness:${selected.ref}`]"
+              role="status"
+            >
+              {{ $t("common.loading") }}
+            </p>
+            <ProblemNotice
+              v-if="runtime.problems[`environment-readiness:${selected.ref}`]"
+              :problem="
+                runtime.problems[`environment-readiness:${selected.ref}`]
+              "
+              @retry="
+                runtime.loadEnvironmentReadiness(
+                  selected.ref,
+                  inspectorController?.signal,
+                )
+              "
+            />
             <dl>
               <div>
                 <dt>{{ $t("common.status") }}</dt>
                 <dd>
                   <StatusBadge
+                    v-if="selectedReadiness"
                     :state="
                       selectedReadiness?.ready ? 'READY' : 'NEEDS_ATTENTION'
                     "
                   />
+                  <span v-else>{{
+                    $t("runtime.readinessState.UNAVAILABLE")
+                  }}</span>
                 </dd>
               </div>
               <div>
@@ -449,12 +568,29 @@ onBeforeUnmount(() => {
                 {{ agent.name }}
               </span>
             </div>
+            <ProblemNotice
+              v-if="runtime.problems[`environment-agents:${selected.ref}`]"
+              :problem="runtime.problems[`environment-agents:${selected.ref}`]"
+              @retry="
+                runtime.loadEnvironmentAgents(
+                  selected.ref,
+                  true,
+                  inspectorController?.signal,
+                )
+              "
+            />
             <button
               v-if="runtime.environmentAgentCursors[selected.ref]"
               class="button"
               type="button"
               :disabled="runtime.loading[`environment-agents:${selected.ref}`]"
-              @click="runtime.loadEnvironmentAgents(selected.ref, false)"
+              @click="
+                runtime.loadEnvironmentAgents(
+                  selected.ref,
+                  false,
+                  inspectorController?.signal,
+                )
+              "
             >
               {{ $t("roleImages.loadMore") }}
             </button>
@@ -482,7 +618,7 @@ onBeforeUnmount(() => {
           </RouterLink>
         </aside>
       </div>
-    </section>
+    </component>
   </PageFrame>
   <ModalDialog
     v-if="deleteTarget"
@@ -561,12 +697,20 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .environment-table-wrap {
-  max-height: calc(100vh - 250px);
-  min-height: 360px;
+  max-height: 526px;
   overflow: auto;
+}
+.environment-table-wrap--expanded {
+  max-height: calc(100dvh - 220px);
+}
+.environment-table tbody tr {
+  height: 80px;
 }
 .environment-registry__content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.environment-registry__content--selected {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.38fr);
 }
 .environment-table {

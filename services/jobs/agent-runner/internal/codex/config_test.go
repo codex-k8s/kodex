@@ -47,7 +47,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
+	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
 		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
 		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 	if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
@@ -60,6 +60,10 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	var config runtimeConfig
 	metadata, err := toml.Decode(string(raw), &config)
 	profile := config.Permissions[config.DefaultPermissions]
+	if !metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
+		!metadata.IsDefined("memories", "use_memories") || config.Features.Memories || config.Memories.GenerateMemories || config.Memories.UseMemories {
+		t.Fatal("provider local memory is not explicitly disabled")
+	}
 	if err != nil || len(metadata.Undecoded()) != 0 || profile.Extends != ":workspace" ||
 		profile.Filesystem[filepath.Join(home, "auth.json")] != "deny" || profile.Filesystem[home] != "" ||
 		profile.Filesystem["/proc"] != "deny" ||
@@ -89,7 +93,7 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
 				CodexApprovalPolicy: "never", CodexSandbox: sandbox,
 				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
 			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
@@ -122,7 +126,7 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5",
+	input := model.Input{WorkspaceRoot: workspace, CodexHome: home, Model: "gpt-5", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
 		CodexApprovalPolicy: "never", CodexSandbox: "workspace-write",
 		ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:]),
 		ConfigOverlay:     "model_reasoning_effort = \"high\"\n\n[history]\npersistence = \"none\"\n",
@@ -173,15 +177,20 @@ func TestValidateProviderAuthenticationFailsClosed(t *testing.T) {
 	}
 }
 
-func TestValidateRuntimeSelectionRejectsUnknownModelReasoningToolAndMCP(t *testing.T) {
-	valid := model.Input{Provider: "openai", Model: "gpt-5.4", ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+func TestValidateRuntimeSelectionRejectsInvalidModelReasoningToolAndMCP(t *testing.T) {
+	valid := model.Input{ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", Provider: "openai", Model: "gpt-5.4", ConfigOverlay: "model_reasoning_effort = \"high\"\n",
 		EnvironmentTools: []runtimecontract.RuntimeEnvironmentTool{{Name: "Shell", Command: "sh", Description: "Shell"}}}
 	if err := validateRuntimeSelection(valid); err != nil {
 		t.Fatalf("valid runtime selection rejected: %v", err)
 	}
+	future := valid
+	future.Model, future.ConfigOverlay, future.EffectiveReasoningEffort = "future-account-model", "", "custom-effort"
+	if validateRuntimeSelection(future) != nil {
+		t.Fatal("server-issued model and effort were replaced by a local catalog")
+	}
 	for name, mutate := range map[string]func(*model.Input){
 		"provider":        func(input *model.Input) { input.Provider = "foreign" },
-		"model":           func(input *model.Input) { input.Model = "future-model" },
+		"model":           func(input *model.Input) { input.Model = "" },
 		"model reasoning": func(input *model.Input) { input.ConfigOverlay = "model_reasoning_effort = \"max\"\n" },
 		"TOML key":        func(input *model.Input) { input.ConfigOverlay = "unknown = true\n" },
 		"MCP configuration": func(input *model.Input) {

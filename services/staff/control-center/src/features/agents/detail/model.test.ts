@@ -106,6 +106,8 @@ describe("agent detail model", () => {
   it("вставляет server-owned template variable строго в текущее выделение", () => {
     const item = toTemplateVariablePickerItem({
       name: "project.ref",
+      available: true,
+      reason: "AVAILABLE",
       valueType: "OPAQUE_REF",
       description: "Ссылка Проекта",
       example: "{{ .project.ref }}",
@@ -133,6 +135,8 @@ describe("agent detail model", () => {
     expect(
       templateVariableInsertion({
         name: "runtime.environment.tools",
+        available: true,
+        reason: "AVAILABLE",
         valueType: "COLLECTION",
         description: "Инструменты",
         example: "{{ .runtime.environment.tools }}",
@@ -146,10 +150,46 @@ describe("agent detail model", () => {
     ).toBe("{{ range .runtime.environment.tools }}{{ .name }}{{ end }}");
   });
 
+  it("сохраняет недоступную переменную для просмотра, запрещая вставку", () => {
+    const item = toTemplateVariablePickerItem({
+      name: "agent.ref",
+      available: false,
+      reason: "AGENT_CONTEXT_REQUIRED",
+      collection: false,
+      itemFields: [],
+      valueType: "OPAQUE_REF",
+      description: "Агент",
+      example: "{{ .agent.ref }}",
+      source: "AGENT",
+    });
+    expect(item.disabled).toBe(true);
+    expect(item.variable.reason).toBe("AGENT_CONTEXT_REQUIRED");
+    expect(() => templateVariableInsertion(item.variable)).toThrow();
+  });
+
+  it.each([
+    { available: undefined, reason: "AVAILABLE" },
+    { available: true, reason: "NOT_MATERIALIZED" },
+    { available: false, reason: "AVAILABLE" },
+    { available: false, reason: "UNKNOWN" },
+  ])("закрыто отклоняет некорректную availability %j", (availability) => {
+    const variable = {
+      name: "agent.ref",
+      valueType: "OPAQUE_REF",
+      description: "Агент",
+      example: "{{ .agent.ref }}",
+      source: "AGENT",
+      ...availability,
+    } as unknown as Parameters<typeof normalizeTemplateVariable>[0];
+    expect(() => normalizeTemplateVariable(variable)).toThrow();
+  });
+
   it("нормализует wire-каталог без локального придумывания шаблона", () => {
     expect(
       normalizeTemplateVariable({
         name: "input.files",
+        available: true,
+        reason: "AVAILABLE",
         valueType: "collection",
         description: "Файлы входа",
         example: "{{ range .input.files }}{{ .path }}{{ end }}",

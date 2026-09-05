@@ -264,6 +264,9 @@ function integrationDefinition(): IntegrationDefinition {
     origin: "SHIPPED",
     digest: "a".repeat(64),
     adapter: "GITHUB",
+    adapterOwner: "integration-gateway",
+    executionRoute: "MANAGED_MCP",
+    adapterReadiness: "READY",
   };
 }
 
@@ -395,7 +398,7 @@ describe("platform store", () => {
     const runResponse = (
       items: Run[],
     ): { data: RunPage; response: Response } => ({
-      data: { items },
+      data: { items, total: items.length },
       response: new Response(null, { status: 200 }),
     });
     listRunsMock
@@ -836,6 +839,29 @@ describe("platform store", () => {
     expect(store.projectList).toEqual([]);
     expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
+  });
+
+  it("не принимает старый owner ACK после сброса и нового запроса с тем же ключом", async () => {
+    let resolveOld!: (value: ReturnType<typeof response>) => void;
+    listProjectsMock.mockReturnValueOnce(
+      new Promise<ReturnType<typeof response>>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const store = usePlatformStore();
+    const oldRequest = store.loadProjects();
+    store.clearOwnerState();
+    listProjectsMock.mockResolvedValueOnce(
+      response([project("project_new_owner")]),
+    );
+    await store.loadProjects();
+    resolveOld(response([project("project_old_owner")]));
+    await oldRequest;
+    expect(store.projectList.map((item) => item.ref)).toEqual([
+      "project_new_owner",
+    ]);
+    expect(store.problems.projects).toBeUndefined();
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
   });
 
   it("сохраняет авторитетную готовность core независимо от списка подключений", async () => {

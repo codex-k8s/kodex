@@ -13,10 +13,19 @@ export type NavigationSection =
   | "automations"
   | "runtime-environments"
   | "runtime-secrets"
+  | "role-images"
   | "project-access"
   | "provider-accounts";
 
 const routeSections: Readonly<Record<string, NavigationSection>> = {
+  "context-resource": "files",
+  "project-context-resource": "files",
+  "organization-agents": "agents",
+  "organization-workflows": "workflows",
+  "organization-automations": "automations",
+  "organization-environments": "runtime-environments",
+  "organization-secrets": "runtime-secrets",
+  "organization-files": "files",
   home: "home",
   projects: "projects",
   runs: "runs",
@@ -42,6 +51,9 @@ const routeSections: Readonly<Record<string, NavigationSection>> = {
   "runtime-environment-new": "runtime-environments",
   "runtime-environment": "runtime-environments",
   "runtime-secrets": "runtime-secrets",
+  "role-images": "role-images",
+  "role-image-new": "role-images",
+  "role-image": "role-images",
   "project-access": "project-access",
 };
 

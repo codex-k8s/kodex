@@ -322,6 +322,47 @@ wait_job() {
   fail "local Job timed out: $name"
 }
 
+verify_email_projection_generation() {
+  local source_file="$temporary_directory/mail-current.json" expected actual
+  expected=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-dev-source-provenance") |
+    .data.mailSourceSHA256' "$render")
+  [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || fail 'mail source provenance is missing'
+  bash "$script_directory/read-local-mail-configuration.sh" "$source_file" || fail 'mail source readback failed'
+  actual=$(jq -cS '.' "$source_file" | sha256sum | awk '{print $1}')
+  [[ "$actual" == "$expected" ]] || fail 'mail source changed; regenerate the exact local render'
+}
+
+ensure_email_projection_secret() {
+  local name=email-bridge-mailbox-projection state output
+  output="$temporary_directory/email-projection-bootstrap.yaml"
+  state=$(kubectl -n "$namespace" get "secret/$name" --ignore-not-found --request-timeout=20s -o json) ||
+    fail 'email projection Secret discovery failed'
+  if [[ -z "$state" ]]; then
+    yq 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection")' "$render" >"$output"
+    yq -o=json -I=0 '.' "$output" | jq -s -e '
+      length == 1 and .[0].metadata.namespace == "kodex-system" and
+      .[0].metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
+      .[0].type == "Opaque" and .[0].immutable != true and
+      (.[0].stringData."mailboxes.json" | fromjson | .version == "email-bridge/v1")
+    ' >/dev/null || fail 'canonical email projection bootstrap is invalid'
+    # Не применяем пустой bootstrap повторно поверх опубликованного CP поколения.
+    if ! kubectl -n "$namespace" create --field-manager=kodex-local-dev --request-timeout=20s -f "$output" >/dev/null 2>&1; then
+      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
+        fail 'email projection Secret creation failed'
+    else
+      state=$(kubectl -n "$namespace" get "secret/$name" --request-timeout=20s -o json) ||
+        fail 'email projection Secret readback failed'
+    fi
+  fi
+  jq -e '
+    .kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection" and
+    .metadata.namespace == "kodex-system" and
+    .metadata.labels."app.kubernetes.io/managed-by" == "control-plane" and
+    (.metadata.uid | type == "string" and length > 0) and
+    .type == "Opaque" and .immutable != true
+  ' <<<"$state" >/dev/null || fail 'email projection Secret ownership readback failed'
+}
+
 apply_job() {
   local name=$1 output
   output="$temporary_directory/job-$name.yaml"
@@ -1064,6 +1105,7 @@ readback_local_image_supply_chain() {
 }
 
 if [[ "$mode" == apply ]]; then
+  verify_email_projection_generation
   ensure_local_object_storage_secret
   ensure_local_backup_controller_secret
   ensure_seed_secrets
@@ -1077,12 +1119,13 @@ if [[ "$mode" == apply ]]; then
       .kind != "Secret" and .kind != "CustomResourceDefinition")
   '
   cleanup_local_frontend_transport
+  ensure_email_projection_secret
   ensure_session_archive_worker_secret
   cleanup_legacy_session_archive_worker_resources
   wait_certificates
   apply_render statefulsets 'select(.kind == "StatefulSet")'
-  reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs
-  for workload in kodex-postgresql kodex-nats seaweedfs; do
+  reconcile_local_statefulset_rollout kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql
+  for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do
     kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
       fail "local StatefulSet is unavailable: $workload"
   done
@@ -1091,6 +1134,7 @@ if [[ "$mode" == apply ]]; then
 
   apply_job internal-rpc-authority-migrate
   apply_job control-plane-migrate
+  apply_job email-bridge-migration
   apply_job kodex-postgresql-runtime-credentials
   apply_job control-plane-broker-bootstrap
 
@@ -1133,7 +1177,7 @@ readback_local_object_storage_secret
 expected_backup_credentials="$temporary_directory/backup-controller-credentials-expected.json"
 write_local_backup_controller_credentials "$expected_backup_credentials"
 readback_local_backup_controller_secret "$expected_backup_credentials"
-for workload in kodex-postgresql kodex-nats seaweedfs; do
+for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do
   kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
     fail "local StatefulSet is unavailable: $workload"
 done
@@ -1147,7 +1191,7 @@ while IFS= read -r workload; do
 done < <(yq -N -r 'select(.kind == "Deployment") | .metadata.name' "$render" | sort -u)
 
 for job in seaweedfs-bucket-bootstrap internal-rpc-authority-migrate control-plane-migrate \
-  kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
+  email-bridge-migration kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
   [[ "$(kubectl -n "$namespace" get "job/$job" -o jsonpath='{.status.succeeded}')" == 1 ]] ||
     fail "local Job readback failed: $job"
 done

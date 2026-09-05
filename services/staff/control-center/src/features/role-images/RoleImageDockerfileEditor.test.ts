@@ -1,8 +1,14 @@
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, h } from "vue";
 import { describe, expect, it } from "vitest";
+import { createI18n } from "vue-i18n";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
+const i18n = createI18n({
+  legacy: false,
+  locale: "ru",
+  messages: { ru: { app: { editorKeyboard: "Tab: отступ" } } },
+});
 
 describe("RoleImageDockerfileEditor", () => {
   it("рендерит контейнер CodeMirror и не подменяет source", async () => {
@@ -14,7 +20,7 @@ describe("RoleImageDockerfileEditor", () => {
             label: "Dockerfile",
             modelValue: source,
           }),
-      }),
+      }).use(i18n),
     );
 
     expect(html).toContain('class="dockerfile-editor__viewport"');
@@ -32,7 +38,7 @@ describe("RoleImageDockerfileEditor", () => {
             readonly: true,
             validationMessages: ["Нужен FROM"],
           }),
-      }),
+      }).use(i18n),
     );
 
     expect(html).toContain("is-readonly");

@@ -1,0 +1,19 @@
+{
+  "apiVersion": "cert-manager.io/v1",
+  "kind": "Certificate",
+  "metadata": {
+    "name": "internal-rpc-authority-email-bridge-workload",
+    "namespace": "kodex-system",
+    "annotations": {"argocd.argoproj.io/sync-wave": "-9"}
+  },
+  "spec": {
+    "secretName": "internal-rpc-authority-email-bridge-workload-tls",
+    "duration": "720h",
+    "renewBefore": "120h",
+    "privateKey": {"algorithm": "ECDSA", "size": 256, "rotationPolicy": "Always"},
+    "dnsNames": ["email-bridge", "email-bridge.kodex-system.svc", "email-bridge.kodex-system.svc.cluster.local"],
+    "uris": ["spiffe://kodex.local/ns/kodex-system/sa/email-bridge"],
+    "usages": ["server auth", "client auth"],
+    "issuerRef": {"name": "kodex-installation-ca", "kind": "Issuer"}
+  }
+}

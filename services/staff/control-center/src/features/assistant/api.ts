@@ -1,6 +1,7 @@
 import { requestSignal } from "@/shared/api/client";
 import {
   addAssistantTurn,
+  archiveAssistantConversation,
   applyAssistantPlan,
   createAssistantConversation,
   getSystemAssistant,
@@ -18,33 +19,76 @@ import type {
   AssistantPlanDecisionResponse,
   AssistantPlanOperationInput,
   SystemAssistant,
+  ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, mutateWithRetry } from "@/shared/api/mutation";
 import { asProblem, unwrap } from "@/shared/api/problem";
 
 const readRetryDelaysMs = [0, 200, 600] as const;
 
-export async function readAssistant(): Promise<SystemAssistant> {
+export async function readAssistant(
+  signal?: AbortSignal,
+): Promise<SystemAssistant> {
   return readWithRetry(
     async () =>
-      (await unwrap(getSystemAssistant({ signal: requestSignal() }))).data,
+      (await unwrap(getSystemAssistant({ signal: requestSignal(signal) })))
+        .data,
+    signal,
   );
 }
 
 export async function readConversations(
   projectRef?: string,
-): Promise<AssistantConversation[]> {
+  pageToken?: string,
+  signal?: AbortSignal,
+  filter: { query?: string; state?: AssistantConversation["state"] } = {},
+): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
       (
         await unwrap(
           listAssistantConversations({
-            ...(projectRef ? { query: { projectRef } } : {}),
-            signal: requestSignal(),
+            query: {
+              pageSize: 40,
+              ...(projectRef ? { projectRef } : {}),
+              ...(pageToken ? { pageToken } : {}),
+              ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),
+              ...(filter.state ? { state: filter.state } : {}),
+            },
+            signal: requestSignal(signal),
           }),
         )
-      ).data.items,
+      ).data,
+    signal,
   );
+}
+
+export async function archiveConversation(
+  conversation: AssistantConversation,
+): Promise<AssistantConversation> {
+  const result = (
+    await mutate(
+      (headers) =>
+        archiveAssistantConversation({
+          path: { conversationRef: conversation.ref },
+          headers: {
+            "If-Match": headers["If-Match"] ?? "",
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      conversation.version,
+    )
+  ).data;
+  if (
+    result.ref !== conversation.ref ||
+    result.projectRef !== conversation.projectRef ||
+    result.state !== "ARCHIVED" ||
+    result.version <= conversation.version
+  )
+    throw new Error("Assistant archive receipt mismatch");
+  return result;
 }
 
 export async function createConversation(
@@ -107,15 +151,20 @@ export async function appendTurn(
   ).data;
 }
 
-async function readWithRetry<T>(request: () => Promise<T>): Promise<T> {
+async function readWithRetry<T>(
+  request: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   let lastProblem = asProblem(new Error("Assistant read did not start"));
   for (const delayMs of readRetryDelaysMs) {
+    signal?.throwIfAborted();
     if (delayMs > 0) {
       await new Promise<void>((resolve) =>
         globalThis.setTimeout(resolve, delayMs),
       );
     }
     try {
+      signal?.throwIfAborted();
       return await request();
     } catch (error) {
       lastProblem = asProblem(error);

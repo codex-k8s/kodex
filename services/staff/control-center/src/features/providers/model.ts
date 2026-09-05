@@ -19,7 +19,10 @@ export type ProviderAccount = ApiProviderAccount;
 export type ProviderAccountState = ProviderAccount["state"];
 export type ProviderAccountPage = ApiProviderAccountPage;
 export type ProviderAccountCreateInput = ApiProviderAccountCreateInput;
-export type ProviderAccountCandidate = ApiProviderAccountCandidate;
+export type ProviderAccountCandidate = Pick<
+  ApiProviderAccountCandidate,
+  "accountRef" | "weight"
+>;
 export type ProviderAccountAction = NextAction;
 export type ProviderPolicyMode = "FIXED" | "LEAST_USED" | "WEIGHTED";
 
@@ -55,14 +58,16 @@ export function isPendingDeviceAuthorization(
   const expiresAt = authorization.expiresAt
     ? Date.parse(authorization.expiresAt)
     : Number.NaN;
-  return !Number.isFinite(expiresAt) || expiresAt > now;
+  return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
 export function safeVerificationUri(value: string | undefined): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    return url.protocol === "https:" && !url.username && !url.password
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }

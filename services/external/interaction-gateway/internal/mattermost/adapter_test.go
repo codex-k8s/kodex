@@ -2,6 +2,7 @@ package mattermost
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -45,15 +46,15 @@ func TestParseDecisionUsesBoundedCommands(t *testing.T) {
 func TestPostedMessageDropsForeignChannelAndBot(t *testing.T) {
 	t.Parallel()
 	event := model.NewWebSocketEvent(model.WebsocketEventPosted, "team", "channel", "user", nil, "").SetData(map[string]any{
-		"post": `{"id":"post","channel_id":"channel","user_id":"user","message":"work"}`,
+		"post": fmt.Sprintf(`{"id":%q,"channel_id":"channel","user_id":%q,"message":"work"}`, testPostID, testUserID),
 	})
-	if post, ok := postedMessage(event, "channel", "bot"); !ok || post.Id != "post" {
+	if post, ok := postedMessage(event, "channel", "bot"); !ok || post.Id != testPostID {
 		t.Fatalf("postedMessage() = %#v, %v", post, ok)
 	}
 	if _, ok := postedMessage(event, "foreign", "bot"); ok {
 		t.Fatal("postedMessage() accepted a foreign channel")
 	}
-	if _, ok := postedMessage(event, "channel", "user"); ok {
+	if _, ok := postedMessage(event, "channel", testUserID); ok {
 		t.Fatal("postedMessage() accepted a bot post")
 	}
 }

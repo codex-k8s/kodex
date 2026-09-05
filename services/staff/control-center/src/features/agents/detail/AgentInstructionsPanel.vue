@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -43,6 +43,8 @@ const props = defineProps<{
   busy: boolean;
   dirty: boolean;
   projectRef: string;
+  agentRef?: string;
+  runtimeRevisionRef?: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -64,7 +66,12 @@ let materializedController: AbortController | undefined;
 const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
-const loadVariables = createTemplateVariableLoader(props.projectRef);
+const loadVariables = computed(() =>
+  createTemplateVariableLoader(props.projectRef, {
+    agentRef: props.agentRef,
+    runtimeRevisionRef: props.runtimeRevisionRef,
+  }),
+);
 const materializedContent = computed(
   () =>
     materializedPreview.value?.fullMaterializedPrompt ??
@@ -72,10 +79,13 @@ const materializedContent = computed(
     "",
 );
 const materializedStale = computed(
-  () => materializedTemplate.value !== props.modelValue,
+  () =>
+    !materializedPreview.value ||
+    materializedTemplate.value !== props.modelValue,
 );
 
 function insertVariable(item: TemplateVariablePickerItem): void {
+  if (!props.canEdit || props.busy || item.disabled) return;
   editor.value?.insertAtCursor(templateVariableInsertion(item.variable));
 }
 
@@ -89,15 +99,19 @@ async function refreshMaterializedPreview(): Promise<void> {
   if (!props.modelValue.trim() || materializedBusy.value) return;
   materializedController?.abort();
   const controller = new AbortController();
+  const template = props.modelValue;
   materializedController = controller;
   materializedBusy.value = true;
   materializedProblem.value = undefined;
   try {
-    materializedPreview.value = await loadMaterializedTemplatePreview(
-      props.modelValue,
+    const preview = await loadMaterializedTemplatePreview(
+      template,
       controller.signal,
     );
-    materializedTemplate.value = props.modelValue;
+    if (controller.signal.aborted || materializedController !== controller)
+      return;
+    materializedPreview.value = preview;
+    materializedTemplate.value = template;
   } catch (error) {
     if (!controller.signal.aborted)
       materializedProblem.value = asProblem(error);
@@ -113,23 +127,46 @@ const completeVariables: CodeEditorCompletionProvider = async (
   query,
   signal,
 ): Promise<CodeEditorCompletionItem[]> => {
-  const page = await loadVariables({ cursor: undefined, query, signal });
-  return page.items.map((item) => ({
-    label: item.variable.name,
-    apply: templateVariableInsertion(item.variable),
-    detail: [
-      item.scope,
-      item.variable.valueType,
-      item.variable.description,
-      item.variable.example,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-    type: "variable",
-  }));
+  const loader = loadVariables.value;
+  const page = await loader({ cursor: undefined, query, signal });
+  if (signal.aborted || loader !== loadVariables.value) return [];
+  return page.items
+    .filter((item) => !item.disabled)
+    .map((item) => ({
+      label: item.variable.name,
+      apply: templateVariableInsertion(item.variable),
+      detail: [
+        item.scope,
+        item.variable.valueType,
+        item.variable.description,
+        item.variable.example,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      type: "variable",
+    }));
 };
 
-onBeforeUnmount(() => materializedController?.abort());
+function invalidatePreview(): void {
+  materializedController?.abort();
+  materializedController = undefined;
+  materializedBusy.value = false;
+  materializedPreview.value = undefined;
+  materializedProblem.value = undefined;
+}
+watch(
+  () => [
+    props.modelValue,
+    props.projectRef,
+    props.agentRef,
+    props.runtimeRevisionRef,
+  ],
+  invalidatePreview,
+  {
+    flush: "sync",
+  },
+);
+onBeforeUnmount(invalidatePreview);
 </script>
 
 <template>
@@ -184,7 +221,7 @@ onBeforeUnmount(() => materializedController?.abort());
           language="markdown"
           :label="$t('agents.instructions')"
           :description="copy.instructions.markdown"
-          :readonly="!canEdit"
+          :readonly="!canEdit || busy"
           :validation-messages="validationMessages"
           :min-lines="18"
           :completion-provider="completeVariables"
@@ -306,6 +343,8 @@ onBeforeUnmount(() => materializedController?.abort());
         </div>
         <p>{{ copy.instructions.variablesHelp }}</p>
         <TemplateVariableCatalog
+          :agent-ref="agentRef"
+          :runtime-revision-ref="runtimeRevisionRef"
           :project-ref="projectRef"
           :disabled="!canEdit || busy || mode !== 'edit'"
           @select="insertVariable"
@@ -340,6 +379,8 @@ onBeforeUnmount(() => materializedController?.abort());
 <style scoped>
 .instructions-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 .instructions-panel__head,
@@ -364,14 +405,14 @@ onBeforeUnmount(() => materializedController?.abort());
   display: inline-flex;
   width: max-content;
   max-width: 100%;
-  overflow: hidden;
+  flex-wrap: wrap;
   border: 1px solid var(--border);
   border-radius: 7px;
 }
 .instructions-panel__mode {
   display: inline-flex;
   min-height: 32px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
@@ -380,7 +421,8 @@ onBeforeUnmount(() => materializedController?.abort());
   color: var(--muted);
   background: var(--surface);
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .instructions-panel__mode:last-child {
   border-right: 0;
@@ -407,6 +449,7 @@ onBeforeUnmount(() => materializedController?.abort());
 }
 .instructions-panel__preview-bar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 36px;
   align-items: center;
   gap: 6px;
@@ -557,7 +600,7 @@ onBeforeUnmount(() => materializedController?.abort());
 }
 @media (max-width: 960px) {
   .instructions-panel__workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

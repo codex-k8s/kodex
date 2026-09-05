@@ -4,7 +4,7 @@ title: Локальная проверка активации STT
 type: verification
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-05
 ---
 
@@ -15,6 +15,19 @@ updated: 2026-09-05
 browser-проверка их объединённого результата не является локальным STT тестом.
 
 ## Критерий → свидетельство
+
+Продолжение MVP-UI-56 от main `8026633a9`: `GetModelCatalog` имеет отдельный
+admin authority и доступен до первой configuration/credential. Новые
+`TestCatalogPrincipalUsesIndependentOrganizationPermission`,
+`TestCatalogPrincipalRejectsAuthoritySubstitution`,
+`TestGetModelCatalogBeforeConfigurationHasNoRemoteEffect`,
+`TestGetModelCatalogRejectsAuthorityExpiryAndCancellation` и сценарий
+`TestProtectedFakeIntegration/catalog_before_configuration` проверяют
+domain и настоящий mTLS/generated unary path с fake verifier. Проверяются
+speech-only/отозванное право, неверные binding/provenance, неизвестный payload,
+cancel и отсутствие policy/credential/provider effects. Общий максимум
+provider timeout покрыт `TestPolicyProviderTimeoutUsesAdapterLimit`.
+Live CP issuer/verifier, browser и OpenAI по-прежнему требуют общей приёмки.
 
 Дополнение1029: checkpoint `fd93e6f4ebd254be41fcb4cc9e7a4775a20f932b`
 интегрирован с сохранением consumer NetworkPolicy8081. STT expectations сверяются

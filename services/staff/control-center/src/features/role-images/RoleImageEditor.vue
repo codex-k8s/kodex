@@ -3,7 +3,7 @@ import {
   Archive,
   Box,
   Hammer,
-  History,
+  Maximize2,
   Link2,
   PackageCheck,
   RotateCcw,
@@ -28,6 +28,8 @@ import { useRoleImagesStore } from "@/features/role-images/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import CodeDiff from "@/shared/ui/CodeDiff.vue";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
 
 const props = defineProps<{
   projectRef: string;
@@ -40,6 +42,16 @@ const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
 const dockerfile = ref("");
+const diffOpen = ref(false);
+const buildsExpanded = ref(false);
+const revisionsExpanded = ref(false);
+const openedBuildSources = ref(new Set<string>());
+function toggleBuildSource(ref: string, event: Event): void {
+  const details = event.currentTarget;
+  if (!(details instanceof HTMLDetailsElement)) return;
+  if (details.open) openedBuildSources.value.add(ref);
+  else openedBuildSources.value.delete(ref);
+}
 const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
 const recipe = computed(() =>
   props.recipeRef ? store.recipes[props.recipeRef] : undefined,
@@ -79,6 +91,14 @@ const dockerfileMessages = computed(() =>
 const selectedEnvironment = computed(() =>
   store.environments.find((item) => item.key === environmentKey.value),
 );
+const hasLocalChanges = computed(() =>
+  Boolean(
+    recipe.value &&
+    (name.value !== recipe.value.name ||
+      environmentKey.value !== recipe.value.environment.environmentKey ||
+      dockerfile.value !== recipe.value.environment.dockerfile),
+  ),
+);
 const canSave = computed(
   () =>
     name.value.trim().length > 0 &&
@@ -101,6 +121,8 @@ const environmentLabel = computed(() => {
 });
 let buildPollTimer: ReturnType<typeof setTimeout> | undefined;
 let lifecyclePollAttempts = 0;
+let disposed = false;
+let loadGeneration = 0;
 
 function stopBuildPolling(): void {
   if (buildPollTimer) clearTimeout(buildPollTimer);
@@ -110,6 +132,7 @@ function stopBuildPolling(): void {
 function scheduleBuildPolling(): void {
   stopBuildPolling();
   if (
+    disposed ||
     !props.recipeRef ||
     (!buildActive.value && !promotionPending.value) ||
     lifecyclePollAttempts >= 150
@@ -119,10 +142,11 @@ function scheduleBuildPolling(): void {
 }
 
 async function refreshBuild(): Promise<void> {
-  if (!props.recipeRef) return;
+  if (disposed || !props.recipeRef) return;
+  const current = loadGeneration;
   lifecyclePollAttempts += 1;
   await store.loadDetail(props.projectRef, props.recipeRef, false);
-  scheduleBuildPolling();
+  if (current === loadGeneration) scheduleBuildPolling();
 }
 
 function sync(): void {
@@ -134,6 +158,7 @@ function sync(): void {
 }
 
 async function load(): Promise<void> {
+  const current = ++loadGeneration;
   lifecyclePollAttempts = 0;
   const tasks: Promise<void>[] = [
     store.loadSupportingCatalogs(props.projectRef),
@@ -141,6 +166,7 @@ async function load(): Promise<void> {
   if (props.recipeRef)
     tasks.push(store.loadDetail(props.projectRef, props.recipeRef));
   await Promise.all(tasks);
+  if (disposed || current !== loadGeneration) return;
   if (!props.recipeRef && !environmentKey.value) {
     const recommended = store.environments.find(
       (environment) => environment.available && environment.recommended,
@@ -199,7 +225,7 @@ async function save(): Promise<void> {
 async function runCommand(
   action: "REQUEST_BUILD" | "ARCHIVE" | "RESTORE",
 ): Promise<void> {
-  if (!recipe.value) return;
+  if (!recipe.value || store.mutating || hasLocalChanges.value) return;
   try {
     await store.command(props.projectRef, recipe.value, action);
     lifecyclePollAttempts = 0;
@@ -217,7 +243,13 @@ async function confirmLifecycle(): Promise<void> {
 }
 
 async function promote(): Promise<void> {
-  if (!recipe.value || !artifact.value) return;
+  if (
+    !recipe.value ||
+    !artifact.value ||
+    store.mutating ||
+    hasLocalChanges.value
+  )
+    return;
   if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
   try {
     await store.promote(props.projectRef, recipe.value, artifact.value);
@@ -238,6 +270,8 @@ watch(
 );
 onMounted(() => void load());
 onBeforeUnmount(() => {
+  disposed = true;
+  loadGeneration += 1;
   stopBuildPolling();
   store.dispose();
 });
@@ -278,7 +312,7 @@ onBeforeUnmount(() => {
             v-if="canRequestBuild(recipe)"
             class="button button--primary"
             type="button"
-            :disabled="store.mutating"
+            :disabled="store.mutating || hasLocalChanges"
             @click="runCommand('REQUEST_BUILD')"
           >
             <Hammer :size="16" aria-hidden="true" />
@@ -288,7 +322,7 @@ onBeforeUnmount(() => {
             v-if="recipe.nextActions.includes('ARCHIVE')"
             class="button"
             type="button"
-            :disabled="store.mutating"
+            :disabled="store.mutating || hasLocalChanges"
             @click="confirmationAction = 'ARCHIVE'"
           >
             <Archive :size="16" aria-hidden="true" />
@@ -298,7 +332,7 @@ onBeforeUnmount(() => {
             v-if="recipe.nextActions.includes('RESTORE')"
             class="button"
             type="button"
-            :disabled="store.mutating"
+            :disabled="store.mutating || hasLocalChanges"
             @click="confirmationAction = 'RESTORE'"
           >
             <RotateCcw :size="16" aria-hidden="true" />
@@ -308,7 +342,7 @@ onBeforeUnmount(() => {
             v-if="canPromoteRoleImage(recipe, artifact)"
             class="button button--primary"
             type="button"
-            :disabled="store.mutating"
+            :disabled="store.mutating || hasLocalChanges"
             @click="promote"
           >
             <PackageCheck :size="16" aria-hidden="true" />
@@ -448,6 +482,25 @@ onBeforeUnmount(() => {
               v-model="dockerfile"
               :label="t('roleImages.dockerfile')"
               :validation-messages="dockerfileMessages"
+              :readonly="
+                store.mutating ||
+                (!!recipe && !recipe.nextActions.includes('UPDATE'))
+              "
+            />
+            <button
+              v-if="recipe && dockerfile !== recipe.environment.dockerfile"
+              type="button"
+              class="button"
+              :aria-expanded="diffOpen"
+              @click="diffOpen = !diffOpen"
+            >
+              {{ t("managed.diff") }}
+            </button>
+            <CodeDiff
+              v-if="diffOpen && recipe"
+              :original="recipe.environment.dockerfile"
+              :modified="dockerfile"
+              :label="t('managed.diff')"
             />
             <div class="save-boundary">
               <p>
@@ -470,106 +523,159 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section v-if="recipe" class="panel build-history">
+          <component
+            v-if="recipe"
+            :is="buildsExpanded ? ModalDialog : 'section'"
+            class="build-history"
+            :class="{ 'build-history--expanded': buildsExpanded }"
+            :title="buildsExpanded ? t('roleImages.buildHistory') : undefined"
+            size="full"
+            @close="buildsExpanded = false"
+          >
             <header class="section-header">
               <div>
                 <h2>{{ t("roleImages.buildHistory") }}</h2>
                 <p>{{ t("roleImages.buildHistoryHelp") }}</p>
               </div>
-              <History :size="20" aria-hidden="true" />
+              <button
+                v-if="!buildsExpanded"
+                class="icon-button"
+                type="button"
+                :title="t('catalog.expand')"
+                :aria-label="t('catalog.expand')"
+                @click="buildsExpanded = true"
+              >
+                <Maximize2 :size="20" />
+              </button>
             </header>
-            <div v-if="!builds.length" class="empty-section">
-              {{ t("roleImages.noBuilds") }}
+            <div class="build-history__scroll">
+              <div v-if="!builds.length" class="empty-section">
+                {{ t("roleImages.noBuilds") }}
+              </div>
+              <article
+                v-for="build in builds"
+                v-else
+                :key="build.ref"
+                class="build-row"
+              >
+                <div>
+                  <strong>
+                    {{ t("roleImages.attempt", { attempt: build.attempt }) }}
+                  </strong>
+                  <code>
+                    {{
+                      t("roleImages.generationLabel", {
+                        generation: buildRevisionIdentity(build).generation,
+                      })
+                    }}
+                  </code>
+                  <small>{{
+                    new Date(build.updatedAt).toLocaleString()
+                  }}</small>
+                </div>
+                <div class="build-progress">
+                  <span :style="{ width: `${build.progressPercent}%` }" />
+                </div>
+                <span>{{ build.progressPercent }}%</span>
+                <StatusBadge :state="build.stage" />
+                <p v-if="build.diagnosticSummary" class="build-diagnostic">
+                  {{ build.diagnosticSummary }}
+                  <code v-if="build.diagnosticCode">
+                    {{ build.diagnosticCode }}
+                  </code>
+                </p>
+                <details
+                  class="build-source"
+                  @toggle="toggleBuildSource(build.ref, $event)"
+                >
+                  <summary>
+                    {{ t("roleImages.dockerfile") }} ·
+                    {{
+                      t("roleImages.generationLabel", {
+                        generation: build.recipeGeneration,
+                      })
+                    }}
+                  </summary>
+                  <CodeEditor
+                    v-if="openedBuildSources.has(build.ref)"
+                    :model-value="build.dockerfile"
+                    :label="t('roleImages.dockerfile')"
+                    language="dockerfile"
+                    readonly
+                  />
+                </details>
+              </article>
             </div>
-            <article
-              v-for="build in builds"
-              v-else
-              :key="build.ref"
-              class="build-row"
-            >
-              <div>
-                <strong>
-                  {{ t("roleImages.attempt", { attempt: build.attempt }) }}
-                </strong>
-                <code>
-                  {{
-                    t("roleImages.generationLabel", {
-                      generation: buildRevisionIdentity(build).generation,
-                    })
-                  }}
-                </code>
-                <small>{{ new Date(build.updatedAt).toLocaleString() }}</small>
-              </div>
-              <div class="build-progress">
-                <span :style="{ width: `${build.progressPercent}%` }" />
-              </div>
-              <span>{{ build.progressPercent }}%</span>
-              <StatusBadge :state="build.stage" />
-              <p v-if="build.diagnosticSummary" class="build-diagnostic">
-                {{ build.diagnosticSummary }}
-                <code v-if="build.diagnosticCode">
-                  {{ build.diagnosticCode }}
-                </code>
-              </p>
-              <details class="build-source">
-                <summary>
-                  {{ t("roleImages.dockerfile") }} ·
-                  {{
-                    t("roleImages.generationLabel", {
-                      generation: build.recipeGeneration,
-                    })
-                  }}
-                </summary>
-                <pre><code>{{ build.dockerfile }}</code></pre>
-              </details>
-            </article>
-          </section>
+          </component>
 
-          <section v-if="recipe" class="panel build-history">
+          <component
+            v-if="recipe"
+            :is="revisionsExpanded ? ModalDialog : 'section'"
+            class="build-history"
+            :class="{ 'build-history--expanded': revisionsExpanded }"
+            :title="
+              revisionsExpanded ? t('runtime.revisionHistory') : undefined
+            "
+            size="full"
+            @close="revisionsExpanded = false"
+          >
             <header class="section-header">
               <div>
                 <h2>{{ t("runtime.revisionHistory") }}</h2>
                 <p>{{ t("roleImages.immutableRevisionHelp") }}</p>
               </div>
-              <History :size="20" aria-hidden="true" />
+              <button
+                v-if="!revisionsExpanded"
+                class="icon-button"
+                type="button"
+                :title="t('catalog.expand')"
+                :aria-label="t('catalog.expand')"
+                @click="revisionsExpanded = true"
+              >
+                <Maximize2 :size="20" />
+              </button>
             </header>
-            <div v-if="!revisions.length" class="empty-section">
-              {{ t("common.empty") }}
-            </div>
-            <article
-              v-for="revision in revisions"
-              v-else
-              :key="revision.ref"
-              class="revision-row"
-            >
-              <div>
-                <strong>rev {{ revision.revision }}</strong>
-                <span>
-                  {{
-                    t("roleImages.generationLabel", {
-                      generation: revision.recipeGeneration,
-                    })
-                  }}
-                </span>
+            <div class="build-history__scroll build-history__scroll--revisions">
+              <div v-if="!revisions.length" class="empty-section">
+                {{ t("common.empty") }}
               </div>
-              <code :title="revision.manifestDigest">{{
-                revision.manifestDigest
-              }}</code>
-              <StatusBadge
-                :state="revision.promotedReference ? 'PROMOTED' : 'COMPLETED'"
-              />
-              <small>{{ new Date(revision.createdAt).toLocaleString() }}</small>
-            </article>
-            <button
-              v-if="store.revisionNextPageToken[recipe.ref]"
-              class="button"
-              type="button"
-              :disabled="store.loadingDetail"
-              @click="store.loadMoreRevisions(projectRef, recipe.ref)"
-            >
-              {{ t("roleImages.loadMore") }}
-            </button>
-          </section>
+              <article
+                v-for="revision in revisions"
+                v-else
+                :key="revision.ref"
+                class="revision-row"
+              >
+                <div>
+                  <strong>rev {{ revision.revision }}</strong>
+                  <span>
+                    {{
+                      t("roleImages.generationLabel", {
+                        generation: revision.recipeGeneration,
+                      })
+                    }}
+                  </span>
+                </div>
+                <code :title="revision.manifestDigest">{{
+                  revision.manifestDigest
+                }}</code>
+                <StatusBadge
+                  :state="revision.promotedReference ? 'PROMOTED' : 'COMPLETED'"
+                />
+                <small>{{
+                  new Date(revision.createdAt).toLocaleString()
+                }}</small>
+              </article>
+              <button
+                v-if="store.revisionNextPageToken[recipe.ref]"
+                class="button"
+                type="button"
+                :disabled="store.loadingDetail"
+                @click="store.loadMoreRevisions(projectRef, recipe.ref)"
+              >
+                {{ t("roleImages.loadMore") }}
+              </button>
+            </div>
+          </component>
         </main>
 
         <aside class="editor-aside">
@@ -947,12 +1053,26 @@ onBeforeUnmount(() => {
   white-space: pre;
 }
 .revision-row {
+  min-height: 88px;
   display: grid;
   grid-template-columns: minmax(160px, 0.5fr) minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px 0;
   border-top: 1px solid var(--hairline);
+}
+.build-history__scroll {
+  max-height: 768px;
+  overflow: auto;
+}
+.build-history__scroll .build-row {
+  min-height: 128px;
+}
+.build-history__scroll--revisions {
+  max-height: 528px;
+}
+.build-history--expanded .build-history__scroll {
+  max-height: calc(100dvh - 210px);
 }
 .revision-row > div {
   display: grid;

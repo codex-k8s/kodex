@@ -1,0 +1,50 @@
+package platform
+
+import _ "embed"
+
+var (
+	//go:embed sql/secret_draft_publishing_active.sql
+	querySecretDraftPublishingActive string
+	//go:embed sql/secret_draft_creator_matches.sql
+	querySecretDraftCreatorMatches string
+	//go:embed sql/secret_draft_expire_operations.sql
+	querySecretDraftExpireOperations string
+	//go:embed sql/secret_draft_readiness.sql
+	querySecretDraftReadiness string
+	//go:embed sql/secret_draft_get.sql
+	querySecretDraftGet string
+	//go:embed sql/secret_draft_lock.sql
+	querySecretDraftLock string
+	//go:embed sql/secret_draft_insert.sql
+	querySecretDraftInsert string
+	//go:embed sql/secret_draft_update.sql
+	querySecretDraftUpdate string
+	//go:embed sql/secret_draft_operation_lookup.sql
+	querySecretDraftOperationLookup string
+	//go:embed sql/secret_draft_operation_lock.sql
+	querySecretDraftOperationLock string
+	//go:embed sql/secret_draft_operation_insert.sql
+	querySecretDraftOperationInsert string
+	//go:embed sql/secret_draft_operation_reissue.sql
+	querySecretDraftOperationReissue string
+	//go:embed sql/secret_draft_operation_consume.sql
+	querySecretDraftOperationConsume string
+	//go:embed sql/secret_draft_operation_finish.sql
+	querySecretDraftOperationFinish string
+	//go:embed sql/secret_draft_operation_active.sql
+	querySecretDraftOperationActive string
+	//go:embed sql/secret_draft_target_revision.sql
+	querySecretDraftTargetRevision string
+	//go:embed sql/secret_draft_audit.sql
+	querySecretDraftAudit string
+	//go:embed sql/secret_draft_recovery_list.sql
+	querySecretDraftRecoveryList string
+	//go:embed sql/secret_draft_cleanup_intent.sql
+	querySecretDraftCleanupIntent string
+	//go:embed sql/secret_draft_cleanup_complete.sql
+	querySecretDraftCleanupComplete string
+	//go:embed sql/secret_draft_owner_scope.sql
+	querySecretDraftOwnerScope string
+	//go:embed sql/secret_draft_clock.sql
+	querySecretDraftClock string
+)

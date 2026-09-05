@@ -38,7 +38,7 @@ type AuthorizationIssuerServiceClient interface {
 	// IssueContinuationAuthorizationContext выпускает child context только из
 	// уже принятого локальным verifier parent context. Actor/tenant/project и
 	// provenance наследуются; request не может их переопределить.
-	IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueAuthorizationContextResponse, error)
+	IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueContinuationAuthorizationContextResponse, error)
 	// CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
 	// signing/policy snapshot, которые использует рабочий выпуск.
 	CheckReadiness(ctx context.Context, in *AuthorizationIssuerServiceCheckReadinessRequest, opts ...grpc.CallOption) (*AuthorizationIssuerServiceCheckReadinessResponse, error)
@@ -62,9 +62,9 @@ func (c *authorizationIssuerServiceClient) IssueAuthorizationContext(ctx context
 	return out, nil
 }
 
-func (c *authorizationIssuerServiceClient) IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueAuthorizationContextResponse, error) {
+func (c *authorizationIssuerServiceClient) IssueContinuationAuthorizationContext(ctx context.Context, in *IssueContinuationAuthorizationContextRequest, opts ...grpc.CallOption) (*IssueContinuationAuthorizationContextResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(IssueAuthorizationContextResponse)
+	out := new(IssueContinuationAuthorizationContextResponse)
 	err := c.cc.Invoke(ctx, AuthorizationIssuerService_IssueContinuationAuthorizationContext_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ type AuthorizationIssuerServiceServer interface {
 	// IssueContinuationAuthorizationContext выпускает child context только из
 	// уже принятого локальным verifier parent context. Actor/tenant/project и
 	// provenance наследуются; request не может их переопределить.
-	IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error)
+	IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueContinuationAuthorizationContextResponse, error)
 	// CheckReadiness проверяет тот же UDS peer-binding и фактически загруженный
 	// signing/policy snapshot, которые использует рабочий выпуск.
 	CheckReadiness(context.Context, *AuthorizationIssuerServiceCheckReadinessRequest) (*AuthorizationIssuerServiceCheckReadinessResponse, error)
@@ -113,7 +113,7 @@ type UnimplementedAuthorizationIssuerServiceServer struct{}
 func (UnimplementedAuthorizationIssuerServiceServer) IssueAuthorizationContext(context.Context, *IssueAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IssueAuthorizationContext not implemented")
 }
-func (UnimplementedAuthorizationIssuerServiceServer) IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueAuthorizationContextResponse, error) {
+func (UnimplementedAuthorizationIssuerServiceServer) IssueContinuationAuthorizationContext(context.Context, *IssueContinuationAuthorizationContextRequest) (*IssueContinuationAuthorizationContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IssueContinuationAuthorizationContext not implemented")
 }
 func (UnimplementedAuthorizationIssuerServiceServer) CheckReadiness(context.Context, *AuthorizationIssuerServiceCheckReadinessRequest) (*AuthorizationIssuerServiceCheckReadinessResponse, error) {

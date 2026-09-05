@@ -10,6 +10,39 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: "/context/:kind/:resourceRef",
+      name: "context-resource",
+      component: lazyPage(() => import("@/pages/ContextResourcePage.vue")),
+    },
+    {
+      path: "/projects/:projectRef/context/:kind/:resourceRef",
+      name: "project-context-resource",
+      component: lazyPage(() => import("@/pages/ContextResourcePage.vue")),
+    },
+    {
+      path: "/files",
+      name: "organization-files",
+      component: lazyPage(() => import("@/pages/VfsPage.vue")),
+    },
+    ...(
+      ["agents", "workflows", "automations", "environments", "secrets"] as const
+    ).map((kind) => ({
+      path: `/${kind}`,
+      name: `organization-${kind}`,
+      component: lazyPage(() => import("@/pages/OrganizationCatalogPage.vue")),
+      props: { kind },
+    })),
+    {
+      path: "/configurations/:kind",
+      name: "configuration-catalog",
+      component: lazyPage(() => import("@/pages/ConfigurationCatalogPage.vue")),
+    },
+    {
+      path: "/configurations/:kind/:configurationRef",
+      name: "configuration",
+      component: lazyPage(() => import("@/pages/ConfigurationPage.vue")),
+    },
+    {
       path: "/",
       name: "home",
       component: lazyPage(() => import("@/pages/HomePage.vue")),

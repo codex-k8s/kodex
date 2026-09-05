@@ -291,6 +291,12 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err := ValidateRuntimeProfile(request.Input); err != nil {
 		return writeProviderBrokerFailure(connection, err)
 	}
+	snapshot, err := request.Input.RequiredContextSnapshot(time.Now())
+	if err != nil || verifyProviderContext(request.Input, snapshot) != nil {
+		return writeProviderBrokerFailure(connection, ErrRuntimeProfile)
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
 		return writeProviderBrokerFailure(connection, err)

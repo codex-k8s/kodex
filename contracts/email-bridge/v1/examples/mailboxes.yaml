@@ -1,0 +1,81 @@
+version: email-bridge/v1
+revision: 1
+managed_by: git
+source: fixtures/email-bridge/read-allow-send-gate
+mailboxes:
+  - id: example-mailbox
+    tenant_id: fixture-tenant
+    connection_id: fixture-connection
+    credential_generation: 1
+    revision: 1
+    enabled: true
+    receive_protocol: imap
+    allowed_folders: [INBOX, Archive, Drafts]
+    archive_folder: Archive
+    drafts_folder: Drafts
+    reply_to: sender@example.test
+    folder: INBOX
+    sender: sender@example.test
+    recipients:
+      - recipient@example.test
+      - copy@example.test
+    envelope_from: sender@example.test
+    hello_name: email-bridge.example.test
+    smtp:
+      host: mail.example.test
+      port: 587
+      tls_mode: starttls
+      server_name: mail.example.test
+      ca: {name: ca, generation: 1}
+      username: {name: user, generation: 1}
+      auth_method: password
+      secret: {name: password, generation: 1}
+    imap:
+      host: mail.example.test
+      port: 993
+      tls_mode: implicit
+      server_name: mail.example.test
+      ca: {name: ca, generation: 1}
+      username: {name: user, generation: 1}
+      auth_method: password
+      secret: {name: password, generation: 1}
+    pop:
+      host: mail.example.test
+      port: 995
+      tls_mode: implicit
+      server_name: mail.example.test
+      ca: {name: ca, generation: 1}
+      username: {name: user, generation: 1}
+      auth_method: password
+      secret: {name: password, generation: 1}
+    limits:
+      timeout_seconds: 20
+      message_bytes: 1048576
+      attachment_bytes: 131072
+      max_attachments: 10
+      max_recipients: 20
+      page_size: 50
+      scan_messages: 1000
+    policies:
+      - {operation: health, policy: allow}
+      - {operation: mailboxes, policy: allow}
+      - {operation: list, policy: allow}
+      - {operation: search, policy: allow}
+      - {operation: fetch, policy: allow}
+      - {operation: download, policy: allow}
+      - {operation: mark, policy: deny}
+      - {operation: delete, policy: human_gate}
+      - {operation: send, policy: human_gate}
+      - {operation: reply, policy: human_gate}
+      - {operation: reply_all, policy: human_gate}
+      - {operation: forward, policy: human_gate}
+      - {operation: receipt, policy: allow}
+      - {operation: thread, policy: allow}
+      - {operation: attachments, policy: allow}
+      - {operation: mark_read, policy: human_gate}
+      - {operation: mark_unread, policy: human_gate}
+      - {operation: move, policy: human_gate}
+      - {operation: archive, policy: human_gate}
+      - {operation: draft_create, policy: human_gate}
+      - {operation: draft_update, policy: human_gate}
+      - {operation: draft_delete, policy: human_gate}

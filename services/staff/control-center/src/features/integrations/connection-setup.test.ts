@@ -25,6 +25,9 @@ function definition(credentialSecretKey?: string): IntegrationDefinition {
     origin: "SHIPPED",
     digest: "sha256:definition",
     adapter: "GITHUB",
+    adapterOwner: "integration-gateway",
+    executionRoute: "MANAGED_MCP",
+    adapterReadiness: "READY",
     ...(credentialSecretKey ? { credentialSecretKey } : {}),
   };
 }

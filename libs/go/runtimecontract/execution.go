@@ -13,10 +13,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
 	RunnerInputSchemaV6       = "kodex.agent-runner-input.v6"
+	RunnerInputSchemaV7       = "kodex.agent-runner-input.v7"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -173,6 +175,7 @@ type RunnerInput struct {
 	AttachmentContext                 string                    `json:"attachment_context,omitempty"`
 	AttachmentSets                    []RunnerAttachmentSet     `json:"attachment_sets,omitempty"`
 	InputArtifacts                    []RunnerInputArtifact     `json:"input_artifacts,omitempty"`
+	ContextSnapshot                   *RuntimeContextSnapshot   `json:"context_snapshot,omitempty"`
 	Capabilities                      []string                  `json:"capabilities,omitempty"`
 	Provider                          string                    `json:"provider"`
 	Model                             string                    `json:"model"`
@@ -190,6 +193,8 @@ type RunnerInput struct {
 	ConfigOverlayVersion              int64                     `json:"config_overlay_version"`
 	ConfigOverlayDigest               string                    `json:"config_overlay_digest"`
 	ConfigOverlay                     string                    `json:"config_overlay"`
+	EffectiveReasoningEffort          string                    `json:"effective_reasoning_effort"`
+	ReasoningMode                     string                    `json:"reasoning_mode"`
 	RuntimeEnvironmentRef             string                    `json:"runtime_environment_ref"`
 	RuntimeEnvironmentVersion         int64                     `json:"runtime_environment_version"`
 	RuntimeEnvironmentDigest          string                    `json:"runtime_environment_digest"`
@@ -238,7 +243,10 @@ func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 }
 
 func (input RunnerInput) Validate() error {
-	if input.Schema != RunnerInputSchemaV6 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
+		return ErrRuntimeContext
+	}
+	if input.Schema != RunnerInputSchemaV7 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 || !opaqueReferencePattern.MatchString(input.OrganizationRef) ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -280,6 +288,9 @@ func (input RunnerInput) Validate() error {
 		return errors.New("runner STT configuration binding is invalid")
 	}
 	canonicalOverlay, overlayDigest, err := CanonicalConfigOverlay(input.ConfigOverlay)
+	if ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
+		return errors.New("runner effective reasoning effort is invalid")
+	}
 	if err != nil || canonicalOverlay != input.ConfigOverlay || overlayDigest != input.ConfigOverlayDigest {
 		return errors.New("runner config overlay binding is invalid")
 	}
@@ -528,6 +539,8 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ConfigOverlayVersion        int64
 		ConfigOverlayDigest         string
 		ConfigOverlay               string
+		EffectiveReasoningEffort    string
+		ReasoningMode               string
 		RuntimeEnvironmentRef       string
 		RuntimeEnvironmentVersion   int64
 		RuntimeEnvironmentDigest    string
@@ -538,6 +551,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		SecretProjections           []RuntimeSecretProjection
 		EnvironmentPolicy           RuntimeEnvironmentPolicy
 		WorkspacePolicy             RuntimeWorkspacePolicy
+		ContextSnapshot             *RuntimeContextSnapshot
 		KubernetesAccessProfile     RuntimeKubernetesAccessProfile
 	}{
 		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
@@ -561,10 +575,13 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		RuntimeConfigRef: input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
 		ProviderPolicyRef: input.ProviderPolicyRef, ProviderPolicyVersion: input.ProviderPolicyVersion, ProviderPolicyDigest: input.ProviderPolicyDigest,
 		ConfigOverlayRef: input.ConfigOverlayRef, ConfigOverlayVersion: input.ConfigOverlayVersion, ConfigOverlayDigest: input.ConfigOverlayDigest, ConfigOverlay: input.ConfigOverlay,
-		RuntimeEnvironmentRef: input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
+		EffectiveReasoningEffort: input.EffectiveReasoningEffort,
+		ReasoningMode:            input.ReasoningMode,
+		RuntimeEnvironmentRef:    input.RuntimeEnvironmentRef, RuntimeEnvironmentVersion: input.RuntimeEnvironmentVersion, RuntimeEnvironmentDigest: input.RuntimeEnvironmentDigest,
 		EnvironmentBindingRef: input.EnvironmentBindingRef, EnvironmentBindingVersion: input.EnvironmentBindingVersion, EnvironmentBindingDigest: input.EnvironmentBindingDigest,
 		EnvironmentValues: input.EnvironmentValues, SecretProjections: input.SecretProjections,
 		EnvironmentPolicy: input.EnvironmentPolicy, WorkspacePolicy: input.WorkspacePolicy,
+		ContextSnapshot:         input.ContextSnapshot,
 		KubernetesAccessProfile: input.EffectiveKubernetesAccess.Profile,
 	}
 	raw, err := json.Marshal(payload)

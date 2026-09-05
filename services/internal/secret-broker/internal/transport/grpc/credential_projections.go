@@ -31,6 +31,7 @@ const (
 	sttWorkloadID                = "stt-tts-service"
 	sttSPIFFEID                  = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
 	runtimeProjectionOperation   = "platform.runtime.credentials.materialize"
+	assistantProjectionOperation = "platform.runtime.credentials.system-assistant.materialize"
 	runtimeReadinessOperation    = "platform.runtime.credentials.readiness.check"
 	sttCredentialOperation       = "platform.stt.credential.project"
 	maximumAuthorityRevision     = uint64(1<<53 - 1)
@@ -44,6 +45,26 @@ func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
+	return server.materializeRuntimeCredentials(ctx, request, authority)
+}
+
+func (server *Server) MaterializeSystemAssistantCredentials(ctx context.Context, request *secretbrokerv1.MaterializeSystemAssistantCredentialsRequest) (*secretbrokerv1.MaterializeSystemAssistantCredentialsResponse, error) {
+	authority, _, err := verifiedProjectionAuthority(ctx, runtimeControllerWorkloadID, runtimeControllerSPIFFEID,
+		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName, assistantProjectionOperation)
+	if err != nil {
+		return nil, err
+	}
+	if request.GetExecution() == nil {
+		return nil, status.Error(codes.InvalidArgument, "assistant execution is required")
+	}
+	response, err := server.materializeRuntimeCredentials(ctx, request.GetExecution(), authority)
+	if err != nil {
+		return nil, err
+	}
+	return &secretbrokerv1.MaterializeSystemAssistantCredentialsResponse{Projection: response.GetProjection()}, nil
+}
+
+func (server *Server) materializeRuntimeCredentials(ctx context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest, authority *controlplanev1.CredentialProjectionAuthority) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
 	resolved, err := server.owner.ResolveRuntimeCredentialProjection(ctx, &controlplanev1.ResolveRuntimeCredentialProjectionRequest{
 		Authority: authority, WorkloadInstance: request.GetWorkloadInstance(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
 		Generation: request.GetGeneration(), RuntimeRevisionRef: request.GetRuntimeRevisionRef(),
@@ -144,7 +165,7 @@ func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, 
 		verified.GetSourceRevision() > maximumAuthorityRevision || !validProjectionSHA256(verified.GetSourceDigestSha256()) ||
 		verified.GetCallerCredentialRevision() == 0 || verified.GetCallerCredentialRevision() > maximumAuthorityRevision ||
 		uuid.Validate(verified.GetJti()) != nil || !validProjectionIdentity(verified.GetAuthority().GetActor()) ||
-		!validProjectionIdentity(verified.GetAuthority().GetTenant()) || !validProjectionIdentity(verified.GetAuthority().GetProject()) {
+		!validProjectionIdentity(verified.GetAuthority().GetTenant()) || !validProjectionProject(fullMethod, verified.GetAuthority().GetProject()) {
 		return nil, nil, status.Error(codes.PermissionDenied, "verified credential projection authority is invalid")
 	}
 	return &controlplanev1.CredentialProjectionAuthority{
@@ -153,6 +174,19 @@ func verifiedProjectionAuthority(ctx context.Context, callerID, callerSPIFFEID, 
 		SourceDigestSha256: verified.GetSourceDigestSha256(), ProofJti: verified.GetJti(), CallerWorkloadId: callerID,
 		CallerFullMethod: fullMethod, CallerCredentialRevision: verified.GetCallerCredentialRevision(), ExpiresAt: verified.GetExpiresAt(),
 	}, verified, nil
+}
+
+func validProjectionProject(method string, project *internalrpcauthorityv1.AuthorityIdentity) bool {
+	if method == controlplanev1.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName {
+		return project == nil
+	}
+	if method == secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName {
+		return project == nil
+	}
+	if method == sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName && project == nil {
+		return true
+	}
+	return validProjectionIdentity(project)
 }
 
 func validProjectionIdentity(identity *internalrpcauthorityv1.AuthorityIdentity) bool {
@@ -177,7 +211,7 @@ func sameDelegatedAuthorityLocator(locator *sttv1.DelegatedAuthorityLocator, ver
 		locator.GetSourceDigestSha256() == verified.GetSourceDigestSha256() &&
 		sameProjectionProvenance(locator.GetActor(), authority.GetActor().GetProvenance()) &&
 		sameProjectionProvenance(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
-		sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance()) &&
+		((authority.GetProject() == nil && locator.GetProject() == nil) || sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance())) &&
 		locator.GetExpiresAt().AsTime().Equal(verified.GetExpiresAt().AsTime())
 }
 

@@ -22,13 +22,15 @@ done
   env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 ./...
 )
 
-schema="$repository_root/contracts/runtime-controller/v6/agent-runner-input.schema.json"
+schema="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
 jq -e '
   .additionalProperties == false and
-  .properties.schema.const == "kodex.agent-runner-input.v6" and
+  .properties.schema.const == "kodex.agent-runner-input.v7" and
   (["runtime_revision_ref", "runtime_revision_version", "runtime_revision_digest",
     "instruction_ref", "instruction_digest", "prompt_template_ref",
-    "prompt_template_digest", "prompt_materialization_digest", "workspace_policy"] - .required | length == 0) and
+    "prompt_template_digest", "prompt_materialization_digest", "workspace_policy",
+    "effective_reasoning_effort", "reasoning_mode"] - .required | length == 0) and
+  (.properties.reasoning_mode.enum == ["SUPPORTED", "UNSUPPORTED"]) and
   (.properties.execution_binding_digest."$ref" == "#/$defs/sha256") and
   (.properties.mcp_binding_digest."$ref" == "#/$defs/sha256") and
   (."$defs".sha256.pattern == "^[a-f0-9]{64}$")

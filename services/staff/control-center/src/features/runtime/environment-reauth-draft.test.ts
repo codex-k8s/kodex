@@ -25,7 +25,7 @@ function environmentInput(): RuntimeEnvironmentInput {
       },
     ],
     values: [],
-    secretBindings: [],
+    secretBindings: [{ name: "TOKEN", secretRef: "secret_one", revision: 7 }],
     policy: defaultRuntimeEnvironmentPolicy(),
   };
 }

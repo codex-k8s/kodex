@@ -133,9 +133,12 @@ KODEX_TEST_CREDENTIAL='must-not-be-persisted' \
   "$fixture_root/tools/dev/full-local-e2e.sh" \
     --kubeconfig "$kubeconfig" --context fixture-local \
     --state-directory "$state_directory" --resource-prefix contract-full \
+    --profile web-with-mattermost \
     --run-timeout-ms 60000 --target test-extra >/dev/null
 grep -Fq 'dev up ' "$command_log" || fail 'full run did not delegate deployment to dev.sh up'
 grep -Fq 'dev e2e ' "$command_log" || fail 'full run did not delegate browser E2E to dev.sh e2e'
+[[ $(grep '^dev \(up\|e2e\) ' "$command_log" | grep -c -- '--profile web-with-mattermost') == 2 ]] ||
+  fail 'full run did not pass the selected profile to both deployment and browser E2E'
 grep -Fq 'hot-reload --kubeconfig ' "$command_log" ||
   fail 'full run did not verify Go and Vue hot reload'
 grep -Fq 'storage-e2e integration-deployed-e2e.sh ' "$command_log" ||
@@ -236,6 +239,12 @@ if "$fixture_root/tools/dev/full-local-e2e.sh" --check \
   --state-directory "$state_directory" --resource-prefix contract-batch \
   --batch browser --batch browser >/dev/null 2>&1; then
   fail 'duplicated E2E batch was accepted'
+fi
+
+if "$fixture_root/tools/dev/full-local-e2e.sh" --check --profile unknown \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" >/dev/null 2>&1; then
+  fail 'unknown deployment profile was accepted'
 fi
 
 printf 'Kodex full local E2E entrypoint tests passed\n'

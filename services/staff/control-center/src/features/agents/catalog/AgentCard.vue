@@ -37,7 +37,10 @@ const { t } = useI18n();
       </span>
     </div>
 
-    <div class="agent-card__activity">
+    <div
+      v-if="item.currentActivity && item.state !== 'READY'"
+      class="agent-card__activity"
+    >
       <Activity :size="15" aria-hidden="true" />
       <div>
         <span>{{ t("agents.currentActivity") }}</span>
