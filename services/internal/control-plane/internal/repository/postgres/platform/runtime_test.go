@@ -2,6 +2,7 @@ package platform
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -79,11 +80,17 @@ func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 		policy.MaximumFileCount != 10_000 || len(policy.Digest) != 64 {
 		t.Fatalf("workspace policy = %#v", policy)
 	}
-	if len(policy.Rules) != 4 || policy.Rules[0].Path != "/workspace/input" ||
-		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[3].Path != "/workspace" ||
-		policy.Rules[3].Access != "WRITABLE" || policy.Rules[2].Path != "/workspace/.kodex/state/codex-home/auth.json" ||
-		policy.Rules[2].Access != "READ_ONLY" {
-		t.Fatalf("workspace path matrix = %#v", policy.Rules)
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
+	if policy.Digest != shared.Digest || len(policy.Rules) != len(shared.Rules) {
+		t.Fatal("producer workspace policy differs from shared runtime contract")
+	}
+	restored := runtimecontract.RuntimeWorkspacePolicy{Revision: policy.Revision, Root: policy.Root, Digest: policy.Digest,
+		MaximumWritableBytes: policy.MaximumWritableBytes, MaximumFileCount: policy.MaximumFileCount, DenialReasons: policy.DenialReasons}
+	for _, rule := range policy.Rules {
+		restored.Rules = append(restored.Rules, runtimecontract.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
+	if !reflect.DeepEqual(restored, shared) || restored.Validate() != nil {
+		t.Fatal("producer projection changed shared rule order or digest")
 	}
 	if strings.Join(policy.DenialReasons, ",") != "READ_ONLY,QUOTA_EXCEEDED,PATH_OUTSIDE_WORKSPACE,RUNTIME_IO_ERROR" {
 		t.Fatalf("workspace denial reasons = %#v", policy.DenialReasons)

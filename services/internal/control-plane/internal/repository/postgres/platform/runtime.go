@@ -945,19 +945,16 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
 	policy := entity.RuntimeWorkspacePolicy{
-		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
-		Rules: []entity.RuntimeWorkspacePathRule{
-			{Path: "/workspace/input", Access: "READ_ONLY"},
-			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
-			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
-			{Path: "/workspace", Access: "WRITABLE"},
-		},
-		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
+		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
+		Rules:         make([]entity.RuntimeWorkspacePathRule, 0, len(shared.Rules)),
+		DenialReasons: append([]string(nil), shared.DenialReasons...),
 	}
-	raw, _ := json.Marshal(policy)
-	digest := sha256.Sum256(raw)
-	policy.Digest = hex.EncodeToString(digest[:])
+	for _, rule := range shared.Rules {
+		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
 	return policy
 }
 
