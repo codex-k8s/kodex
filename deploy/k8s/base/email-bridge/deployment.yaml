@@ -109,11 +109,6 @@
                 "readOnly": true
               },
               {
-                "name": "configuration",
-                "mountPath": "/var/run/email/config",
-                "readOnly": true
-              },
-              {
                 "name": "tls",
                 "mountPath": "/var/run/email/tls",
                 "readOnly": true
@@ -137,13 +132,6 @@
             "emptyDir": {"medium": "Memory", "sizeLimit": "1Mi"}
           },
           {
-            "name": "configuration",
-            "configMap": {
-              "name": "email-bridge-configuration",
-              "defaultMode": 292
-            }
-          },
-          {
             "name": "tls",
             "secret": {
               "secretName": "email-bridge-tls",
@@ -161,22 +149,7 @@
             "name": "mail",
             "secret": {
               "secretName": "email-bridge-mailbox-projection",
-              "optional": true,
-              "defaultMode": 288,
-              "items": [
-                {
-                  "key": "ca-1",
-                  "path": "ca/1"
-                },
-                {
-                  "key": "username-1",
-                  "path": "user/1"
-                },
-                {
-                  "key": "password-1",
-                  "path": "password/1"
-                }
-              ]
+              "defaultMode": 288
             }
           }
         ]

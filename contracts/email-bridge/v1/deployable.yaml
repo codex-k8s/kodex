@@ -33,7 +33,7 @@ readiness:
 egress:
   owner: egress-gateway
   issue: 1029
-  endpoint: egress-gateway.kodex-system.svc:8080
+  endpoint: egress-gateway.kodex-system.svc:8082
   direct_dial: forbidden
 state:
   owner: email-bridge

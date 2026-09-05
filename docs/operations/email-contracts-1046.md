@@ -155,9 +155,10 @@ CP принимает `CONTROL_PLANE_EMAIL_CONFIGURATION_FILE` до запуск
 Это тот же строгий документ `email-bridge/v1`, который получает bridge, до
 24 MiB, не отдельный пользовательский RPC. `DecodeConfiguration` использует
 общие schema и validator `libs/go/emailbridgeapi`. Документ не содержит secret
-values; в PostgreSQL попадает только mailbox authority projection, без endpoint,
-username/secret/CA descriptors. Digest полного исходного mailbox сохраняет
-commitment на эти descriptors, не раскрывая их в проекции.
+values. Отдельная mailbox authority projection не содержит endpoint или
+username/secret/CA descriptors. Миграция 00623 дополнительно сохраняет полный
+типизированный документ с descriptors в immutable внутренней таблице для
+publisher/restore; он не выдаётся публичным receipt/authorization view.
 
 Tenant/connection проверяются по существующему CP owner state: exact refs,
 `definition_key=email`, `public_configuration.mailbox_id/from_address`.
@@ -172,11 +173,43 @@ binding не понижается. Удалённая mailbox возвращае
 mailbox revision. Изменение/отключение connection также закрывает чтение.
 Событий нет: authority read идёт в PostgreSQL при каждом разрешении операции.
 
-Deployment-последовательность: создать owner connection, доставить один exact
-документ CP и bridge, перезапустить consumers, проверить protected path.
-Без файла CP не активирует mailbox authorization из оставшегося DB snapshot.
-Mount/delivery этого документа ещё требуется согласовать с root; startup import
-не заменяет delivery и не доказывает работу почтового сервера.
+CP deployment монтирует доверенный ConfigMap `email-bridge-configuration` и
+включает EMAIL worker trust file. Startup принимает документ и восстанавливает
+последнюю сохранённую revision, если в release остался точный пустой seed
+`revision=1, managed_by=git, source=release-bootstrap, mailboxes=[]`.
+Произвольный устаревший непустой документ не заменяет owner state.
+Без настроенного файла EMAIL projection worker выключен; активные профили
+явно задают этот файл. Принятый документ не доказывает доступность mail server.
+
+### Доставка Snapshot
+
+CP владеет заранее создаваемым Secret `email-bridge-mailbox-projection`.
+Пустой seed содержит только `mailboxes.json` с пустым списком mailbox, без
+фиктивных CA/username/password. RBAC: только `get/update` этого exact Secret,
+без create/list/delete, только ServiceAccount control-plane.
+
+`internal/emailprojection.Kubernetes.Publish` читает принятую DB revision,
+проверяет forward-only revision/digest и существование всех exact credential
+keys включённых mailbox. Формат ключа: `<descriptor.name>.<generation>`.
+Новая конфигурация публикуется одной заменой `mailboxes.json`; credential
+values не меняются. Общий размер ограничен 900 KiB. После Update обязателен
+Get readback revision/digest/UID/resourceVersion. Ошибка не превращается в
+готовность. Отдельный bounded cancel/join worker восстанавливает projection,
+readiness выполняет только readback текущего DB snapshot, не публикацию.
+
+Это producer checkpoint, не завершение D5: UI/YAML commands и отдельный
+write-only credential lifecycle ещё не подключены. Существующий bridge
+пока читает startup ConfigMap и фиксированные credential paths; переход на
+атомарный Secret snapshot и reload передан root как consumer dependency.
+До его подключения изменение mailbox document не считается доставленным
+работающему consumer. Само наличие credential key не доказывает его
+пригодность для SMTP/IMAP или protected authorization path.
+
+Локально PASS: `go test -race ./internal/app ./internal/emailprojection`,
+targeted PostgreSQL `email_configuration` (включая immutable document и restore
+из пустого seed), `make test-email-bridge-render` и
+`make test-email-projection-render` для web-only/web-with-mattermost.
+Protected CP -> bridge, consumer reload и внешняя почта: NOT RUN.
 
 Локальные проверки `email_configuration` disposable PG и Go/race emailpolicy/app:
 PASS. Проверены exact replay, document/mailbox rollback, descriptor commitment,
@@ -223,14 +256,32 @@ owner-транзакцией. Нового domain event нет: Get/Resolve яв
 Повторить `ReportEmailEffectReceipt` с прежними Binding, ExternalReceiptRef,
 ExternalReceiptDigest, SemanticInputDigest, Outcome и Idempotency-Key.
 CP возвращает тот же owner ref и сохранённый command result. После expiry/revoke
-допускается только exact replay уже сохранённой observation, не первая запись
-и не новый provider effect. Свежий verified EMAIL worker credential обязателен.
+допускается exact replay уже сохранённой observation. После expiry прежней lease
+также допускается поздняя запись наблюдения по ранее выданной immutable
+authorization: exact organization/source/lease/fence/generation/semantic digest.
+Первый receipt может быть только UNKNOWN; terminal Report требует прежний UNKNOWN
+receipt и не может противоречить owner decision. Свежий verified EMAIL worker
+credential обязателен. Ни authorization, ни grant не продлеваются.
 Пустой receipt_ref в `ResolveEmailReconciliation` не вводится.
+
+Поздний Report атомарно закрывает истёкший RUNNING invocation в UNKNOWN_OUTCOME,
+очищает исполняемую lease и сохраняет receipt/audit/idempotency. Уже FAILED или
+CANCELLED источник не открывается заново: receipt-bound fresh Reconcile/Resolve
+доступен и для этих terminal states (миграция 00621), исключительно для local
+audit/unlock. Claim не выдаёт эти invocations повторно. Новый terminal receipt
+без исходного UNKNOWN запрещён, как и создание UNKNOWN для SUCCEEDED источника.
+Нового события нет: авторитетные Get/Resolve остаются read path.
 
 Consumer recovery должен устойчиво сохранить исходный binding и idempotency key
 до Report, убрать local expiry precheck только для этого read-like replay и не
 продолжать отправку после истечения lease. Он не может восстановить source
-lineage по произвольному external ref/digest. Эта consumer доработка передана root.
+lineage по произвольному external ref/digest. Consumer checkpoint root: `07cd3ee69`.
+
+Локальный PG `email_configuration|email_receipt` проверяет real authorization
+перед expiry, отсутствие первого Report в CP до expiry, поздний UNKNOWN,
+owner NO_EFFECT_CONFIRMED и Resolve, потерю terminal Report, exact replay,
+FAILED/CANCELLED reconciliation и отсутствие новых claims. Protected issuer→CP→bridge
+для этого recovery: NOT RUN.
 
 Локально PASS: 21-operation semantic/scope/Human Gate matrix (12 mutations),
 Go/race domain/service/repository/gRPC, disposable PG email receipt/watermark/

@@ -13,7 +13,7 @@ type Kind string
 
 const (
 	ReconcileEmailEffect               Kind = "RECONCILE_EMAIL_EFFECT"
-	ReportEmailEffect                 Kind = "REPORT_EMAIL_EFFECT"
+	ReportEmailEffect                  Kind = "REPORT_EMAIL_EFFECT"
 	CreateSkillBundleDraft             Kind = "CREATE_SKILL_BUNDLE_DRAFT"
 	SaveSkillBundleDraft               Kind = "SAVE_SKILL_BUNDLE_DRAFT"
 	ValidateSkillBundleDraft           Kind = "VALIDATE_SKILL_BUNDLE_DRAFT"
@@ -113,6 +113,7 @@ const (
 	ChangeIntegrationGrant             Kind = "CHANGE_INTEGRATION_GRANT"
 	CreateAssistantConversation        Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation        Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
+	ArchiveAssistantConversation       Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
@@ -315,6 +316,7 @@ type AssistantConversationInput struct {
 	Context    entity.AssistantContextDescriptor
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
+type AssistantConversationArchiveInput struct{ ConversationRef string }
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
 }

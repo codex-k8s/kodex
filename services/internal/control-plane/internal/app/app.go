@@ -81,14 +81,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
-	if config.EmailConfigurationFile != "" {
-		raw, err := readBoundedFileLimit(config.EmailConfigurationFile, 24<<20)
-		if err != nil {
-			return fmt.Errorf("read email configuration: %w", err)
-		}
-		if err := repository.ConfigureEmail(startup, raw); err != nil {
-			return fmt.Errorf("configure email projection: %w", err)
-		}
+	emailProjection, err := initializeEmailProjection(startup, repository, config)
+	if err != nil {
+		return fmt.Errorf("initialize email projection: %w", err)
 	}
 	skillScanner, err := skillscanclient.New(config.SkillScannerSocket, config.SkillScannerTimeout)
 	if err != nil {
@@ -272,7 +267,8 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, cleanupClaimHealth, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
+		emailProjection.Run,
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
@@ -477,13 +473,13 @@ type readinessCondition interface {
 	Ready() (bool, string)
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, emailProjection *emailProjection, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
+			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check), emailProjection.Check(check))
 			cancel()
 			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
 			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {

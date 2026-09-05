@@ -28,6 +28,10 @@ type emailReceiptOwner struct {
 	id, runRef, projectID, invocationState string
 }
 
+func emailReconciliationSourceClosed(state string) bool {
+	return state == "UNKNOWN_OUTCOME" || state == "CANCELLED" || state == "FAILED"
+}
+
 func readEmailReceipt(ctx context.Context, tx pgx.Tx, current scope, receiptRef, invocationRef string) (emailReceiptOwner, error) {
 	var owner emailReceiptOwner
 	r := &owner.receipt
@@ -134,7 +138,7 @@ func (repository *Repository) reconcileEmailEffect(ctx context.Context, tx pgx.T
 	if input.Mutation.ExpectedVersion == nil || *input.Mutation.ExpectedVersion != owner.receipt.Version {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	if payload.ExpectedReceiptDigest != owner.receipt.ExternalReceiptDigest || owner.receipt.Outcome != emailpolicy.OutcomeUnknown || owner.invocationState != "UNKNOWN_OUTCOME" {
+	if payload.ExpectedReceiptDigest != owner.receipt.ExternalReceiptDigest || owner.receipt.Outcome != emailpolicy.OutcomeUnknown || !emailReconciliationSourceClosed(owner.invocationState) {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	previous, err := readEmailDecision(ctx, tx, current, owner.receipt.Ref, "")
@@ -201,7 +205,7 @@ func (repository *Repository) ResolveEmailReconciliation(ctx context.Context, pr
 	}
 	if decisionRef != "" && decision.Ref != decisionRef || decision.ReceiptVersion != owner.receipt.Version ||
 		decision.ReceiptDigest != digest || owner.receipt.ExternalReceiptDigest != digest || owner.receipt.ExternalReceiptRef != externalRef ||
-		owner.receipt.Outcome != emailpolicy.OutcomeUnknown || owner.invocationState != "UNKNOWN_OUTCOME" ||
+		owner.receipt.Outcome != emailpolicy.OutcomeUnknown || !emailReconciliationSourceClosed(owner.invocationState) ||
 		!decision.ExpiresAt.After(time.Now().UTC()) || decision.GrantRef == "" {
 		return entity.EmailEffectReceiptView{}, errs.ErrForbidden
 	}

@@ -219,6 +219,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	if err != nil || replay.EmailReceipt == nil || replay.EmailReceipt.Version != 1 {
 		t.Fatalf("immutable original report replay: %v", err)
 	}
+	testEmailLateReport(t, ctx, repository, service, owner, runtime, gateway, email, report.Principal, execution, connection.Ref, bounded, input)
 	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-revoke", ExpectedVersion: &granted.Connection.Version},
 		Payload:  command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})

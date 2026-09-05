@@ -92,6 +92,10 @@ spec:
                   fieldPath: metadata.namespace
             - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_SECRET_NAME
               value: kodex-integration-credentials
+            - name: CONTROL_PLANE_EMAIL_CONFIGURATION_FILE
+              value: /var/run/config/kodex/control-plane/email/mailboxes.yaml
+            - name: CONTROL_PLANE_EMAIL_GRANT_TRUST_FILE
+              value: /var/run/config/kodex/control-plane/application-grants/email-bridge.platform-worker.public.jwk
             - name: CONTROL_PLANE_KUBERNETES_API_TIMEOUT
               value: 3s
             - name: CONTROL_PLANE_OIDC_ISSUER
@@ -247,6 +251,9 @@ spec:
             - name: application-grants
               mountPath: /var/run/config/kodex/control-plane/application-grants
               readOnly: true
+            - name: email-configuration
+              mountPath: /var/run/config/kodex/control-plane/email
+              readOnly: true
             - name: provider-application-grant
               mountPath: /var/run/secrets/kodex/control-plane/application-grant
               readOnly: true
@@ -352,6 +359,13 @@ spec:
           secret:
             secretName: control-plane-application-grants
             defaultMode: 292
+        - name: email-configuration
+          configMap:
+            name: email-bridge-configuration
+            defaultMode: 0440
+            items:
+              - key: mailboxes.yaml
+                path: mailboxes.yaml
         - name: provider-application-grant
           emptyDir:
             sizeLimit: 1Mi
