@@ -32,6 +32,8 @@ Runner отклоняет v6 и отсутствие/подмену effective ef
 идёт в config.toml, app-server turn params и continuation fingerprint.
 
 Обновление требует rebuild и promotion образа с exact digest v7 schema.
+Счётчик `roleRuntimeContractRevision` повышается с 1 до 2; он независим
+от номера ABI v7. Новый digest со старым счётчиком 1 не допускается.
 Runtime-controller, role-image admission, environment render и warm reuse
 проверяют тот же revision/digest. Уже сохранённые RuntimeRevision/attempt не
 переписываются и не преобразуются в v7. Старый image не допускается к fresh
