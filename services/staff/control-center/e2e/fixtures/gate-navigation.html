@@ -20,16 +20,25 @@
       import { configureApiClient } from "../../src/shared/api/client";
       import "../../src/app/styles/base.css";
       import DecisionsPage from "../../src/pages/DecisionsPage.vue";
+      import HomeGateCatalog from "../../src/features/home/components/HomeGateCatalog.vue";
       await loadRuntimeConfig();
       configureApiClient();
       const router = createRouter({
         history: createMemoryHistory(),
-        routes: [{ path: "/decisions", component: DecisionsPage }],
+        routes: [
+          { path: "/decisions", component: DecisionsPage },
+          { path: "/home-gates", component: HomeGateCatalog },
+        ],
       });
       const app = createApp({
         render: () =>
           h("main", { style: "padding:16px;max-width:1800px;margin:auto" }, [
             h("nav", [
+              h(
+                "button",
+                { onClick: () => router.push("/home-gates") },
+                "Home Gates",
+              ),
               h(
                 "button",
                 {

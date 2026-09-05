@@ -521,7 +521,7 @@ revisionRef: сервер выбирает новый UI draft. Опублико
 | 16, 34–36, 43  | agents/detail/api, WorkflowDetailPage, automation editor; prompt-template preview           | Exact будущие AGENT/WORKFLOW_STEP/SCHEDULE_DRAFT target/context. SYNTHETIC preview и исторический RuntimeRevision diff не заменяют этот путь.                         |
 | 31, 40         | Workflow capability/grant selectors; `/platform-capabilities`                               | Effective user∩agent projection. availableWithoutIntegration/readiness не являются пользовательскими полномочиями.                                                    |
 | 37, 61         | VfsPage, files/context resources; `/vfs/nodes`, `/vfs/search`                               | Node version/state/nextActions, eligibility выбора и массовых операций. Skill/Memory typed lifecycle уже подключён; реальная runtime запись принадлежит owner/runner. |
-| 04–06, 38      | HomePage, platform store; `/runs`, `/owner-gates`                                           | Owner-gate query/total и общая полная сводка. Server run states и realtime invalidation уже подключены.                                                               |
+| 04–06          | HomePage, platform store; `/runs`, `/owner-gates`                                           | Общая полная сводка: Run/global Artifact totals ещё требуют producer. Owner-gate query/total/states подключены по HTTP358; runtime приёмка NOT RUN.                   |
 | CFG, 42        | RoleImage/managed configuration editors; role-image-recipes                                 | Server query/state, managed ref/revision/source association, исполняемый UI/GIT package/build путь.                                                                   |
 | Mattermost, 39 | InteractionIdentitiesPanel; identity bind/revoke                                            | Eligible active platform USER, team/channel catalog и canonical external-user hash rule.                                                                              |
 | 46             | RuntimeEnvironmentEditorPage; environment drafts                                            | Server savedAt и immutable base reference. Точный Secret revision уже сохраняется при edit/reauth.                                                                    |
@@ -838,6 +838,18 @@ keywords и temperature; текущий публичный API по-прежне
 credential value редакторы остаются sensitive и не получают микрофон.
 `stt-catalog.synthetic.spec.ts` проверяет сохранение значений, поиск, ошибку
 каталога и геометрию на 390/2900; реальный STT/provider/runtime остаётся NOT RUN.
+
+## Серверные страницы решений
+
+Home/Decisions потребляют HTTP checkpoint `358687bc7b55878225adeba897ada92b820c284e`:
+`listOwnerGates` передаёт literal query, project и явный набор состояний истории;
+страницы по 30, total и cursor принадлежат CP. Смена фильтра отменяет старое чтение,
+повтор cursor/строк отклоняется; realtime invalidation перечитывает первую страницу.
+Home раскрывает тот же список с поиском и серверным выбором проекта, сохраняет
+порядок и ограничивает компактный список шестью строками. Decisions сохраняет
+отдельный protected GET для адресного решения вне загруженных страниц.
+Это не закрывает MVP-UI-05: Run/global Artifact totals и реальная сквозная приёмка
+остаются обязательными; browser fixtures не доказывают runtime authority.
 
 ## Deploy ownership
 

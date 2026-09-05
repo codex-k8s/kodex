@@ -95,44 +95,45 @@ function formatDate(value?: string): string {
         @retry="emit('retryRuns')"
       />
 
-      <div v-if="gates.length" class="home-attention__group">
-        <div class="home-attention__group-head">
-          <ShieldQuestion :size="18" aria-hidden="true" />
-          <h3>{{ $t("home.pending") }}</h3>
-          <span v-if="gatesCount !== undefined">{{ gatesCount }}</span>
-          <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+      <slot name="gates">
+        <div v-if="gates.length" class="home-attention__group">
+          <div class="home-attention__group-head">
+            <ShieldQuestion :size="18" aria-hidden="true" />
+            <h3>{{ $t("home.pending") }}</h3>
+            <span v-if="gatesCount !== undefined">{{ gatesCount }}</span>
+            <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+          </div>
+          <RouterLink
+            v-for="gate in gates"
+            :key="gate.ref"
+            :to="{
+              path: runPath(gate.runRef, gate.projectRef),
+              query: { nodeRef: gate.nodeRef },
+            }"
+            class="home-attention__item"
+          >
+            <div class="home-attention__copy">
+              <h4>{{ gate.title }}</h4>
+              <SafeSummary :content="gate.contextSummary" />
+              <p>
+                <span>{{ projectName(gate.projectRef) }}</span>
+                <span
+                  >{{ $t("workboard.initiator") }}:
+                  {{ gate.requestedBy.displayName }}</span
+                >
+              </p>
+            </div>
+            <div class="home-attention__aside">
+              <StatusBadge :state="gate.state" tone="warning" />
+              <time v-if="gate.expiresAt" :datetime="gate.expiresAt">
+                <CalendarClock :size="13" aria-hidden="true" />{{
+                  formatDate(gate.expiresAt)
+                }}
+              </time>
+            </div>
+          </RouterLink>
         </div>
-        <RouterLink
-          v-for="gate in gates"
-          :key="gate.ref"
-          :to="{
-            path: runPath(gate.runRef, gate.projectRef),
-            query: { nodeRef: gate.nodeRef },
-          }"
-          class="home-attention__item"
-        >
-          <div class="home-attention__copy">
-            <h4>{{ gate.title }}</h4>
-            <SafeSummary :content="gate.contextSummary" />
-            <p>
-              <span>{{ projectName(gate.projectRef) }}</span>
-              <span
-                >{{ $t("workboard.initiator") }}:
-                {{ gate.requestedBy.displayName }}</span
-              >
-            </p>
-          </div>
-          <div class="home-attention__aside">
-            <StatusBadge :state="gate.state" tone="warning" />
-            <time v-if="gate.expiresAt" :datetime="gate.expiresAt">
-              <CalendarClock :size="13" aria-hidden="true" />{{
-                formatDate(gate.expiresAt)
-              }}
-            </time>
-          </div>
-        </RouterLink>
-      </div>
-
+      </slot>
       <div v-if="failedRuns.length" class="home-attention__group">
         <div
           class="home-attention__group-head home-attention__group-head--danger"
@@ -168,7 +169,9 @@ function formatDate(value?: string): string {
       </div>
 
       <p
-        v-if="ready && !gatesProblem && !runsProblem && total === 0"
+        v-if="
+          !$slots.gates && ready && !gatesProblem && !runsProblem && total === 0
+        "
         class="home-attention__empty"
       >
         {{ $t("workboard.noAttention") }}

@@ -2150,13 +2150,33 @@ paths:
     get:
       tags: [Decisions]
       operationId: listOwnerGates
+      description: >-
+        Доступные actor решения в серверном порядке createdAt/ref DESC.
+        query ищет literal substring в title, prompt и contextSummary без учёта регистра.
+        state и states взаимоисключающие; без них выдаются все доступные состояния.
+        CP считает total до pagination в том же snapshot, что и страницу.
+        Cursor связан с actor, организацией, project, query и нормализованными states;
+        смена scope требует первой страницы. Чтение не создаёт событие и не меняет lifecycle Gate.
       parameters:
         - { $ref: '#/components/parameters/ProjectRefQuery' }
+        - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
         - name: state
           in: query
+          description: Одно состояние; не передаётся совместно со states.
           schema: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
+        - name: states
+          in: query
+          description: Явный набор состояний, включая terminal history; не передаётся совместно со state.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 6
+            uniqueItems: true
+            items: { type: string, enum: [OPEN, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED] }
       responses:
         '200':
           description: Human Gates
@@ -2164,10 +2184,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, nextPageToken]
+                required: [items, nextPageToken, total]
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/OwnerGate' } }
                   nextPageToken: { type: string, maxLength: 512 }
+                  total:
+                    type: integer
+                    format: int64
+                    minimum: 0
+                    maximum: 9007199254740991
+                    description: Полное server-owned количество доступных решений после query/state/project фильтров, до pagination.
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/owner-gates/{gateRef}:
     get:

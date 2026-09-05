@@ -15,6 +15,7 @@ import { useRouter } from "vue-router";
 
 import { openAssistantWorkspace } from "@/features/assistant/events";
 import HomeAttentionCenter from "@/features/home/components/HomeAttentionCenter.vue";
+import HomeGateCatalog from "@/features/home/components/HomeGateCatalog.vue";
 import HomeProjectsList from "@/features/home/components/HomeProjectsList.vue";
 import HomeSessionList from "@/features/home/components/HomeSessionList.vue";
 import {
@@ -318,14 +319,6 @@ onBeforeUnmount(() => {
     </template>
 
     <HomeAttentionCenter
-      v-if="
-        openGates.length ||
-        failedRuns.length ||
-        !overviewReady ||
-        !runsReady ||
-        platform.problems.overview ||
-        platform.problems.runs
-      "
       class="home-attention-section"
       :gates="openGates"
       :gates-count="platform.overview?.pendingGateCount"
@@ -340,7 +333,8 @@ onBeforeUnmount(() => {
       :refreshing="refreshing"
       @retry-gates="refreshOverview"
       @retry-runs="refreshRuns"
-    />
+      ><template #gates><HomeGateCatalog /></template
+    ></HomeAttentionCenter>
 
     <div
       class="home-dashboard"

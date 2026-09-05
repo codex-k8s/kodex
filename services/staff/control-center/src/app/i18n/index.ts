@@ -520,6 +520,7 @@ const ru = {
   },
   common: {
     search: "Поиск",
+    expand: "Развернуть список",
     refresh: "Обновить",
     loadMore: "Загрузить ещё",
     invalidJsonAt: "Ошибка JSON: строка {line}, столбец {column}",
@@ -3274,6 +3275,7 @@ const en = {
   common: {
     ...ru.common,
     search: "Search",
+    expand: "Expand list",
     refresh: "Refresh",
     loadMore: "Load more",
     invalidJsonAt: "Invalid JSON at line {line}, column {column}",
