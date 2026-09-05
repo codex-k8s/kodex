@@ -17,7 +17,8 @@ func scanEnvironmentDraft(row rowScanner) (entity.RuntimeEnvironmentDraft, error
 	var draft entity.RuntimeEnvironmentDraft
 	var specification, diagnostics []byte
 	err := row.Scan(&draft.Ref, &draft.ProjectRef, &draft.EnvironmentRef, &draft.ExpectedEnvironmentVersion,
-		&draft.State, &draft.Version, &specification, &draft.ValidationDigest, &diagnostics, &draft.PublishedEnvironmentRef)
+		&draft.State, &draft.Version, &specification, &draft.ValidationDigest, &diagnostics, &draft.PublishedEnvironmentRef,
+		&draft.BaseVersionRef, &draft.BaseRevision, &draft.SavedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return draft, errs.ErrNotFound
 	}
@@ -42,8 +43,12 @@ func (repository *Repository) GetRuntimeEnvironmentDraft(ctx context.Context, pr
 		return draft, err
 	}
 	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "PROJECT", ResourceRef: draft.ProjectRef})
-	if err != nil { return entity.RuntimeEnvironmentDraft{}, err }
-	if current.authorityProjectID != "" && current.authorityProjectID != target.projectID { return entity.RuntimeEnvironmentDraft{}, errs.ErrNotFound }
+	if err != nil {
+		return entity.RuntimeEnvironmentDraft{}, err
+	}
+	if current.authorityProjectID != "" && current.authorityProjectID != target.projectID {
+		return entity.RuntimeEnvironmentDraft{}, errs.ErrNotFound
+	}
 	if err := repository.requireAccess(ctx, tx, current, "project.manage", target); err != nil {
 		return entity.RuntimeEnvironmentDraft{}, err
 	}
@@ -58,6 +63,8 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 	var draft entity.RuntimeEnvironmentDraft
 	var err error
 	if input.Kind == command.CreateRuntimeEnvironmentDraft {
+		var baseVersionRef string
+		var baseRevision int64
 		if len(asJSON(payload.Specification)) > 256<<10 || payload.ProjectRef == "" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -72,6 +79,10 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 			if environment.Version != payload.ExpectedEnvironmentVersion {
 				return commandOutcome{}, errs.ErrVersionMismatch
 			}
+			baseVersionRef, baseRevision = environment.CurrentVersion.Ref, environment.CurrentVersion.Revision
+			if baseVersionRef == "" || baseRevision <= 0 {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
 		} else if payload.ExpectedEnvironmentVersion != 0 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -80,10 +91,12 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		draft = entity.RuntimeEnvironmentDraft{Ref: ref, Version: 1, ProjectRef: payload.ProjectRef, EnvironmentRef: payload.EnvironmentRef,
+			BaseVersionRef: baseVersionRef, BaseRevision: baseRevision,
 			ExpectedEnvironmentVersion: payload.ExpectedEnvironmentVersion, Specification: payload.Specification, State: "DRAFT", Diagnostics: []string{}}
-		_, err = tx.Exec(ctx, queryEnvironmentDraftInsert, pgx.StrictNamedArgs{"ref": ref, "organization_id": current.organizationID,
+		err = tx.QueryRow(ctx, queryEnvironmentDraftInsert, pgx.StrictNamedArgs{"ref": ref, "organization_id": current.organizationID,
 			"project_id": mustProjectID(ctx, tx, current.organizationID, payload.ProjectRef), "environment_ref": draft.EnvironmentRef,
-			"environment_version": draft.ExpectedEnvironmentVersion, "specification": asJSON(draft.Specification), "actor_id": current.actorID})
+			"environment_version": draft.ExpectedEnvironmentVersion, "specification": asJSON(draft.Specification), "actor_id": current.actorID,
+			"base_version_ref": draft.BaseVersionRef}).Scan(&draft.SavedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
@@ -144,14 +157,15 @@ func (repository *Repository) changeRuntimeEnvironmentDraft(ctx context.Context,
 		default:
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		updated, err := tx.Exec(ctx, queryEnvironmentDraftUpdate, pgx.StrictNamedArgs{
+		err = tx.QueryRow(ctx, queryEnvironmentDraftUpdate, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "ref": draft.Ref, "version": draft.Version, "specification": asJSON(draft.Specification),
-			"state": draft.State, "validation_digest": draft.ValidationDigest, "diagnostics": asJSON(draft.Diagnostics), "published_ref": draft.PublishedEnvironmentRef})
+			"state": draft.State, "validation_digest": draft.ValidationDigest, "diagnostics": asJSON(draft.Diagnostics), "published_ref": draft.PublishedEnvironmentRef,
+			"save_content": input.Kind == command.SaveRuntimeEnvironmentDraft}).Scan(&draft.SavedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return commandOutcome{}, errs.ErrVersionMismatch
+		}
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
-		}
-		if updated.RowsAffected() != 1 {
-			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		draft.Version++
 		return environmentDraftOutcome(current, draft, environment, mustProjectID(ctx, tx, current.organizationID, draft.ProjectRef)), nil

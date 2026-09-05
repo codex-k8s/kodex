@@ -43,4 +43,5 @@ type ManagedConfigurationSourceWork struct {
 	Deadline                                                       time.Time
 	PublicConfiguration                                            map[string]any
 	CredentialRevision                                             IntegrationCredentialRevision
+	DefinitionPackage                                              []byte
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.GetRuntimeEnvironmentDraftRequest) (*controlplanev1.GetRuntimeEnvironmentDraftResponse, error) {
@@ -129,7 +130,12 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 	for _, tool := range spec.Tools {
 		specification.Tools = append(specification.Tools, &controlplanev1.RuntimeEnvironmentTool{Name: tool.Name, Command: tool.Command, Description: tool.Description, UsageHint: tool.UsageHint})
 	}
+	var savedAt *timestamppb.Timestamp
+	if !input.SavedAt.IsZero() {
+		savedAt = timestamppb.New(input.SavedAt)
+	}
 	return &controlplanev1.RuntimeEnvironmentDraft{Ref: input.Ref, Version: input.Version, ProjectRef: input.ProjectRef,
+		BaseVersionRef: input.BaseVersionRef, BaseRevision: input.BaseRevision, SavedAt: savedAt,
 		EnvironmentRef: input.EnvironmentRef, ExpectedEnvironmentVersion: input.ExpectedEnvironmentVersion, State: input.State,
 		Specification: specification, ValidationDigest: input.ValidationDigest, Diagnostics: input.Diagnostics, PublishedEnvironmentRef: input.PublishedEnvironmentRef}
 }

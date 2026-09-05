@@ -22,13 +22,21 @@ WITH expired AS (
       AND credential_revision.organization_id=c.organization_id AND credential_revision.connection_id=c.id
     JOIN control_plane.integration_grants g ON g.id = d.grant_id
     LEFT JOIN control_plane.owner_gates gate ON gate.id = d.gate_id
+    LEFT JOIN control_plane.owner_gates approval ON approval.id = d.approval_gate_id
     WHERE d.organization_id = @organization_id::uuid
       AND d.state IN ('DUE', 'FAILED')
-      AND d.attempt < 10
+      AND d.attempt < d.execution_max_attempts
       AND d.available_at <= clock_timestamp()
       AND c.enabled
+      AND c.organization_id=d.organization_id AND c.lifecycle_state='ACTIVE'
       AND c.state IN ('CONNECTED', 'DEGRADED')
       AND g.enabled
+      AND g.organization_id=c.organization_id AND g.connection_id=c.id
+      AND g.definition_version=c.definition_version AND g.definition_digest=c.definition_digest
+      AND (d.capability_key NOT IN ('mattermost.notifications','mattermost.result_mirror') OR
+          (approval.organization_id=d.organization_id AND approval.state='APPROVED'
+           AND d.connection_version=c.version AND d.definition_version=c.definition_version
+           AND d.definition_digest=c.definition_digest))
       AND (d.acceptance_receipt_id IS NULL OR EXISTS (
           SELECT 1 FROM control_plane.interaction_message_receipts receipt
           JOIN control_plane.interaction_identities identity ON identity.id=receipt.identity_id
@@ -40,7 +48,7 @@ WITH expired AS (
       AND (d.gate_id IS NULL OR gate.state = 'OPEN')
       AND (SELECT count(*) FROM expired) >= 0
     ORDER BY d.available_at, d.created_at
-    FOR UPDATE OF d SKIP LOCKED
+    FOR UPDATE OF c,g,d SKIP LOCKED
     LIMIT @claim_limit
 ), claimed AS (
     UPDATE control_plane.interaction_deliveries d
@@ -76,7 +84,8 @@ SELECT
     COALESCE(gate.ref,''),COALESCE(gate.version,0),run.ref,
     claimed.external_team_ref,claimed.external_channel_ref,claimed.target_root_post_ref,COALESCE(receipt.ref,''),
     credential_revision.ref,credential_revision.revision,credential_revision.secret_ref,credential_revision.secret_uid::text,
-    credential_revision.secret_resource_version,credential_revision.content_sha256,credential_revision.created_at
+    credential_revision.secret_resource_version,credential_revision.content_sha256,credential_revision.created_at,
+    g.capability_key,COALESCE(approval.ref,''),COALESCE(approval.version,0)
 FROM claimed
 JOIN control_plane.integration_connections c ON c.id = claimed.connection_id
 JOIN control_plane.integration_credential_revisions credential_revision
@@ -86,4 +95,6 @@ JOIN control_plane.projects project ON project.id = claimed.project_id
 JOIN control_plane.runs run ON run.id=claimed.root_run_id
 LEFT JOIN control_plane.owner_gates gate ON gate.id=claimed.gate_id
 LEFT JOIN control_plane.interaction_message_receipts receipt ON receipt.id=claimed.acceptance_receipt_id
+JOIN control_plane.integration_grants g ON g.id=claimed.grant_id
+LEFT JOIN control_plane.owner_gates approval ON approval.id=claimed.approval_gate_id
 ORDER BY claimed.created_at

@@ -267,7 +267,7 @@ func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlpla
 	return &controlplanev1.ManagedConfigurationSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
 		Kind: controlplanev1.ManagedConfigurationKind(controlplanev1.ManagedConfigurationKind_value["MANAGED_CONFIGURATION_KIND_"+value.Kind]),
 		Name: value.Name, ManagedBy: controlplanev1.ManagedConfigurationOwner(controlplanev1.ManagedConfigurationOwner_value["MANAGED_CONFIGURATION_OWNER_"+value.ManagedBy]),
-		Source: value.Source, SourceRevision: value.SourceRevision, CurrentRevision: castManagedRevision(value.CurrentRevision), UpdatedAt: timestamp(value.UpdatedAt)}
+		Source: value.Source, SourceRevision: value.SourceRevision, CurrentRevision: castManagedRevision(value.CurrentRevision), UpdatedAt: timestamp(value.UpdatedAt), GitSource: castConfigurationSource(value.GitSource)}
 }
 
 func castManagedConsumer(value entity.ManagedConfigurationConsumer) *controlplanev1.ManagedConfigurationConsumer {

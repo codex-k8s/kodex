@@ -189,7 +189,9 @@ func castProviderPolicy(value entity.ProviderAccountPolicyVersion) *controlplane
 	result := &controlplanev1.ProviderAccountPolicyVersion{Ref: value.Ref, Version: value.Version, Mode: value.Mode,
 		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
 	for _, candidate := range value.AccountCandidates {
-		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight})
+		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight,
+			CatalogRevision: candidate.CatalogRevision, CatalogDigest: candidate.CatalogDigest,
+			ProviderDefinitionKey: candidate.ProviderDefinitionKey, DefaultReasoningEffort: candidate.DefaultReasoningEffort})
 	}
 	return result
 }
@@ -202,9 +204,13 @@ func castConfigOverlay(value *entity.ConfigOverlayVersion) *controlplanev1.Confi
 	if value == nil {
 		return nil
 	}
-	return &controlplanev1.ConfigOverlayVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
+	result := &controlplanev1.ConfigOverlayVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
 		State: value.State, Content: value.Content, Digest: value.Digest, ValidationMessages: value.ValidationMessages,
-		CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+		CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt), SchemaRevision: value.SchemaRevision, SchemaDigest: value.SchemaDigest}
+	for _, item := range value.Diagnostics {
+		result.Diagnostics = append(result.Diagnostics, &controlplanev1.ConfigOverlayDiagnostic{Code: item.Code, Key: item.Key, Line: item.Line, Column: item.Column, Message: item.Message})
+	}
+	return result
 }
 func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *controlplanev1.RuntimeEnvironmentVersion {
 	result := &controlplanev1.RuntimeEnvironmentVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
@@ -301,7 +307,7 @@ func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *c
 			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
 			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest, VersionRef: value.EnvironmentBinding.VersionRef},
 		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
-		AgentVersion: value.AgentVersion}
+		AgentVersion: value.AgentVersion, OverlaySchema: castConfigOverlaySchema(value.OverlaySchema)}
 	for _, binding := range value.SkillBindings {
 		result.SkillBindings = append(result.SkillBindings, castContextBinding(binding))
 	}

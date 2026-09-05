@@ -99,6 +99,33 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
+	currentBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, assistant.Ref, "")
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, currentBinding.sessionID, providerAccountRef, configuration, configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	if retainedPolicy != nil {
+		providerPolicyRef, providerPolicyVersion, providerPolicyDigest = retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+	}
+	parsedOverlay, err := runtimecontract.ParseConfigOverlay(configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	effectiveEffort := parsedOverlay.ModelReasoningEffort
+	if effectiveEffort == "" {
+		effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+	}
+	reasoningMode := runtimecontract.ReasoningSupported
+	if effectiveEffort == "" {
+		reasoningMode = runtimecontract.ReasoningUnsupported
+	}
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
@@ -159,6 +186,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
 		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
+		"effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode,
 		"providerAccountRef":               providerAccountRef,
 		"providerCredentialRevisionRef":    providerCredentialRef,
 		"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
@@ -259,6 +287,10 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	}
 	if len(snapshot.desiredCandidates) == 0 {
 		return false, nil
+	}
+	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, snapshot.desiredCandidates)
+	if err != nil {
+		return false, err
 	}
 	desiredMode := "LEAST_USED"
 	if len(snapshot.desiredCandidates) == 1 {
@@ -392,6 +424,9 @@ func (repository *Repository) replaceWarmSession(
 		"created_by":          current.createdBy,
 	}).Scan(&nextSessionID); err != nil || nextSessionID == "" {
 		return errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, organizationID, nextSessionID, current.assistantRef); err != nil {
+		return err
 	}
 	var runtimeVersion int64
 	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSwitchSession, pgx.StrictNamedArgs{

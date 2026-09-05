@@ -31,13 +31,14 @@ const (
 type Diagnostic struct{ Code, Message string }
 
 type document struct {
-	Name        string                 `json:"name" yaml:"name" toml:"name"`
-	Description string                 `json:"description,omitempty" yaml:"description,omitempty" toml:"description,omitempty"`
-	Template    string                 `json:"template,omitempty" yaml:"template,omitempty" toml:"template,omitempty"`
-	BaseImage   string                 `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
-	Packages    []string               `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
-	Definition  *integrationDefinition `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
-	STT         *STTConfiguration      `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	Name        string                  `json:"name" yaml:"name" toml:"name"`
+	Description string                  `json:"description,omitempty" yaml:"description,omitempty" toml:"description,omitempty"`
+	Template    string                  `json:"template,omitempty" yaml:"template,omitempty" toml:"template,omitempty"`
+	BaseImage   string                  `json:"baseImage,omitempty" yaml:"baseImage,omitempty" toml:"baseImage,omitempty"`
+	Packages    []string                `json:"packages,omitempty" yaml:"packages,omitempty" toml:"packages,omitempty"`
+	Definition  *integrationDefinition  `json:"definition,omitempty" yaml:"definition,omitempty" toml:"definition,omitempty"`
+	STT         *STTConfiguration       `json:"stt,omitempty" yaml:"stt,omitempty" toml:"stt,omitempty"`
+	RoleImage   *RoleImageConfiguration `json:"roleImage,omitempty" yaml:"roleImage,omitempty" toml:"roleImage,omitempty"`
 }
 
 type integrationDefinition struct {
@@ -188,6 +189,13 @@ func validateDocument(kind string, value document) error {
 	}
 	switch kind {
 	case KindRoleImage:
+		if value.RoleImage != nil {
+			if value.BaseImage != "" || len(value.Packages) != 0 || value.Template != "" || value.Definition != nil || value.STT != nil ||
+				value.RoleImage.RoleDefinitionRef == "" || value.RoleImage.Environment.EnvironmentKey == "" {
+				return errors.New("role image specification is invalid")
+			}
+			return nil
+		}
 		if value.BaseImage == "" || len(value.Packages) > 128 || value.Template != "" || value.Definition != nil || value.STT != nil {
 			return errors.New("role image specification is invalid")
 		}

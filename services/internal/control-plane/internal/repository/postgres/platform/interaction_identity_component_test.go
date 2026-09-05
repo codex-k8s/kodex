@@ -163,4 +163,6 @@ WHERE run.organization_id=$1::uuid AND run.ref=$2 ORDER BY node.id LIMIT 1 RETUR
 	if err := repository.requireAccess(ctx, tx, human, "gate.resolve", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: gateRef}); err == nil {
 		t.Fatal("mapped member acquired gateway gate authority")
 	}
+	_ = tx.Rollback(ctx)
+	testInteractionDeliveryApproval(t, ctx, repository, pool, owner, connectionRef, ackRunRef)
 }
