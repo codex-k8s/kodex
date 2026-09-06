@@ -50,18 +50,22 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 		t.Fatal("published baseline history readback failed")
 	}
 	var firstRows, firstID int64
+	if err := goose.UpToContext(ctx, database, "migrations", 20260906000100); err != nil {
+		t.Fatal("apply published workload boundary")
+	}
+	testSnapshotGenerationUpgradeRejection(t, port)
 	for attempt := range 2 {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			t.Fatalf("apply authority migration attempt %d: %T", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260906000100 {
+		if err != nil || version != 20260907000100 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 3 {
+		).Scan(&rows, &maximumID); err != nil || rows != 4 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
