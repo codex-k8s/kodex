@@ -27,11 +27,14 @@ calculate_source_content_fingerprint() {
 usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
+    '  [--profile web-only|web-with-mattermost]' \
+    '  [--mail-configuration <exact-snapshot>] [--mail-resolv-conf <trusted-resolver-file>]' \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
+    '  --stt-hot-reload-image <repository@sha256:digest>' \
     '  --backup-controller-image <repository@sha256:digest>' \
     '  --promoted-pull-host <dns>' \
     '  --role-image-builder-image <repository@sha256:digest>' \
@@ -48,6 +51,9 @@ usage() {
 source_root=""
 cache_root=""
 output=""
+mail_configuration=""
+mail_resolv_conf=/etc/resolv.conf
+deployment_profile=web-only
 public_host=""
 oidc_host=""
 ingress_class=traefik
@@ -58,6 +64,7 @@ kubernetes_endpoint_cidr=""
 kubernetes_endpoint_port=""
 runner_image=""
 session_archive_image=""
+stt_hot_reload_image=""
 backup_controller_image=""
 promoted_pull_host=""
 role_image_builder_image=""
@@ -74,6 +81,9 @@ while (($# > 0)); do
     --source-root) source_root=${2:-}; shift 2 ;;
     --cache-root) cache_root=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
+    --mail-configuration) mail_configuration=${2:-}; shift 2 ;;
+    --mail-resolv-conf) mail_resolv_conf=${2:-}; shift 2 ;;
+    --profile) deployment_profile=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
     --ingress-class) ingress_class=${2:-}; shift 2 ;;
@@ -84,6 +94,7 @@ while (($# > 0)); do
     --kubernetes-endpoint-port) kubernetes_endpoint_port=${2:-}; shift 2 ;;
     --runner-image) runner_image=${2:-}; shift 2 ;;
     --session-archive-image) session_archive_image=${2:-}; shift 2 ;;
+    --stt-hot-reload-image) stt_hot_reload_image=${2:-}; shift 2 ;;
     --backup-controller-image) backup_controller_image=${2:-}; shift 2 ;;
     --promoted-pull-host) promoted_pull_host=${2:-}; shift 2 ;;
     --role-image-builder-image) role_image_builder_image=${2:-}; shift 2 ;;
@@ -99,6 +110,8 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+case "$deployment_profile" in web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 
 [[ "$source_root" == /* && -d "$source_root/.git" || -f "$source_root/.git" ]] ||
   fail 'source root must be an exact Git worktree path'
@@ -121,6 +134,9 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
   fail 'local runner image must use an exact manifest digest'
 [[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local session archive image must use an exact manifest digest'
+[[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
+  "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local STT hot-reload image must use an exact manifest digest'
 [[ "$backup_controller_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local backup-controller image must use an exact manifest digest'
 [[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
@@ -147,7 +163,7 @@ done
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
 lock_file="$repository_root/tools/dev/components.lock.json"
-runtime_contract_file="$repository_root/contracts/runtime-controller/v6/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -193,6 +209,8 @@ chmod 0777 "$source_root/services/staff/control-center/node_modules"
 go_modules=(
   services/internal/control-plane
   services/internal/secret-broker
+  services/internal/stt-tts-service
+  services/internal/email-bridge
   services/internal/internal-rpc-authority
   services/internal/runtime-controller
   services/external/control-api-gateway
@@ -202,6 +220,9 @@ go_modules=(
   services/jobs/artifact-retention
   services/jobs/session-archive
 )
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  go_modules+=(services/external/interaction-gateway)
+fi
 for module in "${go_modules[@]}"; do
   [[ -f "$source_root/$module/go.mod" ]] || fail "Go module is absent: $module"
   GOMODCACHE="$go_module_cache" GOCACHE="$go_prime_cache" GOWORK=off GOTOOLCHAIN=local \
@@ -224,11 +245,13 @@ air_digest=$(sha256sum -- "$air_binary" | awk '{print $1}')
 chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"
 find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type d -exec chmod a+rx {} +
 find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type f -exec chmod a+r {} +
+# Исполнение доступно каждому non-root UID контейнера независимо от umask сборщика.
+chmod 0555 "$air_binary"
 
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"
 {
-  kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only"
+  kubectl kustomize "$repository_root/deploy/k8s/profiles/$deployment_profile"
   printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/base/local-object-storage"
   printf '\n---\n'
@@ -253,6 +276,7 @@ OIDC_HOST="$oidc_host" OIDC_ORIGIN="$oidc_origin" \
 INGRESS_CLASS="$ingress_class" CLUSTER_ISSUER="$cluster_issuer" \
 KUBERNETES_SERVICE_CIDR="$kubernetes_service_cidr" \
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
+DEPLOYMENT_PROFILE="$deployment_profile" \
 SEAWEEDFS_IMAGE="$seaweedfs_image" AWS_CLI_IMAGE="$aws_cli_image" \
 PROMOTED_PULL_HOST="$promoted_pull_host" \
 PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
@@ -279,8 +303,10 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   with(select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job");
     .spec.template.metadata.labels."kodex.dev/environment" = "staging" |
     .spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.template.metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
     .spec.template.metadata.annotations."kodex.dev/source-revision" = strenv(SOURCE_REVISION) |
     .spec.template.metadata.annotations."kodex.dev/source-content-sha256" = strenv(SOURCE_DIGEST) |
+    .spec.template.metadata.annotations."kodex.dev/deployment-profile" = strenv(DEPLOYMENT_PROFILE) |
     ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
     ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
@@ -288,13 +314,14 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   ) |
   with(select(.metadata.labels != null);
     .metadata.labels."kodex.dev/environment" = "staging" |
+    .metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
     .metadata.labels."kodex.dev/local-profile" = "hot-reload"
   )
 ' "$render"
 
 printf '\n---\n' >>"$render"
 SOURCE_REVISION="$source_revision" SOURCE_DIGEST="$source_digest" \
-SOURCE_DIRTY="$source_dirty" yq -n '
+SOURCE_DIRTY="$source_dirty" DEPLOYMENT_PROFILE="$deployment_profile" yq -n '
   {
     "apiVersion":"v1",
     "kind":"ConfigMap",
@@ -304,11 +331,13 @@ SOURCE_DIRTY="$source_dirty" yq -n '
       "labels":{
         "app.kubernetes.io/part-of":"kodex",
         "kodex.dev/environment":"staging",
+        "kodex.dev/profile":strenv(DEPLOYMENT_PROFILE),
         "kodex.dev/local-profile":"hot-reload"
       }
     },
     "data":{
       "sourceRevision":strenv(SOURCE_REVISION),
+      "deploymentProfile":strenv(DEPLOYMENT_PROFILE),
       "sourceContentSHA256":strenv(SOURCE_DIGEST),
       "sourceDirty":strenv(SOURCE_DIRTY)
     }
@@ -332,6 +361,9 @@ yq -i '
     (.kind != "IngressRouteTCP" or .metadata.name == "kodex-image-registry-pull") and
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
+      .metadata.name == "stt-tts-service" or
+      .metadata.name == "email-bridge" or
+      .metadata.name == "interaction-gateway" or
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
@@ -351,6 +383,7 @@ yq -i '
       .metadata.name == "image-admission-controller" or
       .metadata.name == "role-image-builder") and
     (.kind != "Job" or .metadata.name == "control-plane-migrate" or
+      .metadata.name == "email-bridge-migration" or
       .metadata.name == "control-plane-broker-bootstrap" or
       .metadata.name == "internal-rpc-authority-migrate" or
       .metadata.name == "kodex-postgresql-runtime-credentials" or
@@ -429,7 +462,7 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     .data.trustedRoleBaseDigest = strenv(RUNNER_DIGEST) |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(ADMISSION_TOOLS_SHA256) |
-    .data.roleRuntimeContractRevision = "1" |
+    .data.roleRuntimeContractRevision = "2" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST) |
     .data.providerAppArmorProfile = strenv(PROVIDER_APPARMOR_PROFILE)
   ) |
@@ -673,13 +706,16 @@ patch_go_container() {
         }]) |
       .spec.replicas = 1 |
       ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.name == strenv(CONTAINER))) |= (
+        (.resources // {} | with_entries(
+          .value |= with_entries(select(.key == "ephemeral-storage"))
+        ) | with_entries(select(.value != {}))) as $storage_resources |
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
         .command = ["/workspace/tools/dev/run-go-hot-reload.sh"] |
         .args = ([strenv(MODULE),strenv(PACKAGE),strenv(CONTAINER)] +
           (strenv(COMMAND_ARGS) | from_json)) |
         .workingDir = ("/workspace/" + strenv(MODULE)) |
-        .resources = {"requests":{"cpu":"50m","memory":"128Mi"}} |
+        .resources = ({"requests":{"cpu":"50m","memory":"128Mi"}} * $storage_resources) |
         .securityContext.readOnlyRootFilesystem = false |
         .volumeMounts = (((.volumeMounts // []) |
           map(select(.name != "dev-source" and .name != "dev-go-mod" and .name != "dev-go-sumdb" and
@@ -827,6 +863,12 @@ patch_go_container Deployment control-plane internal-rpc-authority-verifier serv
 patch_go_container Deployment secret-broker secret-broker services/internal/secret-broker ./cmd/secret-broker
 patch_go_container Deployment secret-broker internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment secret-broker platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+patch_go_container Deployment stt-tts-service stt-tts-service services/internal/stt-tts-service ./cmd/stt-tts-service
+patch_go_container Deployment stt-tts-service internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment stt-tts-service internal-rpc-authority-verifier services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-verifier
+patch_go_container Deployment email-bridge email-bridge services/internal/email-bridge ./cmd/email-bridge
+patch_go_container Deployment email-bridge internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+patch_go_container Deployment email-bridge platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
@@ -836,6 +878,13 @@ patch_go_container Deployment runtime-controller platform-worker-grant-agent ser
 patch_go_container Deployment integration-gateway integration-gateway services/external/integration-gateway ./cmd/integration-gateway
 patch_go_container Deployment integration-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment integration-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  patch_go_container Deployment interaction-gateway interaction-gateway services/external/interaction-gateway ./cmd/interaction-gateway
+  patch_go_container Deployment interaction-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
+  patch_go_container Deployment interaction-gateway platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
+  patch_go_init_container interaction-gateway internal-rpc-authority-socket-init \
+    services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
+fi
 patch_go_container Deployment integration-synthetic integration-synthetic services/external/integration-gateway ./cmd/integration-synthetic
 patch_go_container Deployment automation-scheduler automation-scheduler services/jobs/automation-scheduler ./cmd/automation-scheduler
 patch_go_container Deployment artifact-retention artifact-retention services/jobs/artifact-retention ./cmd/artifact-retention
@@ -860,7 +909,20 @@ yq -i '
   )
 ' "$render"
 
-for workload in control-plane secret-broker control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
+STT_IMAGE="$stt_hot_reload_image" yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "stt-tts-service");
+    (.spec.template.spec.containers[] | select(.name == "stt-tts-service")) |= (
+      .image = strenv(STT_IMAGE) |
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .startupProbe.failureThreshold = 150 |
+      .volumeMounts += [{"name":"dev-stt-tmp","mountPath":"/tmp"}]
+    ) |
+    .spec.template.spec.volumes += [{"name":"dev-stt-tmp","emptyDir":{"sizeLimit":"128Mi"}}]
+  )
+' "$render"
+
+for workload in control-plane secret-broker stt-tts-service email-bridge control-api-gateway runtime-controller integration-gateway automation-scheduler session-archive; do
   patch_go_init_container "$workload" internal-rpc-authority-socket-init \
     services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-socket-init
 done
@@ -868,6 +930,47 @@ done
 patch_go_job internal-rpc-authority-migrate migrate services/internal/internal-rpc-authority ./cmd/cli up
 patch_go_job control-plane-migrate migrate services/internal/control-plane ./cmd/cli up
 patch_go_job control-plane-broker-bootstrap bootstrap services/internal/control-plane ./cmd/cli broker bootstrap
+patch_go_job email-bridge-migration migration services/internal/email-bridge ./cmd/cli up
+
+# EMAIL сохраняет production TLS и non-root identities. Air пишет только
+# в ограниченный tmp и отдельный build cache; migration не запускается через Air.
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "email-bridge");
+    (.spec.template.spec.initContainers[] | select(.name == "internal-rpc-authority-socket-init")) |= (
+      .securityContext.runAsNonRoot = true |
+      .securityContext.runAsUser = 29000 |
+      .securityContext.runAsGroup = 29000 |
+      .securityContext.readOnlyRootFilesystem = true |
+      .securityContext.capabilities = {"drop":["ALL"]} |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .volumeMounts += [
+        {"name":"dev-email-init-bin","mountPath":"/usr/local/bin"},
+        {"name":"dev-email-init-tmp","mountPath":"/tmp"}
+      ]
+    ) |
+    .spec.template.spec.volumes += [
+      {"name":"dev-email-init-bin","emptyDir":{"sizeLimit":"128Mi"}},
+      {"name":"dev-email-init-tmp","emptyDir":{"sizeLimit":"128Mi"}}
+    ] |
+    (.spec.template.spec.containers[]) |= (
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"} |
+      .startupProbe.failureThreshold = 150 |
+      .volumeMounts += [{"name":("dev-email-tmp-" + .name),"mountPath":"/tmp"}]
+    ) |
+    .spec.template.spec.volumes += [
+      .spec.template.spec.containers[] |
+      {"name":("dev-email-tmp-" + .name),"emptyDir":{"sizeLimit":"128Mi"}}
+    ]
+  ) |
+  with(select(.kind == "Job" and .metadata.name == "email-bridge-migration");
+    .spec.activeDeadlineSeconds = 300 |
+    (.spec.template.spec.containers[] | select(.name == "migration")) |= (
+      .securityContext.readOnlyRootFilesystem = true |
+      .resources.limits = {"cpu":"2","memory":"2Gi"}
+    )
+  )
+' "$render"
 
 frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
 api_middlewares=""
@@ -1010,6 +1113,7 @@ PUBLIC_HOST="$public_host" yq -i '
 ' "$render"
 
 SESSION_ARCHIVE_IMAGE="$session_archive_image" \
+DEPLOYMENT_PROFILE="$deployment_profile" \
 AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
   with(select(.kind == "ConfigMap" and
       .metadata.name == "internal-rpc-authority-publisher-target-registry");
@@ -1023,8 +1127,11 @@ AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
         .workload_id == "image-admission" or
         .workload_id == "image-promotion" or
         .workload_id == "integration-gateway" or
+        (.workload_id == "interaction-gateway" and strenv(DEPLOYMENT_PROFILE) == "web-with-mattermost") or
         .workload_id == "role-image-builder" or
         .workload_id == "secret-broker" or
+        .workload_id == "stt-tts-service" or
+        .workload_id == "email-bridge" or
         .workload_id == "session-archive" or
         .workload_id == "runtime-controller"
       )) |
@@ -1064,6 +1171,13 @@ yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
   unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])[]
 ' | yq -p=json -P >"$output"
+
+if [[ -z "$mail_configuration" ]]; then
+  mail_configuration="$temporary_directory/mail-bootstrap.json"
+  yq -r 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection") |
+    .stringData."mailboxes.json"' "$output" >"$mail_configuration"
+fi
+bash "$repository_root/tools/dev/render-local-mail.sh" "$output" "$mail_configuration" "$mail_resolv_conf" "$output"
 
 # Local workloads use disposable telemetry settings. Apply this only after all
 # generated init containers have been materialized into the final manifest.
@@ -1130,6 +1244,9 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
+"$repository_root/tools/dev/verify-local-stt-render.sh" "$output" "$stt_hot_reload_image"
+"$repository_root/tools/dev/verify-local-email-render.sh" "$output"
+"$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '
   any(.[];
     .kind == "ServersTransport" and .metadata.name == "control-api-gateway" and

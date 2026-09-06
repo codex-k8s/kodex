@@ -19,6 +19,8 @@ resources:
   - ../../overlays/production/stt-tts-service
   - ../../overlays/production/email-bridge
   - ../../overlays/production/artifact-retention
+  - ../../overlays/production/session-archive
+  - ../../overlays/production/backup-controller
   - ../../overlays/production/control-api-gateway
   - ../../overlays/production/staff-control-center
   - ../../overlays/production/interaction-gateway

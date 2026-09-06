@@ -7,15 +7,17 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s [--source-root <path>] [--cache-root <path>]\n' "$0" >&2
+  printf 'Usage: %s [--source-root <path>] [--cache-root <path>] [--profile web-only|web-with-mattermost]\n' "$0" >&2
 }
 
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 cache_root=""
+deployment_profile=web-only
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --cache-root) cache_root=${2:-}; shift 2 ;;
+    --profile) deployment_profile=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -154,6 +156,7 @@ install -d -m 0700 "$cache_root"
 render="$temporary_directory/render.yaml"
 
 "$source_root/tools/dev/render-local.sh" \
+  --profile "$deployment_profile" \
   --source-root "$source_root" --cache-root "$cache_root" --output "$render" \
   --public-host control.127.0.0.1.nip.io \
   --oidc-host sso.127.0.0.1.nip.io \
@@ -162,6 +165,7 @@ render="$temporary_directory/render.yaml"
   --kubernetes-endpoint-cidr 127.0.0.1/32 --kubernetes-endpoint-port 6443 \
   --runner-image registry.local.kodex/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   --session-archive-image registry.local.kodex/kodex/session-archive@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+  --stt-hot-reload-image registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555 \
   --backup-controller-image registry.local.kodex/kodex/backup-controller@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
   --promoted-pull-host pull.127.0.0.1.nip.io \
   --role-image-builder-image registry.local.kodex/kodex/role-image-builder@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \
@@ -175,8 +179,46 @@ render="$temporary_directory/render.yaml"
   --role-image-input-source-sha256 4444444444444444444444444444444444444444444444444444444444444444 \
   >/dev/null
 
+stt_image=registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555
+"$source_root/tools/dev/verify-local-profile-render.sh" "$render" "$deployment_profile"
+opposite_profile=web-only
+[[ "$deployment_profile" != web-only ]] || opposite_profile=web-with-mattermost
+if "$source_root/tools/dev/verify-local-profile-render.sh" "$render" "$opposite_profile" >/dev/null 2>&1; then
+  fail 'profile verifier accepted a render from another profile'
+fi
+profile_negative="$temporary_directory/profile-negative.yaml"
+if [[ "$deployment_profile" == web-with-mattermost ]]; then
+  for mutation in \
+    'select(.kind != "Deployment" or .metadata.name != "interaction-gateway")' \
+    '(select(.kind == "Deployment" and .metadata.name == "interaction-gateway") | .spec.template.spec.containers) |= map(select(.name != "platform-worker-grant-agent"))' \
+    '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "interaction-gateway")) | to_yaml)'; do
+    yq "$mutation" "$render" >"$profile_negative"
+    if "$source_root/tools/dev/verify-local-profile-render.sh" "$profile_negative" "$deployment_profile" >/dev/null 2>&1; then
+      fail "profile verifier accepted missing Mattermost material: $mutation"
+    fi
+  done
+fi
+"$source_root/tools/dev/verify-local-stt-render.sh" "$render" "$stt_image"
+stt_negative="$temporary_directory/stt-negative.yaml"
+for mutation in \
+  'select(.kind != "Deployment" or .metadata.name != "stt-tts-service")' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers) |= map(select(.name != "internal-rpc-authority-issuer"))' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | select(.name == "stt-tts-service") | .readinessProbe.exec) = {"command":["true"]}' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | .volumeMounts[] | select(.name == "dev-go-mod") | .readOnly) = false' \
+  '(select(.kind == "Deployment" and .metadata.name == "stt-tts-service") | .spec.template.spec.containers[] | select(.name == "stt-tts-service") | .image) = "golang:latest"' \
+  '(select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") | .data."key-delivery-targets.yaml") |= (from_yaml | .targets |= map(select(.workload_id != "stt-tts-service")) | to_yaml)' \
+  '(select(.kind == "NetworkPolicy" and .metadata.name == "stt-tts-service-exact-runtime-paths") | .spec.egress[].ports[] | select(.port == 8081) | .port) = 8080'; do
+  yq "$mutation" "$render" >"$stt_negative"
+  if "$source_root/tools/dev/verify-local-stt-render.sh" "$stt_negative" "$stt_image" >/dev/null 2>&1; then
+    fail "local STT verifier accepted a broken render: $mutation"
+  fi
+done
+
+bash "$source_root/scripts/tests/local-email-render-contract-test.sh" "$render"
+
 air_binary="$cache_root/go-tools/air"
 [[ -x "$air_binary" ]] || fail 'pinned Air executable is absent from the local tool cache'
+[[ "$(stat -c '%a' "$air_binary")" == 555 ]] || fail 'pinned Air executable is not read-only executable for every runtime UID'
 if readelf -l "$air_binary" | rg -q 'Requesting program interpreter'; then
   fail 'pinned Air executable is dynamically linked and is not portable into the Alpine hot-reload image'
 fi
@@ -252,13 +294,14 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       contains("variables.admissionId")))
 ' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
-  jq -cS . "$source_root/contracts/runtime-controller/v6/agent-runner-input.schema.json" |
+  jq -cS . "$source_root/contracts/runtime-controller/v7/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
 )
 actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256)' \
   <<<"$policy_json" | sha256sum | awk '{print $1}')
 jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_contract_digest" '
   .data.policySHA256 == $policy and
+  .data.roleRuntimeContractRevision == "2" and
   .data.roleRuntimeContractSHA256 == $runtime
 ' <<<"$policy_json" >/dev/null ||
   fail 'local policy or role runtime contract identity is not content-addressed'
@@ -284,13 +327,14 @@ source_dirty=false
 [[ -z "$(git -C "$source_root" status --porcelain --untracked-files=all)" ]] || source_dirty=true
 yq -o=json -I=0 '.' "$render" | jq -s -e \
   --arg source_revision "$source_revision" --arg source_digest "$source_digest" \
-  --arg source_dirty "$source_dirty" '
+  --arg source_dirty "$source_dirty" --arg profile "$deployment_profile" '
     . as $resources |
     (first($resources[] | select(.kind == "ConfigMap" and
       .metadata.namespace == "kodex-system" and
       .metadata.name == "kodex-dev-source-provenance")) | .data) as $provenance |
-    $provenance == {
+    ($provenance | del(.mailSourceSHA256, .mailConfigurationRevision, .mailConfigurationDigest, .mailPolicyDigest)) == {
       sourceRevision:$source_revision,
+      deploymentProfile:$profile,
       sourceContentSHA256:$source_digest,
       sourceDirty:$source_dirty
     } and
@@ -299,7 +343,8 @@ yq -o=json -I=0 '.' "$render" | jq -s -e \
       .spec.template.metadata.annotations["kodex.dev/source-revision"] ==
         $source_revision and
       .spec.template.metadata.annotations["kodex.dev/source-content-sha256"] ==
-        $source_digest)
+        $source_digest and
+      .spec.template.metadata.annotations["kodex.dev/deployment-profile"] == $profile)
   ' >/dev/null || fail 'rendered source provenance is not bound to the actual worktree content'
 [[ "$actual_policy_digest" != "$source_digest" &&
   "$expected_runtime_contract_digest" != "$source_digest" ]] ||
@@ -383,6 +428,24 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       select(.name == "RUNTIME_CONTROLLER_ROLE_RUNTIME_CONTRACT_SHA256") |
       .value] | first) == $policy.roleRuntimeContractSHA256)
 ' >/dev/null || fail 'runtime-controller annotations do not match effective hot-reload images'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  first(.[] | select(.kind == "Deployment" and .metadata.name == "runtime-controller")) |
+  .spec.template.spec as $pod |
+  any($pod.volumes[];
+    .name == "artifact-spool" and .emptyDir.sizeLimit == "2Gi" and
+    (.emptyDir.medium // "") == "") and
+  any($pod.containers[];
+    .name == "runtime-controller" and
+    .resources.requests["ephemeral-storage"] == "128Mi" and
+    .resources.limits["ephemeral-storage"] == "2Gi" and
+    any(.volumeMounts[];
+      .name == "artifact-spool" and
+      .mountPath == "/var/run/kodex/runtime-controller/artifact-spool" and
+      (.readOnly // false) == false and has("subPath") == false)) and
+  all(($pod.containers + ($pod.initContainers // []))[];
+    .name == "runtime-controller" or
+    all(.volumeMounts[]?; .name != "artifact-spool"))
+' >/dev/null || fail 'runtime-controller artifact spool storage boundary is invalid'
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "internal-rpc-authority-publisher" and

@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  boundedResponseBody,
+  verifyWorkspaceAcceptance,
+  verifyWorkspaceQuota,
+  workspaceAcceptanceTask,
+  workspaceQuotaTask,
+} from "./runtime-workspace-acceptance.mjs";
 import {
   chmodSync,
   lstatSync,
@@ -10,17 +17,30 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { createOwnerSessionClient } from "./owner-session-client.mjs";
+import { exactOrigin } from "./owner-session-storage.mjs";
 
 function fail(message) {
   throw new Error(`Kodex local RoleImage E2E failed: ${message}`);
 }
 
 const phase = process.argv[2] ?? "";
-if (!new Set(["prepare", "launch"]).has(phase)) {
-  fail("phase must be prepare or launch");
+if (
+  !new Set([
+    "prepare",
+    "launch",
+    "capture-runtime",
+    "verify-workspace",
+    "launch-quota",
+    "verify-quota",
+  ]).has(phase)
+) {
+  fail("phase is unsupported");
 }
 
-const baseURL = new URL(process.env.KODEX_ROLE_IMAGE_E2E_BASE_URL ?? "");
+const baseURL = new URL(
+  exactOrigin(process.env.KODEX_ROLE_IMAGE_E2E_BASE_URL ?? ""),
+);
 if (baseURL.protocol !== "https:" || baseURL.pathname !== "/") {
   fail("base URL must be an exact HTTPS origin");
 }
@@ -44,6 +64,13 @@ if (
 ) {
   fail("timeout is invalid");
 }
+const phaseDeadline = Date.now() + timeoutMilliseconds;
+
+function requestSignal() {
+  const remaining = phaseDeadline - Date.now();
+  if (remaining <= 0) fail("phase deadline exceeded");
+  return AbortSignal.timeout(Math.min(30_000, remaining));
+}
 
 function privateRegularFile(path, maximumBytes) {
   const info = lstatSync(path);
@@ -58,65 +85,34 @@ function privateRegularFile(path, maximumBytes) {
   }
 }
 
-privateRegularFile(storageStatePath, 1 << 20);
-const storageState = JSON.parse(readFileSync(storageStatePath, "utf8"));
-if (!Array.isArray(storageState.cookies))
-  fail("browser storage cookies are invalid");
-const matchingCookies = storageState.cookies.filter((cookie) => {
-  if (
-    !cookie ||
-    typeof cookie !== "object" ||
-    typeof cookie.name !== "string" ||
-    typeof cookie.value !== "string"
-  )
-    return false;
-  const domain = String(cookie.domain ?? "").replace(/^\./, "");
-  return (
-    cookie.secure === true &&
-    (baseURL.hostname === domain || baseURL.hostname.endsWith(`.${domain}`))
-  );
+const ownerSession = createOwnerSessionClient({
+  origin: baseURL.origin,
+  storagePath: storageStatePath,
 });
-const csrf = matchingCookies.find(
-  (cookie) => cookie.name === "__Host-kodex-csrf",
-)?.value;
-const session = matchingCookies.find(
-  (cookie) => cookie.name === "__Host-kodex-session",
-)?.value;
-if (
-  typeof csrf !== "string" ||
-  csrf.length < 43 ||
-  csrf.length > 256 ||
-  typeof session !== "string" ||
-  session.length < 32
-) {
-  fail("authenticated owner storage state is incomplete");
-}
-const cookieHeader = matchingCookies
-  .map((cookie) => `${cookie.name}=${cookie.value}`)
-  .join("; ");
 
 async function request(method, path, { body, version, expectedStatus } = {}) {
   const headers = {
     Accept: "application/json",
-    Cookie: cookieHeader,
-    Origin: baseURL.origin,
   };
-  const idempotencyKey = body === undefined ? "" : randomUUID();
+  const mutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+  const idempotencyKey = mutation ? randomUUID() : "";
+  if (mutation) {
+    headers["Idempotency-Key"] = idempotencyKey;
+  }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
-    headers["Idempotency-Key"] = idempotencyKey;
-    headers["X-CSRF-Token"] = csrf;
   }
   if (version !== undefined) headers["If-Match"] = `"${String(version)}"`;
   const requestBody = body === undefined ? undefined : JSON.stringify(body);
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     let response;
     try {
-      response = await fetch(new URL(path, baseURL), {
+      response = await ownerSession.request(path, {
         method,
         headers,
         body: requestBody,
         redirect: "error",
+        signal: requestSignal(),
       });
     } catch (error) {
       if (attempt < 3) {
@@ -127,9 +123,9 @@ async function request(method, path, { body, version, expectedStatus } = {}) {
         `${method} ${path} failed before a response (${error instanceof Error ? error.name : "UNKNOWN"})`,
       );
     }
-    const text = await response.text();
-    if (Buffer.byteLength(text) > 2 << 20)
-      fail(`oversized API response: ${path}`);
+    const text = (await boundedResponseBody(response, 2 << 20)).toString(
+      "utf8",
+    );
     let value = {};
     if (text) {
       try {
@@ -147,7 +143,10 @@ async function request(method, path, { body, version, expectedStatus } = {}) {
       await retryDelay(attempt);
       continue;
     }
-    const code = typeof value.code === "string" ? value.code : "UNKNOWN";
+    const code =
+      typeof value.code === "string" && /^[A-Z0-9_]{1,80}$/.test(value.code)
+        ? value.code
+        : "UNKNOWN";
     fail(`${method} ${path} returned ${String(response.status)} (${code})`);
   }
   fail(`${method} ${path} exhausted bounded retries`);
@@ -409,13 +408,102 @@ async function launch() {
   const agentRef = boundedString(state.agentRef, "agent ref");
   exactImage(state.promotedReference, "promoted reference");
   exactDigest(state.manifestDigest, "manifest digest");
+  const nonce = randomBytes(16).toString("hex");
+  const currentAgent = await request(
+    "GET",
+    `/api/v1/agents/${encodeURIComponent(agentRef)}`,
+    { expectedStatus: 200 },
+  );
+  if (currentAgent.ref !== agentRef || currentAgent.projectRef !== projectRef)
+    fail("workspace agent binding is invalid");
+  if (
+    !currentAgent.capabilities?.some(
+      (capability) => capability.key === "platform.artifact.manage",
+    )
+  ) {
+    await request(
+      "POST",
+      `/api/v1/agents/${encodeURIComponent(agentRef)}/commands`,
+      {
+        body: {
+          action: "GRANT_CAPABILITY",
+          capabilityKey: "platform.artifact.manage",
+        },
+        version: currentAgent.version,
+        expectedStatus: 200,
+      },
+    );
+  }
+  const runtime = await request(
+    "GET",
+    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+    { expectedStatus: 200 },
+  );
+  const modelQuery = new URLSearchParams({
+    query: runtime.configuration.model,
+    providerDefinitionKey: "openai-codex",
+    pageSize: "100",
+  });
+  const models = await request(
+    "GET",
+    `/api/v1/model-capabilities?${modelQuery}`,
+    { expectedStatus: 200 },
+  );
+  const accountRef = models.items?.find(
+    (model) => model.id === runtime.configuration.model && model.available,
+  )?.eligibleProviderAccountRefs?.[0];
+  if (
+    typeof accountRef !== "string" ||
+    !/^pacc_[A-Za-z0-9_-]+$/.test(accountRef)
+  )
+    fail("configured runtime model has no eligible provider account");
+  modelQuery.set("providerAccountRef", accountRef);
+  const accountModels = await request(
+    "GET",
+    `/api/v1/model-capabilities?${modelQuery}`,
+    { expectedStatus: 200 },
+  );
+  const selectedModel = accountModels.items?.find(
+    (model) =>
+      model.id === runtime.configuration.model &&
+      model.available &&
+      model.eligibleProviderAccountRefs?.includes(accountRef),
+  );
+  if (
+    !selectedModel ||
+    !/^mcat_[a-f0-9]{64}$/.test(accountModels.catalogRevision) ||
+    !/^[a-f0-9]{64}$/.test(accountModels.catalogDigest)
+  )
+    fail("exact account model catalog is unavailable");
+  await request(
+    "PUT",
+    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+    {
+      body: {
+        runtimeProfileRef: runtime.configuration.runtimeProfileRef,
+        model: runtime.configuration.model,
+        providerPolicyMode: "FIXED",
+        providerAccounts: [
+          {
+            accountRef,
+            weight: 1,
+            catalogRevision: accountModels.catalogRevision,
+            catalogDigest: accountModels.catalogDigest,
+            providerDefinitionKey: selectedModel.providerDefinitionKey,
+          },
+        ],
+      },
+      version: runtime.agentVersion,
+      expectedStatus: 200,
+    },
+  );
   const workspace = await request("POST", "/api/v1/runs", {
     body: {
       projectRef,
       targetRef: agentRef,
       targetType: "AGENT",
       title: `${prefix} promoted runtime readback`,
-      task: "Ответь одним коротким предложением, что локальный RoleImage runtime запущен.",
+      task: workspaceAcceptanceTask(nonce),
     },
     expectedStatus: 201,
   });
@@ -424,13 +512,208 @@ async function launch() {
     ...state,
     status: "launched",
     runRef,
+    activeRunRef: runRef,
+    workspaceNonce: nonce,
     launchedAt: new Date().toISOString(),
+  });
+}
+
+async function captureRuntime() {
+  privateRegularFile(statePath, 1 << 20);
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (
+    state.version !== 1 ||
+    !["launched", "quota-launched"].includes(state.status)
+  )
+    fail("launched runtime state is absent");
+  const runRef = boundedString(state.activeRunRef, "active run ref");
+  for (;;) {
+    const run = await request(
+      "GET",
+      `/api/v1/runs/${encodeURIComponent(runRef)}`,
+      { expectedStatus: 200 },
+    );
+    if (
+      run.ref !== runRef ||
+      run.projectRef !== state.projectRef ||
+      run.target?.ref !== state.agentRef
+    )
+      fail("active runtime owner differs");
+    if (run.state !== "QUEUED") {
+      if (!["RUNNING", "SUCCEEDED", "FAILED"].includes(run.state))
+        fail("active runtime state is unexpected");
+      const revision = (
+        await request(
+          "GET",
+          `/api/v1/runs/${encodeURIComponent(runRef)}/runtime-revision-diff`,
+          { expectedStatus: 200 },
+        )
+      ).current;
+      if (
+        !revision ||
+        revision.runRef !== runRef ||
+        revision.sessionRef !== run.sessionRef ||
+        revision.attempt !== run.attempt ||
+        !Number.isSafeInteger(run.attempt) ||
+        run.attempt < 1
+      )
+        fail("active runtime revision differs");
+      const shortHash = (value) =>
+        createHash("sha256")
+          .update(boundedString(value, "runtime binding ref"))
+          .digest("hex")
+          .slice(0, 16);
+      writeState({
+        ...state,
+        runtimeBinding: {
+          runRef,
+          revisionDigest: exactSHA256(
+            revision.revisionDigest,
+            "runtime revision digest",
+          ),
+          projectHash: shortHash(run.projectRef),
+          sessionHash: shortHash(run.sessionRef),
+          attempt: run.attempt,
+        },
+      });
+      return;
+    }
+    if (Date.now() >= phaseDeadline) fail("runtime binding deadline exceeded");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+async function launchQuota() {
+  privateRegularFile(statePath, 1 << 20);
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (
+    state.version !== 1 ||
+    state.status !== "workspace-passed" ||
+    state.workspaceEvidence?.checks?.nativeAgentShell !== "PASS"
+  )
+    fail("positive workspace control is absent");
+  const run = await request("POST", "/api/v1/runs", {
+    expectedStatus: 201,
+    body: {
+      projectRef: state.projectRef,
+      targetRef: state.agentRef,
+      targetType: "AGENT",
+      title: `${prefix} workspace quota negative`,
+      task: workspaceQuotaTask(randomBytes(16).toString("hex")),
+    },
+  });
+  const quotaRunRef = boundedString(run.run?.ref, "quota run ref");
+  if (quotaRunRef === state.runRef) fail("quota run reused positive control");
+  const { runtimeBinding: _binding, ...previous } = state;
+  writeState({
+    ...previous,
+    status: "quota-launched",
+    quotaRunRef,
+    activeRunRef: quotaRunRef,
+  });
+}
+
+async function verifyWorkspace() {
+  privateRegularFile(statePath, 1 << 20);
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (
+    state.version !== 1 ||
+    state.status !== "runtime-observed" ||
+    !state.runtimePod?.uid
+  )
+    fail("runtime image readback is absent");
+  const runRef = boundedString(state.runRef, "run ref");
+  for (;;) {
+    const run = await request(
+      "GET",
+      `/api/v1/runs/${encodeURIComponent(runRef)}`,
+      { expectedStatus: 200 },
+    );
+    if (run.state === "SUCCEEDED") break;
+    if (!["QUEUED", "RUNNING"].includes(run.state))
+      fail("workspace run did not succeed");
+    if (Date.now() >= phaseDeadline) fail("workspace run deadline exceeded");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const verification = {
+    getJSON: (path) => request("GET", path, { expectedStatus: 200 }),
+    getContent: async (path, maximumBytes) => {
+      const response = await ownerSession.request(path, {
+        redirect: "error",
+        signal: requestSignal(),
+      });
+      if (response.status !== 200) fail("workspace artifact download failed");
+      return boundedResponseBody(response, maximumBytes);
+    },
+    runRef,
+    projectRef: state.projectRef,
+    agentRef: state.agentRef,
+    nonce: state.workspaceNonce,
+  };
+  let evidence;
+  for (;;) {
+    try {
+      evidence = await verifyWorkspaceAcceptance(verification);
+      break;
+    } catch (error) {
+      if (
+        error?.code !== "ARTIFACT_SCAN_PENDING" ||
+        Date.now() >= phaseDeadline
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+  const { workspaceNonce: _nonce, ...safeState } = state;
+  writeState({
+    ...safeState,
+    status: "workspace-passed",
+    workspaceEvidence: evidence,
+    workspaceFinishedAt: new Date().toISOString(),
+  });
+}
+
+async function verifyQuota() {
+  privateRegularFile(statePath, 1 << 20);
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (state.version !== 1 || state.status !== "quota-observed")
+    fail("quota runtime observation is absent");
+  const runRef = boundedString(state.quotaRunRef, "quota run ref");
+  for (;;) {
+    const run = await request(
+      "GET",
+      `/api/v1/runs/${encodeURIComponent(runRef)}`,
+      { expectedStatus: 200 },
+    );
+    if (run.state === "FAILED") break;
+    if (!["QUEUED", "RUNNING"].includes(run.state))
+      fail("quota run did not fail");
+    if (Date.now() >= phaseDeadline) fail("quota run deadline exceeded");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const quotaEvidence = await verifyWorkspaceQuota({
+    getJSON: (path) => request("GET", path, { expectedStatus: 200 }),
+    runRef,
+    projectRef: state.projectRef,
+    agentRef: state.agentRef,
+    observation: state.quotaObservation,
+  });
+  writeState({
+    ...state,
+    status: "passed",
+    quotaEvidence,
+    workspaceEvidence: { ...state.workspaceEvidence, quota: "PASS" },
+    finishedAt: new Date().toISOString(),
   });
 }
 
 try {
   if (phase === "prepare") await prepare();
-  else await launch();
+  else if (phase === "launch") await launch();
+  else if (phase === "capture-runtime") await captureRuntime();
+  else if (phase === "launch-quota") await launchQuota();
+  else if (phase === "verify-quota") await verifyQuota();
+  else await verifyWorkspace();
 } catch (error) {
   console.error(
     error instanceof Error ? error.message : "Kodex local RoleImage E2E failed",

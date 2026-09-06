@@ -64,6 +64,11 @@ func TestInspectRepositoryIgnoresSQLLiteralsInTests(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
+	for _, directory := range []string{"libs", "tools"} {
+		if err := os.Mkdir(filepath.Join(root, directory), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	path := filepath.Join(root, "services", "example", "repository_test.go")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)

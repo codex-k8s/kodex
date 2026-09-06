@@ -43,7 +43,7 @@ done
   fail 'resource prefix is invalid'
 [[ "$timeout_seconds" =~ ^[0-9]+$ && "$timeout_seconds" -ge 60 && "$timeout_seconds" -le 1800 ]] ||
   fail 'timeout must be between 60 and 1800 seconds'
-for command_name in jq kubectl node npm stat; do
+for command_name in jq kubectl node npm stat timeout; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -104,7 +104,7 @@ cleanup() {
     kill "$pod_watch_pid" >/dev/null 2>&1 || true
     wait "$pod_watch_pid" >/dev/null 2>&1 || true
   fi
-  rm -f -- "$api_storage_state" ${pod_watch_file:+"$pod_watch_file"}
+  rm -f -- "$api_storage_state" "$api_storage_state.session.json" ${pod_watch_file:+"$pod_watch_file"}
 }
 trap cleanup EXIT
 KODEX_E2E_BASE_URL="${base_url%/}" \
@@ -125,62 +125,98 @@ common_environment=(
 env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" prepare
 
 select_exact_runtime_pod() {
-  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" '
-    [.[] |
-      select((.metadata.uid as $uid | $before | index($uid)) == null) |
-      select(
-        ([(.spec.initContainers[]? | select(.name == "workspace-init") | .image),
-          (.spec.containers[]? |
-            select(.name == "role-runtime" or .name == "provider-runtime") | .image)] |
-          length == 3 and all(. == $image)) and
-        ([(.status.initContainerStatuses[]? | select(.name == "workspace-init") | .imageID),
-          (.status.containerStatuses[]? |
-            select(.name == "role-runtime" or .name == "provider-runtime") | .imageID)] |
-          length == 3 and all(test("@sha256:[a-f0-9]{64}$")) and (unique | length == 1))
-      )] |
-    sort_by(.metadata.creationTimestamp) | last // empty
-  '
+  jq -c --argjson before "$before_pods" --arg image "$promoted_reference" \
+    --argjson binding "$(jq -ce '.runtimeBinding' "$state")" \
+    -f "$repository_root/tools/dev/runtime-workspace-pod.jq"
 }
 
-before_pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json |
-  jq -c '[.items[].metadata.uid]')
-pod_watch_file=$(mktemp "$state.XXXXXX.pod-watch.json")
-chmod 0600 "$pod_watch_file"
-kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
-  --watch --output-watch-events -o json >"$pod_watch_file" 2>/dev/null &
-pod_watch_pid=$!
-sleep 1
-env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" launch
-
-promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
-deadline=$((SECONDS + timeout_seconds))
-pod_json=""
-while ((SECONDS < deadline)); do
-  pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json)
-  pod_json=$(jq -c '.items' <<<"$pods" | select_exact_runtime_pod)
-  if [[ -z "$pod_json" ]]; then
-    pod_json=$(jq -cs '[.[] | .object // .]' "$pod_watch_file" 2>/dev/null |
-      select_exact_runtime_pod 2>/dev/null || true)
-  fi
-  [[ -z "$pod_json" ]] || break
-  sleep 1
-done
-kill "$pod_watch_pid" >/dev/null 2>&1 || true
-wait "$pod_watch_pid" >/dev/null 2>&1 || true
-pod_watch_pid=""
-if [[ -z "$pod_json" ]]; then
+observe_runtime_pod() {
+  local launch_phase=$1
+  before_pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json |
+    jq -c '[.items[].metadata.uid]')
+  pod_watch_file=$(mktemp "$state.XXXXXX.pod-watch.json")
+  chmod 0600 "$pod_watch_file"
   kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
-    -o custom-columns=NAME:.metadata.name,PHASE:.status.phase --no-headers >&2 || true
-  fail 'runtime Pod exact image and imageID readback timed out'
-fi
+    --watch --output-watch-events -o json >"$pod_watch_file" 2>/dev/null &
+  pod_watch_pid=$!
+  sleep 1
+  env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" "$launch_phase"
+  env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" capture-runtime
 
-pod_name=$(jq -er '.metadata.name' <<<"$pod_json")
-pod_uid=$(jq -er '.metadata.uid' <<<"$pod_json")
+  promoted_reference=$(jq -er '.promotedReference | select(test("@sha256:[a-f0-9]{64}$"))' "$state")
+  deadline=$((SECONDS + timeout_seconds))
+  pod_json=""
+  while ((SECONDS < deadline)); do
+    pods=$(kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true -o json)
+    pod_json=$(jq -c '.items' <<<"$pods" | select_exact_runtime_pod)
+    if [[ -z "$pod_json" ]]; then
+      pod_json=$(jq -cs '[.[] | .object // .] | group_by(.metadata.uid) | map(last)' "$pod_watch_file" 2>/dev/null |
+        select_exact_runtime_pod 2>/dev/null || true)
+    fi
+    [[ -z "$pod_json" ]] || break
+    sleep 1
+  done
+  kill "$pod_watch_pid" >/dev/null 2>&1 || true
+  wait "$pod_watch_pid" >/dev/null 2>&1 || true
+  pod_watch_pid=""
+  if [[ -z "$pod_json" ]]; then
+    kubectl -n kodex-runtime get pods -l runtime.kodex.dev/managed=true \
+      -o custom-columns=NAME:.metadata.name,PHASE:.status.phase --no-headers >&2 || true
+    fail 'runtime Pod exact image and imageID readback timed out'
+  fi
+
+  pod_name=$(jq -er '.metadata.name' <<<"$pod_json")
+  pod_uid=$(jq -er '.metadata.uid' <<<"$pod_json")
+}
+
+observe_runtime_pod launch
 temporary_state=$(mktemp "$state.XXXXXX")
 jq --arg pod_name "$pod_name" --arg pod_uid "$pod_uid" \
-  '.status="passed" | .runtimePod={name:$pod_name,uid:$pod_uid} | .finishedAt=(now | todateiso8601)' \
+  '.status="runtime-observed" | .runtimePod={name:$pod_name,uid:$pod_uid}' \
   "$state" >"$temporary_state"
 chmod 0600 "$temporary_state"
 mv -- "$temporary_state" "$state"
+env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" verify-workspace
+
+# Canary запускается только в exact Pod второго Run; он возвращает закрытый код,
+# не читает и не выводит пользовательские файлы. Удаление fixture остаётся
+# обычным terminal cleanup execution volume, без ручной правки runtime.
+rm -f -- "$pod_watch_file"
+pod_watch_file=""
+observe_runtime_pod launch-quota
+quota_reason=""
+while ((SECONDS < deadline)); do
+  current_pod=$(kubectl -n kodex-runtime get pod "$pod_name" -o json)
+  current_uid=$(jq -er '.metadata.uid' <<<"$current_pod")
+  [[ "$current_uid" == "$pod_uid" ]] || fail 'quota runtime Pod UID changed'
+  [[ -n "$(jq -c '[.]' <<<"$current_pod" | select_exact_runtime_pod)" ]] ||
+    fail 'quota runtime Pod binding changed'
+  if quota_reason=$(timeout 8s kubectl --request-timeout=5s -n kodex-runtime \
+      exec "$pod_name" -c role-runtime --pod-running-timeout=3s -- \
+      /usr/local/bin/kodex-agent-runner runtime-workspace-canary 2>/dev/null); then
+    case "$quota_reason" in
+      QUOTA_EXCEEDED) break ;;
+      OK) ;;
+      *) fail 'quota runtime canary returned another denial' ;;
+    esac
+  else
+    fail 'quota runtime canary did not complete'
+  fi
+  sleep 1
+done
+[[ "$quota_reason" == QUOTA_EXCEEDED ]] || fail 'quota runtime observation timed out'
+current_pod=$(kubectl -n kodex-runtime get pod "$pod_name" -o json)
+[[ "$(jq -er '.metadata.uid' <<<"$current_pod")" == "$pod_uid" &&
+   -n "$(jq -c '[.]' <<<"$current_pod" | select_exact_runtime_pod)" ]] ||
+  fail 'quota runtime Pod changed during readback'
+temporary_state=$(mktemp "$state.XXXXXX")
+jq --arg pod_name "$pod_name" --arg pod_uid "$pod_uid" \
+  '.status="quota-observed" | .quotaObservation={
+    reason:"QUOTA_EXCEEDED",runRef:.quotaRunRef,revisionDigest:.runtimeBinding.revisionDigest,
+    attempt:.runtimeBinding.attempt,podName:$pod_name,podUID:$pod_uid}' \
+  "$state" >"$temporary_state"
+chmod 0600 "$temporary_state"
+mv -- "$temporary_state" "$state"
+env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" verify-quota
 
 printf 'Kodex local RoleImage supply-chain E2E passed: %s\n' "$resource_prefix"
