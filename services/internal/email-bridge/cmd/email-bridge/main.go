@@ -15,8 +15,8 @@ func main() {
 	base := context.Background()
 	ctx, stop := signal.NotifyContext(base, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	if app.Run(ctx, base, version) != nil {
-		slog.Error("Email bridge stopped unexpectedly")
+	if err := app.Run(ctx, base, version); err != nil {
+		app.LogFailure(slog.Default(), err)
 		os.Exit(1)
 	}
 }
