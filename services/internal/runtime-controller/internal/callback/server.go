@@ -43,6 +43,8 @@ var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 type Config struct {
 	Listen, CertificateFile, PrivateKeyFile, ClientCAFile, ExpectedClientSPIFFEID string
 	RequestTimeout, WarmLongPoll                                                  time.Duration
+	FileTransferTimeout                                                           time.Duration
+	ArtifactSpoolDirectory                                                        string
 }
 
 // Coordinator связывает leader claim loop с callbacks, не становясь owner store.
@@ -132,27 +134,34 @@ type Server struct {
 	coordinator *Coordinator
 	logger      *slog.Logger
 	http        *http.Server
+	spool       *artifactSpool
 }
 
 func New(config Config, manager *workload.Manager, control *controlplaneclient.Client, coordinator *Coordinator, logger *slog.Logger) (*Server, error) {
 	if manager == nil || control == nil || coordinator == nil || logger == nil || config.Listen == "" ||
 		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
-		config.WarmLongPoll < time.Second || config.WarmLongPoll > 30*time.Second {
+		config.WarmLongPoll < time.Second || config.WarmLongPoll > 30*time.Second ||
+		config.FileTransferTimeout < time.Second || config.FileTransferTimeout > runtimecontract.MaximumArtifactTransferDuration {
 		return nil, errors.New("runtime callback configuration is invalid")
 	}
 	tlsConfig, err := serverTLS(config)
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{config: config, manager: manager, control: control, coordinator: coordinator, logger: logger}
+	spool, err := openArtifactSpool(config.ArtifactSpoolDirectory)
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{config: config, manager: manager, control: control, coordinator: coordinator, logger: logger, spool: spool}
 	server.http = &http.Server{Addr: config.Listen, Handler: http.HandlerFunc(server.route), TLSConfig: tlsConfig,
 		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 30 * time.Second,
-		WriteTimeout: time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+10) * time.Second,
+		WriteTimeout: max(2*config.FileTransferTimeout+10*time.Second, time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+10)*time.Second),
 		IdleTimeout:  60 * time.Second, MaxHeaderBytes: 16 << 10}
 	return server, nil
 }
 
 func (server *Server) Run(ctx context.Context) error {
+	server.http.BaseContext = func(net.Listener) context.Context { return ctx }
 	listener, err := net.Listen("tcp", server.config.Listen)
 	if err != nil {
 		return errors.New("listen runtime callback")
@@ -170,6 +179,9 @@ func (server *Server) Run(ctx context.Context) error {
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		err := server.http.Shutdown(shutdown)
+		if err != nil {
+			_ = server.http.Close()
+		}
 		serveErr := <-done
 		if !errors.Is(serveErr, http.ErrServerClosed) {
 			err = errors.Join(err, serveErr)
@@ -178,15 +190,24 @@ func (server *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (server *Server) Shutdown(ctx context.Context) error { return server.http.Shutdown(ctx) }
+func (server *Server) Shutdown(ctx context.Context) error {
+	err := server.http.Shutdown(ctx)
+	if err != nil {
+		_ = server.http.Close()
+	}
+	return err
+}
+
+func (server *Server) Close() error                                 { return server.spool.close() }
+func (server *Server) CheckArtifactSpool(ctx context.Context) error { return server.spool.check(ctx) }
 
 func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "no-store")
-	if request.URL.RawQuery != "" || request.URL.Fragment != "" {
+	if request.URL.Fragment != "" {
 		http.NotFound(writer, request)
 		return
 	}
-	if request.Method == http.MethodGet && request.URL.Path == "/v1/warm/next" {
+	if request.Method == http.MethodGet && request.URL.Path == "/v1/warm/next" && request.URL.RawQuery == "" {
 		server.nextWarm(writer, request)
 		return
 	}
@@ -197,6 +218,10 @@ func (server *Server) route(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		server.artifact(writer, request, parts[2], parts[4])
+		return
+	}
+	if request.URL.RawQuery != "" {
+		http.NotFound(writer, request)
 		return
 	}
 	if len(parts) != 4 || parts[0] != "v1" || parts[1] != "executions" || parts[2] == "" {
@@ -374,43 +399,23 @@ func (server *Server) artifact(writer http.ResponseWriter, request *http.Request
 		http.NotFound(writer, request)
 		return
 	}
-	var expected *runtimecontract.RunnerInputArtifact
-	for index := range input.InputArtifacts {
-		if input.InputArtifacts[index].Ref == artifactRef {
-			expected = &input.InputArtifacts[index]
-			break
+	if request.URL.RawQuery != "" {
+		if strings.HasPrefix(request.URL.RawQuery, "context_kind=") || request.URL.Query().Has("context_kind") {
+			server.contextArtifact(writer, request, input, artifactRef)
+		} else {
+			server.catalogArtifact(writer, request, input, artifactRef)
+		}
+		return
+	}
+	for _, expected := range input.InputArtifacts {
+		if expected.Ref == artifactRef {
+			pin := artifactTransferPin{ref: expected.Ref, project: input.ProjectRef, name: expected.FileName, media: expected.MediaType,
+				digest: expected.Digest, size: expected.SizeBytes, revision: expected.Revision, version: expected.Version}
+			server.serveArtifactTransfer(writer, request, input, pin, expected.MediaType)
+			return
 		}
 	}
-	if expected == nil {
-		http.NotFound(writer, request)
-		return
-	}
-	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
-	defer cancel()
-	response, err := server.control.Runtime.ReadExecutionArtifact(ctx, &controlplanev1.ReadExecutionArtifactRequest{
-		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, ArtifactRef: expected.Ref,
-	})
-	if err != nil {
-		writeControlError(writer, err)
-		return
-	}
-	artifact := response.GetArtifact()
-	content := response.GetContent()
-	digest := sha256.Sum256(content)
-	actualDigest := "sha256:" + hex.EncodeToString(digest[:])
-	if artifact.GetRef() != expected.Ref || artifact.GetProjectRef() != input.ProjectRef || artifact.GetFileName() != expected.FileName ||
-		artifact.GetMediaType() != expected.MediaType || artifact.GetSizeBytes() != expected.SizeBytes ||
-		int64(len(content)) != expected.SizeBytes || artifact.GetRevision() != int32(expected.Revision) ||
-		artifact.GetVersion() != expected.Version || subtle.ConstantTimeCompare([]byte(artifact.GetDigest()), []byte(expected.Digest)) != 1 ||
-		subtle.ConstantTimeCompare([]byte(actualDigest), []byte(expected.Digest)) != 1 {
-		http.Error(writer, "runtime artifact binding is invalid", http.StatusConflict)
-		return
-	}
-	writer.Header().Set("Content-Type", expected.MediaType)
-	writer.Header().Set("Content-Length", strconv.FormatInt(expected.SizeBytes, 10))
-	writer.Header().Set("X-Kodex-Artifact-Digest", expected.Digest)
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(content)
+	http.NotFound(writer, request)
 }
 
 func (server *Server) nextWarm(writer http.ResponseWriter, request *http.Request) {
@@ -567,6 +572,7 @@ func emptyMCPParams(raw json.RawMessage) bool {
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
+	result = append(result, runtimeFileTools(input)...)
 	if input.SystemAssistant {
 		result = append(result, configurationCatalogTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
@@ -655,6 +661,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
+	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest:
+		result, err = server.callFileTool(request.Context(), input, params.Name, params.Arguments)
 	default:
 		err = errors.New("tool is not available")
 	}
@@ -1143,6 +1151,14 @@ func (server *Server) recordToolCall(ctx context.Context, input runtimecontract.
 }
 
 func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, arguments map[string]any) (map[string]any, string, string, bool) {
+	if runtimecontract.IsRuntimeFileTool(tool) {
+		purpose, _ := arguments["purpose"].(string)
+		_, ok := runtimeFilePurpose(input, purpose)
+		if !ok {
+			return nil, "", "", false
+		}
+		return map[string]any{"purpose": purpose}, "", input.FileCatalog.Ref, true
+	}
 	switch tool {
 	case "get_configuration_catalog":
 		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant

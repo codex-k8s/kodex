@@ -4,13 +4,62 @@ title: Диагностика runtime-controller
 type: runbook
 status: approved
 owner: sre
-version: 3.0.0
-updated: 2026-09-04
+version: 3.1.0
+updated: 2026-09-05
 ---
 
 # Диагностика runtime-controller
 
 ## Role Pod path
+
+### Ограниченное завершение (#1073)
+
+Role Pod имеет exact `terminationGracePeriodSeconds=150`, закреплённый также
+admission. Три обычных контейнера не имеют гарантированного порядка SIGTERM;
+relay drain60s сохраняет финальный credential commit, runner имеет отдельные
+57s чтения provider result,60s completion и20s cleanup.
+
+Выход одного provider/relay контейнера не позволяет немедленно заменить
+измеренный результат пустым failure: controller ждёт callback120s. При
+execution timeout либо добровольном shutdown StopTurn удаляет только Pod,
+сохраняя ticket, projection и NetworkPolicy для exact callback. Текущая lease
+продолжает проходить owner RenewExecution; отказ owner закрывает execution,
+не продлевая отозванный grant. После истечения grace используется прежний
+неизменный failure receipt, cleanup выполняется после durable owner success.
+
+Controller прекращает claim, но удерживает Kubernetes leadership и callback
+listener до завершения bounded drain. Потеря leadership является отдельным
+закрытым отказом, включая потерю уже во время drain. Максимум drain210s
+покрывает stop10 + callback120 + failure retry60 + cleanup10 и запас10s;
+callback listener имеет ещё5s, controller Pod grace240s оставляет время
+на закрытие listener и telemetry. Это не расширяет deadline owner grants.
+
+При ручной проверке сверить metadata Pod grace, leader Lease holder до/после
+завершения, terminal receipt и отсутствие раннего удаления execution ticket/
+NetworkPolicy. Не выводить ticket data. Потеря ACK либо отказ refresh остаются
+ошибкой, а не подтверждением credential effect. Owner cancel может запретить
+поздний callback; drain не обещает приём данных после owner terminal.
+
+| Переход | Авторитетный результат | Закрытие |
+| --- | --- | --- |
+| Обычный terminal | Exact CompleteExecution receipt с измеренным Usage | Callback удаляет runtime material после owner commit |
+| Provider timeout/refresh failure | Частичный результат и FAILED receipt, без подтверждения неизвестного refresh | Независимый completion, без повторного provider effect |
+| Pod SIGTERM | Текущий lease и результат после provider/relay drain | Callback120s предшествует fallback |
+| Controller timeout/shutdown | StopTurn, действующая owner lease, bounded receipt readback | Сначала join текущих turns, затем listener/election/dependencies |
+| Owner cancel/revoke | Owner отказывает в renew/callback | Немедленное закрытие, без replacement grant и обещания late Usage |
+| Leadership lost | Дальнейшие claims и drain renewal запрещены | Stop/delete текущего Pod и coordinator close |
+| Slow peer | Relay deadline закрывает incomplete request без commit | Listener/connection/callback cancel и join в пределах60s |
+
+Локальные regression используют fake Kubernetes readback, настоящий HTTP
+listener callback и owner RPC stub; runner companion — настоящий Unix relay.
+Live/SRE deployment и совместный acceptance пока NOT RUN. Context7 проверен
+для `/golang/go` и `/websites/kubernetes_io`.
+
+После companion локально прошли полный controller race/vet/build и
+`make test-web-only-release`: app1.063s, callback1.892s,
+credentialprojection1.024s, workload1.779s. Для issuer требуется отдельный
+authority companion `a2883dff26496ff4669b69666e310e2433a27708`: обычный issuer
+не гарантирует доступность fresh proof в течение controller drain.
 
 Для каждой обычной attempt controller создаёт новый Pod exact promoted role
 image. Проверить authoritative execution, RuntimeRevision digest, attempt,
@@ -18,7 +67,7 @@ fence/generation, image `repository@sha256`, runtime ABI, ServiceAccount,
 resources, PVC и callback ticket. Display role name, prompt или caller-supplied
 Kubernetes locator не являются authority.
 
-`kodex.agent-runner-input.v6` должен пройти schema validation. Mutable
+`kodex.agent-runner-input.v7` должен пройти schema validation. Mutable
 tag, image вне promoted repository, ABI mismatch, stale fence, extra container,
 broad ServiceAccount или host access закрыто отклоняются admission.
 
@@ -44,6 +93,32 @@ Runtime ConfigMap должен быть immutable и содержать ровн
 `skills.json`, `memories.json`, `mcp.json`, `callback.json`,
 `provider-auth.sha256`. Их annotations должны совпадать с Pod по organization,
 project, session, turn, attempt, execution/MCP binding и всем policy digests.
+
+Skills и Memory являются отдельными typed snapshots, не tools/knowledge.
+Сверить metadata exact binding/revision/digest и наличие `context_snapshot`;
+содержимое Memory summary и Skill files в диагностику не выводить.
+Controller проверяет полный RuntimeRevision digest после hydration. Отсутствие
+нового snapshot в producer не исправляется fallback на mutable catalog.
+
+Отдельный `runtime-context` emptyDir (520Mi) монтируется ровно в
+`/workspace/context`: init RW, role/provider RO, credential relay без mount.
+Admission запрещает alias, subPath и вложенные mounts. Canary не заменяет
+проверку реального RO filesystem перед запуском provider.
+Подробный callback-контракт и интеграционные зависимости:
+[`OPS-RUNTIME-1025`](../operations/runtime-context-1025.md).
+
+## Временные файлы transfer
+
+При причине readiness `artifact_spool` сверить metadata тома `artifact-spool`
+(disk emptyDir2Gi, mount только у controller), UID10001 и fsGroup29000,
+настройки `RUNTIME_CONTROLLER_ARTIFACT_SPOOL_DIRECTORY` и
+`RUNTIME_CONTROLLER_FILE_TRANSFER_TIMEOUT`. Не читать содержимое private
+каталога или файловых дескрипторов процесса. Временные файлы unlink сразу после
+открытия; отсутствие pathname во время передачи является ожидаемым.
+Исчерпание двух transfer slots возвращает503 без частичного body. Нельзя
+обходить отказ увеличением unary message limit или общим writable root.
+Локальное воспроизведение: `make test-runtime-controller-artifact-transfer`;
+он проверяет stream/spool и оба profile renders без обращения к кластеру.
 
 ## Always-hot assistant
 

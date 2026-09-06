@@ -495,7 +495,7 @@ spec:
         object.spec.restartPolicy == 'Never' &&
         has(object.spec.enableServiceLinks) &&
         object.spec.enableServiceLinks == false &&
-        object.spec.terminationGracePeriodSeconds == 30 &&
+        object.spec.terminationGracePeriodSeconds == 150 &&
         (!has(object.spec.hostNetwork) || object.spec.hostNetwork == false) &&
         (!has(object.spec.hostPID) || object.spec.hostPID == false) &&
         (!has(object.spec.hostIPC) || object.spec.hostIPC == false) &&
@@ -764,7 +764,7 @@ spec:
       message: runtime revision and ticket mounts are not exact read-only projections
     - expression: >-
         object.spec.volumes.all(volume,
-          volume.name in ['session', 'workspace', 'vfs-input', 'vfs-knowledge',
+          volume.name in ['session', 'workspace', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca',
             'callback-client', 'provider-auth', 'provider-socket', 'tmp',
             'provider-tmp', 'provider-credential-relay', 'kube-api-access'] ||
@@ -815,6 +815,12 @@ spec:
             !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
             !has(volume.secret) && !has(volume.configMap) &&
             !has(volume.projected))) == 1) &&
+        size(object.spec.volumes.filter(volume,
+          volume.name == 'runtime-context' && has(volume.emptyDir) &&
+          quantity(string(volume.emptyDir.sizeLimit)).compareTo(quantity('520Mi')) == 0 &&
+          (!has(volume.emptyDir.medium) || volume.emptyDir.medium == '') &&
+          !has(volume.hostPath) && !has(volume.persistentVolumeClaim) &&
+          !has(volume.secret) && !has(volume.configMap) && !has(volume.projected))) == 1 &&
         ['provider-socket', 'provider-credential-relay'].all(name,
           size(object.spec.volumes.filter(volume,
             volume.name == name && has(volume.emptyDir) &&
@@ -837,8 +843,17 @@ spec:
             mount.mountPath.startsWith('/workspace/.kodex/volumes/')))
       message: runtime environment volume mount path is outside the closed workspace catalog
     - expression: >-
+        variables.allContainers.all(container,
+          !has(container.volumeMounts) || container.volumeMounts.all(mount,
+            !mount.mountPath.startsWith('/workspace/context/') &&
+            (mount.mountPath != '/workspace/context' || mount.name == 'runtime-context') &&
+            (mount.name != 'runtime-context' ||
+              (mount.mountPath == '/workspace/context' && !has(mount.subPath) &&
+               !has(mount.subPathExpr) && !has(mount.mountPropagation)))))
+      message: runtime context cannot have aliases or nested mounts
+    - expression: >-
         variables.providerContainers[0].volumeMounts.all(mount,
-          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge',
+          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'provider-auth', 'provider-socket',
             'provider-credential-relay', 'provider-tmp']) &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
@@ -853,6 +868,10 @@ spec:
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'vfs-knowledge' && mount.mountPath == '/workspace/knowledge' &&
           has(mount.readOnly) && mount.readOnly == true)) == 1 &&
+        size(variables.providerContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-context' && mount.mountPath == '/workspace/context' &&
+          has(mount.readOnly) && mount.readOnly == true && !has(mount.subPath) &&
+          !has(mount.subPathExpr) && !has(mount.mountPropagation))) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'runtime-input' &&
           mount.mountPath == '/var/run/config/kodex/runtime' &&
@@ -876,14 +895,14 @@ spec:
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-tmp' && mount.mountPath == '/tmp')) == 1 &&
         variables.roleContainers[0].volumeMounts.all(mount,
-          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge',
+          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
             'provider-socket', 'tmp', 'kube-api-access'] ||
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         ['workspace', 'session'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
-        ['vfs-input', 'vfs-knowledge'].all(name,
+        ['vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
             mount.name == name && has(mount.readOnly) && mount.readOnly == true)) == 1) &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
@@ -894,6 +913,9 @@ spec:
           mount.name == 'vfs-input' && mount.mountPath == '/workspace/input')) == 1 &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'vfs-knowledge' && mount.mountPath == '/workspace/knowledge')) == 1 &&
+        size(variables.roleContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-context' && mount.mountPath == '/workspace/context' &&
+          !has(mount.subPath) && !has(mount.subPathExpr) && !has(mount.mountPropagation))) == 1 &&
         size(variables.roleContainers[0].volumeMounts.filter(mount,
           mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
           !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
@@ -929,10 +951,10 @@ spec:
           mount.name == 'provider-credential-relay' &&
           mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
         object.spec.initContainers[0].volumeMounts.all(mount,
-          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge',
+          mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
             'tmp']) &&
-        ['workspace', 'session', 'vfs-input', 'vfs-knowledge'].all(name,
+        ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(object.spec.initContainers[0].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
@@ -943,6 +965,9 @@ spec:
           mount.name == 'vfs-input' && mount.mountPath == '/workspace/input')) == 1 &&
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
           mount.name == 'vfs-knowledge' && mount.mountPath == '/workspace/knowledge')) == 1 &&
+        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          mount.name == 'runtime-context' && mount.mountPath == '/workspace/context' &&
+          !has(mount.subPath) && !has(mount.subPathExpr) && !has(mount.mountPropagation))) == 1 &&
         size(object.spec.initContainers[0].volumeMounts.filter(mount,
           mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
           !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&

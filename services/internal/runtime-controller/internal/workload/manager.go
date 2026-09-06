@@ -189,15 +189,46 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 	if run == nil {
 		return errors.New("runtime leader callback is required")
 	}
-	electionContext, cancel := context.WithCancel(ctx)
+	electionContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
+	watcherDone := make(chan struct{})
+	finished := make(chan struct{})
+	started := make(chan struct{})
+	defer func() { close(finished); <-watcherDone }()
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+		}
+		select {
+		case <-started:
+		default:
+			cancel()
+			return
+		}
+		timer := time.NewTimer(ControllerShutdownDrain)
+		defer timer.Stop()
+		select {
+		case <-finished:
+		case <-timer.C:
+			cancel()
+		}
+	}()
 	result := make(chan error, 1)
 	elector, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
 		Lock: &resourcelock.LeaseLock{LeaseMeta: metav1.ObjectMeta{Name: "runtime-controller-leader", Namespace: manager.config.ControlNamespace},
 			Client: manager.client.CoordinationV1(), LockConfig: resourcelock.ResourceLockConfig{Identity: manager.config.ControllerPodUID}},
 		LeaseDuration: 15 * time.Second, RenewDeadline: 10 * time.Second, RetryPeriod: 2 * time.Second, ReleaseOnCancel: true,
 		Callbacks: leaderelection.LeaderCallbacks{OnStartedLeading: func(leaderContext context.Context) {
-			result <- run(leaderContext)
+			close(started)
+			if ctx.Err() != nil {
+				result <- ctx.Err()
+				cancel()
+				return
+			}
+			result <- runWithLeadership(ctx, leaderContext, run)
 			cancel()
 		}, OnStoppedLeading: func() {}},
 	})
@@ -206,14 +237,38 @@ func (manager *Manager) RunAsLeader(ctx context.Context, run func(context.Contex
 	}
 	elector.Run(electionContext)
 	select {
-	case err := <-result:
-		return err
+	case <-started:
+		return <-result
 	default:
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		return errors.New("runtime leadership lost")
 	}
+}
+
+// ControllerShutdownDrain покрывает stop10 + callback120 + fallback60 + cleanup10.
+const ControllerShutdownDrain = 210 * time.Second
+
+var ErrLeadershipLost = errors.New("runtime leadership lost")
+
+type leadershipContextKey struct{}
+
+func LeadershipDone(ctx context.Context) <-chan struct{} {
+	if leadership, ok := ctx.Value(leadershipContextKey{}).(context.Context); ok {
+		return leadership.Done()
+	}
+	return nil
+}
+
+func runWithLeadership(lifecycle, leadership context.Context, run func(context.Context) error) error {
+	ctx, cancel := context.WithCancelCause(context.WithValue(context.WithoutCancel(leadership), leadershipContextKey{}, leadership))
+	defer cancel(context.Canceled)
+	stopLifecycle := context.AfterFunc(lifecycle, func() { cancel(context.Canceled) })
+	defer stopLifecycle()
+	stopLeadership := context.AfterFunc(leadership, func() { cancel(ErrLeadershipLost) })
+	defer stopLeadership()
+	return run(ctx)
 }
 
 func (manager *Manager) CleanupStaleTurns(ctx context.Context) error {
@@ -413,6 +468,9 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 		}
 	}
 	manager.addCatalog(&input, revision)
+	if err := hydrateRuntimeContext(&input, revision); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
@@ -437,6 +495,9 @@ func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionS
 	}
 	input.SessionRef, input.AgentRef = revision.GetSessionRef(), revision.GetAgentRef()
 	manager.addCatalog(&input, revision)
+	if err := hydrateRuntimeContext(&input, revision); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
 		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
@@ -458,6 +519,9 @@ func validateRuntimeRevisionDigest(input runtimecontract.RunnerInput, binding Pr
 }
 
 func validateRunnerInput(input runtimecontract.RunnerInput) error {
+	if _, err := input.RequiredContextSnapshot(time.Now()); err != nil {
+		return err
+	}
 	if err := input.Validate(); err != nil {
 		return err
 	}
@@ -499,7 +563,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV6, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV7, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		OrganizationRef:    revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
@@ -528,6 +592,8 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ConfigOverlayVersion:       revision.GetConfigOverlayVersion(),
 		ConfigOverlayDigest:        revision.GetConfigOverlayDigest(),
 		ConfigOverlay:              revision.GetConfigOverlay(),
+		EffectiveReasoningEffort:   revision.GetEffectiveReasoningEffort(),
+		ReasoningMode:              strings.TrimPrefix(revision.GetReasoningMode().String(), "RUNTIME_REASONING_MODE_"),
 		RuntimeEnvironmentRef:      revision.GetRuntimeEnvironmentRef(),
 		RuntimeEnvironmentVersion:  revision.GetRuntimeEnvironmentVersion(),
 		RuntimeEnvironmentDigest:   revision.GetRuntimeEnvironmentDigest(),
@@ -1258,20 +1324,34 @@ func (manager *Manager) ResolveTurn(ctx context.Context, leaseRef, token string)
 	return input, nil
 }
 
-func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
+// StopTurn останавливает Pod, сохраняя ticket и сеть для финального callback.
+func (manager *Manager) StopTurn(ctx context.Context, leaseRef string) error {
 	secretName := ticketName(leaseRef)
-	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return errors.New("read runtime ticket before stopping pod")
+	}
 	podName := runtimecontract.RuntimeTurnPodName(leaseRef)
 	if secret != nil {
 		if boundName := secret.Annotations[podAnnotation]; boundName != "" {
 			podName = boundName
 		}
 	}
-	var result error
-	if podName != "" && podName != "system-assistant-warm" {
+	if podName != "" {
 		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			result = errors.Join(result, errors.New("delete completed runtime pod"))
+			return errors.New("stop runtime pod")
 		}
+	}
+	return nil
+}
+
+func (manager *Manager) DeleteTurn(ctx context.Context, leaseRef string) error {
+	secretName := ticketName(leaseRef)
+	secret, _ := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	var result error
+	// Успешный warm turn сохраняет общий Pod; остановка timeout выполняется StopTurn.
+	if secret == nil || secret.Annotations[podAnnotation] != "system-assistant-warm" {
+		result = manager.StopTurn(ctx, leaseRef)
 	}
 	if err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		result = errors.Join(result, errors.New("delete completed runtime ticket"))
@@ -1445,11 +1525,9 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 	if err != nil {
 		return nil, errors.New("encode runtime input projection")
 	}
-	memories := make([]runtimecontract.RunnerInputArtifact, 0)
-	for _, artifact := range input.InputArtifacts {
-		if artifact.Scope == runtimecontract.AttachmentScopeKnowledge {
-			memories = append(memories, artifact)
-		}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return nil, err
 	}
 	identity := map[string]any{
 		"organization_ref": input.OrganizationRef, "project_ref": input.ProjectRef, "run_ref": input.RunRef, "node_ref": input.NodeRef,
@@ -1464,11 +1542,11 @@ func runtimeProjectionData(input runtimecontract.RunnerInput) (map[string]string
 		}
 		return string(raw), nil
 	}
-	skills, err := encode(map[string]any{"identity": identity, "tools": input.EnvironmentTools}, "encode runtime skill projection")
+	skills, err := encode(map[string]any{"identity": identity, "context_digest": snapshot.Digest, "skills": snapshot.Skills}, "encode runtime skill projection")
 	if err != nil {
 		return nil, err
 	}
-	memory, err := encode(map[string]any{"identity": identity, "artifacts": memories}, "encode runtime memory projection")
+	memory, err := encode(map[string]any{"identity": identity, "context_digest": snapshot.Digest, "memories": snapshot.Memories}, "encode runtime memory projection")
 	if err != nil {
 		return nil, err
 	}
@@ -1698,6 +1776,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
 		{Name: "vfs-input", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
 		{Name: "vfs-knowledge", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: &workspaceLimit}}},
+		{Name: "runtime-context", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantityPointer(resource.MustParse("520Mi"))}}},
 		{Name: "runtime-input", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: runtimeProjectionName(input)}, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "runtime-ticket", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: ticketSecret, DefaultMode: int32Pointer(0o440)}}},
 		{Name: "callback-ca", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: manager.config.CallbackClientCASecret, DefaultMode: int32Pointer(0o440)}}},
@@ -1713,12 +1792,14 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		{Name: "session", MountPath: "/workspace/.kodex/state"},
 		{Name: "vfs-input", MountPath: "/workspace/input"},
 		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge"},
+		{Name: "runtime-context", MountPath: runtimecontract.RuntimeContextRoot},
 	}
 	sandboxWorkspaceMounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
 		{Name: "session", MountPath: "/workspace/.kodex/state"},
 		{Name: "vfs-input", MountPath: "/workspace/input", ReadOnly: true},
 		{Name: "vfs-knowledge", MountPath: "/workspace/knowledge", ReadOnly: true},
+		{Name: "runtime-context", MountPath: runtimecontract.RuntimeContextRoot, ReadOnly: true},
 	}
 	roleMounts := append([]corev1.VolumeMount(nil), sandboxWorkspaceMounts...)
 	roleMounts = append(roleMounts, corev1.VolumeMount{Name: "runtime-input", MountPath: "/var/run/config/kodex/runtime", ReadOnly: true}, corev1.VolumeMount{Name: "runtime-ticket", MountPath: "/var/run/secrets/kodex/runtime/ticket/token", SubPath: ticketKey, ReadOnly: true}, corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true}, corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true}, corev1.VolumeMount{Name: "provider-socket", MountPath: "/run/kodex/provider"}, corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"})
@@ -1820,7 +1901,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
 		Labels:      labels,
 		Annotations: annotations},
-		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(30),
+		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(150),
 			SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPointer(true), FSGroup: int64Pointer(29000), FSGroupChangePolicy: fsGroupChangePolicyPointer(corev1.FSGroupChangeOnRootMismatch), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			InitContainers:  []corev1.Container{{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()}},
 			Containers:      []corev1.Container{role, provider, relay}, Volumes: volumes}}

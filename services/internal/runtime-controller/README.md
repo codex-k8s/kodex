@@ -4,8 +4,8 @@ title: runtime-controller
 type: service
 status: approved
 owner: developer
-version: 3.0.0
-updated: 2026-09-04
+version: 3.2.0
+updated: 2026-09-05
 ---
 
 # runtime-controller
@@ -37,8 +37,15 @@ policy, signature, promotion и runtime ABI. Controller допускает то�
 
 ## Runtime contract
 
-Канонический input — `kodex.agent-runner-input.v6`, схема находится в
-`contracts/runtime-controller/v6/agent-runner-input.schema.json`, типы — в
+Typed Skills/Memory materialization и карта owner→controller→runner описаны в
+[`OPS-RUNTIME-1025`](../../../docs/operations/runtime-context-1025.md).
+`skills.json` содержит только `RuntimeSkillBundle`, `memories.json` только
+`RuntimeMemoryRecord`; environment tools и knowledge artifacts не подменяют
+эти виды. Исполняемый input требует явный `context_snapshot`, даже для пустого
+контекста. Changed pins меняют RuntimeRevision и warm compatibility digests.
+
+Канонический input — `kodex.agent-runner-input.v7`, схема находится в
+`contracts/runtime-controller/v7/agent-runner-input.schema.json`, типы — в
 `libs/go/runtimecontract`. Input связывает organization/project/agent/session/
 turn/run/node/attempt, revision digest, role image digest, bounded input,
 capabilities и credential references. Payload не назначает owner или lineage.
@@ -77,6 +84,37 @@ turn/attempt, RuntimeRevision digest, input digest, method и binding digest.
 Проверка capability/grant выполняется по той же RuntimeRevision и не расширяет
 eligibility из payload.
 
+Execution с owner `file_catalog` получает четыре read-only инструмента:
+`search_files`, `get_file_metadata`, `preview_file`, `get_file_manifest`.
+Контроллер закрепляет descriptor в RuntimeRevision и execution/MCP digest до
+materialization. Tools берут lease/fence/generation/catalog из проверенного
+callback input; caller выбирает только объявленный purpose, query/page либо
+exact entry/ref/revision/digest. Search и manifest ограничены 100 строками,
+cursor — 512 символами, preview — 16KiB. Произвольного path/project selector
+нет. Ответ проверяется по catalog, purpose, project и exact file pins до
+выдачи агенту; activity содержит только purpose и catalog grant.
+
+Вклад owner642: `ccefadda86f25370924a5a4fd19f57d7ace7ae85`.
+Локальные generated gRPC и authenticated callback tests проверяют все четыре
+операции, подмену snapshot/file и отказ при недоступном обязательном audit.
+Полное тело читается отдельным `StreamExecutionArtifact`: initial Proto request
+связан с proof, owner повторяет текущую eligibility перед Complete. Controller
+принимает chunks до64KiB и файл до512MiB в private spool; checksum, размер,
+Complete и EOF проверяются до HTTP headers. Metadata возвращает относительный
+download descriptor без credential; catalog selector сверяется через отдельный
+GetExecutionFileMetadata перед body stream. Input/Skill callbacks используют
+тот же stream, сохраняя собственные immutable pins.
+
+Отдельный disk-backed `artifact-spool` emptyDir ограничен2Gi и монтируется
+только controller. Внутренний каталог0700 и files0600 принадлежат process UID;
+файл unlink сразу после создания и исчезает при close/crash. Не более двух
+полных transfers одновременно, readiness выполняет небольшой writable canary.
+Timeout owner stream до2m, HTTP delivery имеет отдельный ограниченный бюджет.
+Публичная локальная проверка: `make test-runtime-controller-artifact-transfer`.
+Consumer agent-runner требует согласования HTTP timeout и отдельного local
+download bridge; этот хвост и live protected transfer пока NOT RUN.
+Эти проверки не заменяют live agent/workspace acceptance.
+
 ## System assistant
 
 Системный помощник использует отдельный always-hot Pod. Reconciler поддерживает
@@ -110,7 +148,7 @@ ServiceAccount, Role/RoleBinding и NetworkPolicy; Secret Broker reconciler
 создаёт новую attempt, lease, RuntimeRevision и projections. Результат читается
 через `ControlPlaneQueryService.GetArtifact`/`ListArtifacts` и
 `ArtifactTransferService.DownloadArtifact`, а не из удаляемого Pod.
-`RuntimeWorkService.ReadExecutionArtifact` предназначен только для exact input
+`RuntimeWorkService.StreamExecutionArtifact` предназначен только для exact input
 активной lease и после terminal не является путём чтения результата.
 
 ## Матрица жизненного цикла и полномочий
@@ -118,7 +156,7 @@ ServiceAccount, Role/RoleBinding и NetworkPolicy; Secret Broker reconciler
 | Сценарий #1025 | Инициатор и authority | Owner-команда и результат | Consumer/cleanup |
 | --- | --- | --- | --- |
 | Claim/materialize | runtime-controller, mTLS + signed workload context | `ClaimExecution`: owner выбирает revision, attempt, fence, grants | `BuildTurnInput` пересчитывает digest; broker descriptor; immutable ConfigMap/ticket/PVC; Pod |
-| Input/knowledge | init, callback mTLS + ticket + exact execution headers | `ReadExecutionArtifact`: active lease, pinned artifact/manifest, tenant | bounded download и digest verification до запуска provider; read-only mount |
+| Input/knowledge | init, callback mTLS + ticket + exact execution headers | `StreamExecutionArtifact`: active lease, pinned artifact/manifest, tenant; initial request digest и final owner read | bounded private spool, Complete/EOF/digest verification до выдачи bytes; read-only mount |
 | MCP | runner, те же headers и MCP binding | специализированная owner-команда, точный effective grant | callback не объединяет grants проекта |
 | Retry/continuation | owner graph command | прежние lease/grants закрыты; `ClaimExecution` получает новую revision/attempt | новый Pod/ticket/ConfigMap; прежний attempt не переиспользуется |
 | Terminal | runner completion с attempt, revision, ticket | `CompleteExecution` сохраняет результат/receipt у owner | HTTP ACK после commit; bounded cleanup в handler; Artifact API сохраняет read path |

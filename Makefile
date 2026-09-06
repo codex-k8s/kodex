@@ -126,6 +126,10 @@ test-integration-deployed-e2e:
 test-agent-runner:
 	@./scripts/tests/agent-runner-test.sh
 
+.PHONY: test-runtime-controller-artifact-transfer
+test-runtime-controller-artifact-transfer:
+	@bash ./scripts/tests/runtime-controller-artifact-transfer-test.sh
+
 test-stt-tts-service-contract:
 	@./scripts/tests/stt-tts-service-contract-test.sh
 

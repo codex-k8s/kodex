@@ -20,7 +20,7 @@ import (
 
 const (
 	defaultTurnInspectionInterval = 2 * time.Second
-	defaultTerminalCallbackGrace  = 10 * time.Second
+	defaultTerminalCallbackGrace  = 120 * time.Second
 	failureCompletionMaximumTries = 5
 )
 
@@ -33,6 +33,7 @@ var defaultFailureCompletionRetryDelays = [...]time.Duration{
 
 type turnLifecycle interface {
 	ObserveTurnPod(context.Context, runtimecontract.RunnerInput, bool) (workload.TurnPodObservation, error)
+	StopTurn(context.Context, string) error
 	DeleteTurn(context.Context, string) error
 }
 
@@ -255,17 +256,18 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			}
 			return
 		case <-execution.Done():
-			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_TIMEOUT", "")
+			if errors.Is(context.Cause(parent), workload.ErrLeadershipLost) {
+				runtime.closeRevokedTurn(parent, input, done)
+				return
+			}
+			runtime.drainTurn(parent, input, done)
 			return
 		case <-renew.C:
 			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
 			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
 			cancelRequest()
 			if err != nil {
-				cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(parent), runtime.config.RequestTimeout)
-				_ = runtime.turns.DeleteTurn(cleanup, input.LeaseRef)
-				cancelCleanup()
-				runtime.coordinator.Complete(input.LeaseRef)
+				runtime.closeRevokedTurn(parent, input, done)
 				return
 			}
 		case <-inspect.C:
@@ -295,6 +297,64 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 			return
 		}
 	}
+}
+
+func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+	select {
+	case <-done:
+		return
+	default:
+	}
+	base := context.WithoutCancel(parent)
+	stop, cancelStop := context.WithTimeout(base, runtime.config.RequestTimeout)
+	err := runtime.turns.StopTurn(stop, input.LeaseRef)
+	cancelStop()
+	if err != nil {
+		runtime.logger.WarnContext(base, "runtime graceful stop failed", "error_class", "kubernetes")
+	}
+	timer := time.NewTimer(runtime.terminalGrace)
+	defer timer.Stop()
+	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
+	defer renew.Stop()
+	for {
+		select {
+		case <-workload.LeadershipDone(parent):
+			runtime.closeRevokedTurn(base, input, done)
+			return
+		case <-done:
+			return
+		case <-timer.C:
+			select {
+			case <-done:
+				return
+			default:
+			}
+			runtime.completeFailure(base, input, "RUNTIME_TIMEOUT", "")
+			return
+		case <-renew.C:
+			request, cancel := context.WithTimeout(base, runtime.config.RequestTimeout)
+			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+			cancel()
+			if err != nil {
+				runtime.closeRevokedTurn(base, input, done)
+				return
+			}
+		}
+	}
+}
+
+func (runtime *runtime) closeRevokedTurn(base context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+	select {
+	case <-done:
+		return
+	default:
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
+	defer cancel()
+	// Отказ authority останавливает также warm Pod; успешный DeleteTurn его сохраняет.
+	_ = runtime.turns.StopTurn(cleanup, input.LeaseRef)
+	_ = runtime.turns.DeleteTurn(cleanup, input.LeaseRef)
+	runtime.coordinator.Complete(input.LeaseRef)
 }
 
 func (runtime *runtime) progress(ctx context.Context, input runtimecontract.RunnerInput, code string) error {
