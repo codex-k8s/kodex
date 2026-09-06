@@ -394,7 +394,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV6, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV7, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
@@ -414,7 +414,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ProviderCredentialSHA256: strings.Repeat("e", 64),
 		RuntimeConfigRef:         "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
-		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
+		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1, ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "medium",
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,

@@ -55,10 +55,19 @@ type appServer struct {
 	nextID      int64
 }
 
-func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (Result, error) {
+func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (result Result, resultErr error) {
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, err
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := verifyProviderContext(input, snapshot); err != nil {
+		return Result{}, err
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, err
 	}
@@ -70,6 +79,13 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, err
 	}
 	state := newProtocolState(input.CodexSessionID)
+	defer func() {
+		if resultErr != nil {
+			// Учитываем только ранее проверенные измерения, даже если terminal,
+			// thread/read, остановка процесса или захват архива завершились ошибкой.
+			result = state.measuredResult()
+		}
+	}()
 	initialize := map[string]any{
 		"clientInfo":   map[string]string{"name": "kodex-agent-runner", "title": "Kodex agent-runner", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": false, "optOutNotificationMethods": suppressedNotificationMethods},
@@ -82,6 +98,9 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.notifyInitialized(); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
+	if err := server.configureContextSkills(ctx, state, input, snapshot); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
@@ -135,7 +154,7 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := server.stop(state); err != nil {
 		return Result{}, err
 	}
-	result, err := state.terminalResult()
+	result, err = state.terminalResult()
 	if err != nil {
 		return Result{}, err
 	}
@@ -152,14 +171,22 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 
 func turnStartParams(input model.Input, threadID string, prompt []byte) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(input.ConfigOverlay)
-	if err != nil {
+	if err != nil || runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return nil, ErrRuntimeProfile
 	}
+	snapshot, err := input.RequiredContextSnapshot(time.Now())
+	if err != nil {
+		return nil, err
+	}
+	items, err := contextInputItems(input, snapshot, prompt, time.Now())
+	if err != nil {
+		return nil, err
+	}
 	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
-		"approvalPolicy": input.CodexApprovalPolicy, "input": []map[string]any{{"type": "text", "text": string(prompt)}}}
+		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
-	if overlay.ModelReasoningEffort != "" {
-		params["effort"] = overlay.ModelReasoningEffort
+	if input.ReasoningMode == runtimecontract.ReasoningSupported {
+		params["effort"] = input.EffectiveReasoningEffort
 	}
 	if overlay.Personality != "" {
 		params["personality"] = overlay.Personality

@@ -10,6 +10,11 @@ updated: 2026-09-04
 
 # agent-runner
 
+Потоковый file consumer описан в
+[`runner-file-transfer-1026.md`](../../../docs/operations/runner-file-transfer-1026.md):
+отдельный bounded file client и authenticated relative GET bridge сохраняют
+command deadlines и exact RuntimeRevision/catalog authority.
+
 `agent-runner` — защищённый runtime ABI внутри каждого promoted role image. Это
 не legacy service и не общий long-lived bot. Для обычного turn отдельный runner
 стартует внутри нового execution-scoped Pod этой роли; системный помощник имеет
@@ -19,7 +24,7 @@ updated: 2026-09-04
 
 Runner:
 
-- читает и строго валидирует immutable `kodex.agent-runner-input.v6`;
+- читает и строго валидирует immutable `kodex.agent-runner-input.v7`;
 - подтверждает exact organization/project/run/node/session/turn/attempt/fence,
   полный execution binding и MCP binding через execution-scoped callback;
 - применяет готовые server-materialized instructions без повторного rendering;
@@ -126,10 +131,19 @@ model/reasoning/image/tools/MCP/files/config bindings, а также обяза�
 `workflow-stage`, `automation`, `session-continuation` и
 `effective-capabilities` blocks.
 
-VFS inputs материализуются только после digest verification. Skills
-представлены exact `environment_tools` выбранного promoted image, memories —
-version-pinned knowledge artifacts в read-only `/workspace/knowledge`. Эти
-проекции не дополняются из mutable catalogs во время turn.
+VFS inputs материализуются только после digest verification. `environment_tools`
+остаются инструментами image, knowledge artifacts остаются файлами: ни один из
+этих видов не является SkillBundle либо KodexMemoryRecord.
+
+Отдельный контракт Skills/Memory и стыковка с CP/controller описаны в
+[`OPS-RUNNER-1026`](../../../docs/operations/runner-context-1026.md).
+`RuntimeContextSnapshot` закрепляет typed revisions, bindings, provenance,
+scan evidence и retention; review eligibility проверяет CP. Материализация использует отдельное read-only дерево
+`/workspace/context`, bounded file callback и полную проверку набора файлов.
+Нативный provider Skill получает проверенный `SKILL.md`; память передаётся
+отдельной typed projection, без записи внутреннего Codex memory store.
+Готовность producer/controller wiring проверяется на интегрированном SHA,
+наличие одних типов или consumer-функций её не доказывает.
 
 ## Workspace и результат
 
@@ -204,5 +218,5 @@ Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal 
 (`effort`, `personality`). Источник:
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
-Schema: `contracts/runtime-controller/v6/agent-runner-input.schema.json`.
+Schema: `contracts/runtime-controller/v7/agent-runner-input.schema.json`.
 Supply chain: `docs/domains/images-supply-chain.md`.

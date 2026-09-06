@@ -29,7 +29,7 @@ RUN mkdir -p /out/kodex-protected \
 # последним stage этого Dockerfile и не зависит от local-runtime.
 FROM docker.io/library/node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS local-codex-cli
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.152.0
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.153.4
 
 RUN set -eu; \
 	npm install --global "${KODEX_CODEX_PACKAGE}"; \
@@ -114,7 +114,7 @@ FROM docker.io/library/node:24-bookworm@sha256:934240a162082fd8b8a2f90cd51144464
 
 ENV GOTOOLCHAIN=local
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.152.0
+ARG KODEX_CODEX_PACKAGE=@openai/codex@0.153.4
 ARG GH_CLI_VERSION=2.95.0
 ARG KUBECTL_VERSION=v1.36.2
 ARG HELM_VERSION=v4.2.1

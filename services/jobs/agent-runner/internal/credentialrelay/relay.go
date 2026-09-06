@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
@@ -24,6 +25,7 @@ const (
 	maximumAckBytes     = 256
 	providerUID         = 10002
 	relayUID            = 10003
+	shutdownDrain       = 60 * time.Second
 )
 
 type request struct {
@@ -55,6 +57,8 @@ func Commit(ctx context.Context, input model.Input, refresh runtimecontract.Runn
 		return errors.New("provider credential relay is unavailable")
 	}
 	defer connection.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = connection.Close() })
+	defer stopClose()
 	uid, err := peerUID(connection)
 	if err != nil || !authorizedRelayUID(uid) {
 		return errors.New("provider credential relay peer is unauthorized")
@@ -107,19 +111,50 @@ func Serve(ctx context.Context, input model.Input) error {
 	if err := os.Chown(SocketPath, -1, 29000); err != nil || os.Chmod(SocketPath, 0o660) != nil {
 		return errors.New("protect provider credential relay socket")
 	}
+	return serveListener(ctx, listener, shutdownDrain, func(requestContext context.Context, connection net.Conn) error {
+		return serveConnection(requestContext, input, connection, client)
+	})
+}
+
+// SIGTERM не отзывает текущий grant: relay ограниченно принимает его финальный
+// refresh после остановки provider process. Владелец повторно проверяет grant.
+func serveListener(ctx context.Context, listener net.Listener, drain time.Duration, handle func(context.Context, net.Conn) error) error {
+	serving, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
+	finished := make(chan struct{})
+	watcherDone := make(chan struct{})
+	defer func() { close(finished); <-watcherDone }()
 	go func() {
-		<-ctx.Done()
-		_ = listener.Close()
+		defer close(watcherDone)
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+		}
+		timer := time.NewTimer(drain)
+		defer timer.Stop()
+		select {
+		case <-finished:
+			return
+		case <-timer.C:
+			cancel()
+			_ = listener.Close()
+		}
 	}()
 	for {
 		connection, acceptErr := listener.Accept()
 		if acceptErr != nil {
-			if ctx.Err() != nil {
+			if serving.Err() != nil {
 				return nil
 			}
 			return errors.New("accept provider credential relay request")
 		}
-		_ = serveConnection(ctx, input, connection, client)
+		requestContext, cancelRequest := context.WithTimeout(serving, drain)
+		_ = connection.SetDeadline(time.Now().Add(drain))
+		stopClose := context.AfterFunc(requestContext, func() { _ = connection.Close() })
+		_ = handle(requestContext, connection)
+		stopClose()
+		cancelRequest()
 		_ = connection.Close()
 	}
 }
@@ -129,6 +164,10 @@ func serveConnection(ctx context.Context, input model.Input, connection net.Conn
 	if err != nil || !authorizedProviderUID(uid) {
 		return errors.New("provider credential relay peer is unauthorized")
 	}
+	return serveBoundConnection(ctx, input, connection, committer)
+}
+
+func serveBoundConnection(ctx context.Context, input model.Input, connection net.Conn, committer refreshCommitter) error {
 	payload, err := decodeRequest(connection)
 	if err != nil {
 		return err
