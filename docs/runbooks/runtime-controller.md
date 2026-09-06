@@ -109,6 +109,13 @@ Admission запрещает alias, subPath и вложенные mounts. Canary
 
 ## Временные файлы transfer
 
+При `StartError` до entrypoint проверить mountPath:
+`/var/lib/kodex/runtime-controller/artifact-spool`. Путь через `/var/run/kodex`
+пересекает read-only `/run/kodex` в образах с alias `/var/run -> /run`.
+Read-only authority и non-root сохраняются. Локальная проверка реального mount:
+`KODEX_SPOOL_TEST_IMAGE=sha256:... bash scripts/tests/spool-mount-container-test.sh`
+(заранее подготовленный локальный образ с `/bin/sh`, без pull и сети).
+
 При причине readiness `artifact_spool` сверить metadata тома `artifact-spool`
 (disk emptyDir2Gi, mount только у controller), UID10001 и fsGroup29000,
 настройки `RUNTIME_CONTROLLER_ARTIFACT_SPOOL_DIRECTORY` и

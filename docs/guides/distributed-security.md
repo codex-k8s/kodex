@@ -976,3 +976,17 @@ Systemd service с `Type=notify` сохраняет в `RestrictAddressFamilies`
 разрешением дополнительного сетевого ingress. Recovery сбрасывает только прежний
 failed state принадлежащих установщику units до нового запуска. Новый отказ
 проверяется после активации и probe, а readback никогда не очищает failed state.
+
+Registry credentials, private PEM и обратимый Docker auth не передаются через
+аргументы дочерних процессов, включая `jq --arg`. Используются private файлы
+и `jq --rawfile`, stdin либо read-only certificate projection; JSON credentials
+создаются с mode0600 в private каталоге и удаляются при завершении, включая
+ошибку. CLI-флаг, принимающий PEM contents, нельзя заменять путём к файлу:
+нужен поддерживаемый config/file loader с прежней exact TLS/mTLS identity.
+
+Writable spool и read-only authority/credential mounts не пересекаются после
+разрешения filesystem aliases внутри образа, включая `/var/run -> /run`.
+Операционные каталоги размещаются отдельно с прежними ограничениями объёма,
+UID и lifecycle. Ошибка создания mountpoint до entrypoint исправляется выбором
+непересекающегося пути, а не снятием read-only или запуском от root. Render
+проверяет согласованность ConfigMap и mountPath обоих профилей.

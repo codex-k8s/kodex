@@ -98,7 +98,7 @@ func loadConfig() (Config, error) {
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
 		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
 		FileTransferTimeout:    runtimecontract.MaximumArtifactTransferDuration,
-		ArtifactSpoolDirectory: "/var/run/kodex/runtime-controller/artifact-spool",
+		ArtifactSpoolDirectory: "/var/lib/kodex/runtime-controller/artifact-spool",
 		ExecutionTimeout:       60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {

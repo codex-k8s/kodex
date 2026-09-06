@@ -26,6 +26,7 @@ done
 [[ "$source_root" == /* && -x "$source_root/tools/dev/render-local.sh" &&
   -x "$source_root/tools/render-image-admission-job.sh" ]] ||
   fail 'source root is invalid'
+timeout 30s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
 [[ -n "$cache_root" ]] || cache_root="$source_root/.kodex-dev/cache"
 [[ "$cache_root" == /* && "$cache_root" != / && "$cache_root" != "$HOME" ]] ||
   fail 'cache root is invalid'
@@ -79,17 +80,14 @@ for admission_tools_dockerfile in \
   rg 'RUN for tool in .*bash' "$admission_tools_dockerfile" >/dev/null ||
     fail "image admission runtime does not verify the renderer shell: $admission_tools_dockerfile"
 done
-rg -F 'regctl registry set "$host" --skip-check --tls enabled' \
-  "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" >/dev/null ||
-  fail 'authenticated registry configuration still performs an unauthenticated connectivity check'
-rg -F 'regctl registry login "$host" --skip-check' \
-  "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" >/dev/null ||
-  fail 'authenticated registry login still performs a pre-credential connectivity check'
 for authenticated_registry_script in \
-  "$source_root/deploy/k8s/base/image-supply-chain/cleanup.sh" \
+  "$source_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh"; do
-  rg -F -- '--skip-check' "$authenticated_registry_script" >/dev/null ||
-    fail "authenticated registry helper omits skip-check: $authenticated_registry_script"
+  rg -F 'export REGCTL_CONFIG=' "$authenticated_registry_script" >/dev/null ||
+    fail 'registry helper omits private configuration'
+  if rg 'regctl registry (set|login)' "$authenticated_registry_script" >/dev/null; then
+    fail 'private configuration must precede the first authenticated registry operation'
+  fi
 done
 rg -F -- "-name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort" \
   "$source_root/tools/dev/seed-local-image-supply-chain.sh" >/dev/null ||
@@ -440,7 +438,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .resources.limits["ephemeral-storage"] == "2Gi" and
     any(.volumeMounts[];
       .name == "artifact-spool" and
-      .mountPath == "/var/run/kodex/runtime-controller/artifact-spool" and
+      .mountPath == "/var/lib/kodex/runtime-controller/artifact-spool" and
       (.readOnly // false) == false and has("subPath") == false)) and
   all(($pod.containers + ($pod.initContainers // []))[];
     .name == "runtime-controller" or

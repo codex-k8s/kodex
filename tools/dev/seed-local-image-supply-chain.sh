@@ -149,16 +149,13 @@ docker run --rm --network host --user 0:0 \
     export DOCKER_CONFIG=/work/docker
     mkdir -p "$HOME" "$DOCKER_CONFIG"
     target=kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003
-    auth=$(printf "%s:%s" "$(tr -d "\r\n" </work/username)" \
-      "$(tr -d "\r\n" </work/password)" | base64 | tr -d "\r\n")
-    jq -n --arg target "$target" --arg auth "$auth" \
-      "{auths:{(\$target):{auth:\$auth}}}" >"$DOCKER_CONFIG/config.json"
-    regctl registry set "$target" --skip-check --tls enabled \
-      --cacert "$(cat /work/ca.pem)" \
-      --client-cert "$(cat /work/client.crt)" \
-      --client-key "$(cat /work/client.key)"
-    regctl registry login "$target" --skip-check --user "$(cat /work/username)" \
-      --pass-stdin < /work/password
+    export REGCTL_CONFIG="$HOME/regctl.json"
+    jq -n --arg target "$target" --rawfile ca /work/ca.pem \
+      --rawfile cert /work/client.crt --rawfile key /work/client.key \
+      --rawfile user /work/username --rawfile pass /work/password \
+      "{version:1,hosts:{(\$target):{tls:\"enabled\",regcert:\$ca,
+        clientCert:\$cert,clientKey:\$key,user:(\$user|gsub(\"[\\r\\n]\";\"\")),
+        pass:(\$pass|gsub(\"[\\r\\n]\";\"\"))}}}" >"$REGCTL_CONFIG"
     regctl image import "$target/kodex/agent-runner:local-base" /input/runner.oci.tar
     regctl image import "$target/kodex/control-plane:local-readiness" /input/runner.oci.tar
     regctl image copy "$KODEX_FRONTEND_REFERENCE" "$target/kodex/dockerfile:local-frontend"

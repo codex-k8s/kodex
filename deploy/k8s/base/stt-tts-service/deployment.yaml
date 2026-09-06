@@ -76,7 +76,7 @@ spec:
             - {name: workload-tls, mountPath: /var/run/secrets/kodex/stt-tts-service/workload-tls, readOnly: true}
             - {name: internal-ca, mountPath: /var/run/config/kodex/stt-tts-service/internal-ca, readOnly: true}
             - {name: authority-sockets, mountPath: /run/kodex, readOnly: true}
-            - {name: stt-spool, mountPath: /var/run/kodex/stt-spool}
+            - {name: stt-spool, mountPath: /var/lib/kodex/stt-spool}
             - {name: otel-ca, mountPath: /var/run/config/kodex/stt-tts-service/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/stt-tts-service/observability, readOnly: true}
       volumes:

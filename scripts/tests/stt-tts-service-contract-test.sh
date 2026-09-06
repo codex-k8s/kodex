@@ -12,6 +12,8 @@ kubectl kustomize "$repository_root/deploy/k8s/base/stt-tts-service-provider-smo
 for profile in web-only web-with-mattermost; do
   render="$temporary_root/${profile}.yaml"
   kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$render"
+  yq -o=json -I=0 '.' "$render" | jq -s '.' >"$render.json"
+  python3 "$repository_root/scripts/tests/spool-mount-boundary-test.py" "$render.json"
   yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service")' "$render" >/dev/null
   if yq -e 'select(.kind == "Job" and .metadata.name == "stt-provider-smoke")' "$render" >/dev/null 2>&1; then
     printf 'Live STT smoke entered automatic %s render\n' "$profile" >&2
@@ -82,7 +84,7 @@ yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
   (.emptyDir.sizeLimit == "64Mi" and .emptyDir.medium == "Memory")' "$temporary_root/production.yaml" >/dev/null
 yq -e 'select(.kind == "ConfigMap" and .metadata.name == "stt-tts-service-runtime") |
   (.data.STT_REQUEST_TIMEOUT == "20s" and .data.STT_SHUTDOWN_TIMEOUT == "30s" and
-   .data.STT_SPOOL_DIRECTORY == "/var/run/kodex/stt-spool")' "$temporary_root/production.yaml" >/dev/null
+   .data.STT_SPOOL_DIRECTORY == "/var/lib/kodex/stt-spool")' "$temporary_root/production.yaml" >/dev/null
 yq -e 'select(.kind == "Deployment" and .metadata.name == "stt-tts-service") |
   (.spec.template.spec.containers[] | select(.name == "stt-tts-service") |
    .readinessProbe.httpGet.path == "/readyz")' "$temporary_root/production.yaml" >/dev/null

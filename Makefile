@@ -282,3 +282,7 @@ check-proto-codegen: check-proto-toolchain
 	@PROTOBUF_GO_PLUGIN_LOCAL_VERSION='$(PROTOBUF_GO_PLUGIN_LOCAL_VERSION)' \
 		GRPC_GO_PLUGIN_LOCAL_VERSION='$(GRPC_GO_PLUGIN_LOCAL_VERSION)' \
 		./scripts/check-proto-codegen.sh
+
+.PHONY: test-registry-credential-files
+test-registry-credential-files:
+	@timeout 30s python3 scripts/tests/registry-credential-files-test.py

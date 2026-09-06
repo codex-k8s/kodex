@@ -58,6 +58,8 @@ Matroska packet boundaries берутся из demuxer без повторног
 
 Hard limits: 25 MiB на файл, два stream/50 MiB зарезервированных bytes,
 64 MiB memory-backed spool, 256 MiB container memory. Policy может сужать limits.
+Spool монтируется по `/var/lib/kodex/stt-spool`, отдельно от read-only authority
+`/run/kodex`; alias `/var/run -> /run` не используется для writable mount.
 Полный stream ограничен min(20 секунд, authority expiry), decode — 5 секунд
 внутри этого бюджета, provider — не более 15 секунд и всех expiry.
 PCM вывод не сохраняется; превышение sample budget отменяет и дожидается
