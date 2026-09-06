@@ -34,3 +34,14 @@ request. Остальные методы сохраняют STREAM_SESSION; call
 сопоставление enum, безопасные целочисленные ревизии JSON и полную матрицу
 ошибок. Эти тесты являются доказательством контракта и не подменяют
 исполняемую реализацию.
+
+`authorityclient.LocalAuthorityError.Diagnostic()` возвращает закрытые локальные
+стадии выдачи proof/context, исходный нормализованный gRPC code и известные enum
+`AuthorizationErrorDetail`. Локальный `Error()` содержит только эту классификацию;
+`GRPCStatus()` сохраняет прежний безопасный status. Сообщение зависимости,
+correlation из detail, credential, request и unknown fields не копируются.
+`NewProofFailure` позволяет provider отметить отказ до обращения к issuer:
+`proof_operation`, `grant_missing`, `grant_read`, `proof_resolve`, `proof_response`.
+Диагностика не является разрешением, подтверждением эффекта или причиной retry.
+Существующий bounded proof retry и запрет downstream без context сохраняются
+для unary, stream, request-bound stream и continuation.

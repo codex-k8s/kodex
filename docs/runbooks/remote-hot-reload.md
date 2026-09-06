@@ -45,6 +45,19 @@ bootstrap использует временную приватную копию 
 в приватной копии Teleport единственный context получает имя `kodex-dev`.
 Пользователь работает через `tsh kube login`.
 
+## Образ интеграционного gateway
+
+`integration-gateway` использует отдельный hot-reload образ из
+`tools/dev/Dockerfile.local-integration`: Go, Git и CA закреплены версиями,
+образ собирается на доверенном хосте через `build-local-integration.sh` и
+передаётся renderer только как exact OCI manifest digest. Git обязателен для
+startup и управляемого write-back. Код остаётся read-only mount, `/tmp` —
+ограниченный scratch; package install внутри Pod не выполняется.
+Проверка фактического локального образа: `make test-integration-hot-reload-container`
+с `KODEX_INTEGRATION_RUNTIME_TEST_IMAGE=sha256:...`. Она проверяет Go/Git/HTTPS
+helper/CA, non-root bare Git workspace и запрет записи в исходники без сети.
+Эта проверка не заменяет protected gateway readiness и живой Git write-back.
+
 ## Предварительные условия
 
 1. Все публичные DNS-имена из `/srv/kodex-dev/private/remote.env` имеют точные `A`/`AAAA`,

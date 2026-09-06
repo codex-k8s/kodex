@@ -224,7 +224,7 @@ func ContinuationUnaryClientInterceptor(
 				RequestDigestSha256: requestDigest,
 			})
 		if err != nil {
-			return newLocalAuthorityError(err, pending.correlationID)
+			return newLocalAuthorityError(err, pending.correlationID, StageContinuationIssue)
 		}
 		return invoker(metadata.AppendToOutgoingContext(ctx, AuthorizationMetadata, issued.GetCompactJws()), method, request, reply, connection, options...)
 	}
@@ -236,10 +236,11 @@ func ContinuationUnaryClientInterceptor(
 type LocalAuthorityError struct {
 	code          codes.Code
 	correlationID string
+	diagnostic    Diagnostic
 }
 
 func (failure *LocalAuthorityError) Error() string {
-	return failure.GRPCStatus().Err().Error()
+	return failure.GRPCStatus().Err().Error() + " [" + failure.diagnostic.String() + "]"
 }
 
 // GRPCStatus сохраняет классификацию для стандартных gRPC helpers.
@@ -262,14 +263,14 @@ func (failure *LocalAuthorityError) CorrelationID() string {
 	return failure.correlationID
 }
 
-func newLocalAuthorityError(err error, correlationID string) error {
+func newLocalAuthorityError(err error, correlationID string, stage DiagnosticStage) error {
 	code := authorityFailureCode(err)
 	switch code {
 	case codes.Canceled, codes.Unavailable, codes.DeadlineExceeded:
 	default:
 		code = codes.Unauthenticated
 	}
-	return &LocalAuthorityError{code: code, correlationID: correlationID}
+	return &LocalAuthorityError{code: code, correlationID: correlationID, diagnostic: diagnosticFrom(err, stage)}
 }
 
 func authorityFailureCode(err error) codes.Code {
@@ -336,7 +337,7 @@ func IssuerUnaryClientInterceptor(
 		}
 		proof, correlationID, err := authorityProofWithRetry(ctx, proofs, operationID, method)
 		if err != nil {
-			return newLocalAuthorityError(err, correlationID)
+			return newLocalAuthorityError(err, correlationID, StageProofResolve)
 		}
 		issued, err := issuer.IssueAuthorizationContext(
 			ctx,
@@ -348,7 +349,7 @@ func IssuerUnaryClientInterceptor(
 			},
 		)
 		if err != nil {
-			return newLocalAuthorityError(err, correlationID)
+			return newLocalAuthorityError(err, correlationID, StageContextIssue)
 		}
 		ctx = metadata.AppendToOutgoingContext(
 			ctx,
@@ -386,13 +387,13 @@ func IssuerStreamClientInterceptor(
 		}
 		proof, correlationID, err := authorityProofWithRetry(ctx, proofs, operationID, method)
 		if err != nil {
-			return nil, newLocalAuthorityError(err, correlationID)
+			return nil, newLocalAuthorityError(err, correlationID, StageProofResolve)
 		}
 		issued, err := issuer.IssueAuthorizationContext(ctx, &internalrpcauthorityv1.IssueAuthorizationContextRequest{
 			OperationId: operationID, CorrelationId: correlationID, AuthorityProofCompactJws: proof,
 		})
 		if err != nil {
-			return nil, newLocalAuthorityError(err, correlationID)
+			return nil, newLocalAuthorityError(err, correlationID, StageContextIssue)
 		}
 		ctx = metadata.AppendToOutgoingContext(ctx, AuthorizationMetadata, issued.GetCompactJws())
 		return streamer(ctx, description, connection, method, options...)

@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.16
+version: 1.4.17
 updated: 2026-09-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Отказ выдачи межсервисного контекста различает локальную стадию чтения grant,
+обращение к авторитетному proof resolver и обращение к issuer. Закрытый gRPC
+code и известные enum диагностического detail можно сохранить для process
+boundary; исходные сообщения, credential, correlation из detail и неизвестные
+поля не копируются. Диагностика не меняет внешний status, retry budget или
+решение verifier. Готовый issuer не доказывает успех предшествующего resolver,
+а накопленный счётчик успешных выдач не исключает частичных отказов.
 
 Поколения manifest signer и workload signing key принадлежат разным trust
 domains; их числовое равенство не подтверждает authority. Workload watermark

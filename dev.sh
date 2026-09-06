@@ -720,6 +720,9 @@ session_archive_image=$(<"$state_directory/session-archive-image")
 "$repository_root/tools/dev/build-local-stt.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 stt_hot_reload_image=$(<"$state_directory/stt-hot-reload-image")
+"$repository_root/tools/dev/build-local-integration.sh" \
+  --source-root "$repository_root" --state-directory "$state_directory"
+integration_hot_reload_image=$(<"$state_directory/integration-hot-reload-image")
 "$repository_root/tools/dev/build-local-backup-controller.sh" \
   --source-root "$repository_root" --state-directory "$state_directory"
 backup_controller_image=$(<"$state_directory/backup-controller-image")
@@ -769,6 +772,7 @@ bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_direc
   --runner-image "$runner_image" \
   --session-archive-image "$session_archive_image" \
   --stt-hot-reload-image "$stt_hot_reload_image" \
+  --integration-hot-reload-image "$integration_hot_reload_image" \
   --backup-controller-image "$backup_controller_image" \
   --promoted-pull-host "$promoted_pull_host" \
   --role-image-builder-image "$role_image_builder_image" \

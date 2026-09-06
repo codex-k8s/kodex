@@ -35,6 +35,7 @@ usage() {
     '  --runner-image <repository@sha256:digest>' \
     '  --session-archive-image <repository@sha256:digest>' \
     '  --stt-hot-reload-image <repository@sha256:digest>' \
+    '  --integration-hot-reload-image <repository@sha256:digest>' \
     '  --backup-controller-image <repository@sha256:digest>' \
     '  --promoted-pull-host <dns>' \
     '  --role-image-builder-image <repository@sha256:digest>' \
@@ -65,6 +66,7 @@ kubernetes_endpoint_port=""
 runner_image=""
 session_archive_image=""
 stt_hot_reload_image=""
+integration_hot_reload_image=""
 backup_controller_image=""
 promoted_pull_host=""
 role_image_builder_image=""
@@ -95,6 +97,7 @@ while (($# > 0)); do
     --runner-image) runner_image=${2:-}; shift 2 ;;
     --session-archive-image) session_archive_image=${2:-}; shift 2 ;;
     --stt-hot-reload-image) stt_hot_reload_image=${2:-}; shift 2 ;;
+    --integration-hot-reload-image) integration_hot_reload_image=${2:-}; shift 2 ;;
     --backup-controller-image) backup_controller_image=${2:-}; shift 2 ;;
     --promoted-pull-host) promoted_pull_host=${2:-}; shift 2 ;;
     --role-image-builder-image) role_image_builder_image=${2:-}; shift 2 ;;
@@ -137,6 +140,9 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
 [[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
   "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local STT hot-reload image must use an exact manifest digest'
+[[ "$integration_hot_reload_image" =~ ^registry\.local\.kodex/kodex/integration-hot-reload@sha256:[a-f0-9]{64}$ &&
+  "$integration_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local integration hot-reload image must use an exact manifest digest'
 [[ "$backup_controller_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local backup-controller image must use an exact manifest digest'
 [[ "$promoted_pull_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ &&
@@ -921,6 +927,15 @@ yq -i '
   )
 ' "$render"
 
+INTEGRATION_IMAGE="$integration_hot_reload_image" yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "integration-gateway");
+    (.spec.template.spec.containers[] | select(.name == "integration-gateway")) |= (
+      .image = strenv(INTEGRATION_IMAGE) |
+      .securityContext.readOnlyRootFilesystem = true
+    )
+  )
+' "$render"
+
 STT_IMAGE="$stt_hot_reload_image" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "stt-tts-service");
     (.spec.template.spec.containers[] | select(.name == "stt-tts-service")) |= (
@@ -1263,6 +1278,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
   fail 'frontend development workload is absent'
 "$repository_root/tools/dev/verify-local-stt-render.sh" "$output" "$stt_hot_reload_image"
+"$repository_root/tools/dev/verify-local-integration-render.sh" "$output" "$integration_hot_reload_image"
 "$repository_root/tools/dev/verify-local-email-render.sh" "$output"
 "$repository_root/tools/dev/verify-local-profile-render.sh" "$output" "$deployment_profile"
 yq -o=json -I=0 '.' "$output" | jq -s -e --arg tls_mode "$tls_mode" '

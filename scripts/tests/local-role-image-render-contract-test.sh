@@ -164,6 +164,7 @@ render="$temporary_directory/render.yaml"
   --runner-image registry.local.kodex/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   --session-archive-image registry.local.kodex/kodex/session-archive@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
   --stt-hot-reload-image registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555 \
+  --integration-hot-reload-image registry.local.kodex/kodex/integration-hot-reload@sha256:6666666666666666666666666666666666666666666666666666666666666666 \
   --backup-controller-image registry.local.kodex/kodex/backup-controller@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
   --promoted-pull-host pull.127.0.0.1.nip.io \
   --role-image-builder-image registry.local.kodex/kodex/role-image-builder@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd \
@@ -209,6 +210,19 @@ for mutation in \
   yq "$mutation" "$render" >"$stt_negative"
   if "$source_root/tools/dev/verify-local-stt-render.sh" "$stt_negative" "$stt_image" >/dev/null 2>&1; then
     fail "local STT verifier accepted a broken render: $mutation"
+  fi
+done
+
+integration_image=registry.local.kodex/kodex/integration-hot-reload@sha256:6666666666666666666666666666666666666666666666666666666666666666
+"$source_root/tools/dev/verify-local-integration-render.sh" "$render" "$integration_image"
+integration_negative="$temporary_directory/integration-negative.yaml"
+for mutation in \
+  '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.containers[] | select(.name == "integration-gateway") | .image) = "docker.io/library/golang:1.26.6-alpine"' \
+  '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.containers[] | select(.name == "integration-gateway") | .securityContext.readOnlyRootFilesystem) = false' \
+  '(select(.kind == "Deployment" and .metadata.name == "integration-gateway") | .spec.template.spec.volumes[] | select(.name == "configuration-writeback-scratch") | .emptyDir) = {}'; do
+  yq "$mutation" "$render" >"$integration_negative"
+  if "$source_root/tools/dev/verify-local-integration-render.sh" "$integration_negative" "$integration_image" >/dev/null 2>&1; then
+    fail 'local integration verifier accepted a broken runtime image or storage boundary'
   fi
 done
 
