@@ -18,7 +18,7 @@ terminal state.
 
 Проверить:
 
-1. input schema `kodex.agent-runner-input.v6` и bounded file mode/size;
+1. input schema `kodex.agent-runner-input.v7` и bounded file mode/size;
 2. exact execution/revision/turn/attempt/fence;
 3. trusted runtime ABI digest;
 4. runtime-controller callback TLS/SPIFFE/ticket;
@@ -40,7 +40,42 @@ credential values в диагностику не включаются.
 Runner не использует shell orchestration. Provider/CLI запускаются прямым
 `exec` с typed arguments, управляемой process group и явным environment.
 
-## `config.toml`
+## Завершение трёх контейнеров (#1073)
+
+Обычные контейнеры `role-runtime`, `provider-runtime` и
+`provider-credential-relay` могут получить SIGTERM в любом порядке. Relay
+сохраняет listener и текущую callback boundary не более 60 секунд после
+сигнала. В этом окне остаются обязательными peer UID, exact lease/fence/
+generation, RuntimeRevision и прежние credential pins. Новые grants и attempts
+не создаются; owner revoke по-прежнему запрещает commit.
+
+Каждое чтение relay ограничено deadline; по окончании drain отменяются callback
+и accepted connection, закрывается listener, watcher и handler завершаются
+до закрытия callback client. Отсутствие ACK не означает успешный refresh и
+не разрешает слепой повтор. Уже измеренный Usage остаётся в частичном broker
+result и в неизменном FAILED completion.
+
+Согласованные бюджеты: provider process shutdown12s, refresh commit40s,
+provider response read grace57s, отдельный runner completion60s и cleanup20s.
+Role Pod требует150s; controller/admission companion находится в #1025/PR1063.
+Проверять только metadata и безопасный receipt, не печатать auth payload.
+
+Локальная проверка: `go test -race -p 1 ./internal/credentialrelay` в модуле
+runner использует настоящий Unix listener, bounded payload/commit/ack после
+отмены и медленного peer. Общие runner callback/broker tests дополнительно
+проверяют частичный Usage и отсутствие повторного provider execution.
+Live/SIGTERM в Kubernetes требует отдельного разрешённого контура.
+
+Context7: `/golang/go` (cancel/deadline/закрытие connections) и
+`/websites/kubernetes_io` (termination grace и порядок sidecar).
+
+После relay companion локально прошли полный runner race/vet/build и
+`make test-agent-runner`: app19.448s, codex6.431s, остальные пакеты PASS.
+Сохранены тесты partial Usage исходного `2a7b47d350e6800696ee5ca061bc1f0e708fdd2a`;
+его прежний PASS не использован вместо нового запуска. Общий integrated
+baseline/review и реальный Kubernetes shutdown остаются NOT RUN.
+
+## `config.toml`: материализация
 
 Runner каждый раз создаёт `config.toml` из одной typed структуры со следующим
 приоритетом:

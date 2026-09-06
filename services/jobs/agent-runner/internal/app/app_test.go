@@ -11,10 +11,12 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
 
 func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
@@ -137,7 +139,7 @@ func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *te
 		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 4, RuntimeConfigDigest: strings.Repeat("c", 64),
 		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 5, ProviderPolicyDigest: strings.Repeat("f", 64),
 		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 6,
-		ConfigOverlayDigest: strings.Repeat("d", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+		ConfigOverlayDigest: strings.Repeat("d", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 7, RuntimeEnvironmentDigest: strings.Repeat("1", 64),
 		EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingVersion: 8, EnvironmentBindingDigest: strings.Repeat("2", 64),
 		MCPBindingDigest: strings.Repeat("e", 64), Capabilities: []string{"platform.artifact.manage"},
@@ -181,7 +183,7 @@ func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
 				Instructions: materializedInstructions(test.kind, []string{"project.read"}), Capabilities: []string{"project.read"},
 				RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: int64(test.attempt), RuntimeRevisionDigest: strings.Repeat("a", 64),
 				Model: "gpt-5.4", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64),
-				ImageManifestDigest: "sha256:" + strings.Repeat("b", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n",
+				ImageManifestDigest: "sha256:" + strings.Repeat("b", 64), ConfigOverlay: "model_reasoning_effort = \"high\"\n", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
 				MCPBindingDigest: strings.Repeat("c", 64), RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigDigest: strings.Repeat("d", 64),
 				ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyDigest: strings.Repeat("e", 64), ConfigOverlayRef: "cover_abcdefgh",
 				ConfigOverlayDigest: strings.Repeat("f", 64), RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentDigest: strings.Repeat("1", 64),
@@ -421,6 +423,7 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 	state := &health{input: model.Input{WorkspaceRoot: root, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}}
 	state.live.Store(true)
 	state.ready.Store(true)
+	state.workspace.Store(&workspaceHealth{checked: time.Now(), err: workspacepolicy.RunCanary(t.Context(), root, state.input.WorkspacePolicy)})
 	response := httptest.NewRecorder()
 	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if response.Code != http.StatusNoContent {
@@ -432,6 +435,7 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, ".kodex/outbox")); err != nil {
 		t.Fatal(err)
 	}
+	state.workspace.Store(&workspaceHealth{checked: time.Now(), err: workspacepolicy.RunCanary(t.Context(), root, state.input.WorkspacePolicy)})
 	response = httptest.NewRecorder()
 	healthHandler(state).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if response.Code != http.StatusServiceUnavailable ||

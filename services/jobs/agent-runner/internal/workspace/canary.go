@@ -2,6 +2,7 @@
 package workspace
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -38,17 +39,25 @@ func DenialReason(err error) string {
 	return runtimecontract.RuntimeWorkspaceIOError
 }
 
-func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error {
+func RunCanary(ctx context.Context, root string, policy runtimecontract.RuntimeWorkspacePolicy) error {
+	if ctx.Err() != nil {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+	}
 	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root || policy.Validate() != nil {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 	}
-	for _, candidate := range []string{"/workspace/input/readiness", "/workspace/knowledge/readiness"} {
+	lock, err := Lock(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	for _, candidate := range []string{"/workspace/input/readiness", "/workspace/knowledge/readiness", runtimecontract.RuntimeContextRoot + "/readiness"} {
 		access, reason := policy.AccessForPath(candidate)
 		if reason != "" || access != runtimecontract.RuntimeWorkspaceReadOnly {
 			return &Denial{Reason: runtimecontract.RuntimeWorkspaceReadOnly}
 		}
 	}
-	usage, files, err := writableUsage(root, policy)
+	usage, files, err := writableUsageContext(ctx, root, policy)
 	if err != nil {
 		return err
 	}
@@ -80,6 +89,9 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	const temporary = "current.txt.next"
 	defer unix.Unlinkat(nestedDirectory, temporary, 0)
 	defer unix.Unlinkat(nestedDirectory, current, 0)
+	if ctx.Err() != nil {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+	}
 	file, err := unix.Openat(nestedDirectory, current, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		return classify(err)
@@ -96,6 +108,9 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	}
 	if err := verifyFile(nestedDirectory, current, initialPayload); err != nil {
 		return err
+	}
+	if ctx.Err() != nil {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	file, err = unix.Openat(nestedDirectory, temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
@@ -117,6 +132,9 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 	if err := verifyFile(nestedDirectory, current, replacementPayload); err != nil {
 		return err
 	}
+	if ctx.Err() != nil {
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+	}
 	if err = unix.Unlinkat(nestedDirectory, current, 0); err != nil {
 		return classify(err)
 	}
@@ -130,9 +148,14 @@ func RunCanary(root string, policy runtimecontract.RuntimeWorkspacePolicy) error
 }
 
 func verifyFile(directory int, name, expected string) error {
-	file, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	file, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return classify(err)
+	}
+	var stat unix.Stat_t
+	if err := unix.Fstat(file, &stat); err != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG || stat.Nlink != 1 {
+		_ = unix.Close(file)
+		return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
 	}
 	buffer := make([]byte, len(expected)+1)
 	read, readErr := readBounded(file, buffer)
@@ -143,7 +166,7 @@ func verifyFile(directory int, name, expected string) error {
 	return nil
 }
 
-func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, provenance ResultProvenance) error {
+func PublishResult(ctx context.Context, root string, policy runtimecontract.RuntimeWorkspacePolicy, provenance ResultProvenance) error {
 	if provenance.Schema != "kodex.workspace-write-result.v1" || provenance.RuntimeRevisionRef == "" ||
 		provenance.RuntimeRevisionVersion < 1 || !validSHA256(provenance.RuntimeRevisionDigest) ||
 		provenance.Attempt < 1 || !validSHA256(provenance.ExecutionBindingDigest) {
@@ -157,6 +180,11 @@ func PublishResult(root string, policy runtimecontract.RuntimeWorkspacePolicy, p
 	if access, reason := policy.AccessForPath(".kodex/outbox/workspace-write-result.json"); reason != "" || access != runtimecontract.RuntimeWorkspaceWritable {
 		return &Denial{Reason: runtimecontract.RuntimeWorkspaceReadOnly}
 	}
+	lock, err := Lock(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	directory, err := openDirectory(root, ".kodex/outbox")
 	if err != nil {
 		return classify(err)
@@ -232,8 +260,15 @@ func readBounded(file int, buffer []byte) (int, error) {
 }
 
 func writableUsage(root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, error) {
+	return writableUsageContext(nil, root, policy)
+}
+
+func writableUsageContext(ctx context.Context, root string, policy runtimecontract.RuntimeWorkspacePolicy) (int64, int64, error) {
 	var bytes, files, entries int64
 	err := filepath.WalkDir(root, func(localPath string, entry fs.DirEntry, walkErr error) error {
+		if ctx != nil && ctx.Err() != nil {
+			return &Denial{Reason: runtimecontract.RuntimeWorkspaceIOError}
+		}
 		if walkErr != nil {
 			return classify(walkErr)
 		}

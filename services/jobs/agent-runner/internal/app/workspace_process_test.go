@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,11 +19,62 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func TestWorkspaceCanaryPublicationAndResetCoordinate(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770); err != nil {
+		t.Fatal(err)
+	}
+	policy := runtimecontract.RuntimeWorkspacePolicyV1()
+	provenance := workspace.ResultProvenance{Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: "rrev_fixture",
+		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 1,
+		ExecutionBindingDigest: strings.Repeat("b", 64)}
+	for range 8 {
+		var workers sync.WaitGroup
+		start := make(chan struct{})
+		failures := make(chan error, 3)
+		for _, operation := range []func() error{
+			func() error { return workspace.RunCanary(t.Context(), root, policy) },
+			func() error { return workspace.PublishResult(t.Context(), root, policy, provenance) },
+			func() error { return resetWorkspaceDirectory(t.Context(), root, ".kodex/outbox") },
+		} {
+			workers.Go(func() { <-start; failures <- operation() })
+		}
+		close(start)
+		workers.Wait()
+		close(failures)
+		for err := range failures {
+			if err != nil {
+				t.Fatal("coordinated workspace lifecycle failed")
+			}
+		}
+	}
+	if err := workspace.PublishResult(t.Context(), root, policy, provenance); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := collectArtifacts(model.Input{WorkspaceRoot: root}, "synthetic result")
+	if err != nil || len(artifacts) != 2 {
+		t.Fatal("coordinated workspace publication is incomplete")
+	}
+}
+
 // Детерминированный процесс агента выполняет настоящий файловый сценарий без
 // обращения к платной модели. Отказы проверяются отдельно от успешной записи.
 func TestWorkspaceAgentProcess(t *testing.T) {
 	mode := os.Getenv("KODEX_WORKSPACE_TEST_PROCESS")
 	if mode == "" {
+		return
+	}
+	if mode == "canary" {
+		if os.Geteuid() == 0 {
+			t.Fatal("workspace canary fixture must run as non-root")
+		}
+		if err := workspace.RunCanary(t.Context(), "/workspace", runtimecontract.RuntimeWorkspacePolicyV1()); err != nil {
+			t.Fatal(err)
+		}
+		entries, err := os.ReadDir("/workspace/.kodex/outbox")
+		if err != nil || len(entries) != 0 {
+			t.Fatal("non-root canary did not clean temporary files")
+		}
 		return
 	}
 	if mode != "positive" {
@@ -88,7 +140,7 @@ func TestWorkspaceSubprocessWriteAndCompletionProvenance(t *testing.T) {
 	provenance := workspace.ResultProvenance{Schema: "kodex.workspace-write-result.v1",
 		RuntimeRevisionRef: input.RuntimeRevisionRef, RuntimeRevisionVersion: input.RuntimeRevisionVersion,
 		RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest}
-	if err := workspace.PublishResult(root, runtimecontract.RuntimeWorkspacePolicyV1(), provenance); err != nil {
+	if err := workspace.PublishResult(t.Context(), root, runtimecontract.RuntimeWorkspacePolicyV1(), provenance); err != nil {
 		t.Fatal(err)
 	}
 	artifacts, err := completionArtifacts(input, "Completed.")
@@ -115,6 +167,11 @@ func TestWorkspaceSubprocessWriteAndCompletionProvenance(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCanaryWithNonRootProcess(t *testing.T) {
+	root := workspaceProcessFixture(t)
+	runWorkspaceProcess(t, root, "canary")
+}
+
 func TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink(t *testing.T) {
 	root := workspaceProcessFixture(t)
 	foreign := t.TempDir()
@@ -125,7 +182,7 @@ func TestNextAttemptClearsOutboxWithoutFollowingForeignSymlink(t *testing.T) {
 	if err := os.Symlink(foreign, filepath.Join(outbox, "previous-attempt")); err != nil {
 		t.Fatal(err)
 	}
-	if err := resetWorkspaceDirectory(root, ".kodex/outbox"); err != nil {
+	if err := resetWorkspaceDirectory(t.Context(), root, ".kodex/outbox"); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(outbox)

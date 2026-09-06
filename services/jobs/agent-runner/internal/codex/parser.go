@@ -1319,6 +1319,26 @@ func (state *protocolState) terminalResult() (Result, error) {
 	return state.result, nil
 }
 
+// Измерения подтверждены отдельными валидными notification. Ошибка следующего
+// сообщения не разрешает использовать его модель или заявлять успешный terminal.
+func (state *protocolState) measuredResult() Result {
+	if !state.baselineCaptured || state.turnID == "" {
+		return Result{}
+	}
+	usage, err := tokenUsageDelta(state.latestUsage, state.usageBaseline)
+	if err != nil {
+		return Result{}
+	}
+	result := Result{Usage: usage}
+	for _, callID := range state.toolCallOrder {
+		call := state.toolCalls[callID]
+		if call.Validate() == nil {
+			result.ToolCalls = append(result.ToolCalls, call)
+		}
+	}
+	return result
+}
+
 func closedTurnStatus(value string) bool {
 	return value == "completed" || value == "interrupted" || value == "failed" || value == "inProgress"
 }

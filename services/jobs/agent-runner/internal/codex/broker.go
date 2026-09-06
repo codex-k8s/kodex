@@ -23,6 +23,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/filetransfer"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
 	"golang.org/x/sys/unix"
@@ -33,9 +34,14 @@ const (
 	maximumBrokerBytes           = 4 << 20
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
+	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
 )
 
-var ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
+var (
+	ErrProviderAuthentication        = errors.New("Codex provider authentication is unavailable")
+	errProviderBrokerResponseInvalid = errors.New("isolated Codex provider response is invalid")
+	errProviderBrokerFailed          = errors.New("isolated Codex provider failed")
+)
 
 type brokerRequest struct {
 	Input         model.Input `json:"input"`
@@ -147,6 +153,8 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 		}
 	}
 	defer connection.Close()
+	stopContext := bindBrokerConnectionContext(ctx, connection)
+	defer stopContext()
 	encoder := json.NewEncoder(connection)
 	if err := encoder.Encode(brokerRequest{Input: input, Prompt: prompt,
 		MCPSocket: mcpSocket, MCPProxyToken: mcpProxyToken}); err != nil {
@@ -156,20 +164,55 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	if !ok || unixConnection.CloseWrite() != nil {
 		return Result{}, errors.New("seal isolated Codex provider request")
 	}
+	return readProviderBrokerResponse(connection)
+}
+
+// После отмены больше не посылаем request, но даём изолированному процессу
+// ограниченное время остановиться, завершить credential callback и вернуть Usage.
+func bindBrokerConnectionContext(ctx context.Context, connection net.Conn) func() {
 	if deadline, ok := ctx.Deadline(); ok {
-		_ = connection.SetReadDeadline(deadline)
+		_ = connection.SetWriteDeadline(deadline)
+		_ = connection.SetReadDeadline(deadline.Add(providerResultDeliveryGrace))
 	}
-	decoder := json.NewDecoder(bufio.NewReaderSize(connection, 64<<10))
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		_ = connection.SetWriteDeadline(time.Now())
+		_ = connection.SetReadDeadline(time.Now().Add(providerResultDeliveryGrace))
+	})
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
+}
+
+func readProviderBrokerResponse(reader io.Reader) (Result, error) {
+	decoder := json.NewDecoder(bufio.NewReaderSize(&boundedReader{reader: reader, remaining: maximumBrokerBytes}, 64<<10))
 	decoder.DisallowUnknownFields()
 	var response brokerResponse
 	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) {
-		return Result{}, errors.New("isolated Codex provider failed")
+		return Result{}, errProviderBrokerFailed
 	}
 	if !response.OK {
-		return Result{}, providerBrokerError(response.Failure)
+		switch response.Failure {
+		case providerBrokerFailureAuthentication, providerBrokerFailureAuthority, providerBrokerFailureMCP,
+			providerBrokerFailureConfiguration, providerBrokerFailureProvider:
+		default:
+			return Result{}, errProviderBrokerResponseInvalid
+		}
+		if response.Result.Usage.Validate() != nil || len(response.Result.ToolCalls) > runtimecontract.MaximumNativeToolCalls {
+			return Result{}, errProviderBrokerResponseInvalid
+		}
+		for _, call := range response.Result.ToolCalls {
+			if call.Validate() != nil {
+				return Result{}, errProviderBrokerResponseInvalid
+			}
+		}
+		return failedProviderResult(response.Result), providerBrokerError(response.Failure)
 	}
 	if response.Failure != "" {
-		return Result{}, errors.New("isolated Codex provider response is invalid")
+		return Result{}, errProviderBrokerResponseInvalid
 	}
 	return response.Result, nil
 }
@@ -185,9 +228,9 @@ func providerBrokerError(failure providerBrokerFailure) error {
 	case providerBrokerFailureConfiguration:
 		return ErrRuntimeProfile
 	case providerBrokerFailureProvider:
-		return errors.New("isolated Codex provider failed")
+		return errProviderBrokerFailed
 	default:
-		return errors.New("isolated Codex provider response is invalid")
+		return errProviderBrokerResponseInvalid
 	}
 }
 
@@ -291,6 +334,12 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err := ValidateRuntimeProfile(request.Input); err != nil {
 		return writeProviderBrokerFailure(connection, err)
 	}
+	snapshot, err := request.Input.RequiredContextSnapshot(time.Now())
+	if err != nil || verifyProviderContext(request.Input, snapshot) != nil {
+		return writeProviderBrokerFailure(connection, ErrRuntimeProfile)
+	}
+	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	defer cancelContext()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
 		return writeProviderBrokerFailure(connection, err)
@@ -310,7 +359,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if _, err := hex.DecodeString(request.MCPProxyToken); err != nil {
 		return errors.New("provider broker MCP capability is invalid")
 	}
-	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken)
+	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken, request.Input)
 	if err != nil {
 		return writeProviderBrokerFailure(connection, err)
 	}
@@ -320,7 +369,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
-		return writeProviderBrokerFailure(connection, err)
+		return writeProviderBrokerResultFailure(connection, result, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
@@ -329,7 +378,18 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 }
 
 func writeProviderBrokerFailure(connection io.Writer, err error) error {
+	return writeProviderBrokerResultFailure(connection, Result{}, err)
+}
+
+// Ошибка не подтверждает итог или credential effect. Измеренный расход и
+// безопасная native timeline сохраняются независимо от этого исхода.
+func failedProviderResult(result Result) Result {
+	return Result{Usage: result.Usage, ToolCalls: result.ToolCalls}
+}
+
+func writeProviderBrokerResultFailure(connection io.Writer, result Result, err error) error {
 	return json.NewEncoder(connection).Encode(brokerResponse{
+		Result:  failedProviderResult(result),
 		Failure: classifyProviderBrokerFailure(err),
 		OK:      false,
 	})
@@ -343,7 +403,7 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 	result, executionErr := execute(ctx, input, prompt, mcpProxyToken)
 	authentication, changed, err := readProviderCredentialRefresh(input, authenticationPath)
 	if err != nil {
-		return Result{}, err
+		return result, err
 	}
 	defer clear(authentication)
 	if changed {
@@ -356,7 +416,7 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 		commitContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), providerRefreshCommitTimeout)
 		defer cancel()
 		if err := commit(commitContext, input, payload); err != nil {
-			return Result{}, errors.New("commit refreshed provider authentication")
+			return result, errors.New("commit refreshed provider authentication")
 		}
 	}
 	return result, executionErr
@@ -397,7 +457,7 @@ type providerMCPBridge struct {
 	url       string
 }
 
-func startProviderMCPBridge(ctx context.Context, socketPath, localToken string) (*providerMCPBridge, error) {
+func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, input model.Input) (*providerMCPBridge, error) {
 	if os.Geteuid() != 10002 || socketPath != "/run/kodex/provider/mcp-authority.sock" || len(localToken) != 64 {
 		return nil, errors.New("provider MCP bridge binding is invalid")
 	}
@@ -405,14 +465,14 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string) 
 	if err != nil {
 		return nil, errors.New("listen provider MCP bridge")
 	}
-	transport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+	transport := &http.Transport{DisableCompression: true, MaxResponseHeaderBytes: 16 << 10, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}
 	target, _ := url.Parse("http://kodex-mcp-authority/mcp")
 	reverse := &httputil.ReverseProxy{Transport: transport, ErrorLog: log.New(io.Discard, "", 0),
 		Director: func(request *http.Request) {
-			request.URL.Scheme, request.URL.Host, request.URL.Path = target.Scheme, target.Host, target.Path
-			request.URL.RawPath, request.URL.RawQuery, request.Host = "", "", target.Host
+			request.URL.Scheme, request.URL.Host = target.Scheme, target.Host
+			request.Host = target.Host
 			request.Header.Del("Cookie")
 			request.Header.Del("Forwarded")
 			request.Header.Del("X-Forwarded-For")
@@ -422,6 +482,23 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string) 
 			http.Error(writer, "required MCP authority is unavailable", http.StatusBadGateway)
 		}, FlushInterval: -1}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet && request.URL.Path != "/mcp" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
+			if _, err := filetransfer.CatalogRequest(input, request); err != nil {
+				http.NotFound(writer, request)
+				return
+			}
+			bounded, cancel := context.WithTimeout(request.Context(), filetransfer.TotalTimeout)
+			defer cancel()
+			control := http.NewResponseController(writer)
+			deadline, _ := bounded.Deadline()
+			if err := control.SetWriteDeadline(deadline); err != nil {
+				http.Error(writer, "runtime file response deadline is unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			defer control.SetWriteDeadline(time.Time{})
+			reverse.ServeHTTP(writer, request.WithContext(bounded))
+			return
+		}
 		if request.URL.Path != "/mcp" || request.URL.RawQuery != "" ||
 			(request.Method != http.MethodPost && request.Method != http.MethodGet && request.Method != http.MethodDelete) ||
 			subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) != 1 {
@@ -457,7 +534,7 @@ func decodeEOF(decoder *json.Decoder) bool {
 }
 
 type boundedReader struct {
-	reader    net.Conn
+	reader    io.Reader
 	remaining int64
 }
 

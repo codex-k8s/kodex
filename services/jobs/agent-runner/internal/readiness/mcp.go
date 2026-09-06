@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -44,6 +45,7 @@ type MCPProxy struct {
 	done       chan error
 	socketPath string
 	localToken string
+	files      *callback.Client
 }
 
 func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (*MCPProxy, error) {
@@ -76,6 +78,16 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		_ = os.Remove(mcpAuthoritySocket)
 		transport.CloseIdleConnections()
 		return nil, errors.New("protect MCP authority socket")
+	}
+	fileClient, err := callback.New(input)
+	if err != nil || fileClient.Token() != token {
+		if fileClient != nil {
+			fileClient.Close()
+		}
+		_ = listener.Close()
+		_ = os.Remove(mcpAuthoritySocket)
+		transport.CloseIdleConnections()
+		return nil, errors.New("runtime file callback authority is invalid")
 	}
 	reverse := &httputil.ReverseProxy{
 		Director: func(request *http.Request) {
@@ -113,6 +125,10 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		FlushInterval: -1,
 	}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodGet && request.URL.Path != "/mcp" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
+			fileClient.ServeCatalogFile(writer, request, input)
+			return
+		}
 		if request.URL.Path != "/mcp" || request.URL.RawQuery != "" ||
 			(request.Method != http.MethodPost && request.Method != http.MethodGet && request.Method != http.MethodDelete) ||
 			subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) != 1 {
@@ -130,10 +146,11 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		return (&net.Dialer{}).DialContext(ctx, "unix", mcpAuthoritySocket)
 	}}
 	proxy := &MCPProxy{server: server, transport: transport, local: localTransport, done: done,
-		socketPath: mcpAuthoritySocket, localToken: localToken}
+		socketPath: mcpAuthoritySocket, localToken: localToken, files: fileClient}
 	go func() { done <- server.Serve(secured) }()
 	localEndpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
 	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken, requiredTools); err != nil {
+		fileClient.Close()
 		_ = server.Close()
 		localTransport.CloseIdleConnections()
 		transport.CloseIdleConnections()
@@ -147,6 +164,7 @@ func (proxy *MCPProxy) SocketPath() string       { return proxy.socketPath }
 func (proxy *MCPProxy) LocalBearerToken() string { return proxy.localToken }
 
 func (proxy *MCPProxy) Close(ctx context.Context) error {
+	proxy.files.Close()
 	err := proxy.server.Shutdown(ctx)
 	if err != nil {
 		_ = proxy.server.Close()

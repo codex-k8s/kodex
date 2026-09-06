@@ -21,11 +21,13 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/filetransfer"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 type Client struct {
 	http        *http.Client
+	files       *http.Client
 	base        *url.URL
 	token       string
 	retryDelays []time.Duration
@@ -54,10 +56,13 @@ func New(input model.Input) (*Client, error) {
 		transport.CloseIdleConnections()
 		return nil, err
 	}
-	return &Client{http: &http.Client{Transport: transport, Timeout: 35 * time.Second}, base: base, token: token}, nil
+	return &Client{http: &http.Client{Transport: transport, Timeout: 35 * time.Second}, files: filetransfer.NewClient(transport), base: base, token: token}, nil
 }
 
 func (client *Client) Close() {
+	if client.files != nil {
+		client.files.CloseIdleConnections()
+	}
 	if transport, ok := client.http.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
@@ -98,6 +103,8 @@ func (client *Client) CommitProviderCredentialRefresh(ctx context.Context, input
 }
 
 func (client *Client) WriteArtifact(ctx context.Context, input model.Input, artifact runtimecontract.RunnerInputArtifact, destination io.Writer) error {
+	ctx, cancel := context.WithTimeout(ctx, filetransfer.TotalTimeout)
+	defer cancel()
 	endpoint := *client.base
 	endpoint.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/artifacts/" + url.PathEscape(artifact.Ref)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
@@ -107,7 +114,7 @@ func (client *Client) WriteArtifact(ctx context.Context, input model.Input, arti
 	request.Header.Set("Authorization", "Bearer "+client.token)
 	bindExecutionHeaders(request, input, "artifact")
 	request.Header.Set("Accept", artifact.MediaType)
-	response, err := client.http.Do(request)
+	response, err := client.files.Do(request)
 	if err != nil {
 		return errors.New("runtime artifact callback is unavailable")
 	}
