@@ -1,12 +1,19 @@
 -- name: managed_configuration_list_bindings :many
-WITH bindings AS MATERIALIZED (
+WITH binding_snapshot AS MATERIALIZED (
     SELECT binding.consumer_kind, binding.consumer_ref, revision.ref AS revision_ref, binding.version,
+           configuration.ref AS configuration_ref,
            binding.consumer_kind || ':' || binding.consumer_ref AS cursor_ref
     FROM control_plane.managed_configuration_bindings binding
     JOIN control_plane.managed_configuration_sets configuration ON configuration.id=binding.configuration_set_id
     JOIN control_plane.managed_configuration_revisions revision ON revision.id=binding.configuration_revision_id
-    WHERE configuration.organization_id=@organization_id::uuid AND configuration.ref=@configuration_ref
+    JOIN control_plane.managed_configuration_sets target
+      ON target.organization_id = configuration.organization_id AND target.ref = @configuration_ref
+     AND target.kind = configuration.kind
+     AND target.project_id IS NOT DISTINCT FROM configuration.project_id
+    WHERE configuration.organization_id=@organization_id::uuid
       AND binding.configuration_kind=configuration.kind
+), bindings AS MATERIALIZED (
+    SELECT * FROM binding_snapshot WHERE configuration_ref = @configuration_ref
 ), targets AS (
     SELECT organization_id,kind,ref,id,project_id,owner_id,related_ids FROM control_plane.catalog_access_targets
     UNION ALL
@@ -39,7 +46,7 @@ WITH bindings AS MATERIALIZED (
         COALESCE(string_agg(decode('00','hex') || convert_to(consumer_kind,'UTF8') || decode('00','hex') ||
           convert_to(consumer_ref,'UTF8') || decode('00','hex') || convert_to(revision_ref,'UTF8') || decode('00','hex') ||
           convert_to(version::text,'UTF8'),''::bytea ORDER BY consumer_kind COLLATE "C",consumer_ref COLLATE "C"),''::bytea)), 'hex') AS digest
-    FROM bindings
+    FROM binding_snapshot
 )
 SELECT COALESCE(page.consumer_kind,''),COALESCE(page.consumer_ref,''),COALESCE(page.revision_ref,''),COALESCE(page.version,0),
        totals.total,commitment.digest

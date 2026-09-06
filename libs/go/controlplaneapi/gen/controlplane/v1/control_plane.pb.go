@@ -55398,13 +55398,15 @@ func (x *ManagedConfigurationSet) GetSourceEditable() bool {
 }
 
 type ManagedConfigurationConsumer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	Ref           string                 `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
-	RevisionRef   string                 `protobuf:"bytes,3,opt,name=revision_ref,json=revisionRef,proto3" json:"revision_ref,omitempty"`
-	Version       int64                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Kind        string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Ref         string                 `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	RevisionRef string                 `protobuf:"bytes,3,opt,name=revision_ref,json=revisionRef,proto3" json:"revision_ref,omitempty"`
+	Version     int64                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
+	// Только вход REBIND: явное ожидание отсутствия связи, revision_ref/version пусты.
+	ExpectedAbsent bool `protobuf:"varint,5,opt,name=expected_absent,json=expectedAbsent,proto3" json:"expected_absent,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ManagedConfigurationConsumer) Reset() {
@@ -55463,6 +55465,13 @@ func (x *ManagedConfigurationConsumer) GetVersion() int64 {
 		return x.Version
 	}
 	return 0
+}
+
+func (x *ManagedConfigurationConsumer) GetExpectedAbsent() bool {
+	if x != nil {
+		return x.ExpectedAbsent
+	}
+	return false
 }
 
 type ManagedConfigurationImpact struct {
@@ -76899,12 +76908,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"git_source\x18\v \x01(\v2..controlplane.v1.ManagedConfigurationGitSourceR\tgitSource\x12,\n" +
 	"\x0fsource_editable\x18\f \x01(\bH\x00R\x0esourceEditable\x88\x01\x01B\x12\n" +
-	"\x10_source_editable\"\x81\x01\n" +
+	"\x10_source_editable\"\xaa\x01\n" +
 	"\x1cManagedConfigurationConsumer\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\x12!\n" +
 	"\frevision_ref\x18\x03 \x01(\tR\vrevisionRef\x12\x18\n" +
-	"\aversion\x18\x04 \x01(\x03R\aversion\"\xa3\x02\n" +
+	"\aversion\x18\x04 \x01(\x03R\aversion\x12'\n" +
+	"\x0fexpected_absent\x18\x05 \x01(\bR\x0eexpectedAbsent\"\xa3\x02\n" +
 	"\x1aManagedConfigurationImpact\x12+\n" +
 	"\x11configuration_ref\x18\x01 \x01(\tR\x10configurationRef\x12.\n" +
 	"\x13target_revision_ref\x18\x02 \x01(\tR\x11targetRevisionRef\x12K\n" +

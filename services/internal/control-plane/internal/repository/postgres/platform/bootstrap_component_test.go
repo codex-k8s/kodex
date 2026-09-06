@@ -346,6 +346,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("integration connection tests bind exact workload before replay", func(t *testing.T) { testIntegrationTestAuthority(t, ctx, repository) })
 	t.Run("secret revision impact selected rebind and retention", func(t *testing.T) { testSecretImpact(t, ctx, repository, pool) })
 	t.Run("STT system roles advance immutably", func(t *testing.T) { testSTTRoleMigration(t, ctx, pool) })
+	t.Run("managed binding global CAS rejects stale absence and pins", func(t *testing.T) {
+		testManagedBindingCAS(t, ctx, repository)
+	})
 	// Последний сценарий намеренно отключает выбранный аккаунт; последующих runtime fixtures нет.
 	t.Run("account selection rechecks disabled account after lock wait", func(t *testing.T) {
 		testProviderSelectionAfterLockWait(t, ctx, repository)
@@ -411,7 +414,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		Mutation: value.Mutation{IdempotencyKey: "managed-prompt-rebind", ExpectedVersion: &version},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref,
 			RevisionRef: created.ManagedRevision.Ref, ImpactDigest: impact.Digest,
-			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: agent.Ref}}}})
+			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: agent.Ref, ExpectedAbsent: true}}}})
 	if err != nil || rebound.ManagedConfiguration == nil || rebound.ManagedConfiguration.Version != version+1 {
 		t.Fatalf("rebind managed prompt: result=%#v err=%v", rebound, err)
 	}
@@ -486,7 +489,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		Mutation: value.Mutation{IdempotencyKey: "managed-prompt-rebind-corrected", ExpectedVersion: &correctedVersion},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref,
 			RevisionRef: correctedDraft.ManagedRevision.Ref, ImpactDigest: correctedImpact.Digest,
-			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: agent.Ref}}}})
+			Consumers: correctedImpact.Consumers}})
 	if err != nil || correctedRebound.ManagedConfiguration == nil {
 		t.Fatalf("selectively rebind corrected managed prompt: result=%#v err=%v", correctedRebound, err)
 	}
@@ -607,7 +610,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		Mutation: value.Mutation{IdempotencyKey: "managed-system-stt-rebind", ExpectedVersion: &sttVersion},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: sttCreated.ManagedConfiguration.Ref,
 			RevisionRef: sttCreated.ManagedRevision.Ref, ImpactDigest: sttImpact.Digest,
-			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "STT_SERVICE", Ref: "stt-tts-service"}}}})
+			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "STT_SERVICE", Ref: "stt-tts-service", ExpectedAbsent: true}}}})
 	if err != nil || sttRebound.ManagedConfiguration == nil || sttRebound.ManagedConfiguration.Version != sttVersion+1 {
 		t.Fatalf("rebind system STT consumer: result=%#v err=%v", sttRebound, err)
 	}
@@ -955,7 +958,7 @@ func testIntegrationDefinitionRebindAuthority(
 		Mutation: value.Mutation{IdempotencyKey: "definition-scope-manager-rebind", ExpectedVersion: &version},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: definition.ManagedConfiguration.Ref,
 			RevisionRef: definition.ManagedRevision.Ref, ImpactDigest: impact.Digest,
-			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "INTEGRATION_CONNECTION", Ref: connection.Ref}}},
+			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "INTEGRATION_CONNECTION", Ref: connection.Ref, ExpectedAbsent: true}}},
 	})
 	if !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("definition rebind without exact integration.manage error = %v", err)
@@ -973,6 +976,7 @@ func publishAndRebindManagedConfiguration(
 	consumer entity.ManagedConfigurationConsumer,
 ) command.Result {
 	t.Helper()
+	consumer.ExpectedAbsent = true
 	created, err := service.Execute(ctx, command.Command{Kind: createKind, Principal: principal,
 		Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: input})
 	if err != nil || created.ManagedConfiguration == nil || created.ManagedRevision == nil || created.ManagedRevision.State != "DRAFT" {
@@ -1009,6 +1013,16 @@ func publishAndRebindManagedConfiguration(
 		t.Fatalf("read %s impact: impact=%#v err=%v", key, impact, err)
 	}
 	version = published.ManagedConfiguration.Version
+	if consumer.Kind == "INTEGRATION_CONNECTION" {
+		previous, readErr := service.GetEffectiveManagedConfiguration(ctx, principal, "INTEGRATION_DEFINITION", consumer.Kind, consumer.Ref)
+		if readErr == nil {
+			consumer.ExpectedAbsent = false
+			consumer.RevisionRef = previous.Revision.Ref
+			consumer.Version = previous.Version
+		} else if !errors.Is(readErr, domainerrs.ErrNotFound) {
+			t.Fatal(readErr)
+		}
+	}
 	rebound, err := service.Execute(ctx, command.Command{Kind: rebindKind, Principal: principal,
 		Mutation: value.Mutation{IdempotencyKey: key + "-rebind", ExpectedVersion: &version},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref,
@@ -3969,7 +3983,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 	if err != nil || created.Schedule == nil || created.Schedule.CronExpression != "30 9 * * 1-5" || created.Schedule.TimeOfDay != "09:30" || created.Schedule.NextRunAt == nil {
 		t.Fatalf("create normalized schedule: schedule=%#v err=%v", created.Schedule, err)
 	}
-	capturedTemplateRef := bindScheduleTemplateFixture(t, ctx, service, owner, project.Project.Ref, created.Schedule.Ref, "schedule-captured-template", `Captured {{.task}} / {{.run.ref}}`)
+	capturedTemplateRef, capturedBinding := bindScheduleTemplateFixture(t, ctx, service, owner, project.Project.Ref, created.Schedule.Ref, "schedule-captured-template", `Captured {{.task}} / {{.run.ref}}`)
 	if _, err := repository.pool.Exec(ctx, bootstrapComponentMakeScheduleDueQuery, created.Schedule.Ref); err != nil {
 		t.Fatalf("make schedule due: %v", err)
 	}
@@ -3985,7 +3999,7 @@ func testScheduleLifecycle(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("claim due schedule: claims=%#v err=%v", claims, err)
 	}
 	staleClaim := claims[0]
-	bindScheduleTemplateFixture(t, ctx, service, owner, project.Project.Ref, created.Schedule.Ref, "schedule-changed-template", `Changed {{.task}}`)
+	bindScheduleTemplateFixture(t, ctx, service, owner, project.Project.Ref, created.Schedule.Ref, "schedule-changed-template", `Changed {{.task}}`, capturedBinding)
 	if _, err := repository.pool.Exec(ctx, bootstrapComponentExpireScheduleClaimQuery, stringMap(staleClaim, "occurrenceRef")); err != nil {
 		t.Fatalf("expire schedule claim: %v", err)
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
-func bindScheduleTemplateFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, scheduleRef, key, content string) string {
+func bindScheduleTemplateFixture(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, projectRef, scheduleRef, key, content string, previous ...entity.ManagedConfigurationConsumer) (string, entity.ManagedConfigurationConsumer) {
 	t.Helper()
 	execute := func(kind command.Kind, version *int64, payload command.ManagedConfigurationInput) command.Result {
 		result, err := executePromptPublicationFixture(t, ctx, service, command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-" + string(kind), ExpectedVersion: version}, Payload: payload})
@@ -31,9 +31,16 @@ func bindScheduleTemplateFixture(t *testing.T, ctx context.Context, service *pla
 		t.Fatal(err)
 	}
 	input.ImpactDigest = impact.Digest
-	input.Consumers = []entity.ManagedConfigurationConsumer{{Kind: "SCHEDULE", Ref: scheduleRef}}
+	input.Consumers = []entity.ManagedConfigurationConsumer{{Kind: "SCHEDULE", Ref: scheduleRef, ExpectedAbsent: true}}
+	if len(previous) == 1 {
+		input.Consumers[0] = previous[0]
+	}
 	execute(command.RebindPromptTemplate, &published.ManagedConfiguration.Version, input)
-	return created.ManagedRevision.Ref
+	bound, err := service.GetManagedConfigurationImpact(ctx, owner, input.ConfigurationRef, input.RevisionRef, query.Filter{})
+	if err != nil || len(bound.Consumers) != 1 {
+		t.Fatalf("read exact schedule binding: %v", err)
+	}
+	return created.ManagedRevision.Ref, bound.Consumers[0]
 }
 
 func checkCapturedScheduleRuntime(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, runRef, templateRef string) {
