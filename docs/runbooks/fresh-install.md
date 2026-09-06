@@ -307,6 +307,11 @@ Kodex unit-файлы. Наличие неизвестного unit или drop-
 порты. Число одновременных соединений ограничено, service sandboxed, а unit
 files имеют явный owner marker.
 
+`Type=notify` сохраняется: sandbox разрешает `AF_UNIX` для локального
+`sd_notify` наряду с `AF_INET/AF_INET6` для proxy. Это не добавляет сетевых
+listeners или destinations. Без notification socket процесс не сообщает READY
+и systemd завершает запуск по timeout (#1103).
+
 `preflight` закрыто отклоняет синтаксически неверный, неглобальный либо не
 назначенный host-интерфейсу IPv6 адрес. `apply` идемпотентно сверяет ownership перед
 записью и включает только socket units. `readback` сравнивает точное содержимое
@@ -314,6 +319,13 @@ files имеют явный owner marker.
 выполняет локальный HTTP-запрос через IPv6 bridge до Traefik. Проверка
 публичного TLS и DNS выполняется отдельным ACME preflight после готовности
 всего ingress.
+
+После прежнего timeout повторяется тот же repo-owned `apply`: после остановки
+proxy сбрасывается failed state только четырёх управляемых units, затем
+перезапускаются sockets. Сброс выполняется до нового запуска; readback не очищает
+ошибки и повторно проверяет состояние после HTTP probe. Новый service failure
+останавливает операцию. Не следует заменять `Type=notify`, сбрасывать все failed
+units хоста или править units вручную.
 
 ## 5. Установка
 

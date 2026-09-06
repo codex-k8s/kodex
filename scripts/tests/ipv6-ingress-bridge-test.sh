@@ -41,6 +41,9 @@ case "$command_name" in
   restart)
     for unit in "$@"; do
       : >"$state_directory/$unit.active"
+      if [[ "${KODEX_TEST_NEW_PROXY_FAILURE:-false}" == true ]]; then
+        : >"$state_directory/${unit%.socket}.service.failed"
+      fi
     done
     ;;
   disable)
@@ -54,7 +57,11 @@ case "$command_name" in
       rm -f -- "$state_directory/$unit.active"
     done
     ;;
-  reset-failed) ;;
+  reset-failed)
+    for unit in "$@"; do
+      rm -f -- "$state_directory/$unit.failed"
+    done
+    ;;
   is-enabled)
     [[ "${1:-}" == --quiet ]] && shift
     [[ -f "$state_directory/${1:?}.enabled" ]]
@@ -64,7 +71,8 @@ case "$command_name" in
     [[ -f "$state_directory/${1:?}.active" ]]
     ;;
   is-failed)
-    exit 1
+    [[ "${1:-}" == --quiet ]] && shift
+    [[ -f "$state_directory/${1:?}.failed" ]]
     ;;
   show)
     unit=${*: -1}
@@ -88,6 +96,9 @@ EOF
 cat >"$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${KODEX_TEST_FAILURE_DURING_PROBE:-false}" == true ]]; then
+  : >"${KODEX_TEST_SYSTEMD_STATE:?}/kodex-ipv6-ingress-bridge-443.service.failed"
+fi
 printf '404'
 EOF
 
@@ -133,12 +144,36 @@ for port in 80 443; do
   grep -Fq -- "--connections-max=256 --exit-idle-time=5min 127.0.0.1:$port" \
     "$service_file" || fail "proxy target or connection bound is invalid: $port"
   grep -Fxq 'NoNewPrivileges=yes' "$service_file" || fail "service hardening is absent: $port"
+  grep -Fxq 'Type=notify' "$service_file" || fail "notification readiness is absent: $port"
+  grep -Fxq 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' "$service_file" ||
+    fail "notification socket family is unavailable: $port"
   grep -Fxq 'CapabilityBoundingSet=' "$service_file" ||
     fail "service capabilities are not empty: $port"
   if grep -Fq 'ListenStream=[::]:' "$socket_file"; then
     fail "wildcard IPv6 listener was rendered: $port"
   fi
 done
+
+# Stop/restart не стирает прежний failed state. Apply обязан восстановить
+# только свои units; readback и новый отказ не имеют права сбрасывать state.
+for port in 80 443; do
+  for kind in socket service; do
+    : >"$state_directory/kodex-ipv6-ingress-bridge-$port.$kind.failed"
+  done
+done
+: >"$state_directory/unrelated.service.failed"
+expect_failure run_bridge --mode readback \
+  --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+run_bridge --mode apply --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+[[ -f "$state_directory/unrelated.service.failed" ]] || fail 'unrelated failure was reset'
+KODEX_TEST_NEW_PROXY_FAILURE=true expect_failure run_bridge --mode apply \
+  --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+[[ -f "$state_directory/kodex-ipv6-ingress-bridge-80.service.failed" ]] ||
+  fail 'new service failure was erased'
+run_bridge --mode apply --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+KODEX_TEST_FAILURE_DURING_PROBE=true expect_failure run_bridge --mode readback \
+  --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
+run_bridge --mode apply --server-public-ipv6-address "$KODEX_TEST_HOST_IPV6"
 
 first_digest=$(sha256sum "$unit_directory"/kodex-ipv6-ingress-bridge-* | sha256sum)
 run_bridge --mode apply \
