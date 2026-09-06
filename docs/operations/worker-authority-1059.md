@@ -4,7 +4,7 @@ title: Служебная авторизация EMAIL и Mattermost
 type: operations
 status: approved
 owner: backend
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-06
 ---
 
@@ -58,6 +58,7 @@ workload/key tests, fresh key separation, issuer profile, SQL principal
   индивидуальность 11 ключей, отсутствие private material в public trust,
   точные права файлов, signer rotation и отрицательные identity/key случаи.
 - `make test-internal-rpc-authority-postgres`: одноразовая PostgreSQL,
+  два фактических `goose.UpContext` с неизменной migration history,
   реальные LOGIN/CONNECT/SET issuer, запрет других authority capabilities.
 - `make test-install-contract`: полный набор статических и динамических
   проекций обоих consumer и замкнутый реестр из 22 runtime principals.
@@ -110,6 +111,23 @@ SHA в PR; интеграционный baseline и live consumers остают�
 исходным integrated4e327; generated получены канонической генерацией.
 Приватные безопасные логи: `authority-normalize-proto.log`,
 `authority-normalize-codegen.log`, `authority-normalize-go.log`.
-PostgreSQL/install/render для этого нового SHA — **NOT RUN**: их предыдущий
-PASS на0765 относится к прежнему checkpoint. Общий baseline/review/live также
-**NOT RUN**.
+Install/render для680c — **NOT RUN**: их предыдущий PASS на0765 относится
+к прежнему checkpoint. Общий baseline/review/live также **NOT RUN**.
+
+На `bf93ff2dea391aa80967f55da591327b8cca6196` публичный
+`make test-internal-rpc-authority-postgres` — **PASS**. Оснастка выполняет
+встроенную миграцию через тот же Goose API, что production CLI, дважды
+проверяет текущую версию и неизменность истории. Компонентный тест завершился
+за0.167s; последующие LOGIN/CONNECT/SET, отказ чужих capabilities, static
+identity и exact promotion assertions также прошли. До этого добавления
+публичная оснастка исполняла SQL через `psql`; её прежний PASS не доказывал
+повторный Goose up. CLI unit, shell syntax и diff check — **PASS**.
+Production Go/Proto и SQL migration в этом дополнении не изменялись.
+Безопасный локальный лог: `authority-goose-postgres.log`.
+
+Актуальная документация Goose `UpContext`, `SetBaseFS` и applied version
+readback повторно проверена через Context7 `/pressly/goose`. Тест принимает
+только порт созданного публичной оснасткой loopback контейнера; произвольный
+DSN не принимает. Production CLI сохраняет обязательный exact verify-full TLS.
+Эта проверка новой disposable установки не является проверкой обновления
+существующей живой БД и не разрешает редактировать применённую миграцию.
