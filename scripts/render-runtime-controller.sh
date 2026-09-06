@@ -62,7 +62,7 @@ repo_root="$(cd -- "$script_dir/.." && pwd -P)"
 rendered="$(kubectl kustomize "$repo_root/deploy/k8s/overlays/$environment_name/runtime-controller")" || fail "kustomize render failed"
 controller_placeholder="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:$(printf '0%.0s' {1..64})"
 authority_placeholder="ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:$(printf '0%.0s' {1..64})"
-[[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 12 ]] || fail "render has an unexpected controller placeholder count"
+[[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected controller placeholder count"
 [[ "$(grep -Fc "$authority_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected authority placeholder count"
 [[ "$(grep -Fc 'registry-pull-placeholder/kodex/roles@sha256:' <<<"$rendered" || true)" == 1 ]] ||
   fail "render has no exact promoted role repository placeholder"

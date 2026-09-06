@@ -439,9 +439,13 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     any(.volumeMounts[];
       .name == "artifact-spool" and
       .mountPath == "/var/lib/kodex/runtime-controller/artifact-spool" and
-      (.readOnly // false) == false and has("subPath") == false)) and
+      (.readOnly // false) == false and .subPath == "controller")) and
+  any($pod.initContainers[];
+    .name == "artifact-spool-init" and .securityContext.runAsUser == 10001 and
+    .command == ["/bin/sh", "-ec"] and
+    any(.volumeMounts[]; .name == "artifact-spool" and has("subPath") == false)) and
   all(($pod.containers + ($pod.initContainers // []))[];
-    .name == "runtime-controller" or
+    .name == "runtime-controller" or .name == "artifact-spool-init" or
     all(.volumeMounts[]?; .name != "artifact-spool"))
 ' >/dev/null || fail 'runtime-controller artifact spool storage boundary is invalid'
 yq -o=json -I=0 '.' "$render" | jq -s -e '

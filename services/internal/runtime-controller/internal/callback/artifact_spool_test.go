@@ -6,8 +6,104 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
+
+func TestArtifactSpoolPreparationKubernetesVolume(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.Chmod(directory, os.ModeSetgid|0777); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openArtifactSpool(directory); err == nil {
+		t.Fatal("unprepared public root accepted")
+	}
+	var group sync.WaitGroup
+	for range 8 {
+		group.Go(func() {
+			if err := PrepareArtifactSpool(directory); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	group.Wait()
+	spool, err := openArtifactSpool(filepath.Join(directory, "controller"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spool.close()
+	if err := spool.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(directory); err != nil || info.Mode().Perm() != 0777 {
+		t.Fatal("volume root was changed")
+	}
+}
+
+func TestArtifactSpoolPreparationRejectsUntrustedChild(t *testing.T) {
+	for _, scenario := range []string{"symlink-root", "symlink-child", "public-child", "file-child", "traversal"} {
+		t.Run(scenario, func(t *testing.T) {
+			directory := t.TempDir()
+			child := filepath.Join(directory, "controller")
+			switch scenario {
+			case "symlink-root":
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(directory, link); err != nil {
+					t.Fatal(err)
+				}
+				directory = link
+			case "symlink-child":
+				if err := os.Symlink(t.TempDir(), child); err != nil {
+					t.Fatal(err)
+				}
+			case "public-child":
+				if err := os.Mkdir(child, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "file-child":
+				if err := os.WriteFile(child, nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "traversal":
+				directory += "/../unsafe"
+			}
+			if err := PrepareArtifactSpool(directory); err == nil {
+				t.Fatal("unsafe preparation accepted")
+			}
+		})
+	}
+}
+
+// Контейнерный harness запускает настоящий constructor/readiness и unlink path
+// на subPath, подготовленном отдельным non-root init binary.
+func TestArtifactSpoolContainerStartup(t *testing.T) {
+	directory := os.Getenv("KODEX_ARTIFACT_SPOOL_CONTAINER_DIRECTORY")
+	if directory == "" {
+		t.Skip("disposable container fixture only")
+	}
+	spool, err := openArtifactSpool(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spool.close()
+	if err := spool.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	file, release, err := spool.acquire(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if _, err := file.Write([]byte("synthetic")); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := os.ReadDir(filepath.Join(directory, "private")); err != nil || len(entries) != 0 {
+		t.Fatal("transfer remains linked")
+	}
+	if err := os.WriteFile("/run/kodex/forbidden", nil, 0600); err == nil {
+		t.Fatal("authority mount is writable")
+	}
+}
 
 func TestArtifactSpoolUnlinksImmediatelyAndBoundsConcurrentTransfers(t *testing.T) {
 	directory := t.TempDir()

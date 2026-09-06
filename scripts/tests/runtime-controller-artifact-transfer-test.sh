@@ -34,10 +34,11 @@ for profile in web-only web-with-mattermost; do
         .resources.limits."ephemeral-storage" == "2Gi" and
         any(.volumeMounts[]; .name == "artifact-spool" and
           .mountPath == "/var/lib/kodex/runtime-controller/artifact-spool" and (.readOnly // false) == false and
-          .subPath == null and .mountPropagation == null)) and
+          .subPath == "controller" and .mountPropagation == null)) and
       all(.spec.template.spec.containers[] | select(.name != "runtime-controller");
         all(.volumeMounts[]?; .name != "artifact-spool")) and
-      all(.spec.template.spec.initContainers[]?.volumeMounts[]?; .name != "artifact-spool"))
+      all(.spec.template.spec.initContainers[]? | select(.name != "artifact-spool-init");
+        all(.volumeMounts[]?; .name != "artifact-spool")))
   ' >/dev/null || fail "$profile spool ownership, limits or configuration differ"
 done
 
