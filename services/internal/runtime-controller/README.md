@@ -106,7 +106,9 @@ GetExecutionFileMetadata перед body stream. Input/Skill callbacks испо�
 тот же stream, сохраняя собственные immutable pins.
 
 Отдельный disk-backed `artifact-spool` emptyDir ограничен2Gi и монтируется
-только controller. Внутренний каталог0700 и files0600 принадлежат process UID;
+только controller по `/var/lib/kodex/runtime-controller/artifact-spool`, отдельно
+от read-only authority `/run/kodex`. Alias `/var/run -> /run` не используется
+для writable mount. Внутренний каталог0700 и files0600 принадлежат process UID;
 файл unlink сразу после создания и исчезает при close/crash. Не более двух
 полных transfers одновременно, readiness выполняет небольшой writable canary.
 Timeout owner stream до2m, HTTP delivery имеет отдельный ограниченный бюджет.
