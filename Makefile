@@ -59,6 +59,13 @@ test-internal-rpc-authority-abi-render:
 test-worker-authority-projections:
 	@./scripts/tests/worker-authority-projections-test.sh
 
+.PHONY: test-interaction-gateway-render test-interaction-gateway-postgres
+test-interaction-gateway-render:
+	@./scripts/tests/interaction-gateway-render-test.sh
+
+test-interaction-gateway-postgres:
+	@./scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$$/(interaction|integration_connection_tests)'
+
 test-control-plane-postgres:
 	@./scripts/tests/control-plane-postgres-test.sh
 

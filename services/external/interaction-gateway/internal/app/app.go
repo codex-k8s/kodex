@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
@@ -39,6 +38,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	defer func() {
+		resultErr = errors.Join(resultErr, serviceruntime.RunShutdown(shutdownBase,
+			serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
+			serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
+		))
+	}()
 	logger := telemetry.Logger(os.Stdout)
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
 	readiness := serviceruntime.NewReadiness()
@@ -51,11 +56,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	if err := control.CheckLocalAuthority(startup); err != nil {
-		return errors.Join(
-			fmt.Errorf("interaction gateway startup barrier failed: %w", err),
-			control.Close(),
-		)
+		return fmt.Errorf("interaction gateway startup barrier failed: %w", err)
 	}
 	text, err := usertext.New()
 	if err != nil {
@@ -78,11 +81,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
-	sources := newSourceManager(control, adapter, logger, config)
+	sources := newSourceManager(control.Interaction, adapter, logger, config)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveTechnical(technical),
 		monitorLocalReadiness(control, readiness, metrics, logger, config),
 		runDeliveryLoop(control, adapter, logger, config),
+		runInvocationLoop(control.Runtime, adapter, logger, config),
 		runSourceRefresh(sources, control, logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
@@ -92,10 +96,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
 		serviceruntime.ShutdownOperation{Name: "interaction workers", Timeout: config.ShutdownTimeout / 3, Run: workers.Wait},
 		serviceruntime.ShutdownOperation{Name: "interaction sources", Timeout: config.ShutdownTimeout / 3, Run: sources.Close},
-		serviceruntime.ShutdownOperation{Name: "control-plane client", Timeout: config.ShutdownTimeout / 6, Run: func(context.Context) error { return control.Close() }},
 		serviceruntime.ShutdownOperation{Name: "technical HTTP", Timeout: config.ShutdownTimeout / 6, Run: technical.Shutdown},
-		serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
-		serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
 	)
 	return errors.Join(err, shutdownErr)
 }
@@ -148,7 +149,7 @@ func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Ada
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-			err := processDeliveries(cycle, control, adapter, config)
+			err := processDeliveries(cycle, control.Interaction, adapter, config)
 			cancel()
 			if err != nil && !degraded {
 				degraded = true
@@ -164,36 +165,6 @@ func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Ada
 			}
 		}
 	}
-}
-
-func processDeliveries(ctx context.Context, control *controlplaneclient.Client, adapter *mattermost.Adapter, config Config) error {
-	claimed, err := control.Interaction.ClaimInteractionDeliveries(ctx, &controlplanev1.ClaimInteractionDeliveriesRequest{
-		WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit,
-	})
-	if err != nil {
-		return err
-	}
-	for _, claim := range claimed.GetClaims() {
-		postRef, threadRef, deliveryErr := adapter.Deliver(ctx, claim)
-		if err := completeDelivery(ctx, control, claim, postRef, threadRef, deliveryErr); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func completeDelivery(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.InteractionDeliveryClaim, postRef, threadRef string, deliveryErr error) error {
-	lease := claim.GetLease()
-	if lease == nil {
-		return errors.New("interaction delivery lease is missing")
-	}
-	success, code := mattermost.Outcome(deliveryErr)
-	_, err := control.Interaction.CompleteInteractionDelivery(ctx, &controlplanev1.CompleteInteractionDeliveryRequest{
-		Mutation:    &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetDeliveryRef(), "complete")},
-		DeliveryRef: claim.GetDeliveryRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(),
-		Success: success, ExternalPostRef: postRef, ExternalThreadRef: threadRef, SafeErrorCode: code,
-	})
-	return err
 }
 
 func stableKey(left, right string) string {
