@@ -601,7 +601,7 @@ if [[ "$mode" == apply ]]; then
   for node_command in node npm npx corepack; do
     ln -sfn "/usr/local/node/bin/$node_command" "/usr/local/bin/$node_command"
   done
-  # Сетевой npm install '@openai/codex@0.152.0' намеренно запрещён: пакеты
+  # Сетевой npm install '@openai/codex@0.153.4' намеренно запрещён: пакеты
   # извлекаются только после проверки repo-owned SHA-512 без lifecycle scripts.
   codex_install_root=/usr/local/lib/kodex-cli
   download_integrity_artifact codex-cli "$temporary_directory/codex-cli.tgz"

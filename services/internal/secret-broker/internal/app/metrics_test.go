@@ -32,7 +32,7 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
 	operations := secretBrokerOperations()
-	if len(operations) != 10 ||
+	if len(operations) != 17 ||
 		operations["platform.runtime-secrets.operations.fail"] != controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName ||
 		operations["platform.runtime-secrets.operations.recover"] != controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName ||
 		operations["platform.runtime-secrets.materialization.recover"] != controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName ||
@@ -40,5 +40,18 @@ func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 		operations["platform.credential-projections.runtime.validate"] != controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName ||
 		operations["platform.credential-projections.stt.resolve"] != controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName {
 		t.Fatalf("secret broker owner operation registry is incomplete: %#v", operations)
+	}
+	for id, method := range map[string]string{
+		"platform.runtime-secret-drafts.readiness.check":         controlplanev1.RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+		"platform.runtime-secret-drafts.operations.consume":      controlplanev1.RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.complete":     controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.fail":         controlplanev1.RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.recover":      controlplanev1.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+		"platform.runtime-secret-drafts.materialization.recover": controlplanev1.RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.cleanup.complete":        controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+	} {
+		if operations[id] != method {
+			t.Fatal("secret draft owner operation registry is incomplete")
+		}
 	}
 }

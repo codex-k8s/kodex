@@ -23,6 +23,9 @@ const (
 
 type Config struct {
 	RuntimeNamespace            string        `env:"SECRET_BROKER_RUNTIME_NAMESPACE"`
+	DraftNamespace              string        `env:"SECRET_BROKER_DRAFT_NAMESPACE"`
+	DraftKeyringFile            string        `env:"SECRET_BROKER_DRAFT_KEYRING_FILE"`
+	DraftKeyGuardName           string        `env:"SECRET_BROKER_DRAFT_KEY_GUARD_NAME"`
 	ClaimantID                  string        `env:"POD_UID"`
 	GRPCListen                  string        `env:"SECRET_BROKER_GRPC_LISTEN"`
 	TechnicalListen             string        `env:"SECRET_BROKER_TECHNICAL_LISTEN"`
@@ -54,6 +57,8 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		RuntimeNamespace: "kodex-runtime", GRPCListen: ":8443", TechnicalListen: ":9090",
+		DraftNamespace: "kodex-secret-drafts", DraftKeyGuardName: "secret-broker-draft-key-guard",
+		DraftKeyringFile:      "/var/run/secrets/kodex/secret-broker/draft-keyring/keyring.json",
 		ServerCertificateFile: "/var/run/secrets/kodex/secret-broker/server/tls.crt",
 		ServerPrivateKeyFile:  "/var/run/secrets/kodex/secret-broker/server/tls.key",
 		ClientCAFile:          "/var/run/config/kodex/secret-broker/client/ca.pem",
@@ -81,7 +86,8 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
-	if config.RuntimeNamespace != "kodex-runtime" || config.ClaimantID == "" || len(config.ClaimantID) > 128 ||
+	if config.RuntimeNamespace != "kodex-runtime" || config.DraftNamespace != "kodex-secret-drafts" ||
+		config.DraftKeyGuardName != "secret-broker-draft-key-guard" || config.ClaimantID == "" || len(config.ClaimantID) > 128 ||
 		config.ControlPlaneTarget != defaultControlPlaneTarget ||
 		config.ControlPlaneTLSServerName != defaultControlPlaneTLSServerName ||
 		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
@@ -112,7 +118,7 @@ func (config Config) validate() error {
 	}
 	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile,
 		config.ControlPlaneCAFile, config.ControlPlaneCertificateFile, config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile,
-		config.CodexBinary, config.ProviderAuthorizationRoot, config.AuthorityVerifierSocket} {
+		config.CodexBinary, config.ProviderAuthorizationRoot, config.AuthorityVerifierSocket, config.DraftKeyringFile} {
 		if !filepath.IsAbs(path) {
 			return errors.New("secret broker file path is invalid")
 		}

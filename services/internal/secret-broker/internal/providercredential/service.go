@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	maximumAPIKeyBytes     = 16 << 10
-	minimumAPIKeyBytes     = 8
-	defaultDeviceAuthTTL   = 15 * time.Minute
-	deviceAuthFinishBudget = 30 * time.Second
+	maximumAPIKeyBytes      = 16 << 10
+	minimumAPIKeyBytes      = 8
+	defaultDeviceAuthTTL    = 15 * time.Minute
+	deviceAuthFinishBudget  = 30 * time.Second
+	deviceAuthCleanupBudget = 40 * time.Second
 )
 
 var (
@@ -32,9 +33,15 @@ type Store interface {
 	GetProviderAuthorizationAttempt(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
 	CompleteProviderAuthorizationAttempt(context.Context, kubernetesstore.ProviderAuthorizationAttempt) (kubernetesstore.ProviderAuthorizationAttempt, error)
 	CreateProviderCredential(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, error)
+	ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error)
 	DiscardProviderAuthorizationAttempt(context.Context, string, string, string, string, string) error
 	DiscardProviderCredential(context.Context, string, string, kubernetesstore.ProviderCredentialDescriptor) error
-	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (string, error)
+	CleanupProviderCredential(context.Context, string, string, int64, kubernetesstore.ProviderCredentialDescriptor) (kubernetesstore.ProviderCredentialCleanupResult, error)
+	ObserveProviderAuthorizationCleanup(context.Context, kubernetesstore.ProviderAuthorizationCleanupTarget) (kubernetesstore.ProviderAuthorizationCleanupObservation, error)
+	FenceProviderAuthorization(context.Context, kubernetesstore.ProviderAuthorizationCleanupTarget) error
+	FenceAuthorizationCredentialName(context.Context, kubernetesstore.ProviderAuthorizationCleanupTarget) (*kubernetesstore.ProviderCredentialDescriptor, error)
+	ReadProviderCleanupReceipt(context.Context, kubernetesstore.ProviderCleanupReceiptIdentity) (kubernetesstore.ProviderCredentialCleanupResult, bool, error)
+	CompleteProviderCleanupReceipt(context.Context, kubernetesstore.ProviderCleanupReceiptIdentity, *kubernetesstore.ProviderCredentialDescriptor) (kubernetesstore.ProviderCredentialCleanupResult, error)
 }
 
 type DeviceAuthorization struct {
@@ -120,7 +127,7 @@ func (service *Service) StartDeviceAuthorization(
 	service.sessions[materializerRef] = worker
 	service.mu.Unlock()
 	service.workers.Add(1)
-	go service.waitForDeviceAuthorization(wanted, worker)
+	go service.waitForDeviceAuthorization(stored, worker)
 	return castDeviceAuthorization(stored), nil
 }
 
@@ -173,12 +180,49 @@ func (service *Service) CleanupProviderCredential(
 	taskRef, accountRef string,
 	leaseGeneration int64,
 	descriptor kubernetesstore.ProviderCredentialDescriptor,
-) (string, error) {
+) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	receipt, err := service.store.CleanupProviderCredential(ctx, taskRef, accountRef, leaseGeneration, descriptor)
 	if errors.Is(err, kubernetesstore.ErrProviderCredentialCleanupInvalid) {
-		return "", ErrInvalidInput
+		return kubernetesstore.ProviderCredentialCleanupResult{}, ErrInvalidInput
 	}
 	return receipt, err
+}
+
+func (service *Service) ObserveAuthorizationCleanup(ctx context.Context, target kubernetesstore.ProviderAuthorizationCleanupTarget) (kubernetesstore.ProviderAuthorizationCleanupObservation, error) {
+	return service.store.ObserveProviderAuthorizationCleanup(ctx, target)
+}
+
+func (service *Service) CleanupAuthorization(ctx context.Context, target kubernetesstore.ProviderAuthorizationCleanupTarget) (kubernetesstore.ProviderCredentialCleanupResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, deviceAuthCleanupBudget)
+	defer cancel()
+	identity, err := kubernetesstore.AuthorizationCleanupReceiptIdentity(target)
+	if err != nil {
+		return kubernetesstore.ProviderCredentialCleanupResult{}, err
+	}
+	if result, found, err := service.store.ReadProviderCleanupReceipt(ctx, identity); err != nil || found {
+		return result, err
+	}
+	// CAS fence закрывает новых producers на всех репликах до локального join.
+	if err := service.store.FenceProviderAuthorization(ctx, target); err != nil {
+		return kubernetesstore.ProviderCredentialCleanupResult{}, err
+	}
+	service.mu.Lock()
+	worker := service.sessions[target.MaterializerAttemptRef]
+	service.mu.Unlock()
+	if worker != nil {
+		worker.once.Do(func() { close(worker.discard) })
+		_ = worker.session.Close()
+		select {
+		case <-worker.done:
+		case <-ctx.Done():
+			return kubernetesstore.ProviderCredentialCleanupResult{}, ctx.Err()
+		}
+	}
+	produced, err := service.store.FenceAuthorizationCredentialName(ctx, target)
+	if err != nil {
+		return kubernetesstore.ProviderCredentialCleanupResult{}, err
+	}
+	return service.store.CompleteProviderCleanupReceipt(ctx, identity, produced)
 }
 
 func (service *Service) ObserveDeviceAuthorization(
@@ -266,6 +310,14 @@ func (service *Service) waitForDeviceAuthorization(
 	}()
 	session := worker.session
 	wait, cancel := context.WithDeadline(service.lifecycle, attempt.ExpiresAt)
+	// Cleanup мог установить fence между Create pending и регистрацией worker.
+	// Свежий owner read закрывает запуск такого локального producer.
+	current, readErr := service.store.GetProviderAuthorizationAttempt(wait, attempt.MaterializerAttemptRef)
+	if readErr != nil || current.State != "PENDING" || current.AttemptRef != attempt.AttemptRef || current.AccountRef != attempt.AccountRef ||
+		current.SecretUID != attempt.SecretUID || current.MaterializerAttemptRef != attempt.MaterializerAttemptRef {
+		cancel()
+		return
+	}
 	authJSON, masked, err := session.Wait(wait)
 	cancel()
 	select {

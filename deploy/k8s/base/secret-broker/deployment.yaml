@@ -49,6 +49,12 @@ spec:
                   fieldPath: metadata.uid
             - name: SECRET_BROKER_RUNTIME_NAMESPACE
               value: kodex-runtime
+            - name: SECRET_BROKER_DRAFT_NAMESPACE
+              value: kodex-secret-drafts
+            - name: SECRET_BROKER_DRAFT_KEY_GUARD_NAME
+              value: secret-broker-draft-key-guard
+            - name: SECRET_BROKER_DRAFT_KEYRING_FILE
+              value: /var/run/secrets/kodex/secret-broker/draft-keyring/keyring.json
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:
@@ -120,6 +126,9 @@ spec:
             capabilities:
               drop: [ALL]
           volumeMounts:
+            - name: draft-keyring
+              mountPath: /var/run/secrets/kodex/secret-broker/draft-keyring
+              readOnly: true
             - name: kube-api-access
               mountPath: /var/run/secrets/kubernetes.io/serviceaccount
               readOnly: true
@@ -147,6 +156,11 @@ spec:
               mountPath: /var/run/secrets/kodex/secret-broker/observability
               readOnly: true
       volumes:
+        - name: draft-keyring
+          secret:
+            secretName: secret-broker-draft-keyring
+            defaultMode: 0440
+            items: [{key: keyring.json, path: keyring.json}]
         - name: kube-api-access
           projected:
             defaultMode: 0440

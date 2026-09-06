@@ -7,9 +7,15 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const (
+	providerCleanupErrorDomain      = "kodex.provider_credential_cleanup"
+	providerCleanupCASChangedReason = "CAS_SNAPSHOT_CHANGED"
 )
 
 func (server *Server) CheckProviderCredentialMaterializerReadiness(
@@ -50,6 +56,39 @@ func (server *Server) ObserveDeviceAuthorization(
 ) (*controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse, error) {
 	if server.providerCredentials == nil {
 		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
+	}
+	if request.GetMode() == controlplanev1.ProviderAuthorizationObservationMode_PROVIDER_AUTHORIZATION_OBSERVATION_MODE_METADATA_ONLY {
+		target := kubernetesstore.ProviderAuthorizationCleanupTarget{TaskRef: request.GetTaskRef(), AccountRef: request.GetAccountRef(),
+			AuthorizationAttemptRef: request.GetAuthorizationAttemptRef(), MaterializerAttemptRef: request.GetMaterializerAttemptRef(),
+			Generation: request.GetLeaseGeneration()}
+		result, err := server.providerCredentials.ObserveAuthorizationCleanup(ctx, target)
+		if err != nil {
+			return nil, providerCredentialCleanupError(err)
+		}
+		response := &controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse{
+			Credential: providerCredentialDescriptor(result.ProducedCredential),
+		}
+		switch result.State {
+		case kubernetesstore.ProviderAuthorizationPresent:
+			response.ObjectState = controlplanev1.ProviderAuthorizationObjectState_PROVIDER_AUTHORIZATION_OBJECT_STATE_PRESENT
+			response.PendingObject = &controlplanev1.ProviderAuthorizationObjectDescriptor{AccountRef: result.Target.AccountRef,
+				AuthorizationAttemptRef: result.Target.AuthorizationAttemptRef, MaterializerAttemptRef: result.Target.MaterializerAttemptRef,
+				Uid: result.Target.UID, ResourceVersion: result.Target.ResourceVersion}
+		case kubernetesstore.ProviderAuthorizationAbsent, kubernetesstore.ProviderAuthorizationFenced:
+			response.ObjectState = controlplanev1.ProviderAuthorizationObjectState_PROVIDER_AUTHORIZATION_OBJECT_STATE_ABSENT_UNFENCED
+			if result.State == kubernetesstore.ProviderAuthorizationFenced {
+				response.ObjectState = controlplanev1.ProviderAuthorizationObjectState_PROVIDER_AUTHORIZATION_OBJECT_STATE_CONFIRMED_ABSENT
+			}
+			response.AbsentObject = &controlplanev1.ProviderAuthorizationAbsenceDescriptor{AccountRef: result.Target.AccountRef,
+				AuthorizationAttemptRef: result.Target.AuthorizationAttemptRef, MaterializerAttemptRef: result.Target.MaterializerAttemptRef}
+		default:
+			return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupConflict)
+		}
+		return response, nil
+	}
+	if request.GetMode() != controlplanev1.ProviderAuthorizationObservationMode_PROVIDER_AUTHORIZATION_OBSERVATION_MODE_POLL ||
+		request.GetAccountRef() != "" || request.GetAuthorizationAttemptRef() != "" || request.GetTaskRef() != "" || request.GetLeaseGeneration() != 0 {
+		return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
 	}
 	result, err := server.providerCredentials.ObserveDeviceAuthorization(ctx, request.GetMaterializerAttemptRef())
 	if err != nil {
@@ -113,25 +152,52 @@ func (server *Server) CleanupProviderCredential(
 	if server.providerCredentials == nil {
 		return nil, status.Error(codes.Unavailable, "provider credential materializer is unavailable")
 	}
-	descriptor := kubernetesstore.ProviderCredentialDescriptor{}
-	if credential := request.GetCredential(); credential != nil {
-		descriptor = kubernetesstore.ProviderCredentialDescriptor{
+	var result kubernetesstore.ProviderCredentialCleanupResult
+	var err error
+	recovery := kubernetesstore.ProviderCleanupRecoveryIdentity{TaskRef: request.GetRecoveryIdentity().GetTaskRef(),
+		Generation: request.GetRecoveryIdentity().GetLeaseGeneration(), LegacyLastGeneration: request.GetRecoveryIdentity().GetLegacyLastGeneration()}
+	if !recovery.Valid(request.GetTaskRef(), request.GetLeaseGeneration()) {
+		return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
+	}
+	switch request.GetTargetKind() {
+	case controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_CREDENTIAL:
+		credential := request.GetCredential()
+		if credential == nil || request.GetPendingObject() != nil || request.GetAbsentObject() != nil {
+			return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
+		}
+		descriptor := kubernetesstore.ProviderCredentialDescriptor{
 			SecretName: credential.GetSecretName(), SecretUID: credential.GetSecretUid(),
 			SecretResourceVersion: credential.GetSecretResourceVersion(), ContentSHA256: credential.GetContentSha256(),
 		}
+		result, err = server.providerCredentials.CleanupProviderCredentialWithRecovery(ctx, request.GetTaskRef(), request.GetAccountRef(), request.GetLeaseGeneration(), descriptor, recovery)
+	case controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_AUTHORIZATION_ATTEMPT:
+		pending := request.GetPendingObject()
+		if pending == nil || request.GetCredential() != nil || request.GetAbsentObject() != nil || pending.GetAccountRef() != request.GetAccountRef() {
+			return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
+		}
+		result, err = server.providerCredentials.CleanupAuthorizationWithRecovery(ctx, kubernetesstore.ProviderAuthorizationCleanupTarget{
+			TaskRef: request.GetTaskRef(), AccountRef: request.GetAccountRef(), Generation: request.GetLeaseGeneration(),
+			Kind: kubernetesstore.ProviderCleanupAuthorization, AuthorizationAttemptRef: pending.GetAuthorizationAttemptRef(),
+			MaterializerAttemptRef: pending.GetMaterializerAttemptRef(), UID: pending.GetUid(), ResourceVersion: pending.GetResourceVersion(),
+		}, recovery)
+	case controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_AUTHORIZATION_ABSENCE:
+		absent := request.GetAbsentObject()
+		if absent == nil || request.GetCredential() != nil || request.GetPendingObject() != nil || absent.GetAccountRef() != request.GetAccountRef() {
+			return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
+		}
+		result, err = server.providerCredentials.CleanupAuthorizationWithRecovery(ctx, kubernetesstore.ProviderAuthorizationCleanupTarget{
+			TaskRef: request.GetTaskRef(), AccountRef: request.GetAccountRef(), Generation: request.GetLeaseGeneration(),
+			Kind: kubernetesstore.ProviderCleanupAbsence, AuthorizationAttemptRef: absent.GetAuthorizationAttemptRef(),
+			MaterializerAttemptRef: absent.GetMaterializerAttemptRef(),
+		}, recovery)
+	default:
+		return nil, providerCredentialCleanupError(kubernetesstore.ErrProviderCredentialCleanupInvalid)
 	}
-	receipt, err := server.providerCredentials.CleanupProviderCredential(
-		ctx,
-		request.GetTaskRef(),
-		request.GetAccountRef(),
-		request.GetLeaseGeneration(),
-		descriptor,
-	)
 	if err != nil {
 		return nil, providerCredentialCleanupError(err)
 	}
 	return &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse{
-		TerminalReceipt: receipt,
+		TerminalReceipt: result.TerminalReceipt, ProducedCredential: providerCredentialDescriptor(result.ProducedCredential),
 	}, nil
 }
 
@@ -178,6 +244,15 @@ func providerCredentialError(err error) error {
 
 func providerCredentialCleanupError(err error) error {
 	switch {
+	case errors.Is(err, kubernetesstore.ErrProviderAuthorizationCleanupSnapshotChanged):
+		result := status.New(codes.FailedPrecondition, "provider authorization cleanup snapshot changed before fencing")
+		withDetails, detailErr := result.WithDetails(&errdetails.ErrorInfo{
+			Domain: providerCleanupErrorDomain, Reason: providerCleanupCASChangedReason,
+		})
+		if detailErr != nil {
+			return result.Err()
+		}
+		return withDetails.Err()
 	case errors.Is(err, providercredential.ErrInvalidInput),
 		errors.Is(err, kubernetesstore.ErrProviderCredentialCleanupInvalid):
 		return status.Error(codes.InvalidArgument, "provider credential cleanup input is invalid")

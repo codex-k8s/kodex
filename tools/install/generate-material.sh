@@ -351,6 +351,15 @@ put_material kodex/image-admission/signing password "$output_directory/registry/
 put_material kodex/image-admission/signing private_key "$output_directory/registry/signing/cosign.key"
 put_material kodex/image-admission/signing public_key "$output_directory/registry/signing/cosign.pub"
 
+# Новый installation material получает отдельный ключ черновиков. Последующая
+# установка использует create-only readback; blind apply не вращает этот ключ.
+mkdir -p "$output_directory/crypto/secret-drafts"
+secret_draft_key_directory=$(cd -- "$output_directory/crypto/secret-drafts" && pwd -P)
+(cd "$repository_root/services/internal/secret-broker" &&
+  go run ./cmd/secret-draft-keys generate --output-file "$secret_draft_key_directory/keyring.json") ||
+  fail 'secret draft keyring generation failed'
+put_material kodex/secret-broker-draft-keyring keyring.json "$secret_draft_key_directory/keyring.json"
+
 (
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   GOWORK=off go run ./cmd/fresh-install-key-material "$output_directory/crypto"

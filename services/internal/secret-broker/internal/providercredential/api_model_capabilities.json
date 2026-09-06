@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "revision": "openai-api-2026-09-06.1",
+  "verifiedAt": "2026-09-06T00:00:00Z",
+  "validUntil": "2026-10-06T00:00:00Z",
+  "runtimeVersion": "0.153.4",
+  "models": [
+    {"id": "gpt-6-astra", "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"], "defaultReasoningEffort": "low", "apiDefault": null, "defaultOrigin": "KODEX_RUNTIME_POLICY", "source": "https://developers.openai.com/api/docs/models/gpt-6-astra"},
+    {"id": "gpt-5.6-sol", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh", "max"], "defaultReasoningEffort": "medium", "apiDefault": "medium", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol"},
+    {"id": "gpt-5.6-terra", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh", "max"], "defaultReasoningEffort": "medium", "apiDefault": "medium", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra"},
+    {"id": "gpt-5.6-luna", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh", "max"], "defaultReasoningEffort": "medium", "apiDefault": "medium", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna"},
+    {"id": "gpt-5.5", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh"], "defaultReasoningEffort": "medium", "apiDefault": "medium", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.5"},
+    {"id": "gpt-5.4", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh"], "defaultReasoningEffort": "none", "apiDefault": "none", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.4"},
+    {"id": "gpt-5.4-mini", "reasoningEfforts": ["none", "low", "medium", "high", "xhigh"], "defaultReasoningEffort": "none", "apiDefault": "none", "defaultOrigin": "OPENAI_API_DOCUMENTATION", "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini"}
+  ]
+}

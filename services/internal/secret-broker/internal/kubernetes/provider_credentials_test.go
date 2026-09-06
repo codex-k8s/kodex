@@ -7,7 +7,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,7 +26,7 @@ const (
 
 func TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent(t *testing.T) {
 	t.Parallel()
-	store, client := newTestStore(t)
+	store, client := newAuthorizationCleanupStore(t)
 	const attemptRef = "pauth_test12345"
 	const accountRef = "pacc_test12345"
 	descriptor, err := store.CreateProviderCredential(context.Background(), attemptRef, accountRef,
@@ -57,8 +56,12 @@ func TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent(t *test
 		t.Fatal(err)
 	}
 	assertProviderSecretDeletePreconditions(t, client, descriptor.SecretName, descriptor.SecretUID, descriptor.SecretResourceVersion)
-	if _, err := client.CoreV1().Secrets(testNamespace).Get(context.Background(), descriptor.SecretName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("credential was not deleted: %v", err)
+	fence, err := client.CoreV1().Secrets(testNamespace).Get(context.Background(), descriptor.SecretName, metav1.GetOptions{})
+	if err != nil || len(fence.Data[providerAuthJSONKey]) != 0 {
+		t.Fatalf("credential material survived discard: %v", err)
+	}
+	if _, err := store.parseProviderCleanupFence(fence, "CREDENTIAL", accountRef); err != nil {
+		t.Fatalf("discard did not fence credential name: %v", err)
 	}
 	if err := store.DiscardProviderCredential(context.Background(), attemptRef, accountRef, descriptor); err != nil {
 		t.Fatalf("idempotent discard failed: %v", err)
@@ -83,16 +86,9 @@ func TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if expected := providerCredentialCleanupReceipt(
-				providerCleanupTaskRef,
-				providerCleanupAccountRef,
-				providerCleanupGeneration,
-				descriptor,
-			); receipt != expected {
-				t.Fatalf("terminal receipt = %q, want %q", receipt, expected)
-			}
-			if len(receipt) > 512 || strings.Contains(receipt, "synthetic-cleanup-value") || !visibleASCII(receipt) {
-				t.Fatalf("terminal receipt is not bounded safe metadata: %q", receipt)
+			if receipt.TerminalReceipt == "" || receipt.ProducedCredential != nil || len(receipt.TerminalReceipt) > 512 ||
+				strings.Contains(receipt.TerminalReceipt, "synthetic-cleanup-value") || !visibleASCII(receipt.TerminalReceipt) {
+				t.Fatalf("terminal receipt is not bounded safe metadata: %#v", receipt)
 			}
 			assertProviderSecretDeletePreconditions(
 				t,
@@ -104,10 +100,14 @@ func TestCleanupProviderCredentialDeletesOnlyExactServerOwnedSecret(t *testing.T
 			if got := providerSecretActionCount(client, "get", descriptor.SecretName); got != 2 {
 				t.Fatalf("exact cleanup GET count = %d, want pre-delete and terminal readback", got)
 			}
-			if _, err := client.CoreV1().Secrets(testNamespace).Get(
+			fence, err := client.CoreV1().Secrets(testNamespace).Get(
 				context.Background(), descriptor.SecretName, metav1.GetOptions{},
-			); !apierrors.IsNotFound(err) {
-				t.Fatalf("provider credential still exists after exact cleanup: %v", err)
+			)
+			if err != nil || len(fence.Data[providerAuthJSONKey]) != 0 {
+				t.Fatalf("credential material survived cleanup: %v", err)
+			}
+			if _, err := store.parseProviderCleanupFence(fence, "CREDENTIAL", providerCleanupAccountRef); err != nil {
+				t.Fatalf("cleanup did not fence credential name: %v", err)
 			}
 		})
 	}
@@ -126,8 +126,8 @@ func TestCleanupProviderCredentialNotFoundIsDeterministicWithoutDelete(t *testin
 	second, err := store.CleanupProviderCredential(
 		context.Background(), providerCleanupTaskRef, providerCleanupAccountRef, providerCleanupGeneration, descriptor,
 	)
-	if err != nil || first == "" || second != first {
-		t.Fatalf("NotFound receipt is not deterministic: first=%q second=%q err=%v", first, second, err)
+	if err != nil || first.TerminalReceipt == "" || second != first {
+		t.Fatalf("NotFound receipt is not deterministic: first=%#v second=%#v err=%v", first, second, err)
 	}
 	if got := providerSecretActionCount(client, "delete", descriptor.SecretName); got != 0 {
 		t.Fatalf("NotFound cleanup issued %d delete calls", got)
@@ -185,7 +185,11 @@ func TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate(t *testing.T)
 	_, descriptor := providerCleanupFixture(providerSecretBrokerManager)
 	receipts := map[string]struct{}{}
 	add := func(taskRef, accountRef string, generation int64, value ProviderCredentialDescriptor) {
-		receipts[providerCredentialCleanupReceipt(taskRef, accountRef, generation, value)] = struct{}{}
+		identity, err := credentialCleanupReceiptIdentity(taskRef, accountRef, generation, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		receipts[providerCleanupResultReceipt(identity, nil)] = struct{}{}
 	}
 	add(providerCleanupTaskRef, providerCleanupAccountRef, providerCleanupGeneration, descriptor)
 	add("pcct_cleanup5678", providerCleanupAccountRef, providerCleanupGeneration, descriptor)
@@ -204,7 +208,7 @@ func TestProviderCredentialCleanupReceiptBindsEveryExactCoordinate(t *testing.T)
 	}
 }
 
-func TestCleanupProviderCredentialRejectsReplacementWithoutDelete(t *testing.T) {
+func TestCleanupProviderCredentialReportsReplacementWithoutDelete(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := providerCleanupFixture(providerRuntimeManager)
 	replacementContent := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"replacement-value"}`)
@@ -216,11 +220,12 @@ func TestCleanupProviderCredentialRejectsReplacementWithoutDelete(t *testing.T) 
 	secret.Data[providerAuthJSONKey] = replacementContent
 	secret.Data[providerAuthSHA256Key] = []byte(replacementDigestText)
 	store, client := newTestStore(t, secret)
-	_, err := store.CleanupProviderCredential(
+	result, err := store.CleanupProviderCredential(
 		context.Background(), providerCleanupTaskRef, providerCleanupAccountRef, providerCleanupGeneration, descriptor,
 	)
-	if !errors.Is(err, ErrProviderCredentialCleanupConflict) {
-		t.Fatalf("replacement Secret was not rejected: %v", err)
+	if err != nil || result.ProducedCredential == nil || result.ProducedCredential.SecretUID != string(secret.UID) ||
+		result.ProducedCredential.ContentSHA256 != replacementDigestText {
+		t.Fatalf("replacement Secret did not become a separate exact target: %v", err)
 	}
 	if got := providerSecretActionCount(client, "delete", descriptor.SecretName); got != 0 {
 		t.Fatalf("replacement Secret received %d delete calls", got)
@@ -238,9 +243,6 @@ func TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch(t *te
 		}},
 		{name: "managed label", change: func(secret *corev1.Secret, _ *ProviderCredentialDescriptor) {
 			secret.Labels[providerManagedByLabel] = "foreign-controller"
-		}},
-		{name: "UID", change: func(_ *corev1.Secret, descriptor *ProviderCredentialDescriptor) {
-			descriptor.SecretUID = "62000000-0000-4000-8000-000000000003"
 		}},
 		{name: "resource version", change: func(_ *corev1.Secret, descriptor *ProviderCredentialDescriptor) {
 			descriptor.SecretResourceVersion = "different-version"
@@ -272,19 +274,20 @@ func TestCleanupProviderCredentialRejectsBindingMetadataAndContentMismatch(t *te
 	}
 }
 
-func TestCleanupProviderCredentialRequiresTerminalNotFoundReadback(t *testing.T) {
+func TestCleanupProviderCredentialRequiresFencedTerminalReadback(t *testing.T) {
 	t.Parallel()
 	secret, descriptor := providerCleanupFixture(providerRuntimeManager)
 	store, client := newTestStore(t, secret)
 	getCalls := 0
 	client.Fake.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.(k8stesting.GetAction).GetName() != descriptor.SecretName {
+			return false, nil, nil
+		}
 		getCalls++
 		if getCalls != 2 {
 			return false, nil, nil
 		}
 		replacement := secret.DeepCopy()
-		replacement.UID = types.UID("62000000-0000-4000-8000-000000000004")
-		replacement.ResourceVersion = "replacement-after-delete"
 		return true, replacement, nil
 	})
 	_, err := store.CleanupProviderCredential(
@@ -362,12 +365,8 @@ func TestCleanupProviderCredentialTemporaryAPIErrorsRemainRetryable(t *testing.T
 
 func TestDiscardProviderAuthorizationAttemptRequiresExactLineage(t *testing.T) {
 	t.Parallel()
-	store, client := newTestStore(t)
-	attempt := ProviderAuthorizationAttempt{
-		AttemptRef: "pauth_device123", AccountRef: "pacc_device123", MaterializerAttemptRef: "pmat_device123",
-		State: "PENDING", VerificationURI: "https://example.invalid/device", UserCode: "ABCD-EFGH",
-		ExpiresAt: time.Now().UTC().Add(10 * time.Minute),
-	}
+	store, client := newAuthorizationCleanupStore(t)
+	attempt, _ := authorizationCleanupFixture()
 	stored, created, err := store.CreateProviderAuthorizationAttempt(context.Background(), attempt)
 	if err != nil || !created {
 		t.Fatalf("create attempt: created=%v err=%v", created, err)
@@ -388,7 +387,9 @@ func TestDiscardProviderAuthorizationAttemptRequiresExactLineage(t *testing.T) {
 		stored.MaterializerAttemptRef, stored.SecretUID, stored.ResourceVersion); err != nil {
 		t.Fatal(err)
 	}
-	assertProviderSecretDeletePreconditions(t, client, name, stored.SecretUID, stored.ResourceVersion)
+	if providerSecretActionCount(client, "delete", name) != 0 || providerSecretActionCount(client, "update", name) != 1 {
+		t.Fatal("pending discard must fence atomically without reopening its name")
+	}
 	if err := store.DiscardProviderAuthorizationAttempt(context.Background(), stored.AttemptRef, stored.AccountRef,
 		stored.MaterializerAttemptRef, stored.SecretUID, stored.ResourceVersion); err != nil {
 		t.Fatalf("idempotent attempt discard failed: %v", err)
@@ -461,6 +462,10 @@ func providerSecretActionCount(client *fake.Clientset, verb, name string) int {
 		if action.GetVerb() == verb && action.GetResource().Resource == "secrets" {
 			if named, ok := action.(interface{ GetName() string }); ok && named.GetName() == name {
 				count++
+			} else if write, ok := action.(interface{ GetObject() runtime.Object }); ok {
+				if secret, ok := write.GetObject().(*corev1.Secret); ok && secret.Name == name {
+					count++
+				}
 			}
 		}
 	}

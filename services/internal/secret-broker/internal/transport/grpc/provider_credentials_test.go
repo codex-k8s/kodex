@@ -13,6 +13,7 @@ import (
 )
 
 type cleanupProviderCredentialMaterializerStub struct {
+	ProviderCredentialMaterializer
 	taskRef      string
 	accountRef   string
 	generation   int64
@@ -20,9 +21,14 @@ type cleanupProviderCredentialMaterializerStub struct {
 	receipt      string
 	err          error
 	cleanupCalls int
+	recovery     kubernetesstore.ProviderCleanupRecoveryIdentity
 }
 
 func (stub *cleanupProviderCredentialMaterializerStub) Check(context.Context) error { return nil }
+
+func (stub *cleanupProviderCredentialMaterializerStub) ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error) {
+	return providercredential.ModelCatalog{}, errors.New("unexpected catalog observation")
+}
 
 func (stub *cleanupProviderCredentialMaterializerStub) StartDeviceAuthorization(
 	context.Context,
@@ -55,18 +61,20 @@ func (stub *cleanupProviderCredentialMaterializerStub) Discard(
 	return errors.New("unexpected materialization discard")
 }
 
-func (stub *cleanupProviderCredentialMaterializerStub) CleanupProviderCredential(
+func (stub *cleanupProviderCredentialMaterializerStub) CleanupProviderCredentialWithRecovery(
 	_ context.Context,
 	taskRef, accountRef string,
 	generation int64,
 	descriptor kubernetesstore.ProviderCredentialDescriptor,
-) (string, error) {
+	recovery kubernetesstore.ProviderCleanupRecoveryIdentity,
+) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	stub.cleanupCalls++
+	stub.recovery = recovery
 	stub.taskRef = taskRef
 	stub.accountRef = accountRef
 	stub.generation = generation
 	stub.descriptor = descriptor
-	return stub.receipt, stub.err
+	return kubernetesstore.ProviderCredentialCleanupResult{TerminalReceipt: stub.receipt}, stub.err
 }
 
 func TestCleanupProviderCredentialHandlerPreservesExactTarget(t *testing.T) {
@@ -76,6 +84,8 @@ func TestCleanupProviderCredentialHandlerPreservesExactTarget(t *testing.T) {
 	server := &Server{providerCredentials: stub}
 	request := &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{
 		TaskRef: "pcct_cleanup1234", AccountRef: "pacc_cleanup1234", LeaseGeneration: 7,
+		RecoveryIdentity: &controlplanev1.ProviderCredentialCleanupRecoveryIdentity{TaskRef: "pcct_origin1234", LeaseGeneration: 2},
+		TargetKind:       controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_CREDENTIAL,
 		Credential: &controlplanev1.ProviderCredentialDescriptor{
 			SecretName:            "provider-credential-cleanup",
 			SecretUid:             "61000000-0000-4000-8000-000000000002",
@@ -115,7 +125,12 @@ func TestCleanupProviderCredentialHandlerClassifiesErrors(t *testing.T) {
 			server := &Server{providerCredentials: stub}
 			_, err := server.CleanupProviderCredential(
 				context.Background(),
-				&controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{},
+				&controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{
+					TaskRef: "pcct_cleanup1234", LeaseGeneration: 7,
+					RecoveryIdentity: &controlplanev1.ProviderCredentialCleanupRecoveryIdentity{TaskRef: "pcct_origin1234", LeaseGeneration: 2},
+					TargetKind:       controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_CREDENTIAL,
+					Credential:       &controlplanev1.ProviderCredentialDescriptor{},
+				},
 			)
 			if status.Code(err) != test.code || stub.cleanupCalls != 1 {
 				t.Fatalf("cleanup error code = %s, want %s; calls=%d", status.Code(err), test.code, stub.cleanupCalls)

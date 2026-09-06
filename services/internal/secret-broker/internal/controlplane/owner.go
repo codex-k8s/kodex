@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/recovery"
+	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/recoverycursor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -15,18 +19,24 @@ import (
 const (
 	recoveryPageSize     = 100
 	maximumRecoveryPages = 10
+	recoveryListTimeout  = 10 * time.Second
 )
 
+var errRecoveryPaginationCycle = errors.New("runtime secret recovery pagination cycled")
+
 type Owner struct {
-	client     *controlplaneclient.Client
-	claimantID string
+	client         *controlplaneclient.Client
+	claimantID     string
+	recoveryReader chan struct{}
+	recoveryCursor string
+	recoveryCycle  recoverycursor.Cycle
 }
 
 func New(client *controlplaneclient.Client, claimantID string) (*Owner, error) {
 	if client == nil || client.RuntimeSecrets == nil || claimantID == "" {
 		return nil, errors.New("runtime secret owner client is required")
 	}
-	return &Owner{client: client, claimantID: claimantID}, nil
+	return &Owner{client: client, claimantID: claimantID, recoveryReader: make(chan struct{}, 1)}, nil
 }
 
 func (owner *Owner) Check(ctx context.Context) error {
@@ -84,26 +94,48 @@ func (owner *Owner) ResolveTranscriptionCredentialProjection(ctx context.Context
 	return owner.client.RuntimeSecrets.ResolveTranscriptionCredentialProjection(ctx, request)
 }
 
-// ListRecoveryWork читает bounded snapshot просроченных CLAIMED operation.
+// ListRecoveryWork читает ограниченную порцию просроченных CLAIMED operation.
 // Pagination token остаётся внутри owner adapter и не попадает в recovery logs.
-func (owner *Owner) ListRecoveryWork(ctx context.Context) ([]recovery.RecoveryWork, error) {
+func (owner *Owner) ListRecoveryWork(ctx context.Context) (work []recovery.RecoveryWork, resultErr error) {
+	ctx, cancel := context.WithTimeout(ctx, recoveryListTimeout)
+	defer cancel()
+	select {
+	case owner.recoveryReader <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() {
+		if resultErr != nil {
+			owner.recoveryCursor = ""
+			owner.recoveryCycle.Reset()
+		}
+		<-owner.recoveryReader
+	}()
 	result := make([]recovery.RecoveryWork, 0, recoveryPageSize)
-	pageToken := ""
-	seenTokens := make(map[string]struct{}, maximumRecoveryPages)
+	pageToken := owner.recoveryCursor
+	seenTokens := map[string]struct{}{pageToken: {}}
+	seenOperations := make(map[string]struct{}, recoveryPageSize*maximumRecoveryPages)
 	for pageIndex := 0; pageIndex < maximumRecoveryPages; pageIndex++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		response, err := owner.client.RuntimeSecrets.ListRuntimeSecretRecoveryWork(ctx, &controlplanev1.ListRuntimeSecretRecoveryWorkRequest{
 			Page: &controlplanev1.PageRequest{PageSize: recoveryPageSize, PageToken: pageToken},
 		})
 		if err != nil {
 			return nil, err
 		}
-		if response == nil || len(result)+len(response.GetOperations()) > recoveryPageSize*maximumRecoveryPages {
+		if response == nil || len(response.GetOperations()) > recoveryPageSize {
 			return nil, errors.New("runtime secret recovery work response is invalid")
 		}
 		for _, item := range response.GetOperations() {
-			if item == nil {
+			if item == nil || item.GetOperationRef() == "" {
 				return nil, errors.New("runtime secret recovery work item is invalid")
 			}
+			if _, duplicate := seenOperations[item.GetOperationRef()]; duplicate {
+				return nil, errors.New("runtime secret recovery operation is repeated")
+			}
+			seenOperations[item.GetOperationRef()] = struct{}{}
 			result = append(result, recovery.RecoveryWork{
 				OperationRef: item.GetOperationRef(), Kind: item.GetKind(), ClaimantID: item.GetClaimantId(),
 				ClaimGeneration: item.GetClaimGeneration(), Namespace: item.GetNamespace(), SecretRef: item.GetSecretRef(),
@@ -112,18 +144,25 @@ func (owner *Owner) ListRecoveryWork(ctx context.Context) ([]recovery.RecoveryWo
 		}
 		nextToken := response.GetPage().GetNextPageToken()
 		if nextToken == "" {
+			owner.recoveryCursor = ""
+			owner.recoveryCycle.Reset()
 			return result, nil
 		}
-		if nextToken == pageToken {
+		if len(response.GetOperations()) == 0 || len(nextToken) > 512 || nextToken == pageToken ||
+			!utf8.ValidString(nextToken) || strings.ContainsRune(nextToken, '\x00') {
 			return nil, errors.New("runtime secret recovery pagination did not advance")
 		}
 		if _, exists := seenTokens[nextToken]; exists {
-			return nil, errors.New("runtime secret recovery pagination cycled")
+			return nil, errRecoveryPaginationCycle
+		}
+		if !owner.recoveryCycle.Advance(nextToken) {
+			return nil, errRecoveryPaginationCycle
 		}
 		seenTokens[nextToken] = struct{}{}
 		pageToken = nextToken
 	}
-	return nil, errors.New("runtime secret recovery work exceeds bounded pagination")
+	owner.recoveryCursor = pageToken
+	return result, nil
 }
 
 func (owner *Owner) Consume(ctx context.Context, grant string) (*controlplanev1.ConsumeRuntimeSecretOperationResponse, error) {

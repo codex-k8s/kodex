@@ -35,15 +35,15 @@
     },
     {
       "name": "codex-cli",
-      "version": "0.152.0",
-      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0.tgz",
-      "integrity": "sha512-Vx0tg/J5SbxYYGJazTtL/XySK9Dlqc5KW1MZM71NMwVci/4F1ap+FfSKPFTlrICEtOTuq3KNcWSdv9oMGdPuRw=="
+      "version": "0.153.4",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.153.4.tgz",
+      "integrity": "sha512-wbHDmit7S/YvBGVX1DQmk13xtWblZ2cApeJ/pB7xDZ10Cna+DZc5ij7f0F4OxdsXN4FW1oLT48OpogUI1+8Y2w=="
     },
     {
       "name": "codex-linux-x64",
-      "version": "0.152.0-linux-x64",
-      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.152.0-linux-x64.tgz",
-      "integrity": "sha512-Isn/g5EZTaNbwZtaIuz67U1FNDEVVeMpS4xiR+c1dpOPL2xxrGNtdAothOW2YKsb96OsS+QfClziFb4qxesWDA=="
+      "version": "0.153.4-linux-x64",
+      "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.153.4-linux-x64.tgz",
+      "integrity": "sha512-x1EcwBlY3AObM1VTUHNM2AzAJQsyreGdagpF+qFiYi/Oa30VBktvvG0C6tLtCzqW6hjZNWkGZQWmeVk7MuJKWg=="
     },
     {
       "name": "helm",

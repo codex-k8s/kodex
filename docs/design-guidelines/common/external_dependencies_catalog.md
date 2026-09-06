@@ -62,7 +62,7 @@ lock-файлом; точный image — Dockerfile либо release lock.
 
 | Tool | Active version/source | Scope |
 |---|---:|---|
-| `@openai/codex` | `0.152.0` | первый provider adapter через typed app-server contract |
+| `@openai/codex` | `0.153.4` | первый provider adapter через typed app-server contract, Astra и отдельные API capabilities #1100 |
 | `kodex-agent-runner` | текущий release digest | защищённый runtime ABI каждого role image |
 | Node.js | `24.x` | Codex/provider process и role tooling |
 | Go | `1.26.6` | runtime/toolchain для ролей, которым это разрешено recipe |
