@@ -25,9 +25,12 @@ type jiraIssue struct {
 }
 
 func (adapter *Adapter) testJira(ctx context.Context, request Request, configuration map[string]string) error {
-	definition := adapter.definitions["jira"]
+	definition, err := adapter.validateDefinition(request)
+	if err != nil {
+		return err
+	}
 	capability, _ := definition.Capability(definition.Spec.HealthCheck.Operation)
-	_, err := adapter.jiraJSON(ctx, request, capability, configuration, http.MethodGet,
+	_, err = adapter.jiraJSON(ctx, request, capability, configuration, http.MethodGet,
 		"/rest/api/3/project/"+url.PathEscape(configuration["project_key"]), nil, nil, "")
 	return err
 }

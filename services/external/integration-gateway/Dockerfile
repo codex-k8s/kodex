@@ -8,6 +8,7 @@ WORKDIR /workspace
 COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
 COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/credentialfs/ libs/go/credentialfs/
+COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
@@ -24,7 +25,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/integration-gateway ./cmd/integration-gateway
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS runtime
+FROM docker.io/library/alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime
+RUN apk add --no-cache git=2.52.0-r0 ca-certificates && \
+    addgroup -g 10001 kodex && adduser -D -H -u 10001 -G kodex kodex
 COPY --from=build --chmod=0555 /out/integration-gateway /usr/local/bin/integration-gateway
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/integration-gateway"]

@@ -4,7 +4,7 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.3.0
+version: 2.4.0
 updated: 2026-09-05
 ---
 
@@ -20,6 +20,16 @@ updated: 2026-09-05
 approval policy, input и resource scope. Gateway принимает только совпадающие
 `definition_version`, `definition_digest`, grant scope и immutable input
 digest.
+
+UI/Git-managed packages передаются внутри каждой protected claim и проверяются
+по точным key/version/digest и compiled executable baseline. Они не заменяют
+общий registry других подключений. Deadline, attempts и Human Gate учитывают
+выбранную revision. Git source worker читает pinned commit/regular blob,
+проверяет ancestry/digests и возвращает typed completion владельцу.
+Полная карта находится в
+[integration-configuration-sources-1028.md](../../../docs/operations/integration-configuration-sources-1028.md).
+Git write-back и итоговый owner/profile цикл требуют отдельного завершения
+в этом же unit; наличие read consumer не означает готовность всего CFG.
 
 Поставляются семь schema-versioned packages:
 

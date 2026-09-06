@@ -64,6 +64,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	adapter, err := integration.New(integration.Config{
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
 		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
+		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 	})
 	if err != nil {
 		return err
@@ -75,7 +76,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorLocalReadiness(control, readiness, metrics, logger, config), runIntegrationLoop(control, adapter, business, logger, config))
+	workHealth := &workCycleHealth{}
+	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorLocalReadiness(control, readiness, workHealth, metrics, business, logger, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -103,7 +105,7 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
-func monitorLocalReadiness(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorLocalReadiness(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, workHealth *workCycleHealth, metrics *sharedobservability.Metrics, business *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -111,6 +113,7 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 			check, cancel := context.WithTimeout(ctx, config.RequestTimeout)
 			err := control.CheckLocalAuthority(check)
 			cancel()
+			business.WorkPathReady(err == nil && workHealth.ready(time.Now(), integrationCycleBudget(config)+5*time.Second+config.ReadinessInterval))
 			if err == nil {
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "integration gateway readiness restored")
@@ -118,7 +121,7 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 				metrics.SetReady(true)
 			} else {
 				if readiness.Set(false, "local_authority_unavailable") {
-					logger.WarnContext(ctx, "integration gateway readiness lost", "error_class", "sidecar")
+					logger.WarnContext(ctx, "integration gateway readiness lost", "error_class", "local_authority_unavailable")
 				}
 				metrics.SetReady(false)
 			}
@@ -131,14 +134,18 @@ func monitorLocalReadiness(control *controlplaneclient.Client, readiness *servic
 	}
 }
 
-func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration.Adapter, workHealth *workCycleHealth, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
-			cycle, cancel := context.WithTimeout(ctx, 2*config.OperationTimeout+4*config.RequestTimeout)
+			cycle, cancel := context.WithTimeout(ctx, integrationCycleBudget(config))
 			processed, err := processIntegrationWork(cycle, control, adapter, metrics, config)
 			cancel()
+			workHealth.record(time.Now(), err)
+			if err != nil {
+				metrics.WorkPathReady(false)
+			}
 			metrics.Cycle(err)
 			if err != nil && !degraded {
 				degraded = true
@@ -193,7 +200,13 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		}
 		processed++
 	}
-	return processed, nil
+	sources, err := processConfigurationSourceWork(ctx, control.ConfigurationSources, adapter, metrics, config)
+	processed += sources
+	if err != nil {
+		return processed, err
+	}
+	writebacks, err := processConfigurationWriteBackWork(ctx, control.ConfigurationWriteBacks, adapter, metrics, config)
+	return processed + writebacks, err
 }
 
 func completeTest(ctx context.Context, control *controlplaneclient.Client, claim *controlplanev1.IntegrationConnectionTestClaim, result string, operationErr error) error {

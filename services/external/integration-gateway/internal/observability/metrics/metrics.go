@@ -6,17 +6,29 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type Metrics struct{ cycles, operations *prometheus.CounterVec }
+type Metrics struct {
+	cycles, operations *prometheus.CounterVec
+	workPathReady      prometheus.Gauge
+}
 
 func New(registry *observability.Metrics) (*Metrics, error) {
 	m := &Metrics{
-		cycles:     prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "integration_gateway", Name: "cycles_total", Help: "Total completed integration worker cycles."}, []string{"outcome"}),
-		operations: prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "integration_gateway", Name: "operations_total", Help: "Total adapter outcomes before receipt persistence."}, []string{"operation", "outcome"}),
+		cycles:        prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "integration_gateway", Name: "cycles_total", Help: "Total completed integration worker cycles."}, []string{"outcome"}),
+		operations:    prometheus.NewCounterVec(prometheus.CounterOpts{Namespace: "kodex", Subsystem: "integration_gateway", Name: "operations_total", Help: "Total adapter outcomes before receipt persistence."}, []string{"operation", "outcome"}),
+		workPathReady: prometheus.NewGauge(prometheus.GaugeOpts{Namespace: "kodex", Subsystem: "integration_gateway", Name: "work_path_ready", Help: "Whether a fresh complete protected owner work cycle has succeeded."}),
 	}
-	if err := registry.Register(m.cycles, m.operations); err != nil {
+	if err := registry.Register(m.cycles, m.operations, m.workPathReady); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (m *Metrics) WorkPathReady(ready bool) {
+	value := float64(0)
+	if ready {
+		value = 1
+	}
+	m.workPathReady.Set(value)
 }
 
 func (m *Metrics) Cycle(err error) {
@@ -36,6 +48,26 @@ func (m *Metrics) Operation(test, success, unknown bool) {
 		outcome = "error"
 	}
 	if unknown {
+		outcome = "unknown"
+	}
+	m.operations.WithLabelValues(operation, outcome).Inc()
+}
+
+func (m *Metrics) ConfigurationSource(success bool) {
+	outcome := "success"
+	if !success {
+		outcome = "error"
+	}
+	m.operations.WithLabelValues("configuration_source", outcome).Inc()
+}
+
+func (m *Metrics) ConfigurationWriteBack(branch, success bool) {
+	operation := "configuration_writeback_pr"
+	if branch {
+		operation = "configuration_writeback_branch"
+	}
+	outcome := "success"
+	if !success {
 		outcome = "unknown"
 	}
 	m.operations.WithLabelValues(operation, outcome).Inc()
