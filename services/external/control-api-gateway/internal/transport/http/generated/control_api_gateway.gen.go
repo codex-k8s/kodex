@@ -2266,6 +2266,102 @@ func (e ManagedConfigurationConsumerKind) Valid() bool {
 	}
 }
 
+// Defines values for ManagedConfigurationConsumerAbsentExpectedAbsent.
+const (
+	ManagedConfigurationConsumerAbsentExpectedAbsentTrue ManagedConfigurationConsumerAbsentExpectedAbsent = true
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationConsumerAbsentExpectedAbsent enum.
+func (e ManagedConfigurationConsumerAbsentExpectedAbsent) Valid() bool {
+	switch e {
+	case ManagedConfigurationConsumerAbsentExpectedAbsentTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationConsumerAbsentKind.
+const (
+	ManagedConfigurationConsumerAbsentKindAGENT                 ManagedConfigurationConsumerAbsentKind = "AGENT"
+	ManagedConfigurationConsumerAbsentKindAGENTCONTINUATION     ManagedConfigurationConsumerAbsentKind = "AGENT_CONTINUATION"
+	ManagedConfigurationConsumerAbsentKindINTEGRATIONCONNECTION ManagedConfigurationConsumerAbsentKind = "INTEGRATION_CONNECTION"
+	ManagedConfigurationConsumerAbsentKindRUNTIMEENVIRONMENT    ManagedConfigurationConsumerAbsentKind = "RUNTIME_ENVIRONMENT"
+	ManagedConfigurationConsumerAbsentKindSCHEDULE              ManagedConfigurationConsumerAbsentKind = "SCHEDULE"
+	ManagedConfigurationConsumerAbsentKindSTTSERVICE            ManagedConfigurationConsumerAbsentKind = "STT_SERVICE"
+	ManagedConfigurationConsumerAbsentKindWORKFLOW              ManagedConfigurationConsumerAbsentKind = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationConsumerAbsentKind enum.
+func (e ManagedConfigurationConsumerAbsentKind) Valid() bool {
+	switch e {
+	case ManagedConfigurationConsumerAbsentKindAGENT:
+		return true
+	case ManagedConfigurationConsumerAbsentKindAGENTCONTINUATION:
+		return true
+	case ManagedConfigurationConsumerAbsentKindINTEGRATIONCONNECTION:
+		return true
+	case ManagedConfigurationConsumerAbsentKindRUNTIMEENVIRONMENT:
+		return true
+	case ManagedConfigurationConsumerAbsentKindSCHEDULE:
+		return true
+	case ManagedConfigurationConsumerAbsentKindSTTSERVICE:
+		return true
+	case ManagedConfigurationConsumerAbsentKindWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationConsumerMatchExpectedAbsent.
+const (
+	ManagedConfigurationConsumerMatchExpectedAbsentFalse ManagedConfigurationConsumerMatchExpectedAbsent = false
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationConsumerMatchExpectedAbsent enum.
+func (e ManagedConfigurationConsumerMatchExpectedAbsent) Valid() bool {
+	switch e {
+	case ManagedConfigurationConsumerMatchExpectedAbsentFalse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationConsumerMatchKind.
+const (
+	ManagedConfigurationConsumerMatchKindAGENT                 ManagedConfigurationConsumerMatchKind = "AGENT"
+	ManagedConfigurationConsumerMatchKindAGENTCONTINUATION     ManagedConfigurationConsumerMatchKind = "AGENT_CONTINUATION"
+	ManagedConfigurationConsumerMatchKindINTEGRATIONCONNECTION ManagedConfigurationConsumerMatchKind = "INTEGRATION_CONNECTION"
+	ManagedConfigurationConsumerMatchKindRUNTIMEENVIRONMENT    ManagedConfigurationConsumerMatchKind = "RUNTIME_ENVIRONMENT"
+	ManagedConfigurationConsumerMatchKindSCHEDULE              ManagedConfigurationConsumerMatchKind = "SCHEDULE"
+	ManagedConfigurationConsumerMatchKindSTTSERVICE            ManagedConfigurationConsumerMatchKind = "STT_SERVICE"
+	ManagedConfigurationConsumerMatchKindWORKFLOW              ManagedConfigurationConsumerMatchKind = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationConsumerMatchKind enum.
+func (e ManagedConfigurationConsumerMatchKind) Valid() bool {
+	switch e {
+	case ManagedConfigurationConsumerMatchKindAGENT:
+		return true
+	case ManagedConfigurationConsumerMatchKindAGENTCONTINUATION:
+		return true
+	case ManagedConfigurationConsumerMatchKindINTEGRATIONCONNECTION:
+		return true
+	case ManagedConfigurationConsumerMatchKindRUNTIMEENVIRONMENT:
+		return true
+	case ManagedConfigurationConsumerMatchKindSCHEDULE:
+		return true
+	case ManagedConfigurationConsumerMatchKindSTTSERVICE:
+		return true
+	case ManagedConfigurationConsumerMatchKindWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ManagedConfigurationDraftInputContentFormat.
 const (
 	ManagedConfigurationDraftInputContentFormatJSON ManagedConfigurationDraftInputContentFormat = "JSON"
@@ -6303,13 +6399,13 @@ func (e SystemAssistantRuntimeState) Valid() bool {
 
 // Defines values for SystemAssistantSystem.
 const (
-	SystemAssistantSystemTrue SystemAssistantSystem = true
+	True SystemAssistantSystem = true
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantSystem enum.
 func (e SystemAssistantSystem) Valid() bool {
 	switch e {
-	case SystemAssistantSystemTrue:
+	case True:
 		return true
 	default:
 		return false
@@ -6351,13 +6447,13 @@ func (e SystemSTTParametersChunkingStrategy) Valid() bool {
 
 // Defines values for SystemSTTParametersStream.
 const (
-	SystemSTTParametersStreamFalse SystemSTTParametersStream = false
+	False SystemSTTParametersStream = false
 )
 
 // Valid indicates whether the value is a known member of the SystemSTTParametersStream enum.
 func (e SystemSTTParametersStream) Valid() bool {
 	switch e {
-	case SystemSTTParametersStreamFalse:
+	case False:
 		return true
 	default:
 		return false
@@ -9683,6 +9779,39 @@ type ManagedConfigurationConsumer struct {
 // ManagedConfigurationConsumerKind defines model for ManagedConfigurationConsumer.Kind.
 type ManagedConfigurationConsumerKind string
 
+// ManagedConfigurationConsumerAbsent defines model for ManagedConfigurationConsumerAbsent.
+type ManagedConfigurationConsumerAbsent struct {
+	ExpectedAbsent ManagedConfigurationConsumerAbsentExpectedAbsent `json:"expectedAbsent"`
+	Kind           ManagedConfigurationConsumerAbsentKind           `json:"kind"`
+	Ref            string                                           `json:"ref"`
+}
+
+// ManagedConfigurationConsumerAbsentExpectedAbsent defines model for ManagedConfigurationConsumerAbsent.ExpectedAbsent.
+type ManagedConfigurationConsumerAbsentExpectedAbsent bool
+
+// ManagedConfigurationConsumerAbsentKind defines model for ManagedConfigurationConsumerAbsent.Kind.
+type ManagedConfigurationConsumerAbsentKind string
+
+// ManagedConfigurationConsumerInput ABSENT — только создание отсутствующей связи; MATCH — точные pins прежней связи. Pins target revision не обозначают отсутствие.
+type ManagedConfigurationConsumerInput struct {
+	union json.RawMessage
+}
+
+// ManagedConfigurationConsumerMatch defines model for ManagedConfigurationConsumerMatch.
+type ManagedConfigurationConsumerMatch struct {
+	ExpectedAbsent *ManagedConfigurationConsumerMatchExpectedAbsent `json:"expectedAbsent,omitempty"`
+	Kind           ManagedConfigurationConsumerMatchKind            `json:"kind"`
+	Ref            string                                           `json:"ref"`
+	RevisionRef    OpaqueRef                                        `json:"revisionRef"`
+	Version        int64                                            `json:"version"`
+}
+
+// ManagedConfigurationConsumerMatchExpectedAbsent defines model for ManagedConfigurationConsumerMatch.ExpectedAbsent.
+type ManagedConfigurationConsumerMatchExpectedAbsent bool
+
+// ManagedConfigurationConsumerMatchKind defines model for ManagedConfigurationConsumerMatch.Kind.
+type ManagedConfigurationConsumerMatchKind string
+
 // ManagedConfigurationCopyInput defines model for ManagedConfigurationCopyInput.
 type ManagedConfigurationCopyInput struct {
 	Name string `json:"name"`
@@ -9771,8 +9900,8 @@ type ManagedConfigurationPage struct {
 
 // ManagedConfigurationRebindInput defines model for ManagedConfigurationRebindInput.
 type ManagedConfigurationRebindInput struct {
-	Consumers    []ManagedConfigurationConsumer `json:"consumers"`
-	ImpactDigest string                         `json:"impactDigest"`
+	Consumers    []ManagedConfigurationConsumerInput `json:"consumers"`
+	ImpactDigest string                              `json:"impactDigest"`
 }
 
 // ManagedConfigurationResult defines model for ManagedConfigurationResult.
@@ -15378,6 +15507,68 @@ type UpdateWorkflowDraftJSONRequestBody = WorkflowInput
 
 // CommandWorkflowJSONRequestBody defines body for CommandWorkflow for application/json ContentType.
 type CommandWorkflowJSONRequestBody = WorkflowCommand
+
+// AsManagedConfigurationConsumerAbsent returns the union data inside the ManagedConfigurationConsumerInput as a ManagedConfigurationConsumerAbsent
+func (t ManagedConfigurationConsumerInput) AsManagedConfigurationConsumerAbsent() (ManagedConfigurationConsumerAbsent, error) {
+	var body ManagedConfigurationConsumerAbsent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromManagedConfigurationConsumerAbsent overwrites any union data inside the ManagedConfigurationConsumerInput as the provided ManagedConfigurationConsumerAbsent
+func (t *ManagedConfigurationConsumerInput) FromManagedConfigurationConsumerAbsent(v ManagedConfigurationConsumerAbsent) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeManagedConfigurationConsumerAbsent performs a merge with any union data inside the ManagedConfigurationConsumerInput, using the provided ManagedConfigurationConsumerAbsent
+func (t *ManagedConfigurationConsumerInput) MergeManagedConfigurationConsumerAbsent(v ManagedConfigurationConsumerAbsent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsManagedConfigurationConsumerMatch returns the union data inside the ManagedConfigurationConsumerInput as a ManagedConfigurationConsumerMatch
+func (t ManagedConfigurationConsumerInput) AsManagedConfigurationConsumerMatch() (ManagedConfigurationConsumerMatch, error) {
+	var body ManagedConfigurationConsumerMatch
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromManagedConfigurationConsumerMatch overwrites any union data inside the ManagedConfigurationConsumerInput as the provided ManagedConfigurationConsumerMatch
+func (t *ManagedConfigurationConsumerInput) FromManagedConfigurationConsumerMatch(v ManagedConfigurationConsumerMatch) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeManagedConfigurationConsumerMatch performs a merge with any union data inside the ManagedConfigurationConsumerInput, using the provided ManagedConfigurationConsumerMatch
+func (t *ManagedConfigurationConsumerInput) MergeManagedConfigurationConsumerMatch(v ManagedConfigurationConsumerMatch) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ManagedConfigurationConsumerInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ManagedConfigurationConsumerInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // AsAgent returns the union data inside the CommandAgentInstructions200JSONResponseBody as a Agent
 func (t CommandAgentInstructions200JSONResponseBody) AsAgent() (Agent, error) {

@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,10 +46,14 @@ func managedConsumerInput(w http.ResponseWriter, input generated.ManagedConfigur
 	result := make([]*controlplanev1.ManagedConfigurationConsumer, 0, len(input.Consumers))
 	seen := make(map[string]struct{}, len(input.Consumers))
 	for _, value := range input.Consumers {
-		item := &controlplanev1.ManagedConfigurationConsumer{Kind: string(value.Kind), Ref: value.Ref, RevisionRef: value.RevisionRef, Version: value.Version}
+		item, valid := managedConsumerSelection(value)
+		if !valid {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return nil, false
+		}
 		key := item.Kind + "\x00" + item.Ref
 		_, duplicate := seen[key]
-		if _, err := managedConsumerView(item); err != nil || duplicate {
+		if duplicate {
 			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 			return nil, false
 		}
@@ -56,6 +61,68 @@ func managedConsumerInput(w http.ResponseWriter, input generated.ManagedConfigur
 		result = append(result, item)
 	}
 	return result, true
+}
+
+func managedConsumerSelection(value generated.ManagedConfigurationConsumerInput) (*controlplanev1.ManagedConfigurationConsumer, bool) {
+	// Generated oneOf сохраняет raw JSON и не проверяет additionalProperties.
+	// Проверяем закрытую форму до typed conversion, включая explicit null pins.
+	raw, err := value.MarshalJSON()
+	var fields map[string]json.RawMessage
+	if err != nil || json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return nil, false
+	}
+	for key := range fields {
+		switch key {
+		case "kind", "ref", "expectedAbsent", "revisionRef", "version":
+		default:
+			return nil, false
+		}
+	}
+	expectedAbsent := false
+	if flag, present := fields["expectedAbsent"]; present {
+		switch string(flag) {
+		case "true":
+			expectedAbsent = true
+		case "false":
+		default:
+			return nil, false
+		}
+	}
+	if expectedAbsent {
+		if _, present := fields["revisionRef"]; present {
+			return nil, false
+		}
+		if _, present := fields["version"]; present {
+			return nil, false
+		}
+		selection, err := value.AsManagedConfigurationConsumerAbsent()
+		if err != nil || !managedConsumerIdentity(string(selection.Kind), selection.Ref) {
+			return nil, false
+		}
+		return &controlplanev1.ManagedConfigurationConsumer{Kind: string(selection.Kind), Ref: selection.Ref, ExpectedAbsent: true}, true
+	}
+	selection, err := value.AsManagedConfigurationConsumerMatch()
+	if err != nil || !managedConsumerIdentity(string(selection.Kind), selection.Ref) || !validManagedVersion(selection.Version) || len(selection.RevisionRef) < 8 || len(selection.RevisionRef) > 128 {
+		return nil, false
+	}
+	for _, char := range selection.RevisionRef {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-') {
+			return nil, false
+		}
+	}
+	return &controlplanev1.ManagedConfigurationConsumer{Kind: string(selection.Kind), Ref: selection.Ref, RevisionRef: selection.RevisionRef, Version: selection.Version}, true
+}
+
+func managedConsumerIdentity(kind, ref string) bool {
+	if ref == "" || len(ref) > 160 {
+		return false
+	}
+	switch kind {
+	case "AGENT", "AGENT_CONTINUATION", "WORKFLOW", "SCHEDULE", "RUNTIME_ENVIRONMENT", "INTEGRATION_CONNECTION", "STT_SERVICE":
+		return true
+	default:
+		return false
+	}
 }
 
 func writeManagedResult(w http.ResponseWriter, statusCode int, value managedConfigurationResponse) {
@@ -183,12 +250,7 @@ func managedRevisionView(value *controlplanev1.ManagedConfigurationRevision) (ge
 }
 
 func managedConsumerView(value *controlplanev1.ManagedConfigurationConsumer) (generated.ManagedConfigurationConsumer, error) {
-	if value == nil || value.GetRef() == "" || len(value.GetRef()) > 160 || value.GetRevisionRef() == "" || !validManagedVersion(value.GetVersion()) {
-		return generated.ManagedConfigurationConsumer{}, errManagedConfigurationShape
-	}
-	switch value.GetKind() {
-	case "AGENT", "AGENT_CONTINUATION", "WORKFLOW", "SCHEDULE", "RUNTIME_ENVIRONMENT", "INTEGRATION_CONNECTION", "STT_SERVICE":
-	default:
+	if value == nil || !managedConsumerIdentity(value.GetKind(), value.GetRef()) || value.GetRevisionRef() == "" || !validManagedVersion(value.GetVersion()) {
 		return generated.ManagedConfigurationConsumer{}, errManagedConfigurationShape
 	}
 	return generated.ManagedConfigurationConsumer{Kind: generated.ManagedConfigurationConsumerKind(value.GetKind()), Ref: value.GetRef(), RevisionRef: value.GetRevisionRef(), Version: value.GetVersion()}, nil
