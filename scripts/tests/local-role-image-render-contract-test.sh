@@ -359,7 +359,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       ([.spec.template.spec.containers[] |
         select(.name == "runtime-controller") | .image] | first) and
     .spec.template.metadata.annotations["kodex.dev/authority-image"] ==
-      ([.spec.template.spec.containers[] |
+      ([ (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
         select(.name == "internal-rpc-authority-issuer") | .image] | first) and
     all(.spec.template.metadata.annotations["kodex.dev/controller-image"],
         .spec.template.metadata.annotations["kodex.dev/authority-image"];
