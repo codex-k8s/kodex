@@ -10,12 +10,13 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
+	shared "github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
 const (
@@ -58,16 +59,7 @@ type Profile struct {
 }
 
 // DNSConfig ограничивает server-owned resolver и cache.
-type DNSConfig struct {
-	MinimumTTLSeconds        int `json:"minimumTTLSeconds"`
-	MaximumTTLSeconds        int `json:"maximumTTLSeconds"`
-	MaximumCacheEntries      int `json:"maximumCacheEntries"`
-	MaximumQueries           int `json:"maximumQueries"`
-	MaximumCNAMEDepth        int `json:"maximumCnameDepth"`
-	MaximumRecords           int `json:"maximumRecords"`
-	MaximumMessageBytes      int `json:"maximumMessageBytes"`
-	QueryTimeoutMilliseconds int `json:"queryTimeoutMilliseconds"`
-}
+type DNSConfig = dnsresolver.Config
 
 // Limits ограничивает CONNECT, ClientHello, dial, tunnel и shutdown.
 type Limits struct {
@@ -230,30 +222,7 @@ func (active *Active) Allows(hostname string, port int) bool {
 
 // NormalizeHostname принимает только уже canonical lowercase ASCII FQDN.
 func NormalizeHostname(value string) (string, error) {
-	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "*@/\\[]:%") || len(value) > 254 {
-		return "", errors.New("hostname is invalid")
-	}
-	if value != strings.ToLower(value) || strings.HasSuffix(value, ".") || len(value) > 253 {
-		return "", errors.New("hostname is invalid")
-	}
-	if _, err := netip.ParseAddr(value); err == nil {
-		return "", errors.New("IP literal is prohibited")
-	}
-	labels := strings.Split(value, ".")
-	if len(labels) < 2 {
-		return "", errors.New("hostname must be a FQDN")
-	}
-	for _, label := range labels {
-		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return "", errors.New("hostname label is invalid")
-		}
-		for _, character := range label {
-			if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
-				return "", errors.New("hostname must use ASCII LDH labels")
-			}
-		}
-	}
-	return value, nil
+	return shared.NormalizeHostname(value)
 }
 
 func validate(document *Document) error {
@@ -263,15 +232,7 @@ func validate(document *Document) error {
 	if !validRevision(document.Metadata.Revision) {
 		return errors.New("policy revision is invalid")
 	}
-	dns := document.Spec.DNS
-	if dns.MinimumTTLSeconds < 5 || dns.MinimumTTLSeconds > 300 ||
-		dns.MaximumTTLSeconds < dns.MinimumTTLSeconds || dns.MaximumTTLSeconds > 3600 ||
-		dns.MaximumCacheEntries < 4 || dns.MaximumCacheEntries > 256 ||
-		dns.MaximumQueries < 2 || dns.MaximumQueries > 32 ||
-		dns.MaximumCNAMEDepth < 1 || dns.MaximumCNAMEDepth > 16 ||
-		dns.MaximumRecords < 4 || dns.MaximumRecords > 256 ||
-		dns.MaximumMessageBytes < 512 || dns.MaximumMessageBytes > 64<<10 ||
-		dns.QueryTimeoutMilliseconds < 100 || dns.QueryTimeoutMilliseconds > 10_000 {
+	if document.Spec.DNS.Validate() != nil {
 		return errors.New("policy DNS bounds are invalid")
 	}
 	limits := document.Spec.Limits
@@ -403,6 +364,9 @@ func rejectDuplicateFields(value []byte) error {
 	}
 	return requireJSONEOF(decoder)
 }
+
+// RejectDuplicateFields применяет общий строгий JSON parser к отдельной mail projection.
+func RejectDuplicateFields(value []byte) error { return rejectDuplicateFields(value) }
 
 func inspectJSONValue(decoder *json.Decoder) error {
 	token, err := decoder.Token()

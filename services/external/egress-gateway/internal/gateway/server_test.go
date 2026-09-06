@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/prometheus/client_golang/prometheus"
