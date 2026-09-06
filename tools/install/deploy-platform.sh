@@ -793,7 +793,9 @@ if [[ "$mode" == apply ]]; then
   apply_render statefulsets 'select(.kind == "StatefulSet")'
   wait_statefulset kodex-postgresql
   wait_statefulset kodex-nats
+  wait_statefulset email-bridge-postgresql
 
+  apply_job email-bridge-migration
   apply_job internal-rpc-authority-migrate
   apply_job control-plane-migrate
   apply_job kodex-postgresql-runtime-credentials
@@ -835,7 +837,8 @@ wait_workloads
 verify_runtime_namespace_boundary
 wait_system_assistant
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer; do
+  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  email-bridge-migration; do
   [[ "$(kubectl --context "$context" -n "$namespace" get "job/$job_name" \
     -o jsonpath='{.status.succeeded}')" == 1 ]] || fail "Job readback failed: $job_name"
 done

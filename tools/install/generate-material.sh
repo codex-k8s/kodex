@@ -221,6 +221,20 @@ put_material kodex/artifact-retention/postgres-runtime dsn \
 put_material internal-rpc-authority/postgres-migration dsn \
   "$output_directory/database/internal_rpc_authority_migrator/dsn"
 
+# Почтовая БД изолирована от PostgreSQL control-plane и authority.
+for role in admin runtime migration; do
+  write_value "$output_directory/material/kodex/email-bridge/postgres-bootstrap/$role-password" \
+    "$(openssl rand -hex 32)"
+done
+for role in runtime migration; do
+  username=email_bridge_runtime
+  [[ "$role" != migration ]] || username=email_bridge_migrator
+  password=$(<"$output_directory/material/kodex/email-bridge/postgres-bootstrap/$role-password")
+  write_value "$output_directory/material/kodex/email-bridge/postgres-$role/dsn" \
+    "postgresql://$username:$password@email-bridge-postgresql.kodex-system.svc.cluster.local:5432/email_bridge?sslmode=verify-full&sslrootcert=/var/run/email/tls/ca.crt"
+done
+unset username password
+
 openssl rand -hex 32 >"$output_directory/control-api/session-current.hex"
 openssl rand -hex 32 >"$output_directory/control-api/session-previous.hex"
 openssl rand -base64 48 | tr -d '\n' >"$output_directory/control-api/lease-signing.key"

@@ -15,6 +15,8 @@ jq -e '
     (.dockerfile | type == "string" and length > 0) and
     ((has("target") | not) or
       (.component == "role-image-builder" and .target == "runtime") or
+      (.component == "email-bridge" and .target == "runtime") or
+      (.component == "email-bridge-migration" and .target == "migration") or
       (.component == "image-admission" and .target == "admission-runtime")))
 ' "$repository_root/tools/release/images.json" >/dev/null || {
   printf 'Release image inventory is invalid\n' >&2
