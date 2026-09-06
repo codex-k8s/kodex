@@ -29,18 +29,8 @@ spec:
           volumeMounts:
             - name: internal-rpc-authority-sockets
               mountPath: /run/kodex
-      containers:
-        - name: runtime-controller
-          env:
-            - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
-              value: /run/kodex/internal-rpc-authority/issuer.sock
-            - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
-              value: issuer
-          volumeMounts:
-            - name: internal-rpc-authority-sockets
-              mountPath: /run/kodex
-              readOnly: true
         - name: internal-rpc-authority-issuer
+          restartPolicy: Always
           image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command:
             - /usr/local/bin/internal-rpc-authority-issuer
@@ -100,7 +90,7 @@ spec:
             periodSeconds: 5
           startupProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: auth-metrics
             timeoutSeconds: 2
             periodSeconds: 2
@@ -185,13 +175,14 @@ spec:
               mountPath: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
               readOnly: true
         - name: platform-worker-grant-agent
+          restartPolicy: Always
           image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent]
           env:
             - {name: PLATFORM_WORKER_GRANT_WORKLOAD_ID, value: runtime-controller}
             - {name: PLATFORM_WORKER_GRANT_OUTPUT_FILE, value: /var/run/secrets/kodex/runtime-controller/application-grant/application-grant.jws}
           ports: [{name: grant-metrics, containerPort: 9093, protocol: TCP}]
-          startupProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
+          startupProbe: {httpGet: {path: /readyz, port: grant-metrics}, periodSeconds: 2, timeoutSeconds: 2, failureThreshold: 30}
           readinessProbe: {httpGet: {path: /readyz, port: grant-metrics}, periodSeconds: 5, timeoutSeconds: 2, failureThreshold: 2}
           livenessProbe: {httpGet: {path: /healthz, port: grant-metrics}, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3}
           resources:
@@ -207,6 +198,17 @@ spec:
           volumeMounts:
             - {name: application-grant, mountPath: /var/run/secrets/kodex/runtime-controller/application-grant}
             - {name: platform-worker-grant-signer, mountPath: /var/run/secrets/kodex/platform-worker-grant-signer, readOnly: true}
+      containers:
+        - name: runtime-controller
+          env:
+            - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
+              value: /run/kodex/internal-rpc-authority/issuer.sock
+            - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
+              value: issuer
+          volumeMounts:
+            - name: internal-rpc-authority-sockets
+              mountPath: /run/kodex
+              readOnly: true
       volumes:
         - name: authority-bootstrap-roots
           secret:

@@ -15,6 +15,44 @@ attestor и restore controller. Secret values, DSN и private keys не выво
 
 ## Контракт
 
+### Controller shutdown companion (#1073)
+
+Только у runtime-controller issuer и platform-worker-grant-agent являются
+native sidecars (`initContainers`, `restartPolicy: Always`). Порядок:
+socket-init → issuer startup `/readyz` → grant-agent startup `/readyz` → main.
+Issuer проверяет PostgreSQL/replay/snapshot/restore barrier без обращения к
+main или grant-agent. Grant-agent подписывает и атомарно пишет начальный
+application grant без обращения к main или issuer; startup cycle отсутствует.
+UID, limits/requests, secret mounts и полномочия не изменяются.
+
+После main exit Kubernetes останавливает grant-agent, затем issuer. Main не
+ожидает SIGTERM этих процессов, поэтому порядок не создаёт shutdown deadlock.
+Сторонние owner grants и leadership не продлеваются: signer продолжает прежнюю
+ротацию application grant, а owner RPC сохраняет точную проверку lease/fence.
+Это позволяет controller выполнить bounded callback drain перед закрытием
+локального issuer; runtime Pod provider/relay остаются обычными контейнерами
+со своим протоколом drain, их перевод в native sidecars не выполняется.
+
+Native sidecars стабильны с Kubernetes1.33; installer lock содержит
+K3s `v1.36.3+k3s1`. Поддержка и обратный порядок остановки сверены через Context7
+`/websites/kubernetes_io` и
+[официальный контракт Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/).
+Ресурсы постоянно работающих init sidecars учитываются вместе с main;
+requests/limits не уменьшаются и остаются прежними.
+
+Локально оба profile ABI render с negative image/restartPolicy и полный
+local-role-image-render contract прошли. Первый local render выявил старый
+selector проверки authority-image только в containers; после включения
+initContainers повтор прошёл. Исторический FAIL не является runtime PASS.
+
+`make test-internal-rpc-authority-abi-render` проверяет обе группы containers,
+точный startup order/readiness/resources и отклоняет подменённый native issuer
+image. Local render применяет hot reload, authority image annotation и
+PostgreSQL guard также к init sidecars. Реальный Kubernetes SIGTERM и live
+проверки пока NOT RUN; локальный render не выдаётся за runtime acceptance.
+Откат только согласованный с controller/runner companion: прежний обычный
+issuer снова может закрыться до receipt.
+
 - installation material создаёт bootstrap roots, static PostgreSQL roles и
   начальные exact Kubernetes Secrets;
 - `internal-rpc-authority-publisher` является единственным writer динамических

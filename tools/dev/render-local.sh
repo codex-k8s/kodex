@@ -281,9 +281,9 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     .spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
     .spec.template.metadata.annotations."kodex.dev/source-revision" = strenv(SOURCE_REVISION) |
     .spec.template.metadata.annotations."kodex.dev/source-content-sha256" = strenv(SOURCE_DIGEST) |
-    (.spec.template.spec.containers[] | select(.startupProbe != null) |
+    ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
       .startupProbe.failureThreshold) = 180 |
-    (.spec.template.spec.containers[] | select(.startupProbe != null) |
+    ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
       .startupProbe.periodSeconds) = 2
   ) |
   with(select(.metadata.labels != null);
@@ -672,7 +672,7 @@ patch_go_container() {
           "hostPath":{"path":strenv(BUILD_CACHE_PATH),"type":"Directory"}
         }]) |
       .spec.replicas = 1 |
-      (.spec.template.spec.containers[] | select(.name == strenv(CONTAINER))) |= (
+      ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.name == strenv(CONTAINER))) |= (
         .image = strenv(GO_IMAGE) |
         .imagePullPolicy = "IfNotPresent" |
         .command = ["/workspace/tools/dev/run-go-hot-reload.sh"] |
@@ -1052,7 +1052,7 @@ yq -i '
       (.spec.template.spec.containers[] |
         select(.name == "runtime-controller") | .image) |
     .spec.template.metadata.annotations."kodex.dev/authority-image" =
-      (.spec.template.spec.containers[] |
+      ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
         select(.name == "internal-rpc-authority-issuer") | .image)
   )
 ' "$render"
@@ -1122,7 +1122,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
       ([.spec.template.spec.containers[] |
         select(.name == "runtime-controller") | .image] | first) and
     .spec.template.metadata.annotations["kodex.dev/authority-image"] ==
-      ([.spec.template.spec.containers[] |
+      ([ (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
         select(.name == "internal-rpc-authority-issuer") | .image] | first))
 ' >/dev/null || fail 'runtime-controller image annotations do not match effective local containers'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "staff-control-center")' "$output" >/dev/null ||
@@ -1224,7 +1224,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
   [
     .[] |
     select(.kind == "Deployment") as $deployment |
-    $deployment.spec.template.spec.containers[] |
+    ($deployment.spec.template.spec.containers[]?, $deployment.spec.template.spec.initContainers[]?) |
     select(
       .name == "internal-rpc-authority-issuer" or
       .name == "internal-rpc-authority-verifier"

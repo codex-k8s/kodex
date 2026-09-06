@@ -33,6 +33,7 @@ spec:
                   - session-archive
                   - control-api-gateway
                   - integration-gateway
+                  - email-bridge
                   - control-plane
                   - internal-rpc-authority-publisher
                   - role-image-builder
