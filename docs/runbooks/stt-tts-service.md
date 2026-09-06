@@ -16,6 +16,11 @@ authority proof нельзя публиковать в evidence или лога�
 
 ## Readiness
 
+При `StartError` до запуска процесса сверить `STT_SPOOL_DIRECTORY` и mountPath:
+`/var/lib/kodex/stt-spool`. Writable spool не должен попадать под read-only
+`/run/kodex`, включая alias `/var/run -> /run`; не снимать read-only authority
+или non-root. Оба профиля проверяет `make test-stt-tts-service-contract`.
+
 `/healthz` подтверждает процесс; `/readyz` и `CheckReadiness` —
 локальные issuer/verifier/config/decoder/spool. Они не подтверждают provider.
 Неаутентифицированная техническая диагностика полного пути всегда сообщает

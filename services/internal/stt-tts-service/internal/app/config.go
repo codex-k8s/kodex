@@ -51,7 +51,7 @@ type Config struct {
 
 func loadConfig() (Config, error) {
 	config := Config{
-		GRPCListen: ":8443", TechnicalListen: ":9090", SpoolDirectory: "/var/run/kodex/stt-spool",
+		GRPCListen: ":8443", TechnicalListen: ":9090", SpoolDirectory: "/var/lib/kodex/stt-spool",
 		ServerCertificateFile:   "/var/run/secrets/kodex/stt-tts-service/workload-tls/tls.crt",
 		ServerPrivateKeyFile:    "/var/run/secrets/kodex/stt-tts-service/workload-tls/tls.key",
 		ClientCAFile:            "/var/run/config/kodex/stt-tts-service/internal-ca/ca.pem",

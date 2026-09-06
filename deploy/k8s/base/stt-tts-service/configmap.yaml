@@ -11,7 +11,7 @@ data:
   STT_POLICY_TLS_SERVER_NAME: "control-plane.kodex-system.svc.cluster.local"
   STT_CREDENTIAL_TARGET: "dns:///secret-broker.kodex-system.svc:8443"
   STT_CREDENTIAL_TLS_SERVER_NAME: "secret-broker.kodex-system.svc.cluster.local"
-  STT_SPOOL_DIRECTORY: "/var/run/kodex/stt-spool"
+  STT_SPOOL_DIRECTORY: "/var/lib/kodex/stt-spool"
   STT_REQUEST_TIMEOUT: "20s"
   STT_STARTUP_TIMEOUT: "30s"
   STT_READINESS_TIMEOUT: "5s"
