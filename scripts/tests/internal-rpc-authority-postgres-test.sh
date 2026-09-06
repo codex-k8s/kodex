@@ -36,14 +36,17 @@ pg_isready -h 127.0.0.1 -p "$port" -U postgres >/dev/null 2>&1 ||
   fail 'disposable PostgreSQL did not become ready'
 
 admin_dsn="postgresql://postgres@127.0.0.1:${port}/postgres?sslmode=disable"
-migrator_dsn="postgresql://internal_rpc_authority_migrator@127.0.0.1:${port}/internal_rpc_authority?sslmode=disable"
 authority_admin_dsn="postgresql://postgres@127.0.0.1:${port}/internal_rpc_authority?sslmode=disable"
-baseline="$repository_root/services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql"
 
-psql "$admin_dsn" --no-password --file \
+psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
   "$repository_root/deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql" \
   >/dev/null
-psql "$migrator_dsn" --no-password --file "$baseline" >/dev/null
+(
+  cd -- "$repository_root/services/internal/internal-rpc-authority"
+  KODEX_AUTHORITY_MIGRATION_TEST_PORT="$port" \
+    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    go test -count=1 -timeout=60s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
+)
 
 assertion=$(psql "$authority_admin_dsn" --no-password --tuples-only --no-align <<'SQL'
 SELECT
