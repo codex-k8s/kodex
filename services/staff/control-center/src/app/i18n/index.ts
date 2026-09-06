@@ -3047,8 +3047,8 @@ const ru = {
 };
 
 const en = {
-  ...sttActivationMessages.en,
   ...ru,
+  ...sttActivationMessages.en,
   entityCards: entityCardMessages.en,
   providerLifecycle: providerLifecycleMessages.en,
   workflowLaunch: workflowLaunchMessages.en,

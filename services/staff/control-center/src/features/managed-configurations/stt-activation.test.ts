@@ -3,6 +3,7 @@ import {
   prepareSttActivation,
   activateStt,
   readEffectiveStt,
+  readSttStatus,
 } from "./stt-activation";
 import * as api from "./api";
 import * as sdk from "@/shared/api/generated/openapi/sdk.gen";
@@ -60,6 +61,26 @@ beforeEach(() => {
   vi.mocked(sdk.getSystemSttConfiguration).mockResolvedValue(missing as never);
 });
 describe("активация STT", () => {
+  it("readback показывает имя и readiness фактически активной конфигурации", async () => {
+    const value = {
+      configurationRef: configuration.ref,
+      revisionRef: revision.ref,
+      ready: false,
+    };
+    vi.mocked(sdk.getSystemSttConfiguration).mockResolvedValue(
+      ok(value) as never,
+    );
+    await expect(readSttStatus(signal)).resolves.toEqual({
+      effective: value,
+      name: configuration.name,
+    });
+    vi.mocked(api.history).mockResolvedValue({
+      configuration: { ...configuration, ref: "configuration_wrong" },
+    } as never);
+    await expect(readSttStatus(signal)).rejects.toThrow(
+      "Invalid effective STT configuration",
+    );
+  });
   it("доказывает view/manage до global absence и передаёт ABSENT без pins", async () => {
     const plan = await prepareSttActivation(configuration, revision, signal);
     expect(plan.consumer).toEqual({

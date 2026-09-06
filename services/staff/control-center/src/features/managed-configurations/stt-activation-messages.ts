@@ -2,6 +2,7 @@ export const sttActivationMessages = {
   ru: {
     activation: {
       title: "Активная конфигурация распознавания",
+      active: "Сейчас активна «{name}», ревизия {revision}.",
       intro:
         "Публикация сохраняет ревизию. Для применения к распознаванию активируйте её отдельным действием.",
       prepare: "Подготовить активацию",
@@ -30,6 +31,7 @@ export const sttActivationMessages = {
   en: {
     activation: {
       title: "Active speech recognition configuration",
+      active: "Currently active: “{name}”, revision {revision}.",
       intro:
         "Publishing saves a revision. Activate it separately to use it for speech recognition.",
       prepare: "Prepare activation",

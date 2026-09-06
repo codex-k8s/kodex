@@ -248,6 +248,9 @@ for (const width of [390, 2900]) {
       await expect(page.getByTestId("stt-readiness")).toContainText(
         "распознавание пока не готово",
       );
+      await expect(
+        page.getByText("Сейчас активна «Русское распознавание», ревизия 2."),
+      ).toBeVisible();
       expect(posts).toBe(scenario === "stale" ? 2 : 1);
       expect(globalReads).toBeGreaterThan(2);
       expect(failures).toEqual([]);

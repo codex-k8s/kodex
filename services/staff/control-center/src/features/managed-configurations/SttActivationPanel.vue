@@ -18,7 +18,7 @@ import {
 import {
   prepareSttActivation,
   activateStt,
-  readEffectiveStt,
+  readSttStatus,
   type SttActivationPlan,
 } from "./stt-activation";
 import { sttActivationMessages } from "./stt-activation-messages";
@@ -32,6 +32,7 @@ const emit = defineEmits<{ busy: [boolean] }>();
 const { t } = useI18n({ useScope: "local", messages: sttActivationMessages });
 const plan = ref<SttActivationPlan>();
 const effective = ref<SystemSttConfiguration>();
+const effectiveName = ref<string>();
 const read = ref(false),
   busy = ref(false),
   unknown = ref(false),
@@ -61,6 +62,7 @@ function invalidate() {
   generation++;
   plan.value = undefined;
   effective.value = undefined;
+  effectiveName.value = undefined;
   read.value = false;
   problem.value = undefined;
   busy.value = false;
@@ -130,6 +132,7 @@ async function work(operation: (signal: AbortSignal) => Promise<void>) {
 function prepare() {
   if (!allowed.value || unknown.value) return;
   plan.value = undefined;
+  read.value = false;
   void work(async (signal) => {
     const result = await prepareSttActivation(
       props.configuration,
@@ -139,14 +142,18 @@ function prepare() {
     if (!signal.aborted) {
       plan.value = result;
       effective.value = result.current;
+      effectiveName.value = result.currentName;
       read.value = true;
     }
   });
 }
 async function reread(signal: AbortSignal) {
-  const value = await readEffectiveStt(signal);
+  read.value = false;
+  const status = await readSttStatus(signal);
+  const value = status.effective;
   if (signal.aborted) return;
   effective.value = value;
+  effectiveName.value = status.name;
   read.value = true;
   const intent = readPublicationAttempt(
     "SYSTEM_STT",
@@ -218,6 +225,14 @@ function confirm() {
     <p v-if="unknown" role="alert">{{ t("activation.unknown") }}</p>
     <p v-if="acknowledged" role="status">{{ t("activation.acknowledged") }}</p>
     <p v-if="observed" role="status">{{ t("activation.observed") }}</p>
+    <p v-if="read && effective">
+      {{
+        t("activation.active", {
+          name: effectiveName,
+          revision: effective.revision,
+        })
+      }}
+    </p>
     <p v-if="read" role="status" data-testid="stt-readiness">
       {{
         t(

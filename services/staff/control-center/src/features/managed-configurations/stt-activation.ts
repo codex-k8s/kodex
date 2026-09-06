@@ -59,6 +59,19 @@ export function checkedSttImpact(
     throw new Error("Invalid STT binding projection");
   return page;
 }
+export async function readSttStatus(signal: AbortSignal) {
+  const effective = await readEffectiveStt(signal);
+  if (!effective) return { effective, name: undefined };
+  const configuration = (await history(effective.configurationRef, signal))
+    .configuration;
+  if (
+    configuration.ref !== effective.configurationRef ||
+    configuration.kind !== "SYSTEM_STT" ||
+    configuration.projectRef
+  )
+    throw new Error("Invalid effective STT configuration");
+  return { effective, name: configuration.name };
+}
 export async function prepareSttActivation(
   configuration: ManagedConfiguration,
   revision: ManagedConfigurationRevision,
