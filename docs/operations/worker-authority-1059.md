@@ -4,11 +4,20 @@ title: Служебная авторизация EMAIL и Mattermost
 type: operations
 status: approved
 owner: backend
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-06
 ---
 
 # Границы
+
+Актуальное дополнение после первого общего review: #1093 и
+[PostgreSQL boundary issuer/verifier](authority-database-boundary-1093.md).
+EMAIL principal перенесён из ещё не принятого изменения baseline в новую
+forward-only migration; сам опубликованный baseline побайтово совпадает с
+main. RLS и обязательные triggers теперь закрывают workload/credential
+generation, attestation, monotonic и replay retention при прямом SQL.
+Исторические сообщения ниже о единственном fresh baseline относятся к прежним
+checkpoint. Новая оснастка проверяет baseline → upgrade → повторный up.
 
 Источник: #1018, #1059, зависимые #1030/#1037/#1046. Используется существующий
 internal-rpc-authority; нового сервиса, универсального grant либо сетевого

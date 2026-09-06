@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +15,7 @@ import (
 var publicationFunctionDeclaration string
 
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
+const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -107,15 +110,22 @@ func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	}
 }
 
-func TestFreshInstallContainsOneAuthorityBaseline(t *testing.T) {
+func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	t.Parallel()
 
 	entries, err := filepath.Glob("migrations/*.sql")
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 1 || entries[0] != baselineMigration {
-		t.Fatalf("unexpected fresh migration set: %v", entries)
+	if len(entries) != 2 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration {
+		t.Fatalf("unexpected forward migration set: %v", entries)
+	}
+	content, err := os.ReadFile(baselineMigration)
+	if err != nil {
+		t.Fatal("read published baseline")
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "d4c9ed792ae0e157247fd3e1b58d15f7bbff43bf38f202bf72e9201398be4e0a" {
+		t.Fatal("published authority baseline bytes changed")
 	}
 }
 
@@ -165,7 +175,6 @@ func TestBaselineMaterializesCurrentWorkloadPrincipals(t *testing.T) {
 		"ira_control_plane_resolver_g1",
 		"ira_integration_gateway_issuer_g1",
 		"ira_interaction_gateway_issuer_g1",
-		"ira_email_bridge_issuer_g1",
 		"ira_runtime_controller_issuer_g1",
 	} {
 		if !strings.Contains(text, required) {
@@ -222,7 +231,6 @@ func TestBaselineGrantsDatabaseConnectToExactRuntimePrincipals(t *testing.T) {
 		"ira_control_plane_resolver_g1",
 		"ira_integration_gateway_issuer_g1",
 		"ira_interaction_gateway_issuer_g1",
-		"ira_email_bridge_issuer_g1",
 		"ira_runtime_controller_issuer_g1",
 	} {
 		if !strings.Contains(grant, principal) {

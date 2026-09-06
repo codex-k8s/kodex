@@ -50,7 +50,7 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
 
 assertion=$(psql "$authority_admin_dsn" --no-password --tuples-only --no-align <<'SQL'
 SELECT
-  (SELECT count(*) = 9
+  (SELECT count(*) = 14
      FROM pg_catalog.pg_proc AS procedure
      JOIN pg_catalog.pg_namespace AS namespace
        ON namespace.oid = procedure.pronamespace

@@ -40,19 +40,28 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal("configure migration dialect")
 	}
+	// Сначала устанавливаем опубликованный baseline, затем проверяем реальное
+	// обновление этой БД. Второй up не меняет ни схему, ни историю Goose.
+	if err := goose.UpToContext(ctx, database, "migrations", 20260823000100); err != nil {
+		t.Fatalf("apply published baseline: %T", err)
+	}
+	var baselineRows int64
+	if err := database.QueryRowContext(ctx, "SELECT count(*) FROM public.goose_db_version").Scan(&baselineRows); err != nil || baselineRows != 2 {
+		t.Fatal("published baseline history readback failed")
+	}
 	var firstRows, firstID int64
 	for attempt := range 2 {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			t.Fatalf("apply authority migration attempt %d: %T", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260823000100 {
+		if err != nil || version != 20260906000100 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 2 {
+		).Scan(&rows, &maximumID); err != nil || rows != 3 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
@@ -61,4 +70,7 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 			t.Fatal("repeated migration changed applied history")
 		}
 	}
+	t.Run("workload boundary", func(t *testing.T) {
+		testWorkloadDatabaseBoundary(t, port)
+	})
 }

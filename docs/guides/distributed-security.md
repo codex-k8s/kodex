@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.10
-updated: 2026-09-05
+version: 1.4.11
+updated: 2026-09-06
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -424,6 +424,16 @@ principal.
 повторная попытка закрыто отклоняются. Аварийное завершение действия освобождает
 блокировку, после чего вывод из обращения завершается, а повторная попытка
 видит `RETIRED`.
+
+Общая issuer/verifier capability не является row ownership. Для watermark и
+replay registry связывает LOGIN с exact workload/purpose/generation; RLS
+использует эту связь и удерживает identity row lock. Прямые DML права требуют
+дополнительного закрытого enforcement тех же transition invariants: свежий
+независимый snapshot receipt и owner history, запрет уменьшения revision,
+неизменяемость reservation и server-owned минимальный retention перед delete.
+Одной проверки `IF`/`WHERE` в SQL-запросе приложения недостаточно, если DB-роль
+может обойти её прямым UPDATE. Необходимы узкий защищённый SQL API либо
+обязательные RLS/trigger guards; runtime не получает их изменение и TRUNCATE.
 
 Reconciliation Job является installation-компонентом, а не постоянным runtime
 controller. Она получает только bootstrap credential и закрытый Secret с
