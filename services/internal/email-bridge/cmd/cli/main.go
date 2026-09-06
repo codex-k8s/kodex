@@ -43,16 +43,14 @@ func run() error {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	// Ping отделяет настройку/соединение от выполнения forward-only migrations.
-	if e = db.PingContext(ctx); e != nil {
-		return failure(stageDatabaseConnect, e)
-	}
-	goose.SetBaseFS(migrations)
-	if e = goose.SetDialect("postgres"); e != nil {
-		return failure(stageDialect, e)
-	}
-	if os.Args[1] == "up" {
-		return failure(stageMigration, goose.UpContext(ctx, db, "migrations"))
-	}
-	return failure(stageStatus, goose.StatusContext(ctx, db, "migrations"))
+	return withReadyDatabase(ctx, db.PingContext, func(ready context.Context) error {
+		goose.SetBaseFS(migrations)
+		if e = goose.SetDialect("postgres"); e != nil {
+			return failure(stageDialect, e)
+		}
+		if os.Args[1] == "up" {
+			return failure(stageMigration, goose.UpContext(ready, db, "migrations"))
+		}
+		return failure(stageStatus, goose.StatusContext(ready, db, "migrations"))
+	}, databaseRetryDelay)
 }

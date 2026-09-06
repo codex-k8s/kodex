@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -51,6 +50,16 @@ func reportFailure(output io.Writer, err error) {
 			stage = string(failed.stage)
 		}
 		class = failureClass(failed.cause)
+		var wait *connectionWaitFailure
+		if errors.As(failed.cause, &wait) {
+			class = failureClass(wait.cause)
+			outcome := "deadline"
+			if errors.Is(wait.budget, context.Canceled) {
+				outcome = "canceled"
+			}
+			fmt.Fprintf(output, "%s stage=%s error_class=%s wait_status=%s\n", migrationFailureMessage, stage, class, outcome)
+			return
+		}
 		if failed.stage == stageDSNRead {
 			class = "secure_file"
 		}
@@ -99,12 +108,5 @@ func failureClass(err error) string {
 	if errors.As(err, &configuration) {
 		return "connection_configuration"
 	}
-	var network net.Error
-	if errors.As(err, &network) {
-		if network.Timeout() {
-			return "timeout"
-		}
-		return "network"
-	}
-	return "unknown"
+	return networkFailureClass(err)
 }
