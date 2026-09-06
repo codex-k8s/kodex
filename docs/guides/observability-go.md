@@ -61,6 +61,12 @@ domain rejection. Sentinel tests включают вложенные ошибк�
 
 ## Общая библиотека
 
+Composition root читает shared telemetry env через `RuntimeConfigFromEnv`.
+Ручная неполная копия `RuntimeConfig` не должна терять `Disabled`, Sentry pins
+или sampler; сервисный Config не дублирует required shared env, иначе disabled
+профиль ошибочно требует отсутствующие exporters. Prometheus при отключении
+exporters остаётся рабочим; enabled-профиль сохраняет все проверки TLS/DSN.
+
 Переиспользуемый код находится в `libs/go/observability`:
 
 - отдельный Prometheus registry с меткой `service`;

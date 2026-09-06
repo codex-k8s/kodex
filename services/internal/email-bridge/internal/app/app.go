@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -61,11 +61,12 @@ func Run(ctx, background context.Context, version string) (result error) {
 		return e
 	}
 	stage = stageTelemetry
-	telemetry, e := observability.NewRuntime(ctx, observability.RuntimeConfig{ServiceName: "email-bridge", ServiceVersion: version, Environment: c.Environment, OTLPEndpoint: c.OTLPEndpoint, OTLPTLSServerName: c.OTLPServerName, OTLPCAFile: c.OTLPCAFile, TraceSampleRatio: 0.1})
+	telemetry, e := newTelemetry(ctx, version)
 	if e != nil {
 		return e
 	}
-	defer serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing})
+	defer func() { result = errors.Join(result, stopTelemetry(background, telemetry)) }()
+	logger := telemetry.Logger(os.Stdout)
 	stage = stageMetrics
 	metrics := observability.NewMetrics("email_bridge", version, nil)
 	businessMetrics := business.New()
@@ -124,7 +125,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		}
 	}, func(route string, status int, _ time.Time) {
 		if status >= 500 {
-			slog.Error("Email bridge request failed", "route", route, "status", status)
+			logger.Error("Email bridge request failed", "route", route, "status", status)
 		}
 	}, httptransport.Handler{Current: configurationState.Service, Metrics: businessMetrics})
 	server := &http.Server{Handler: http.MaxBytesHandler(handler, 24<<20), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 70 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384, TLSConfig: transportTLS, BaseContext: func(net.Listener) context.Context { return ctx }}

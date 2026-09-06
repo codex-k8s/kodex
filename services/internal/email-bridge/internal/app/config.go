@@ -31,10 +31,6 @@ type Config struct {
 	ConfigurationMode             string `env:"EMAIL_BRIDGE_CONFIGURATION_MODE,required,notEmpty"`
 	ExpectedConfigurationRevision int64  `env:"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_REVISION"`
 	ExpectedConfigurationDigest   string `env:"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST"`
-	Environment                   string `env:"DEPLOYMENT_ENVIRONMENT,required,notEmpty"`
-	OTLPEndpoint                  string `env:"OTEL_EXPORTER_OTLP_ENDPOINT,required,notEmpty"`
-	OTLPServerName                string `env:"OTEL_EXPORTER_OTLP_TLS_SERVER_NAME,required,notEmpty"`
-	OTLPCAFile                    string `env:"OTEL_EXPORTER_OTLP_CA_FILE,required,notEmpty"`
 }
 
 func loadConfig() (Config, error) {
@@ -51,7 +47,7 @@ func loadConfig() (Config, error) {
 	if !c.configurationPins().valid() {
 		return c, errors.New(configurationPinError)
 	}
-	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile, c.OTLPCAFile} {
+	for _, p := range []string{c.SecretsRoot, c.DSNFile, c.CertificateFile, c.PrivateKeyFile, c.CAFile, c.ApplicationGrantFile} {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
 			return c, errors.New("invalid email bridge file path")
 		}

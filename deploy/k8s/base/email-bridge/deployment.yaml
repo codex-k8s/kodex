@@ -109,6 +109,11 @@
                 "readOnly": true
               },
               {
+                "name": "internal-rpc-authority-sentry-dsn",
+                "mountPath": "/var/run/email/sentry",
+                "readOnly": true
+              },
+              {
                 "name": "tls",
                 "mountPath": "/var/run/email/tls",
                 "readOnly": true
