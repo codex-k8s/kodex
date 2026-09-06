@@ -7,6 +7,30 @@ owner: developer
 
 # Публичные assets Control Center
 
+## Offline bootstrap в локальном и disposable профиле
+
+Issue #1107: `render-local.sh` запускает `prime-frontend-cache.sh` на доверенном
+host до применения manifest. Установка выполняется в Node image по digest из
+PWA Dockerfile, без host npmrc и без lifecycle scripts. Receipt связывает точные
+package.json/package-lock.json, image, Node/npm, platform/arch/native ABI и Alpine.
+Только успешная установка с загрузкой Vite/native dependencies публикуется
+атомарным rename; параллельные prime сериализуются. Незавершённая установка
+удаляется, существующий несовместимый cache не считается успешным.
+
+Pod получает точный cache read-only и никогда не вызывает npm install.
+Отсутствующий или устаревший receipt закрыто останавливает startup с диагностикой
+`frontend cache is absent or stale; run trusted host render`. Изменение lock
+требует повторного repo-owned render/deploy; старый cache не изменяется под
+работающим Pod. Vite читает source/runtime config read-only, использует
+`--configLoader runner` и отдельный `/tmp/vite-cache`. NetworkPolicy сохраняется.
+
+Проверка: `make test-frontend-offline-bootstrap` (Docker, до 900 секунд), затем
+`scripts/tests/local-role-image-render-contract-test.sh` для обоих профилей.
+Первый prime требует registry на доверенном host; рабочий Vite проверяется с
+`--network none`. Ручная проверка владельца после merge: штатный remote render/up,
+readiness Pod, `/src/main.ts`, manifest и runtime config без install/restart loop.
+Rollback: вернуть предыдущий source SHA и повторить тот же render/deploy.
+
 Issue #1022 / #1101, один PWA unit. `public-assets-ingress.yaml` открывает
 ровно `/manifest.webmanifest`, `/logo.png`, `/sw.js` через `pathType: Exact`.
 Priority300 отделён от API200 и основного browser router. Все три используют

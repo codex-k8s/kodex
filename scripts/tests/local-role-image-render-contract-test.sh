@@ -490,6 +490,21 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
         .name == "READBACK_IMAGE" and
         .value == "pull.127.0.0.1.nip.io/kodex/control-plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
 ' >/dev/null || fail 'hot-reload frontend, tool, evidence PVC, or pull readiness contract is invalid'
+yq -o=json -I=0 '.' "$render" | jq -s -e '
+  first(.[] | select(.kind == "Deployment" and .metadata.name == "staff-control-center")) |
+  .spec.template.spec as $pod |
+  any($pod.volumes[]; .name == "dev-node-modules" and
+    (.hostPath.path | test("/frontend-v1/[a-f0-9]{64}/node_modules$"))) and
+  any($pod.volumes[]; .name == "dev-frontend-tmp" and has("emptyDir")) and
+  any($pod.containers[]; .image as $image |
+    .name == "staff-control-center" and
+    any(.env[]; .name == "KODEX_DEV_NODE_IMAGE" and .value == $image) and
+    any(.env[]; .name == "KODEX_DEV_CACHE_DIR" and .value == "/tmp/vite-cache") and
+    any(.volumeMounts[]; .name == "dev-node-modules" and .readOnly == true) and
+    any(.volumeMounts[]; .name == "dev-frontend-source" and .readOnly == true) and
+    any(.volumeMounts[]; .name == "dev-frontend-identity" and .readOnly == true) and
+    any(.volumeMounts[]; .name == "runtime-config" and .readOnly == true))
+' >/dev/null || fail 'frontend offline cache boundary is invalid'
 expected_frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format digest)
 actual_frontend_sha256=$(jq -er '.data.frontendSHA256' <<<"$policy_json")

@@ -10,11 +10,9 @@ root=/workspace/services/staff/control-center
 test -r "$root/package-lock.json" || fail 'frontend lock file is absent'
 cd "$root"
 
-lock_digest=$(sha256sum package-lock.json | awk '{print $1}')
-installed_digest=$(cat node_modules/.kodex-lock-digest 2>/dev/null || true)
-if [ "$installed_digest" != "$lock_digest" ]; then
-  npm ci --no-audit --no-fund
-  printf '%s' "$lock_digest" >node_modules/.kodex-lock-digest
-fi
+identity=$(sh /workspace/tools/dev/frontend-cache-identity.sh) || fail 'runtime identity is unavailable'
+installed_identity=$(cat node_modules/.kodex-cache-identity 2>/dev/null || true)
+test "$installed_identity" = "$identity" || fail 'frontend cache is absent or stale; run trusted host render'
+test -r node_modules/vite/bin/vite.js || fail 'frontend cache is incomplete'
 
-exec npm run dev -- --host 0.0.0.0 --port 8080 --strictPort
+exec node node_modules/vite/bin/vite.js --configLoader runner --host 0.0.0.0 --port 8080 --strictPort
