@@ -167,6 +167,17 @@ for profile in ['web-only', 'web-with-mattermost']:
             mounts = {m['name']: m for m in c['volumeMounts']}
             assert mounts['application-grant']['readOnly']
             assert mounts['internal-rpc-authority-observability']['mountPath'] == '/var/run/email/observability'
+            sentry = mounts['internal-rpc-authority-sentry-dsn']
+            assert sentry['readOnly'] and sentry['mountPath'] == '/var/run/email/sentry'
+            assert runtime['SENTRY_DSN_FILE'] == sentry['mountPath'] + '/sentry-dsn'
+            assert runtime['SENTRY_EXPECTED_HOST'] == 'sentry-relay.observability.svc:8443'
+            volume = next(v['secret'] for v in pod['volumes'] if v['name'] == sentry['name'])
+            assert volume == dict(secretName='internal-rpc-authority-sentry', defaultMode=288, items=[dict(key='dsn', path='sentry-dsn')])
+            issuer_egress = get('NetworkPolicy', 'email-bridge-internal-rpc-authority-exact-paths')['spec']['egress']
+            assert any(rule.get('ports') == [dict(protocol='TCP', port=8443)] and
+                destination.get('namespaceSelector', {}).get('matchLabels') == {'kubernetes.io/metadata.name': 'observability'} and
+                destination.get('podSelector', {}).get('matchLabels') == {'app.kubernetes.io/name': 'sentry-relay'}
+                for rule in issuer_egress for destination in rule.get('to', []))
     print('Email bridge full profile render passed: ' + profile)
     digest = 'sha256:' + 'a' * 64
     prefix = 'registry.example.test/kodex/'

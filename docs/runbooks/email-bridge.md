@@ -10,6 +10,32 @@ updated: 2026-09-05
 
 # Email bridge
 
+## Телеметрия runtime (#1135)
+
+EMAIL использует общий `RuntimeConfigFromEnv`: локальный render с
+`OTEL_SDK_DISABLED=true` создаёт runtime без внешних exporters, но сохраняет
+Prometheus и HTTP middleware. Собственный Config не дублирует shared env и не
+требует OTLP/Sentry файлов в disabled-профиле. Прежний ручной constructor терял
+Disabled и Sentry settings, поэтому достигший этой стадии startup отклонялся.
+
+Enabled-профиль сохраняет обязательную проверку exact OTLP TLS и Sentry host.
+Основной контейнер читает `SENTRY_DSN_FILE` из существующего
+`internal-rpc-authority-sentry-dsn` volume: Secret `internal-rpc-authority-sentry`,
+key `dsn`, projected path `sentry-dsn`, mode0440, mount read-only. OTLP CA остаётся
+в `internal-rpc-authority-observability`. Общая pod NetworkPolicy уже разрешает
+только точные observability destinations: collector4317 и sentry-relay8443.
+Новый широкий egress или копия Secret не создаются.
+
+Tracing shutdown и Sentry flush имеют независимые пятисекундные бюджеты от
+неотменённого контекста; отказ первого не пропускает второй. Ошибка cleanup
+сохраняется в итоговом результате. Runtime logger использует общий безопасный
+observability handler. Constructor, invalid enabled settings, Prometheus при
+disabled и независимость cleanup покрыты EMAIL unit/race; rendered оба профиля
+проверяют exact Secret/mount/env/egress.
+
+Live startup мог остановиться раньше telemetry; совпадение живого stage и
+готовность EMAIL подтверждаются только отдельным штатным rollout/readback.
+
 ## Отказ migration CLI
 
 `Email bridge migration failed` содержит только `stage` и закрытый
