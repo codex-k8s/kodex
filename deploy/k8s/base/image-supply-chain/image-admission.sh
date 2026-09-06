@@ -494,31 +494,32 @@ EOF
 }
 
 login_registry() {
+  umask 077
   host=$1
   username_file=$2
   password_file=$3
   docker_directory=/tmp/docker
+  trap 'rm -rf -- /tmp/docker' EXIT
   mkdir -p "$docker_directory/certs.d/$host"
   cp /identity/ca.pem "$docker_directory/certs.d/$host/ca.crt"
   cp /identity/registry-client.crt "$docker_directory/certs.d/$host/client.cert"
   cp /identity/registry-client.key "$docker_directory/certs.d/$host/client.key"
-  auth=$(printf '%s:%s' "$(tr -d '\r\n' <"$username_file")" \
-    "$(tr -d '\r\n' <"$password_file")" | base64 | tr -d '\r\n')
-  if [ -f "$docker_directory/config.json" ]; then
-    jq --arg host "$host" --arg auth "$auth" '.auths[$host] = {auth:$auth}' \
-      "$docker_directory/config.json" >"$docker_directory/config.next.json"
-    mv "$docker_directory/config.next.json" "$docker_directory/config.json"
-  else
-    jq -n --arg host "$host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' >"$docker_directory/config.json"
-  fi
+  [ -f "$docker_directory/config.json" ] || printf '{}\n' >"$docker_directory/config.json"
+  jq --arg host "$host" --rawfile user "$username_file" --rawfile pass "$password_file" '
+    .auths[$host] = {auth: ((($user|gsub("[\r\n]";"")) + ":" +
+      ($pass|gsub("[\r\n]";""))) | @base64)}
+  ' "$docker_directory/config.json" >"$docker_directory/config.next.json"
+  mv "$docker_directory/config.next.json" "$docker_directory/config.json"
   export DOCKER_CONFIG=$docker_directory
-  regctl registry set "$host" --skip-check --tls enabled \
-    --cacert "$(cat /identity/ca.pem)" \
-    --client-cert "$(cat /identity/registry-client.crt)" \
-    --client-key "$(cat /identity/registry-client.key)"
-  regctl registry login "$host" --skip-check \
-    --user "$(tr -d '\r\n' <"$username_file")" \
-    --pass-stdin <"$password_file" >/dev/null
+  export REGCTL_CONFIG="$docker_directory/regctl.json"
+  [ -f "$REGCTL_CONFIG" ] || printf '{"version":1,"hosts":{}}\n' >"$REGCTL_CONFIG"
+  jq --arg host "$host" --rawfile ca /identity/ca.pem \
+    --rawfile cert /identity/registry-client.crt --rawfile key /identity/registry-client.key \
+    --rawfile user "$username_file" --rawfile pass "$password_file" '
+      .hosts[$host] = {tls:"enabled",regcert:$ca,clientCert:$cert,clientKey:$key,
+        user:($user|gsub("[\r\n]";"")),pass:($pass|gsub("[\r\n]";""))}
+    ' "$REGCTL_CONFIG" >"$docker_directory/regctl.next.json"
+  mv "$docker_directory/regctl.next.json" "$REGCTL_CONFIG"
 }
 
 write_syft_registry_config() {
