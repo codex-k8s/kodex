@@ -66,6 +66,7 @@ func (client *Client) ObserveDeviceAuthorization(
 	response, err := client.client.ProviderCredentials.ObserveDeviceAuthorization(ctx,
 		&controlplanev1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest{
 			MaterializerAttemptRef: materializerAttemptRef,
+			Mode:                   controlplanev1.ProviderAuthorizationObservationMode_PROVIDER_AUTHORIZATION_OBSERVATION_MODE_POLL,
 		})
 	if err != nil {
 		return platformservice.ProviderAuthorizationObservation{}, err
@@ -124,29 +125,44 @@ func (client *Client) CleanupProviderCredential(
 	taskRef, accountRef string,
 	leaseGeneration int64,
 	credential entity.ProviderCredentialDescriptor,
-) (string, error) {
+	recovery ...*entity.ProviderCleanupRecoveryIdentity,
+) (entity.ProviderAuthorizationCleanupResult, error) {
+	var result entity.ProviderAuthorizationCleanupResult
 	if !validProviderCredentialRef(taskRef, "pcct_") ||
 		!validProviderCredentialRef(accountRef, "pacc_") ||
 		leaseGeneration < 1 || !validProviderCredentialDescriptor(credential) {
-		return "", errors.New("provider credential cleanup request is invalid")
+		return result, errors.New("provider credential cleanup request is invalid")
 	}
-	response, err := client.client.ProviderCredentials.CleanupProviderCredential(ctx,
-		&controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{
-			TaskRef: taskRef, AccountRef: accountRef, LeaseGeneration: leaseGeneration,
-			Credential: &controlplanev1.ProviderCredentialDescriptor{
-				SecretName: credential.SecretName, SecretUid: credential.SecretUID,
-				SecretResourceVersion: credential.SecretResourceVersion,
-				ContentSha256:         credential.ContentSHA256,
-			},
-		})
+	request := &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest{
+		TaskRef: taskRef, AccountRef: accountRef, LeaseGeneration: leaseGeneration,
+		TargetKind: controlplanev1.ProviderCredentialCleanupTargetKind_PROVIDER_CREDENTIAL_CLEANUP_TARGET_KIND_CREDENTIAL,
+		Credential: &controlplanev1.ProviderCredentialDescriptor{
+			SecretName: credential.SecretName, SecretUid: credential.SecretUID,
+			SecretResourceVersion: credential.SecretResourceVersion,
+			ContentSha256:         credential.ContentSHA256,
+		},
+	}
+	if len(recovery) > 1 {
+		return result, errors.New("provider cleanup recovery identity is invalid")
+	}
+	if len(recovery) == 1 {
+		var err error
+		request.RecoveryIdentity, err = cleanupRecoveryIdentity(recovery[0])
+		if err != nil {
+			return result, err
+		}
+	}
+	response, err := client.client.ProviderCredentials.CleanupProviderCredential(ctx, request)
 	if err != nil {
-		return "", err
+		return result, err
 	}
 	receipt := response.GetTerminalReceipt()
-	if !validBoundedSafeText(receipt, maximumProviderCredentialTerminalReceiptBytes) {
-		return "", errors.New("provider credential cleanup terminal receipt is invalid")
+	result.TerminalReceipt, result.ProducedCredential = receipt, credentialDescriptor(response.GetProducedCredential())
+	if !validBoundedSafeText(receipt, maximumProviderCredentialTerminalReceiptBytes) ||
+		(result.ProducedCredential != nil && !validProviderCredentialDescriptor(*result.ProducedCredential)) {
+		return entity.ProviderAuthorizationCleanupResult{}, errors.New("provider credential cleanup terminal receipt is invalid")
 	}
-	return receipt, nil
+	return result, nil
 }
 
 func credentialDescriptor(value *controlplanev1.ProviderCredentialDescriptor) *entity.ProviderCredentialDescriptor {

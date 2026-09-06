@@ -11,6 +11,7 @@ LEFT JOIN LATERAL (
            attempt_row.safe_failure_code
     FROM control_plane.provider_authorization_attempts attempt_row
     WHERE attempt_row.provider_account_id = account.id
+      AND attempt_row.preparation_state <> 'RESERVED'
     ORDER BY attempt_row.created_at DESC, attempt_row.ref DESC
     LIMIT 1
 ) attempt ON true

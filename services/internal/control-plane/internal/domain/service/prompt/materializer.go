@@ -13,6 +13,8 @@ import (
 	"strings"
 	"text/template"
 	"text/template/parse"
+
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 var ErrInvalid = errors.New("invalid prompt template")
@@ -25,12 +27,19 @@ const (
 )
 
 type Diagnostic struct {
+	VariableName            string
 	Severity, Code, Message string
 	Line, Column            int32
 }
 
 // Snapshot содержит только проверенные server-owned значения одной immutable revision.
 type Snapshot struct {
+	ExtraTemplates                                        []entity.PromptUserTemplate `json:",omitempty"`
+	ContextPin                                            entity.PromptContextPin
+	UnavailableVariables                                  map[string]string
+	StagePurposeTemplate, StageExpectedResultTemplate     string
+	ServiceTemplateRevision, Locale                       string
+	SemanticValues                                        map[SemanticSlot]string
 	TargetKind, TargetRef, ProjectRef, RunRef, SessionRef string
 	TemplateRef, TemplateDigest                           string
 	Variables                                             map[string]string
@@ -42,10 +51,36 @@ type Snapshot struct {
 }
 
 type Materialization struct {
-	Prompt, SafePrompt, Digest  string
-	TemplateRef, TemplateDigest string
-	EffectiveCapabilities       []string
-	Diagnostics                 []Diagnostic
+	Complete                                                                       bool
+	ContextPin                                                                     entity.PromptContextPin
+	RuntimeDiff                                                                    *RuntimeDiff
+	ServiceTemplateRevision, ServiceTemplateDigest, VariableSnapshotDigest, Locale string
+	Slots                                                                          []SlotProvenance
+	Sections                                                                       []Section
+	FullSections                                                                   []Section
+	Prompt, SafePrompt, Digest                                                     string
+	TemplateRef, TemplateDigest                                                    string
+	EffectiveCapabilities                                                          []string
+	Diagnostics                                                                    []Diagnostic
+}
+
+// FromSnapshot одинаково переносит immutable owner snapshot в preview и runtime.
+func FromSnapshot(snapshot entity.PromptMaterializationSnapshot) Snapshot {
+	values := make(map[SemanticSlot]string, len(snapshot.SemanticValues))
+	for name, value := range snapshot.SemanticValues {
+		values[SemanticSlot(name)] = value
+	}
+	return Snapshot{ServiceTemplateRevision: snapshot.ServiceTemplateRevision, Locale: snapshot.Locale, SemanticValues: values,
+		ExtraTemplates:       snapshot.ExtraTemplates,
+		ContextPin:           snapshot.ContextPin,
+		UnavailableVariables: snapshot.UnavailableVariables,
+		StagePurposeTemplate: snapshot.StagePurposeTemplate, StageExpectedResultTemplate: snapshot.StageExpectedResultTemplate,
+		TargetKind: snapshot.TargetKind, TargetRef: snapshot.TargetRef, ProjectRef: snapshot.ProjectRef, RunRef: snapshot.RunRef,
+		SessionRef: snapshot.SessionRef, TemplateRef: snapshot.TemplateRef, TemplateDigest: snapshot.TemplateDigest,
+		Variables: snapshot.Variables, StructuredVariables: snapshot.StructuredVariables, UserCapabilities: snapshot.UserCapabilities,
+		AgentCapabilities: snapshot.AgentCapabilities, WorkflowCapabilities: snapshot.WorkflowCapabilities,
+		ConnectionCapabilities: snapshot.ConnectionCapabilities, HumanGateCapabilities: snapshot.HumanGateCapabilities,
+		WorkflowStage: snapshot.WorkflowStage, Automation: snapshot.Automation, SessionContinuation: snapshot.SessionContinuation}
 }
 
 func Validate(templateText string, allowedVariables map[string]string) []Diagnostic {
@@ -59,6 +94,9 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 	if unknown := firstUnknownTemplateField(parsed.Tree.Root, allowedVariables); unknown != "" {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN", Message: "Prompt template contains an unknown variable", Line: 1, Column: 1}}
 	}
+	if _, valid := templateSlots(parsed.Tree.Root); !valid {
+		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_SLOT_INVALID", Message: "Prompt slots require a standalone literal insertion", Line: 1, Column: 1}}
+	}
 	if _, err := executeTemplate(parsed, validationTemplateData()); err != nil {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_EXECUTION_INVALID", Message: "Prompt template cannot be executed with the canonical variable shape", Line: 1, Column: 1}}
 	}
@@ -66,6 +104,14 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 }
 
 func Materialize(templateText string, snapshot Snapshot) (Materialization, error) {
+	if snapshot.ServiceTemplateRevision != "" {
+		return materializeSemantic(templateText, snapshot)
+	}
+	return materializeLegacy(templateText, snapshot)
+}
+
+// materializeLegacy сохраняет интерпретацию уже записанных immutable snapshots.
+func materializeLegacy(templateText string, snapshot Snapshot) (Materialization, error) {
 	variables := copyVariables(snapshot.Variables)
 	variables["project.ref"] = snapshot.ProjectRef
 	variables["run.ref"] = snapshot.RunRef
@@ -127,7 +173,7 @@ func Materialize(templateText string, snapshot Snapshot) (Materialization, error
 	structured, _ := json.Marshal(snapshot.StructuredVariables)
 	digestMaterial = append(digestMaterial, string(structured))
 	digest := sha256.Sum256([]byte(strings.Join(digestMaterial, "\x00")))
-	return Materialization{Prompt: rendered, SafePrompt: safeRendered, Digest: hex.EncodeToString(digest[:]), TemplateRef: snapshot.TemplateRef,
+	return Materialization{Complete: true, Prompt: rendered, SafePrompt: safeRendered, Digest: hex.EncodeToString(digest[:]), TemplateRef: snapshot.TemplateRef,
 		TemplateDigest: snapshot.TemplateDigest, EffectiveCapabilities: effective, Diagnostics: diagnostics}, nil
 }
 
@@ -232,7 +278,10 @@ func Catalog() map[string]string {
 	return map[string]string{
 		"user.ref": "", "user.name": "", "organization.ref": "", "organization.name": "",
 		"project.ref": "", "project.name": "", "agent.ref": "", "agent.name": "",
+		"workflow.name": "", "workflow.purpose": "", "step.key": "", "step.name": "", "step.purpose": "", "step.expected_result": "",
+		"integrations.items": "", "integrations.summary": "", "input.values": "",
 		"workflow.ref": "", "workflow.stage.key": "", "automation.ref": "", "run.ref": "",
+		"automation.name": "", "automation.task": "", "automation.scheduled_at": "", "automation.timezone": "", "automation.revision": "",
 		"session.ref": "", "turn.ref": "", "task": "", "node.ref": "", "target.ref": "",
 		"environment.ref": "", "tools.summary": "", "input.files": "", "input.files_count": "",
 		"input.files_dir": "", "input.manifest_path": "", "session.files": "", "session.files_count": "",
@@ -247,7 +296,7 @@ func Catalog() map[string]string {
 }
 
 func parseTemplate(templateText string) (*template.Template, error) {
-	return template.New("prompt").Option("missingkey=error").Parse(templateText)
+	return template.New("prompt").Option("missingkey=error").Funcs(template.FuncMap{"slot": validateSlot}).Parse(templateText)
 }
 
 func firstUnknownTemplateField(node parse.Node, allowed map[string]string) string {
@@ -278,6 +327,20 @@ func firstUnknownTemplateField(node parse.Node, allowed map[string]string) strin
 			}
 		}
 	case *parse.CommandNode:
+		if len(current.Args) > 0 {
+			if function, ok := current.Args[0].(*parse.IdentifierNode); ok && function.Ident == "slot" {
+				if len(current.Args) != 2 {
+					return "slot"
+				}
+				name, ok := current.Args[1].(*parse.StringNode)
+				if !ok {
+					return "slot"
+				}
+				if _, err := validateSlot(name.Text); err != nil {
+					return "slot"
+				}
+			}
+		}
 		for _, argument := range current.Args {
 			if unknown := firstUnknownTemplateField(argument, allowed); unknown != "" {
 				return unknown
@@ -315,7 +378,7 @@ func firstUnknownTemplateField(node parse.Node, allowed map[string]string) strin
 
 func allowedTemplateFunction(name string) bool {
 	switch name {
-	case "and", "or", "not", "eq", "ne", "lt", "le", "gt", "ge", "len", "print", "printf":
+	case "and", "or", "not", "eq", "ne", "lt", "le", "gt", "ge", "len", "print", "printf", "slot":
 		return true
 	default:
 		return false
@@ -345,7 +408,7 @@ func allowedTemplateField(name string, allowed map[string]string) bool {
 
 func allowedTemplateItemField(name string) bool {
 	switch name {
-	case "artifact_ref", "revision_ref", "name", "media_type", "size", "sha256", "path", "source", "version", "purpose", "description":
+	case "artifact_ref", "revision_ref", "name", "media_type", "size", "sha256", "path", "source", "version", "purpose", "description", "ref", "capability":
 		return true
 	default:
 		return false
@@ -364,9 +427,11 @@ func canonicalTemplateData(overrides map[string]any) map[string]any {
 		"organization": map[string]any{"ref": "", "name": ""},
 		"project":      map[string]any{"ref": "", "name": ""},
 		"agent":        map[string]any{"ref": "", "name": ""},
-		"input":        map[string]any{},
-		"workflow":     map[string]any{"ref": "", "stage": map[string]any{"key": ""}},
-		"automation":   map[string]any{"ref": ""},
+		"input":        map[string]any{"values": map[string]any{}},
+		"workflow":     map[string]any{"ref": "", "name": "", "purpose": "", "stage": map[string]any{"key": ""}},
+		"step":         map[string]any{"key": "", "name": "", "purpose": "", "expected_result": ""},
+		"integrations": map[string]any{"items": []any{}, "summary": ""},
+		"automation":   map[string]any{"ref": "", "name": "", "task": "", "scheduled_at": "", "timezone": "", "revision": ""},
 		"run":          map[string]any{"ref": ""},
 		"session":      map[string]any{"ref": ""},
 		"gate":         map[string]any{},

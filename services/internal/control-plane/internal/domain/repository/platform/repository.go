@@ -13,6 +13,7 @@ import (
 )
 
 type BootstrapState struct {
+	SpeechTranscription               entity.SpeechTranscriptionAvailability
 	Bootstrapped, OnboardingCompleted bool
 	OrganizationRef                   string
 	Assistant                         entity.SystemAssistant
@@ -84,6 +85,7 @@ type ProofPrincipalInput struct {
 	OwnerClaim              bool
 	CallerWorkload          string
 	Operation               string
+	RequestDigestSHA256     string
 	ProjectRef              string
 }
 
@@ -132,11 +134,14 @@ type RuntimeSecretFailInput struct {
 // ProviderCredentialCleanupTask несёт только immutable snapshot, который
 // materializer должен удалить по exact descriptor и fencing generation.
 type ProviderCredentialCleanupTask struct {
+	Recovery        *entity.ProviderCleanupRecoveryIdentity
 	Ref, AccountRef string
 	Attempt         int32
 	Generation      int64
 	LeaseExpiresAt  time.Time
 	Credential      entity.ProviderCredentialDescriptor
+	TargetKind      string
+	Authorization   entity.ProviderAuthorizationCleanupTarget
 }
 
 type ProviderCredentialCleanupResult struct {
@@ -214,6 +219,34 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxConfigurationView, error)
+	ListEmailMailboxConfigurations(context.Context, value.Principal, string, string, query.Page) (entity.EmailMailboxPage, error)
+	ListEmailMailboxCredentials(context.Context, value.Principal, string, string, query.Page) ([]entity.EmailMailboxCredential, int64, string, error)
+	GetEmailMailboxCredentialReceipt(context.Context, value.Principal, string, string) (entity.EmailMailboxCredential, error)
+	PreviewEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxPreview, error)
+	ReportEmailConfigurationReadback(context.Context, value.Principal, int64, string) error
+	GetRuntimeSecretDraft(context.Context, value.Principal, string) (entity.RuntimeSecretDraft, error)
+	PrepareRuntimeSecretDraftImpact(context.Context, value.Principal, string, value.Mutation) (entity.RuntimeSecretDraftImpactPlan, error)
+	GetRuntimeSecretDraftImpact(context.Context, value.Principal, string, string, query.Page) (entity.RuntimeSecretDraftImpactPage, error)
+	PrepareRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftPrepareInput) (entity.RuntimeSecretDraftOperationReceipt, error)
+	ConsumeRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftWork, error)
+	FinishRuntimeSecretDraft(context.Context, value.Principal, RuntimeSecretDraftWorkInput) (entity.RuntimeSecretDraftResult, error)
+	ListRuntimeSecretDraftRecovery(context.Context, value.Principal, query.Page) ([]entity.RuntimeSecretDraftWork, string, error)
+	CheckRuntimeSecretDraftWork(context.Context, value.Principal) error
+	GetRuntimeRevisionPublicPair(context.Context, value.Principal, string, string) (entity.RuntimeRevisionPublicProjection, *entity.RuntimeRevisionPublicProjection, error)
+	GetEmailEffectReceipt(context.Context, value.Principal, string) (entity.EmailEffectReceiptView, error)
+	ResolveEmailAuthorization(context.Context, value.Principal, query.EmailAuthorization) (entity.EmailAuthorization, error)
+	ResolveEmailReconciliation(context.Context, value.Principal, string, string, string, string) (entity.EmailEffectReceiptView, error)
+	GetMemoryRecord(context.Context, value.Principal, string) (entity.KodexMemoryRecord, error)
+	GetSkillBundle(context.Context, value.Principal, string) (entity.SkillBundle, error)
+	ListSkillBundles(context.Context, value.Principal, query.Filter) ([]entity.SkillBundle, int64, string, error)
+	ListSkillBundleRevisions(context.Context, value.Principal, string, query.Page) ([]entity.SkillBundleRevision, int64, string, error)
+	ListMemoryRecords(context.Context, value.Principal, query.Filter) ([]entity.KodexMemoryRecord, int64, string, error)
+	ListMemoryRecordRevisions(context.Context, value.Principal, string, query.Page) ([]entity.MemoryRecordRevision, int64, string, error)
+	GetRuntimeEnvironmentDraft(context.Context, value.Principal, string) (entity.RuntimeEnvironmentDraft, error)
+	GetRuntimeSecretImpact(context.Context, value.Principal, string, int64, string, query.Page) (entity.RuntimeSecretImpact, error)
+	GetRuntimeEnvironmentImpact(context.Context, value.Principal, string, string, string, query.Page) (entity.RuntimeEnvironmentImpact, error)
+	ListInteractionIdentities(context.Context, value.Principal, string, query.Page) ([]entity.InteractionIdentity, string, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
 	AcceptWorkerGrant(context.Context, WorkerGrantInput) error
@@ -223,6 +256,9 @@ type Repository interface {
 	GetPlatformEventCursor(context.Context, value.Principal) (string, int64, error)
 	GetOverview(context.Context, value.Principal, string) (Overview, error)
 	ListCapabilities(context.Context, value.Principal) ([]entity.IntegrationCapability, error)
+	GetAgentEffectiveCapabilities(context.Context, value.Principal, string, string, string, query.Filter) (entity.AgentEffectiveCapabilities, error)
+	ListArtifactBindingTargets(context.Context, value.Principal, string, query.Filter) (entity.ArtifactBindingTargets, error)
+	GetRunAttachmentEligibility(context.Context, value.Principal, string, entity.RunTarget, string) (entity.RunAttachmentEligibility, error)
 	ListRuntimes(context.Context, value.Principal) ([]entity.RuntimeSelection, error)
 	Search(context.Context, value.Principal, query.Filter) ([]entity.SearchResult, int64, string, error)
 	ListVFSNodes(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
@@ -237,7 +273,12 @@ type Repository interface {
 	GetAgent(context.Context, value.Principal, string) (entity.Agent, error)
 	GetEffectivePromptTemplate(context.Context, value.Principal, string) (entity.InstructionVersion, error)
 	GetPromptMaterializationSnapshot(context.Context, value.Principal, string, string) (entity.PromptMaterializationSnapshot, error)
+	GetPromptPreviewContextSnapshot(context.Context, value.Principal, string, string, query.PromptPreviewContext) (entity.PromptMaterializationSnapshot, error)
+	GetSchedulePromptPreviewSnapshot(context.Context, value.Principal, command.ScheduleInput, string, int64, time.Time, string) (entity.PromptMaterializationSnapshot, entity.SchedulePromptPreviewPin, []entity.TemplateVariable, error)
+	ListPromptContextVariables(context.Context, value.Principal, query.Filter) (entity.PromptVariableCatalog, error)
 	GetAgentRuntimeConfiguration(context.Context, value.Principal, string) (entity.AgentRuntimeConfigurationView, error)
+	ListConfigOverlayRevisions(context.Context, value.Principal, query.Filter) ([]entity.ConfigOverlayVersion, int64, string, error)
+	GetConfigOverlayRevision(context.Context, value.Principal, string, string) (entity.ConfigOverlayVersion, error)
 	ListAgentRuntimeConfigurations(context.Context, value.Principal, query.Filter) ([]entity.AgentRuntimeConfiguration, string, error)
 	ListRuntimeEnvironments(context.Context, value.Principal, query.Filter) ([]entity.RuntimeEnvironmentSet, string, error)
 	GetRuntimeEnvironment(context.Context, value.Principal, string) (entity.RuntimeEnvironmentSet, error)
@@ -257,23 +298,28 @@ type Repository interface {
 	ResolveTranscriptionCredentialProjection(context.Context, value.Principal, TranscriptionCredentialProjectionInput) (TranscriptionCredentialProjection, error)
 	ListTemplateVariables(context.Context, value.Principal, query.Filter) ([]entity.TemplateVariable, int64, string, error)
 	ListProviderDefinitions(context.Context, value.Principal, query.Filter) ([]entity.ProviderDefinition, string, error)
-	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) ([]entity.ModelCapability, int64, string, error)
+	ListModelCapabilities(context.Context, value.Principal, string, string, query.Filter) (entity.ModelCatalog, error)
 	ListManagedConfigurationHistory(context.Context, value.Principal, string, query.Page) (entity.ManagedConfigurationSet, []entity.ManagedConfigurationRevision, int64, string, error)
-	GetManagedConfigurationImpact(context.Context, value.Principal, string, string) (entity.ManagedConfigurationImpact, error)
+	ListManagedConfigurations(context.Context, value.Principal, query.Filter) ([]entity.ManagedConfigurationSet, int64, string, error)
+	GetManagedConfigurationImpact(context.Context, value.Principal, string, string, query.Filter) (entity.ManagedConfigurationImpact, error)
+	GetRoleImageImpactPlan(context.Context, value.Principal, string, string, query.Page) (entity.RoleImageImpactPage, error)
+	GetRevisionImpactPlan(context.Context, value.Principal, string, string, query.Page) (entity.RevisionImpactPage, error)
 	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
 	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)
 	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)
+	ListProviderAccountBlockers(context.Context, value.Principal, query.ProviderAccountBlockers) (entity.ProviderAccountBlockerPage, error)
 	GetProviderAccount(context.Context, value.Principal, string) (entity.ProviderAccount, error)
+	GetProviderAccountWithUsage(context.Context, value.Principal, string, *entity.ProviderAccountUsageContext) (entity.ProviderAccount, error)
 	ListRoleImageRecipeRevisions(context.Context, value.Principal, query.Filter) ([]entity.RoleImageRecipeRevision, string, error)
 	ListWorkflows(context.Context, value.Principal, query.Filter) ([]entity.Workflow, string, error)
 	GetWorkflow(context.Context, value.Principal, string) (entity.Workflow, error)
-	ListRuns(context.Context, value.Principal, query.Filter) ([]entity.Run, string, error)
+	ListRuns(context.Context, value.Principal, query.Filter) ([]entity.Run, int64, string, error)
 	GetRun(context.Context, value.Principal, string) (entity.Run, error)
 	GetRunGraph(context.Context, value.Principal, string) (entity.Run, entity.RunGraph, error)
 	ListRunEvents(context.Context, value.Principal, query.Filter) ([]entity.RunEvent, int64, bool, error)
-	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, string, error)
+	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, int64, string, error)
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
-	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, string, error)
+	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, int64, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
 	GetArtifactImpact(context.Context, value.Principal, string, string) (entity.ArtifactImpact, error)
 	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
@@ -283,12 +329,20 @@ type Repository interface {
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
 	PurgeArtifact(context.Context, value.Principal, value.Mutation, string, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
+	SearchExecutionFiles(context.Context, value.Principal, query.ExecutionFileContext, string, query.Page) (entity.ExecutionFilePage, error)
+	GetExecutionFileMetadata(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef) (entity.ExecutionFileMetadata, error)
+	PreviewExecutionFile(context.Context, value.Principal, query.ExecutionFileContext, query.ExecutionFileRef, int32) (entity.ExecutionFilePreview, error)
+	GetExecutionFileManifest(context.Context, value.Principal, query.ExecutionFileContext, query.Page) (entity.ExecutionFilePage, error)
 	ListSchedules(context.Context, value.Principal, query.Filter) ([]entity.Schedule, string, error)
 	GetSchedule(context.Context, value.Principal, string) (entity.Schedule, error)
 	ListScheduleRevisions(context.Context, value.Principal, query.Filter) ([]entity.ScheduleRevision, string, error)
 	ListScheduleRuns(context.Context, value.Principal, query.Filter) ([]entity.ScheduleRunOccurrence, string, error)
 	ListIntegrationDefinitions(context.Context, value.Principal, query.Filter) ([]entity.IntegrationDefinition, string, []string, error)
 	ListIntegrationConnections(context.Context, value.Principal, query.Filter) ([]entity.IntegrationConnection, string, error)
+	ListIntegrationGrantConnectionCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationConnectionCandidates, error)
+	ListIntegrationGrantProjectCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationProjectCandidates, error)
+	ListIntegrationGrantRecipientCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationRecipientCandidates, error)
+	ListIntegrationGrantCapabilityCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationCapabilityCandidates, error)
 	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)
 	GetSystemAssistant(context.Context, value.Principal) (entity.SystemAssistant, error)
 	ListAssistantConversations(context.Context, value.Principal, query.Filter) ([]entity.AssistantConversation, string, error)
@@ -308,7 +362,7 @@ type Repository interface {
 	ClaimSessionArchiveTasks(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	RenewSessionArchiveTask(context.Context, value.Principal, command.SessionArchiveTaskInput) (map[string]any, error)
 	ClaimProviderCredentialCleanupTasks(context.Context, string, int32) ([]ProviderCredentialCleanupTask, error)
-	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
+	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, entity.ProviderAuthorizationCleanupResult) (ProviderCredentialCleanupResult, error)
 	FailProviderCredentialCleanupTask(context.Context, string, string, int64, string) (ProviderCredentialCleanupResult, error)
 	ClaimDueSchedules(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	RenewScheduleOccurrence(context.Context, value.Principal, command.OccurrenceInput) (map[string]any, error)

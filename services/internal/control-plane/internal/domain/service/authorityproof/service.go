@@ -344,7 +344,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	if credential == input.Authorization || credential == "" || strings.TrimSpace(credential) != credential {
 		return ResolveResult{}, errors.New("application credential is invalid")
 	}
-	principal := platformrepo.ProofPrincipalInput{CallerWorkload: producer.CallerWorkloadID, Operation: input.OperationID, ProjectRef: input.ProjectReference}
+	principal := platformrepo.ProofPrincipalInput{CallerWorkload: producer.CallerWorkloadID, Operation: input.OperationID, ProjectRef: input.ProjectReference, RequestDigestSHA256: input.RequestDigestSHA256}
 	actorKind := "SERVICE"
 	actorSource := "DOMAIN_STATE"
 	actorReference := ""

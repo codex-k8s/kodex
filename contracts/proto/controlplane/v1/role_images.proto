@@ -121,6 +121,18 @@ message RoleImageRecipe {
   repeated string next_actions = 17;
   RoleEnvironmentSelection environment = 18;
   string project_ref = 19;
+  RoleImageManagedLineage managed_lineage = 20;
+  bool source_available = 21;
+}
+
+message RoleImageManagedLineage {
+  string configuration_ref = 1;
+  string revision_ref = 2;
+  int64 revision = 3;
+  string managed_by = 4;
+  string source_ref = 5;
+  string source_revision = 6;
+  string origin = 7;
 }
 
 enum ImageBuildStage {
@@ -163,6 +175,8 @@ message ImageBuild {
   google.protobuf.Timestamp created_at = 19;
   google.protobuf.Timestamp updated_at = 20;
   string dockerfile = 21;
+  string configuration_revision_ref = 22;
+  bool source_available = 23;
 }
 
 enum ImageAdmissionVerdict {
@@ -225,11 +239,14 @@ message ListRoleImageRecipesRequest {
   string project_ref = 1;
   string role_definition_ref = 2;
   PageRequest page = 3;
+  string query = 4;
+  string state = 5;
 }
 
 message ListRoleImageRecipesResponse {
   repeated RoleImageRecipe recipes = 1;
   PageInfo page = 2;
+  int64 total = 3;
 }
 
 message GetRoleImageRecipeRequest {

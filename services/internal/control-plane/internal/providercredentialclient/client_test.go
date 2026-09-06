@@ -2,6 +2,7 @@ package providercredentialclient
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -60,8 +62,8 @@ func TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt(t *testi
 	receipt, err := cleanupClient(t, stub).CleanupProviderCredential(
 		context.Background(), cleanupTaskRef, cleanupAccountRef, 7, cleanupCredential,
 	)
-	if err != nil || receipt != cleanupReceipt {
-		t.Fatalf("cleanup result: receipt=%q err=%v", receipt, err)
+	if err != nil || receipt.TerminalReceipt != cleanupReceipt {
+		t.Fatalf("cleanup result: receipt=%+v err=%v", receipt, err)
 	}
 	request := stub.request
 	if stub.calls != 1 || request.GetTaskRef() != cleanupTaskRef || request.GetAccountRef() != cleanupAccountRef ||
@@ -70,6 +72,47 @@ func TestCleanupProviderCredentialSendsExactDescriptorAndReturnsReceipt(t *testi
 		request.GetCredential().GetSecretResourceVersion() != cleanupCredential.SecretResourceVersion ||
 		request.GetCredential().GetContentSha256() != cleanupCredential.ContentSHA256 {
 		t.Fatalf("cleanup request does not preserve exact task: %#v", request)
+	}
+}
+
+func TestCleanupRecoveryPreservesCurrentClaimAndBindsEveryOriginField(t *testing.T) {
+	t.Parallel()
+	stub := &providerCredentialClientStub{response: &controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse{TerminalReceipt: cleanupReceipt}}
+	origin := &entity.ProviderCleanupRecoveryIdentity{TaskRef: "pcct_61000000-0000-4000-8000-000000000099", Generation: 1, LegacyLastGeneration: 5}
+	if _, err := cleanupClient(t, stub).CleanupProviderCredential(context.Background(), cleanupTaskRef, cleanupAccountRef, 7, cleanupCredential, origin); err != nil {
+		t.Fatal(err)
+	}
+	request := stub.request
+	if request.TaskRef != cleanupTaskRef || request.LeaseGeneration != 7 || request.RecoveryIdentity.TaskRef != origin.TaskRef || request.RecoveryIdentity.LeaseGeneration != 1 || request.RecoveryIdentity.LegacyLastGeneration != 5 {
+		t.Fatal("recovery substituted current claim")
+	}
+	digest := func(message proto.Message) [32]byte {
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sha256.Sum256(raw)
+	}
+	baseline := digest(request)
+	for _, mutate := range []func(*controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest){
+		func(r *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) {
+			r.RecoveryIdentity.TaskRef = cleanupTaskRef
+		},
+		func(r *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) {
+			r.RecoveryIdentity.LeaseGeneration++
+		},
+		func(r *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) {
+			r.RecoveryIdentity.LegacyLastGeneration++
+		},
+		func(r *controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest) {
+			r.LeaseGeneration++
+		},
+	} {
+		changed := proto.Clone(request).(*controlplanev1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest)
+		mutate(changed)
+		if digest(changed) == baseline {
+			t.Fatal("canonical request digest omitted recovery/claim pins")
+		}
 	}
 }
 

@@ -114,6 +114,7 @@ func scanBuild(row roleImageRowScanner) (entity.ImageBuild, error) {
 		return entity.ImageBuild{}, errors.New("decode image build specification")
 	}
 	result.Dockerfile = recipe.Dockerfile
+	result.SourceAvailable = true
 	return result, nil
 }
 
@@ -228,7 +229,7 @@ func scanLockedPromotionRequest(row roleImageRowScanner) (lockedPromotionRequest
 
 func roleImageActions(recipe entity.RoleImageRecipe, canManage bool) []string {
 	actions := []string{"OPEN"}
-	if !canManage {
+	if !canManage || shippedRoleImage(recipe) {
 		return actions
 	}
 	if recipe.State == "ACTIVE" {

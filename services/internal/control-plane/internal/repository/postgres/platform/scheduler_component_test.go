@@ -18,6 +18,7 @@ import (
 
 func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
+	seedObservedCatalogFixture(t, ctx, repository)
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +78,7 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 		execute(command.SetScheduleEnabled, owner, key, command.ScheduleInput{Ref: schedule.Ref, Enabled: false}, &current.Version)
 	}
 	schedule := newSchedule("continued", "CONTINUE_ONE", entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, map[string]any{})
+	testScheduleMaterializedPreview(t, ctx, repository, service, owner, schedule, false)
 	eventCount := func() int {
 		var count int
 		if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.outbox_events WHERE convert_from(payload,'UTF8')::jsonb->>'aggregateRef'=$1 AND convert_from(payload,'UTF8')::jsonb->>'eventName'='SCHEDULE_CHANGED'`, schedule.Ref).Scan(&count); err != nil {
@@ -168,6 +170,7 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 		t.Fatal("runtime snapshot lost exact schedule provenance")
 	}
 	completeClaimedExecution(t, ctx, service, runtimeWorker, snapshot, "scheduler-runtime", false)
+	testScheduleMaterializedPreview(t, ctx, repository, service, owner, schedule, true)
 	var state string
 	if err := repository.pool.QueryRow(ctx, `SELECT state FROM control_plane.schedule_occurrences WHERE ref=$1`, stringMap(first, "occurrenceRef")).Scan(&state); err != nil || state != "COMPLETED" {
 		t.Fatalf("terminal graph: %s %v", state, err)
@@ -268,7 +271,14 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: agent.Ref, Draft: &draft}, nil).Workflow
 	workflow = execute(command.ValidateWorkflow, owner, "workflow-valid", command.WorkflowInput{Ref: workflow.Ref}, &workflow.Version).Workflow
 	workflow = execute(command.PublishWorkflow, owner, "workflow-publish", command.WorkflowInput{Ref: workflow.Ref}, &workflow.Version).Workflow
-	processSchedule := newSchedule("process", "NEW_EACH_RUN", entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}, map[string]any{"record": "synthetic"})
+	replayedWorkflow := execute(command.CreateWorkflow, owner, "workflow", command.WorkflowInput{ProjectRef: project.Ref,
+		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: agent.Ref, Draft: &draft}, nil).Workflow
+	if replayedWorkflow.Version != workflow.Version || replayedWorkflow.Published == nil || replayedWorkflow.LaunchReadiness == nil || replayedWorkflow.LaunchReadiness.WorkflowVersion != workflow.Version || replayedWorkflow.LaunchReadiness.RevisionRef != workflow.Published.Ref {
+		t.Fatal("historical Workflow receipt mixed current readiness with stale body")
+	}
+	testWorkflowLaunchReadiness(t, ctx, repository, service, owner, workflow)
+	processSchedule := newSchedule("process", "CONTINUE_ONE", entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}, map[string]any{"record": "synthetic"})
+	testScheduleMaterializedPreview(t, ctx, repository, service, owner, processSchedule, false)
 	makeDue(processSchedule, 7)
 	processClaim := claim()
 	process := execute(command.MaterializeOccurrence, materializePrincipal, "process-run", leaseInput(processClaim), nil).Run
@@ -285,5 +295,6 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 		t.Fatal("automation task did not reach coordinator context")
 	}
 	completeClaimedExecution(t, ctx, service, runtimeWorker, coordinator, "scheduler-process", false)
+	testScheduleMaterializedPreview(t, ctx, repository, service, owner, processSchedule, true)
 	disable(processSchedule, "disable-process")
 }

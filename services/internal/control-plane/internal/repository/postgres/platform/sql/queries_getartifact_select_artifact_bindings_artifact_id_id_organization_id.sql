@@ -17,7 +17,9 @@ LEFT JOIN control_plane.sessions s ON s.id=r.session_id
 LEFT JOIN control_plane.run_nodes n ON n.id=ar.node_id
 WHERE ar.organization_id=$1::uuid
   AND ar.ref=$2
-  AND ($3 IN ('OWNER','ADMINISTRATOR') OR (ar.project_id IS NULL AND ar.created_by=$4::uuid) OR EXISTS(
-    SELECT 1 FROM control_plane.memberships m
-    WHERE m.project_id=ar.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)
-  ))
+  AND EXISTS (
+    SELECT 1 FROM control_plane.catalog_access_targets target
+    WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
+      AND control_plane.catalog_resource_visible(ar.organization_id,$4::uuid,'artifact.view',target.kind,
+          target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp())
+  )

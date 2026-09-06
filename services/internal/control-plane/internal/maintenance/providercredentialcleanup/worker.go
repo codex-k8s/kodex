@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -21,6 +22,7 @@ const (
 	SafeCodeRejected    = "PROVIDER_CREDENTIAL_CLEANUP_REJECTED"
 	SafeCodeTimeout     = "PROVIDER_CREDENTIAL_CLEANUP_TIMEOUT"
 	SafeCodeFailed      = "PROVIDER_CREDENTIAL_CLEANUP_FAILED"
+	SafeCodeCASChanged  = "PROVIDER_CREDENTIAL_CLEANUP_CAS_CHANGED"
 
 	claimUnavailableReason  = "provider_credential_cleanup_claim_unavailable"
 	minimumPollInterval     = 50 * time.Millisecond
@@ -32,12 +34,14 @@ const (
 
 type Repository interface {
 	ClaimProviderCredentialCleanupTasks(context.Context, string, int32) ([]platformrepository.ProviderCredentialCleanupTask, error)
-	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, string) (platformrepository.ProviderCredentialCleanupResult, error)
+	CompleteProviderCredentialCleanupTask(context.Context, string, string, int64, entity.ProviderAuthorizationCleanupResult) (platformrepository.ProviderCredentialCleanupResult, error)
 	FailProviderCredentialCleanupTask(context.Context, string, string, int64, string) (platformrepository.ProviderCredentialCleanupResult, error)
 }
 
 type Materializer interface {
-	CleanupProviderCredential(context.Context, string, string, int64, entity.ProviderCredentialDescriptor) (string, error)
+	CleanupProviderCredential(context.Context, string, string, int64, entity.ProviderCredentialDescriptor, ...*entity.ProviderCleanupRecoveryIdentity) (entity.ProviderAuthorizationCleanupResult, error)
+	ObserveAuthorizationCleanup(context.Context, entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error)
+	CleanupAuthorization(context.Context, entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error)
 }
 
 type Config struct {
@@ -131,13 +135,22 @@ func (worker *Worker) runCycle(ctx context.Context) (int, error) {
 
 func (worker *Worker) processTask(ctx context.Context, task platformrepository.ProviderCredentialCleanupTask) string {
 	cleanupCtx, cancelCleanup := context.WithTimeout(ctx, worker.config.OperationTimeout)
-	receipt, cleanupErr := worker.materializer.CleanupProviderCredential(
-		cleanupCtx,
-		task.Ref,
-		task.AccountRef,
-		task.Generation,
-		task.Credential,
-	)
+	var receipt entity.ProviderAuthorizationCleanupResult
+	var cleanupErr error
+	switch task.TargetKind {
+	case "CREDENTIAL":
+		receipt, cleanupErr = worker.materializer.CleanupProviderCredential(cleanupCtx, task.Ref, task.AccountRef, task.Generation, task.Credential, task.Recovery)
+	case "AUTHORIZATION_METADATA":
+		var observation entity.ProviderAuthorizationCleanupObservation
+		observation, cleanupErr = worker.materializer.ObserveAuthorizationCleanup(cleanupCtx, task.Authorization)
+		if cleanupErr == nil {
+			receipt.Observation = &observation
+		}
+	case "AUTHORIZATION_ATTEMPT", "AUTHORIZATION_ABSENCE":
+		receipt, cleanupErr = worker.materializer.CleanupAuthorization(cleanupCtx, task.Authorization)
+	default:
+		cleanupErr = status.Error(codes.InvalidArgument, "provider cleanup target kind is invalid")
+	}
 	cancelCleanup()
 	if ctx.Err() != nil {
 		return ""
@@ -171,6 +184,15 @@ func (worker *Worker) processTask(ctx context.Context, task platformrepository.P
 }
 
 func safeErrorCode(err error) string {
+	if status.Code(err) == codes.FailedPrecondition {
+		details := status.Convert(err).Details()
+		if len(details) == 1 {
+			info, ok := details[0].(*errdetails.ErrorInfo)
+			if ok && info.Domain == "kodex.provider_credential_cleanup" && info.Reason == "CAS_SNAPSHOT_CHANGED" && len(info.Metadata) == 0 {
+				return SafeCodeCASChanged
+			}
+		}
+	}
 	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
 		return SafeCodeTimeout
 	}

@@ -142,7 +142,7 @@ func main() {
 		{
 			ProducerID: "control-plane.oidc-stt", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
 			CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
-			Operations: controlplaneclient.STTGatewayOperations(), ProjectRequired: requiredProjects(controlplaneclient.STTGatewayOperations()),
+			Operations:       controlplaneclient.STTGatewayOperations(),
 			AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"}, TargetWorkloadID: sttID,
 			TargetSPIFFEID: sttPeer, TargetAudience: sttAudience, TargetTLSServerName: sttTLS,
 		},
@@ -151,6 +151,7 @@ func main() {
 		worker("session-archive", "control-plane.session-archive", controlplaneclient.SessionArchiveOperations()),
 		worker("integration-gateway", "control-plane.integration-gateway", controlplaneclient.IntegrationGatewayOperations()),
 		worker("interaction-gateway", "control-plane.interaction-gateway", controlplaneclient.InteractionGatewayOperations()),
+		worker("email-bridge", "control-plane.email-bridge", controlplaneclient.EmailBridgeOperations()),
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
@@ -176,7 +177,13 @@ func main() {
 		continuationWorker("control-plane.stt-policy", controlplaneclient.STTPolicyProjectionOperations(), controlPlaneID, controlPlanePeer, controlPlaneAudience, controlPlaneTLS),
 		continuationWorker("secret-broker.stt-credential", controlplaneclient.STTCredentialProjectionOperations(), secretBrokerID, secretBrokerPeer, secretBrokerAudience, secretBrokerTLS),
 	}
-	value := document{Version: 1, PolicyRevision: 44, Policy: policy{
+	profiles = append(profiles, profile{
+		ProducerID: "control-plane.oidc-secret-draft", WorkloadID: "control-api-gateway", Credential: "OIDC_BEARER",
+		CredentialIssuer: *oidcIssuer, CredentialAudience: *oidcAudience, CredentialTrust: "kodex-oidc-signers-g1",
+		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
+		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
+	})
+	value := document{Version: 1, PolicyRevision: 73, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -259,7 +266,7 @@ func main() {
 func continuationWorker(producerID string, operations map[string]string, targetID, targetPeer, targetAudience, targetTLS string) profile {
 	result := targetedWorker(sttID, producerID, operations, targetID, targetPeer, targetAudience, targetTLS)
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
-	result.ProjectRequired = requiredProjects(operations)
+	result.ProjectRequired = map[string]struct{}{}
 	result.Continuation = &continuationProfile{ParentOperationID: "platform.stt.transcribe", ParentFullMethod: sttTranscribeMethod}
 	return result
 }
@@ -273,7 +280,27 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 }
 
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
+	// Полный nested execution/catalog pin покрывается canonical Proto digest.
+	// Отдельные resource/version/attempt headers здесь не назначают полномочия.
+	switch operationID {
+	case "platform.query.integration-grant-candidates.connections.list", "platform.query.integration-grant-candidates.projects.list", "platform.query.integration-grant-candidates.recipients.list", "platform.query.integration-grant-candidates.capabilities.list":
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.runtime.files.search", "platform.runtime.files.metadata", "platform.runtime.files.preview", "platform.runtime.files.manifest", "platform.runtime.execution.artifact.stream":
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	}
 	mode := "UNARY_PROTO_SHA256"
+	if operationID == "platform.query.provider-accounts.blockers.list" {
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	}
+	if operationID == "platform.command.provider-accounts.queued-work.cancel" {
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	}
+	if strings.HasPrefix(operationID, "platform.runtime-secret-drafts.") || strings.HasPrefix(operationID, "platform.configuration-sources.work.") || strings.HasPrefix(operationID, "platform.configuration-writebacks.work.") {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	}
+	if operationID == "platform.command.runtime-secret-drafts.save" {
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	}
 	if fullMethod == sttTranscribeMethod || strings.Contains(fullMethod, "/Upload") || strings.Contains(fullMethod, "/DownloadArtifact") {
 		mode = "STREAM_SESSION"
 	}
@@ -284,6 +311,32 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
+	case "platform.command.environment-draft-impact.prepare", "platform.command.instructions-impact.prepare", "platform.command.prompt-template-impact.prepare":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.query.artifact-binding-targets.list", "platform.query.run-attachment-eligibility.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.query.configuration-writebacks.get", "platform.query.configuration-writebacks.list":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.role-image-writebacks.prepare", "platform.command.integration-definition-writebacks.prepare", "platform.command.configuration-writebacks.approve", "platform.command.configuration-writebacks.reject", "platform.command.configuration-writebacks.cancel":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.query.config-overlays.revisions.list", "platform.query.config-overlays.revisions.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.role-image-sources.configure", "platform.command.role-image-sources.refresh", "platform.command.integration-definition-sources.configure", "platform.command.integration-definition-sources.refresh":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.provider-accounts.model-catalog.observe", "platform.stt.model-catalog.get", "platform.email.configuration.report",
+		"platform.query.email-mailbox.configurations.list", "platform.query.email-mailbox.configurations.preview", "platform.query.email-mailbox.credentials.list":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.query.email-mailbox.configurations.get", "platform.query.email-mailbox.credential-receipts.get":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.email-mailbox.drafts.create":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.command.email-mailbox.drafts.save", "platform.command.email-mailbox.drafts.validate", "platform.command.email-mailbox.drafts.publish", "platform.command.email-mailbox.drafts.discard",
+		"platform.command.email-mailbox.configurations.bind", "platform.command.email-mailbox.configurations.unbind":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.email.effect-receipts.report":
+		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
+	case "platform.command.email-effects.reconcile":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.stt.transcribe":
 		return requestProfile{Mode: mode, Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.stt.policy.resolve", "platform.stt.credential.project":
@@ -293,7 +346,8 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	case "platform.provider-credentials.device-authorize.get":
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "REQUIRED", Idempotency: "FORBIDDEN"}
 	}
-	resource := strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+	resource := operationID == "platform.command.role-image-impact-plans.prepare" || operationID == "platform.command.runtime-secret-drafts.impact.prepare" || operationID == "platform.query.runtime-revisions.diff" || strings.Contains(operationID, ".get") || strings.Contains(operationID, ".update") || strings.Contains(operationID, ".delete") ||
+		strings.Contains(operationID, ".save") || strings.Contains(operationID, ".discard") ||
 		strings.Contains(operationID, ".validate") || strings.Contains(operationID, ".publish") || strings.Contains(operationID, ".rebind") ||
 		strings.Contains(operationID, ".detach") || strings.Contains(operationID, ".copy") || strings.Contains(operationID, "device-")
 	version := strings.HasPrefix(operationID, "platform.command.") && !strings.Contains(operationID, ".create") && !strings.Contains(operationID, ".upload")
@@ -304,6 +358,8 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
+		"platform.stt.model-catalog.get":                       "system.configuration.manage",
+		"platform.stt.transcribe":                              "stt.transcribe",
 		"platform.command.agents.avatar.upload":                "agent.avatar.manage",
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
 		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
@@ -362,7 +418,9 @@ func delegatedTargetedWorker(
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
 	result.ProjectRequired = make(map[string]struct{}, len(operations))
 	for operation := range operations {
-		result.ProjectRequired[operation] = struct{}{}
+		if operation != "platform.runtime.credentials.system-assistant.materialize" {
+			result.ProjectRequired[operation] = struct{}{}
+		}
 	}
 	return result
 }

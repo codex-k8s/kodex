@@ -68,6 +68,9 @@ JOIN control_plane.provider_credential_revisions credential
   ON credential.id = provider_account.current_credential_revision_id
 JOIN control_plane.role_definitions role_definition ON role_definition.id = a.role_definition_id
 JOIN control_plane.instruction_versions instruction ON instruction.ref = ar.core_prompt_ref
+JOIN control_plane.agent_instruction_bindings active_instruction
+ ON active_instruction.agent_id=a.id AND active_instruction.organization_id=a.organization_id
+ AND active_instruction.instruction_id=instruction.id
 JOIN control_plane.agent_runtime_config_versions runtime_config
   ON runtime_config.id = a.current_runtime_config_id
 JOIN control_plane.provider_account_policy_versions provider_policy

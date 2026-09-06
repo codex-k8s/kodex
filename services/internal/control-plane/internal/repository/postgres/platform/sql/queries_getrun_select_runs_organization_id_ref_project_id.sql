@@ -3,14 +3,14 @@ SELECT r.ref,COALESCE(p.ref,''),s.ref,root.ref,COALESCE(parent.ref,''),COALESCE(
        COALESCE((SELECT array_agg(artifact.ref ORDER BY artifact.created_at) FROM control_plane.artifacts artifact JOIN control_plane.runs artifact_run ON artifact_run.id=artifact.run_id WHERE artifact_run.root_run_id=r.root_run_id),'{}'::text[]),
        COALESCE((SELECT array_agg(gate.ref ORDER BY gate.created_at) FROM control_plane.owner_gates gate WHERE gate.root_run_id=r.root_run_id),'{}'::text[]),
        r.usage,r.created_at,r.started_at,r.finished_at,
-       ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-         SELECT 1 FROM control_plane.memberships m
-         WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'CANCEL_RUNS'=ANY(m.permissions)
-       )),
-       ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-         SELECT 1 FROM control_plane.memberships m
-         WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'LAUNCH_RUNS'=ANY(m.permissions)
-       ))
+       control_plane.catalog_resource_visible(r.organization_id,$3::uuid,'run.cancel','RUN',r.id,r.project_id,
+           r.initiated_by,jsonb_build_object('PROJECT',r.project_id::text),transaction_timestamp()),
+       EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+               WHERE target.organization_id=r.organization_id AND target.kind=r.target_type AND target.ref=r.target_ref
+                 AND target.kind IN ('AGENT','WORKFLOW')
+                 AND control_plane.catalog_resource_visible(r.organization_id,$3::uuid,
+                     CASE target.kind WHEN 'AGENT' THEN 'agent.launch' ELSE 'workflow.launch' END,
+                     target.kind,target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp()))
 FROM control_plane.runs r
 LEFT JOIN control_plane.projects p ON p.id=r.project_id
 JOIN control_plane.sessions s ON s.id=r.session_id
@@ -24,7 +24,5 @@ LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.sys
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id=r.input_attachment_set_id
 WHERE r.organization_id=$1::uuid
   AND r.ref=$2
-  AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-    SELECT 1 FROM control_plane.memberships m
-    WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)
-  ))
+  AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection(
+      $1::uuid,$3::uuid,NULLIF($4,'')::uuid,'RUN',r.ref,transaction_timestamp()));

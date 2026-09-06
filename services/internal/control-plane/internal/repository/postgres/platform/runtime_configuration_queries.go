@@ -2,13 +2,13 @@ package platform
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -19,16 +19,32 @@ import (
 )
 
 func (repository *Repository) GetAgentRuntimeConfiguration(ctx context.Context, principal value.Principal, ref string) (entity.AgentRuntimeConfigurationView, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.AgentRuntimeConfigurationView{}, err
 	}
-	row := repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetAgentView, scope.organizationID, ref, scope.role, scope.actorID)
-	view, err := repository.scanAgentRuntimeConfigurationView(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.AgentRuntimeConfigurationView{}, errs.ErrNotFound
-	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	permission, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, scope, "agent.view", ref)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if scope.authorityProjectID != "" && scope.authorityProjectID != target.projectID {
+		return entity.AgentRuntimeConfigurationView{}, errs.ErrForbidden
+	}
+	if err := repository.requireAccess(ctx, tx, scope, permission, target); err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, ref)
+	if err != nil {
+		return entity.AgentRuntimeConfigurationView{}, err
+	}
+	if tx.Commit(ctx) != nil {
 		return entity.AgentRuntimeConfigurationView{}, errs.ErrUnavailable
 	}
 	return view, nil
@@ -76,35 +92,29 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 	if err != nil {
 		return nil, "", err
 	}
-	if filter.ProjectRef == "" || (filter.Page.Token != "" && (!strings.HasPrefix(filter.Page.Token, "renv_") || len(filter.Page.Token) > 96)) {
-		return nil, "", errs.ErrInvalid
-	}
-	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
-		"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
-		"cursor_ref": filter.Page.Token, "platform_role": scope.role, "actor_id": scope.actorID, "page_size": limit + 1,
-	})
-	if err != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	defer rows.Close()
-	items := make([]entity.RuntimeEnvironmentSet, 0, limit+1)
-	for rows.Next() {
-		item, scanErr := repository.scanRuntimeEnvironment(rows)
-		if scanErr != nil {
-			return nil, "", errs.ErrUnavailable
-		}
-		items = append(items, item)
-	}
-	if rows.Err() != nil {
-		return nil, "", errs.ErrUnavailable
-	}
-	next := ""
-	if len(items) > int(limit) {
-		items = items[:limit]
-		next = items[len(items)-1].Ref
-	}
-	return items, next, nil
+	return authorizedCatalog(ctx, repository, scope, "RUNTIME_ENVIRONMENT", filter,
+		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.RuntimeEnvironmentSet, error) {
+			rows, err := tx.Query(ctx, queryRuntimeConfigurationListEnvironments, pgx.StrictNamedArgs{
+				"actor_id": scope.actorID, "authority_project": scope.authorityProjectID,
+				"organization_id": scope.organizationID, "project_ref": filter.ProjectRef, "query": strings.TrimSpace(filter.Query),
+				"cursor_ref": cursor, "page_size": limit,
+			})
+			if err != nil {
+				return nil, errs.ErrUnavailable
+			}
+			defer rows.Close()
+			var items []entity.RuntimeEnvironmentSet
+			for rows.Next() {
+				item, err := repository.scanRuntimeEnvironment(rows)
+				if err != nil {
+					return nil, errs.ErrUnavailable
+				}
+				items = append(items, item)
+			}
+			return items, rows.Err()
+		}, func(item entity.RuntimeEnvironmentSet) entity.AccessScope {
+			return entity.AccessScope{ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
+		}, func(_ pgx.Tx, _ *entity.RuntimeEnvironmentSet, _ func(string) bool) error { return nil })
 }
 
 func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
@@ -112,11 +122,22 @@ func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, princip
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
 	}
-	item, err := repository.scanRuntimeEnvironment(repository.pool.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: ref}, ""); err != nil {
+		return entity.RuntimeEnvironmentSet{}, err
+	}
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
 	}
 	if err != nil {
+		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	if tx.Commit(ctx) != nil {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
 	return item, nil
@@ -159,24 +180,27 @@ func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context
 	return items, next, nil
 }
 
-type templateVariableCursor struct {
-	Version int    `json:"v"`
-	Filter  string `json:"f"`
-	Name    string `json:"n"`
-}
-
 func (repository *Repository) ListTemplateVariables(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.TemplateVariable, int64, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, 0, "", err
+	}
 	if filter.ProjectRef != "" {
 		if _, err := repository.GetProject(ctx, principal, filter.ProjectRef); err != nil {
 			return nil, 0, "", err
 		}
-	} else if _, err := repository.resolveScope(ctx, principal); err != nil {
-		return nil, 0, "", err
 	}
-	if len([]rune(filter.Query)) > 200 {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) {
 		return nil, 0, "", errs.ErrInvalid
 	}
-	cursor, err := decodeTemplateVariableCursor(filter.Page.Token, filter.ProjectRef, filter.Query)
+	cursor, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	availability, materialized, err := repository.templateAvailability(ctx, principal, current, filter)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -184,15 +208,17 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	needle := strings.ToLower(strings.TrimSpace(filter.Query))
 	filtered := make([]entity.TemplateVariable, 0, len(catalog))
 	for _, item := range catalog {
+		item.Available = availability[item.Name]
+		item.Reason = variableAvailabilityReason(item, availability, materialized)
 		if needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle) {
 			filtered = append(filtered, item)
 		}
 	}
 	total := int64(len(filtered))
 	start := 0
-	if cursor.Name != "" {
+	if cursor != "" {
 		for index, item := range filtered {
-			if item.Name == cursor.Name {
+			if item.Name == cursor {
 				start = index + 1
 				break
 			}
@@ -206,7 +232,7 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	end := min(start+limit, len(filtered))
 	items := filtered[start:end]
 	if end < len(filtered) {
-		next = encodeTemplateVariableCursor(filter.ProjectRef, filter.Query, items[len(items)-1].Name)
+		next = encodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter, items[len(items)-1].Name)
 		if next == filter.Page.Token {
 			return nil, 0, "", errs.ErrConflict
 		}
@@ -214,36 +240,16 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	return items, total, next, nil
 }
 
-func templateVariableFilterDigest(projectRef, queryValue string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(projectRef) + "\x00" + strings.TrimSpace(queryValue)))
-	return base64.RawURLEncoding.EncodeToString(sum[:12])
-}
-
-func encodeTemplateVariableCursor(projectRef, queryValue, name string) string {
-	raw, _ := json.Marshal(templateVariableCursor{Version: 1, Filter: templateVariableFilterDigest(projectRef, queryValue), Name: name})
-	return base64.RawURLEncoding.EncodeToString(raw)
-}
-
-func decodeTemplateVariableCursor(token, projectRef, queryValue string) (templateVariableCursor, error) {
-	if strings.TrimSpace(token) == "" {
-		return templateVariableCursor{}, nil
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) > 1024 {
-		return templateVariableCursor{}, errs.ErrInvalid
-	}
-	var cursor templateVariableCursor
-	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Filter != templateVariableFilterDigest(projectRef, queryValue) || cursor.Name == "" {
-		return templateVariableCursor{}, errs.ErrInvalid
-	}
-	return cursor, nil
-}
-
 func templateVariableCatalog() []entity.TemplateVariable {
-	return []entity.TemplateVariable{
+	items := []entity.TemplateVariable{
 		{Name: "agent.name", Type: "string", Description: "Server-owned имя текущего ИИ-сотрудника", Example: "{{ .agent.name }}", Source: "AGENT"},
 		{Name: "agent.ref", Type: "reference", Description: "Ссылка текущего ИИ-сотрудника", Example: "{{ .agent.ref }}", Source: "AGENT"},
 		{Name: "automation.ref", Type: "reference", Description: "Ссылка текущей Automation", Example: "{{ .automation.ref }}", Source: "AUTOMATION"},
+		{Name: "automation.name", Type: "string", Description: "i18n:AUTOMATION_VARIABLE_NAME", Example: "{{ .automation.name }}", Source: "AUTOMATION"},
+		{Name: "automation.task", Type: "string", Description: "i18n:AUTOMATION_VARIABLE_TASK", Example: "{{ .automation.task }}", Source: "AUTOMATION"},
+		{Name: "automation.scheduled_at", Type: "string", Description: "i18n:AUTOMATION_VARIABLE_SCHEDULED_AT", Example: "{{ .automation.scheduled_at }}", Source: "AUTOMATION"},
+		{Name: "automation.timezone", Type: "string", Description: "i18n:AUTOMATION_VARIABLE_TIMEZONE", Example: "{{ .automation.timezone }}", Source: "AUTOMATION"},
+		{Name: "automation.revision", Type: "reference", Description: "i18n:AUTOMATION_VARIABLE_REVISION", Example: "{{ .automation.revision }}", Source: "AUTOMATION"},
 		{Name: "environment.ref", Type: "reference", Description: "Ссылка exact runtime environment", Example: "{{ .environment.ref }}", Source: "RUNTIME"},
 		promptFileCollection("gate.files", "Вложения текущего Human Gate message", "GATE"),
 		{Name: "gate.files_count", Type: "integer", Description: "Количество файлов текущего Human Gate message", Example: "{{ .gate.files_count }}", Source: "GATE"},
@@ -289,6 +295,21 @@ func templateVariableCatalog() []entity.TemplateVariable {
 		{Name: "workflow.ref", Type: "reference", Description: "Ссылка текущего Workflow", Example: "{{ .workflow.ref }}", Source: "WORKFLOW"},
 		{Name: "workflow.stage.key", Type: "string", Description: "Ключ exact этапа Workflow", Example: "{{ .workflow.stage.key }}", Source: "WORKFLOW"},
 	}
+	for _, item := range []struct{ name, description, source string }{
+		{"workflow.name", "Имя выбранного Процесса", "WORKFLOW"}, {"workflow.purpose", "Назначение выбранного Процесса", "WORKFLOW"},
+		{"step.key", "Ключ выбранного этапа", "WORKFLOW"}, {"step.name", "Имя выбранного этапа", "WORKFLOW"},
+		{"step.purpose", "Материализованное назначение этапа", "WORKFLOW"}, {"step.expected_result", "Материализованный ожидаемый результат этапа", "WORKFLOW"},
+		{"integrations.summary", "Сводка точных доступных integration grants", "RUNTIME"},
+		{"runtime.environment.ref", "Ссылка выбранной immutable версии окружения", "RUNTIME"},
+		{"runtime.environment.image.reference", "Ссылка образа выбранного окружения", "RUNTIME"}, {"runtime.environment.image.digest", "Digest образа выбранного окружения", "RUNTIME"},
+	} {
+		items = append(items, entity.TemplateVariable{Name: item.name, Type: "string", Description: item.description, Example: "{{ ." + item.name + " }}", Source: item.source})
+	}
+	items = append(items, entity.TemplateVariable{Name: "input.values", Type: "object", Description: "Типизированные входные данные выбранного запуска", Example: "{{ .input.values }}", Source: "INPUT"},
+		entity.TemplateVariable{Name: "integrations.items", Type: "collection", Collection: true, ItemType: "integration_descriptor", Description: "Точные разрешённые integration grants", Example: "{{ range .integrations.items }}{{ .name }}{{ end }}", RangeExample: "{{ range .integrations.items }}{{ .name }}{{ end }}", Source: "RUNTIME",
+			ItemFields: []entity.TemplateVariableField{{Name: "ref", Type: "reference", Description: "Ссылка разрешённого grant"}, {Name: "version", Type: "integer", Description: "Версия grant"}, {Name: "name", Type: "string", Description: "Название возможности"}, {Name: "description", Type: "string", Description: "Описание возможности"}, {Name: "capability", Type: "string", Description: "Ключ возможности"}}})
+	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+	return items
 }
 
 func promptFileCollection(name, description, source string) entity.TemplateVariable {
@@ -359,6 +380,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 	view.Environment.CurrentVersion.Version = view.Environment.CurrentVersion.Revision
 	view.EnvironmentBinding.AgentRef = view.Configuration.AgentRef
 	view.EnvironmentBinding.EnvironmentRef = view.Environment.Ref
+	view.EnvironmentBinding.VersionRef = view.Environment.CurrentVersion.Ref
 	if decodeStrict(rawCandidates, &view.Configuration.ProviderPolicy.AccountCandidates) != nil ||
 		decodeStrict(rawPublishedProblems, &view.PublishedOverlay.ValidationMessages) != nil ||
 		decodeStrict(rawValues, &view.Environment.CurrentVersion.Values) != nil ||

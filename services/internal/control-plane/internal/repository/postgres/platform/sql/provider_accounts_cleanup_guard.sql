@@ -8,7 +8,6 @@ SELECT EXISTS (
              AND revision.organization_id = @organization_id::uuid
              AND lease.organization_id = @organization_id::uuid
              AND lease.state = 'CLAIMED'
-             AND lease.expires_at > clock_timestamp()
        ) AS active_runtime_lease,
        EXISTS (
            SELECT 1

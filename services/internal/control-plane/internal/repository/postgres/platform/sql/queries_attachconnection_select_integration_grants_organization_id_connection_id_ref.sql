@@ -6,9 +6,11 @@ LEFT JOIN control_plane.agents a ON g.target_kind='AGENT' AND a.ref=g.target_ref
 LEFT JOIN control_plane.workflows w ON g.target_kind='WORKFLOW' AND w.ref=g.target_ref AND w.organization_id=g.organization_id
 WHERE g.organization_id=$1::uuid
   AND g.connection_id=(SELECT id FROM control_plane.integration_connections WHERE organization_id=$1::uuid AND ref=$2)
-  AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-      SELECT 1 FROM control_plane.memberships m
-      WHERE m.organization_id=g.organization_id AND m.subject_id=$4::uuid AND m.active
-        AND m.project_id=COALESCE(a.project_id,w.project_id)
-        AND ('VIEW'=ANY(m.permissions) OR 'MANAGE_INTEGRATIONS'=ANY(m.permissions))))
+  AND EXISTS (
+      SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=g.organization_id AND target.kind=g.target_kind AND target.ref=g.target_ref
+        AND control_plane.catalog_resource_visible(g.organization_id,$3::uuid,
+          CASE target.kind WHEN 'AGENT' THEN 'agent.view' WHEN 'WORKFLOW' THEN 'workflow.view' ELSE '' END,
+          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp())
+  )
 ORDER BY g.created_at

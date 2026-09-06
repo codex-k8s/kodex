@@ -8,5 +8,7 @@ FROM control_plane.integration_connections c
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 WHERE c.organization_id=$1::uuid AND c.lifecycle_state='ACTIVE' AND ($2='' OR c.definition_key=$2)
-ORDER BY c.updated_at DESC
+ AND ($4='' OR strpos(lower(c.name || ' ' || d.name || ' ' || c.ref),lower($4))>0)
+ AND c.ref>$5
+ORDER BY c.ref
 LIMIT $3

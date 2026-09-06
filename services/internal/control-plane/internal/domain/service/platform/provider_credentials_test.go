@@ -18,12 +18,44 @@ var errProviderOwnerCommit = errors.New("synthetic provider owner commit failure
 
 type providerFailureRepository struct {
 	platformrepo.Repository
-	account         entity.ProviderAccount
-	referenced      bool
-	referenceErr    error
-	referenceChecks int
-	resolveCalls    int
-	executed        command.Command
+	account            entity.ProviderAccount
+	referenced         bool
+	referenceErr       error
+	referenceChecks    int
+	resolveCalls       int
+	executed           command.Command
+	reservationErr     error
+	reservationApplied bool
+}
+
+func (repository *providerFailureRepository) ReserveProviderAuthorization(_ context.Context, _ value.Principal, mutation value.Mutation, accountRef, method, digest string) (entity.ProviderAuthorizationReservation, error) {
+	if repository.reservationErr != nil {
+		return entity.ProviderAuthorizationReservation{}, repository.reservationErr
+	}
+	if mutation.ExpectedVersion == nil || len(digest) != 64 {
+		return entity.ProviderAuthorizationReservation{}, errs.ErrInvalid
+	}
+	return entity.ProviderAuthorizationReservation{AttemptRef: providerAuthorizationRef(accountRef, mutation.IdempotencyKey, method), ReservedVersion: *mutation.ExpectedVersion + 1, Applied: repository.reservationApplied}, nil
+}
+
+func TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay(t *testing.T) {
+	t.Parallel()
+	version := int64(4)
+	repository := &providerFailureRepository{account: entity.ProviderAccount{Ref: "pacc_test123", Version: version}, reservationErr: errs.ErrForbidden}
+	materializer := &providerMaterializerRecorder{}
+	service, err := New(repository, WithProviderCredentialMaterializer(materializer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutation := value.Mutation{IdempotencyKey: "reservation-boundary", ExpectedVersion: &version}
+	if _, err := service.AuthorizeProviderAccountAPIKey(context.Background(), providerTestPrincipal(), mutation, repository.account.Ref, []byte("synthetic-api-key")); !errors.Is(err, errs.ErrForbidden) || materializer.apiCalls != 0 {
+		t.Fatalf("denied reservation performed materialization: %v calls=%d", err, materializer.apiCalls)
+	}
+	repository.reservationErr = nil
+	repository.reservationApplied = true
+	if _, err := service.AuthorizeProviderAccountAPIKey(context.Background(), providerTestPrincipal(), mutation, repository.account.Ref, []byte("synthetic-api-key")); err != nil || materializer.apiCalls != 0 {
+		t.Fatalf("applied reservation repeated materialization: %v calls=%d", err, materializer.apiCalls)
+	}
 }
 
 func (repository *providerFailureRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {

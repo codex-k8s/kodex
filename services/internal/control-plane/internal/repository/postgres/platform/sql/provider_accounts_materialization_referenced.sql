@@ -5,6 +5,10 @@ SELECT EXISTS (
     WHERE account.organization_id = @organization_id::uuid
       AND account.ref = @account_ref
       AND (
+          EXISTS (SELECT 1 FROM control_plane.provider_authorization_attempts reserved
+                  WHERE reserved.organization_id=account.organization_id AND reserved.provider_account_id=account.id
+                    AND reserved.ref=@authorization_ref AND reserved.preparation_state='RESERVED')
+          OR
           (
               @materializer_attempt_ref <> ''
               AND EXISTS (

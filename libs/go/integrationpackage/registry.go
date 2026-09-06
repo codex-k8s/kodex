@@ -63,7 +63,7 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterJira:          {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
-	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessNotReady},
+	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 }
 
 func Adapter(key string) (AdapterDescriptor, bool) {
@@ -85,6 +85,12 @@ func (definition Package) ExecutableBy(owner AdapterOwner, route ExecutionRoute)
 	descriptor, ok := Adapter(definition.Spec.Adapter)
 	return ok && descriptor.Owner == owner && descriptor.Route == route &&
 		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil
+}
+
+// CallableByAgent отделяет пользовательскую команду MCP от подписки,
+// которая принимает события и решения реального внешнего пользователя.
+func (capability Capability) CallableByAgent() bool {
+	return validKey(capability.Operation) && capability.Operation != "mattermost.inbound" && capability.Operation != "mattermost.gate_decisions"
 }
 
 var (

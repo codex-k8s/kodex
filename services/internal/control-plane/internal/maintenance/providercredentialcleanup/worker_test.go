@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -32,6 +33,7 @@ var testCredential = entity.ProviderCredentialDescriptor{
 type completeCall struct {
 	taskRef, leaseOwner, receipt string
 	generation                   int64
+	completion                   entity.ProviderAuthorizationCleanupResult
 }
 
 type failCall struct {
@@ -66,12 +68,13 @@ func (stub *repositoryStub) CompleteProviderCredentialCleanupTask(
 	_ context.Context,
 	taskRef, leaseOwner string,
 	generation int64,
-	receipt string,
+	completion entity.ProviderAuthorizationCleanupResult,
 ) (platformrepository.ProviderCredentialCleanupResult, error) {
 	stub.mu.Lock()
 	defer stub.mu.Unlock()
 	stub.completeCalls = append(stub.completeCalls, completeCall{
-		taskRef: taskRef, leaseOwner: leaseOwner, generation: generation, receipt: receipt,
+		taskRef: taskRef, leaseOwner: leaseOwner, generation: generation, receipt: completion.TerminalReceipt,
+		completion: completion,
 	})
 	return platformrepository.ProviderCredentialCleanupResult{}, stub.completeErr
 }
@@ -91,7 +94,10 @@ func (stub *repositoryStub) FailProviderCredentialCleanupTask(
 }
 
 type materializerStub struct {
-	cleanup func(context.Context, string, string, int64, entity.ProviderCredentialDescriptor) (string, error)
+	cleanup              func(context.Context, string, string, int64, entity.ProviderCredentialDescriptor) (string, error)
+	produced             *entity.ProviderCredentialDescriptor
+	observe              func(context.Context, entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error)
+	cleanupAuthorization func(context.Context, entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error)
 }
 
 func (stub *materializerStub) CleanupProviderCredential(
@@ -99,8 +105,24 @@ func (stub *materializerStub) CleanupProviderCredential(
 	taskRef, accountRef string,
 	generation int64,
 	credential entity.ProviderCredentialDescriptor,
-) (string, error) {
-	return stub.cleanup(ctx, taskRef, accountRef, generation, credential)
+	_ ...*entity.ProviderCleanupRecoveryIdentity,
+) (entity.ProviderAuthorizationCleanupResult, error) {
+	receipt, err := stub.cleanup(ctx, taskRef, accountRef, generation, credential)
+	return entity.ProviderAuthorizationCleanupResult{TerminalReceipt: receipt, ProducedCredential: stub.produced}, err
+}
+
+func (stub *materializerStub) ObserveAuthorizationCleanup(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error) {
+	if stub.observe == nil {
+		return entity.ProviderAuthorizationCleanupObservation{}, errors.New("unexpected metadata call")
+	}
+	return stub.observe(ctx, target)
+}
+
+func (stub *materializerStub) CleanupAuthorization(ctx context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error) {
+	if stub.cleanupAuthorization == nil {
+		return entity.ProviderAuthorizationCleanupResult{}, errors.New("unexpected authorization cleanup call")
+	}
+	return stub.cleanupAuthorization(ctx, target)
 }
 
 func TestWorkerCompletesSuccessfulCleanup(t *testing.T) {
@@ -134,9 +156,54 @@ func TestWorkerCompletesSuccessfulCleanup(t *testing.T) {
 	if len(repository.completeCalls) != 1 || len(repository.failCalls) != 0 {
 		t.Fatalf("finalization calls: complete=%d fail=%d", len(repository.completeCalls), len(repository.failCalls))
 	}
-	want := completeCall{taskRef: task.Ref, leaseOwner: testLeaseOwner, generation: task.Generation, receipt: testReceipt}
+	want := completeCall{taskRef: task.Ref, leaseOwner: testLeaseOwner, generation: task.Generation, receipt: testReceipt,
+		completion: entity.ProviderAuthorizationCleanupResult{TerminalReceipt: testReceipt}}
 	if repository.completeCalls[0] != want {
 		t.Fatalf("complete call: got=%#v want=%#v", repository.completeCalls[0], want)
+	}
+}
+
+func TestWorkerPreservesProducedCredentialAndMetadataCompletion(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"CREDENTIAL", "AUTHORIZATION_ATTEMPT", "AUTHORIZATION_ABSENCE", "AUTHORIZATION_METADATA"} {
+		t.Run(kind, func(t *testing.T) {
+			task := cleanupTask(testTaskRef, 7)
+			task.TargetKind = kind
+			task.Authorization = entity.ProviderAuthorizationCleanupTarget{TaskRef: task.Ref, AccountRef: task.AccountRef, Generation: task.Generation}
+			repository := &repositoryStub{}
+			materializer := &materializerStub{
+				produced: &testCredential,
+				cleanup: func(context.Context, string, string, int64, entity.ProviderCredentialDescriptor) (string, error) {
+					return testReceipt, nil
+				},
+				cleanupAuthorization: func(_ context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupResult, error) {
+					if target != task.Authorization {
+						t.Fatal("cleanup owner target lost")
+					}
+					return entity.ProviderAuthorizationCleanupResult{TerminalReceipt: testReceipt, ProducedCredential: &testCredential}, nil
+				},
+				observe: func(_ context.Context, target entity.ProviderAuthorizationCleanupTarget) (entity.ProviderAuthorizationCleanupObservation, error) {
+					if target != task.Authorization {
+						t.Fatal("metadata owner target lost")
+					}
+					return entity.ProviderAuthorizationCleanupObservation{State: "ABSENT_UNFENCED", Target: target, ProducedCredential: &testCredential}, nil
+				},
+			}
+			if stage := newTestWorker(t, repository, materializer).processTask(context.Background(), task); stage != "" {
+				t.Fatalf("unexpected completion stage %s", stage)
+			}
+			if len(repository.completeCalls) != 1 || len(repository.failCalls) != 0 {
+				t.Fatal("cleanup result was not completed exactly once")
+			}
+			completion := repository.completeCalls[0].completion
+			if kind == "AUTHORIZATION_METADATA" {
+				if completion.Observation == nil || completion.Observation.State != "ABSENT_UNFENCED" || completion.TerminalReceipt != "" || completion.ProducedCredential != nil {
+					t.Fatal("metadata read was promoted to cleanup receipt")
+				}
+			} else if completion.ProducedCredential == nil || *completion.ProducedCredential != testCredential || completion.TerminalReceipt != testReceipt {
+				t.Fatal("produced credential was lost before owner completion")
+			}
+		})
 	}
 }
 
@@ -272,9 +339,36 @@ func TestSafeErrorCodeUsesOnlyRepositoryCodes(t *testing.T) {
 	}
 }
 
+func TestCASSnapshotRecoveryRequiresExactAuthenticatedDetail(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name, domain, reason string
+		code                 codes.Code
+		metadata             map[string]string
+		want                 string
+	}{
+		{"exact", "kodex.provider_credential_cleanup", "CAS_SNAPSHOT_CHANGED", codes.FailedPrecondition, nil, SafeCodeCASChanged},
+		{"foreign domain", "foreign", "CAS_SNAPSHOT_CHANGED", codes.FailedPrecondition, nil, SafeCodeRejected},
+		{"unknown reason", "kodex.provider_credential_cleanup", "UNKNOWN", codes.FailedPrecondition, nil, SafeCodeRejected},
+		{"timeout", "kodex.provider_credential_cleanup", "CAS_SNAPSHOT_CHANGED", codes.DeadlineExceeded, nil, SafeCodeTimeout},
+		{"unexpected metadata", "kodex.provider_credential_cleanup", "CAS_SNAPSHOT_CHANGED", codes.FailedPrecondition, map[string]string{"unexpected": "value"}, SafeCodeRejected},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			st, err := status.New(test.code, "cleanup failed").WithDetails(&errdetails.ErrorInfo{Domain: test.domain, Reason: test.reason, Metadata: test.metadata})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := safeErrorCode(st.Err()); got != test.want {
+				t.Fatalf("safe error code: got %s want %s", got, test.want)
+			}
+		})
+	}
+}
+
 func cleanupTask(ref string, generation int64) platformrepository.ProviderCredentialCleanupTask {
 	return platformrepository.ProviderCredentialCleanupTask{
 		Ref: ref, AccountRef: testAccountRef, Generation: generation,
+		TargetKind: "CREDENTIAL",
 		Credential: testCredential, LeaseExpiresAt: time.Now().Add(time.Minute),
 	}
 }

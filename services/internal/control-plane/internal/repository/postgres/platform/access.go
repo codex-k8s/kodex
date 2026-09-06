@@ -507,6 +507,9 @@ func (repository *Repository) requireAccess(ctx context.Context, tx pgx.Tx, curr
 	default:
 		return errs.ErrInvalid
 	}
+	if current.authorityProjectID != "" && resolved.projectID != "" && current.authorityProjectID != resolved.projectID {
+		return errs.ErrNotFound
+	}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
 		return err
@@ -599,6 +602,10 @@ func organizationTarget(ref string) entity.AccessScope {
 
 func visibilityPermission(kind string) string {
 	switch kind {
+	case "RUNTIME_ENVIRONMENT":
+		return "project.view"
+	case "MEMBERSHIP":
+		return "access.manage"
 	case "PROJECT":
 		return "project.view"
 	case "AGENT":

@@ -197,12 +197,25 @@ yq -N -r '
     .restore_coordination.role_credential_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-credential" and
     .restore_coordination.ack_key_secret_name == "internal-rpc-authority-secret-broker-verifier-restore-ack")] | length) == 1
 ' >/dev/null || fail 'provider credential publisher delivery targets are incomplete'
+expected_policy_revision=$(jq -er '.policy_revision' \
+  "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json")
 yq -N -r '
   select(.kind == "ConfigMap" and
     .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data["authority-policy.json"]
-' "$render" | jq -e '
-  .policy_revision == 44 and
+' "$render" | jq -e --argjson expected_revision "$expected_policy_revision" '
+  .policy_revision == $expected_revision and
+  ([.policy.operation_bindings[] |
+    select(.operation_id | startswith("platform.runtime-secret-drafts.")) |
+    select(.caller_workload_id == "control-api-gateway" and
+      .target_workload_id == "secret-broker" and
+      .authority_proof_producer_id == "control-plane.oidc-secret-draft") |
+    .full_method] | sort) == ([
+      "/secretbroker.v1.SecretBrokerService/SaveSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/ValidateSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/PublishSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/DiscardSecretDraft",
+      "/secretbroker.v1.SecretBrokerService/CheckSecretDraftReadiness"] | sort) and
   ([.policy.authority_proof_producers[] |
     select(.producer_id == "secret-broker.provider-credential-materializer" and
       .caller_workload_id == "control-plane" and
@@ -229,10 +242,16 @@ yq -N -r '
       .project_required == true and
       .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials")] | length) == 1 and
   ([.policy.operation_bindings[] |
+    select(.operation_id == "platform.runtime.credentials.system-assistant.materialize" and
+      .caller_workload_id == "runtime-controller" and
+      .target_workload_id == "secret-broker" and
+      .project_required == false and
+      .full_method == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials")] | length) == 1 and
+  ([.policy.operation_bindings[] |
     select(.operation_id == "platform.stt.credential.project" and
       .caller_workload_id == "stt-tts-service" and
       .target_workload_id == "secret-broker" and
-      .project_required == true and
+      .project_required == false and
       .full_method == "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential")] | length) == 1
 ' >/dev/null || fail 'secret broker protected operation profiles are incomplete'
 for job in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \

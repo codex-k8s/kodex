@@ -2,6 +2,7 @@ package platform
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -60,30 +61,23 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
-func TestPromptUserCapabilitiesCannotExceedInitiatorAuthority(t *testing.T) {
-	got := promptUserCapabilities("MEMBER", []string{"LAUNCH_RUNS"},
-		[]string{"platform.run.launch", "platform.agent.manage"}, []string{"calendar.write"})
-	if len(got) != 1 || got[0] != "platform.run.launch" {
-		t.Fatalf("effective user capabilities = %#v", got)
-	}
-	owner := promptUserCapabilities("OWNER", nil,
-		[]string{"platform.agent.manage"}, []string{"calendar.write"})
-	if strings.Join(owner, ",") != "calendar.write,platform.agent.manage" {
-		t.Fatalf("owner capabilities = %#v", owner)
-	}
-}
-
 func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 	policy := runtimeWorkspacePolicy()
 	if policy.Revision != 1 || policy.Root != "/workspace" || policy.MaximumWritableBytes != 1<<30 ||
 		policy.MaximumFileCount != 10_000 || len(policy.Digest) != 64 {
 		t.Fatalf("workspace policy = %#v", policy)
 	}
-	if len(policy.Rules) != 4 || policy.Rules[0].Path != "/workspace/input" ||
-		policy.Rules[0].Access != "READ_ONLY" || policy.Rules[3].Path != "/workspace" ||
-		policy.Rules[3].Access != "WRITABLE" || policy.Rules[2].Path != "/workspace/.kodex/state/codex-home/auth.json" ||
-		policy.Rules[2].Access != "READ_ONLY" {
-		t.Fatalf("workspace path matrix = %#v", policy.Rules)
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
+	if policy.Digest != shared.Digest || len(policy.Rules) != len(shared.Rules) {
+		t.Fatal("producer workspace policy differs from shared runtime contract")
+	}
+	restored := runtimecontract.RuntimeWorkspacePolicy{Revision: policy.Revision, Root: policy.Root, Digest: policy.Digest,
+		MaximumWritableBytes: policy.MaximumWritableBytes, MaximumFileCount: policy.MaximumFileCount, DenialReasons: policy.DenialReasons}
+	for _, rule := range policy.Rules {
+		restored.Rules = append(restored.Rules, runtimecontract.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
+	if !reflect.DeepEqual(restored, shared) || restored.Validate() != nil {
+		t.Fatal("producer projection changed shared rule order or digest")
 	}
 	if strings.Join(policy.DenialReasons, ",") != "READ_ONLY,QUOTA_EXCEEDED,PATH_OUTSIDE_WORKSPACE,RUNTIME_IO_ERROR" {
 		t.Fatalf("workspace denial reasons = %#v", policy.DenialReasons)
@@ -191,9 +185,24 @@ func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 
 func TestFilterIntegrationGrantsCannotBypassEffectiveCapabilities(t *testing.T) {
 	t.Parallel()
-	grants := []map[string]string{{"capabilityKey": "read"}, {"capabilityKey": "write"}}
+	grants := []map[string]string{{"capabilityKey": "read", "operation": "mattermost.post.read"}, {"capabilityKey": "write", "operation": "mattermost.post.send"}}
 	filtered := filterIntegrationGrants(grants, []string{"read"})
 	if len(filtered) != 1 || filtered[0]["capabilityKey"] != "read" {
 		t.Fatalf("filtered grants = %#v", filtered)
+	}
+}
+
+func TestRuntimeIntegrationGrantsExcludeSystemSubscriptions(t *testing.T) {
+	t.Parallel()
+	grants := []map[string]string{
+		{"capabilityKey": "read", "operation": "mattermost.post.read"},
+		{"capabilityKey": "read", "operation": "mattermost.inbound"},
+		{"capabilityKey": "read", "operation": "mattermost.gate_decisions"},
+		{"capabilityKey": "read", "operation": ""},
+	}
+	for _, filtered := range [][]map[string]string{callableIntegrationGrants(grants), filterIntegrationGrants(grants, []string{"read"})} {
+		if len(filtered) != 1 || filtered[0]["operation"] != "mattermost.post.read" {
+			t.Fatalf("system subscription reached runtime capabilities: %#v", filtered)
+		}
 	}
 }

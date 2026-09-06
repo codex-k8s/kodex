@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -30,11 +30,22 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
+	dbctx, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	tx, err := repository.pool.BeginTx(dbctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
 	fenceDigest := sha256.Sum256([]byte(fence))
 	item := entity.Artifact{}
 	var objectKey, objectVersion, objectETag, objectDigest string
 	var objectSize int64
-	err = repository.pool.QueryRow(ctx, queryRuntimeReadexecutionartifactSelectArtifactContent, pgx.StrictNamedArgs{
+	err = tx.QueryRow(dbctx, queryRuntimeReadexecutionartifactSelectArtifactContent, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"lease_ref":       leaseRef,
 		"fence_digest":    hex.EncodeToString(fenceDigest[:]),
@@ -65,6 +76,24 @@ func (repository *Repository) ReadExecutionArtifact(ctx context.Context, princip
 		(objectETag != "" && object.ETag != objectETag) {
 		_ = object.Body.Close()
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
+	}
+	auditRef, err := newRef("aud")
+	if err != nil {
+		_ = object.Body.Close()
+		return platformrepo.ArtifactDownload{}, err
+	}
+	tag, err := tx.Exec(dbctx, queryRuntimeFilesBodyAudit, pgx.StrictNamedArgs{
+		"audit_ref": auditRef, "organization_id": scope.organizationID, "artifact_ref": artifactRef,
+		"lease_ref": leaseRef, "fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation,
+		"correlation": scope.correlationRef,
+	})
+	if err != nil || tag.RowsAffected() != 1 {
+		_ = object.Body.Close()
+		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+	}
+	if tx.Commit(dbctx) != nil {
+		_ = object.Body.Close()
+		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
 	return platformrepo.ArtifactDownload{Artifact: item, Reader: object.Body}, nil
 }
@@ -166,6 +195,14 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if !ok || !validToolCallProjection(payload) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	filePurpose := ""
+	if runtimecontract.IsRuntimeFileTool(payload.Tool) {
+		filePurpose, _ = payload.SafeParameters["purpose"].(string)
+		if len(payload.SafeParameters) != 1 || !contains([]string{runtimecontract.FilePurposeProject, runtimecontract.FilePurposeRunResult, runtimecontract.FilePurposeSkill, runtimecontract.FilePurposeWorkspaceInput}, filePurpose) ||
+			!strings.HasPrefix(payload.GrantRef, "vfc_") || payload.CapabilityRef != "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -175,6 +212,7 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeRecordtoolcallSelectActorAndGrant, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "node_id": lease["nodeID"], "generation": payload.Generation,
 		"grant_ref": payload.GrantRef, "capability_ref": payload.CapabilityRef,
+		"tool": payload.Tool, "purpose": filePurpose,
 	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
@@ -254,6 +292,9 @@ func containsSensitiveToolKey(value any) bool {
 }
 
 func toolCapabilityMatches(tool, capability string, integration, systemAssistant bool) bool {
+	if runtimecontract.IsRuntimeFileTool(tool) {
+		return integration && capability == ""
+	}
 	if integration {
 		return tool == "invoke_integration" && capability != ""
 	}
@@ -297,7 +338,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
+	codexSessionID, previousContextDigest                                                        string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -317,8 +358,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if !ok || payload.WorkloadInstance == "" || payload.Limit < 1 || payload.Limit > 32 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionExpireStaleLeases, scope.organizationID); err != nil {
-		return commandOutcome{}, fmt.Errorf("expire stale runtime leases: %w", errs.ErrUnavailable)
+	expired, err := repository.expireRuntimeClaimLeases(ctx, tx, scope, input)
+	if err != nil {
+		return commandOutcome{}, err
 	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.DefaultImageReference,
@@ -362,7 +404,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID); err != nil {
+			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -393,7 +435,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
+	failedRoots := make(map[string]bool)
+	claimedRoots := make(map[string]string)
 	for _, candidate := range claimable {
+		if failedRoots[candidate.rootRunID] {
+			continue
+		}
 		var activeExecutions int64
 		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionCountActiveProviderLeases,
 			candidate.providerAccountID, scope.organizationID).Scan(&activeExecutions); err != nil {
@@ -402,347 +449,479 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if activeExecutions >= providerAccountCapacity[candidate.providerAccountID] {
 			continue
 		}
-		nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
-		rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
-		sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
-		runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, candidate.provider, candidate.model
-		providerAccountID, providerAccountRef := candidate.providerAccountID, candidate.providerAccountRef
-		providerCredentialID, providerCredentialRef := candidate.providerCredentialID, candidate.providerCredentialRef
-		providerCredentialRevisionNumber := candidate.providerCredentialRevisionNumber
-		providerSecretName, providerSecretUID := candidate.providerSecretName, candidate.providerSecretUID
-		providerSecretResourceVersion := candidate.providerSecretResourceVersion
-		providerCredentialSHA256 := candidate.providerCredentialSHA256
-		instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
-		capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
-		inputAttachmentSetRef, inputAttachmentSetManifestDigest := candidate.inputAttachmentSetRef, candidate.inputAttachmentSetManifestDigest
-		inputAttachmentContext := candidate.inputAttachmentContext
-		rawAttachmentSets := candidate.rawAttachmentSets
-		rawArtifacts := candidate.rawArtifacts
-		attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
-		rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
-		callbackEdgeRef, rawSessionContext := candidate.callbackEdgeRef, candidate.rawSessionContext
-		turnID, agentID := candidate.turnID, candidate.agentID
-		roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
-		roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
-		roleImageArtifactID, roleImageArtifactRef := candidate.roleImageArtifactID, candidate.roleImageArtifactRef
-		roleImageRecipeGeneration := candidate.roleImageRecipeGeneration
-		imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
-		roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
-		roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
-		runtimeConfigID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest := candidate.runtimeConfigID, candidate.runtimeConfigRef, candidate.runtimeConfigVersion, candidate.runtimeConfigDigest
-		providerPolicyID, providerPolicyRef, providerPolicyVersion, providerPolicyDigest := candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest
-		configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
-		environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
-		runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
-		codexSessionID := candidate.codexSessionID
-		fence, err := newRef("fnc")
+		candidateTx, err := tx.Begin(ctx)
 		if err != nil {
-			return commandOutcome{}, err
-		}
-		fenceDigest := sha256.Sum256([]byte(fence))
-		leaseRef, _ := newRef("lea")
-		podName := runtimecontract.RuntimeTurnPodName(leaseRef)
-		serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
-		var inputMap map[string]any
-		_ = jsonUnmarshal(rawInput, &inputMap)
-		inputDigestHex, err := runtimecontract.RuntimeBoundedInputDigest(inputMap)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		var delegationTargets []map[string]string
-		_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
-		var integrationGrants []map[string]string
-		_ = jsonUnmarshal(rawIntegrationGrants, &integrationGrants)
-		var artifacts []map[string]any
-		_ = jsonUnmarshal(rawArtifacts, &artifacts)
-		var attachmentSets []map[string]string
-		_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
-		var sessionContext []map[string]string
-		_ = jsonUnmarshal(rawSessionContext, &sessionContext)
-		var environmentValues []runtimecontract.RuntimeEnvironmentValue
-		var secretProjections []runtimecontract.RuntimeSecretProjection
-		if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
-			candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,
-			candidate.volumesDigest, candidate.networkDigest, candidate.rbacDigest)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		effectiveKubernetesAccess, err := runtimecontract.RuntimeKubernetesAccessForExecution(
-			environmentPolicy.KubernetesAccess, serviceAccountName, podName)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		if environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
-			if projectRef == "" || candidate.initiatorRef == "" {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			initiatorScope := scope
-			initiatorScope.actorRef = candidate.initiatorRef
-			target, resolveErr := repository.resolveAccessTarget(ctx, tx, scope.organizationID, entity.AccessScope{
-				ProjectRef: projectRef, ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: runtimeEnvironmentRef,
-			})
-			if resolveErr != nil || repository.requireAccess(ctx, tx, initiatorScope, "environment.privileged.manage", target) != nil {
-				return commandOutcome{}, errs.ErrNotFound
-			}
-		}
-		environmentImage := runtimecontract.RuntimeEnvironmentImage{
-			ArtifactRef: roleImageArtifactRef, RecipeRef: roleImageRecipeRef, RecipeGeneration: roleImageRecipeGeneration,
-			Reference: imageReference, Digest: imageManifestDigest,
-		}
-		canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
-		if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
-		if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		var rawAssistantContext []byte
-		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		var assistantContext map[string]any
-		_ = jsonUnmarshal(rawAssistantContext, &assistantContext)
-		targetKind := promptservice.TargetAgent
-		workflowStage, automation, continuation := "", "", ""
-		if candidate.workflowStepKey != "" {
-			targetKind = promptservice.TargetWorkflowStage
-			workflowStage = candidate.workflowStepKey + ": " + task
-		}
-		if candidate.source == "SCHEDULE" {
-			targetKind = promptservice.TargetAutomation
-			automation = task
-		}
-		if candidate.turnNumber > 1 {
-			targetKind = promptservice.TargetSessionContinuation
-			continuation = string(rawSessionContext)
-		}
-		connectionCapabilities := make([]string, 0, len(integrationGrants))
-		for _, grant := range integrationGrants {
-			if capability := grant["capabilityKey"]; capability != "" {
-				connectionCapabilities = append(connectionCapabilities, capability)
+		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
+			configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, candidate.agentRef, candidate.runtimeConfigID)
+			if err != nil {
+				return commandOutcome{}, err
 			}
-		}
-		userCapabilities := promptUserCapabilities(candidate.userPlatformRole, candidate.userProjectPermissions,
-			capabilities, connectionCapabilities)
-		var workflowCapabilities []string
-		if candidate.workflowRef != "" {
-			workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
-		}
-		humanGateCapabilities := candidate.humanGateCapabilities
-		targetRef := agentRef
-		if targetKind == promptservice.TargetWorkflowStage {
-			targetRef = candidate.workflowStepKey
-		}
-		if targetKind == promptservice.TargetAutomation {
-			targetRef = candidate.automationRef
-			if targetRef == "" {
-				targetRef = runRef
-			}
-		}
-		if targetKind == promptservice.TargetSessionContinuation {
-			targetRef = sessionRef
-		}
-		toolNames := make([]string, 0, len(environmentTools))
-		for _, tool := range environmentTools {
-			toolNames = append(toolNames, tool.Name)
-		}
-		sort.Strings(toolNames)
-		structuredPromptVariables, err := promptStructuredVariables(
-			artifacts, environmentTools, environmentImage, runtimeEnvironmentRef, inputAttachmentSetRef, candidate.workflowRef,
-		)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		promptSnapshot := entity.PromptMaterializationSnapshot{
-			TargetKind: targetKind, TargetRef: targetRef, ProjectRef: projectRef, RunRef: runRef,
-			SessionRef: sessionRef, TemplateRef: instructionRef, TemplateDigest: instructionDigest,
-			TemplateContent: instructions,
-			Variables: map[string]string{
-				"user.ref": candidate.initiatorRef, "user.name": candidate.initiatorName,
-				"organization.ref": candidate.organizationRef, "organization.name": candidate.organizationName,
-				"project.name": candidate.projectName, "agent.ref": agentRef, "agent.name": candidate.agentName,
-				"workflow.ref": candidate.workflowRef, "workflow.stage.key": candidate.workflowStepKey,
-				"automation.ref": candidate.automationRef, "task": task, "node.ref": nodeRef,
-				"environment.ref": runtimeEnvironmentRef, "tools.summary": strings.Join(toolNames, ", "), "turn.ref": turnRef,
-			},
-			StructuredVariables: structuredPromptVariables,
-			UserCapabilities:    userCapabilities, AgentCapabilities: capabilities,
-			WorkflowCapabilities: workflowCapabilities, ConnectionCapabilities: connectionCapabilities,
-			HumanGateCapabilities: humanGateCapabilities,
-			WorkflowStage:         workflowStage, Automation: automation,
-			SessionContinuation: continuation,
-		}
-		materializedPrompt, err := promptservice.Materialize(instructions, promptservice.Snapshot{
-			TargetKind: promptSnapshot.TargetKind, TargetRef: promptSnapshot.TargetRef,
-			ProjectRef: promptSnapshot.ProjectRef, RunRef: promptSnapshot.RunRef, SessionRef: promptSnapshot.SessionRef,
-			TemplateRef: promptSnapshot.TemplateRef, TemplateDigest: promptSnapshot.TemplateDigest,
-			Variables: promptSnapshot.Variables, StructuredVariables: promptSnapshot.StructuredVariables,
-			UserCapabilities:  promptSnapshot.UserCapabilities,
-			AgentCapabilities: promptSnapshot.AgentCapabilities, WorkflowCapabilities: promptSnapshot.WorkflowCapabilities,
-			ConnectionCapabilities: promptSnapshot.ConnectionCapabilities, HumanGateCapabilities: promptSnapshot.HumanGateCapabilities,
-			WorkflowStage: promptSnapshot.WorkflowStage, Automation: promptSnapshot.Automation,
-			SessionContinuation: promptSnapshot.SessionContinuation,
-		})
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		instructions = materializedPrompt.Prompt
-		capabilities = materializedPrompt.EffectiveCapabilities
-		integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
-		rawEffectiveIntegrationGrants, err := json.Marshal(integrationGrants)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
-		resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
-		integrationGrantsDigest := sha256.Sum256(rawEffectiveIntegrationGrants)
-		integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
-		sttConfiguration := entity.SystemSTTConfiguration{}
-		if capabilityEnabled(capabilities, "platform.stt.use") {
-			var eligible, providerEnabled bool
-			var rawProviderCapabilities []byte
-			if err := tx.QueryRow(ctx, queryManagedConfigurationGetSTT, pgx.StrictNamedArgs{"organization_id": scope.organizationID}).Scan(
-				&sttConfiguration.ConfigurationRef, &sttConfiguration.RevisionRef, &sttConfiguration.Revision,
-				&sttConfiguration.Digest, &sttConfiguration.ProviderAccountRef, &sttConfiguration.Model,
-				&sttConfiguration.Language, &sttConfiguration.PermissionKey, &eligible, &providerEnabled,
-				&rawProviderCapabilities); err != nil {
+			if configuration.Model != candidate.model {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			var providerCapabilities map[string]any
-			if sttConfiguration.ConfigurationRef == "" || sttConfiguration.RevisionRef == "" || sttConfiguration.Revision < 1 ||
-				len(sttConfiguration.Digest) != sha256.Size*2 || sttConfiguration.PermissionKey != "platform.stt.use" ||
-				!eligible || !providerEnabled || json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
+			verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, candidate.sessionID, candidate.providerAccountRef, configuration, candidate.configOverlay)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			if retainedPolicy != nil {
+				candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest = retainedPolicy.PolicyID, retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+			}
+			overlayConfiguration, err := runtimecontract.ParseConfigOverlay(candidate.configOverlay)
+			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			if _, allowed := modelcatalog.Find(sttConfiguration.Model, providerReportedModels(providerCapabilities)); !allowed {
+			effectiveEffort := overlayConfiguration.ModelReasoningEffort
+			if effectiveEffort == "" {
+				effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+			}
+			reasoningMode := runtimecontract.ReasoningSupported
+			if effectiveEffort == "" {
+				reasoningMode = runtimecontract.ReasoningUnsupported
+			}
+			nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
+			rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
+			sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
+			runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, candidate.provider, candidate.model
+			providerAccountID, providerAccountRef := candidate.providerAccountID, candidate.providerAccountRef
+			providerCredentialID, providerCredentialRef := candidate.providerCredentialID, candidate.providerCredentialRef
+			providerCredentialRevisionNumber := candidate.providerCredentialRevisionNumber
+			providerSecretName, providerSecretUID := candidate.providerSecretName, candidate.providerSecretUID
+			providerSecretResourceVersion := candidate.providerSecretResourceVersion
+			providerCredentialSHA256 := candidate.providerCredentialSHA256
+			instructionRef, instructionDigest, instructions := candidate.instructionRef, candidate.instructionDigest, candidate.instructions
+			capabilities, knowledge, rawInput := candidate.capabilities, candidate.knowledge, candidate.rawInput
+			inputAttachmentSetRef, inputAttachmentSetManifestDigest := candidate.inputAttachmentSetRef, candidate.inputAttachmentSetManifestDigest
+			inputAttachmentContext := candidate.inputAttachmentContext
+			rawAttachmentSets := candidate.rawAttachmentSets
+			rawArtifacts := candidate.rawArtifacts
+			if !capabilityEnabled(capabilities, runtimecontract.ArtifactCapability) {
+				if inputAttachmentSetRef != "" {
+					return commandOutcome{}, errs.ErrCapabilityRequired
+				}
+				if err := repository.requireRuntimeFileOptIn(ctx, tx, scope, projectID, sessionID, agentRef); err != nil {
+					return commandOutcome{}, err
+				}
+			}
+			attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
+			rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
+			callbackEdgeRef, rawSessionContext := candidate.callbackEdgeRef, candidate.rawSessionContext
+			turnID, agentID := candidate.turnID, candidate.agentID
+			roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
+			roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
+			roleImageArtifactID, roleImageArtifactRef := candidate.roleImageArtifactID, candidate.roleImageArtifactRef
+			roleImageRecipeGeneration := candidate.roleImageRecipeGeneration
+			imageReference, imageManifestDigest := candidate.imageReference, candidate.imageManifestDigest
+			roleRuntimeContractRevision := candidate.roleRuntimeContractRevision
+			roleRuntimeContractSHA256 := candidate.roleRuntimeContractSHA256
+			runtimeConfigID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest := candidate.runtimeConfigID, candidate.runtimeConfigRef, candidate.runtimeConfigVersion, candidate.runtimeConfigDigest
+			providerPolicyID, providerPolicyRef, providerPolicyVersion, providerPolicyDigest := candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest
+			configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
+			environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
+			runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
+			codexSessionID := candidate.codexSessionID
+			fence, err := newRef("fnc")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			fenceDigest := sha256.Sum256([]byte(fence))
+			leaseRef, _ := newRef("lea")
+			podName := runtimecontract.RuntimeTurnPodName(leaseRef)
+			serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
+			var inputMap map[string]any
+			_ = jsonUnmarshal(rawInput, &inputMap)
+			var scheduleTemplate *schedulePromptTemplate
+			rootAutomation := candidate.source == "SCHEDULE" && rootRunID == runID && (candidate.workflowStepKey == "" || candidate.workflowStepKey == "workflow.coordinator.initial")
+			if candidate.source == "SCHEDULE" {
+				var err error
+				scheduleTemplate, err = unwrapSchedulePromptInput(inputMap)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+				if rootAutomation && scheduleTemplate != nil {
+					task = stringMap(inputMap["automation"].(map[string]any), "text")
+				}
+			}
+			inputDigestHex, err := runtimecontract.RuntimeBoundedInputDigest(inputMap)
+			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			var delegationTargets []map[string]string
+			_ = jsonUnmarshal(rawDelegationTargets, &delegationTargets)
+			var integrationGrants []map[string]string
+			if err := jsonUnmarshal(rawIntegrationGrants, &integrationGrants); err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			integrationGrants = callableIntegrationGrants(integrationGrants)
+			var artifacts []map[string]any
+			_ = jsonUnmarshal(rawArtifacts, &artifacts)
+			var attachmentSets []map[string]string
+			_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
+			var sessionContext []map[string]string
+			_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+			var environmentValues []runtimecontract.RuntimeEnvironmentValue
+			var secretProjections []runtimecontract.RuntimeSecretProjection
+			if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			environmentTools, err := runtimecontract.DecodeRuntimeEnvironmentTools(candidate.rawEnvironmentTools)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
+				candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,
+				candidate.volumesDigest, candidate.networkDigest, candidate.rbacDigest)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			effectiveKubernetesAccess, err := runtimecontract.RuntimeKubernetesAccessForExecution(
+				environmentPolicy.KubernetesAccess, serviceAccountName, podName)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			if environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
+				if projectRef == "" || candidate.initiatorRef == "" {
+					return commandOutcome{}, errs.ErrConflict
+				}
+				initiatorScope := scope
+				initiatorScope.actorRef = candidate.initiatorRef
+				target, resolveErr := repository.resolveAccessTarget(ctx, tx, scope.organizationID, entity.AccessScope{
+					ProjectRef: projectRef, ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: runtimeEnvironmentRef,
+				})
+				if resolveErr != nil || repository.requireAccess(ctx, tx, initiatorScope, "environment.privileged.manage", target) != nil {
+					return commandOutcome{}, errs.ErrNotFound
+				}
+			}
+			environmentImage := runtimecontract.RuntimeEnvironmentImage{
+				ArtifactRef: roleImageArtifactRef, RecipeRef: roleImageRecipeRef, RecipeGeneration: roleImageRecipeGeneration,
+				Reference: imageReference, Digest: imageManifestDigest,
+			}
+			canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
+			if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			verifiedEnvironmentDigest, err := runtimecontract.RuntimeEnvironmentDigest(environmentValues, secretProjections, environmentImage, environmentTools, environmentPolicy)
+			if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			var rawAssistantContext []byte
+			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			var assistantContext map[string]any
+			if len(rawAssistantContext) == 0 {
+				return commandOutcome{}, errs.ErrNotFound
+			}
+			if jsonUnmarshal(rawAssistantContext, &assistantContext) != nil || assistantContext == nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			targetKind := promptservice.TargetAgent
+			workflowStage, automation, continuation := "", "", ""
+			if candidate.workflowStepKey != "" {
+				targetKind = promptservice.TargetWorkflowStage
+				workflowStage = candidate.workflowStepKey + ": " + task
+			}
+			if rootAutomation {
+				if candidate.workflowStepKey == "" {
+					targetKind = promptservice.TargetAutomation
+				}
+				automation = task
+			}
+			initiatorCapabilityScope := scope
+			initiatorCapabilityScope.actorRef = candidate.initiatorRef
+			if err := repository.checkClaimContinuationPinTx(ctx, tx, scope, nodeRef); err != nil {
+				return commandOutcome{}, err
+			}
+			artifactRefs := make([]string, 0, len(artifacts))
+			for _, artifact := range artifacts {
+				artifactRefs = append(artifactRefs, stringMap(artifact, "ref"))
+			}
+			if err := repository.authorizePromptArtifactsTx(ctx, tx, initiatorCapabilityScope, projectRef, artifactRefs); err != nil {
+				return commandOutcome{}, err
+			}
+			userCapabilities, permittedIntegrationGrants, err := repository.agentCapabilityAuthority(ctx, tx, initiatorCapabilityScope, projectRef, agentRef, capabilities)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			integrationGrants = permittedIntegrationGrants
+			connectionCapabilities := make([]string, 0, len(integrationGrants))
+			for _, grant := range integrationGrants {
+				if capability := grant["capabilityKey"]; capability != "" {
+					connectionCapabilities = append(connectionCapabilities, capability)
+				}
+			}
+			var workflowCapabilities []string
+			if candidate.workflowRef != "" {
+				workflowCapabilities = append([]string{}, candidate.workflowCapabilities...)
+			}
+			humanGateCapabilities := candidate.humanGateCapabilities
+			targetRef := agentRef
+			if targetKind == promptservice.TargetWorkflowStage {
+				targetRef = candidate.workflowStepKey
+			}
+			if targetKind == promptservice.TargetAutomation {
+				targetRef = candidate.automationRef
+				if targetRef == "" {
+					targetRef = runRef
+				}
+			}
+			if targetKind == promptservice.TargetSessionContinuation {
+				targetRef = sessionRef
+			}
+			toolNames := make([]string, 0, len(environmentTools))
+			for _, tool := range environmentTools {
+				toolNames = append(toolNames, tool.Name)
+			}
+			sort.Strings(toolNames)
+			structuredPromptVariables, err := promptStructuredVariables(
+				artifacts, environmentTools, environmentImage, runtimeEnvironmentRef, inputAttachmentSetRef, candidate.workflowRef,
+			)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			promptSnapshot := entity.PromptMaterializationSnapshot{
+				TargetKind: targetKind, TargetRef: targetRef, ProjectRef: projectRef, RunRef: runRef,
+				SessionRef: sessionRef, TemplateRef: instructionRef, TemplateDigest: instructionDigest,
+				TemplateContent: instructions,
+				Variables: map[string]string{
+					"user.ref": candidate.initiatorRef, "user.name": candidate.initiatorName,
+					"organization.ref": candidate.organizationRef, "organization.name": candidate.organizationName,
+					"project.name": candidate.projectName, "agent.ref": agentRef, "agent.name": candidate.agentName,
+					"workflow.ref": candidate.workflowRef, "workflow.stage.key": candidate.workflowStepKey,
+					"automation.ref": candidate.automationRef, "task": task, "node.ref": nodeRef,
+					"environment.ref": runtimeEnvironmentRef, "tools.summary": strings.Join(toolNames, ", "), "turn.ref": turnRef,
+				},
+				StructuredVariables: structuredPromptVariables,
+				UserCapabilities:    userCapabilities, AgentCapabilities: capabilities,
+				WorkflowCapabilities: workflowCapabilities, ConnectionCapabilities: connectionCapabilities,
+				HumanGateCapabilities: humanGateCapabilities,
+				WorkflowStage:         workflowStage, Automation: automation,
+				SessionContinuation: continuation,
+			}
+			if err := repository.hydrateRuntimePromptContext(ctx, tx, scope, nodeRef, &promptSnapshot); err != nil {
+				return commandOutcome{}, err
+			}
+			targetKind = promptSnapshot.TargetKind
+			promptSnapshot.ContextPin.RuntimeConfigurationRef, promptSnapshot.ContextPin.RuntimeConfigurationDigest = runtimeConfigRef, runtimeConfigDigest
+			promptSnapshot.ContextPin.EnvironmentVersionRef, promptSnapshot.ContextPin.EnvironmentDigest = runtimeEnvironmentRef, runtimeEnvironmentDigest
+			promptSnapshot.ContextPin.EnvironmentBindingRef, promptSnapshot.ContextPin.EnvironmentBindingVersion = environmentBindingRef, environmentBindingVersion
+			promptSnapshot.StructuredVariables["input"].(map[string]any)["values"] = inputMap
+			promptSnapshot.StructuredVariables["integrations"] = promptIntegrationScope(integrationGrants, promptservice.Intersection(userCapabilities, promptservice.Union(capabilities, connectionCapabilities), workflowCapabilities, humanGateCapabilities))
+			if rootAutomation {
+				automationValues, _ := inputMap["automation"].(map[string]any)
+				applyAutomationPromptVariables(&promptSnapshot, stringMap(automationValues, "scheduleRef"), stringMap(automationValues, "name"), stringMap(automationValues, "text"), stringMap(automationValues, "scheduledAt"), stringMap(automationValues, "timezone"), stringMap(automationValues, "scheduleRevisionRef"))
+			}
+			if rootAutomation && scheduleTemplate != nil {
+				task, err = repository.materializeSchedulePromptTaskTx(ctx, tx, scope, nodeRef, scheduleTemplate, &promptSnapshot)
+				if err != nil {
+					return commandOutcome{}, err
+				}
+			}
+			if rootAutomation {
+				if err := prepareAutomationCoordinatorPurpose(&promptSnapshot); err != nil {
+					return commandOutcome{}, err
+				}
+			}
+			materializedPrompt, err := promptservice.Materialize(instructions, promptservice.FromSnapshot(promptSnapshot))
+			if err != nil || !materializedPrompt.Complete {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			instructions = materializedPrompt.Prompt
+			capabilities = materializedPrompt.EffectiveCapabilities
+			integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
+			rawEffectiveIntegrationGrants, err := json.Marshal(integrationGrants)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			resolvedInstructionsDigest := sha256.Sum256([]byte(instructions))
+			resolvedInstructionsDigestHex := hex.EncodeToString(resolvedInstructionsDigest[:])
+			integrationGrantsDigest := sha256.Sum256(rawEffectiveIntegrationGrants)
+			integrationGrantsDigestHex := hex.EncodeToString(integrationGrantsDigest[:])
+			sttConfiguration := entity.SystemSTTConfiguration{}
+			if capabilityEnabled(capabilities, "platform.stt.use") {
+				actorScope := scope
+				if err := tx.QueryRow(ctx, querySTTRuntimeActor, scope.organizationID, runRef).Scan(
+					&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.organizationRef); err != nil {
+					return commandOutcome{}, errs.ErrConflict
+				}
+				sttConfiguration, err = repository.getSystemSTTConfigurationTx(ctx, tx, actorScope)
+				if err != nil || !sttConfiguration.Ready {
+					return commandOutcome{}, errs.ErrConflict
+				}
+			}
+			workspacePolicy := runtimeWorkspacePolicy()
+			revisionRef, err := newRef("rrev")
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			snapshot := map[string]any{
+				"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
+				"turnRef": turnRef, "attempt": attempt, "task": task,
+				"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
+				"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
+				"runtimeModel": model, "effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode, "instructionRef": instructionRef,
+				"providerAccountRef":               providerAccountRef,
+				"providerCredentialRevisionRef":    providerCredentialRef,
+				"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
+				"providerSecretName":               providerSecretName,
+				"providerSecretUID":                providerSecretUID,
+				"providerSecretResourceVersion":    providerSecretResourceVersion,
+				"providerCredentialSHA256":         providerCredentialSHA256,
+				"instructionDigest":                instructionDigest, "instructions": instructions,
+				"promptTemplateRef":             materializedPrompt.TemplateRef,
+				"promptTemplateDigest":          materializedPrompt.TemplateDigest,
+				"promptMaterializationDigest":   materializedPrompt.Digest,
+				"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
+				"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,
+				"promptVariableSnapshotDigest":  materializedPrompt.VariableSnapshotDigest,
+				"promptSlots":                   materializedPrompt.Slots,
+				"promptTargetKind":              targetKind,
+				"promptSnapshot":                promptSnapshot,
+				"promptAuthority": map[string]any{
+					"user": userCapabilities, "agent": promptSnapshot.AgentCapabilities, "workflow": workflowCapabilities,
+					"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
+				},
+				"capabilities": capabilities, "integrationGrants": integrationGrants,
+				"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
+				"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
+				"attachmentContext": inputAttachmentContext,
+				"attachmentSets":    attachmentSets,
+				"delegationTargets": delegationTargets,
+				"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
+				"input": inputMap, "inputDigest": inputDigestHex,
+				"runtimeRevisionRef":     revisionRef,
+				"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
+				"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
+				"roleImageRecipeGeneration": roleImageRecipeGeneration,
+				"imageReference":            imageReference, "imageManifestDigest": imageManifestDigest,
+				"roleRuntimeContractRevision": roleRuntimeContractRevision,
+				"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
+				"runtimeConfigRef":            runtimeConfigRef, "runtimeConfigVersion": runtimeConfigVersion, "runtimeConfigDigest": runtimeConfigDigest,
+				"providerPolicyRef": providerPolicyRef, "providerPolicyVersion": providerPolicyVersion, "providerPolicyDigest": providerPolicyDigest,
+				"providerPolicyMode": candidate.providerPolicyMode,
+				"configOverlayRef":   configOverlayRef, "configOverlayVersion": configOverlayVersion, "configOverlayDigest": configOverlayDigest, "configOverlay": configOverlay,
+				"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
+				"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
+				"environmentValues": environmentValues, "secretProjections": secretProjections,
+				"environmentImage": environmentImage, "environmentTools": environmentTools,
+				"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
+				"workspacePolicy": workspacePolicy,
+				"codexSessionID":  codexSessionID,
+			}
+			if sttConfiguration.ConfigurationRef != "" {
+				snapshot["systemSTTConfigurationRef"] = sttConfiguration.ConfigurationRef
+				snapshot["systemSTTConfigurationRevisionRef"] = sttConfiguration.RevisionRef
+				snapshot["systemSTTConfigurationVersion"] = sttConfiguration.Revision
+				snapshot["systemSTTConfigurationDigest"] = sttConfiguration.Digest
+			}
+			if len(assistantContext) != 0 {
+				snapshot["assistantContext"] = assistantContext
+			}
+			contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			snapshot["contextSnapshot"] = contextSnapshot
+			snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
+			var continuationNotice *preparedContinuationNotice
+			if candidate.turnNumber > 1 {
+				continuationNotice, err = repository.prepareRuntimeContinuationNotice(ctx, tx, scope, snapshot, promptSnapshot)
+				if err != nil {
+					return commandOutcome{}, fmt.Errorf("prepare continuation notice: %w", err)
+				}
+			}
+			if err := captureRuntimeFileCatalog(ctx, tx, scope, snapshot, contextSnapshot); err != nil {
+				return commandOutcome{}, err
+			}
+			revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			snapshot["revisionDigest"] = revisionDigestHex
+			rawSnapshot, err := json.Marshal(snapshot)
+			if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			var runtimeRevisionID string
+			if err := tx.QueryRow(ctx, queryRuntimeClaimExecutionInsertRuntimeRevision,
+				revisionRef, scope.organizationID, projectID, rootRunID, runID, nodeID,
+				sessionID, turnID, agentID, roleDefinitionID, roleImageRecipeID,
+				roleImageArtifactID, providerAccountID, providerCredentialID,
+				generation, attempt, runtimeKey, runtimeRevision, provider, model,
+				providerAccountRef, providerCredentialRef, providerCredentialRevisionNumber,
+				providerSecretName, providerSecretUID, providerSecretResourceVersion,
+				providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
+				inputDigestHex, capabilities, integrationGrantsDigestHex,
+				imageReference, imageManifestDigest, roleRuntimeContractRevision,
+				roleRuntimeContractSHA256, runtimeConfigID, providerPolicyID, configOverlayID,
+				runtimeEnvironmentID, environmentBindingID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest,
+				providerPolicyRef, providerPolicyVersion, providerPolicyDigest, configOverlayRef, configOverlayVersion,
+				configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest,
+				environmentBindingRef, environmentBindingVersion, environmentBindingDigest,
+				environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
+				environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
+				revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
+				return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrUnavailable)
+			}
+			if err := repository.persistRuntimeContinuationNotice(ctx, tx, scope, runtimeRevisionID, continuationNotice); err != nil {
+				return commandOutcome{}, fmt.Errorf("persist continuation notice: %w", err)
+			}
+			expiresAt := time.Now().UTC().Add(30 * time.Second)
+			if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,
+				leaseRef, scope.organizationID, runID, nodeID, runtimeRevisionID,
+				payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
+				inputDigestHex, expiresAt); err != nil {
+				return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrUnavailable)
+			}
+			if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
+				return commandOutcome{}, fmt.Errorf("start claimed execution node: %w", errs.ErrUnavailable)
+			}
+			event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID,
+				nodeRef, "TURN_STARTED", nodeRef, "", "", "", "i18n:RUN_TURN_STARTED", "RUNNING", "RUNNING")
+			if err != nil {
+				return commandOutcome{}, fmt.Errorf("emit claimed execution event: %w", err)
+			}
+			snapshot["leaseRef"], snapshot["fence"], snapshot["generation"] = leaseRef, fence, generation
+			snapshot["expiresAt"], snapshot["eventRef"] = expiresAt, event.Ref
+			items = append(items, snapshot)
+			if firstRunRef == "" {
+				firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
+			}
+			return commandOutcome{}, nil
+		}(candidateTx)
+		if candidateErr == nil {
+			if err := candidateTx.Commit(ctx); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			claimedRoots[candidate.nodeRef] = candidate.rootRunID
+			continue
 		}
-		workspacePolicy := runtimeWorkspacePolicy()
-		revisionRef, err := newRef("rrev")
-		if err != nil {
+		if err := candidateTx.Rollback(ctx); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !runtimeCandidateEligibilityFailure(candidateErr) {
+			return commandOutcome{}, candidateErr
+		}
+		if err := repository.failRuntimeCandidateGraph(ctx, tx, scope, input, candidate); err != nil {
 			return commandOutcome{}, err
 		}
-		snapshot := map[string]any{
-			"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
-			"turnRef": turnRef, "attempt": attempt, "task": task,
-			"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
-			"runtimeRevision": runtimeRevision, "runtimeProvider": provider,
-			"runtimeModel": model, "instructionRef": instructionRef,
-			"providerAccountRef":               providerAccountRef,
-			"providerCredentialRevisionRef":    providerCredentialRef,
-			"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
-			"providerSecretName":               providerSecretName,
-			"providerSecretUID":                providerSecretUID,
-			"providerSecretResourceVersion":    providerSecretResourceVersion,
-			"providerCredentialSHA256":         providerCredentialSHA256,
-			"instructionDigest":                instructionDigest, "instructions": instructions,
-			"promptTemplateRef":           materializedPrompt.TemplateRef,
-			"promptTemplateDigest":        materializedPrompt.TemplateDigest,
-			"promptMaterializationDigest": materializedPrompt.Digest,
-			"promptTargetKind":            targetKind,
-			"promptSnapshot":              promptSnapshot,
-			"promptAuthority": map[string]any{
-				"user": userCapabilities, "agent": promptSnapshot.AgentCapabilities, "workflow": workflowCapabilities,
-				"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
-			},
-			"capabilities": capabilities, "integrationGrants": integrationGrants,
-			"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
-			"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
-			"attachmentContext": inputAttachmentContext,
-			"attachmentSets":    attachmentSets,
-			"delegationTargets": delegationTargets,
-			"callbackEdgeRef":   callbackEdgeRef, "sessionContext": sessionContext,
-			"input": inputMap, "inputDigest": inputDigestHex,
-			"runtimeRevisionRef":     revisionRef,
-			"runtimeRevisionVersion": generation, "roleDefinitionRef": roleDefinitionRef,
-			"roleImageRecipeRef": roleImageRecipeRef, "roleImageArtifactRef": roleImageArtifactRef,
-			"roleImageRecipeGeneration": roleImageRecipeGeneration,
-			"imageReference":            imageReference, "imageManifestDigest": imageManifestDigest,
-			"roleRuntimeContractRevision": roleRuntimeContractRevision,
-			"roleRuntimeContractSHA256":   roleRuntimeContractSHA256,
-			"runtimeConfigRef":            runtimeConfigRef, "runtimeConfigVersion": runtimeConfigVersion, "runtimeConfigDigest": runtimeConfigDigest,
-			"providerPolicyRef": providerPolicyRef, "providerPolicyVersion": providerPolicyVersion, "providerPolicyDigest": providerPolicyDigest,
-			"providerPolicyMode": candidate.providerPolicyMode,
-			"configOverlayRef":   configOverlayRef, "configOverlayVersion": configOverlayVersion, "configOverlayDigest": configOverlayDigest, "configOverlay": configOverlay,
-			"runtimeEnvironmentRef": runtimeEnvironmentRef, "runtimeEnvironmentVersion": runtimeEnvironmentVersion, "runtimeEnvironmentDigest": runtimeEnvironmentDigest,
-			"environmentBindingRef": environmentBindingRef, "environmentBindingVersion": environmentBindingVersion, "environmentBindingDigest": environmentBindingDigest,
-			"environmentValues": environmentValues, "secretProjections": secretProjections,
-			"environmentImage": environmentImage, "environmentTools": environmentTools,
-			"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
-			"workspacePolicy": workspacePolicy,
-			"codexSessionID":  codexSessionID,
-		}
-		if sttConfiguration.ConfigurationRef != "" {
-			snapshot["systemSTTConfigurationRef"] = sttConfiguration.ConfigurationRef
-			snapshot["systemSTTConfigurationRevisionRef"] = sttConfiguration.RevisionRef
-			snapshot["systemSTTConfigurationVersion"] = sttConfiguration.Revision
-			snapshot["systemSTTConfigurationDigest"] = sttConfiguration.Digest
-		}
-		if len(assistantContext) != 0 {
-			snapshot["assistantContext"] = assistantContext
-		}
-		revisionDigestHex, err := runtimeRevisionDigestFromSnapshot(snapshot)
-		if err != nil {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		snapshot["revisionDigest"] = revisionDigestHex
-		rawSnapshot, err := json.Marshal(snapshot)
-		if err != nil || len(rawSnapshot) > 256<<10 {
-			return commandOutcome{}, errs.ErrConflict
-		}
-		var runtimeRevisionID string
-		if err := tx.QueryRow(ctx, queryRuntimeClaimExecutionInsertRuntimeRevision,
-			revisionRef, scope.organizationID, projectID, rootRunID, runID, nodeID,
-			sessionID, turnID, agentID, roleDefinitionID, roleImageRecipeID,
-			roleImageArtifactID, providerAccountID, providerCredentialID,
-			generation, attempt, runtimeKey, runtimeRevision, provider, model,
-			providerAccountRef, providerCredentialRef, providerCredentialRevisionNumber,
-			providerSecretName, providerSecretUID, providerSecretResourceVersion,
-			providerCredentialSHA256, instructionRef, resolvedInstructionsDigestHex,
-			inputDigestHex, capabilities, integrationGrantsDigestHex,
-			imageReference, imageManifestDigest, roleRuntimeContractRevision,
-			roleRuntimeContractSHA256, runtimeConfigID, providerPolicyID, configOverlayID,
-			runtimeEnvironmentID, environmentBindingID, runtimeConfigRef, runtimeConfigVersion, runtimeConfigDigest,
-			providerPolicyRef, providerPolicyVersion, providerPolicyDigest, configOverlayRef, configOverlayVersion,
-			configOverlayDigest, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest,
-			environmentBindingRef, environmentBindingVersion, environmentBindingDigest,
-			environmentPolicy.ResourcesDigest, environmentPolicy.VolumesDigest, environmentPolicy.NetworkDigest,
-			environmentPolicy.RBACDigest, effectiveKubernetesAccess.Digest,
-			revisionDigestHex, rawSnapshot).Scan(&runtimeRevisionID); err != nil {
-			return commandOutcome{}, fmt.Errorf("insert runtime revision: %w", errs.ErrConflict)
-		}
-		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionInsertRuntimeLeasesRefRunIdWorkloadInstance,
-			leaseRef, scope.organizationID, runID, nodeID, runtimeRevisionID,
-			payload.WorkloadInstance, hex.EncodeToString(fenceDigest[:]), generation,
-			inputDigestHex, expiresAt); err != nil {
-			return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrConflict)
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
-			return commandOutcome{}, fmt.Errorf("start claimed execution node: %w", errs.ErrUnavailable)
-		}
-		event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID,
-			nodeRef, "TURN_STARTED", nodeRef, "", "", "", "i18n:RUN_TURN_STARTED", "RUNNING", "RUNNING")
-		if err != nil {
-			return commandOutcome{}, fmt.Errorf("emit claimed execution event: %w", err)
-		}
-		snapshot["leaseRef"], snapshot["fence"], snapshot["generation"] = leaseRef, fence, generation
-		snapshot["expiresAt"], snapshot["eventRef"] = expiresAt, event.Ref
-		items = append(items, snapshot)
 		if firstRunRef == "" {
-			firstProjectID, firstProjectRef, firstRunRef = projectID, projectRef, runRef
+			firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
 		}
+		failedRoots[candidate.rootRunID] = true
+		retained := items[:0]
+		for _, item := range items {
+			if claimedRoots[stringMap(item, "nodeRef")] != candidate.rootRunID {
+				retained = append(retained, item)
+			}
+		}
+		items = retained
 	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED"}, nil
+	if firstRunRef == "" && expired {
+		firstRunRef = scope.organizationRef
+	}
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0}, nil
 }
 
 func (repository *Repository) commitProviderCredentialRefresh(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
@@ -875,38 +1054,11 @@ func providerCredentialRefreshOutcome(lease map[string]any, accountRef, credenti
 
 func jsonUnmarshal(raw []byte, target any) error { return json.Unmarshal(raw, target) }
 
-func promptUserCapabilities(platformRole string, projectPermissions, agentCapabilities, connectionCapabilities []string) []string {
-	eligible := promptservice.Union(agentCapabilities, connectionCapabilities)
-	if platformRole == "OWNER" || platformRole == "ADMINISTRATOR" {
-		return eligible
-	}
-	permissions := make(map[string]struct{}, len(projectPermissions))
-	for _, permission := range projectPermissions {
-		permissions[permission] = struct{}{}
-	}
-	connection := make(map[string]struct{}, len(connectionCapabilities))
-	for _, capability := range connectionCapabilities {
-		connection[capability] = struct{}{}
-	}
-	required := map[string]string{
-		"platform.project.manage":    "MANAGE",
-		"platform.agent.manage":      "MANAGE_AGENTS",
-		"platform.run.launch":        "LAUNCH_RUNS",
-		"platform.run.delegate":      "MANAGE_AGENTS",
-		"platform.gate.resolve":      "RESOLVE_GATES",
-		"platform.artifact.manage":   "MANAGE_ARTIFACTS",
-		"platform.schedule.manage":   "MANAGE_SCHEDULES",
-		"platform.integration.grant": "MANAGE_INTEGRATIONS",
-		"platform.stt.use":           "VIEW",
-	}
-	result := make([]string, 0, len(eligible))
-	for _, capability := range eligible {
-		permission := required[capability]
-		if _, ok := connection[capability]; ok {
-			permission = "MANAGE_INTEGRATIONS"
-		}
-		if _, ok := permissions[permission]; permission != "" && ok {
-			result = append(result, capability)
+func callableIntegrationGrants(grants []map[string]string) []map[string]string {
+	result := make([]map[string]string, 0, len(grants))
+	for _, grant := range grants {
+		if (integrationpackage.Capability{Operation: grant["operation"]}).CallableByAgent() {
+			result = append(result, grant)
 		}
 	}
 	return result
@@ -918,7 +1070,7 @@ func filterIntegrationGrants(grants []map[string]string, capabilities []string) 
 		allowed[capability] = struct{}{}
 	}
 	result := make([]map[string]string, 0, len(grants))
-	for _, grant := range grants {
+	for _, grant := range callableIntegrationGrants(grants) {
 		if _, ok := allowed[grant["capabilityKey"]]; ok {
 			result = append(result, grant)
 		}
@@ -936,19 +1088,16 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
+	shared := runtimecontract.RuntimeWorkspacePolicyV1()
 	policy := entity.RuntimeWorkspacePolicy{
-		Revision: 1, Root: "/workspace", MaximumWritableBytes: 1 << 30, MaximumFileCount: 10_000,
-		Rules: []entity.RuntimeWorkspacePathRule{
-			{Path: "/workspace/input", Access: "READ_ONLY"},
-			{Path: "/workspace/knowledge", Access: "READ_ONLY"},
-			{Path: "/workspace/.kodex/state/codex-home/auth.json", Access: "READ_ONLY"},
-			{Path: "/workspace", Access: "WRITABLE"},
-		},
-		DenialReasons: []string{"READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"},
+		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
+		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
+		Rules:         make([]entity.RuntimeWorkspacePathRule, 0, len(shared.Rules)),
+		DenialReasons: append([]string(nil), shared.DenialReasons...),
 	}
-	raw, _ := json.Marshal(policy)
-	digest := sha256.Sum256(raw)
-	policy.Digest = hex.EncodeToString(digest[:])
+	for _, rule := range shared.Rules {
+		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
+	}
 	return policy
 }
 
@@ -981,7 +1130,9 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		AttachmentSetRef: stringMap(values, "attachmentSetRef"), AttachmentSetManifestDigest: stringMap(values, "attachmentSetManifestDigest"),
 		AttachmentContext: stringMap(values, "attachmentContext"), Capabilities: runtimeRevisionStringSlice(values["capabilities"]),
 		Provider: stringMap(values, "runtimeProvider"), Model: stringMap(values, "runtimeModel"),
-		ProviderAccountRef: stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
+		EffectiveReasoningEffort: stringMap(values, "effectiveReasoningEffort"),
+		ReasoningMode:            stringMap(values, "reasoningMode"),
+		ProviderAccountRef:       stringMap(values, "providerAccountRef"), ProviderCredentialRef: stringMap(values, "providerCredentialRevisionRef"),
 		ProviderCredentialRevision: runtimeRevisionMapInt64(values, "providerCredentialRevisionNumber"),
 		ProviderCredentialSHA256:   stringMap(values, "providerCredentialSHA256"),
 		RuntimeConfigRef:           stringMap(values, "runtimeConfigRef"), RuntimeConfigVersion: runtimeRevisionMapInt64(values, "runtimeConfigVersion"), RuntimeConfigDigest: stringMap(values, "runtimeConfigDigest"),
@@ -1026,6 +1177,28 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
 	input.SessionContext = runtimeRevisionSessionContext(values["sessionContext"])
+	if raw, ok := values["fileCatalog"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var catalog runtimecontract.RuntimeFileCatalog
+		if json.Unmarshal(encoded, &catalog) != nil || catalog.Validate() != nil {
+			return "", errs.ErrConflict
+		}
+		input.FileCatalog = &catalog
+	}
+	if raw, ok := values["contextSnapshot"]; ok {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		var snapshot runtimecontract.RuntimeContextSnapshot
+		if json.Unmarshal(encoded, &snapshot) != nil {
+			return "", errs.ErrConflict
+		}
+		input.ContextSnapshot = &snapshot
+	}
 	if value, ok := values["assistantContext"].(map[string]any); ok && len(value) != 0 {
 		context := &runtimecontract.RunnerAssistantContext{
 			Route: stringMap(value, "route"), EntityKind: stringMap(value, "entityKind"), EntityRef: stringMap(value, "entityRef"),
@@ -1236,12 +1409,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if len(payload.Artifacts) > 0 {
-		var allowed bool
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability, scope.organizationID, runtimecontract.ArtifactCapability, lease["nodeID"]).Scan(&allowed); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if !allowed {
-			return commandOutcome{}, errs.ErrForbidden
+		if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	nodeState, runState := "SUCCEEDED", "RUNNING"
@@ -1548,6 +1717,9 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		"created_by":          initiatorID,
 	}).Scan(&childSessionID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, scope.organizationID, childSessionID, payload.TargetAgentRef); err != nil {
+		return commandOutcome{}, err
 	}
 	childTask := strings.TrimSpace(payload.Task)
 	if workflowInstructions != "" {

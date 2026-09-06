@@ -10,6 +10,9 @@ SELECT agent.ref,
            AND provider_account.enabled
            AND provider_account.current_credential_revision_id IS NOT NULL
            AND provider_account.definition_key = runtime_config.provider
+           AND EXISTS (SELECT 1 FROM control_plane.session_model_catalog_bindings binding
+               WHERE binding.session_id = session.id AND binding.organization_id = session.organization_id
+                 AND binding.provider_account_id = session.provider_account_id)
            AND EXISTS (
                SELECT 1
                FROM jsonb_array_elements(provider_policy.account_candidates) candidate(value)

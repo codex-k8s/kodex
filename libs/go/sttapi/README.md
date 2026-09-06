@@ -10,6 +10,15 @@
 доказывать server-owned delegated/continuation proof из #1023. До появления
 этого primitive producer закрыто отказывает до сетевого RPC.
 
+`GetModelCatalog(GetModelCatalogRequest{})` возвращает wrapper с тем же
+`TranscriptionModelCatalog`, что и availability. Отдельные org-scoped admin
+authority, unary digest и permission `system.configuration.manage` обязательны;
+права на speech, configuration enabled и credential для этого чтения не нужны.
+Каталог содержит adapter version/observedAt и возможности параметров,
+а не account readiness; UI не заменяет его собственным enum. Empty request
+не принимает authority/resource selectors. Общий `modelprofile` также задаёт
+предельный provider timeout для owner validation и runtime.
+
 `Transcribe` — client-streaming RPC: metadata предшествует bounded chunks,
 commit фиксирует точный размер и SHA-256. Success возвращает transcript и
 безопасный provenance receipt без audio, credential или authority grant.

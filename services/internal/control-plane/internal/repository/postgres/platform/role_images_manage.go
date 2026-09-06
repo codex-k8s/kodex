@@ -2,9 +2,12 @@ package platform
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	roleimagerepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
@@ -14,57 +17,91 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (repository *Repository) List(ctx context.Context, principal value.Principal, filter roleimagerepo.Filter) ([]entity.RoleImageRecipe, string, error) {
+type roleImageListCursor struct {
+	Filter    string
+	Ref       string
+	UpdatedAt time.Time
+}
+
+func (repository *Repository) List(ctx context.Context, principal value.Principal, filter roleimagerepo.Filter) ([]entity.RoleImageRecipe, string, int64, error) {
+	if len(filter.Query) > 128 || !utf8.ValidString(filter.Query) || strings.ContainsRune(filter.Query, 0) || (filter.State != "" && filter.State != "ACTIVE" && filter.State != "ARCHIVED") {
+		return nil, "", 0, errs.ErrInvalid
+	}
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return nil, "", err
+		return nil, "", 0, err
+	}
+	filterDigest := roleImageDigest([]string{current.organizationID, current.actorID, current.authorityProjectID, filter.ProjectRef, filter.RoleDefinitionRef, filter.Query, filter.State})
+	cursor := roleImageListCursor{}
+	if filter.Page.Token != "" {
+		raw, err := base64.RawURLEncoding.DecodeString(filter.Page.Token)
+		if err != nil || len(raw) > 2048 || json.Unmarshal(raw, &cursor) != nil || cursor.Filter != filterDigest || cursor.Ref == "" || cursor.UpdatedAt.IsZero() {
+			return nil, "", 0, errs.ErrInvalid
+		}
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return nil, "", errs.ErrUnavailable
+		return nil, "", 0, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	project, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
-		ProjectRef: filter.ProjectRef, ResourceKind: "PROJECT", ResourceRef: filter.ProjectRef,
-	})
-	if err != nil {
-		return nil, "", err
+	if _, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ProjectRef: filter.ProjectRef, ResourceKind: "PROJECT", ResourceRef: filter.ProjectRef}); err != nil {
+		return nil, "", 0, err
 	}
 	authorization, err := repository.loadRoleImageAccessContext(ctx, tx, current)
 	if err != nil {
-		return nil, "", err
+		return nil, "", 0, err
 	}
-	if !authorization.allowed("project.view", project) {
-		return nil, "", errs.ErrNotFound
+	if err := tx.QueryRow(ctx, queryCatalogSnapshotTime).Scan(&authorization.evaluatedAt); err != nil {
+		return nil, "", 0, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryRoleImagesListRecipes, current.organizationID,
-		filter.ProjectRef, filter.RoleDefinitionRef, boundedPage(filter.Page))
+	args := pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID, "project_ref": filter.ProjectRef, "role_ref": filter.RoleDefinitionRef, "query": filter.Query, "state": filter.State}
+	var total int64
+	if err := tx.QueryRow(ctx, queryRoleImageManagedCount, args).Scan(&total); err != nil {
+		return nil, "", 0, errs.ErrUnavailable
+	}
+	args["cursor_ref"], args["cursor_time"], args["page_limit"] = cursor.Ref, cursor.UpdatedAt, boundedPage(filter.Page)+1
+	rows, err := tx.Query(ctx, queryRoleImagesListRecipes, args)
 	if err != nil {
-		return nil, "", errs.ErrUnavailable
+		return nil, "", 0, errs.ErrUnavailable
 	}
 	result := make([]entity.RoleImageRecipe, 0)
 	targets := make([]resolvedAccessTarget, 0)
 	for rows.Next() {
-		item, ownerSubjectRef, scanErr := scanRecipe(rows)
-		if scanErr != nil {
+		item, ownerRef, err := scanRecipe(rows)
+		if err != nil {
 			rows.Close()
-			return nil, "", errs.ErrUnavailable
+			return nil, "", 0, errs.ErrUnavailable
 		}
-		result = append(result, item)
-		targets = append(targets, roleImageAccessTarget(item.Ref, item.ProjectRef, ownerSubjectRef))
+		target := roleImageAccessTarget(item.Ref, item.ProjectRef, ownerRef)
+		if !authorization.allowed("project.view", target) {
+			rows.Close()
+			return nil, "", 0, errs.ErrUnavailable
+		}
+		result, targets = append(result, item), append(targets, target)
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, "", errs.ErrUnavailable
-	}
+	rowErr := rows.Err()
 	rows.Close()
+	if rowErr != nil {
+		return nil, "", 0, errs.ErrUnavailable
+	}
+	next := ""
+	if len(result) > int(boundedPage(filter.Page)) {
+		result, targets = result[:len(result)-1], targets[:len(targets)-1]
+		last := result[len(result)-1]
+		raw, _ := json.Marshal(roleImageListCursor{Filter: filterDigest, Ref: last.Ref, UpdatedAt: last.UpdatedAt})
+		next = base64.RawURLEncoding.EncodeToString(raw)
+	}
 	for index := range result {
 		result[index].NextActions = roleImageActions(result[index], authorization.allowed("image.build", targets[index]))
+		if err := hydrateRoleImageManagedLineage(ctx, tx, current.organizationID, &result[index]); err != nil {
+			return nil, "", 0, err
+		}
+		projectRoleImageSource(&result[index], nil, authorization.allowed("image.source.view", targets[index]), authorization.allowed("image.source.manage", targets[index]))
 	}
 	if err := committed(tx, ctx); err != nil {
-		return nil, "", err
+		return nil, "", 0, err
 	}
-	return result, "", nil
+	return result, next, total, nil
 }
 
 func (repository *Repository) Get(ctx context.Context, principal value.Principal, ref string) (roleimagerepo.Detail, error) {
@@ -94,6 +131,7 @@ func (repository *Repository) Get(ctx context.Context, principal value.Principal
 	if err != nil {
 		return roleimagerepo.Detail{}, err
 	}
+	projectRoleImageSource(&detail.Recipe, detail.Builds, authorization.allowed("image.source.view", target), authorization.allowed("image.source.manage", target))
 	if err := committed(tx, ctx); err != nil {
 		return roleimagerepo.Detail{}, err
 	}
@@ -160,6 +198,14 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 	} else if !errors.Is(candidateErr, pgx.ErrNoRows) {
 		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
+	if err := hydrateRoleImageManagedLineage(ctx, querier, current.organizationID, &recipe); err != nil {
+		return roleimagerepo.Detail{}, err
+	}
+	for index := range builds {
+		if err := hydrateRoleImageBuildRevision(ctx, querier, current.organizationID, &builds[index]); err != nil {
+			return roleimagerepo.Detail{}, err
+		}
+	}
 	return roleimagerepo.Detail{
 		Recipe: recipe, Builds: builds, ActiveArtifact: activeArtifact,
 		PromotionCandidate: promotionCandidate,
@@ -184,12 +230,19 @@ func (repository *Repository) Manage(ctx context.Context, input roleimagerepo.Ma
 		input.Mutation.Operation, input.Mutation.IdempotencyKey, input.Mutation.IntentDigest, &replay); receiptErr != nil {
 		return roleimagerepo.ManageResult{}, receiptErr
 	} else if found {
+		if err := repository.projectRoleImageManageSource(ctx, tx, current, &replay); err != nil {
+			return roleimagerepo.ManageResult{}, err
+		}
 		if err := committed(tx, ctx); err != nil {
 			return roleimagerepo.ManageResult{}, err
 		}
 		return replay, nil
 	}
 
+	managed, err := repository.managedRoleImageTarget(ctx, tx, current, input)
+	if err != nil {
+		return roleimagerepo.ManageResult{}, err
+	}
 	result, projectID, projectRef, err := repository.applyRoleImageManage(ctx, tx, current, input)
 	if err != nil {
 		return roleimagerepo.ManageResult{}, err
@@ -198,12 +251,26 @@ func (repository *Repository) Manage(ctx context.Context, input roleimagerepo.Ma
 		"ROLE_IMAGE_RECIPE", result.Recipe.Ref, "i18n:ROLE_IMAGE_RECIPE_CHANGED"); err != nil {
 		return roleimagerepo.ManageResult{}, err
 	}
+	if err := repository.recordManagedRoleImageCommand(ctx, tx, current, input, managed, result); err != nil {
+		return roleimagerepo.ManageResult{}, err
+	}
+	if err := hydrateRoleImageManagedLineage(ctx, tx, current.organizationID, &result.Recipe); err != nil {
+		return roleimagerepo.ManageResult{}, err
+	}
+	if result.Build != nil {
+		if err := hydrateRoleImageBuildRevision(ctx, tx, current.organizationID, result.Build); err != nil {
+			return roleimagerepo.ManageResult{}, err
+		}
+	}
 	if err := repository.emitPlatformEvent(ctx, tx, current, "ROLE_IMAGE_RECIPE_CHANGED",
 		projectRef, result.Recipe.Ref, "i18n:ROLE_IMAGE_RECIPE_CHANGED"); err != nil {
 		return roleimagerepo.ManageResult{}, err
 	}
 	if err := repository.storeRoleImageReceipt(ctx, tx, current, input.Mutation.Operation,
 		input.Mutation.IdempotencyKey, input.Mutation.IntentDigest, "ROLE_IMAGE_MANAGE", result); err != nil {
+		return roleimagerepo.ManageResult{}, err
+	}
+	if err := repository.projectRoleImageManageSource(ctx, tx, current, &result); err != nil {
 		return roleimagerepo.ManageResult{}, err
 	}
 	if err := committed(tx, ctx); err != nil {
@@ -251,6 +318,9 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 		}
 		if input.ProjectRef != locked.Recipe.ProjectRef {
 			return roleimagerepo.ManageResult{}, "", "", errs.ErrNotFound
+		}
+		if shippedRoleImage(locked.Recipe) {
+			return roleimagerepo.ManageResult{}, "", "", errs.ErrConflict
 		}
 		if input.Mutation.ExpectedVersion == nil || uint64(*input.Mutation.ExpectedVersion) != locked.Recipe.Version {
 			return roleimagerepo.ManageResult{}, "", "", errs.ErrVersionMismatch
@@ -326,6 +396,10 @@ func (repository *Repository) authorizeRoleImageManage(ctx context.Context, tx p
 	if !authorization.allowed("image.build", target) {
 		return errs.ErrNotFound
 	}
+	if (input.Action == "CREATE" || input.Action == "UPDATE") &&
+		(!authorization.allowed("image.source.view", target) || !authorization.allowed("image.source.manage", target)) {
+		return errs.ErrNotFound
+	}
 	return nil
 }
 
@@ -346,9 +420,10 @@ func (repository *Repository) resolveRoleImageAccessTarget(ctx context.Context, 
 }
 
 type roleImageAccessContext struct {
-	subject     resolvedAccessSubject
-	bindings    []entity.AccessBinding
-	evaluatedAt time.Time
+	subject            resolvedAccessSubject
+	bindings           []entity.AccessBinding
+	evaluatedAt        time.Time
+	authorityProjectID string
 }
 
 func (repository *Repository) loadRoleImageAccessContext(ctx context.Context, tx pgx.Tx, current scope) (roleImageAccessContext, error) {
@@ -360,10 +435,13 @@ func (repository *Repository) loadRoleImageAccessContext(ctx context.Context, tx
 	if err != nil {
 		return roleImageAccessContext{}, err
 	}
-	return roleImageAccessContext{subject: subject, bindings: bindings, evaluatedAt: time.Now().UTC()}, nil
+	return roleImageAccessContext{subject: subject, bindings: bindings, evaluatedAt: time.Now().UTC(), authorityProjectID: current.authorityProjectID}, nil
 }
 
 func (authorization roleImageAccessContext) allowed(permission string, target resolvedAccessTarget) bool {
+	if authorization.authorityProjectID != "" && target.projectID != "" && authorization.authorityProjectID != target.projectID {
+		return false
+	}
 	return accessservice.Evaluate(authorization.subject.AccessSubject, permission, target.scope,
 		target.ownerSubjectRef, authorization.bindings, authorization.evaluatedAt).Allowed
 }

@@ -25,6 +25,9 @@ JOIN LATERAL (
     SELECT instruction.ref, instruction.content, instruction.digest,
            instruction.version_number::bigint, instruction.created_at, instruction.published_at, 2
     FROM control_plane.instruction_versions instruction
+    JOIN control_plane.agent_instruction_bindings active_instruction
+      ON active_instruction.instruction_id=instruction.id AND active_instruction.agent_id=agent.id
+     AND active_instruction.organization_id=agent.organization_id
     WHERE instruction.agent_id = agent.id
       AND instruction.state = 'PUBLISHED'
 ) source ON true

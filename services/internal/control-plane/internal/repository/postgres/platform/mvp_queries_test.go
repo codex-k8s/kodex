@@ -27,15 +27,17 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 		item entity.ProviderAccount
 		want []string
 	}{
-		{name: "pending without attempt", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION"}, want: []string{"OPEN", "CONFIGURE_CREDENTIAL", "REVOKE"}},
+		{name: "pending without attempt", item: entity.ProviderAccount{State: "PENDING_AUTHORIZATION"}, want: []string{"OPEN", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
 		{name: "pending device authorization", item: entity.ProviderAccount{
 			State:         "PENDING_AUTHORIZATION",
 			Authorization: &entity.ProviderAuthorization{State: "PENDING"},
-		}, want: []string{"OPEN", "REFRESH_AUTHORIZATION", "REVOKE"}},
-		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "TEST", "REVOKE", "DISABLE"}},
-		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "REVOKE", "ENABLE"}},
-		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "CONFIGURE_CREDENTIAL", "REVOKE"}},
-		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN"}},
+		}, want: []string{"OPEN", "DELETE", "REFRESH_AUTHORIZATION", "REVOKE"}},
+		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "DELETE", "TEST", "REVOKE", "DISABLE"}},
+		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "DELETE", "REVOKE", "ENABLE"}},
+		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
+		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN", "DELETE"}},
+		{name: "deleting", item: entity.ProviderAccount{State: "DELETING"}, want: []string{"OPEN"}},
+		{name: "deleted", item: entity.ProviderAccount{State: "DELETED"}, want: []string{"OPEN"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -404,7 +406,12 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 		"exact.item ->> 'digest' = content.digest",
 		"WITH ORDINALITY AS exact(item, ordinal)",
 		"(exact_snapshot.item ->> 'version')::bigint",
-		"ORDER BY exact.ordinal",
+		"ORDER BY candidates.priority,candidates.ordinal",
+		"{contextSnapshot,skills}",
+		"binding.ref=skill.item->>'binding_ref'",
+		"to_jsonb(binding.version)=skill.item->'binding_version' AND binding.enabled",
+		"file.item->'artifact_revision'=to_jsonb(artifact.revision)",
+		"control_plane.skill_revision_visible",
 	} {
 		if !strings.Contains(queryRuntimeReadexecutionartifactSelectArtifactContent, fragment) {
 			t.Fatalf("runtime artifact read lacks %q", fragment)

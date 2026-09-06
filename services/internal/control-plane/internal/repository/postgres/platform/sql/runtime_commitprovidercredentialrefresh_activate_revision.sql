@@ -5,5 +5,4 @@ SET current_credential_revision_id = $3::uuid,
     updated_at = clock_timestamp()
 WHERE id = $1::uuid
   AND current_credential_revision_id = $2::uuid
-  AND state = 'AUTHORIZED'
-  AND enabled;
+  AND ((state = 'AUTHORIZED' AND enabled) OR state = 'DELETING');

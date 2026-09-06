@@ -170,10 +170,10 @@ func castUser(value entity.User) *controlplanev1.UserSummary {
 	return &controlplanev1.UserSummary{Ref: value.Ref, DisplayName: value.DisplayName, EmailHint: value.EmailMasked}
 }
 func castMembership(value entity.Membership) *controlplanev1.Membership {
-	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Membership{Ref: value.Ref, Version: value.Version, User: castUser(value.User), PlatformRole: platformRole(value.Role), ProjectPermissions: projectPermissions(value.Permissions), Active: value.Active, NextActions: nextActions(value.NextActions), ProjectRef: value.ProjectRef}
 }
 func castProject(value entity.Project) *controlplanev1.Project {
-	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Project{Ref: value.Ref, Version: value.Version, Name: value.Name, Purpose: value.Purpose, Language: value.Language, Lifecycle: lifecycle(value.Lifecycle), AgentCount: value.AgentCount, WorkflowCount: value.WorkflowCount, ActiveRunCount: value.ActiveRunCount, PendingGateCount: value.PendingGateCount, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions), LastActivityAt: optionalTimestamp(value.LastActivityAt), IntegrationState: value.IntegrationState}
 }
 func castSearchResult(value entity.SearchResult) *controlplanev1.SearchResult {
 	kind := controlplanev1.SearchResultKind(controlplanev1.SearchResultKind_value["SEARCH_RESULT_KIND_"+value.Kind])
@@ -189,7 +189,9 @@ func castProviderPolicy(value entity.ProviderAccountPolicyVersion) *controlplane
 	result := &controlplanev1.ProviderAccountPolicyVersion{Ref: value.Ref, Version: value.Version, Mode: value.Mode,
 		Digest: value.Digest, CreatedAt: timestamp(value.CreatedAt)}
 	for _, candidate := range value.AccountCandidates {
-		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight})
+		result.AccountCandidates = append(result.AccountCandidates, &controlplanev1.ProviderAccountCandidate{AccountRef: candidate.AccountRef, Weight: candidate.Weight,
+			CatalogRevision: candidate.CatalogRevision, CatalogDigest: candidate.CatalogDigest,
+			ProviderDefinitionKey: candidate.ProviderDefinitionKey, DefaultReasoningEffort: candidate.DefaultReasoningEffort})
 	}
 	return result
 }
@@ -202,9 +204,13 @@ func castConfigOverlay(value *entity.ConfigOverlayVersion) *controlplanev1.Confi
 	if value == nil {
 		return nil
 	}
-	return &controlplanev1.ConfigOverlayVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
+	result := &controlplanev1.ConfigOverlayVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
 		State: value.State, Content: value.Content, Digest: value.Digest, ValidationMessages: value.ValidationMessages,
-		CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+		CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt), SchemaRevision: value.SchemaRevision, SchemaDigest: value.SchemaDigest}
+	for _, item := range value.Diagnostics {
+		result.Diagnostics = append(result.Diagnostics, &controlplanev1.ConfigOverlayDiagnostic{Code: item.Code, Key: item.Key, Line: item.Line, Column: item.Column, Message: item.Message})
+	}
+	return result
 }
 func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *controlplanev1.RuntimeEnvironmentVersion {
 	result := &controlplanev1.RuntimeEnvironmentVersion{Ref: value.Ref, Version: value.Version, Revision: value.Revision,
@@ -295,13 +301,20 @@ func castRuntimeEnvironment(value entity.RuntimeEnvironmentSet) *controlplanev1.
 		Ready: value.Ready, ReadinessBlockers: value.ReadinessBlockers, NextActions: nextActions(value.NextActions)}
 }
 func castRuntimeConfigurationView(value entity.AgentRuntimeConfigurationView) *controlplanev1.AgentRuntimeConfigurationView {
-	return &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),
+	result := &controlplanev1.AgentRuntimeConfigurationView{Configuration: castAgentRuntimeConfiguration(value.Configuration),
 		PublishedOverlay: castConfigOverlay(&value.PublishedOverlay), DraftOverlay: castConfigOverlay(value.DraftOverlay),
 		EnvironmentBinding: &controlplanev1.AgentRuntimeEnvironmentBinding{Ref: value.EnvironmentBinding.Ref,
 			Version: value.EnvironmentBinding.Version, AgentRef: value.EnvironmentBinding.AgentRef,
-			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest},
+			EnvironmentRef: value.EnvironmentBinding.EnvironmentRef, Digest: value.EnvironmentBinding.Digest, VersionRef: value.EnvironmentBinding.VersionRef},
 		Environment: castRuntimeEnvironment(value.Environment), SafeEffectiveConfig: value.SafeEffectiveConfig,
-		AgentVersion: value.AgentVersion}
+		AgentVersion: value.AgentVersion, OverlaySchema: castConfigOverlaySchema(value.OverlaySchema)}
+	for _, binding := range value.SkillBindings {
+		result.SkillBindings = append(result.SkillBindings, castContextBinding(binding))
+	}
+	for _, binding := range value.MemoryBindings {
+		result.MemoryBindings = append(result.MemoryBindings, castContextBinding(binding))
+	}
+	return result
 }
 func castIntegrationCapability(value entity.IntegrationCapability) *controlplanev1.IntegrationCapability {
 	result := &controlplanev1.IntegrationCapability{
@@ -329,7 +342,17 @@ func integrationResourceKind(value string) controlplanev1.IntegrationResourceKin
 }
 
 func castIntegrationField(value entity.IntegrationConfigurationField) *controlplanev1.IntegrationConfigurationField {
-	return &controlplanev1.IntegrationConfigurationField{Key: value.Key, Label: value.Label, Help: value.Help, ValueType: value.ValueType, Required: value.Required, Placeholder: value.Placeholder}
+	result := &controlplanev1.IntegrationConfigurationField{Key: value.Key, Label: value.Label, Help: value.Help, ValueType: value.ValueType, Required: value.Required, Placeholder: value.Placeholder,
+		Format: value.Format, AllowedValues: append([]string(nil), value.AllowedValues...), MaximumLength: value.MaximumLength}
+	if value.Minimum != nil {
+		result.Minimum = *value.Minimum
+		result.HasMinimum = true
+	}
+	if value.Maximum != nil {
+		result.Maximum = *value.Maximum
+		result.HasMaximum = true
+	}
+	return result
 }
 
 func castIntegrationCredential(value entity.IntegrationCredentialRevision) *controlplanev1.IntegrationCredentialRevision {
@@ -344,6 +367,13 @@ func castInstruction(value *entity.InstructionVersion) *controlplanev1.Instructi
 	}
 	return &controlplanev1.InstructionVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: instructionState(value.State), Content: value.Content, ValidationMessages: value.ValidationProblems, CreatedAt: timestamp(value.CreatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
 }
+func castInstructionBinding(value *entity.AgentInstructionsBinding) *controlplanev1.AgentInstructionsBinding {
+	if value == nil {
+		return nil
+	}
+	return &controlplanev1.AgentInstructionsBinding{Ref: value.Ref, Version: value.Version, RevisionRef: value.RevisionRef, Effective: value.Effective}
+}
+
 func castAgent(value entity.Agent) *controlplanev1.Agent {
 	capabilities := make([]*controlplanev1.PlatformCapability, 0, len(value.Capabilities))
 	for _, key := range value.Capabilities {
@@ -356,7 +386,7 @@ func castAgent(value entity.Agent) *controlplanev1.Agent {
 		avatar.ArtifactRevision = value.Avatar.ArtifactRevision
 		avatar.ContentPath = value.Avatar.ContentPath
 	}
-	return &controlplanev1.Agent{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RoleDefinitionRef: value.RoleDefinitionRef, RoleDefinitionName: value.RoleDefinitionName, Name: value.Name, Purpose: value.Purpose, RoleDescription: value.RoleDescription, AvatarUrl: value.AvatarURL, Avatar: avatar, State: agentState(value.State), Enabled: value.Enabled, System: value.System, Runtime: &controlplanev1.RuntimeSelection{Ref: value.RuntimeKey, Name: value.RuntimeName, Revision: value.RuntimeRevision, Ready: value.State == "READY", Provider: value.Provider, Model: value.Model}, PublishedInstructions: castInstruction(value.PublishedInstructions), DraftInstructions: castInstruction(value.DraftInstructions), Capabilities: capabilities, IntegrationGrantRefs: value.IntegrationGrantRefs, KnowledgeArtifactRefs: value.KnowledgeArtifactRefs, UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.Agent{InstructionBinding: castInstructionBinding(value.InstructionBinding), Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RoleDefinitionRef: value.RoleDefinitionRef, RoleDefinitionName: value.RoleDefinitionName, Name: value.Name, Purpose: value.Purpose, RoleDescription: value.RoleDescription, AvatarUrl: value.AvatarURL, Avatar: avatar, State: agentState(value.State), Enabled: value.Enabled, System: value.System, Runtime: &controlplanev1.RuntimeSelection{Ref: value.RuntimeKey, Name: value.RuntimeName, Revision: value.RuntimeRevision, Ready: value.State == "READY", Provider: value.Provider, Model: value.Model}, PublishedInstructions: castInstruction(value.PublishedInstructions), DraftInstructions: castInstruction(value.DraftInstructions), Capabilities: capabilities, IntegrationGrantRefs: value.IntegrationGrantRefs, KnowledgeArtifactRefs: value.KnowledgeArtifactRefs, UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions), CurrentRunRef: value.CurrentRunRef}
 }
 func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentRef string) *controlplanev1.WorkflowVersion {
 	if value == nil {
@@ -386,7 +416,16 @@ func castWorkflowVersion(value *entity.WorkflowVersion, state, coordinatorAgentR
 	return &controlplanev1.WorkflowVersion{Ref: value.Ref, Version: int64(value.VersionNumber), Revision: value.VersionNumber, State: workflowState(state), CoordinatorAgentRef: coordinatorAgentRef, InputFields: inputs, Steps: steps, MaxConcurrency: value.Concurrency, TimeoutSeconds: int32(value.TimeoutSeconds), CompletionCriteria: value.CompletionCriteria}
 }
 func castWorkflow(value entity.Workflow) *controlplanev1.Workflow {
-	return &controlplanev1.Workflow{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Purpose: value.Purpose, State: workflowState(value.State), PublishedVersion: castWorkflowVersion(value.Published, "PUBLISHED", value.CoordinatorAgentRef), DraftVersion: castWorkflowVersion(value.Draft, value.State, value.CoordinatorAgentRef), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	result := &controlplanev1.Workflow{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name, Purpose: value.Purpose, State: workflowState(value.State), PublishedVersion: castWorkflowVersion(value.Published, "PUBLISHED", value.CoordinatorAgentRef), DraftVersion: castWorkflowVersion(value.Draft, value.State, value.CoordinatorAgentRef), UpdatedAt: timestamp(value.UpdatedAt), NextActions: nextActions(value.NextActions)}
+	if value.CardSummary != nil {
+		card := value.CardSummary
+		result.CardSummary = &controlplanev1.WorkflowCardSummary{StageCount: card.StageCount, UniqueAgentCount: card.UniqueAgentCount, ParallelGroupCount: card.ParallelGroupCount, HasHumanGate: card.HasHumanGate, ActiveRunCount: card.ActiveRunCount, PendingGateCount: card.PendingGateCount, LastActivityAt: optionalTimestamp(card.LastActivityAt)}
+	}
+	if value.LaunchReadiness != nil {
+		r := value.LaunchReadiness
+		result.LaunchReadiness = &controlplanev1.WorkflowLaunchReadiness{AllowedToSubmit: r.AllowedToSubmit, Reason: r.Reason, WorkflowVersion: r.WorkflowVersion, RevisionRef: r.RevisionRef, ContextDigest: r.ContextDigest, OperationalState: r.OperationalState}
+	}
+	return result
 }
 func castRunTarget(value entity.RunTarget) *controlplanev1.RunTarget {
 	target := &controlplanev1.RunTarget{DisplayName: value.Name}
@@ -462,6 +501,13 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 	if value.ResolvedByName != "" {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}
+	gate.SourceAttachmentSetRef = value.SourceAttachmentSetRef
+	for _, consequence := range value.DecisionConsequences {
+		gate.DecisionConsequences = append(gate.DecisionConsequences, &controlplanev1.OwnerGateDecisionConsequence{Decision: gateDecision(consequence.Decision), SafeSummary: consequence.SafeSummary, ExecutesExternalEffect: consequence.ExecutesExternalEffect, TerminalForRun: consequence.TerminalForRun})
+	}
+	if intent := value.IntegrationIntent; intent != nil {
+		gate.IntegrationIntent = &controlplanev1.IntegrationIntent{ConnectionRef: intent.ConnectionRef, ConnectionName: intent.ConnectionName, DefinitionKey: intent.DefinitionKey, CapabilityKey: intent.CapabilityKey, Operation: intent.Operation, EffectKey: intent.EffectKey, EffectPreview: structure(intent.EffectPreview), ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(intent.ResourceKind), Values: intent.ResourceScope, Digest: intent.ResourceScopeDigest}}
+	}
 	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
@@ -517,7 +563,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
 		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
-		TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
+		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
 		ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
 	}
 	if value.TargetType == "AGENT" {
@@ -623,7 +669,7 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	result := &controlplanev1.AssistantConversation{Ref: value.Ref, Version: value.Version, Title: value.Title,
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
-		Context: context, UpdatedAt: timestamp(value.UpdatedAt)}
+		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
 	for _, turn := range value.Turns {
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
@@ -683,7 +729,8 @@ func castIncident(value entity.Incident) *controlplanev1.Incident {
 }
 
 func castBootstrap(value repository.BootstrapState) *controlplanev1.BootstrapState {
-	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions)}
+	return &controlplanev1.BootstrapState{Initialized: value.Bootstrapped, OnboardingComplete: value.OnboardingCompleted, WebOnlyReady: value.Assistant.Ready, Assistant: castAssistant(value.Assistant), CurrentUser: castUser(value.Actor), PlatformRole: platformRole(value.PlatformRole), NextActions: nextActions(value.NextActions),
+		SpeechTranscription: &controlplanev1.SpeechTranscriptionAvailability{Eligible: value.SpeechTranscription.Eligible, Available: false, Reason: value.SpeechTranscription.Reason}}
 }
 
 func castOverview(value repository.Overview) *controlplanev1.Overview {

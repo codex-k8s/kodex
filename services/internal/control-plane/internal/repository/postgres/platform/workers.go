@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -98,6 +99,33 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
+	currentBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, assistant.Ref, "")
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, currentBinding.sessionID, providerAccountRef, configuration, configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	if retainedPolicy != nil {
+		providerPolicyRef, providerPolicyVersion, providerPolicyDigest = retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
+	}
+	parsedOverlay, err := runtimecontract.ParseConfigOverlay(configOverlay)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
+	effectiveEffort := parsedOverlay.ModelReasoningEffort
+	if effectiveEffort == "" {
+		effectiveEffort = verifiedCandidate.DefaultReasoningEffort
+	}
+	reasoningMode := runtimecontract.ReasoningSupported
+	if effectiveEffort == "" {
+		reasoningMode = runtimecontract.ReasoningUnsupported
+	}
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
@@ -158,6 +186,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
 		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
+		"effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode,
 		"providerAccountRef":               providerAccountRef,
 		"providerCredentialRevisionRef":    providerCredentialRef,
 		"providerCredentialRevisionNumber": providerCredentialRevisionNumber,
@@ -202,6 +231,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"workspacePolicy":             workspacePolicy,
 	}
+	contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, "", "", assistant.Ref)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	snapshot["contextSnapshot"] = contextSnapshot
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
@@ -253,6 +287,10 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	}
 	if len(snapshot.desiredCandidates) == 0 {
 		return false, nil
+	}
+	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, snapshot.desiredCandidates)
+	if err != nil {
+		return false, err
 	}
 	desiredMode := "LEAST_USED"
 	if len(snapshot.desiredCandidates) == 1 {
@@ -386,6 +424,9 @@ func (repository *Repository) replaceWarmSession(
 		"created_by":          current.createdBy,
 	}).Scan(&nextSessionID); err != nil || nextSessionID == "" {
 		return errs.ErrUnavailable
+	}
+	if err := bindSessionModelCatalog(ctx, tx, organizationID, nextSessionID, current.assistantRef); err != nil {
+		return err
 	}
 	var runtimeVersion int64
 	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSwitchSession, pgx.StrictNamedArgs{
@@ -633,10 +674,14 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 		digest := sha256.Sum256([]byte(fence))
 		inputDigest := sha256.Sum256(item.input)
 		automationTextDigest := sha256.Sum256([]byte(item.automationText))
-		promptInputsDigest := sha256.Sum256(item.promptInputs)
+		item.promptInputs, err = repository.captureSchedulePromptTx(ctx, tx, scope, item.ref, item.promptInputs)
+		if err != nil {
+			return nil, err
+		}
+		promptInputsDigest := schedulePromptDigest(1, item.promptInputs)
 		expires := now.Add(30 * time.Second)
 		var occurrenceID string
-		if err := tx.QueryRow(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, *occurrence, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID, item.targetVersion, item.targetDigest, item.automationText, hex.EncodeToString(automationTextDigest[:]), item.promptInputs, hex.EncodeToString(promptInputsDigest[:]), item.initiatedBy, skipped).Scan(&occurrenceID); err != nil {
+		if err := tx.QueryRow(ctx, queryWorkersClaimdueschedulesInsertScheduleOccurrencesRefScheduleIdState, occurrenceRef, scope.organizationID, item.id, *occurrence, item.version, item.targetType, item.targetRef, item.name, item.input, hex.EncodeToString(inputDigest[:]), leaseRef, hex.EncodeToString(digest[:]), instance, expires, item.currentRevisionID, item.targetVersion, item.targetDigest, item.automationText, hex.EncodeToString(automationTextDigest[:]), item.promptInputs, promptInputsDigest, item.initiatedBy, skipped).Scan(&occurrenceID); err != nil {
 			return nil, mapWriteError(err)
 		}
 		if skipped {
@@ -658,7 +703,7 @@ func (repository *Repository) ClaimDueSchedules(ctx context.Context, principal v
 			"leaseRef": leaseRef, "fence": fence, "generation": int64(1), "expiresAt": expires,
 			"attempt": int32(1), "targetRef": item.targetRef, "targetVersion": item.targetVersion,
 			"targetDigest": item.targetDigest, "automationTextDigest": hex.EncodeToString(automationTextDigest[:]),
-			"promptInputsDigest": hex.EncodeToString(promptInputsDigest[:]),
+			"promptInputsDigest": promptInputsDigest,
 			"scheduleVersion":    item.version, "scheduleRevisionRef": item.currentRevisionRef,
 			"scheduleRevision": item.currentRevision, "scheduleRevisionDigest": item.currentRevisionDigest,
 			"inputDigest": hex.EncodeToString(inputDigest[:])})
@@ -705,13 +750,14 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	}
 	var occurrenceID, scheduleID, projectID, projectRef, state, storedDigest, targetType, targetRef, name, storedInputDigest string
 	var revisionDigest, targetDigest, automationText, automationTextDigest, promptInputsDigest string
+	var promptInputFormat int
 	var initiatedBy, initiatorRef, initiatorName string
 	var sessionPolicy, continueSessionRef string
 	var scheduleVersion, generation, targetVersion int64
 	var attempt int32
 	var occurrenceInput, promptInputs []byte
 	var expires time.Time
-	err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef, input.Principal.CredentialRevision).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name, &occurrenceInput, &scheduleVersion, &storedInputDigest, &attempt, &revisionDigest, &targetVersion, &targetDigest, &automationText, &automationTextDigest, &promptInputs, &promptInputsDigest, &initiatedBy, &initiatorRef, &initiatorName, &sessionPolicy, &continueSessionRef)
+	err := tx.QueryRow(ctx, queryWorkersChangeoccurrenceSelectScheduleOccurrencesOrganizationIdRefLeaseRef, scope.organizationID, payload.OccurrenceRef, payload.LeaseRef, input.Principal.CredentialRevision).Scan(&occurrenceID, &scheduleID, &projectID, &projectRef, &state, &storedDigest, &generation, &expires, &targetType, &targetRef, &name, &occurrenceInput, &scheduleVersion, &storedInputDigest, &attempt, &revisionDigest, &targetVersion, &targetDigest, &automationText, &automationTextDigest, &promptInputs, &promptInputsDigest, &initiatedBy, &initiatorRef, &initiatorName, &sessionPolicy, &continueSessionRef, &promptInputFormat)
 	if err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -725,10 +771,10 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 	}
 	inputDigest := sha256.Sum256(occurrenceInput)
 	storedAutomationDigest := sha256.Sum256([]byte(automationText))
-	storedPromptInputsDigest := sha256.Sum256(promptInputs)
+	storedPromptInputsDigest := schedulePromptDigest(promptInputFormat, promptInputs)
 	if storedInputDigest != hex.EncodeToString(inputDigest[:]) ||
 		automationTextDigest != hex.EncodeToString(storedAutomationDigest[:]) ||
-		promptInputsDigest != hex.EncodeToString(storedPromptInputsDigest[:]) ||
+		promptInputsDigest != storedPromptInputsDigest ||
 		scheduleVersion < 1 || targetVersion < 1 || revisionDigest == "" || initiatedBy == "" {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -771,8 +817,10 @@ func (repository *Repository) changeOccurrence(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrConflict
 	}
 	var immutableInput map[string]any
-	var immutablePromptInputs map[string]any
-	if json.Unmarshal(occurrenceInput, &immutableInput) != nil || json.Unmarshal(promptInputs, &immutablePromptInputs) != nil {
+	if _, err := decodeSchedulePromptCapture(promptInputFormat, promptInputs); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if json.Unmarshal(occurrenceInput, &immutableInput) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	nested := input
@@ -836,6 +884,10 @@ func validScheduleErrorCode(value string) bool {
 }
 
 func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	route, err := integrationExecutionRoute(principal.CallerWorkload)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -845,10 +897,10 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsExpireStaleTestLeases, scope.organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsExpireStaleTestLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationtestsSelectIntegrationConnectionTestsOrganizationIdState, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationtestsSelectIntegrationConnectionTestsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -880,12 +932,20 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 	}
 	result := make([]map[string]any, 0, len(candidates))
 	for _, item := range candidates {
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
+		health, exists := definition.Capability(definition.Spec.HealthCheck.Operation)
+		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
+			return nil, errs.ErrForbidden
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsClaimTestLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationtestsClaimTestLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -893,6 +953,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		_ = json.Unmarshal(item.configuration, &configuration)
 		claim := map[string]any{
 			"testRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
+			"definitionPackage": asJSON(definition),
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
@@ -917,7 +978,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
 	var generation int64
 	var expiresAt time.Time
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef).Scan(&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(payload.Fence))
@@ -964,7 +1025,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	encodedInput, err := json.Marshal(boundedInput)
-	if err != nil || len(encodedInput) > 64<<10 {
+	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
 	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef string
@@ -988,14 +1049,17 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); err != nil {
 		return nil, errs.ErrForbidden
 	}
-	definition, exists := repository.integrationDefinitions[definitionKey]
+	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, input["connection_ref"], definitionKey, definitionVersion, definitionDigest)
 	capability, capabilityExists := definition.Capability(input["capability_key"])
-	if !exists || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
+	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
 		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	if err != nil {
+		return nil, errs.ErrInvalid
+	}
+	if len(encodedInput) > 64<<10 && (definitionKey != "github" || capability.Operation != "github.repository.content.update") {
 		return nil, errs.ErrInvalid
 	}
 	var resourceScope map[string]string
@@ -1005,21 +1069,37 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	invocationRef, _ := newRef("inv")
 	inputDigest := sha256.Sum256(canonicalInput)
 	inputDigestHex := hex.EncodeToString(inputDigest[:])
-	intentDigest := sha256.Sum256([]byte(strings.Join([]string{
+	intentParts := []string{
 		input["node_ref"], input["idempotency_key"], input["connection_ref"], input["capability_key"],
 		inputDigestHex, definitionDigest, resourceScopeDigest,
-	}, "\x00")))
+	}
+	mailboxGate := false
+	if definitionKey == "email" {
+		mailbox, err := repository.readEmailMailbox(ctx, tx, scope, resourceScope["mailbox_id"], 0)
+		if err != nil {
+			return nil, err
+		}
+		if mailbox.ConnectionRef != input["connection_ref"] {
+			return nil, errs.ErrForbidden
+		}
+		intentParts = append(intentParts, mailbox.SourceDigest)
+		mailboxGate, err = emailpolicy.CommandRequiresGate(mailbox, capability.Operation, "", canonicalInput)
+		if err != nil {
+			return nil, err
+		}
+	}
+	intentDigest := sha256.Sum256([]byte(strings.Join(intentParts, "\x00")))
 	intentDigestHex := hex.EncodeToString(intentDigest[:])
 	effectKey := "eff_" + intentDigestHex[:32]
 	state := "READY"
-	if risk != "READ" {
+	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var invocationID, resolvedRef, resolvedState string
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
-		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey,
+		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey, mailboxGate,
 	).Scan(&invocationID, &resolvedRef, &resolvedState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
@@ -1074,7 +1154,22 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	}, nil
 }
 
+func integrationExecutionRoute(workload string) (string, error) {
+	switch workload {
+	case "integration-gateway":
+		return "MANAGED_MCP", nil
+	case "interaction-gateway":
+		return "INTERACTION", nil
+	default:
+		return "", errs.ErrForbidden
+	}
+}
+
 func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, principal value.Principal, instance string, limit int32) ([]map[string]any, error) {
+	route, err := integrationExecutionRoute(principal.CallerWorkload)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -1084,10 +1179,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID); err != nil {
+	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit)
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, limit, principal.CallerWorkload, route)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -1129,12 +1224,16 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.connectionRef}); err != nil {
 			continue
 		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
+		if err != nil {
+			return nil, err
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("eff")
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -1145,7 +1244,8 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		_ = json.Unmarshal(item.resourceScope, &resourceScope)
 		claim := map[string]any{
 			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
-			"capabilityKey": item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
+			"definitionPackage": asJSON(definition),
+			"capabilityKey":     item.capabilityKey, "configuration": configuration, "boundedInput": bounded,
 			"definitionVersion": item.definitionVersion, "definitionDigest": item.definitionDigest,
 			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
 			"resourceKind": item.resourceKind, "resourceScope": resourceScope,
@@ -1180,6 +1280,9 @@ func (repository *Repository) GetIntegrationInvocation(ctx context.Context, prin
 }
 
 func (repository *Repository) completeIntegrationInvocation(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	if _, err := integrationExecutionRoute(input.Principal.CallerWorkload); err != nil {
+		return commandOutcome{}, err
+	}
 	payload, ok := input.Payload.(command.IntegrationInvocationInput)
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1203,7 +1306,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	var receiptProviderRef, receiptResponseDigest, receiptResult string
 	var generation int64
 	var expiresAt *time.Time
-	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef).Scan(
+	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationinvocationSelectIntegrationInvocationsOrganizationIdRef, scope.organizationID, payload.InvocationRef, input.Principal.CallerWorkload).Scan(
 		&invocationID, &runID, &rootRunID, &projectID, &projectRef, &nodeRef, &storedDigest,
 		&generation, &state, &leaseRef, &expiresAt, &effectKey, &inputDigest, &receiptRef,
 		&receiptEffectKey, &receiptInputDigest, &receiptProviderRef, &receiptResponseDigest, &receiptResult,

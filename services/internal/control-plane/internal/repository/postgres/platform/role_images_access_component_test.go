@@ -43,9 +43,29 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	created, err := repository.Manage(ctx, roleimagerepo.ManageInput{
 		Principal: roleImageOwner, Action: "CREATE", ProjectRef: project.Ref, RoleDefinitionRef: agent.RoleDefinitionRef,
 		Name: "Application RBAC image", Mutation: roleImageTestMutation("role-image-access-create", "CREATE", nil),
+		Recipe: entity.RoleImageRecipeInput{Dockerfile: "FROM scratch\n# source boundary fixture\n", InstallationBlock: "# private installation fixture"},
 	})
 	if err != nil || created.Recipe.Ref == "" || created.Build == nil {
 		t.Fatalf("owner create role image: result=%#v err=%v", created, err)
+	}
+	foreignProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "role-image-signed-other-project"}, Payload: command.ProjectInput{Name: "Other signed scope", Language: "en"}})
+	if err != nil || foreignProject.Project == nil {
+		t.Fatalf("create other signed project: %v", err)
+	}
+	foreignScope := roleImageOwner
+	if err := repository.pool.QueryRow(ctx, `SELECT id::text FROM control_plane.projects WHERE ref=$1`, foreignProject.Project.Ref).Scan(&foreignScope.ProjectRef); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.Get(ctx, foreignScope, created.Recipe.Ref); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("signed foreign project read source through owner role: %v", err)
+	}
+	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: foreignScope, Action: "CREATE", ProjectRef: project.Ref, RoleDefinitionRef: agent.RoleDefinitionRef,
+		Name: "Application RBAC image", Mutation: roleImageTestMutation("role-image-access-create", "CREATE", nil),
+		Recipe: entity.RoleImageRecipeInput{Dockerfile: "FROM scratch\n# source boundary fixture\n", InstallationBlock: "# private installation fixture"},
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("signed foreign project replayed owner source receipt: %v", err)
 	}
 	worker := roleImageOwner
 	worker.CallerWorkload = "role-image-builder"
@@ -82,7 +102,10 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("resolve role image candidate principal: %v", err)
 	}
 
-	items, _, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 20}})
+	items, _, total, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 20}})
+	if err != nil || total != int64(len(items)) {
+		t.Fatalf("role image list count mismatch: %v", err)
+	}
 	var listed *entity.RoleImageRecipe
 	for index := range items {
 		if !sameStrings(items[index].NextActions, []string{"OPEN"}) {
@@ -95,8 +118,52 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if err != nil || listed == nil {
 		t.Fatalf("project viewer list mismatch: items=%#v err=%v", items, err)
 	}
-	if _, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref); err != nil {
+	if listed.SourceAvailable || listed.Input.Dockerfile != "" || listed.Input.InstallationBlock != "" {
+		t.Fatal("metadata viewer received recipe source")
+	}
+	filtered, _, filteredTotal, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "Application RBAC", State: "ACTIVE", Page: query.Page{Size: 1}})
+	if err != nil || filteredTotal != 1 || len(filtered) != 1 || filtered[0].Ref != created.Recipe.Ref || filtered[0].ManagedLineage == nil {
+		t.Fatalf("filtered recipe lineage/count mismatch: %v", err)
+	}
+	literal, _, literalTotal, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "%", Page: query.Page{Size: 1}})
+	if err != nil || literalTotal != 0 || len(literal) != 0 {
+		t.Fatalf("recipe query treated wildcard as pattern: %v", err)
+	}
+	seen, token := map[string]bool{}, ""
+	for {
+		page, next, count, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 1, Token: token}})
+		if err != nil || count != total || len(page) != 1 || seen[page[0].Ref] {
+			t.Fatalf("recipe pagination mismatch: %v", err)
+		}
+		seen[page[0].Ref] = true
+		if next == "" {
+			break
+		}
+		if _, _, _, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "changed", Page: query.Page{Size: 1, Token: next}}); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("recipe cursor escaped query: %v", err)
+		}
+		if _, _, _, err := repository.List(ctx, roleImageOwner, roleimagerepo.Filter{ProjectRef: project.Ref, Page: query.Page{Size: 1, Token: next}}); !errors.Is(err, domainerrs.ErrInvalid) {
+			t.Fatalf("recipe cursor escaped actor: %v", err)
+		}
+		token = next
+		if int64(len(seen)) >= total {
+			t.Fatal("recipe cursor did not terminate")
+		}
+	}
+	if int64(len(seen)) != total {
+		t.Fatal("recipe pagination omitted visible items")
+	}
+	viewerDetail, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref)
+	if err != nil {
 		t.Fatalf("project viewer cannot read exact role image: %v", err)
+	}
+	if viewerDetail.Recipe.SourceAvailable || viewerDetail.Recipe.Input.Dockerfile != "" || viewerDetail.Recipe.Input.InstallationBlock != "" {
+		t.Fatal("metadata detail exposed recipe source")
+	}
+	for _, build := range viewerDetail.Builds {
+		if build.SourceAvailable || build.Dockerfile != "" {
+			t.Fatal("metadata detail exposed build source")
+		}
 	}
 	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
 		Principal: roleImageCandidate, Action: "CREATE", ProjectRef: project.Ref, RoleDefinitionRef: agent.RoleDefinitionRef,
@@ -111,9 +178,24 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 
 	detail, err := repository.Get(ctx, roleImageCandidate, created.Recipe.Ref)
 	current := detail.Recipe
-	if err != nil || !containsString(current.NextActions, "UPDATE") || !containsString(current.NextActions, "REQUEST_BUILD") {
+	if err != nil || containsString(current.NextActions, "UPDATE") || !containsString(current.NextActions, "REQUEST_BUILD") || current.SourceAvailable {
 		t.Fatalf("exact builder actions mismatch: recipe=%#v err=%v", current, err)
 	}
+	deniedVersion := int64(current.Version)
+	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "UPDATE", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		Name: "Denied source change", Mutation: roleImageTestMutation("role-image-source-denied-update", "UPDATE", &deniedVersion),
+	}); !errors.Is(err, domainerrs.ErrNotFound) && !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("image.build allowed source mutation without source authority: %v", err)
+	}
+	sourceRole := createRoleImageAccessRole(t, ctx, service, owner, "role-image-source-role", "Exact image source editor", []string{"image.source.view", "image.source.manage"}, []string{"RESOURCE_INSTANCE"})
+	sourceBinding := createRoleImageAccessBinding(t, ctx, service, owner, "role-image-source-binding", subjects[0].Ref, sourceRole.CurrentVersion.Ref,
+		entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: project.Ref, ResourceKind: "ROLE_IMAGE", ResourceRef: current.Ref})
+	detail, err = repository.Get(ctx, roleImageCandidate, current.Ref)
+	if err != nil || !detail.Recipe.SourceAvailable || detail.Recipe.Input.Dockerfile != created.Recipe.Input.Dockerfile || detail.Recipe.Input.InstallationBlock != created.Recipe.Input.InstallationBlock || !containsString(detail.Recipe.NextActions, "UPDATE") {
+		t.Fatalf("source editor exact read failed: %v", err)
+	}
+	current = detail.Recipe
 	wrongProjectVersion := int64(current.Version)
 	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
 		Principal: roleImageCandidate, Action: "UPDATE", ProjectRef: "prj_hidden", RecipeRef: current.Ref,
@@ -153,6 +235,42 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if err != nil || requested.Build == nil {
 		t.Fatalf("exact builder request build failed: result=%#v err=%v", requested, err)
 	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "role-image-source-revoke", ExpectedVersion: &sourceBinding.Version},
+		Payload:  command.AccessBindingInput{BindingRef: sourceBinding.Ref}}); err != nil {
+		t.Fatalf("revoke image source authority: %v", err)
+	}
+	replayed, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "REQUEST_BUILD", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		Mutation: roleImageTestMutation("role-image-access-request-build", "REQUEST_BUILD", &buildVersion),
+	})
+	if err != nil || replayed.Build == nil || replayed.Build.Ref != requested.Build.Ref || replayed.Build.SourceAvailable || replayed.Build.Dockerfile != "" || replayed.Recipe.SourceAvailable || replayed.Recipe.Input.InstallationBlock != "" {
+		t.Fatalf("build receipt replay did not recheck source authority: %v", err)
+	}
+	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "UPDATE", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		Name: "Updated application RBAC image", Mutation: roleImageTestMutation("role-image-access-update", "UPDATE", &wrongProjectVersion),
+	}); !errors.Is(err, domainerrs.ErrNotFound) && !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("source update receipt bypassed revoked authority: %v", err)
+	}
+	if created.Recipe.ManagedLineage == nil {
+		t.Fatal("role image is missing managed history lineage")
+	}
+	set, revisions, _, _, err := repository.ListManagedConfigurationHistory(ctx, roleImageCandidate, created.Recipe.ManagedLineage.ConfigurationRef, query.Page{Size: 20})
+	if err != nil || len(revisions) == 0 {
+		t.Fatalf("read metadata history after source revoke: %v", err)
+	}
+	if set.SourceEditable == nil || *set.SourceEditable {
+		t.Fatal("managed source edit authority was not projected after revoke")
+	}
+	if set.CurrentRevision != nil && (set.CurrentRevision.Content != "" || set.CurrentRevision.SourceAvailable == nil || *set.CurrentRevision.SourceAvailable) {
+		t.Fatal("managed current revision exposed revoked source")
+	}
+	for _, revision := range revisions {
+		if revision.Content != "" || revision.SourceAvailable == nil || *revision.SourceAvailable || len(revision.ValidationDiagnostics) != 0 {
+			t.Fatal("managed history exposed revoked source")
+		}
+	}
 }
 
 func roleImageTestMutation(key, action string, expectedVersion *int64) value.Mutation {
@@ -174,7 +292,7 @@ func createRoleImageAccessRole(t *testing.T, ctx context.Context, service *platf
 	return *result.AccessRole
 }
 
-func createRoleImageAccessBinding(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, key, subjectRef, roleVersionRef string, scope entity.AccessScope) {
+func createRoleImageAccessBinding(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, key, subjectRef, roleVersionRef string, scope entity.AccessScope) entity.AccessBinding {
 	t.Helper()
 	result, err := service.Execute(ctx, command.Command{Kind: command.CreateAccessBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.AccessBindingInput{
@@ -183,6 +301,7 @@ func createRoleImageAccessBinding(t *testing.T, ctx context.Context, service *pl
 	if err != nil || result.AccessBinding == nil {
 		t.Fatalf("create %s: binding=%#v err=%v", key, result.AccessBinding, err)
 	}
+	return *result.AccessBinding
 }
 
 func containsString(values []string, expected string) bool {
