@@ -960,6 +960,9 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
       "name":"control-api-gateway","port":{"name":"https"}
     }
   ) |
+  with(select(.kind == "Ingress" and .metadata.name == "staff-control-center-public-assets");
+    .spec.rules[].http.paths[].backend.service.port.name = "http"
+  ) |
   with(select(.kind == "ConfigMap" and (.metadata.name | test("^staff-control-center-runtime-")));
     .immutable = false |
     .data."runtime-config.json" = ({

@@ -18,6 +18,7 @@ describe("runtime secret reveal flow", () => {
       session: {
         beginRuntimeSecretRevealReauth,
         consumePendingRuntimeSecretReveal: () => false,
+        refreshMetadata: vi.fn(),
       },
       reveal,
     });
@@ -31,6 +32,7 @@ describe("runtime secret reveal flow", () => {
   });
 
   it("вызывает reveal только после атомарного потребления допуска", async () => {
+    const refreshMetadata = vi.fn(() => Promise.resolve());
     const reveal = vi.fn(() =>
       Promise.resolve({ value: "one-use-value", valueType: "STRING" as const }),
     );
@@ -41,6 +43,7 @@ describe("runtime secret reveal flow", () => {
       session: {
         beginRuntimeSecretRevealReauth: vi.fn(),
         consumePendingRuntimeSecretReveal: () => true,
+        refreshMetadata,
       },
       reveal,
     });
@@ -51,5 +54,27 @@ describe("runtime secret reveal flow", () => {
     });
     expect(reveal).toHaveBeenCalledOnce();
     expect(reveal).toHaveBeenCalledWith("secret_main");
+    expect(refreshMetadata).toHaveBeenCalledOnce();
+  });
+
+  it("перечитывает session metadata и после неизвестного исхода Reveal без повторного эффекта", async () => {
+    const refreshMetadata = vi.fn(() => Promise.resolve());
+    const reveal = vi.fn(() =>
+      Promise.reject(new Error("Unknown reveal outcome")),
+    );
+    await expect(
+      executeRuntimeSecretReveal({
+        projectRef: "project_sales",
+        secretRef: "secret_main",
+        session: {
+          beginRuntimeSecretRevealReauth: vi.fn(),
+          consumePendingRuntimeSecretReveal: () => true,
+          refreshMetadata,
+        },
+        reveal,
+      }),
+    ).rejects.toThrow("Unknown reveal outcome");
+    expect(reveal).toHaveBeenCalledOnce();
+    expect(refreshMetadata).toHaveBeenCalledOnce();
   });
 });

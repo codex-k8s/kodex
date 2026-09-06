@@ -8,6 +8,7 @@ import {
   type MaybeRefOrGetter,
   type Ref,
 } from "vue";
+import { AppProblem } from "@/shared/api/problem";
 
 export interface AsyncEntityPickerItem {
   id: string;
@@ -25,6 +26,7 @@ export interface AsyncEntityLoadRequest {
 export interface AsyncEntityPage<T extends AsyncEntityPickerItem> {
   items: readonly T[];
   nextCursor?: string | null;
+  total?: number;
 }
 
 export type AsyncEntityLoader<T extends AsyncEntityPickerItem> = (
@@ -87,21 +89,27 @@ export function virtualWindow(options: {
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
+function isObject(value: unknown): boolean {
+  return value !== null && typeof value === "object";
+}
 
 function mergePage<T extends AsyncEntityPickerItem>(
   current: readonly T[],
   incoming: readonly T[],
 ): T[] {
   const result = [...current];
-  const indexes = new Map(result.map((item, index) => [item.id, index]));
+  const ids = new Set(result.map((item) => item.id));
   for (const item of incoming) {
-    const index = indexes.get(item.id);
-    if (index === undefined) {
-      indexes.set(item.id, result.length);
-      result.push(item);
-    } else {
-      result[index] = item;
-    }
+    if (
+      !isObject(item) ||
+      typeof item.id !== "string" ||
+      !item.id ||
+      ids.has(item.id) ||
+      typeof item.label !== "string"
+    )
+      throw new Error("Invalid or duplicate catalog item");
+    ids.add(item.id);
+    result.push(item);
   }
   return result;
 }
@@ -112,12 +120,14 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
 ) {
   const query = ref("");
   const items = shallowRef<T[]>([]);
+  const total = ref<number>();
   const nextCursor = ref<string | null>(null);
   const initialLoading = ref(false);
   const loadingMore = ref(false);
   const error = shallowRef<unknown>();
   const hasLoaded = ref(false);
-  const debounceMs = Math.max(0, options.debounceMs ?? 250);
+  const debounceMs = Math.max(0, options.debounceMs ?? 500);
+  const cursors = new Set<string>();
 
   let generation = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -158,10 +168,36 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
       });
       if (requestController.signal.aborted || expectedGeneration !== generation)
         return;
-      items.value = append
-        ? mergePage(items.value, page.items)
-        : [...page.items];
-      nextCursor.value = page.nextCursor ?? null;
+      if (!isObject(page) || !Array.isArray(page.items))
+        throw new Error("Invalid catalog page");
+      if (
+        page.total !== undefined &&
+        (typeof page.total !== "number" ||
+          !Number.isSafeInteger(page.total) ||
+          page.total < page.items.length)
+      )
+        throw new Error("Invalid catalog total");
+      const cursor = page.nextCursor === "" ? null : (page.nextCursor ?? null);
+      if (
+        cursor !== null &&
+        (typeof cursor !== "string" || cursors.has(cursor))
+      )
+        throw new Error("Repeated or invalid catalog cursor");
+      const merged = mergePage<T>(
+        append ? items.value : [],
+        page.items as readonly T[],
+      );
+      if (page.total !== undefined && page.total < merged.length)
+        throw new AppProblem({
+          status: 412,
+          code: "VERSION_MISMATCH",
+          kind: "conflict",
+          retryable: true,
+        });
+      if (cursor) cursors.add(cursor);
+      items.value = merged;
+      total.value = page.total;
+      nextCursor.value = cursor;
       hasLoaded.value = true;
     } catch (loadError) {
       if (
@@ -170,6 +206,14 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
         isAbortError(loadError)
       )
         return;
+      if (
+        append &&
+        loadError instanceof AppProblem &&
+        loadError.status === 412
+      ) {
+        schedule(0);
+        return;
+      }
       error.value = loadError;
       hasLoaded.value = true;
     } finally {
@@ -184,8 +228,10 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
   function schedule(delay = debounceMs): void {
     cancelPending();
     generation += 1;
+    cursors.clear();
     const expectedGeneration = generation;
     items.value = [];
+    total.value = undefined;
     nextCursor.value = null;
     error.value = undefined;
     hasLoaded.value = false;
@@ -198,6 +244,13 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
 
   function refresh(): void {
     schedule(0);
+  }
+
+  function cancel(): void {
+    generation += 1;
+    cancelPending();
+    initialLoading.value = false;
+    loadingMore.value = false;
   }
 
   async function loadMore(): Promise<void> {
@@ -230,6 +283,7 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     hasMore,
     initialLoading,
     items,
+    total,
     loadMore,
     loadMoreError,
     loadingMore,
@@ -237,6 +291,7 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     phase,
     query,
     refresh,
+    cancel,
   };
 }
 
@@ -326,4 +381,5 @@ export interface AsyncEntityOption {
 export interface AsyncEntityOptionPage {
   items: AsyncEntityOption[];
   nextPageToken?: string;
+  total?: number;
 }

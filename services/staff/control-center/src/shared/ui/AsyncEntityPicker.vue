@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Search,
+  X,
 } from "@lucide/vue";
 import { computed, nextTick, onScopeDispose, ref, useId, watch } from "vue";
 
@@ -45,27 +46,32 @@ interface PickerEntry extends AsyncEntityPickerItem {
   disabledReason?: string;
 }
 
-const props = defineProps<{
-  modelValue?: PickerValue;
-  loadItems?: AsyncEntityLoader<T>;
-  labels?: AsyncEntityPickerLabels;
-  multiple?: boolean;
-  disabled?: boolean;
-  debounceMs?: number;
-  selected?: S;
-  triggerLabel?: string;
-  loadPage?: (
-    query: string,
-    cursor: string | undefined,
-    signal: AbortSignal,
-  ) => Promise<AsyncEntityOptionPage>;
-  placeholder?: string;
-  searchPlaceholder?: string;
-  virtualize?: boolean;
-  virtualItemHeight?: number;
-  virtualColumns?: number;
-  virtualOverscan?: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue?: PickerValue;
+    loadItems?: AsyncEntityLoader<T>;
+    labels?: AsyncEntityPickerLabels;
+    multiple?: boolean;
+    disabled?: boolean;
+    debounceMs?: number;
+    selected?: S;
+    selectedOptions?: readonly S[];
+    clearable?: boolean;
+    triggerLabel?: string;
+    loadPage?: (
+      query: string,
+      cursor: string | undefined,
+      signal: AbortSignal,
+    ) => Promise<AsyncEntityOptionPage>;
+    placeholder?: string;
+    searchPlaceholder?: string;
+    virtualize?: boolean;
+    virtualItemHeight?: number;
+    virtualColumns?: number;
+    virtualOverscan?: number;
+  }>(),
+  { clearable: true },
+);
 const emit = defineEmits<{
   "update:modelValue": [value: PickerValue];
   select: [item: S];
@@ -75,6 +81,8 @@ defineSlots<{ option?(props: { item: T; selected: boolean }): unknown }>();
 const inline = props.loadItems !== undefined;
 const pickerId = `async-picker-${useId()}`;
 const list = ref<HTMLElement>();
+const trigger = ref<HTMLButtonElement>();
+const searchInput = ref<HTMLInputElement>();
 const sentinel = ref<HTMLElement>();
 const open = ref(false);
 const activeIndex = ref(-1);
@@ -93,6 +101,7 @@ const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
         source: item,
       })),
       nextCursor: page.nextCursor,
+      total: page.total,
     };
   }
   if (!props.loadPage) throw new Error("Async entity loader is required");
@@ -112,6 +121,7 @@ const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
       source: item,
     })),
     nextCursor: page.nextPageToken,
+    total: page.total,
   };
 };
 
@@ -119,15 +129,17 @@ const {
   hasMore,
   initialLoading,
   items,
+  total,
   loadMore,
   loadMoreError,
   loadingMore,
   phase,
   query,
   refresh,
+  cancel,
 } = useAsyncEntityCollection(loader, {
-  debounceMs: props.debounceMs ?? (inline ? 250 : 300),
-  immediate: inline,
+  debounceMs: props.debounceMs ?? 500,
+  immediate: inline && !props.disabled,
 });
 
 const copy = computed<AsyncEntityPickerLabels>(
@@ -153,12 +165,34 @@ const selectedIds = computed<readonly string[]>(() => {
   return typeof props.modelValue === "string" ? [props.modelValue] : [];
 });
 const selectedOption = computed(() => {
+  if (typeof props.modelValue !== "string" || !props.modelValue)
+    return undefined;
   const entry = items.value.find((item) => item.id === props.modelValue);
   if (entry && isOption(entry.source)) return entry.source;
-  return props.selected && isOption(props.selected)
+  return props.selected &&
+    isOption(props.selected) &&
+    props.selected.ref === props.modelValue
     ? props.selected
     : undefined;
 });
+const selectionNames = ref<Record<string, string>>({});
+const multipleSelectionLabel = computed(() =>
+  selectedIds.value
+    .map((id) => {
+      const supplied = props.selectedOptions?.find(
+        (item) => isOption(item) && item.ref === id,
+      );
+      return (
+        items.value.find((item) => item.id === id)?.label ??
+        (supplied && isOption(supplied)
+          ? supplied.title
+          : selectionNames.value[id])
+      );
+    })
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(", "),
+);
 const activeDescendant = computed(() => {
   if (
     virtualized.value &&
@@ -250,6 +284,7 @@ function secondaryText(item: PickerEntry): string {
 function chooseInline(item: PickerEntry): void {
   if (props.disabled || item.disabled) return;
   if (props.multiple) {
+    selectionNames.value[item.id] = item.label;
     const selection = new Set(selectedIds.value);
     if (selection.has(item.id)) selection.delete(item.id);
     else selection.add(item.id);
@@ -259,6 +294,10 @@ function chooseInline(item: PickerEntry): void {
 }
 function chooseDropdown(item: PickerEntry): void {
   if (props.disabled || item.disabled || !isOption(item.source)) return;
+  if (props.multiple) {
+    chooseInline(item);
+    return;
+  }
   emit("update:modelValue", item.source.ref);
   emit("select", item.source as S);
   close();
@@ -307,9 +346,25 @@ function ensureIndexVisible(index: number): void {
   );
 }
 function handleListKeydown(event: KeyboardEvent, dropdown: boolean): void {
+  if (props.disabled) return;
+  if (
+    !(event.target instanceof HTMLInputElement) &&
+    !(
+      event.target instanceof HTMLElement &&
+      event.target.getAttribute("role") === "option"
+    )
+  )
+    return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     moveActive(event.key === "ArrowDown" ? 1 : -1);
+    if (!(event.target instanceof HTMLInputElement)) {
+      void nextTick(() =>
+        document
+          .getElementById(activeDescendant.value ?? "")
+          ?.focus({ preventScroll: true }),
+      );
+    }
     return;
   }
   if (event.key !== "Enter" || activeIndex.value < 0) return;
@@ -329,15 +384,32 @@ function handleScroll(event: Event): void {
 function close(): void {
   open.value = false;
   activeIndex.value = -1;
+  cancel();
+}
+function clear(): void {
+  if (props.disabled) return;
+  emit("update:modelValue", props.multiple ? [] : null);
+  void nextTick(() => (inline ? searchInput.value : trigger.value)?.focus());
 }
 function handlePopoverOpen(value: boolean): void {
+  if (props.disabled) {
+    close();
+    return;
+  }
   open.value = value;
   if (value) {
     refresh();
   } else {
-    activeIndex.value = -1;
+    close();
   }
 }
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) close();
+    else if (inline) refresh();
+  },
+);
 </script>
 
 <template>
@@ -352,6 +424,7 @@ function handlePopoverOpen(value: boolean): void {
         copy.label
       }}</span
       ><input
+        ref="searchInput"
         v-model="query"
         type="search"
         :placeholder="copy.searchPlaceholder"
@@ -362,8 +435,17 @@ function handlePopoverOpen(value: boolean): void {
         aria-expanded="true"
         aria-haspopup="listbox"
         aria-autocomplete="list"
-        @keydown="handleListKeydown($event, false)"
-    /></label>
+        @keydown="handleListKeydown($event, false)" /><button
+        v-if="clearable !== false && selectedIds.length"
+        class="icon-button"
+        type="button"
+        :disabled="disabled"
+        :title="$t('common.clearSelection')"
+        :aria-label="$t('common.clearSelection')"
+        @click="clear"
+      >
+        <X :size="16" /></button
+    ></label>
     <div
       :id="`${pickerId}-listbox`"
       ref="list"
@@ -371,6 +453,7 @@ function handlePopoverOpen(value: boolean): void {
       role="listbox"
       :aria-multiselectable="multiple || undefined"
       @scroll.passive="handleScroll"
+      @keydown="handleListKeydown($event, false)"
     >
       <div
         v-if="phase === 'initial-loading'"
@@ -421,11 +504,13 @@ function handlePopoverOpen(value: boolean): void {
               'async-picker__option--selected': isSelected(entry.item),
             }"
             role="option"
+            tabindex="-1"
             :aria-posinset="entry.index + 1"
             :aria-setsize="items.length"
             :aria-selected="isSelected(entry.item)"
             :disabled="disabled || entry.item.disabled"
             @mouseenter="activeIndex = entry.index"
+            @focus="activeIndex = entry.index"
             @click="chooseInline(entry.item)"
           >
             <slot
@@ -496,25 +581,49 @@ function handlePopoverOpen(value: boolean): void {
       @update:open="handlePopoverOpen"
     >
       <template #trigger="{ toggle, attrs }">
-        <button
-          v-bind="attrs"
-          class="async-picker__trigger"
-          type="button"
-          :aria-label="popoverLabel"
-          :disabled="disabled"
-          @click="toggle"
-          @keydown.down.prevent="handlePopoverOpen(true)"
-        >
-          <span v-if="selectedOption" class="async-picker__selection"
-            ><strong>{{ selectedOption.title }}</strong
-            ><small v-if="selectedOption.description">{{
-              selectedOption.description
-            }}</small></span
-          ><span v-else class="async-picker__placeholder">{{
-            placeholder
-          }}</span
-          ><ChevronDown :size="17" aria-hidden="true" />
-        </button>
+        <div class="async-picker__trigger-row">
+          <button
+            ref="trigger"
+            v-bind="attrs"
+            class="async-picker__trigger"
+            type="button"
+            :aria-label="popoverLabel"
+            :disabled="disabled"
+            @click="toggle"
+            @keydown.down.prevent="handlePopoverOpen(true)"
+          >
+            <span
+              v-if="multiple && selectedIds.length"
+              class="async-picker__selection"
+              ><strong>{{
+                $t("common.selectedCount", { count: selectedIds.length })
+              }}</strong
+              ><small v-if="multipleSelectionLabel">{{
+                multipleSelectionLabel
+              }}</small></span
+            >
+            <span v-else-if="selectedOption" class="async-picker__selection"
+              ><strong>{{ selectedOption.title }}</strong
+              ><small v-if="selectedOption.description">{{
+                selectedOption.description
+              }}</small></span
+            ><span v-else class="async-picker__placeholder">{{
+              placeholder ?? triggerLabel
+            }}</span
+            ><ChevronDown :size="17" aria-hidden="true" />
+          </button>
+          <button
+            v-if="clearable !== false && selectedIds.length"
+            class="icon-button"
+            type="button"
+            :disabled="disabled"
+            :title="$t('common.clearSelection')"
+            :aria-label="$t('common.clearSelection')"
+            @click="clear"
+          >
+            <X :size="16" />
+          </button>
+        </div>
       </template>
       <section
         class="async-picker__popover"
@@ -525,6 +634,7 @@ function handlePopoverOpen(value: boolean): void {
             searchPlaceholder
           }}</span
           ><input
+            ref="searchInput"
             v-model="query"
             type="search"
             :placeholder="searchPlaceholder"
@@ -540,6 +650,7 @@ function handlePopoverOpen(value: boolean): void {
           ref="list"
           class="async-picker__options"
           role="listbox"
+          :aria-multiselectable="multiple || undefined"
           :aria-busy="initialLoading || loadingMore"
           @scroll.passive="handleScroll"
         >
@@ -579,14 +690,16 @@ function handlePopoverOpen(value: boolean): void {
               class="async-picker__option"
               :class="{
                 'async-picker__option--active': index === activeIndex,
-                'async-picker__option--selected': item.id === modelValue,
+                'async-picker__option--selected': isSelected(item),
               }"
               type="button"
               role="option"
-              :aria-selected="item.id === modelValue"
-              :disabled="item.disabled"
+              tabindex="-1"
+              :aria-selected="isSelected(item)"
+              :disabled="disabled || item.disabled"
               :title="item.disabledReason"
               @mouseenter="activeIndex = index"
+              @focus="activeIndex = index"
               @click="chooseDropdown(item)"
             >
               <span
@@ -599,6 +712,7 @@ function handlePopoverOpen(value: boolean): void {
                   secondaryText(item)
                 }}</small></span
               >
+              <Check v-if="isSelected(item)" :size="17" aria-hidden="true" />
             </button>
             <div
               ref="sentinel"
@@ -635,8 +749,11 @@ function handlePopoverOpen(value: boolean): void {
           </template>
         </div>
         <footer class="async-picker__footer">
-          {{ $t("runtime.pickerShown", { count: items.length })
-          }}<span v-if="hasMore">{{ $t("runtime.pickerScroll") }}</span>
+          {{
+            total === undefined
+              ? $t("runtime.pickerShown", { count: items.length })
+              : $t("runtime.pickerTotal", { count: items.length, total })
+          }}
         </footer>
       </section>
     </DismissiblePopover>
@@ -672,6 +789,16 @@ function handlePopoverOpen(value: boolean): void {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+.async-picker__trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.async-picker__trigger-row > .async-picker__trigger {
+  min-width: 0;
+  flex: 1;
 }
 .async-picker__selection,
 .async-picker__option-copy {

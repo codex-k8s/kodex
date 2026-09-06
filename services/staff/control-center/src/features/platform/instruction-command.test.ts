@@ -13,9 +13,12 @@ describe("instruction command", () => {
     );
   });
 
-  it("не добавляет revision ref в остальные команды", () => {
-    expect(instructionCommandInput("PUBLISH", "ins_ignored")).toEqual({
-      action: "PUBLISH",
+  it("не добавляет revision ref в validate и не публикует без плана", () => {
+    expect(instructionCommandInput("VALIDATE", "ins_ignored")).toEqual({
+      action: "VALIDATE",
     });
+    expect(() => instructionCommandInput("PUBLISH")).toThrow(
+      "Instruction publication requires an impact plan",
+    );
   });
 });

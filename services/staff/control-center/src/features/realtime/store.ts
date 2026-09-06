@@ -677,6 +677,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
     disconnect("STORE_CLOSED");
   }
 
+  function refreshSession(): void {
+    disconnect("SESSION_RENEWED");
+    connect();
+  }
+
   function handleOnline(): void {
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
@@ -698,5 +703,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
     openPlatform,
     closePlatform,
     closeAll,
+    refreshSession,
   };
 });

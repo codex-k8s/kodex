@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка предпросмотра Автоматизации</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { createPinia } from "pinia";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import AutomationEditorDialog from "../../src/features/automations/AutomationEditorDialog.vue";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const schedule = await (
+        await fetch("/api/v1/schedules/schedule_preview")
+      ).json();
+      const submitted = ref();
+      const app = createApp({
+        setup() {
+          return () =>
+            h("main", [
+              h(AutomationEditorDialog, {
+                projectRef: schedule.projectRef,
+                schedule,
+                onSubmit: (input) => {
+                  submitted.value = input;
+                },
+              }),
+              h(
+                "output",
+                { id: "submitted", hidden: true },
+                submitted.value ? JSON.stringify(submitted.value) : "",
+              ),
+            ]);
+        },
+      });
+      app.use(i18n).use(createPinia()).mount("#app");
+    </script>
+  </body>
+</html>

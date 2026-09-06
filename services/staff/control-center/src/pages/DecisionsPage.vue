@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   CalendarClock,
   CheckCircle2,
@@ -11,11 +13,17 @@ import {
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  gateSelection,
+  readAddressedGate,
+} from "@/features/workboard/gate-navigation";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { useGateCatalog } from "@/features/workboard/gate-catalog";
+import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 import {
   decisionActionLayout,
   decisionHistory,
@@ -51,6 +59,25 @@ const projectFilter = ref(
 let preferredGateRef =
   typeof route.query.gateRef === "string" ? route.query.gateRef : "";
 const view = ref<"PENDING" | "HISTORY">("PENDING");
+const search = ref("");
+const catalog = useGateCatalog();
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const addressedGate = ref<OwnerGate>();
+function loadCatalog(more = false): Promise<void> {
+  return catalog.load(
+    {
+      projectRef: projectFilter.value || undefined,
+      query: search.value,
+      view: view.value,
+    },
+    more,
+  );
+}
+function scrollCatalog(event: Event): void {
+  const element = event.currentTarget as HTMLElement;
+  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
+    void loadCatalog(true);
+}
 const selectedRef = ref(preferredGateRef);
 const comments = ref<Record<string, string>>({});
 const decisionDrafts = ref<Record<string, DecisionAction>>({});
@@ -63,10 +90,74 @@ const busyRef = ref("");
 const problem = ref<AppProblem>();
 const successMessage = ref("");
 let pageMounted = false;
+let routingProject = false;
+const addressedGateLoading = ref(false);
+const addressedGateProblem = ref<AppProblem>();
+let addressedGateController: AbortController | undefined;
+
+async function loadAddressedGate(): Promise<void> {
+  addressedGateController?.abort();
+  if (!preferredGateRef) return;
+  const reference = preferredGateRef;
+  const controller = new AbortController();
+  addressedGateController = controller;
+  addressedGateLoading.value = true;
+  addressedGateProblem.value = undefined;
+  try {
+    const gate = await readAddressedGate(
+      reference,
+      projectFilter.value || undefined,
+      controller.signal,
+    );
+    if (
+      controller.signal.aborted ||
+      !pageMounted ||
+      reference !== preferredGateRef
+    )
+      return;
+    const current = platform.gates[gate.ref];
+    if (current && current.version > gate.version)
+      throw new Error("Owner gate readback is outdated");
+    view.value = gate.state === "OPEN" ? "PENDING" : "HISTORY";
+    platform.gates[gate.ref] = gate;
+    addressedGate.value = gate;
+    selectedRef.value = gate.ref;
+    preferredGateRef = "";
+  } catch (error) {
+    if (!controller.signal.aborted && pageMounted) {
+      addressedGateProblem.value = asProblem(error);
+      selectedRef.value = "";
+      addressedGate.value = undefined;
+      if ([403, 404].includes(addressedGateProblem.value.status))
+        Reflect.deleteProperty(platform.gates, reference);
+    }
+  } finally {
+    if (addressedGateController === controller)
+      addressedGateLoading.value = false;
+  }
+}
+function selectGate(reference: string): void {
+  addressedGateController?.abort();
+  addressedGateLoading.value = false;
+  addressedGateProblem.value = undefined;
+  preferredGateRef = "";
+  addressedGate.value = undefined;
+  selectedRef.value = reference;
+}
+function selectView(value: "PENDING" | "HISTORY"): void {
+  addressedGateController?.abort();
+  addressedGate.value = undefined;
+  addressedGateProblem.value = undefined;
+  addressedGateLoading.value = false;
+  preferredGateRef = "";
+  selectedRef.value =
+    value === view.value ? (visibleItems.value[0]?.gate.ref ?? "") : "";
+  view.value = value;
+}
 
 const inbox = computed(() =>
   decisionInbox(
-    platform.gateList,
+    catalog.items.value,
     platform.projectList,
     projectFilter.value || undefined,
     new Date(),
@@ -75,19 +166,64 @@ const inbox = computed(() =>
 );
 const history = computed(() =>
   decisionHistory(
-    platform.gateList,
+    catalog.items.value,
     platform.projectList,
     projectFilter.value || undefined,
     platform.runList,
   ),
 );
-const visibleItems = computed(() =>
-  view.value === "PENDING" ? inbox.value : history.value,
-);
-const groups = computed(() => groupDecisionInbox(visibleItems.value));
-const selected = computed(() =>
-  visibleItems.value.find((item) => item.gate.ref === selectedRef.value),
-);
+const visibleItems = computed(() => {
+  const byRef = new Map(
+    (view.value === "PENDING" ? inbox.value : history.value).map((item) => [
+      item.gate.ref,
+      item,
+    ]),
+  );
+  return catalog.items.value.flatMap((gate) => {
+    const item = byRef.get(gate.ref);
+    return item ? [item] : [];
+  });
+});
+// Объединяем только соседние группы, сохраняя порядок серверных страниц.
+const groups = computed(() => {
+  const result: ReturnType<typeof groupDecisionInbox> = [];
+  for (const item of visibleItems.value) {
+    const previous = result.at(-1);
+    if (
+      previous?.urgency === item.urgency &&
+      previous.items[0]?.gate.projectRef === item.gate.projectRef
+    )
+      previous.items.push(item);
+    else
+      result.push(
+        ...groupDecisionInbox([item]).map((group) => ({
+          ...group,
+          key: item.gate.ref,
+        })),
+      );
+  }
+  return result;
+});
+const selected = computed(() => {
+  if (addressedGate.value && addressedGate.value.ref === selectedRef.value) {
+    const gate = addressedGate.value;
+    return gate.state === "OPEN"
+      ? decisionInbox(
+          [gate],
+          platform.projectList,
+          undefined,
+          new Date(),
+          platform.runList,
+        )[0]
+      : decisionHistory(
+          [gate],
+          platform.projectList,
+          undefined,
+          platform.runList,
+        )[0];
+  }
+  return visibleItems.value.find((item) => item.gate.ref === selectedRef.value);
+});
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -106,33 +242,88 @@ const selectedAuditEvents = computed(() => {
     .filter((event) => event.resourceRef === selected.value?.gate.ref)
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
 });
-const projectsWithGates = computed(() => {
-  const refs = new Set(
-    platform.gateList
-      .filter((gate) =>
-        view.value === "PENDING" ? gate.state === "OPEN" : true,
-      )
-      .map((gate) => gate.projectRef),
-  );
-  return platform.projectList.filter((project) => refs.has(project.ref));
-});
 
 watch(
   visibleItems,
   (items) => {
-    if (items.some((item) => item.gate.ref === selectedRef.value)) return;
-    const preferred = items.find((item) => item.gate.ref === preferredGateRef);
-    selectedRef.value = preferred?.gate.ref ?? items[0]?.gate.ref ?? "";
-    if (items.length) preferredGateRef = "";
+    if (addressedGate.value?.ref === selectedRef.value) return;
+    selectedRef.value = gateSelection(
+      items.map((item) => item.gate.ref),
+      selectedRef.value,
+      preferredGateRef,
+    );
   },
   { immediate: true },
 );
 
-watch(projectFilter, (value) => {
-  if (!pageMounted) return;
-  preferredGateRef = "";
-  selectedRef.value = "";
-  void platform.loadGates(value || undefined);
+watch(
+  projectFilter,
+  () => {
+    if (!pageMounted || routingProject) return;
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    preferredGateRef = "";
+    selectedRef.value = "";
+    addressedGate.value = undefined;
+    void loadCatalog();
+  },
+  { flush: "sync" },
+);
+watch(
+  () => [route.query.gateRef, route.query.projectRef],
+  ([gateRef, projectRef]) => {
+    addressedGateController?.abort();
+    addressedGateLoading.value = false;
+    addressedGateProblem.value = undefined;
+    const project = typeof projectRef === "string" ? projectRef : "";
+    addressedGate.value = undefined;
+    const changedProject = project !== projectFilter.value;
+    routingProject = true;
+    projectFilter.value = project;
+    routingProject = false;
+    preferredGateRef = typeof gateRef === "string" ? gateRef : "";
+    selectedRef.value = "";
+    if (!pageMounted) return;
+    if (changedProject)
+      void loadCatalog().then(() => {
+        if (pageMounted) return loadAddressedGate();
+      });
+    else if (preferredGateRef) void loadAddressedGate();
+    else selectedRef.value = visibleItems.value[0]?.gate.ref ?? "";
+  },
+);
+onBeforeUnmount(() => {
+  pageMounted = false;
+  addressedGateController?.abort();
+  clearTimeout(searchTimer);
+  catalog.reset();
+  attachmentLoadGeneration += 1;
+});
+watch(view, () => {
+  if (pageMounted) void loadCatalog();
+});
+watch(
+  () =>
+    platform.gateList
+      .map((gate) => `${gate.ref}:${String(gate.version)}`)
+      .sort()
+      .join("|"),
+  () => {
+    catalog.invalidate({
+      projectRef: projectFilter.value || undefined,
+      query: search.value,
+      view: view.value,
+    });
+  },
+);
+watch(search, () => {
+  clearTimeout(searchTimer);
+  addressedGate.value = undefined;
+  catalog.reset();
+  searchTimer = setTimeout(() => {
+    if (pageMounted) void loadCatalog();
+  }, 250);
 });
 
 function formatDate(value?: string): string {
@@ -197,16 +388,16 @@ function decisionConsequence(
   const exact = gate.decisionConsequences.find(
     (consequence) => consequence.decision === decision,
   );
-  if (exact?.safeSummary.trim()) return exact.safeSummary;
+  if (exact?.safeSummary.trim()) return serverMessage(exact.safeSummary);
   if (decision === "APPROVE")
     return (
-      gate.consequencesSummary.trim() || t("decisions.consequencesUnavailable")
+      (gate.consequencesSummary.trim() &&
+        serverMessage(gate.consequencesSummary)) ||
+      t("decisions.consequencesUnavailable")
     );
-  if (decision === "REQUEST_CHANGES")
-    return "Gate перейдёт в CHANGES_REQUESTED. Следующий переход Run не представлен текущей проекцией.";
-  if (decision === "REJECT")
-    return "Gate перейдёт в REJECTED. Закрытие или продолжение Run не представлены текущей проекцией.";
-  return "Gate перейдёт в CANCELLED. Дальнейший lifecycle Run не представлен текущей проекцией.";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesConsequence");
+  if (decision === "REJECT") return t("decisions.rejectConsequence");
+  return t("decisions.cancelConsequence");
 }
 
 function requiresDecisionComment(decision?: DecisionAction): boolean {
@@ -214,17 +405,15 @@ function requiresDecisionComment(decision?: DecisionAction): boolean {
 }
 
 function decisionCommentLabel(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES") return "Что нужно изменить";
-  if (decision === "REJECT") return "Причина отклонения";
-  if (decision === "CANCEL") return "Причина отмены";
-  return "Комментарий к одобрению";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesComment");
+  if (decision === "REJECT") return t("decisions.rejectComment");
+  if (decision === "CANCEL") return t("decisions.cancelComment");
+  return t("decisions.approveComment");
 }
 
 function decisionCommentPlaceholder(decision?: DecisionAction): string {
-  if (decision === "REQUEST_CHANGES")
-    return "Перечислите проверяемые изменения, необходимые для повторного решения";
-  if (decision === "REJECT")
-    return "Укажите причину, которая будет записана в аудит";
+  if (decision === "REQUEST_CHANGES") return t("decisions.changesPlaceholder");
+  if (decision === "REJECT") return t("decisions.rejectPlaceholder");
   return t("decisions.commentPlaceholder");
 }
 
@@ -250,13 +439,12 @@ async function decide(gate: OwnerGate): Promise<void> {
   if (requiresDecisionComment(decision) && !comment) {
     validationMessages.value[gate.ref] =
       decision === "REQUEST_CHANGES"
-        ? "Опишите необходимые изменения."
-        : "Укажите причину отклонения.";
+        ? t("decisions.changesRequired")
+        : t("decisions.rejectionRequired");
     return;
   }
   if (!attachmentsReady(gate.ref)) {
-    validationMessages.value[gate.ref] =
-      "Дождитесь загрузки вложений или исправьте ошибку файла.";
+    validationMessages.value[gate.ref] = t("decisions.attachmentsPending");
     return;
   }
   busyRef.value = gate.ref;
@@ -271,14 +459,19 @@ async function decide(gate: OwnerGate): Promise<void> {
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
     });
     selectedAttachmentComposer.value?.clear();
-    successMessage.value = `${decisionLabel(decision)}: решение «${gate.title}» применено.`;
+    successMessage.value = t("decisions.applied", {
+      decision: decisionLabel(decision),
+      title: gate.title,
+    });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(decisionDrafts.value, gate.ref);
     Reflect.deleteProperty(validationMessages.value, gate.ref);
     Reflect.deleteProperty(attachmentStates.value, gate.ref);
+    addressedGate.value = undefined;
+    await loadCatalog();
   } catch (error) {
     problem.value = asProblem(error);
-    if (problem.value.kind === "conflict") await platform.loadGates();
+    if (problem.value.kind === "conflict") await loadCatalog();
   } finally {
     busyRef.value = "";
   }
@@ -320,11 +513,17 @@ function submitActionClass(decision?: DecisionAction): string[] {
 onMounted(() => {
   pageMounted = true;
   void Promise.all([
-    platform.loadGates(projectFilter.value || undefined),
+    loadCatalog(),
     platform.loadProjects(),
     platform.loadRuns(),
-  ]).then(() => loadGateAudit(selected.value?.gate));
+  ]).then(async () => {
+    if (!pageMounted) return;
+    await loadAddressedGate();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.
+    if (pageMounted) await loadGateAudit(selected.value?.gate);
+  });
 });
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -339,7 +538,10 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'PENDING'"
-            @click="view = 'PENDING'"
+            :aria-label="$t('decisions.pendingAccessible')"
+            :title="$t('decisions.pendingAccessible')"
+            :disabled="addressedGateLoading"
+            @click="selectView('PENDING')"
           >
             {{ $t("decisions.pending") }}
           </button>
@@ -347,50 +549,52 @@ onMounted(() => {
             class="button"
             type="button"
             :aria-pressed="view === 'HISTORY'"
-            @click="view = 'HISTORY'"
+            :disabled="addressedGateLoading"
+            @click="selectView('HISTORY')"
           >
             {{ $t("decisions.history") }}
           </button>
         </div>
-        <label>
-          <span>{{ $t("decisions.projectFilter") }}</span>
-          <select v-model="projectFilter">
-            <option value="">{{ $t("decisions.allProjects") }}</option>
-            <option
-              v-for="project in projectsWithGates"
-              :key="project.ref"
-              :value="project.ref"
-            >
-              {{ project.name }}
-            </option>
-          </select>
-        </label>
+        <GateProjectFilter v-model="projectFilter" />
       </div>
-      <span class="decision-toolbar__count">
+      <label
+        ><span>{{ $t("common.search") }}</span
+        ><input v-model="search" type="search" maxlength="200"
+      /></label>
+      <span
+        v-if="catalog.total.value !== undefined"
+        class="decision-toolbar__count"
+      >
         {{
           $t(
             view === "PENDING"
               ? "decisions.pendingCount"
               : "decisions.historyCount",
-            { count: visibleItems.length },
+            { count: catalog.total.value },
           )
         }}
       </span>
     </div>
 
     <ProblemNotice v-if="problem" :problem="problem" compact />
+    <ProblemNotice
+      v-if="addressedGateProblem"
+      :problem="addressedGateProblem"
+      compact
+      @retry="loadAddressedGate"
+    />
     <div v-if="successMessage" class="decision-success" role="status">
       <CheckCircle2 :size="18" aria-hidden="true" />
       <span>{{ successMessage }}</span>
     </div>
     <AsyncState
       :loading="
-        platform.loading.gates ||
+        (catalog.loading.value && !catalog.items.value.length && !selected) ||
         platform.loading.projects ||
         platform.loading.runs
       "
-      :problem="platform.problems.gates"
-      :empty="visibleItems.length === 0"
+      :problem="catalog.problem.value"
+      :empty="visibleItems.length === 0 && !selected"
       :empty-title="
         $t(
           view === 'PENDING'
@@ -405,10 +609,10 @@ onMounted(() => {
             : 'decisions.historyEmptyText',
         )
       "
-      @retry="platform.loadGates()"
+      @retry="loadCatalog()"
     >
       <div class="decision-inbox">
-        <div class="decision-list">
+        <div class="decision-list" @scroll="scrollCatalog">
           <section v-for="group in groups" :key="group.key">
             <header class="decision-group-header">
               <span
@@ -435,13 +639,13 @@ onMounted(() => {
                 }"
                 type="button"
                 role="listitem"
-                @click="selectedRef = item.gate.ref"
+                @click="selectGate(item.gate.ref)"
               >
                 <span class="decision-row__icon">
                   <ShieldQuestion :size="18" aria-hidden="true" />
                 </span>
                 <span class="decision-row__copy">
-                  <strong>{{ item.gate.title }}</strong>
+                  <strong>{{ serverMessage(item.gate.title) }}</strong>
                   <span>{{
                     item.hasQuestion
                       ? item.gate.contextSummary
@@ -451,13 +655,22 @@ onMounted(() => {
                     v-if="item.hasConsequences"
                     class="decision-row__impact"
                   >
-                    Последствия: {{ item.gate.consequencesSummary }}
+                    {{
+                      $t("decisions.consequenceSummary", {
+                        summary: item.gate.consequencesSummary,
+                      })
+                    }}
                   </small>
                   <small>
                     {{ item.gate.requestedBy.displayName }} ·
                     {{ formatDate(item.gate.openedAt) }}
                     <template v-if="item.gate.expiresAt">
-                      · срок {{ formatDate(item.gate.expiresAt) }}
+                      ·
+                      {{
+                        $t("decisions.dueAt", {
+                          date: formatDate(item.gate.expiresAt),
+                        })
+                      }}
                     </template>
                   </small>
                   <small class="decision-row__route">
@@ -471,13 +684,22 @@ onMounted(() => {
               </button>
             </div>
           </section>
+          <button
+            v-if="catalog.pageToken.value"
+            class="button"
+            type="button"
+            :disabled="catalog.loading.value"
+            @click="loadCatalog(true)"
+          >
+            {{ $t("common.loadMore") }}
+          </button>
         </div>
 
         <aside v-if="selected" class="decision-detail">
           <header class="decision-detail__header">
             <div>
               <p class="eyebrow">{{ $t("decisions.question") }}</p>
-              <h2>{{ selected.gate.title }}</h2>
+              <h2>{{ serverMessage(selected.gate.title) }}</h2>
             </div>
             <StatusBadge :state="selected.gate.state" />
           </header>
@@ -539,9 +761,16 @@ onMounted(() => {
               <dd>{{ selected.gate.requestedBy.displayName }}</dd>
             </div>
             <div>
-              <dt><UserRound :size="15" aria-hidden="true" />Инициатор Run</dt>
+              <dt>
+                <UserRound :size="15" aria-hidden="true" />{{
+                  $t("decisions.runInitiator")
+                }}
+              </dt>
               <dd>
-                {{ selected.run?.initiator.displayName ?? "не представлен" }}
+                {{
+                  selected.run?.initiator.displayName ??
+                  $t("decisions.notProvided")
+                }}
               </dd>
             </div>
             <div>
@@ -579,8 +808,8 @@ onMounted(() => {
               <dt>
                 <FileStack :size="15" aria-hidden="true" />{{
                   view === "HISTORY"
-                    ? "Вложения к решению"
-                    : "Вложения к запросу"
+                    ? $t("decisions.resolutionAttachments")
+                    : $t("decisions.requestAttachments")
                 }}
               </dt>
               <dd>
@@ -625,7 +854,7 @@ onMounted(() => {
             <p>
               {{
                 selected.hasConsequences
-                  ? selected.gate.consequencesSummary
+                  ? serverMessage(selected.gate.consequencesSummary)
                   : $t("decisions.consequencesUnavailable")
               }}
             </p>
@@ -650,7 +879,15 @@ onMounted(() => {
               </div>
             </dl>
             <SafeStructuredData
+              :value="selected.gate.integrationIntent.resourceScope"
+              literal
+            />
+            <p>
+              <code>{{ selected.gate.integrationIntent.effectKey }}</code>
+            </p>
+            <SafeStructuredData
               :value="selected.gate.integrationIntent.effectPreview"
+              literal
             />
           </section>
 
@@ -660,9 +897,12 @@ onMounted(() => {
           >
             <header>
               <h3 id="decision-audit-title">
-                <History :size="16" aria-hidden="true" /> Аудит
+                <History :size="16" aria-hidden="true" />
+                {{ $t("decisions.auditTitle") }}
               </h3>
-              <span v-if="platform.loading.audit">Загружаем…</span>
+              <span v-if="platform.loading.audit">{{
+                $t("common.loading")
+              }}</span>
               <span v-else>{{ selectedAuditEvents.length }}</span>
             </header>
             <ProblemNotice
@@ -681,7 +921,7 @@ onMounted(() => {
               </li>
             </ol>
             <p v-else-if="!platform.loading.audit" class="audit-unavailable">
-              События аудита для этого решения не найдены.
+              {{ $t("decisions.auditEmpty") }}
             </p>
           </section>
 
@@ -697,7 +937,7 @@ onMounted(() => {
               </template>
             </p>
             <p v-if="selected.gate.decisionComment">
-              {{ selected.gate.decisionComment }}
+              {{ serverMessage(selected.gate.decisionComment) }}
             </p>
           </section>
 
@@ -706,7 +946,7 @@ onMounted(() => {
               class="decision-options"
               :disabled="busyRef === selected.gate.ref"
             >
-              <legend>Разрешённые варианты и последствия</legend>
+              <legend>{{ $t("decisions.allowedOptions") }}</legend>
               <label
                 v-for="decision in selected.gate.allowedDecisions"
                 :key="decision"
@@ -730,7 +970,7 @@ onMounted(() => {
                     decisionConsequence(selected.gate, decision)
                   }}</span>
                   <small v-if="requiresDecisionComment(decision)">
-                    Комментарий обязателен
+                    {{ $t("decisions.commentRequired") }}
                   </small>
                 </span>
                 <StatusBadge :state="decisionOutcomeState(decision)" />
@@ -740,10 +980,10 @@ onMounted(() => {
               <span>
                 {{ decisionCommentLabel(selectedDecision) }}
                 <strong v-if="requiresDecisionComment(selectedDecision)">
-                  обязательно
+                  {{ $t("common.required") }}
                 </strong>
               </span>
-              <textarea
+              <VoiceTextarea
                 v-model="comments[selected.gate.ref]"
                 maxlength="4000"
                 :required="requiresDecisionComment(selectedDecision)"
@@ -789,17 +1029,24 @@ onMounted(() => {
                 />
                 {{
                   busyRef === selected.gate.ref
-                    ? "Применяем решение…"
+                    ? $t("decisions.applying")
                     : decisionLabel(selectedDecision)
                 }}
               </button>
               <span>
-                Решение применится с версией {{ selected.gate.version }} и будет
-                записано в аудит.
+                {{
+                  $t("decisions.versionNotice", {
+                    version: selected.gate.version,
+                  })
+                }}
               </span>
             </div>
           </template>
-          <div v-else class="decision-unavailable" role="status">
+          <div
+            v-else-if="view === 'PENDING'"
+            class="decision-unavailable"
+            role="status"
+          >
             <strong>{{ $t("decisions.actionsUnavailable") }}</strong>
             <p>{{ $t("decisions.actionsUnavailableText") }}</p>
           </div>
@@ -812,6 +1059,7 @@ onMounted(() => {
 <style scoped>
 .decision-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: 12px;
@@ -826,7 +1074,8 @@ onMounted(() => {
 .decision-toolbar label {
   display: grid;
   gap: 5px;
-  min-width: min(320px, 100%);
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -835,6 +1084,7 @@ onMounted(() => {
 }
 .decision-view-switch .button {
   min-width: 112px;
+  white-space: nowrap;
   border-radius: 0;
 }
 .decision-view-switch .button:first-child {
@@ -1185,7 +1435,7 @@ onMounted(() => {
   color: var(--danger);
   font-size: 0.72rem;
 }
-.decision-comment textarea {
+.decision-comment :deep(textarea) {
   min-height: 92px;
 }
 .decision-validation {

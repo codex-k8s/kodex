@@ -5,6 +5,7 @@ import {
   createRoleImage,
   loadRoleDefinitionOptions,
   loadRoleImageDependencies,
+  loadRoleImageCreateAccess,
   loadRoleImagePage,
   loadRoleImageRevisionPage,
   promoteRoleImageArtifact,
@@ -22,9 +23,13 @@ const api = vi.hoisted(() => ({
   listRoleImageRecipes: vi.fn(),
   listRuntimeEnvironmentSets: vi.fn(),
   promoteRoleImage: vi.fn(),
+  queryEffectiveAccess: vi.fn(),
   updateRoleImageRecipe: vi.fn(),
 }));
-const mutation = vi.hoisted(() => ({ mutate: vi.fn() }));
+const mutation = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  csrfToken: () => "csrf_synthetic",
+}));
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => api);
 vi.mock("@/shared/api/client", () => ({
@@ -40,6 +45,7 @@ function response<T>(data: T) {
 }
 
 const recipe: RoleImageRecipe = {
+  sourceAvailable: true,
   ref: "image_1",
   version: 3,
   projectRef: "project_1",
@@ -70,15 +76,93 @@ describe("role image API adapter", () => {
     );
   });
 
+  it("разрешает create только по трём точным self decisions этого проекта", async () => {
+    const target = { kind: "PROJECT", projectRef: "project_1" };
+    const permissions = [
+      "image.build",
+      "image.source.view",
+      "image.source.manage",
+    ];
+    const items = permissions.map((permissionKey) => ({
+      permissionKey,
+      decision: "ALLOWED",
+      target,
+      explanation: [],
+    }));
+    api.queryEffectiveAccess.mockReturnValueOnce(response({ items }));
+    const signal = new AbortController().signal;
+    expect(await loadRoleImageCreateAccess("project_1", signal)).toBe(true);
+    expect(api.queryEffectiveAccess).toHaveBeenCalledWith({
+      body: { target, permissionKeys: permissions },
+      headers: { "X-CSRF-Token": "csrf_synthetic" },
+      signal,
+    });
+    api.queryEffectiveAccess.mockReturnValueOnce(
+      response({ items: items.slice(0, 2) }),
+    );
+    expect(await loadRoleImageCreateAccess("project_1", signal)).toBe(false);
+    api.queryEffectiveAccess.mockReturnValueOnce(
+      response({
+        items: items.map((item) => ({
+          ...item,
+          target: { ...target, projectRef: "other_project" },
+        })),
+      }),
+    );
+    expect(await loadRoleImageCreateAccess("project_1", signal)).toBe(false);
+  });
+
+  it("глобальный новый source проверяет ORGANIZATION без выдуманного проекта", async () => {
+    const permissions = [
+      "image.build",
+      "image.source.view",
+      "image.source.manage",
+    ];
+    const items = permissions.map((permissionKey) => ({
+      permissionKey,
+      decision: "ALLOWED",
+      target: { kind: "ORGANIZATION" },
+      explanation: [],
+    }));
+    api.queryEffectiveAccess.mockReturnValueOnce(response({ items }));
+    const signal = new AbortController().signal;
+    expect(await loadRoleImageCreateAccess(undefined, signal)).toBe(true);
+    expect(api.queryEffectiveAccess).toHaveBeenCalledWith({
+      body: { target: { kind: "ORGANIZATION" }, permissionKeys: permissions },
+      headers: { "X-CSRF-Token": "csrf_synthetic" },
+      signal,
+    });
+    api.queryEffectiveAccess.mockReturnValueOnce(
+      response({
+        items: items.map((item) => ({
+          ...item,
+          target: { kind: "PROJECT", projectRef: "project_1" },
+        })),
+      }),
+    );
+    expect(await loadRoleImageCreateAccess(undefined, signal)).toBe(false);
+  });
+
   it("передаёт project и cursor в настоящий list endpoint", async () => {
     api.listRoleImageRecipes.mockReturnValueOnce(
       response({ items: [recipe], nextPageToken: "page_2" }),
     );
-    const page = await loadRoleImagePage("project_1", "page_1");
+    const page = await loadRoleImagePage(
+      "project_1",
+      "page_1",
+      new AbortController().signal,
+      { query: "Среда", state: "ACTIVE", roleDefinitionRef: "role_1" },
+    );
     expect(api.listRoleImageRecipes).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { projectRef: "project_1" },
-        query: { pageSize: 40, pageToken: "page_1" },
+        query: {
+          pageSize: 40,
+          pageToken: "page_1",
+          query: "Среда",
+          state: "ACTIVE",
+          roleDefinitionRef: "role_1",
+        },
       }),
     );
     expect(page.nextPageToken).toBe("page_2");
@@ -143,7 +227,7 @@ describe("role image API adapter", () => {
     );
     const environment = {
       environmentKey: "standard",
-      dockerfile: recipe.environment.dockerfile + "\nRUN true\n",
+      dockerfile: (recipe.environment.dockerfile ?? "") + "\nRUN true\n",
     };
 
     await createRoleImage("project_1", {

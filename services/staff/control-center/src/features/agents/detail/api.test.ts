@@ -1,13 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listTemplateVariables, previewPromptTemplate } = vi.hoisted(() => ({
+const { listTemplateVariables } = vi.hoisted(() => ({
   listTemplateVariables: vi.fn(),
-  previewPromptTemplate: vi.fn(),
 }));
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   listTemplateVariables,
-  previewPromptTemplate,
 }));
 vi.mock("@/shared/api/mutation", () => ({
   csrfToken: () => "c".repeat(43),
@@ -16,15 +14,11 @@ vi.mock("@/shared/api/problem", () => ({
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
 
-import {
-  createTemplateVariableLoader,
-  loadMaterializedTemplatePreview,
-} from "@/features/agents/detail/api";
+import { createTemplateVariableLoader } from "@/features/agents/detail/api";
 
 describe("agent detail api", () => {
   beforeEach(() => {
     listTemplateVariables.mockReset();
-    previewPromptTemplate.mockReset();
   });
 
   it("передаёт серверу поиск и cursor, сохраняя scope переменной", async () => {
@@ -33,6 +27,8 @@ describe("agent detail api", () => {
         items: [
           {
             name: "runtime.environment.tools",
+            available: true,
+            reason: "AVAILABLE",
             valueType: "collection",
             description: "Разрешённые инструменты",
             example:
@@ -41,6 +37,7 @@ describe("agent detail api", () => {
           },
         ],
         nextPageToken: "runtime.environment.tools",
+        total: 1,
       },
     });
     const signal = new AbortController().signal;
@@ -73,29 +70,34 @@ describe("agent detail api", () => {
     expect(page.nextCursor).toBe("runtime.environment.tools");
   });
 
-  it("получает synthetic materialized preview без локальной подстановки", async () => {
-    previewPromptTemplate.mockResolvedValue({
-      data: {
-        safePreview: "Проект: demo",
-        fullMaterializedPrompt: "Проект: demo\nИнструменты: gh",
-        diagnostics: [],
-      },
-    });
+  it("передаёт точный контекст агента и immutable runtime revision", async () => {
+    listTemplateVariables.mockResolvedValue({ data: { items: [], total: 0 } });
     const signal = new AbortController().signal;
-    const preview = await loadMaterializedTemplatePreview(
-      "Проект: {{ .project.name }}",
-      signal,
-    );
-
-    expect(previewPromptTemplate).toHaveBeenCalledWith({
-      body: {
-        template: "Проект: {{ .project.name }}",
-        targetKind: "SYNTHETIC",
-        includeFullMaterialization: true,
+    await createTemplateVariableLoader("project_sales", {
+      agentRef: "agent_sales",
+      runtimeRevisionRef: "revision_exact",
+    })({ query: "", signal });
+    expect(listTemplateVariables).toHaveBeenCalledWith({
+      path: { projectRef: "project_sales" },
+      query: {
+        pageSize: 50,
+        agentRef: "agent_sales",
+        runtimeRevisionRef: "revision_exact",
       },
-      headers: { "X-CSRF-Token": "c".repeat(43) },
       signal,
     });
-    expect(preview.fullMaterializedPrompt).toContain("Инструменты: gh");
   });
+
+  it.each([undefined, -1, 0.5])(
+    "отклоняет некорректный total %j",
+    async (total) => {
+      listTemplateVariables.mockResolvedValue({ data: { items: [], total } });
+      await expect(
+        createTemplateVariableLoader("project_sales")({
+          query: "",
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow();
+    },
+  );
 });

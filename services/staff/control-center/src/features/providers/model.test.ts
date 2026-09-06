@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   accountAllows,
   isPendingDeviceAuthorization,
-  isRuntimeEligible,
   pageAllowsAccountCreation,
   readableProviderBlocker,
   safeVerificationUri,
@@ -31,18 +30,23 @@ function account(overrides: Partial<ProviderAccount> = {}): ProviderAccount {
 }
 
 describe("provider account model", () => {
+  it("сохраняет ожидающее удаление до авторитетного tombstone", () => {
+    const original = account();
+    const deleting = account({ state: "DELETING", version: 2 });
+    expect(upsertProviderAccount([original], deleting)).toEqual([deleting]);
+    expect(
+      upsertProviderAccount(
+        [deleting],
+        account({ state: "DELETED", version: 3 }),
+      ),
+    ).toEqual([]);
+  });
   it("разрешает действия только из server-owned nextActions", () => {
     const item = account();
     expect(accountAllows(item, "DISABLE")).toBe(true);
     expect(accountAllows(item, "ENABLE")).toBe(false);
     expect(pageAllowsAccountCreation(["CREATE_CONNECTION"])).toBe(true);
     expect(pageAllowsAccountCreation(["CONFIGURE_CREDENTIAL"])).toBe(false);
-  });
-
-  it("считает runtime eligible только готовую авторизованную запись", () => {
-    expect(isRuntimeEligible(account())).toBe(true);
-    expect(isRuntimeEligible(account({ ready: false }))).toBe(false);
-    expect(isRuntimeEligible(account({ state: "DISABLED" }))).toBe(false);
   });
 
   it("принимает только HTTPS verification URI и ограничивает blocker copy", () => {
@@ -92,6 +96,26 @@ describe("provider account model", () => {
     expect(
       toggleProviderAccountCandidate([first], first.accountRef, "FIXED"),
     ).toEqual([]);
+  });
+
+  it("не запускает бесконечный device poll без корректного срока действия", () => {
+    for (const expiresAt of [undefined, "invalid"]) {
+      expect(
+        isPendingDeviceAuthorization(
+          account({
+            authorization: {
+              ref: "auth",
+              method: "DEVICE_CODE",
+              state: "PENDING",
+              expiresAt,
+            },
+          }),
+        ),
+      ).toBe(false);
+    }
+    expect(
+      safeVerificationUri("https://user:password@provider.example/device"),
+    ).toBeNull();
   });
 
   it("нормализует веса при смене policy без мутации входа", () => {

@@ -6,6 +6,7 @@ resources:
   - deployment.yaml
   - api-ingress.yaml
   - ingress.yaml
+  - public-assets-ingress.yaml
   - servers-transport.yaml
   - networkpolicy.yaml
   - poddisruptionbudget.yaml
@@ -16,6 +17,7 @@ configMapGenerator:
     files:
       - runtime-config.json
       - security-headers.conf
+      - public-assets.conf
       - readiness.json
 generatorOptions:
   disableNameSuffixHash: false

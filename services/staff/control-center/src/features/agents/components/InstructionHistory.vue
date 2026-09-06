@@ -8,6 +8,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const props = defineProps<{
   versions: InstructionVersion[];
   currentRef?: string;
+  currentEffective?: boolean;
   canRollback: boolean;
   busy: boolean;
 }>();
@@ -69,7 +70,13 @@ function confirmRollback(ref: string): void {
               v-if="version.ref === currentRef"
               class="instruction-history__current"
             >
-              {{ $t("agents.currentRevision") }}
+              {{
+                $t(
+                  currentEffective === false
+                    ? "publicationImpact.instructionsSelected"
+                    : "agents.currentRevision",
+                )
+              }}
             </span>
           </span>
           <button

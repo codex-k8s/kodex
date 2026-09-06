@@ -7,6 +7,7 @@ import {
   loadRoleDefinitionOptions,
   loadRoleEnvironmentCatalog,
   loadRoleImageDependencies,
+  loadRoleImageCreateAccess,
   loadRoleImageDetail,
   loadRoleImagePage,
   loadRoleImageRevisionPage,
@@ -42,15 +43,24 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   const dependencies = reactive<Record<string, RuntimeEnvironmentSet[]>>({});
   const projectRecipeRefs = reactive<Record<string, string[]>>({});
   const projectNextPageToken = reactive<Record<string, string | undefined>>({});
+  const projectTotal = reactive<Record<string, number | undefined>>({});
+  const catalogFilters = new Map<
+    string,
+    { query?: string; state?: "ACTIVE" | "ARCHIVED" }
+  >();
   const roleDefinitions = ref<RoleDefinitionOption[]>([]);
   const environments = ref<RoleEnvironment[]>([]);
+  const createAllowed = reactive<Record<string, boolean>>({});
   const loadingCatalog = ref(false);
   const loadingMore = ref(false);
   const loadingDetail = ref(false);
   const mutating = ref(false);
   const problem = ref<AppProblem>();
   let catalogGeneration = 0;
+  let catalogController: AbortController | undefined;
   let detailGeneration = 0;
+  let supportingGeneration = 0;
+  let supportingController: AbortController | undefined;
 
   const environmentByKey = computed(
     () => new Map(environments.value.map((value) => [value.key, value])),
@@ -65,22 +75,61 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       .filter((value): value is RoleImageRecipe => Boolean(value));
   }
 
-  async function loadCatalog(projectRef: string, reset = true): Promise<void> {
-    if (!reset && !projectNextPageToken[projectRef]) return;
+  async function loadCatalog(
+    projectRef: string,
+    reset = true,
+    filter?: { query?: string; state?: "ACTIVE" | "ARCHIVED" },
+  ): Promise<void> {
+    if (
+      !reset &&
+      (!projectNextPageToken[projectRef] ||
+        loadingCatalog.value ||
+        loadingMore.value)
+    )
+      return;
+    catalogController?.abort();
+    const controller = new AbortController();
+    catalogController = controller;
+    const cursor = reset ? undefined : projectNextPageToken[projectRef];
     const current = ++catalogGeneration;
+    if (filter) catalogFilters.set(projectRef, filter);
+    const activeFilter = catalogFilters.get(projectRef) ?? {};
+    if (reset) {
+      projectRecipeRefs[projectRef] = [];
+      projectNextPageToken[projectRef] = undefined;
+      projectTotal[projectRef] = undefined;
+    }
     if (reset) loadingCatalog.value = true;
     else loadingMore.value = true;
     problem.value = undefined;
     try {
       const page = await loadRoleImagePage(
         projectRef,
-        reset ? undefined : projectNextPageToken[projectRef],
+        cursor,
+        controller.signal,
+        activeFilter,
       );
       if (current !== catalogGeneration) return;
+      if (
+        !Array.isArray(page.items) ||
+        !Number.isSafeInteger(page.total) ||
+        page.total < page.items.length ||
+        page.items.some(
+          (recipe) =>
+            recipe.projectRef !== projectRef ||
+            (activeFilter.state && recipe.state !== activeFilter.state),
+        ) ||
+        (page.nextPageToken && page.nextPageToken === cursor)
+      )
+        throw new Error("Invalid role image catalog scope or cursor");
       const refs = reset ? [] : [...(projectRecipeRefs[projectRef] ?? [])];
       const seen = new Set(refs);
       for (const recipe of page.items) {
-        recipes[recipe.ref] = recipe;
+        if (seen.has(recipe.ref))
+          throw new Error("Repeated role image catalog item");
+        const previous = recipes[recipe.ref];
+        if (!previous || previous.version <= recipe.version)
+          recipes[recipe.ref] = recipe;
         if (!seen.has(recipe.ref)) {
           seen.add(recipe.ref);
           refs.push(recipe.ref);
@@ -88,6 +137,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       }
       projectRecipeRefs[projectRef] = refs;
       projectNextPageToken[projectRef] = page.nextPageToken;
+      projectTotal[projectRef] = page.total;
     } catch (error) {
       if (current === catalogGeneration) problem.value = asProblem(error);
     } finally {
@@ -96,6 +146,19 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         loadingMore.value = false;
       }
     }
+  }
+
+  function clearDetail(recipeRef: string): void {
+    for (const cache of [
+      recipes,
+      builds,
+      artifacts,
+      dependencies,
+      revisions,
+      revisionNextPageToken,
+      promotionReceipts,
+    ])
+      Reflect.deleteProperty(cache, recipeRef);
   }
 
   async function loadDetail(
@@ -109,6 +172,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     try {
       const detail = await loadRoleImageDetail(projectRef, recipeRef);
       if (current !== detailGeneration) return;
+      if (
+        detail.recipe.ref !== recipeRef ||
+        detail.recipe.projectRef !== projectRef ||
+        detail.builds.some((build) => build.recipeRef !== recipeRef)
+      )
+        throw new Error("Invalid role image detail scope");
       if (!showLoading) {
         recipes[detail.recipe.ref] = detail.recipe;
         builds[detail.recipe.ref] = detail.builds;
@@ -131,7 +200,10 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       revisions[detail.recipe.ref] = revisionPage.items;
       revisionNextPageToken[detail.recipe.ref] = revisionPage.nextPageToken;
     } catch (error) {
-      if (current === detailGeneration) problem.value = asProblem(error);
+      if (current === detailGeneration) {
+        clearDetail(recipeRef);
+        problem.value = asProblem(error);
+      }
     } finally {
       if (current === detailGeneration && showLoading)
         loadingDetail.value = false;
@@ -166,16 +238,27 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   async function loadSupportingCatalogs(projectRef: string): Promise<void> {
+    const current = ++supportingGeneration;
+    supportingController?.abort();
+    const controller = new AbortController();
+    supportingController = controller;
+    roleDefinitions.value = [];
+    environments.value = [];
+    createAllowed[projectRef] = false;
     problem.value = undefined;
     try {
-      const [definitions, environmentCatalog] = await Promise.all([
-        loadRoleDefinitionOptions(projectRef),
-        loadRoleEnvironmentCatalog(),
+      const [definitions, environmentCatalog, canCreate] = await Promise.all([
+        loadRoleDefinitionOptions(projectRef, controller.signal),
+        loadRoleEnvironmentCatalog(controller.signal),
+        loadRoleImageCreateAccess(projectRef, controller.signal),
       ]);
+      if (current !== supportingGeneration) return;
       roleDefinitions.value = definitions;
       environments.value = environmentCatalog;
+      createAllowed[projectRef] = canCreate;
     } catch (error) {
-      problem.value = asProblem(error);
+      if (current === supportingGeneration && !controller.signal.aborted)
+        problem.value = asProblem(error);
     }
   }
 
@@ -269,6 +352,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   }
 
   function dispose(): void {
+    catalogController?.abort();
+    supportingController?.abort();
+    supportingGeneration += 1;
     catalogGeneration += 1;
     detailGeneration += 1;
   }
@@ -282,8 +368,10 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     promotionReceipts,
     dependencies,
     projectNextPageToken,
+    projectTotal,
     roleDefinitions,
     environments,
+    createAllowed,
     environmentByKey,
     roleDefinitionByRef,
     loadingCatalog,

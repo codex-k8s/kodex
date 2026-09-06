@@ -1,4 +1,9 @@
 import type { Problem } from "@/shared/api/generated/openapi/types.gen";
+import {
+  assertOwnerRequest,
+  ownerRequestSignal,
+  OwnerContextChangedError,
+} from "./owner-lifetime";
 
 export type ProblemKind =
   | "unauthorized"
@@ -16,6 +21,7 @@ export class AppProblem extends Error {
   readonly kind: ProblemKind;
   readonly title?: string;
   readonly detail?: string;
+  readonly retryAfterSeconds?: number;
 
   constructor(value: {
     status: number;
@@ -25,6 +31,7 @@ export class AppProblem extends Error {
     kind: ProblemKind;
     title?: string;
     detail?: string;
+    retryAfterSeconds?: number;
   }) {
     super(value.code);
     this.name = "AppProblem";
@@ -35,6 +42,7 @@ export class AppProblem extends Error {
     this.kind = value.kind;
     this.title = value.title;
     this.detail = value.detail;
+    this.retryAfterSeconds = value.retryAfterSeconds;
   }
 }
 
@@ -122,6 +130,15 @@ export function normalizeProblem(
   const retryable = isRetryable(value)
     ? value.retryable
     : status === 0 || status === 429 || status >= 500;
+  const transcriptionRateLimit =
+    status === 429 && code === "TRANSCRIPTION_RATE_LIMITED";
+  const retryAfter = response?.headers.get("Retry-After") ?? "";
+  const retryAfterSeconds =
+    transcriptionRateLimit &&
+    /^[1-9][0-9]{0,2}$/.test(retryAfter) &&
+    Number(retryAfter) <= 300
+      ? Number(retryAfter)
+      : undefined;
   const kind: ProblemKind =
     status === 401
       ? "unauthorized"
@@ -137,7 +154,10 @@ export function normalizeProblem(
   return new AppProblem({
     status,
     code,
-    retryable,
+    retryable: transcriptionRateLimit
+      ? retryable && retryAfterSeconds !== undefined
+      : retryable,
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
     kind,
     ...(correlationId ? { correlationId } : {}),
     ...(title ? { title } : {}),
@@ -154,7 +174,15 @@ export interface ApiReadback<T> {
 export async function unwrap<T>(
   request: Promise<GeneratedResponse<T>>,
 ): Promise<ApiReadback<NonNullable<T>>> {
-  const result = await request;
+  const scope = ownerRequestSignal();
+  let result: GeneratedResponse<T>;
+  try {
+    result = await request;
+  } catch (error) {
+    assertOwnerRequest(scope);
+    throw error;
+  }
+  assertOwnerRequest(scope);
   if (!result.response) {
     const problem = normalizeProblem(result.error);
     notifyUnauthorized(problem);
@@ -177,5 +205,12 @@ export async function unwrap<T>(
 
 export function asProblem(error: unknown): AppProblem {
   if (error instanceof AppProblem) return error;
+  if (error instanceof OwnerContextChangedError)
+    return new AppProblem({
+      status: 0,
+      code: "OWNER_CONTEXT_CHANGED",
+      retryable: false,
+      kind: "unknown",
+    });
   return normalizeProblem(error);
 }

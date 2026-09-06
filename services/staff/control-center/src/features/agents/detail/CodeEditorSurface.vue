@@ -4,9 +4,18 @@ import { StreamLanguage } from "@codemirror/language";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { lintGutter, setDiagnostics } from "@codemirror/lint";
 import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView, placeholder as editorPlaceholder } from "@codemirror/view";
+import {
+  EditorView,
+  hoverTooltip,
+  placeholder as editorPlaceholder,
+} from "@codemirror/view";
 import { FileCode2, LockKeyhole, ShieldAlert } from "@lucide/vue";
 import { basicSetup } from "codemirror";
+import {
+  codeEditorKeymap,
+  insertVoiceText,
+} from "@/shared/ui/code-editor-keymap";
+import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -16,7 +25,11 @@ import {
   codeMirrorPhrases,
   markdownStreamParser,
   templateCompletionQuery,
+  tomlCompletionQuery,
+  positionedCodeEditorDiagnostics,
   type CodeEditorCompletionProvider,
+  type CodeEditorHoverProvider,
+  type CodeEditorPositionedDiagnostic,
 } from "@/features/agents/detail/code-editor";
 
 const props = withDefaults(
@@ -30,6 +43,8 @@ const props = withDefaults(
     validationMessages?: readonly string[];
     minLines?: number;
     completionProvider?: CodeEditorCompletionProvider;
+    hoverProvider?: CodeEditorHoverProvider;
+    diagnostics?: readonly CodeEditorPositionedDiagnostic[];
   }>(),
   {
     description: "",
@@ -38,6 +53,8 @@ const props = withDefaults(
     readonly: false,
     validationMessages: () => [],
     completionProvider: undefined,
+    hoverProvider: undefined,
+    diagnostics: () => [],
   },
 );
 
@@ -47,6 +64,12 @@ const editorId = useId();
 const helpId = `${editorId}-help`;
 const validationId = `${editorId}-validation`;
 const editorRoot = ref<HTMLElement>();
+const displayMessages = computed(() => [
+  ...new Set([
+    ...props.validationMessages,
+    ...props.diagnostics.map((item) => item.message),
+  ]),
+]);
 const lineCount = computed(
   () => props.modelValue.replace(/\r\n?/g, "\n").split("\n").length,
 );
@@ -56,6 +79,7 @@ const editorStyle = computed<Record<string, string>>(() => ({
 const editableConfiguration = new Compartment();
 const languageConfiguration = new Compartment();
 const completionConfiguration = new Compartment();
+const hoverConfiguration = new Compartment();
 const placeholderConfiguration = new Compartment();
 const phrasesConfiguration = new Compartment();
 let view: EditorView | undefined;
@@ -68,8 +92,8 @@ function editableExtension() {
       codeEditorContentAttributes({
         label: props.label,
         readonly: props.readonly,
-        invalid: props.validationMessages.length > 0,
-        describedBy: props.validationMessages.length ? validationId : helpId,
+        invalid: displayMessages.value.length > 0,
+        describedBy: displayMessages.value.length ? validationId : helpId,
         errorMessageId: validationId,
       }),
     ),
@@ -85,20 +109,23 @@ function languageExtension() {
 const completionSource: CompletionSource = async (context) => {
   const provider = props.completionProvider;
   if (!provider) return null;
-  const match = templateCompletionQuery(
-    context.state.doc.toString(),
-    context.pos,
-    context.explicit,
-  );
+  const match = (
+    props.language === "toml" ? tomlCompletionQuery : templateCompletionQuery
+  )(context.state.doc.toString(), context.pos, context.explicit);
   if (!match) return null;
 
   const controller = new AbortController();
   context.addEventListener("abort", () => controller.abort());
   try {
-    const items = await provider(match.query, controller.signal);
-    if (controller.signal.aborted) return null;
+    const items = await provider(match.query, controller.signal, {
+      content: context.state.doc.toString(),
+      cursor: context.pos,
+    });
+    if (controller.signal.aborted || provider !== props.completionProvider)
+      return null;
     return {
       from: match.from,
+      ...(match.to !== undefined ? { to: match.to } : {}),
       options: items.map((item) => ({
         label: item.label,
         apply: item.apply ?? item.label,
@@ -116,6 +143,32 @@ function completionExtension() {
     ? EditorState.languageData.of(() => [{ autocomplete: completionSource }])
     : [];
 }
+function hoverExtension() {
+  return props.hoverProvider
+    ? hoverTooltip(
+        (editor, position) => {
+          const result = props.hoverProvider?.(
+            editor.state.doc.toString(),
+            position,
+          );
+          if (!result) return null;
+          return {
+            pos: result.from,
+            end: result.to,
+            create: () => {
+              const dom = document.createElement("div");
+              dom.textContent = result.text;
+              dom.style.whiteSpace = "pre-wrap";
+              dom.style.maxWidth = "min(360px, 80vw)";
+              dom.style.padding = "8px";
+              return { dom };
+            },
+          };
+        },
+        { hideOnChange: true },
+      )
+    : [];
+}
 
 function placeholderExtension() {
   return props.placeholder ? editorPlaceholder(props.placeholder) : [];
@@ -126,7 +179,15 @@ function applyDiagnostics(): void {
   view.dispatch(
     setDiagnostics(
       view.state,
-      codeEditorDiagnostics(props.validationMessages, view.state.doc.length),
+      props.diagnostics.length
+        ? positionedCodeEditorDiagnostics(
+            props.diagnostics,
+            view.state.doc.toString(),
+          )
+        : codeEditorDiagnostics(
+            props.validationMessages,
+            view.state.doc.length,
+          ),
     ),
   );
 }
@@ -185,6 +246,7 @@ onMounted(() => {
     doc: props.modelValue,
     extensions: [
       basicSetup,
+      codeEditorKeymap,
       lintGutter(),
       EditorState.tabSize.of(2),
       EditorView.lineWrapping,
@@ -192,6 +254,7 @@ onMounted(() => {
       editableConfiguration.of(editableExtension()),
       languageConfiguration.of(languageExtension()),
       completionConfiguration.of(completionExtension()),
+      hoverConfiguration.of(hoverExtension()),
       placeholderConfiguration.of(placeholderExtension()),
       phrasesConfiguration.of(
         EditorState.phrases.of(codeMirrorPhrases(locale.value)),
@@ -215,7 +278,7 @@ watch(
   },
 );
 watch(
-  () => [props.readonly, props.label, props.validationMessages.length],
+  () => [props.readonly, props.label, displayMessages.value.length],
   () => {
     view?.dispatch({
       effects: editableConfiguration.reconfigure(editableExtension()),
@@ -235,6 +298,18 @@ watch(
     view?.dispatch({
       effects: completionConfiguration.reconfigure(completionExtension()),
     }),
+);
+watch(
+  () => props.hoverProvider,
+  () =>
+    view?.dispatch({
+      effects: hoverConfiguration.reconfigure(hoverExtension()),
+    }),
+);
+watch(
+  () => props.diagnostics,
+  () => applyDiagnostics(),
+  { deep: true },
 );
 watch(
   () => props.placeholder,
@@ -279,16 +354,26 @@ defineExpose({ focus, insertAtCursor });
       <span class="code-editor__spacer" />
       <LockKeyhole v-if="readonly" :size="15" aria-hidden="true" />
     </div>
-    <div ref="editorRoot" class="code-editor__viewport" />
+    <div class="code-editor-voice">
+      <div
+        ref="editorRoot"
+        class="code-editor__viewport"
+        :title="$t('app.editorKeyboard')"
+      />
+      <VoiceInputButton
+        :readonly="readonly"
+        @transcript="insertVoiceText(view, $event)"
+      />
+    </div>
     <div class="code-editor__foot" aria-live="polite">
       <span class="mono">{{ lineCount }} · {{ modelValue.length }}</span>
       <span
-        v-if="validationMessages.length"
+        v-if="displayMessages.length"
         :id="validationId"
         class="code-editor__validation"
       >
         <ShieldAlert :size="14" aria-hidden="true" />
-        {{ validationMessages.join(" · ") }}
+        {{ displayMessages.join(" · ") }}
       </span>
       <span v-else class="code-editor__spacer" />
     </div>

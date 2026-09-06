@@ -38,6 +38,21 @@ describe("dismissible popover policy", () => {
 });
 
 describe("calculatePopoverPosition", () => {
+  it("не оставляет сжатый dropdown под якорем при наличии места сверху", () => {
+    for (const panelHeight of [0, 50, 220]) {
+      const position = calculatePopoverPosition({
+        anchor: { top: 740, bottom: 790, left: 20, right: 370, width: 350 },
+        panelWidth: 350,
+        panelHeight,
+        viewportWidth: 390,
+        viewportHeight: 860,
+        placement: "bottom-start",
+      });
+      expect(position.side).toBe("top");
+      expect(position.maxHeight).toBeGreaterThan(220);
+      expect(position.top).toBeGreaterThanOrEqual(8);
+    }
+  });
   it("удерживает popover внутри viewport по горизонтали", () => {
     const position = calculatePopoverPosition({
       anchor: { bottom: 60, left: 290, right: 320, top: 30, width: 30 },

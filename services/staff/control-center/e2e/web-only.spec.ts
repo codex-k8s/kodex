@@ -11,6 +11,13 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
+import type {
+  AgentRuntimeConfigurationInput,
+  AgentRuntimeConfigurationView,
+  ConfigOverlaySchema,
+  ModelCapabilityPage,
+  ProviderAccountCandidateInput,
+} from "../src/shared/api/generated/openapi/types.gen";
 
 import { loadE2EEnvironment } from "./environment";
 import {
@@ -53,14 +60,6 @@ const automationTask =
 const automationEditedTask =
   "Ответь точно одной строкой: KODEX_AUTOMATION_E2E_UPDATED_OK. Не используй файлы, внешние источники, интеграции, плагины и запросы пользовательского ввода.";
 const runtimeEnvironmentName = `${environment.resourcePrefix} — среда E2E`;
-const runtimeOverlay = [
-  'model_reasoning_effort = "high"',
-  'personality = "pragmatic"',
-  "allow_login_shell = false",
-  "",
-  "[history]",
-  'persistence = "none"',
-].join("\n");
 const accessRoleName = `${environment.resourcePrefix} — точечный запуск сотрудника`;
 const initialRefs = loadDiscoveryRefs(environment.resourcePrefix);
 let projectRef = initialRefs.projectRef ?? "";
@@ -939,16 +938,7 @@ test.describe("web-only fresh installation", () => {
       .getByRole("button", { name: "Проверить инструкции" })
       .click();
     expect((await validateResponse).status()).toBe(200);
-    const publishResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        new URL(response.url()).pathname ===
-          `/api/v1/agents/${coordinatorRef}/instruction-commands`,
-    );
-    await instructionsPanel
-      .getByRole("button", { name: "Опубликовать инструкции" })
-      .click();
-    expect((await publishResponse).status()).toBe(200);
+    await publishAgent(page);
 
     await expect(history.locator("li")).toHaveCount(initialVersionCount + 1);
     await expect(history).toContainText("Текущая");
@@ -1294,6 +1284,16 @@ test.describe("web-only fresh installation", () => {
     ).toBe(200);
     await expect(policy).toHaveValue(policyAfter);
 
+    const schemaResponse =
+      await readJsonWithNetworkRetry<AgentRuntimeConfigurationView>(
+        page,
+        `/api/v1/agents/${encodeURIComponent(coordinatorRef)}/runtime-configuration`,
+      );
+    expect(schemaResponse.status).toBe(200);
+    const runtimeOverlay = supportedRuntimeOverlay(
+      schemaResponse.body.overlaySchema,
+    );
+
     const overlayEditor = runtimePanel.getByRole("textbox", {
       name: "Overlay config.toml",
     });
@@ -1321,7 +1321,7 @@ test.describe("web-only fresh installation", () => {
       };
     };
     let overlayState = await readOverlayState();
-    if (overlayState.publishedContent !== runtimeOverlay) {
+    if (overlayState.publishedContent.trimEnd() !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
         await overlayEditor.fill(runtimeOverlay);
         const draftCreation = page.waitForResponse(
@@ -1364,9 +1364,12 @@ test.describe("web-only fresh installation", () => {
     const effectiveConfig = runtimePanel.getByRole("textbox", {
       name: "Итоговый effective config",
     });
-    await expect(effectiveConfig).toContainText(
-      'model_reasoning_effort = "high"',
-    );
+    const effortLine = runtimeOverlay
+      .split("\n")
+      .find((line) => line.startsWith("model_reasoning_effort ="));
+    if (effortLine) await expect(effectiveConfig).toContainText(effortLine);
+    else
+      await expect(effectiveConfig).not.toContainText("model_reasoning_effort");
 
     const environmentResponse = page.waitForResponse(
       (response) =>
@@ -1450,15 +1453,14 @@ test.describe("web-only fresh installation", () => {
     expect(readback.environment.ref).toBe(runtimeEnvironmentRef);
     expect(readback.environment.currentVersion.revision).toBeGreaterThan(0);
     expect(readback.publishedOverlay.state).toBe("PUBLISHED");
-    expect(readback.publishedOverlay.content).toMatch(
-      /model_reasoning_effort\s*=\s*"high"/,
+    expect(readback.publishedOverlay.content.trimEnd()).toBe(
+      runtimeOverlay.trimEnd(),
     );
-    expect(readback.publishedOverlay.content).toMatch(
-      /persistence\s*=\s*"none"/,
-    );
-    expect(readback.safeEffectiveConfig).toContain(
-      'model_reasoning_effort = "high"',
-    );
+    if (effortLine) expect(readback.safeEffectiveConfig).toContain(effortLine);
+    else
+      expect(readback.safeEffectiveConfig).not.toContain(
+        "model_reasoning_effort",
+      );
 
     await ensureAuthorizedProviderAffinity(page, coordinatorRef, 0);
     await ensureAuthorizedProviderAffinity(page, analystRef, 1);
@@ -2207,12 +2209,14 @@ test.describe("web-only fresh installation", () => {
           const attachmentSet = (await finalizeResponse.json()) as {
             ref: string;
           };
-          const beforeResponse = await fetch(
-            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-          );
+          const runQuery = `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&query=${encodeURIComponent(title)}&pageSize=1`;
+          const beforeResponse = await fetch(runQuery);
+          if (!beforeResponse.ok) throw new Error("Run count readback failed");
           const before = (await beforeResponse.json()) as {
-            items: Array<{ title: string }>;
+            total: number;
           };
+          if (!Number.isSafeInteger(before.total) || before.total !== 0)
+            throw new Error("Run negative fixture is not empty");
           const response = await fetch("/api/v1/runs", {
             method: "POST",
             headers: {
@@ -2230,17 +2234,18 @@ test.describe("web-only fresh installation", () => {
             }),
           });
           const problem = (await response.json()) as { code?: string };
-          const afterResponse = await fetch(
-            `/api/v1/runs?projectRef=${encodeURIComponent(expectedProjectRef)}&pageSize=100`,
-          );
+          const afterResponse = await fetch(runQuery);
+          if (!afterResponse.ok) throw new Error("Run count readback failed");
           const after = (await afterResponse.json()) as {
-            items: Array<{ title: string }>;
+            total: number;
           };
+          if (!Number.isSafeInteger(after.total) || after.total < 0)
+            throw new Error("Run count is invalid");
           return {
-            afterCount: after.items.length,
-            beforeCount: before.items.length,
+            afterCount: after.total,
+            beforeCount: before.total,
             code: problem.code ?? "",
-            created: after.items.some((run) => run.title === title),
+            created: after.total !== 0,
             status: response.status,
           };
         },
@@ -2249,7 +2254,7 @@ test.describe("web-only fresh installation", () => {
           expectedProjectRef: projectRef,
           idempotencyKeys,
           targetRef: analystRef,
-          title: `${environment.resourcePrefix} — запрещённый запуск с файлом`,
+          title: `${environment.resourcePrefix} — запрещённый запуск ${idempotencyKeys.run}`,
         },
       ),
     );
@@ -3772,79 +3777,147 @@ async function pinAgentProviderAccount(
   agentRef: string,
   accountRef: string,
 ): Promise<void> {
-  const readbackResponse = await readJsonWithNetworkRetry<{
-    agentVersion: number;
-    configuration: {
-      runtimeProfileRef: string;
-      model: string;
-      providerPolicy: {
-        accountCandidates: Array<{ accountRef: string; weight: number }>;
-        mode: string;
-      };
-    };
-  }>(
-    page,
-    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
-  );
-  if (readbackResponse.status !== 200) {
-    throw new Error(
-      `runtime readback failed: ${String(readbackResponse.status)}`,
-    );
-  }
+  const path = `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`;
+  const readbackResponse =
+    await readJsonWithNetworkRetry<AgentRuntimeConfigurationView>(page, path);
+  expect(readbackResponse.status).toBe(200);
   const readback = readbackResponse.body;
-  const currentCandidates =
-    readback.configuration.providerPolicy.accountCandidates;
+  const query = new URLSearchParams({
+    providerAccountRef: accountRef,
+    query: readback.configuration.model,
+    pageSize: "100",
+  });
+  let candidate: ProviderAccountCandidateInput | undefined;
+  let catalogPin = "";
+  const cursors = new Set<string>();
+  for (let index = 0; index < 20; index += 1) {
+    const response = await readJsonWithNetworkRetry<ModelCapabilityPage>(
+      page,
+      `/api/v1/model-capabilities?${query}`,
+    );
+    expect(response.status).toBe(200);
+    const catalog = response.body;
+    expect(catalog.catalogStatus?.state).toBe("READY");
+    expect(Date.parse(catalog.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(
+      Date.now(),
+    );
+    expect(catalog.catalogRevision).toMatch(/^mcat_[a-f0-9]{64}$/);
+    expect(catalog.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
+    const pin = `${catalog.catalogRevision}:${catalog.catalogDigest}`;
+    if (catalogPin) expect(pin).toBe(catalogPin);
+    catalogPin = pin;
+    const model = catalog.items.find(
+      (item) => item.id === readback.configuration.model,
+    );
+    if (model) {
+      expect(model.available).toBe(true);
+      expect(model.eligibleProviderAccountRefs).toContain(accountRef);
+      candidate = {
+        accountRef,
+        weight: 1,
+        catalogRevision: catalog.catalogRevision,
+        catalogDigest: catalog.catalogDigest,
+        providerDefinitionKey: model.providerDefinitionKey,
+      };
+      break;
+    }
+    if (!catalog.nextPageToken) break;
+    expect(cursors.has(catalog.nextPageToken)).toBe(false);
+    cursors.add(catalog.nextPageToken);
+    query.set("pageToken", catalog.nextPageToken);
+  }
+  if (!candidate)
+    throw new Error("Selected model is absent from the exact account catalog");
+  const current = readback.configuration.providerPolicy.accountCandidates;
   if (
     readback.configuration.providerPolicy.mode === "FIXED" &&
-    currentCandidates.length === 1 &&
-    currentCandidates[0]?.accountRef === accountRef
-  ) {
+    current.length === 1 &&
+    current[0]?.accountRef === candidate.accountRef &&
+    current[0].catalogRevision === candidate.catalogRevision &&
+    current[0].catalogDigest === candidate.catalogDigest &&
+    current[0].providerDefinitionKey === candidate.providerDefinitionKey
+  )
     return;
-  }
-
-  const result = await page.evaluate(
-    async ({ expectedAccountRef, expectedAgentRef, runtime }) => {
-      const csrfPrefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-      const csrf = document.cookie
-        .split(";")
-        .map((part) => part.trim())
-        .find((part) => part.startsWith(csrfPrefix))
-        ?.slice(csrfPrefix.length);
-      if (!csrf) return { status: 0, detail: "CSRF token is unavailable" };
-      const publication = await fetch(
-        `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
-        {
+  const input: AgentRuntimeConfigurationInput = {
+    runtimeProfileRef: readback.configuration.runtimeProfileRef,
+    model: readback.configuration.model,
+    providerPolicyMode: "FIXED",
+    providerAccounts: [candidate],
+  };
+  // Один intent сохраняет key/body/OCC при сетевом повторе. Owner решает stale outcome.
+  const idempotencyKey = await page.evaluate(() => crypto.randomUUID());
+  const result = await retryIdempotentBrowserAction(page, () =>
+    page.evaluate(
+      async ({ path, input, version, key }) => {
+        const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+        const csrf = document.cookie
+          .split(";")
+          .map((part) => part.trim())
+          .find((part) => part.startsWith(prefix))
+          ?.slice(prefix.length);
+        if (!csrf) throw new Error("CSRF token is unavailable");
+        const response = await fetch(path, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-            "If-Match": `"${String(runtime.agentVersion)}"`,
+            "Idempotency-Key": key,
+            "If-Match": `"${String(version)}"`,
             "X-CSRF-Token": decodeURIComponent(csrf),
           },
-          body: JSON.stringify({
-            runtimeProfileRef: runtime.runtimeProfileRef,
-            model: runtime.model,
-            providerPolicyMode: "FIXED",
-            providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
-          }),
-        },
-      );
-      return {
-        status: publication.status,
-        detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
-      };
-    },
-    {
-      expectedAccountRef: accountRef,
-      expectedAgentRef: agentRef,
-      runtime: {
-        agentVersion: readback.agentVersion,
-        model: readback.configuration.model,
-        runtimeProfileRef: readback.configuration.runtimeProfileRef,
+          body: JSON.stringify(input),
+        });
+        return { status: response.status };
       },
-    },
+      { path, input, version: readback.agentVersion, key: idempotencyKey },
+    ),
   );
-  expect(result.status, result.detail).toBe(200);
+  expect(result.status).toBe(200);
+  const saved = await readJsonWithNetworkRetry<AgentRuntimeConfigurationView>(
+    page,
+    path,
+  );
+  expect(saved.status).toBe(200);
+  expect(saved.body.configuration.providerPolicy.mode).toBe("FIXED");
+  expect(
+    saved.body.configuration.providerPolicy.accountCandidates,
+  ).toHaveLength(1);
+  expect(
+    saved.body.configuration.providerPolicy.accountCandidates[0],
+  ).toMatchObject(candidate);
+}
+
+function supportedRuntimeOverlay(schema: ConfigOverlaySchema): string {
+  expect(schema.revision).not.toBe("");
+  expect(schema.digest).toMatch(/^[a-f0-9]{64}$/);
+  const lines: string[] = [];
+  for (const key of [
+    "model_reasoning_effort",
+    "personality",
+    "allow_login_shell",
+    "history.persistence",
+  ] as const) {
+    const field = schema.fields.find((candidate) => candidate.key === key);
+    if (!field) throw new Error("Runtime overlay schema field is absent");
+    if (key === "model_reasoning_effort" && field.allowedValues.length === 0)
+      continue;
+    const selected = field.allowedValues.includes(field.defaultValue)
+      ? field.defaultValue
+      : field.allowedValues[0];
+    if (selected === undefined)
+      throw new Error("Runtime overlay schema has no supported value");
+    let value: string;
+    if (field.valueType === "boolean") {
+      if (selected !== "true" && selected !== "false")
+        throw new Error("Runtime overlay boolean schema is invalid");
+      value = selected;
+    } else {
+      value = JSON.stringify(selected);
+    }
+    if (key === "history.persistence")
+      lines.push("", "[history]", `persistence = ${value}`);
+    else lines.push(`${key} = ${value}`);
+  }
+  return lines.join("\n");
 }
 
 async function resolveArtifactRef(

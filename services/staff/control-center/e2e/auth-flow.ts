@@ -490,6 +490,8 @@ function isAuthenticationResponse(response: Response): boolean {
     const path = new URL(response.url()).pathname;
     return (
       path === "/api/v1/session" ||
+      path === "/api/v1/session/authorization" ||
+      path === "/api/v1/session/callback" ||
       path.includes("/.well-known/") ||
       path.includes("/protocol/openid-connect/") ||
       path.endsWith("/authorize") ||
@@ -509,7 +511,7 @@ function isOwnerSessionCreationResponse(
     return (
       response.request().method() === "POST" &&
       location.origin === frontendOrigin &&
-      location.pathname === "/api/v1/session"
+      location.pathname === "/api/v1/session/callback"
     );
   } catch {
     return false;
@@ -537,7 +539,9 @@ function isOIDCProgressRequest(
     if (
       request.method() === "POST" &&
       location.origin === frontendOrigin &&
-      location.pathname === "/api/v1/session"
+      ["/api/v1/session/authorization", "/api/v1/session/callback"].includes(
+        location.pathname,
+      )
     ) {
       return true;
     }

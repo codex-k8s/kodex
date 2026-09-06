@@ -32,6 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   select: [run: Run];
+  clear: [];
 }>();
 
 function requestClose(open: boolean): void {
@@ -39,6 +40,7 @@ function requestClose(open: boolean): void {
 }
 
 function select(item: SessionPickerItem): void {
+  if (item.id === props.selectedSessionRef) return;
   emit("select", item.run);
 }
 
@@ -88,6 +90,7 @@ watch(
       :model-value="selectedSessionRef || null"
       :load-items="loadItems"
       :labels="labels.picker"
+      @update:model-value="$event === null && emit('clear')"
       @select="select"
     >
       <template #option="{ item }">

@@ -34,7 +34,12 @@ test-go-toolchain-contract: check-go-toolchain
 	@./scripts/tests/go-toolchain-contract-test.sh
 
 test-web-only-release:
+	@python3 scripts/tests/pwa-public-assets-test.py
 	@./scripts/tests/web-only-release-test.sh
+
+.PHONY: test-pwa-public-assets-http
+test-pwa-public-assets-http:
+	@timeout 180s python3 scripts/tests/pwa-public-assets-test.py --http
 
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh

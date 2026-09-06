@@ -14,10 +14,10 @@ test("создаёт краткоживущую API-сессию владель�
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).origin === environment.baseURL &&
-      new URL(response.url()).pathname === "/api/v1/session",
+      new URL(response.url()).pathname === "/api/v1/session/callback",
   );
   await authenticateOwner(page, undefined, { mode: "warm" });
-  expect((await sessionResponse).status()).toBe(204);
+  expect((await sessionResponse).status()).toBe(200);
   await expect(page.locator(".app-shell")).toBeVisible();
   await writeAuthenticatedStorageState(
     environment.outputStorageState,

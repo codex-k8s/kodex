@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка почтовой конфигурации</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import {
+        createRouter,
+        createMemoryHistory,
+        RouterView,
+      } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import EmailMailboxConfigurationPanel from "../../src/features/integrations/ui/EmailMailboxConfigurationPanel.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const connection = {
+        ref: "connection_synthetic",
+        version: 3,
+        definitionKey: "email",
+        name: "Почта",
+        state: "CONNECTED",
+        credentialsConfigured: true,
+        credentialsHint: "",
+        capabilities: [],
+        grants: [],
+        nextActions: [],
+        definitionVersion: "1",
+        definitionDigest: "a".repeat(64),
+        publicConfiguration: {},
+      };
+      const Fixture = {
+        render: () =>
+          h(
+            "main",
+            { style: "max-width: 1100px; margin: auto; padding: 16px" },
+            h(EmailMailboxConfigurationPanel, { connection }),
+          ),
+      };
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/", component: Fixture }],
+      });
+      const app = createApp({ render: () => h(RouterView) });
+      app.use(i18n).use(router);
+      await router.push("/");
+      await router.isReady();
+      app.mount("#app");
+    </script>
+  </body>
+</html>

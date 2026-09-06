@@ -164,25 +164,25 @@ const ru: AgentDetailCopy = {
     preview: "Предпросмотр",
     markdown: "Markdown-шаблон инструкций",
     saveDraft: "Сохранить черновик",
-    variables: "Template variables",
+    variables: "Переменные шаблона",
     variablesHelp:
-      "Авторитетный каталог сгруппирован по scope. Выбор вставляет переменную в позицию курсора.",
+      "Авторитетный каталог сгруппирован по области данных. Выбор вставляет переменную в позицию курсора.",
     variableSearch: "Найти переменную по имени или описанию",
-    variableScope: "Scope",
+    variableScope: "Область данных",
     variableExample: "Пример",
     collection: "Коллекция",
     insertVariable: "Вставить переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
     validation: "Сообщения проверки",
-    allScopes: "Все scope",
+    allScopes: "Все области",
     loadedVariables: "Загружено переменных",
-    visibleScopes: "Scope",
-    materializedPreview: "Материализованный preview",
+    visibleScopes: "Областей",
+    materializedPreview: "Проверка подстановки",
     materializedHelp:
-      "Авторитетный API подставляет безопасный synthetic context. Секреты и недоступные поля в preview не раскрываются.",
+      "API подставляет безопасный тестовый контекст. Это проверка шаблона, а предварительный просмотр будущего запуска ещё недоступен. Секреты и недоступные поля не раскрываются.",
     materializedUnavailable:
-      "Материализованный preview пока не получен или устарел.",
+      "Результат проверки подстановки пока не получен или устарел.",
     refreshPreview: "Обновить preview",
   },
   environment: {
@@ -294,11 +294,11 @@ const en: AgentDetailCopy = {
     allScopes: "All scopes",
     loadedVariables: "Loaded variables",
     visibleScopes: "Scopes",
-    materializedPreview: "Materialized preview",
+    materializedPreview: "Substitution check",
     materializedHelp:
-      "The authoritative API substitutes a safe synthetic context. Secrets and unavailable fields are never revealed.",
+      "The API substitutes a safe test context. This checks the template; a preview of the next run is not available yet. Secrets and unavailable fields are never revealed.",
     materializedUnavailable:
-      "The materialized preview has not been loaded or is stale.",
+      "The substitution check has not been loaded or is stale.",
     refreshPreview: "Refresh preview",
   },
   environment: {

@@ -131,6 +131,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     key: RuntimeResource,
     request: () => Promise<T>,
     apply: (value: T) => void,
+    reject?: (problem: AppProblem) => void,
   ): Promise<void> {
     const generation = (generations.get(key) ?? 0) + 1;
     generations.set(key, generation);
@@ -140,7 +141,11 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
       const value = await request();
       if (generations.get(key) === generation) apply(value);
     } catch (error) {
-      if (generations.get(key) === generation) problems[key] = asProblem(error);
+      if (generations.get(key) === generation) {
+        const problem = asProblem(error);
+        reject?.(problem);
+        problems[key] = problem;
+      }
     } finally {
       if (generations.get(key) === generation) loading[key] = false;
     }
@@ -293,6 +298,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     projectRef: string,
     search: string,
     pageToken?: string,
+    signal?: AbortSignal,
   ): Promise<RuntimeEnvironmentPage> {
     return (
       await unwrap(
@@ -303,7 +309,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             ...(pageToken ? { pageToken } : {}),
             pageSize: 30,
           },
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       )
     ).data;
@@ -411,6 +417,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
 
   async function loadEnvironmentReadiness(
     environmentRef: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     await query(
       `environment-readiness:${environmentRef}`,
@@ -419,12 +426,19 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           await unwrap(
             getRuntimeEnvironmentReadiness({
               path: { environmentRef },
-              signal: requestSignal(),
+              signal: requestSignal(signal),
             }),
           )
         ).data,
       (value) => {
+        if (signal?.aborted) return;
         environmentReadiness[environmentRef] = value;
+      },
+      (problem) => {
+        if (signal?.aborted) return;
+        Reflect.deleteProperty(environmentReadiness, environmentRef);
+        if (problem.status === 404 && problem.code === "NOT_FOUND")
+          clearEnvironmentOperationalState(environmentRef);
       },
     );
   }
@@ -432,6 +446,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadEnvironmentAgents(
     environmentRef: string,
     reset = true,
+    signal?: AbortSignal,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -448,11 +463,12 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
                 pageSize: 30,
                 ...(pageToken ? { pageToken } : {}),
               },
-              signal: requestSignal(),
+              signal: requestSignal(signal),
             }),
           )
         ).data,
       (page) => {
+        if (signal?.aborted) return;
         if (reset) environmentAgents[environmentRef] = page.items;
         else {
           const merged = new Map(
@@ -466,7 +482,27 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
         }
         environmentAgentCursors[environmentRef] = page.nextPageToken;
       },
+      (problem) => {
+        if (signal?.aborted) return;
+        Reflect.deleteProperty(environmentAgents, environmentRef);
+        Reflect.deleteProperty(environmentAgentCursors, environmentRef);
+        if (problem.status === 404 && problem.code === "NOT_FOUND")
+          clearEnvironmentOperationalState(environmentRef);
+      },
     );
+  }
+
+  function clearEnvironmentOperationalState(environmentRef: string): void {
+    Reflect.deleteProperty(environmentReadiness, environmentRef);
+    Reflect.deleteProperty(environmentAgents, environmentRef);
+    Reflect.deleteProperty(environmentAgentCursors, environmentRef);
+    for (const key of [
+      `environment-readiness:${environmentRef}`,
+      `environment-agents:${environmentRef}`,
+    ] as const) {
+      generations.set(key, (generations.get(key) ?? 0) + 1);
+      loading[key] = false;
+    }
   }
 
   async function loadEnvironmentVersions(

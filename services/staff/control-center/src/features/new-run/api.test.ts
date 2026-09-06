@@ -113,46 +113,59 @@ describe("new-run cursor API adapters", () => {
     expect(page.nextCursor).toBe("artifact-page-2");
   });
 
-  it("пропускает нерелевантную страницу runs и дедуплицирует session", async () => {
-    api.listRuns
-      .mockReturnValueOnce(
-        response({
-          items: [run({ state: "RUNNING" })],
-          nextPageToken: "run-page-2",
-        }),
-      )
-      .mockReturnValueOnce(
-        response({
-          items: [
-            run({ ref: "run_latest" }),
-            run({ ref: "run_old", createdAt: "2026-08-27T10:00:00Z" }),
-          ],
-          nextPageToken: "run-page-3",
-        }),
-      );
+  it("передаёт точный target владельцу и сохраняет одну серверную страницу", async () => {
+    api.listRuns.mockReturnValueOnce(
+      response({
+        items: [run({ ref: "run_latest" })],
+        total: 43,
+        nextPageToken: "run-page-3",
+      }),
+    );
     const loader = createSessionPickerLoader({
       projectRef: "project_1",
       targetRef: "workflow_1",
       targetType: "WORKFLOW",
     });
-
     const page = await loader({
       query: "итог",
+      cursor: "run-page-2",
       signal: new AbortController().signal,
     });
-
-    expect(api.listRuns).toHaveBeenCalledTimes(2);
+    expect(api.listRuns).toHaveBeenCalledTimes(1);
     expect(page.items.map((item) => item.run.ref)).toEqual(["run_latest"]);
     expect(page.nextCursor).toBe("run-page-3");
-    expect(api.listRuns).toHaveBeenLastCalledWith(
+    expect(api.listRuns).toHaveBeenCalledWith(
       expect.objectContaining({
         query: {
           projectRef: "project_1",
-          pageSize: 100,
+          pageSize: 30,
           pageToken: "run-page-2",
           query: "итог",
+          resumableSessionsOnly: true,
+          targetType: "WORKFLOW",
+          targetRef: "workflow_1",
         },
       }),
     );
+  });
+
+  it("отвергает нерелевантную страницу целиком без поиска следующей", async () => {
+    api.listRuns.mockClear();
+    api.listRuns.mockReturnValueOnce(
+      response({
+        items: [run({ state: "RUNNING" })],
+        total: 43,
+        nextPageToken: "run-page-2",
+      }),
+    );
+    const loader = createSessionPickerLoader({
+      projectRef: "project_1",
+      targetRef: "workflow_1",
+      targetType: "WORKFLOW",
+    });
+    await expect(
+      loader({ query: "", signal: new AbortController().signal }),
+    ).rejects.toThrow("Invalid resumable");
+    expect(api.listRuns).toHaveBeenCalledTimes(1);
   });
 });

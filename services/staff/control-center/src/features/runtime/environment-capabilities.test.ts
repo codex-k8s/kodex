@@ -165,6 +165,7 @@ describe("runtime environment capabilities", () => {
       secretKey: "token",
       secretUid: "4ea063ab-b3ee-49fd-b6d2-d0f44fd85bb1",
       secretResourceVersion: "128",
+      revision: 7,
       contentSha256: "b".repeat(64),
     });
 

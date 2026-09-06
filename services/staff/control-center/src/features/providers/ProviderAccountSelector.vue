@@ -1,20 +1,22 @@
 <script setup lang="ts">
-import { Check, ChevronDown, LoaderCircle, Search, X } from "@lucide/vue";
+import { ChevronDown, X } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-
-import {
-  nearScrollEnd,
-  useAsyncEntityCollection,
-  type AsyncEntityPickerItem,
+import type { ProviderAccountUsageContext } from "@/shared/api/generated/openapi/types.gen";
+import { hasCurrentUsage, usageContextKey } from "./usage";
+import ProviderUsageDetails from "./ProviderUsageDetails.vue";
+import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityLoadRequest,
+  AsyncEntityPickerItem,
+  AsyncEntityPage,
 } from "@/shared/ui/async-entity-picker";
 import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-
 import { loadProviderAccount, loadProviderAccounts } from "./api";
 import {
-  isRuntimeEligible,
   normalizeProviderAccountCandidates,
-  toggleProviderAccountCandidate,
   type ProviderAccount,
   type ProviderAccountCandidate,
   type ProviderDefinitionKey,
@@ -24,26 +26,32 @@ import {
 interface AccountOption extends AsyncEntityPickerItem {
   account: ProviderAccount;
 }
-
 const props = defineProps<{
   modelValue: ProviderAccountCandidate[];
   definitionKey: string;
   policyMode: ProviderPolicyMode;
+  usageContext: ProviderAccountUsageContext;
   disabled?: boolean;
 }>();
+type ProviderAccountEligibilityState = "CONNECTING" | "READY" | "UNAVAILABLE";
 const emit = defineEmits<{
   "update:modelValue": [value: ProviderAccountCandidate[]];
   "eligibility-state-change": [state: ProviderAccountEligibilityState];
+  "submission-allowed-change": [allowed: boolean];
 }>();
-
-type ProviderAccountEligibilityState = "CONNECTING" | "READY" | "UNAVAILABLE";
-
+const { t } = useI18n();
+const route = useRoute();
 const open = ref(false);
 const resolved = ref<Record<string, ProviderAccount>>({});
 const resolvingSelection = ref(false);
-
+const freshness = ref(Date.now());
+const refreshGeneration = ref(0);
+const contextKey = computed(() => usageContextKey(props.usageContext));
+function current(account: ProviderAccount): boolean {
+  return hasCurrentUsage(account, props.usageContext, freshness.value);
+}
 const definitionKey = computed(() =>
-  props.definitionKey === "openai-codex"
+  props.definitionKey === "openai-codex" && props.usageContext.runtimeProfileRef
     ? (props.definitionKey as ProviderDefinitionKey)
     : undefined,
 );
@@ -63,67 +71,112 @@ const selectionEligible = computed(
       ({ account }) =>
         account !== undefined &&
         account.definitionKey === definitionKey.value &&
-        isRuntimeEligible(account),
+        current(account) &&
+        account.usage?.eligibleForSelection === true,
     ),
 );
-const eligibilityState = computed<ProviderAccountEligibilityState>(() => {
-  if (resolvingSelection.value) return "CONNECTING";
-  return selectionEligible.value ? "READY" : "UNAVAILABLE";
-});
-
-const { hasMore, items, loadMore, loadingMore, phase, query, refresh } =
-  useAsyncEntityCollection<AccountOption>(
-    async ({ cursor, query: search, signal }) => {
-      if (!definitionKey.value) return { items: [], nextCursor: null };
-      const page = await loadProviderAccounts(
-        search,
-        cursor,
-        signal,
-        definitionKey.value,
-      );
-      const matching = page.items.filter(
-        (account) => account.definitionKey === definitionKey.value,
-      );
-      for (const account of matching)
-        resolved.value = { ...resolved.value, [account.ref]: account };
-      return {
-        items: matching.map((account) => ({
-          id: account.ref,
-          label: account.name,
-          description: account.externalAccountMasked,
-          disabled: !isRuntimeEligible(account),
-          account,
-        })),
-        nextCursor: page.nextPageToken || null,
-      };
-    },
-    { immediate: false, debounceMs: 250 },
+const submissionAllowed = computed(
+  () =>
+    !resolvingSelection.value &&
+    selectionEligible.value &&
+    selectedAccounts.value.every(
+      ({ account }) => account?.usage?.allowedToSubmit === true,
+    ),
+);
+const eligibilityState = computed<ProviderAccountEligibilityState>(() =>
+  resolvingSelection.value
+    ? "CONNECTING"
+    : selectionEligible.value
+      ? "READY"
+      : "UNAVAILABLE",
+);
+const labels = computed(() => ({
+  label: t("providers.selectorLabel"),
+  searchPlaceholder: t("providers.searchPlaceholder"),
+  loading: t("common.loading"),
+  loadingMore: t("common.loading"),
+  empty: t("providers.noEligibleAccounts"),
+  error: t("errors.default"),
+  retry: t("common.retry"),
+}));
+async function loadAccounts(
+  request: AsyncEntityLoadRequest,
+): Promise<AsyncEntityPage<AccountOption>> {
+  const key = definitionKey.value;
+  const expectedContext = contextKey.value;
+  if (!key) return { items: [], nextCursor: null };
+  const page = await loadProviderAccounts(
+    request.query,
+    request.cursor,
+    request.signal,
+    key,
+    props.usageContext,
   );
-
+  if (request.signal.aborted || expectedContext !== contextKey.value)
+    return { items: [], nextCursor: null };
+  if (page.items.some((account) => !Object.is(account.definitionKey, key)))
+    throw new Error("Provider account catalog scope mismatch");
+  if (
+    page.items.some((account) => !hasCurrentUsage(account, props.usageContext))
+  )
+    throw new Error("Provider account usage context is stale");
+  for (const account of page.items) resolved.value[account.ref] = account;
+  return {
+    items: page.items.map((account) => ({
+      id: account.ref,
+      label: account.name,
+      description: account.externalAccountMasked,
+      disabled: account.usage?.eligibleForSelection !== true,
+      account,
+    })),
+    nextCursor: page.nextPageToken || null,
+  };
+}
 watch(
-  () => ({ definitionKey: definitionKey.value, refs: [...selectedRefs.value] }),
-  async (selection, _previous, onCleanup) => {
+  () => ({
+    key: definitionKey.value,
+    refs: [...selectedRefs.value],
+    opened: open.value,
+    context: contextKey.value,
+    refresh: refreshGeneration.value,
+  }),
+  async (selection, _previous, cleanup) => {
     const controller = new AbortController();
-    onCleanup(() => {
-      controller.abort();
-    });
-    const missing = selection.refs.filter(
-      (ref) => resolved.value[ref]?.definitionKey !== selection.definitionKey,
-    );
-    if (!selection.definitionKey || !missing.length) {
+    cleanup(() => controller.abort());
+    resolved.value = {};
+    emit("submission-allowed-change", false);
+    if (!selection.key || !selection.refs.length) {
       resolvingSelection.value = false;
       return;
     }
     resolvingSelection.value = true;
     const results = await Promise.allSettled(
-      missing.map((ref) => loadProviderAccount(ref, controller.signal)),
+      selection.refs.map(async (ref) => {
+        const account = await loadProviderAccount(
+          ref,
+          controller.signal,
+          props.usageContext,
+        );
+        if (
+          account.ref !== ref ||
+          !hasCurrentUsage(account, props.usageContext)
+        )
+          throw new Error("Provider account usage context is stale");
+        return account;
+      }),
     );
-    if (controller.signal.aborted) return;
-    const additions: Record<string, ProviderAccount> = {};
+    if (controller.signal.aborted || selection.context !== contextKey.value)
+      return;
+    const additions = { ...resolved.value };
+    for (const ref of selection.refs) Reflect.deleteProperty(additions, ref);
     for (const result of results)
-      if (result.status === "fulfilled")
+      if (
+        result.status === "fulfilled" &&
+        Object.is(result.value.definitionKey, selection.key)
+      )
         additions[result.value.ref] = result.value;
-    resolved.value = { ...resolved.value, ...additions };
+    resolved.value = additions;
+    freshness.value = Date.now();
     resolvingSelection.value = false;
   },
   { immediate: true },
@@ -131,6 +184,7 @@ watch(
 watch(
   () => props.policyMode,
   (mode) => {
+    if (props.disabled) return;
     const normalized = normalizeProviderAccountCandidates(
       props.modelValue,
       mode,
@@ -142,43 +196,74 @@ watch(
 watch(eligibilityState, (state) => emit("eligibility-state-change", state), {
   immediate: true,
 });
-watch(definitionKey, () => {
-  if (open.value) refresh();
-});
-
-function setOpen(value: boolean): void {
-  open.value = value;
-  if (value) refresh();
-}
-
-function selected(ref: string): boolean {
-  return selectedRefs.value.includes(ref);
-}
-
-function toggle(account: ProviderAccount): void {
-  if (props.disabled || !isRuntimeEligible(account)) return;
-  emit(
-    "update:modelValue",
-    toggleProviderAccountCandidate(
-      props.modelValue,
-      account.ref,
-      props.policyMode,
+watch(
+  submissionAllowed,
+  (allowed) => emit("submission-allowed-change", allowed),
+  { immediate: true, flush: "sync" },
+);
+watch(selectedAccounts, (accounts, _previous, cleanup) => {
+  const expiry = Math.min(
+    ...accounts.map(({ account }) =>
+      Date.parse(account?.usage?.expiresAt ?? ""),
     ),
   );
+  if (!Number.isFinite(expiry)) return;
+  const timer = setTimeout(
+    () => {
+      freshness.value = Date.now();
+    },
+    Math.min(2_147_483_647, Math.max(0, expiry - Date.now())),
+  );
+  cleanup(() => clearTimeout(timer));
+});
+watch(
+  () => [props.definitionKey, props.disabled, route.fullPath],
+  () => {
+    open.value = false;
+  },
+);
+function setOpen(value: boolean): void {
+  open.value = value && !props.disabled && !!definitionKey.value;
 }
-
-function remove(accountRef: string): void {
+function choose(value: string | null | readonly string[]): void {
+  if (props.disabled) return;
+  const refs = typeof value === "string" ? [value] : (value ?? []);
+  const candidates = refs.map(
+    (ref) =>
+      props.modelValue.find((item) => item.accountRef === ref) ?? {
+        accountRef: ref,
+        weight: 1,
+      },
+  );
+  if (
+    candidates.some((item) => {
+      const account = resolved.value[item.accountRef];
+      return (
+        !account ||
+        !hasCurrentUsage(account, props.usageContext) ||
+        account.usage?.eligibleForSelection !== true
+      );
+    })
+  )
+    return;
   emit(
     "update:modelValue",
-    props.modelValue.filter((item) => item.accountRef !== accountRef),
+    normalizeProviderAccountCandidates(candidates, props.policyMode),
   );
+  if (props.policyMode === "FIXED") open.value = false;
 }
-
+function remove(accountRef: string): void {
+  if (!props.disabled)
+    emit(
+      "update:modelValue",
+      props.modelValue.filter((item) => item.accountRef !== accountRef),
+    );
+}
 function changeWeight(accountRef: string, event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement)) return;
-  const weight = Number(target.value);
-  if (!Number.isSafeInteger(weight) || weight < 1 || weight > 10_000) return;
+  if (props.disabled || !(event.currentTarget instanceof HTMLInputElement))
+    return;
+  const weight = Number(event.currentTarget.value);
+  if (!Number.isSafeInteger(weight) || weight < 1 || weight > 10000) return;
   emit(
     "update:modelValue",
     props.modelValue.map((item) =>
@@ -186,14 +271,7 @@ function changeWeight(accountRef: string, event: Event): void {
     ),
   );
 }
-
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
 </script>
-
 <template>
   <div class="provider-selector">
     <DismissiblePopover
@@ -213,119 +291,120 @@ function handleScroll(event: Event): void {
           :disabled="disabled || !definitionKey"
           @click="toggle"
         >
-          <span>
-            <strong>{{ $t("providers.selectorLabel") }}</strong>
-            <small>{{
+          <span
+            ><strong>{{ $t("providers.selectorLabel") }}</strong
+            ><small>{{
               $t("providers.selectedCount", { count: modelValue.length })
-            }}</small>
-          </span>
-          <ChevronDown :size="17" aria-hidden="true" />
+            }}</small></span
+          ><ChevronDown :size="17" aria-hidden="true" />
         </button>
       </template>
       <section class="provider-selector__popover">
-        <label class="provider-selector__search">
-          <Search :size="16" aria-hidden="true" />
-          <span class="sr-only">{{ $t("providers.search") }}</span>
-          <input
-            v-model="query"
-            type="search"
-            :placeholder="$t('providers.searchPlaceholder')"
-          />
-        </label>
-        <div
-          class="provider-selector__options"
-          role="listbox"
-          aria-multiselectable="true"
-          @scroll.passive="handleScroll"
+        <AsyncEntityPicker
+          :key="contextKey"
+          :load-items="loadAccounts"
+          :labels="labels"
+          :model-value="selectedRefs"
+          :multiple="policyMode !== 'FIXED'"
+          :disabled="disabled"
+          @update:model-value="choose"
         >
-          <p v-if="phase === 'initial-loading'" role="status">
-            <LoaderCircle class="spin" :size="17" aria-hidden="true" />
-            {{ $t("common.loading") }}
-          </p>
-          <p v-else-if="phase === 'error'" role="alert">
-            {{ $t("errors.default") }}
-          </p>
-          <p v-else-if="phase === 'empty'" role="status">
-            {{ $t("providers.noEligibleAccounts") }}
-          </p>
-          <button
-            v-for="item in items"
-            v-else
-            :key="item.id"
-            class="provider-selector__option"
-            type="button"
-            role="option"
-            :aria-selected="selected(item.id)"
-            :disabled="item.disabled"
-            @click="toggle(item.account)"
-          >
-            <span>
-              <strong>{{ item.label }}</strong>
-              <small>{{
+          <template #option="{ item }">
+            <span class="provider-selector__option-copy"
+              ><strong>{{ item.label }}</strong
+              ><small>{{
                 item.description || $t("providers.externalAccountPending")
-              }}</small>
-            </span>
-            <StatusBadge
-              :state="item.account.ready ? item.account.state : 'UNAVAILABLE'"
-            />
-            <Check v-if="selected(item.id)" :size="17" aria-hidden="true" />
-          </button>
-          <p v-if="loadingMore" role="status">
-            <LoaderCircle class="spin" :size="16" aria-hidden="true" />
-            {{ $t("common.loading") }}
-          </p>
-        </div>
+              }}</small
+              ><small
+                >OpenAI Codex ·
+                {{
+                  item.account.authorization
+                    ? $t(
+                        `providers.methods.${item.account.authorization.method}`,
+                      )
+                    : $t("common.noData")
+                }}</small
+              ><small v-if="item.account.safeStatusReason">{{
+                $t(`providers.reasons.${item.account.safeStatusReason}`)
+              }}</small
+              ><small v-else-if="!item.account.enabled">{{
+                $t("states.DISABLED")
+              }}</small></span
+            >
+            <ProviderUsageDetails :usage="item.account.usage" compact />
+            <StatusBadge :state="item.account.state" />
+          </template>
+        </AsyncEntityPicker>
         <RouterLink
           class="provider-selector__manage"
-          to="/administration/providers"
+          :to="{
+            path: '/administration/providers',
+            query: { returnTo: route.fullPath },
+          }"
+          >{{ $t("providers.manageAccounts") }}</RouterLink
         >
-          {{ $t("providers.manageAccounts") }}
-        </RouterLink>
       </section>
     </DismissiblePopover>
-
+    <button
+      type="button"
+      class="button button--ghost"
+      :disabled="resolvingSelection || disabled"
+      @click="refreshGeneration++"
+    >
+      {{ $t("providerUsage.refresh") }}
+    </button>
+    <p
+      v-if="
+        !resolvingSelection &&
+        selectedAccounts.some(({ account }) => account && !current(account))
+      "
+    >
+      {{ $t("providerUsage.stale") }}
+    </p>
     <div v-if="selectedAccounts.length" class="provider-selector__selected">
       <article
         v-for="item in selectedAccounts"
         :key="item.candidate.accountRef"
         class="provider-selector__selected-row"
       >
-        <span>
-          <strong>{{
+        <span
+          ><strong>{{
             item.account?.name ?? $t("providers.accountUnavailable")
-          }}</strong>
-          <small>{{
+          }}</strong
+          ><small>{{
             item.account?.externalAccountMasked ||
             $t("providers.accountUnavailableHelp")
-          }}</small>
-        </span>
-        <label v-if="policyMode === 'WEIGHTED'">
-          <span>{{ $t("runtime.weight") }}</span>
-          <input
+          }}</small></span
+        >
+        <label v-if="policyMode === 'WEIGHTED'"
+          ><span>{{ $t("runtime.weight") }}</span
+          ><input
             type="number"
             min="1"
             max="10000"
             :value="item.candidate.weight"
             :disabled="disabled"
             @change="changeWeight(item.candidate.accountRef, $event)"
-          />
-        </label>
+        /></label>
         <button
           class="icon-button icon-button--danger"
           type="button"
           :disabled="disabled"
+          :title="
+            $t('providers.removeSelection', { name: item.account?.name ?? '' })
+          "
           :aria-label="
             $t('providers.removeSelection', { name: item.account?.name ?? '' })
           "
           @click="remove(item.candidate.accountRef)"
         >
-          <X :size="16" aria-hidden="true" />
+          <X :size="16" />
         </button>
+        <ProviderUsageDetails :usage="item.account?.usage" />
       </article>
     </div>
   </div>
 </template>
-
 <style scoped>
 .provider-selector {
   display: grid;
@@ -354,6 +433,19 @@ function handleScroll(event: Event): void {
 }
 .provider-selector small {
   color: var(--muted);
+}
+.provider-selector__option-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-selector__option-copy strong,
+.provider-selector__option-copy small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .provider-selector__popover {
   display: grid;
@@ -421,6 +513,10 @@ function handleScroll(event: Event): void {
   align-items: center;
   gap: 6px;
   font-size: 0.76rem;
+}
+.provider-selector__selected-row > .provider-usage {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 .provider-selector__selected-row input {
   width: 76px;

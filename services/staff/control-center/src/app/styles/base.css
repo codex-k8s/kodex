@@ -333,6 +333,27 @@ p {
   min-width: 0;
   flex: 1 1 auto;
 }
+.topbar-project-picker {
+  flex: 0 1 280px;
+  min-width: 140px;
+  max-width: 280px;
+}
+.topbar-project-picker .async-picker__trigger {
+  height: 44px;
+  min-height: 44px;
+}
+@media (max-width: 900px) {
+  .topbar-project-picker {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+  .topbar .brand {
+    flex: 0 0 auto;
+  }
+  .topbar .brand > span:last-child {
+    display: none;
+  }
+}
 .global-search {
   width: 100%;
 }
@@ -414,10 +435,11 @@ p {
   margin-left: auto;
 }
 .connection-status {
-  width: 132px;
+  width: max-content;
+  height: 28px;
   flex: 0 0 auto;
   justify-content: center;
-  overflow: hidden;
+  align-self: center;
 }
 .sidebar {
   position: fixed;
@@ -836,6 +858,38 @@ label {
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.segmented-control > button {
+  min-height: 36px;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.segmented-control > button[aria-selected="true"],
+.segmented-control > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.segmented-control > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .files-tab {
   padding: 0 14px;
   border: 0;
@@ -1067,6 +1121,11 @@ label {
 }
 .status-badge {
   display: inline-flex;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+  align-self: center;
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
@@ -1075,6 +1134,18 @@ label {
   background: #f0f3f6;
   font-size: 0.78rem;
   white-space: nowrap;
+}
+.code-editor-voice {
+  position: relative;
+  min-width: 0;
+}
+.code-editor-voice > .voice-input {
+  position: absolute;
+  right: 18px;
+  bottom: 10px;
+}
+.code-editor-voice:has(> .voice-input button) .cm-content {
+  padding-bottom: 56px;
 }
 time,
 .mono,

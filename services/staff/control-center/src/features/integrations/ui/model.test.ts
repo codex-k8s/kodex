@@ -43,6 +43,9 @@ function definition(
     origin: "SHIPPED",
     digest: "a".repeat(64),
     adapter: "GITHUB",
+    adapterOwner: "integration-gateway",
+    executionRoute: "MANAGED_MCP",
+    adapterReadiness: "READY",
     ...overrides,
   };
 }

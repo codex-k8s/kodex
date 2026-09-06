@@ -25,6 +25,12 @@ const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listRunsMock = vi.hoisted(() => vi.fn());
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
+const changeArtifactBindingMock = vi.hoisted(() =>
+  vi.fn<
+    typeof import("@/shared/api/generated/openapi/sdk.gen").changeArtifactBinding
+  >(),
+);
+const getAgentMock = vi.hoisted(() => vi.fn());
 const getArtifactMock = vi.hoisted(() =>
   vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").getArtifact>(),
 );
@@ -75,6 +81,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listRuns: listRunsMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
+  changeArtifactBinding: changeArtifactBindingMock,
+  getAgent: getAgentMock,
   getArtifact: getArtifactMock,
   getArtifactImpact: getArtifactImpactMock,
   deleteArtifact: deleteArtifactMock,
@@ -104,6 +112,7 @@ function project(ref: string, version = 1): Project {
     language: "ru",
     lifecycle: "ACTIVE",
     agentCount: 0,
+    integrationState: "NONE",
     workflowCount: 0,
     activeRunCount: 0,
     pendingGateCount: 0,
@@ -264,6 +273,9 @@ function integrationDefinition(): IntegrationDefinition {
     origin: "SHIPPED",
     digest: "a".repeat(64),
     adapter: "GITHUB",
+    adapterOwner: "integration-gateway",
+    executionRoute: "MANAGED_MCP",
+    adapterReadiness: "READY",
   };
 }
 
@@ -315,6 +327,8 @@ describe("platform store", () => {
     listRunsMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
+    changeArtifactBindingMock.mockReset();
+    getAgentMock.mockReset();
     getArtifactMock.mockReset();
     getArtifactImpactMock.mockReset();
     deleteArtifactMock.mockReset();
@@ -395,7 +409,7 @@ describe("platform store", () => {
     const runResponse = (
       items: Run[],
     ): { data: RunPage; response: Response } => ({
-      data: { items },
+      data: { items, total: items.length },
       response: new Response(null, { status: 200 }),
     });
     listRunsMock
@@ -761,6 +775,39 @@ describe("platform store", () => {
     expect(store.artifacts.artifact_project).toEqual(projectArtifact);
   });
 
+  it("принимает tombstone unbind без eager GET архивного сотрудника", async () => {
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const original = {
+      ...artifact("art_bound", "project_owner"),
+      agentBindings: ["agent_archived"],
+    };
+    const result = {
+      ...original,
+      version: original.version + 1,
+      agentBindings: [],
+    };
+    changeArtifactBindingMock.mockResolvedValue({
+      data: result,
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    getAgentMock.mockRejectedValue(
+      new Error("Archived agent GET must not run"),
+    );
+    const store = usePlatformStore();
+    await expect(
+      store.changeArtifactAgentBinding(original, "agent_archived", false),
+    ).resolves.toEqual(result);
+    expect(store.artifacts[original.ref]).toEqual(result);
+    expect(getAgentMock).not.toHaveBeenCalled();
+    const call = changeArtifactBindingMock.mock.calls[0]?.[0];
+    expect(call?.path).toEqual({ artifactRef: original.ref });
+    expect(call?.body).toEqual({ agentRef: "agent_archived", enabled: false });
+    expect(call?.headers["If-Match"]).toBe(`"${String(original.version)}"`);
+  });
+
   it("читает avatar artifact и перемещает его в общую корзину с OCC", async () => {
     vi.stubGlobal("document", {
       cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
@@ -836,6 +883,29 @@ describe("platform store", () => {
     expect(store.projectList).toEqual([]);
     expect(store.projectCollectionActions).toEqual([]);
     expect(selectedProjectRef()).toBeUndefined();
+  });
+
+  it("не принимает старый owner ACK после сброса и нового запроса с тем же ключом", async () => {
+    let resolveOld!: (value: ReturnType<typeof response>) => void;
+    listProjectsMock.mockReturnValueOnce(
+      new Promise<ReturnType<typeof response>>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const store = usePlatformStore();
+    const oldRequest = store.loadProjects();
+    store.clearOwnerState();
+    listProjectsMock.mockResolvedValueOnce(
+      response([project("project_new_owner")]),
+    );
+    await store.loadProjects();
+    resolveOld(response([project("project_old_owner")]));
+    await oldRequest;
+    expect(store.projectList.map((item) => item.ref)).toEqual([
+      "project_new_owner",
+    ]);
+    expect(store.problems.projects).toBeUndefined();
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
   });
 
   it("сохраняет авторитетную готовность core независимо от списка подключений", async () => {

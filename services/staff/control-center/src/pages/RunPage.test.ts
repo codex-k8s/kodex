@@ -23,6 +23,9 @@ afterAll(() => vi.unstubAllGlobals());
 
 function messages() {
   return {
+    serverMessages: {
+      RUN_COORDINATION_ROLE: "Координатор запуска",
+    },
     common: {
       status: "Состояние",
       result: "Результат",
@@ -237,7 +240,7 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("Завершён");
     expect(html).toContain("status-badge--success");
     expect(html).toContain("Требует внимания");
-    expect(html).toContain("ИИ-сотрудник");
+    expect(html).toContain("Координатор запуска");
     expect(html).toContain("История событий временно недоступна");
     expect(html).toContain("Граф выполнения");
     expect(html).toContain("run-page-body");

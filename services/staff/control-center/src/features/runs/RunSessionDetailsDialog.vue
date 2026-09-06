@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Bot, CircleDot, UserRound, Wrench } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
@@ -15,6 +15,7 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import RuntimeRevisionDiffPanel from "./RuntimeRevisionDiffPanel.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -30,6 +31,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
+const revisionDiffOpen = ref(false);
 
 const parentNode = computed(() =>
   props.nodes.find((candidate) => candidate.ref === props.node.parentNodeRef),
@@ -127,6 +129,14 @@ function eventKind(
         </div>
         <StatusBadge :state="node.state" />
       </header>
+
+      <details
+        v-if="sessionNode"
+        @toggle="revisionDiffOpen = ($event.target as HTMLDetailsElement).open"
+      >
+        <summary>{{ $t("runtimeDiff.title") }}</summary>
+        <RuntimeRevisionDiffPanel v-if="revisionDiffOpen" :run="run" />
+      </details>
 
       <div class="session-details__workspace">
         <aside class="session-details__sidebar">

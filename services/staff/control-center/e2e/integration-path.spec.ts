@@ -7,9 +7,23 @@ import { promisify } from "node:util";
 
 import { type Page } from "@playwright/test";
 
+import type {
+  AgentRuntimeConfigurationView,
+  ModelCapabilityPage,
+  ProviderAccountCandidateInput,
+  ProviderAccountBlockerPage,
+  ProviderAccountDeletion,
+} from "../src/shared/api/generated/openapi";
+
 import { loadE2EEnvironment } from "./environment";
 import { expect, test } from "./fixtures";
 import { gotoWithRetry } from "./helpers";
+import {
+  providerCleanupQuery,
+  providerCleanupProjection,
+  providerCleanupTargets,
+  verifyProviderCleanupFence,
+} from "./provider-cleanup-proof";
 
 const environment = loadE2EEnvironment();
 const execFileAsync = promisify(execFile);
@@ -59,10 +73,13 @@ interface Project extends VersionedRef {
 }
 
 interface Agent extends VersionedRef {
+  readonly name: string;
   readonly state: string;
+  readonly nextActions: readonly string[];
 }
 
 interface ProviderAccount extends VersionedRef {
+  readonly deletion?: ProviderAccountDeletion;
   readonly authorization?: { readonly method: string; readonly state: string };
   readonly enabled: boolean;
   readonly externalAccountMasked: string;
@@ -70,15 +87,6 @@ interface ProviderAccount extends VersionedRef {
   readonly nextActions: readonly string[];
   readonly ready: boolean;
   readonly state: string;
-}
-
-interface ProviderCredentialCleanupReadback {
-  readonly safe_error_code: string;
-  readonly secret_name: string;
-  readonly secret_uid: string;
-  readonly state: string;
-  readonly task_ref: string;
-  readonly terminal_receipt: string;
 }
 
 interface Connection extends VersionedRef {
@@ -475,7 +483,9 @@ test.describe("deployed local integration path", () => {
     );
     let apiKey: string | undefined = await readProviderAPIKey();
     let account: ProviderAccount | undefined;
-    let credentialActivated = false;
+    let fixtureProject: Project | undefined;
+    let fixtureAgent: Agent | undefined;
+    let accountBound = false;
 
     try {
       await gotoWithRetry(page, "/administration/providers");
@@ -532,15 +542,11 @@ test.describe("deployed local integration path", () => {
       expect(account).toMatchObject({
         authorization: { method: "API_KEY", state: "AUTHORIZED" },
         enabled: true,
-        ready: true,
         state: "AUTHORIZED",
       });
       expect(account.externalAccountMasked).not.toBe("");
-      credentialActivated = true;
       await expect(
-        authorizationDialog.getByText(
-          "Учётная запись авторизована и готова к использованию.",
-        ),
+        authorizationDialog.getByText("Учётная запись авторизована."),
       ).toBeVisible();
       await authorizationDialog
         .locator(".modal__footer")
@@ -557,6 +563,7 @@ test.describe("deployed local integration path", () => {
         },
         expectedStatus: 201,
       });
+      fixtureProject = project;
       const agent = await mutateAPI<Agent>(page, {
         method: "POST",
         path: `/api/v1/projects/${encodeURIComponent(project.ref)}/agents`,
@@ -569,7 +576,9 @@ test.describe("deployed local integration path", () => {
         },
         expectedStatus: 201,
       });
+      fixtureAgent = agent;
       await pinAgentProviderAccount(page, agent.ref, account.ref);
+      accountBound = true;
       const run = await createPlainRun(
         page,
         project.ref,
@@ -584,36 +593,184 @@ test.describe("deployed local integration path", () => {
       if ((await credentialInput.count()) > 0) {
         await credentialInput.fill("").catch(() => undefined);
       }
-      if (account && account.state !== "REVOKED") {
-        const current = await readAPI<ProviderAccount>(
-          page,
-          `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
-        ).catch(() => undefined);
-        if (current && current.state !== "REVOKED") {
-          account = await mutateAPI<ProviderAccount>(page, {
-            method: "POST",
-            path: `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}/revocation`,
-            version: current.version,
-            expectedStatus: 200,
-          });
-          expect(account).toMatchObject({
-            enabled: false,
-            ready: false,
-            state: "REVOKED",
-          });
-          if (credentialActivated) {
-            await expect
-              .poll(() => verifyProviderCredentialCleanup(account?.ref ?? ""), {
-                timeout: 180_000,
-                intervals: [250, 1_000, 2_000, 5_000],
-              })
-              .toBe(true);
-          }
-        }
+      if (account) {
+        await deleteFixtureProviderAccount(page, account.ref, {
+          agent: fixtureAgent,
+          project: fixtureProject,
+          accountBound,
+        });
       }
     }
   });
 });
+
+async function deleteFixtureProviderAccount(
+  page: Page,
+  accountRef: string,
+  fixture: {
+    agent?: Agent;
+    project?: Project;
+    accountBound: boolean;
+  },
+): Promise<void> {
+  const accountPath = `/api/v1/provider-accounts/${encodeURIComponent(accountRef)}`;
+  let current = await readAPI<ProviderAccount>(page, accountPath);
+  if (current.state !== "DELETED" && current.state !== "DELETING") {
+    current = await requestFixtureProviderDeletion(page, current);
+  }
+  expect(["DELETING", "DELETED"]).toContain(current.state);
+  if (fixture.agent && current.state !== "DELETED") {
+    const query = new URLSearchParams({
+      kind: "AGENT",
+      query: fixture.agent.name,
+      pageSize: "100",
+    });
+    const blockers = await readAPI<ProviderAccountBlockerPage>(
+      page,
+      `${accountPath}/blockers?${query}`,
+    );
+    expect(blockers.hiddenCount).toBe(0);
+    const ownBlocker = blockers.items.find(
+      (item) => item.ref === fixture.agent?.ref,
+    );
+    if (fixture.accountBound) {
+      expect(ownBlocker).toMatchObject({
+        kind: "AGENT",
+        projectRef: fixture.project?.ref,
+      });
+    }
+    const agentPath = `/api/v1/agents/${encodeURIComponent(fixture.agent.ref)}`;
+    const agent = await readAPI<Agent>(page, agentPath);
+    if (agent.state !== "ARCHIVED") {
+      expect(agent.nextActions).toContain("ARCHIVE");
+      const archived = await mutateAPI<Agent>(page, {
+        method: "POST",
+        path: `${agentPath}/commands`,
+        version: agent.version,
+        body: { action: "ARCHIVE" },
+        expectedStatus: 200,
+      });
+      expect(archived.state).toBe("ARCHIVED");
+    }
+    // Архив снимает только зависимость этого Agent, не чужие warm/active runtimes.
+    await expect
+      .poll(
+        async () => {
+          const fresh = await readAPI<ProviderAccount>(page, accountPath);
+          if (fresh.state === "DELETED") return true;
+          const remaining = await readAPI<ProviderAccountBlockerPage>(
+            page,
+            `${accountPath}/blockers?${query}`,
+          );
+          return remaining.total === 0 && remaining.hiddenCount === 0;
+        },
+        { timeout: 60_000, intervals: [250, 1_000, 2_000] },
+      )
+      .toBe(true);
+  }
+  await expect
+    .poll(
+      async () => {
+        current = await readAPI<ProviderAccount>(page, accountPath);
+        return (
+          current.state === "DELETED" || current.deletion?.state === "FAILED"
+        );
+      },
+      { timeout: 180_000, intervals: [250, 1_000, 2_000, 5_000] },
+    )
+    .toBe(true);
+  if (current.deletion?.state === "FAILED") {
+    await test.step("Один явный повтор удаления после authoritative FAILED", async () => {
+      current = await readAPI<ProviderAccount>(page, accountPath);
+      if (current.state === "DELETED") return;
+      expect(current.state).toBe("DELETING");
+      expect(current.deletion?.state).toBe("FAILED");
+      expect(current.nextActions).toContain("DELETE");
+      current = await requestFixtureProviderDeletion(page, current);
+    });
+  }
+  // После единственного нового intent повторный FAILED остаётся FAIL, не новым retry.
+  await expect
+    .poll(
+      async () => {
+        current = await readAPI<ProviderAccount>(page, accountPath);
+        expect(current.deletion?.state).not.toBe("FAILED");
+        return current.state;
+      },
+      { timeout: 180_000, intervals: [250, 1_000, 2_000, 5_000] },
+    )
+    .toBe("DELETED");
+  expect(current).toMatchObject({
+    enabled: false,
+    ready: false,
+    deletion: { state: "DELETED", pendingCleanup: 0 },
+  });
+  expect(current.deletion?.blockers).toHaveLength(6);
+  expect(current.deletion?.blockers.every((item) => item.total === 0)).toBe(
+    true,
+  );
+  const catalogQuery = new URLSearchParams({
+    query: current.name,
+    pageSize: "100",
+  });
+  const cursors = new Set<string>();
+  let observed = 0;
+  let complete = false;
+  for (let index = 0; index < 20; index += 1) {
+    const catalog = await readAPI<{
+      items: ProviderAccount[];
+      total: number;
+      nextPageToken?: string;
+    }>(page, `/api/v1/provider-accounts?${catalogQuery}`);
+    expect(catalog.items.some((item) => item.ref === accountRef)).toBe(false);
+    observed += catalog.items.length;
+    if (!catalog.nextPageToken) {
+      expect(observed).toBe(catalog.total);
+      complete = true;
+      break;
+    }
+    expect(cursors.has(catalog.nextPageToken)).toBe(false);
+    cursors.add(catalog.nextPageToken);
+    catalogQuery.set("pageToken", catalog.nextPageToken);
+  }
+  expect(complete).toBe(true);
+  await expect
+    .poll(() => verifyProviderCredentialCleanup(accountRef), {
+      timeout: 180_000,
+      intervals: [250, 1_000, 2_000, 5_000],
+    })
+    .toBe(true);
+}
+
+async function requestFixtureProviderDeletion(
+  page: Page,
+  account: ProviderAccount,
+): Promise<ProviderAccount> {
+  expect(account.nextActions).toContain("DELETE");
+  const request = {
+    method: "DELETE" as const,
+    path: `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
+    version: account.version,
+    idempotencyKey: await page.evaluate(() => crypto.randomUUID()),
+    expectedStatus: 200,
+  };
+  try {
+    return await mutateAPI<ProviderAccount>(page, request);
+  } catch (error) {
+    if (
+      error instanceof APIMutationFailure &&
+      error.status >= 400 &&
+      error.status < 500
+    )
+      throw error;
+    // Это отдельный ограниченный recovery этап fixture, не транспортный retry.
+    return await test.step("Восстановить исходный Delete с прежними key и OCC", async () => {
+      const fresh = await readAPI<ProviderAccount>(page, request.path);
+      expect(fresh.ref).toBe(account.ref);
+      return await mutateAPI<ProviderAccount>(page, request);
+    });
+  }
+}
 
 async function createAndTestConnection(
   page: Page,
@@ -774,31 +931,84 @@ async function pinAgentProviderAccount(
   agentRef: string,
   accountRef: string,
 ): Promise<void> {
+  const runtimePath = `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`;
+  const runtime = await readAPI<AgentRuntimeConfigurationView>(
+    page,
+    runtimePath,
+  );
+  const query = new URLSearchParams({
+    providerAccountRef: accountRef,
+    query: runtime.configuration.model,
+    pageSize: "100",
+  });
+  let candidate: ProviderAccountCandidateInput | undefined;
+  let catalogPin = "";
+  const cursors = new Set<string>();
+  for (let index = 0; index < 20; index += 1) {
+    const catalog = await readAPI<ModelCapabilityPage>(
+      page,
+      `/api/v1/model-capabilities?${query}`,
+    );
+    expect(catalog.catalogStatus?.state).toBe("READY");
+    expect(Date.parse(catalog.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(
+      Date.now(),
+    );
+    expect(catalog.catalogRevision).toMatch(/^mcat_[a-f0-9]{64}$/);
+    expect(catalog.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
+    const pin = `${catalog.catalogRevision}:${catalog.catalogDigest}`;
+    if (catalogPin) expect(pin).toBe(catalogPin);
+    catalogPin = pin;
+    const model = catalog.items.find(
+      (item) => item.id === runtime.configuration.model,
+    );
+    if (model) {
+      expect(model.available).toBe(true);
+      expect(model.eligibleProviderAccountRefs).toContain(accountRef);
+      candidate = {
+        accountRef,
+        weight: 1,
+        catalogRevision: catalog.catalogRevision,
+        catalogDigest: catalog.catalogDigest,
+        providerDefinitionKey: model.providerDefinitionKey,
+      };
+      break;
+    }
+    if (!catalog.nextPageToken) break;
+    expect(cursors.has(catalog.nextPageToken)).toBe(false);
+    cursors.add(catalog.nextPageToken);
+    query.set("pageToken", catalog.nextPageToken);
+  }
+  if (!candidate)
+    throw new Error("Selected model is absent from the exact account catalog");
   const result = await page.evaluate(
-    async ({ expectedAccountRef, expectedAgentRef }) => {
+    async ({ expectedAccountRef, expectedAgentRef, candidate, runtime }) => {
       const readbackResponse = await fetch(
         `/api/v1/agents/${encodeURIComponent(expectedAgentRef)}/runtime-configuration`,
       );
       if (!readbackResponse.ok) {
         return { status: readbackResponse.status, detail: "runtime readback" };
       }
-      const readback = (await readbackResponse.json()) as {
-        agentVersion: number;
-        configuration: {
-          runtimeProfileRef: string;
-          model: string;
-          providerPolicy: {
-            accountCandidates: Array<{ accountRef: string; weight: number }>;
-            mode: string;
-          };
+      const readback =
+        (await readbackResponse.json()) as AgentRuntimeConfigurationView;
+      if (
+        readback.agentVersion !== runtime.agentVersion ||
+        readback.configuration.digest !== runtime.configuration.digest
+      ) {
+        return {
+          status: 0,
+          detail: "Runtime changed during catalog selection",
         };
-      };
+      }
       const currentCandidates =
         readback.configuration.providerPolicy.accountCandidates;
       if (
         readback.configuration.providerPolicy.mode === "FIXED" &&
         currentCandidates.length === 1 &&
-        currentCandidates[0]?.accountRef === expectedAccountRef
+        currentCandidates[0]?.accountRef === expectedAccountRef &&
+        currentCandidates[0].catalogRevision === candidate.catalogRevision &&
+        currentCandidates[0].catalogDigest === candidate.catalogDigest &&
+        currentCandidates[0].providerDefinitionKey ===
+          candidate.providerDefinitionKey
       ) {
         return { status: 200, detail: "" };
       }
@@ -823,7 +1033,7 @@ async function pinAgentProviderAccount(
             runtimeProfileRef: readback.configuration.runtimeProfileRef,
             model: readback.configuration.model,
             providerPolicyMode: "FIXED",
-            providerAccounts: [{ accountRef: expectedAccountRef, weight: 1 }],
+            providerAccounts: [candidate],
           }),
         },
       );
@@ -832,9 +1042,20 @@ async function pinAgentProviderAccount(
         detail: publication.ok ? "" : (await publication.text()).slice(0, 512),
       };
     },
-    { expectedAccountRef: accountRef, expectedAgentRef: agentRef },
+    {
+      expectedAccountRef: accountRef,
+      expectedAgentRef: agentRef,
+      candidate,
+      runtime,
+    },
   );
   expect(result.status, result.detail).toBe(200);
+  const saved = await readAPI<AgentRuntimeConfigurationView>(page, runtimePath);
+  expect(saved.configuration.providerPolicy.mode).toBe("FIXED");
+  expect(saved.configuration.providerPolicy.accountCandidates).toHaveLength(1);
+  expect(saved.configuration.providerPolicy.accountCandidates[0]).toMatchObject(
+    candidate,
+  );
 }
 
 async function waitForOpenGate(page: Page, runRef: string): Promise<OwnerGate> {
@@ -971,6 +1192,15 @@ async function readAPIDuringPoll<T>(
   }
 }
 
+class APIMutationFailure extends Error {
+  constructor(
+    readonly status: number,
+    code: string,
+  ) {
+    super(`API mutation failed: status=${String(status)} code=${code}`);
+  }
+}
+
 async function mutateAPI<T>(
   page: Page,
   request: {
@@ -978,6 +1208,7 @@ async function mutateAPI<T>(
     path: string;
     body?: unknown;
     version?: number;
+    idempotencyKey?: string;
     expectedStatus: number;
   },
 ): Promise<T> {
@@ -992,7 +1223,7 @@ async function mutateAPI<T>(
     const headers: Record<string, string> = {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "Idempotency-Key": crypto.randomUUID(),
+      "Idempotency-Key": input.idempotencyKey ?? crypto.randomUUID(),
       "X-CSRF-Token": decodeURIComponent(csrf),
     };
     if (input.version !== undefined)
@@ -1015,9 +1246,7 @@ async function mutateAPI<T>(
     return { status: response.status, code: "", body };
   }, request);
   if (result.status !== request.expectedStatus || result.body === undefined) {
-    throw new Error(
-      `API mutation failed: status=${String(result.status)} code=${result.code}`,
-    );
+    throw new APIMutationFailure(result.status, result.code);
   }
   return result.body as T;
 }
@@ -1259,6 +1488,7 @@ async function verifySingleProviderAffinity(
 async function verifyProviderCredentialCleanup(
   accountRef: string,
 ): Promise<boolean> {
+  const deadline = Date.now() + 60_000;
   if (!/^pacc_[A-Za-z0-9_-]{8,88}$/.test(accountRef)) {
     throw new Error("Provider account ref is invalid for cleanup readback");
   }
@@ -1272,24 +1502,6 @@ async function verifyProviderCredentialCleanup(
   if (!context || /prod(?:uction)?/i.test(context)) {
     throw new Error("Exact local Kubernetes context is unavailable");
   }
-  const query = [
-    "BEGIN TRANSACTION READ ONLY;",
-    "SET LOCAL statement_timeout = '10s';",
-    "SELECT jsonb_build_object(",
-    "  'task_ref', task.ref,",
-    "  'state', task.state,",
-    "  'secret_name', task.secret_name,",
-    "  'secret_uid', task.secret_uid::text,",
-    "  'safe_error_code', task.safe_error_code,",
-    "  'terminal_receipt', task.terminal_receipt",
-    ")::text",
-    "FROM control_plane.provider_credential_cleanup_tasks task",
-    "JOIN control_plane.provider_accounts account",
-    "  ON account.id = task.provider_account_id",
-    "WHERE account.ref = :'account_ref'",
-    "ORDER BY task.created_at, task.id;",
-    "COMMIT;",
-  ].join("\n");
   const result = await execFileWithInput(
     "kubectl",
     [
@@ -1315,38 +1527,15 @@ async function verifyProviderCredentialCleanup(
       "-f",
       "-",
     ],
-    `${query}\n`,
-    { env: childEnvironment, timeout: 30_000, maxBuffer: 64 << 10 },
+    providerCleanupQuery,
+    { env: childEnvironment, timeout: 30_000, maxBuffer: 256 << 10 },
   );
-  const tasks = result.stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as ProviderCredentialCleanupReadback);
-  if (tasks.length === 0) return false;
-  if (
-    tasks.some(
-      (task) =>
-        !/^pcct_[A-Za-z0-9_-]{8,88}$/.test(task.task_ref) ||
-        !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(task.secret_name) ||
-        task.secret_name.length > 63 ||
-        !/^[0-9a-f-]{36}$/.test(task.secret_uid),
-    )
-  ) {
-    throw new Error("Provider credential cleanup readback is invalid");
-  }
-  if (
-    tasks.some(
-      (task) =>
-        task.state !== "COMPLETED" ||
-        task.safe_error_code !== "" ||
-        task.terminal_receipt.length < 1 ||
-        task.terminal_receipt.length > 512,
-    )
-  ) {
-    return false;
-  }
-  for (const task of tasks) {
+  const targets = providerCleanupTargets(result.stdout.trim(), accountRef);
+  for (const target of targets) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0)
+      throw new Error("Provider cleanup proof deadline exceeded");
+    // stdout остаётся только в памяти; ошибка kubectl не публикует Secret.data.
     const secret = await execFileAsync(
       "kubectl",
       [
@@ -1356,14 +1545,19 @@ async function verifyProviderCredentialCleanup(
         "kodex-runtime",
         "get",
         "secret",
-        task.secret_name,
-        "--ignore-not-found",
+        target.name,
         "-o",
-        "jsonpath={.metadata.uid}",
+        providerCleanupProjection,
       ],
-      { env: childEnvironment, timeout: 10_000, maxBuffer: 4 << 10 },
-    );
-    if (secret.stdout.trim() !== "") return false;
+      {
+        env: childEnvironment,
+        timeout: Math.min(10_000, remaining),
+        maxBuffer: 64 << 10,
+      },
+    ).catch(() => {
+      throw new Error("Provider cleanup fence readback failed");
+    });
+    verifyProviderCleanupFence(secret.stdout, target);
   }
   return true;
 }

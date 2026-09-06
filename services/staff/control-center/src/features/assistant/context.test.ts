@@ -5,6 +5,7 @@ import {
   assistantContextIdentity,
   conversationMatchesContext,
   resolveAssistantContext,
+  readableContextOperations,
 } from "@/features/assistant/context";
 import type {
   Agent,
@@ -49,6 +50,13 @@ const sources = {
 };
 
 describe("assistant route context", () => {
+  it("показывает только объявленные владельцем операции и не придумывает unknown", () => {
+    expect(readableContextOperations(["LAUNCH_RUN"])).toEqual(["LAUNCH_RUN"]);
+    expect(readableContextOperations([])).toEqual([]);
+    expect(
+      readableContextOperations(["LAUNCH_RUN", "UNKNOWN_COMMAND"]),
+    ).toBeUndefined();
+  });
   it("не меняет identity при version bump той же сущности", () => {
     const descriptor = {
       route: "/projects/prj_sales",
@@ -132,6 +140,56 @@ describe("assistant route context", () => {
         current,
       ),
     ).toBe(true);
+  });
+
+  it.each([
+    ["files", "FILE", "artifactRef", "file_1"],
+    ["files-trash", "FILE", "artifactRef", "file_2"],
+    ["organization-files", "FILE", "artifactRef", "file_3"],
+    ["integrations", "INTEGRATION_CONNECTION", "connectionRef", "connection_1"],
+  ])(
+    "передаёт точный выбранный ресурс %s без выдуманных полномочий",
+    (name, kind, key, ref) => {
+      const current = route("/files", {});
+      current.name = name;
+      current.query = { [key]: ref };
+      const value = resolveAssistantContext(current, sources);
+      expect(value.projectRef).toBeUndefined();
+      expect(value.descriptor).toEqual({
+        route: "/files",
+        entityKind: kind,
+        entityRef: ref,
+        entityName: "",
+        allowedOperations: [],
+      });
+    },
+  );
+
+  it("связывает окружение с реальным route project, не подменяя его Project context", () => {
+    const current = route("/projects/prj_sales/environments/env_1", {
+      projectRef: "prj_sales",
+      environmentRef: "env_1",
+    });
+    current.name = "runtime-environment";
+    const value = resolveAssistantContext(current, sources);
+    expect(value.projectRef).toBe("prj_sales");
+    expect(value.descriptor.entityKind).toBe("ENVIRONMENT");
+    expect(value.descriptor.entityRef).toBe("env_1");
+    expect(value.descriptor.entityVersion).toBeUndefined();
+  });
+
+  it("не принимает неоднозначный query и не переносит выбор на другую страницу", () => {
+    const current = route("/files", {});
+    current.name = "organization-files";
+    current.query = { artifactRef: ["file_1", "file_2"] };
+    expect(
+      resolveAssistantContext(current, sources).descriptor.entityKind,
+    ).toBe("");
+    current.name = "onboarding";
+    current.query = { artifactRef: "file_1", connectionRef: "connection_1" };
+    expect(
+      resolveAssistantContext(current, sources).descriptor.entityKind,
+    ).toBe("");
   });
 
   it("сопоставляет глобальный контекст со старым ответом без пустых scalar", () => {

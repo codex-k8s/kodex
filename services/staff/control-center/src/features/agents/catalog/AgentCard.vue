@@ -37,7 +37,10 @@ const { t } = useI18n();
       </span>
     </div>
 
-    <div class="agent-card__activity">
+    <div
+      v-if="item.currentRunRef && item.state !== 'READY'"
+      class="agent-card__activity"
+    >
       <Activity :size="15" aria-hidden="true" />
       <div>
         <span>{{ t("agents.currentActivity") }}</span>
@@ -45,6 +48,11 @@ const { t } = useI18n();
           :content="item.currentActivity"
           :fallback="t(`states.${item.state}`)"
         />
+        <RouterLink
+          :to="`/runs/${encodeURIComponent(item.currentRunRef)}`"
+          :aria-label="t('entityCards.openRun')"
+          >{{ t("entityCards.openRun") }}</RouterLink
+        >
       </div>
     </div>
 

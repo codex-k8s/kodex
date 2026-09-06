@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {
   Activity,
+  Archive,
   Bot,
   Check,
   ChevronDown,
   History,
   ListChecks,
-  Mic,
   Pencil,
   Plus,
   Send,
@@ -24,7 +24,13 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
-import { assistantContextIdentity } from "@/features/assistant/context";
+import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
+import {
+  assistantContextIdentity,
+  conversationMatchesContext,
+  readableContextOperations,
+  readableContextKind,
+} from "@/features/assistant/context";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
   assistantEffectiveRuntimeState,
@@ -36,7 +42,6 @@ import {
   persistAssistantWorkspaceOpen,
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
-import { usePlatformStore } from "@/features/platform/store";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
   AssistantContextDescriptor,
@@ -57,6 +62,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -70,7 +76,6 @@ const props = withDefaults(
 );
 const { t } = useI18n();
 const store = useAssistantStore();
-const platform = usePlatformStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const message = ref("");
@@ -89,13 +94,30 @@ const attachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const panel = ref<HTMLElement>();
-const composer = ref<HTMLTextAreaElement>();
+const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
 
+const checkedContext = computed(() => {
+  const conversation = store.selectedConversation;
+  return !store.loading &&
+    !store.problem &&
+    conversation &&
+    conversationMatchesContext(conversation, props.context)
+    ? conversation.context
+    : undefined;
+});
 const contextTitle = computed(
-  () => props.context.entityName || props.context.route || "Kodex",
+  () => checkedContext.value?.entityName || props.context.route || "Kodex",
+);
+const checkedOperations = computed(() =>
+  checkedContext.value
+    ? readableContextOperations(checkedContext.value.allowedOperations)
+    : undefined,
+);
+const checkedContextKind = computed(() =>
+  readableContextKind(checkedContext.value?.entityKind ?? ""),
 );
 const currentPlan = computed<AssistantPlan | undefined>(() => {
   if (!openPlanRef.value) return undefined;
@@ -123,6 +145,10 @@ const canSend = computed(
     !store.busy &&
     assistantRuntimeState.value === "READY" &&
     Boolean(store.assistant?.nextActions.includes("ADD_TURN")) &&
+    (!store.selectedConversation ||
+      store.selectedConversation.state === "ACTIVE") &&
+    (Boolean(store.selectedConversation) ||
+      (!store.historyQuery && store.historyState === "ACTIVE")) &&
     Boolean(store.selectedConversation || canCreateConversation.value) &&
     attachmentState.value.ready,
 );
@@ -153,6 +179,14 @@ async function show(): Promise<void> {
 
 function close(): void {
   if (store.busy) return;
+  if (
+    (message.value.trim() ||
+      attachmentState.value.count > 0 ||
+      attachmentState.value.busy) &&
+    !window.confirm(t("assistant.closeWithDraftConfirm"))
+  )
+    return;
+  store.cancelReads();
   open.value = false;
   persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
@@ -216,9 +250,29 @@ function conversationDisplayTitle(title: string): string {
 }
 
 function startTitleEdit(): void {
-  if (!store.selectedConversation) return;
+  if (
+    !store.selectedConversation ||
+    store.selectedConversation.state === "ARCHIVED"
+  )
+    return;
   titleDraft.value = store.selectedConversation.title;
   titleEditing.value = true;
+}
+async function archiveSelected(): Promise<void> {
+  if (
+    !props.live ||
+    store.busy ||
+    store.loading ||
+    !store.selectedConversation ||
+    store.selectedConversation.state === "ARCHIVED"
+  )
+    return;
+  if (!window.confirm(t("assistant.archiveConfirm"))) return;
+  if (await handleStoreMutation(() => store.archiveSelected())) {
+    titleEditing.value = false;
+    openPlanRef.value = undefined;
+    attachmentComposer.value?.clear();
+  }
 }
 
 async function saveTitle(): Promise<void> {
@@ -310,11 +364,7 @@ watch(
   () => props.refreshRevision,
   (value, previous) => {
     if (open.value && value !== previous)
-      store.applyRealtimeSnapshot(
-        platform.assistant,
-        Object.values(platform.conversations),
-        props.projectRef,
-      );
+      void store.load(props.context, props.projectRef);
   },
 );
 watch(
@@ -342,6 +392,7 @@ onMounted(() => {
   if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
   window.removeEventListener(openAssistantEvent, handleOpenAssistant);
   persistAssistantWorkspaceOpen(false);
@@ -425,6 +476,12 @@ onBeforeUnmount(() => {
             :aria-label="$t('assistant.history')"
           >
             <header>{{ $t("assistant.history") }}</header>
+            <AssistantHistoryFilter
+              :query="store.historyQuery"
+              :state="store.historyState"
+              :disabled="store.busy"
+              @change="store.filterHistory"
+            />
             <button
               v-for="conversation in store.sortedConversations"
               :key="conversation.ref"
@@ -448,6 +505,21 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
               />
             </button>
+            <ProblemNotice
+              v-if="store.historyProblem"
+              :problem="store.historyProblem"
+              @retry="store.loadMoreHistory"
+            />
+            <button
+              v-if="store.nextPageToken"
+              type="button"
+              :disabled="store.loading || store.loadingMore || store.busy"
+              @click="store.loadMoreHistory"
+            >
+              <ChevronDown :size="16" />{{
+                store.loadingMore ? $t("common.loading") : $t("common.loadMore")
+              }}
+            </button>
           </section>
         </div>
         <button
@@ -461,11 +533,62 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
+      <nav
+        v-if="!currentPlan"
+        class="assistant-conversation-sidebar"
+        :aria-label="$t('assistant.history')"
+      >
+        <button
+          class="button"
+          type="button"
+          :disabled="!canStartConversation"
+          @click="startConversation"
+        >
+          <Plus :size="18" />{{ $t("assistant.newConversation") }}
+        </button>
+        <AssistantHistoryFilter
+          :query="store.historyQuery"
+          :state="store.historyState"
+          :disabled="store.busy"
+          @change="store.filterHistory"
+        />
+        <button
+          v-for="conversation in store.sortedConversations"
+          :key="conversation.ref"
+          class="assistant-conversation-entry"
+          :class="{ selected: conversation.ref === store.selectedRef }"
+          type="button"
+          @click="chooseConversation(conversation.ref)"
+        >
+          <strong>{{ conversationDisplayTitle(conversation.title) }}</strong>
+          <time :datetime="conversation.updatedAt">{{
+            new Date(conversation.updatedAt).toLocaleString()
+          }}</time>
+        </button>
+        <ProblemNotice
+          v-if="store.historyProblem"
+          :problem="store.historyProblem"
+          @retry="store.loadMoreHistory"
+        />
+        <button
+          v-if="store.nextPageToken"
+          class="button"
+          type="button"
+          :disabled="store.loading || store.loadingMore || store.busy"
+          @click="store.loadMoreHistory"
+        >
+          <ChevronDown :size="16" />{{
+            store.loadingMore ? $t("common.loading") : $t("common.loadMore")
+          }}
+        </button>
+      </nav>
+
       <AssistantPlanEditor
         v-if="currentPlan"
         :plan="currentPlan"
         :receipt="store.receipt"
         :busy="store.busy"
+        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
         :problem="store.problem"
         @close="openPlanRef = undefined"
         @save="savePlan"
@@ -503,6 +626,26 @@ onBeforeUnmount(() => {
               <span>{{ $t("assistant.context") }}</span>
               <strong>{{ contextTitle }}</strong>
               <small>{{ context.route }}</small>
+              <p v-if="checkedContext" class="assistant-context-details">
+                <span v-if="checkedContextKind">{{
+                  $t(`assistant.contextKind.${checkedContextKind}`)
+                }}</span>
+                <span v-if="checkedContext.entityVersion">{{
+                  $t("assistant.contextVersion", {
+                    version: checkedContext.entityVersion,
+                  })
+                }}</span>
+                <span>{{ $t("assistant.contextOperations") }}</span>
+                <span v-if="checkedOperations === undefined">{{
+                  $t("assistant.contextOperationsUnknown")
+                }}</span>
+                <span v-else-if="!checkedOperations.length">{{
+                  $t("assistant.contextReadOnly")
+                }}</span>
+                <span v-for="operation in checkedOperations" :key="operation">{{
+                  $t(`assistant.contextOperation.${operation}`)
+                }}</span>
+              </p>
             </section>
 
             <section
@@ -537,6 +680,7 @@ onBeforeUnmount(() => {
                   conversationDisplayTitle(store.selectedConversation.title)
                 }}</strong>
                 <button
+                  v-if="store.selectedConversation.state !== 'ARCHIVED'"
                   class="icon-button"
                   type="button"
                   :aria-label="$t('assistant.renameConversation')"
@@ -544,6 +688,20 @@ onBeforeUnmount(() => {
                 >
                   <Pencil :size="16" aria-hidden="true" />
                 </button>
+                <button
+                  v-if="store.selectedConversation.state !== 'ARCHIVED'"
+                  class="icon-button"
+                  type="button"
+                  :disabled="
+                    !live || store.busy || store.loading || !!store.problem
+                  "
+                  :aria-label="$t('assistant.archiveConversation')"
+                  :title="$t('assistant.archiveConversation')"
+                  @click="archiveSelected"
+                >
+                  <Archive :size="16" />
+                </button>
+                <StatusBadge v-else :state="store.selectedConversation.state" />
               </template>
             </section>
 
@@ -654,30 +812,31 @@ onBeforeUnmount(() => {
                 compact
                 purpose="ASSISTANT_MESSAGE"
                 :project-ref="projectRef"
-                :disabled="store.busy || !live"
+                :disabled="
+                  store.busy ||
+                  !live ||
+                  store.selectedConversation?.state === 'ARCHIVED' ||
+                  store.selectedConversation?.state === 'CLOSED'
+                "
                 @change="attachmentState = $event"
               />
               <div class="assistant-composer__field">
-                <textarea
+                <VoiceTextarea
                   ref="composer"
                   v-model="message"
                   rows="2"
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"
                   :placeholder="$t('assistant.message')"
-                  :disabled="store.busy || !live"
+                  :disabled="
+                    store.busy ||
+                    !live ||
+                    store.selectedConversation?.state === 'ARCHIVED' ||
+                    store.selectedConversation?.state === 'CLOSED'
+                  "
                   @keydown="handleComposerKeydown"
                 />
                 <div>
-                  <button
-                    class="assistant-composer__icon"
-                    type="button"
-                    disabled
-                    :aria-label="$t('assistant.microphoneUnavailable')"
-                    :title="$t('assistant.microphoneUnavailable')"
-                  >
-                    <Mic :size="18" aria-hidden="true" />
-                  </button>
                   <button
                     class="assistant-composer__send"
                     type="button"
@@ -735,13 +894,11 @@ onBeforeUnmount(() => {
 }
 .assistant-drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  inset: 4dvh 4vw;
   display: flex;
-  width: clamp(520px, 42vw, 640px);
-  max-width: calc(100vw - 32px);
-  height: 100dvh;
+  width: 92vw;
+  max-width: 92vw;
+  height: 92dvh;
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
@@ -750,7 +907,57 @@ onBeforeUnmount(() => {
   outline: 0;
 }
 .assistant-drawer--plan {
-  width: min(960px, calc(100vw - 32px));
+  width: 92vw;
+}
+.assistant-conversation-sidebar {
+  display: none;
+}
+@media (min-width: 1001px) {
+  .assistant-drawer:not(.assistant-drawer--plan) {
+    padding-left: 280px;
+  }
+  .assistant-drawer:not(.assistant-drawer--plan) > .assistant-drawer__header {
+    margin-left: -280px;
+    height: 72px;
+  }
+  .assistant-conversation-sidebar {
+    position: absolute;
+    inset: 72px auto 0 0;
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .assistant-history {
+    display: none;
+  }
+  .assistant-conversation-entry {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border: 0;
+    border-radius: 6px;
+    text-align: left;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .assistant-conversation-entry.selected {
+    background: var(--accent-soft);
+  }
+  .assistant-conversation-entry strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .assistant-conversation-entry time {
+    color: var(--muted);
+    font-size: 12px;
+  }
 }
 .assistant-drawer > .assistant-plan-editor,
 .assistant-drawer__view,
@@ -921,6 +1128,15 @@ onBeforeUnmount(() => {
   color: var(--subtle);
   font-size: 0.76rem;
 }
+.assistant-context-details {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
 .assistant-context-strip > small {
   grid-column: 2;
   overflow: hidden;
@@ -1077,7 +1293,7 @@ onBeforeUnmount(() => {
 .assistant-composer__field {
   position: relative;
 }
-.assistant-composer textarea {
+.assistant-composer :deep(textarea) {
   width: 100%;
   min-height: 72px;
   max-height: 180px;
@@ -1085,6 +1301,9 @@ onBeforeUnmount(() => {
   padding: 11px 104px 11px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
+}
+.assistant-composer :deep(.voice-textarea__action) {
+  right: 58px;
 }
 .assistant-composer__field > div {
   position: absolute;
@@ -1130,14 +1349,15 @@ onBeforeUnmount(() => {
     bottom: 0;
     width: 100%;
     max-width: none;
-    height: min(88dvh, 900px);
-    max-height: calc(100dvh - 12px);
+    height: 100dvh;
+    max-height: 100dvh;
     border: 1px solid var(--border);
     border-bottom: 0;
-    border-radius: 14px 14px 0 0;
+    border-radius: 0;
     box-shadow: 0 -16px 40px rgb(15 23 42 / 22%);
   }
   .assistant-drawer::before {
+    display: none;
     position: absolute;
     top: 6px;
     left: 50%;

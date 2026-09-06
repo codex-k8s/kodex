@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Trash2, Upload } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -150,7 +151,7 @@ function confirmAvatarRemoval(): void {
       </label>
       <label class="field field--wide">
         <span>{{ $t("agents.role") }}</span>
-        <textarea
+        <VoiceTextarea
           :value="modelValue.roleDescription"
           required
           maxlength="1000"

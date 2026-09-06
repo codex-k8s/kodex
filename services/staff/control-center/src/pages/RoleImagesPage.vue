@@ -10,10 +10,7 @@ const projectRef = computed(() => String(route.params.projectRef));
 </script>
 
 <template>
-  <PageFrame
-    :title="$t('roleImages.title')"
-    :subtitle="$t('roleImages.subtitle')"
-  >
+  <PageFrame :title="$t('roleImages.title')">
     <RoleImageCatalog :project-ref="projectRef" />
   </PageFrame>
 </template>

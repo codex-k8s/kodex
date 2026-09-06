@@ -8,6 +8,8 @@ import {
 describe("shell navigation context", () => {
   it.each([
     ["agents", "agents"],
+    ["organization-members", "project-access"],
+    ["project-access", "project-access"],
     ["agent", "agents"],
     ["new-run", "project-runs"],
     ["project-runs", "project-runs"],

@@ -8,13 +8,16 @@ import {
   ShieldCheck,
   Sparkles,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+import { createTemplateVariableLoader } from "@/features/agents/detail/api";
 import {
-  createTemplateVariableLoader,
-  loadMaterializedTemplatePreview,
-} from "@/features/agents/detail/api";
+  createPromptVariableLoader,
+  previewContextPrompt,
+  type PromptTarget,
+} from "./prompt-context";
+import PromptContextDetails from "./PromptContextDetails.vue";
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type {
@@ -43,6 +46,9 @@ const props = defineProps<{
   busy: boolean;
   dirty: boolean;
   projectRef: string;
+  agentRef?: string;
+  agentVersion?: number;
+  runtimeRevisionRef?: string;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -50,7 +56,7 @@ const emit = defineEmits<{
   validate: [];
   publish: [];
 }>();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const mode = ref<"edit" | "preview" | "materialized">("edit");
 const editor = shallowRef<{
@@ -60,11 +66,30 @@ const materializedPreview = ref<PromptTemplatePreview>();
 const materializedTemplate = ref("");
 const materializedBusy = ref(false);
 const materializedProblem = ref<AppProblem>();
+const fullPreview = ref(false);
+const target = computed<PromptTarget | undefined>(() =>
+  props.agentRef && props.agentVersion
+    ? {
+        projectRef: props.projectRef,
+        targetKind: "AGENT",
+        targetRef: props.agentRef,
+        context: { expectedAgentVersion: props.agentVersion },
+      }
+    : undefined,
+);
+const contextKey = computed(() => JSON.stringify(target.value ?? {}));
 let materializedController: AbortController | undefined;
 const usedVariables = computed(() =>
   extractTemplateVariables(props.modelValue),
 );
-const loadVariables = createTemplateVariableLoader(props.projectRef);
+const loadVariables = computed(() =>
+  target.value
+    ? createPromptVariableLoader(target.value)
+    : createTemplateVariableLoader(props.projectRef, {
+        agentRef: props.agentRef,
+        runtimeRevisionRef: props.runtimeRevisionRef,
+      }),
+);
 const materializedContent = computed(
   () =>
     materializedPreview.value?.fullMaterializedPrompt ??
@@ -72,10 +97,13 @@ const materializedContent = computed(
     "",
 );
 const materializedStale = computed(
-  () => materializedTemplate.value !== props.modelValue,
+  () =>
+    !materializedPreview.value ||
+    materializedTemplate.value !== props.modelValue,
 );
 
 function insertVariable(item: TemplateVariablePickerItem): void {
+  if (!props.canEdit || props.busy || item.disabled) return;
   editor.value?.insertAtCursor(templateVariableInsertion(item.variable));
 }
 
@@ -89,15 +117,22 @@ async function refreshMaterializedPreview(): Promise<void> {
   if (!props.modelValue.trim() || materializedBusy.value) return;
   materializedController?.abort();
   const controller = new AbortController();
+  const template = props.modelValue;
   materializedController = controller;
   materializedBusy.value = true;
   materializedProblem.value = undefined;
   try {
-    materializedPreview.value = await loadMaterializedTemplatePreview(
-      props.modelValue,
+    if (!target.value) throw new Error("Prompt target context is unavailable");
+    const preview = await previewContextPrompt(
+      target.value,
+      template,
       controller.signal,
+      fullPreview.value,
     );
-    materializedTemplate.value = props.modelValue;
+    if (controller.signal.aborted || materializedController !== controller)
+      return;
+    materializedPreview.value = preview;
+    materializedTemplate.value = template;
   } catch (error) {
     if (!controller.signal.aborted)
       materializedProblem.value = asProblem(error);
@@ -113,23 +148,48 @@ const completeVariables: CodeEditorCompletionProvider = async (
   query,
   signal,
 ): Promise<CodeEditorCompletionItem[]> => {
-  const page = await loadVariables({ cursor: undefined, query, signal });
-  return page.items.map((item) => ({
-    label: item.variable.name,
-    apply: templateVariableInsertion(item.variable),
-    detail: [
-      item.scope,
-      item.variable.valueType,
-      item.variable.description,
-      item.variable.example,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-    type: "variable",
-  }));
+  const loader = loadVariables.value;
+  const page = await loader({ cursor: undefined, query, signal });
+  if (signal.aborted || loader !== loadVariables.value) return [];
+  return page.items
+    .filter((item) => !item.disabled)
+    .map((item) => ({
+      label: item.variable.name,
+      apply: templateVariableInsertion(item.variable),
+      detail: [
+        item.scope,
+        item.variable.valueType,
+        item.variable.description,
+        item.variable.example,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      type: "variable",
+    }));
 };
 
-onBeforeUnmount(() => materializedController?.abort());
+function invalidatePreview(): void {
+  materializedController?.abort();
+  materializedController = undefined;
+  materializedBusy.value = false;
+  materializedPreview.value = undefined;
+  materializedProblem.value = undefined;
+}
+watch(
+  () => [
+    props.modelValue,
+    props.projectRef,
+    props.agentRef,
+    props.runtimeRevisionRef,
+    props.agentVersion,
+    fullPreview.value,
+  ],
+  invalidatePreview,
+  {
+    flush: "sync",
+  },
+);
+onBeforeUnmount(invalidatePreview);
 </script>
 
 <template>
@@ -184,7 +244,7 @@ onBeforeUnmount(() => materializedController?.abort());
           language="markdown"
           :label="$t('agents.instructions')"
           :description="copy.instructions.markdown"
-          :readonly="!canEdit"
+          :readonly="!canEdit || busy"
           :validation-messages="validationMessages"
           :min-lines="18"
           :completion-provider="completeVariables"
@@ -209,7 +269,13 @@ onBeforeUnmount(() => materializedController?.abort());
           <div class="instructions-panel__preview-bar">
             <Sparkles :size="15" aria-hidden="true" />
             <span>{{ copy.instructions.materializedPreview }}</span>
-            <StatusBadge :state="materializedStale ? 'DRAFT' : 'AVAILABLE'" />
+            <StatusBadge
+              :state="
+                materializedStale || !materializedPreview?.complete
+                  ? 'DRAFT'
+                  : 'AVAILABLE'
+              "
+            />
             <button
               class="button"
               type="button"
@@ -223,6 +289,13 @@ onBeforeUnmount(() => materializedController?.abort());
           <p class="instructions-panel__materialized-help">
             {{ copy.instructions.materializedHelp }}
           </p>
+          <label
+            ><input
+              v-model="fullPreview"
+              type="checkbox"
+              :disabled="materializedBusy"
+            />{{ t("promptContext.full") }}</label
+          >
           <div
             v-if="materializedBusy"
             class="instructions-panel__materialized-state"
@@ -243,6 +316,10 @@ onBeforeUnmount(() => materializedController?.abort());
           <p v-else class="instructions-panel__materialized-state">
             {{ copy.instructions.materializedUnavailable }}
           </p>
+          <PromptContextDetails
+            v-if="materializedPreview && !materializedStale"
+            :preview="materializedPreview"
+          />
           <ul
             v-if="materializedPreview?.diagnostics.length"
             class="instructions-panel__materialized-diagnostics"
@@ -306,6 +383,10 @@ onBeforeUnmount(() => materializedController?.abort());
         </div>
         <p>{{ copy.instructions.variablesHelp }}</p>
         <TemplateVariableCatalog
+          :load-items="loadVariables"
+          :context-key="contextKey"
+          :agent-ref="agentRef"
+          :runtime-revision-ref="runtimeRevisionRef"
           :project-ref="projectRef"
           :disabled="!canEdit || busy || mode !== 'edit'"
           @select="insertVariable"
@@ -340,6 +421,8 @@ onBeforeUnmount(() => materializedController?.abort());
 <style scoped>
 .instructions-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
 }
 .instructions-panel__head,
@@ -364,14 +447,14 @@ onBeforeUnmount(() => materializedController?.abort());
   display: inline-flex;
   width: max-content;
   max-width: 100%;
-  overflow: hidden;
+  flex-wrap: wrap;
   border: 1px solid var(--border);
   border-radius: 7px;
 }
 .instructions-panel__mode {
   display: inline-flex;
   min-height: 32px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
@@ -380,7 +463,8 @@ onBeforeUnmount(() => materializedController?.abort());
   color: var(--muted);
   background: var(--surface);
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .instructions-panel__mode:last-child {
   border-right: 0;
@@ -390,23 +474,44 @@ onBeforeUnmount(() => materializedController?.abort());
   background: var(--accent-soft);
 }
 .instructions-panel__workspace {
+  --instructions-workspace-height: clamp(480px, 65vh, 680px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(330px, 0.42fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 .instructions-panel__editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
+  height: var(--instructions-workspace-height);
+}
+.instructions-panel__editor :deep(.code-editor) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+.instructions-panel__editor :deep(.code-editor-voice),
+.instructions-panel__editor :deep(.code-editor__viewport),
+.instructions-panel__editor :deep(.cm-editor) {
+  height: 100%;
+  min-height: 0;
+}
+.instructions-panel__editor :deep(.cm-scroller) {
+  overflow: auto;
 }
 .instructions-panel__preview {
-  min-height: 458px;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--surface);
 }
 .instructions-panel__preview-bar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 36px;
   align-items: center;
   gap: 6px;
@@ -450,11 +555,22 @@ onBeforeUnmount(() => materializedController?.abort());
 }
 .instructions-panel__variables {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: var(--instructions-workspace-height);
+  min-height: 0;
+  min-width: 0;
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
+}
+.instructions-panel__variables :deep(.variable-catalog) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.instructions-panel__variables :deep(.variable-catalog__list) {
+  min-height: 0;
+  max-height: none;
 }
 .instructions-panel__variables h3 {
   font-size: 0.92rem;
@@ -464,6 +580,8 @@ onBeforeUnmount(() => materializedController?.abort());
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+  max-height: 90px;
+  overflow: auto;
 }
 .instructions-panel__used > span {
   color: var(--subtle);
@@ -557,7 +675,7 @@ onBeforeUnmount(() => materializedController?.abort());
 }
 @media (max-width: 960px) {
   .instructions-panel__workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

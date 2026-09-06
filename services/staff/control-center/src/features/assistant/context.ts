@@ -20,6 +20,48 @@ export interface ResolvedAssistantContext {
   projectRef?: string;
 }
 
+export const assistantContextOperations = [
+  "CREATE_PROJECT",
+  "UPDATE_PROJECT",
+  "CREATE_AGENT",
+  "CREATE_WORKFLOW",
+  "CHANGE_CAPABILITY",
+  "CHANGE_INTEGRATION_GRANT",
+  "CREATE_SCHEDULE",
+  "LAUNCH_RUN",
+  "CREATE_INTEGRATION_CONNECTION",
+  "TEST_INTEGRATION_CONNECTION",
+  "ARCHIVE_AGENT",
+  "ARCHIVE_WORKFLOW",
+] as const;
+
+export function readableContextKind(kind: string) {
+  return (
+    [
+      "PROJECT",
+      "AGENT",
+      "WORKFLOW",
+      "RUN",
+      "FILE",
+      "ENVIRONMENT",
+      "INTEGRATION_CONNECTION",
+    ] as const
+  ).find((known) => known === kind);
+}
+
+export function readableContextOperations(operations: readonly string[]) {
+  if (
+    operations.some(
+      (operation) =>
+        !assistantContextOperations.some((known) => known === operation),
+    )
+  )
+    return undefined;
+  return assistantContextOperations.filter((operation) =>
+    operations.includes(operation),
+  );
+}
+
 export function assistantContextIdentity(
   context: AssistantContextDescriptor,
   projectRef?: string,
@@ -49,6 +91,29 @@ export function resolveAssistantContext(
   const workflowRef = routeParameter(route, "workflowRef");
   const runRef = routeParameter(route, "runRef");
   const routePath = route.fullPath.slice(0, 500);
+  const selectedResource =
+    route.name === "runtime-environment"
+      ? { kind: "ENVIRONMENT", ref: routeParameter(route, "environmentRef") }
+      : route.name === "integrations"
+        ? { kind: "INTEGRATION_CONNECTION", ref: route.query.connectionRef }
+        : ["files", "files-trash", "organization-files"].includes(
+              String(route.name),
+            )
+          ? { kind: "FILE", ref: route.query.artifactRef }
+          : undefined;
+
+  if (typeof selectedResource?.ref === "string" && selectedResource.ref) {
+    return {
+      descriptor: {
+        route: routePath,
+        entityKind: selectedResource.kind,
+        entityRef: selectedResource.ref,
+        entityName: "",
+        allowedOperations: [],
+      },
+      ...(projectRef ? { projectRef } : {}),
+    };
+  }
 
   if (agentRef) {
     const agent = sources.agents[agentRef];

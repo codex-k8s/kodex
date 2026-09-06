@@ -37,7 +37,7 @@ const icon = computed<Component>(() => {
     role="status"
     aria-live="polite"
     :aria-label="labels[state]"
-    :title="detail || (compact ? labels[state] : undefined)"
+    :title="detail || labels[state]"
     :data-state="connectionState"
     :data-presentation-state="state"
     :data-preserves-current-data="presentation.preservesCurrentData"

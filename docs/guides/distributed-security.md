@@ -76,6 +76,16 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 
 ## Публичная и привилегированная выдача
 
+Публичные PWA manifest, иконки и service worker имеют закрытый список точных
+путей на ingress boundary. Исключение авторизации не распространяется на
+каталог, suffix, API, runtime configuration или SPA fallback. Список сверяется
+с фактическими manifest/icon references и регистрацией worker; новый asset
+не становится публичным автоматически. Backend сохраняет проверку ingress
+transport, а manifest и worker возвращаются с корректным MIME без OIDC
+redirect. Worker не кэширует защищённые данные и не обходит авторизацию
+network request. Проверяются итоговые профили, anonymous/authenticated HTTP,
+границы похожих путей и отсутствие разрешающего cross-origin заголовка.
+
 Владелец состояния задает один авторитетный предикат доступности ресурса для
 каждого класса actor. Этот предикат одинаково применяется к:
 

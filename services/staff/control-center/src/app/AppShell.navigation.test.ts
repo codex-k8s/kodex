@@ -30,10 +30,11 @@ describe("AppShell navigation", () => {
     expect(source).toContain("refreshAfterPreloadFailure");
   });
 
-  it("держит project switcher в sidebar и освобождает header для поиска", () => {
-    expect(source).not.toContain("topbar-project-switcher");
-    expect(source).toContain(
-      '<div class="project-switcher project-switcher--sidebar">',
+  it("держит async project picker между брендом и поиском", () => {
+    expect(source).not.toContain('id="sidebar-project-switcher"');
+    expect(source).toContain("<ProjectPicker");
+    expect(source.indexOf('class="topbar-project-picker"')).toBeLessThan(
+      source.indexOf('class="global-search-wrap"'),
     );
     expect(source).toContain('class="global-search-wrap"');
   });

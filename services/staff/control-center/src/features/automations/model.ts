@@ -49,19 +49,28 @@ export function scheduleInput(schedule: Schedule): ScheduleInput {
     targetRef: schedule.target.ref,
     targetType,
     preset: schedule.preset,
+    ...(schedule.preset === "CUSTOM"
+      ? { cronExpression: schedule.cronExpression }
+      : {}),
     timeOfDay: schedule.timeOfDay ?? "00:00",
     ...(dayOfWeek ? { dayOfWeek } : {}),
     timezone: schedule.timezone,
-    input: { ...(schedule.input ?? {}) },
+    input: { ...schedule.input },
     sessionPolicy: schedule.sessionPolicy,
     notificationPolicy: schedule.notificationPolicy,
+    dstGapPolicy: schedule.dstGapPolicy,
+    dstFoldPolicy: schedule.dstFoldPolicy,
+    misfirePolicy: schedule.misfirePolicy,
+    overlapPolicy: schedule.overlapPolicy,
+    automationText: schedule.automationText,
+    promptInputs: { ...schedule.promptInputs },
   };
 }
 
 export function isSchedulePreset(
   value: string,
 ): value is ScheduleInput["preset"] {
-  return ["HOURLY", "DAILY", "WEEKDAYS", "WEEKLY"].includes(value);
+  return ["HOURLY", "DAILY", "WEEKDAYS", "WEEKLY", "CUSTOM"].includes(value);
 }
 
 function canonicalJson(value: unknown): string {
@@ -83,11 +92,19 @@ function sameInput(left: ScheduleInput, right: ScheduleInput): boolean {
     left.targetRef === right.targetRef &&
     left.targetType === right.targetType &&
     left.preset === right.preset &&
+    (left.preset !== "CUSTOM" ||
+      left.cronExpression === right.cronExpression) &&
     left.timeOfDay === right.timeOfDay &&
     (left.dayOfWeek ?? "") === (right.dayOfWeek ?? "") &&
     left.timezone === right.timezone &&
     left.sessionPolicy === right.sessionPolicy &&
     left.notificationPolicy === right.notificationPolicy &&
+    Object.is(left.dstGapPolicy, right.dstGapPolicy) &&
+    Object.is(left.dstFoldPolicy, right.dstFoldPolicy) &&
+    left.misfirePolicy === right.misfirePolicy &&
+    left.overlapPolicy === right.overlapPolicy &&
+    left.automationText === right.automationText &&
+    canonicalJson(left.promptInputs) === canonicalJson(right.promptInputs) &&
     canonicalJson(left.input) === canonicalJson(right.input)
   );
 }
@@ -167,6 +184,13 @@ function revisionMatchesInput(
     revision.timezone === input.timezone &&
     revision.sessionPolicy === input.sessionPolicy &&
     revision.notificationPolicy === input.notificationPolicy &&
+    Object.is(revision.dstGapPolicy, input.dstGapPolicy) &&
+    Object.is(revision.dstFoldPolicy, input.dstFoldPolicy) &&
+    revision.misfirePolicy === input.misfirePolicy &&
+    revision.overlapPolicy === input.overlapPolicy &&
+    revision.automationText === input.automationText &&
+    canonicalJson(revision.promptInputs) ===
+      canonicalJson(input.promptInputs) &&
     canonicalJson(revision.input) === canonicalJson(input.input)
   );
 }

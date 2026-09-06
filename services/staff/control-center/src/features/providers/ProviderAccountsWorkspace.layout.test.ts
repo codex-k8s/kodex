@@ -27,9 +27,11 @@ describe("provider account layout", () => {
   });
 
   it("использует server search, cursor scroll и безопасные account actions", () => {
-    expect(selector).toContain("useAsyncEntityCollection");
-    expect(selector).toContain("nearScrollEnd");
-    expect(selector).toContain("isRuntimeEligible");
+    expect(selector).toContain("AsyncEntityPicker");
+    expect(selector).toContain(':load-items="loadAccounts"');
+    expect(selector).toContain(":multiple=\"policyMode !== 'FIXED'\"");
+    expect(selector).toContain("nextCursor: page.nextPageToken");
+    expect(selector).toContain("eligibleForSelection");
     expect(workspace).toContain("accountAllows(account");
     expect(workspace).toContain("safeVerificationUri");
     expect(workspace).toContain("definitionsNextPageToken");

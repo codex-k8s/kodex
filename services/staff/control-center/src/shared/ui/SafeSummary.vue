@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -10,11 +11,17 @@ const props = defineProps<{
   maximumLength?: number;
 }>();
 const { t } = useI18n();
-const summary = computed(() => safeSummary(props.content, props.maximumLength));
+const summary = computed(() =>
+  safeSummary(
+    props.content ? serverMessage(props.content) : props.content,
+    props.maximumLength,
+  ),
+);
 const visibleText = computed(() => {
   if (summary.value.structured) return t("common.structuredResult");
   return summary.value.text || props.fallback || "—";
 });
+const serverMessage = useServerMessage();
 </script>
 
 <template>

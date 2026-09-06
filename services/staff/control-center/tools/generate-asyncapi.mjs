@@ -54,7 +54,9 @@ function checkToolchain() {
     readFileSync(resolve(controlCenterRoot, "package.json"), "utf8"),
   );
   for (const packageName of ["@asyncapi/parser", "js-yaml"]) {
-    const expected = packageManifest.devDependencies?.[packageName];
+    const expected =
+      packageManifest.dependencies?.[packageName] ??
+      packageManifest.devDependencies?.[packageName];
     const actual = packageVersion(packageName);
     if (!expected || expected !== actual) {
       fail(

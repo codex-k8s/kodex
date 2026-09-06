@@ -11,7 +11,94 @@ export interface CodeEditorCompletionItem {
 export type CodeEditorCompletionProvider = (
   query: string,
   signal: AbortSignal,
+  context?: CodeEditorCompletionContext,
 ) => Promise<readonly CodeEditorCompletionItem[]>;
+export interface CodeEditorCompletionContext {
+  content: string;
+  cursor: number;
+}
+export interface CodeEditorHover {
+  from: number;
+  to: number;
+  text: string;
+}
+export type CodeEditorHoverProvider = (
+  content: string,
+  position: number,
+) => CodeEditorHover | undefined;
+export interface CodeEditorPositionedDiagnostic {
+  line: number;
+  column: number;
+  message: string;
+}
+export function positionedCodeEditorDiagnostics(
+  messages: readonly CodeEditorPositionedDiagnostic[],
+  content: string,
+): Diagnostic[] {
+  const normalized = content.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n");
+  return messages.flatMap((message) => {
+    if (
+      !Number.isSafeInteger(message.line) ||
+      !Number.isSafeInteger(message.column) ||
+      message.line < 1 ||
+      message.column < 1
+    )
+      return [];
+    const line = lines[message.line - 1];
+    if (line === undefined) return [];
+    const bytes = new TextEncoder().encode(line);
+    if (message.column - 1 > bytes.length) return [];
+    let prefix: string;
+    try {
+      prefix = new TextDecoder("utf-8", { fatal: true }).decode(
+        bytes.slice(0, message.column - 1),
+      );
+    } catch {
+      return [];
+    }
+    const from =
+      lines
+        .slice(0, message.line - 1)
+        .reduce((offset, item) => offset + item.length + 1, 0) + prefix.length;
+    const size = (normalized.codePointAt(from) ?? 0) > 0xffff ? 2 : 1;
+    return [
+      {
+        from,
+        to: Math.min(from + size, normalized.length),
+        message: message.message,
+        severity: "error" as const,
+      },
+    ];
+  });
+}
+export function tomlCompletionQuery(
+  content: string,
+  cursor: number,
+  explicit: boolean,
+): TemplateCompletionQuery | undefined {
+  const before = content.slice(0, cursor);
+  const line = before.slice(before.lastIndexOf("\n") + 1);
+  const value = /^\s*[^=]+\s*=\s*("[^"\n]*|[a-z_-]*)$/.exec(line);
+  if (value) {
+    const after = content.slice(cursor).split("\n")[0] ?? "";
+    const quoted = value[1]?.startsWith('"');
+    const suffix = quoted
+      ? after.indexOf('"') >= 0
+        ? after.indexOf('"') + 1
+        : 0
+      : (/^[a-z_-]*/.exec(after)?.[0].length ?? 0);
+    return {
+      from: before.length - (value[1]?.length ?? 0),
+      to: cursor + suffix,
+      query: value[1] ?? "",
+    };
+  }
+  const key = /^\s*([A-Za-z_".][A-Za-z0-9_".-]*)?$/.exec(line);
+  return key && (explicit || key[1])
+    ? { from: before.length - (key[1]?.length ?? 0), query: key[1] ?? "" }
+    : undefined;
+}
 
 export interface CodeEditorAccessibilityInput {
   label: string;
@@ -72,6 +159,7 @@ export const markdownStreamParser: StreamParser<MarkdownState> = {
 export interface TemplateCompletionQuery {
   from: number;
   query: string;
+  to?: number;
 }
 
 export function templateCompletionQuery(

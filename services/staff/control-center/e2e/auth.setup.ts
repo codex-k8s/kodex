@@ -23,7 +23,7 @@ test.describe("OIDC-сессия владельца", () => {
       },
       { mode: "local" },
     );
-    expect((await sessionResponse).status()).toBe(204);
+    expect((await sessionResponse).status()).toBe(200);
 
     await expect(page).toHaveURL(
       new RegExp(`^${escapeRegExp(environment.baseURL)}/`),
@@ -103,7 +103,7 @@ test.describe("OIDC-сессия владельца", () => {
       const sessionResponse = waitForOwnerSession(page);
       await authenticateOwner(page, undefined, { mode: "warm" });
 
-      expect((await sessionResponse).status()).toBe(204);
+      expect((await sessionResponse).status()).toBe(200);
       expect(delayedRequests).toBe(1);
       await expect(page.locator(".app-shell")).toBeVisible();
       await expect(page).not.toHaveURL(/\/auth\/callback/);
@@ -156,12 +156,12 @@ function waitForOwnerSession(page: Page) {
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).origin === environment.baseURL &&
-      new URL(response.url()).pathname === "/api/v1/session",
+      new URL(response.url()).pathname === "/api/v1/session/callback",
   );
 }
 
 function ownerSessionURL(): string {
-  return new URL("/api/v1/session", environment.baseURL).href;
+  return new URL("/api/v1/session/callback", environment.baseURL).href;
 }
 
 function escapeRegExp(value: string): string {

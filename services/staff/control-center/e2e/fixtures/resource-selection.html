@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка выбора и VFS</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref, reactive } from "vue";
+      import { createRouter, createMemoryHistory } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import ProjectPicker from "../../src/features/projects/ProjectPicker.vue";
+      import NewRunSessionPicker from "../../src/features/new-run/components/NewRunSessionPicker.vue";
+      import IntegrationGrantsPanel from "../../src/features/integrations/ui/IntegrationGrantsPanel.vue";
+      import VfsBrowser from "../../src/features/files/VfsBrowser.vue";
+      import { resolveAssistantContext } from "../../src/features/assistant/context";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const fixture = await (
+        await fetch("/e2e/fixtures/resource-selection.json")
+      ).json();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          {
+            path: "/",
+            name: "organization-files",
+            component: { render: () => null },
+          },
+        ],
+      });
+      await router.push({
+        path: "/",
+        query: {
+          vfsTrail: JSON.stringify([
+            { path: "/projects/project", name: "Проект" },
+          ]),
+        },
+      });
+      const project = ref(fixture.project);
+      const session = ref(fixture.run.sessionRef);
+      const sessionOpen = ref(false);
+      const connection = ref(fixture.connection);
+      const grant = reactive({
+        projectRef: "",
+        targetKind: "AGENT",
+        targetRef: "",
+        capabilityKey: "",
+      });
+      const sessionLabels = {
+        title: "Выбор сессии",
+        subtitle: "Продолжение",
+        close: "Закрыть",
+        states: { SUCCEEDED: "Завершён" },
+        picker: {
+          label: "Сессии",
+          searchPlaceholder: "Поиск сессии",
+          loading: "Загрузка",
+          loadingMore: "Загрузка",
+          empty: "Нет сессий",
+          error: "Ошибка",
+          retry: "Повторить",
+        },
+      };
+      createApp({
+        setup() {
+          return () =>
+            h("main", { style: "padding:16px;max-width:100%;" }, [
+              h("section", { id: "project-picker" }, [
+                h(ProjectPicker, {
+                  project: project.value,
+                  onSelect: (value) => {
+                    project.value = value ? fixture.project : undefined;
+                  },
+                }),
+              ]),
+              h(
+                "output",
+                { id: "project-selection", hidden: true },
+                project.value?.ref ?? "",
+              ),
+              h(
+                "button",
+                {
+                  class: "button",
+                  onClick: () => {
+                    sessionOpen.value = true;
+                  },
+                },
+                "Открыть сессии",
+              ),
+              h(
+                "output",
+                { id: "session-selection", hidden: true },
+                session.value,
+              ),
+              sessionOpen.value &&
+                h(NewRunSessionPicker, {
+                  open: true,
+                  selectedSessionRef: session.value,
+                  locale: "ru",
+                  labels: sessionLabels,
+                  loadItems: async () => ({
+                    items: [
+                      {
+                        id: fixture.run.sessionRef,
+                        label: fixture.run.title,
+                        run: fixture.run,
+                      },
+                    ],
+                    total: 1,
+                  }),
+                  onClose: () => {
+                    sessionOpen.value = false;
+                  },
+                  onSelect: (run) => {
+                    session.value = run.sessionRef;
+                  },
+                  onClear: () => {
+                    session.value = "";
+                  },
+                }),
+              h(IntegrationGrantsPanel, {
+                ...grant,
+                selectedConnection: connection.value,
+                grants: [],
+                busy: false,
+                onSelectConnection: (value) => {
+                  connection.value = value ? fixture.connection : undefined;
+                },
+                "onUpdate:projectRef": (value) => {
+                  grant.projectRef = value;
+                },
+                "onUpdate:targetKind": (value) => {
+                  grant.targetKind = value;
+                },
+                "onUpdate:targetRef": (value) => {
+                  grant.targetRef = value;
+                },
+                "onUpdate:capabilityKey": (value) => {
+                  grant.capabilityKey = value;
+                },
+              }),
+              h(
+                "output",
+                { id: "grant-selection", hidden: true },
+                JSON.stringify(grant),
+              ),
+              h(VfsBrowser, { projectRef: "project" }),
+              h(
+                "output",
+                { id: "assistant-context", hidden: true },
+                JSON.stringify(
+                  resolveAssistantContext(router.currentRoute.value, {
+                    projects: {},
+                    agents: {},
+                    workflows: {},
+                    runs: {},
+                  }),
+                ),
+              ),
+            ]);
+        },
+      })
+        .use(i18n)
+        .use(router)
+        .mount("#app");
+    </script>
+  </body>
+</html>
