@@ -38,7 +38,7 @@ func (server *Server) CompleteOnboarding(w http.ResponseWriter, r *http.Request,
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "state", "")
+	server.writeBootstrapState(w, r, response.GetState())
 }
 func (server *Server) CreateProject(w http.ResponseWriter, r *http.Request, p generated.CreateProjectParams) {
 	body, ok := decodeJSON[generated.ProjectInput](w, r)
@@ -264,10 +264,19 @@ func (server *Server) CommandAgentInstructions(w http.ResponseWriter, r *http.Re
 	var err error
 	switch body.Action {
 	case generated.InstructionCommandActionVALIDATE:
+		if body.PlanRef != nil || body.SelectedItemRefs != nil {
+			writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+			return
+		}
 		response, err = server.control.Command.ValidateInstructionDraft(r.Context(), &controlplanev1.ValidateInstructionDraftRequest{Mutation: m, AgentRef: ref})
 	case generated.InstructionCommandActionPUBLISH:
-		response, err = server.control.Command.PublishInstructionDraft(r.Context(), &controlplanev1.PublishInstructionDraftRequest{Mutation: m, AgentRef: ref})
+		server.publishInstructionsWithImpact(w, r, ref, m, body)
+		return
 	case generated.InstructionCommandActionROLLBACK:
+		if body.PlanRef != nil || body.SelectedItemRefs != nil {
+			writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+			return
+		}
 		response, err = server.control.Command.RollbackInstructions(r.Context(), &controlplanev1.RollbackInstructionsRequest{Mutation: m, AgentRef: ref, PublishedInstructionRef: stringValue(body.PublishedInstructionRef)})
 	default:
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -449,6 +458,10 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), AttachmentSetRef: stringValue(body.AttachmentSetRef)})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response.GetGate() == nil || response.Gate.Ref != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "")

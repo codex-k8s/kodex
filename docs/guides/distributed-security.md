@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.14
+version: 1.4.15
 updated: 2026-09-06
 ---
 
@@ -147,7 +147,7 @@ session являются разными слоями. Срок одного сл
 конкретного browser client задаётся per-client и подтверждается точным
 readback одновременно с realm default.
 
-Sliding API session имеет отдельный idle TTL и абсолютную границу срока
+Прежняя bearer-backed sliding API session имеет отдельный idle TTL и абсолютную границу срока
 проверенного bearer. Renewal разрешён только после успешной проверки session
 cookie, подписи и expiry bearer, `subject`, organization, OIDC `sid`, session
 revision, допустимого Origin, CSRF для mutation и полного application/project
@@ -185,6 +185,30 @@ account JWT доставляется broker, а новые workload credentials 
 строго после cutoff. Broker и consumers проходят bounded sequential rollout;
 readback проверяет точные permission sets и ключи Kubernetes Secrets без
 вывода credential values.
+
+Backend OIDC session использует отдельный протокол Authorization Code + PKCE:
+backend назначает state/nonce/verifier и одноразовую login transaction,
+проверяет exact same-origin и HttpOnly browser binding до token endpoint.
+Браузер не получает access/refresh token. Новая cookie несёт только ссылку
+на зашифрованную owner family и текущую browser/CSRF binding. Public metadata
+содержит server time, idle/access/absolute expiry и renewAfter; она не является
+grant и не продлевает срок при чтении.
+
+Перед refresh durable CAS переводит family в REFRESHING. Только победитель
+вызывает IdP; после timeout, потерянного ответа или crash тот же refresh token
+не повторяется. Неопределённая attempt требует нового входа. Успех сохраняет
+новую generation и токены одной записью, полностью проверяет новый bearer и
+сохраняет issuer/sub/organization/sid/session_revision/auth_time. Свежий
+application proof строится из нового bearer. Absolute SSO ceiling не растёт;
+Keycloak refresh rotation включена с нулевым reuse, idle/max SSO не изменены.
+
+Family/tombstone retention превышает абсолютный SSO срок. Runtime не имеет
+delete/purge/create/update stream authority; bootstrap и readiness проверяют
+одинаковые точные параметры. DiscardNew не вытесняет другие family при
+переполнении, per-subject CAS заменяет только текущую запись. Отсутствующее
+или повреждённое состояние не восстанавливается по cookie. Logout завершает
+family до очистки cookies; поздний refresh не проходит её CAS fence.
+Расход elevation атомарно заменяет browser ID и CSRF и не продлевает auth_time.
 
 WebSocket handshake не продлевает API session: его CSRF subprotocol проверяет
 realtime transport после общей HTTP boundary. Sliding activity фиксирует

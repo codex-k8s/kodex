@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	oidcauth "github.com/codex-k8s/kodex/libs/go/oidcverifier"
@@ -80,6 +81,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
 		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
 		DialTimeout: config.RPCTimeout, RequestTimeout: config.RPCTimeout,
+		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, Proofs: control,
 	})
 	if err != nil {
 		return err
@@ -94,7 +96,23 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	security, err := boundary.New(boundary.Config{Origins: config.origins(), Verifier: oidc, Sessions: sessions, Revocations: revocations, Limiter: limiter, Timeout: config.RequestTimeout})
+	browserState, err := browserstate.New(startup, bus, config.NATSReplicas, config.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	browserOIDC, err := oidc.BrowserClient("kodex-control-center", config.OIDCBrowserOrigin+"/auth/callback")
+	if err != nil {
+		return err
+	}
+	families, err := session.NewFamilies(lifecycle, browserState, browserOIDC, sessions)
+	if err != nil {
+		return err
+	}
+	logins, err := session.NewLogins(lifecycle, browserState, browserOIDC, sessions)
+	if err != nil {
+		return err
+	}
+	security, err := boundary.New(boundary.Config{BrowserOrigin: config.OIDCBrowserOrigin, Logins: logins, Families: families, Origins: config.origins(), Verifier: oidc, Sessions: sessions, Revocations: revocations, Limiter: limiter, Timeout: config.RequestTimeout})
 	if err != nil {
 		return err
 	}
@@ -107,6 +125,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		secrets.Check(startup),
 		realtime.Check(startup),
 		revocations.Check(startup),
+		browserState.Check(startup),
 	); err != nil {
 		return errors.Join(errors.New("control API startup barrier failed"), err)
 	}
@@ -119,6 +138,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := api.AttachSecretBroker(secrets.SecretBroker); err != nil {
+		return err
+	}
+	if err := api.AttachSecretDraftBroker(secrets.Drafts); err != nil {
 		return err
 	}
 	if err := api.AttachSpeechToText(speech.Speech); err != nil {
@@ -142,7 +164,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
-	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, secrets, realtime, revocations, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, secrets, realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	security.StopAdmission()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase, serviceruntime.ShutdownOperation{Name: "public HTTP server", Timeout: config.ShutdownTimeout, Run: public.Shutdown}, serviceruntime.ShutdownOperation{Name: "technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown}, serviceruntime.ShutdownOperation{Name: "gateway workers", Timeout: config.ShutdownTimeout, Run: workers.Wait}, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: config.ShutdownTimeout, Run: telemetry.ShutdownTracing}, serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: config.ShutdownTimeout, Run: telemetry.FlushSentry})
@@ -217,13 +239,13 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 		}
 	}
 }
-func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokerclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokerclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.RPCTimeout)
-			err := errors.Join(control.CheckLocalAuthority(check), secrets.Check(check), realtime.Check(check), revocations.Check(check))
+			err := errors.Join(control.CheckLocalAuthority(check), secrets.Check(check), realtime.Check(check), revocations.Check(check), browserState.Check(check))
 			cancel()
 			if err == nil {
 				changed := readiness.Set(true, "ready")
@@ -257,15 +279,12 @@ func methodOperations() map[string]string {
 func authorityProofOperations() map[string]string {
 	result := controlplaneclient.ControlAPIGatewayOperations()
 	maps.Copy(result, controlplaneclient.STTGatewayOperations())
+	maps.Copy(result, controlplaneclient.SecretDraftGatewayOperations())
 	return result
 }
 
 func authorityProjectRequiredOperations() map[string]struct{} {
-	result := controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
-	for operation := range controlplaneclient.STTGatewayOperations() {
-		result[operation] = struct{}{}
-	}
-	return result
+	return controlplaneclient.ControlAPIGatewayProjectRequiredOperations()
 }
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

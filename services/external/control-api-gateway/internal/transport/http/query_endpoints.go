@@ -22,7 +22,7 @@ func (server *Server) GetBootstrapState(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("ETag", fmt.Sprintf("\"%d\"", identity.SessionRevision))
-	writeMessage(w, http.StatusOK, response, "state", "")
+	server.writeBootstrapState(w, r, response.GetState())
 }
 func (server *Server) GetOverview(w http.ResponseWriter, r *http.Request, p generated.GetOverviewParams) {
 	response, err := server.control.Query.GetOverview(r.Context(), &controlplanev1.GetOverviewRequest{ProjectRef: stringValue(p.ProjectRef)})
@@ -49,6 +49,14 @@ func (server *Server) ListRuntimeSelections(w http.ResponseWriter, r *http.Reque
 	writeMessage(w, http.StatusOK, response, "", "runtimes")
 }
 func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p generated.SearchPlatformParams) {
+	r, ok := catalogRequest(w, r, p.ProjectRef, &p.Query, nil, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchQuery(p.Query) || p.Limit != nil && (*p.Limit < 1 || *p.Limit > 50) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	limit := int32(20)
 	if p.Limit != nil {
 		limit = int32(*p.Limit)
@@ -60,7 +68,7 @@ func (server *Server) SearchPlatform(w http.ResponseWriter, r *http.Request, p g
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "results")
+	writeSearchPage(w, response, stringValue(p.ProjectRef), int(limit))
 }
 func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p generated.ListProjectsParams) {
 	response, err := server.control.Query.ListProjects(r.Context(), &controlplanev1.ListProjectsRequest{Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
@@ -98,12 +106,12 @@ func (server *Server) ListPlatformMembershipCandidates(w http.ResponseWriter, r 
 	}
 	writeMessage(w, http.StatusOK, response, "", "users")
 }
-func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
-	r, ok := withProjectReference(w, r, ref)
+func (server *Server) ListProjectMemberships(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListProjectMembershipsParams) {
+	r, ok := catalogRequest(w, r, &ref, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Page: page(nil, nil)})
+	response, err := server.control.Query.ListProjectMemberships(r.Context(), &controlplanev1.ListProjectMembershipsRequest{ProjectRef: ref, Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -127,7 +135,12 @@ func (server *Server) ListAgents(w http.ResponseWriter, r *http.Request, ref gen
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListAgents(r.Context(), &controlplanev1.ListAgentsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	state, stateOK := catalogStateFilter(p.State, controlplanev1.AgentState_value, "AGENT_STATE_")
+	if !stateOK {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ListAgents(r.Context(), &controlplanev1.ListAgentsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), State: controlplanev1.AgentState(state), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -155,7 +168,12 @@ func (server *Server) ListWorkflows(w http.ResponseWriter, r *http.Request, ref 
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ListWorkflows(r.Context(), &controlplanev1.ListWorkflowsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	state, stateOK := catalogStateFilter(p.State, controlplanev1.WorkflowState_value, "WORKFLOW_STATE_")
+	if !stateOK {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ListWorkflows(r.Context(), &controlplanev1.ListWorkflowsRequest{ProjectRef: ref, Page: page(p.PageSize, p.PageToken), State: controlplanev1.WorkflowState(state), Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -171,9 +189,46 @@ func (server *Server) GetWorkflow(w http.ResponseWriter, r *http.Request, ref ge
 	writeMessage(w, http.StatusOK, response, "workflow", "")
 }
 func (server *Server) ListRuns(w http.ResponseWriter, r *http.Request, p generated.ListRunsParams) {
-	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchText(stringValue(p.Query), 0, 200) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	resumable := boolValue(p.ResumableSessionsOnly)
+	targetType, targetRef := stringValue(p.TargetType), stringValue(p.TargetRef)
+	if resumable && p.States != nil || (p.TargetType == nil) != (p.TargetRef == nil) ||
+		p.TargetType != nil && (!resumable || !p.TargetType.Valid() || !effectiveCapabilityRef(targetRef)) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	states := []controlplanev1.RunState{}
+	if p.States != nil {
+		if len(*p.States) == 0 || len(*p.States) > 7 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		seen := map[controlplanev1.RunState]bool{}
+		for _, state := range *p.States {
+			value, known := controlplanev1.RunState_value["RUN_STATE_"+string(state)]
+			if !state.Valid() || !known || value == 0 || seen[controlplanev1.RunState(value)] {
+				writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+				return
+			}
+			seen[controlplanev1.RunState(value)] = true
+			states = append(states, controlplanev1.RunState(value))
+		}
+	}
+	response, err := server.control.Query.ListRuns(r.Context(), &controlplanev1.ListRunsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), States: states, ResumableSessionsOnly: resumable, TargetType: targetType, TargetRef: targetRef})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response == nil || !validCountedCatalogPage(response.GetTotal(), len(response.GetRuns()), response.GetPage()) ||
+		resumable && !validResumableRunPage(response, stringValue(p.ProjectRef), targetType, targetRef, stringValue(p.PageToken), p.PageSize) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "runs")
@@ -222,12 +277,47 @@ func (server *Server) ListRunEvents(w http.ResponseWriter, r *http.Request, ref 
 	_ = jsonEncoder(w).Encode(value)
 }
 func (server *Server) ListOwnerGates(w http.ResponseWriter, r *http.Request, p generated.ListOwnerGatesParams) {
-	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken)})
+	r, ok := catalogRequest(w, r, p.ProjectRef, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
+	if !validSearchText(stringValue(p.Query), 0, 200) || p.State != nil && p.States != nil {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	state := controlplanev1.OwnerGateState_OWNER_GATE_STATE_UNSPECIFIED
+	if p.State != nil {
+		value, known := controlplanev1.OwnerGateState_value["OWNER_GATE_STATE_"+string(*p.State)]
+		if !p.State.Valid() || !known || value == 0 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		state = controlplanev1.OwnerGateState(value)
+	}
+	states := []controlplanev1.OwnerGateState{}
+	if p.States != nil {
+		if len(*p.States) == 0 || len(*p.States) > 6 {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return
+		}
+		seen := map[controlplanev1.OwnerGateState]bool{}
+		for _, selected := range *p.States {
+			value, known := controlplanev1.OwnerGateState_value["OWNER_GATE_STATE_"+string(selected)]
+			if !selected.Valid() || !known || value == 0 || seen[controlplanev1.OwnerGateState(value)] {
+				writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+				return
+			}
+			seen[controlplanev1.OwnerGateState(value)] = true
+			states = append(states, controlplanev1.OwnerGateState(value))
+		}
+	}
+	paging := page(p.PageSize, p.PageToken)
+	response, err := server.control.Query.ListOwnerGates(r.Context(), &controlplanev1.ListOwnerGatesRequest{ProjectRef: stringValue(p.ProjectRef), Page: paging, State: state, States: states, Query: stringValue(p.Query)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "gates")
+	writeOwnerGatePage(w, response, stringValue(p.ProjectRef), state, states, int(paging.PageSize))
 }
 func (server *Server) GetOwnerGate(w http.ResponseWriter, r *http.Request, ref generated.GateRef) {
 	response, err := server.control.Query.GetOwnerGate(r.Context(), &controlplanev1.GetOwnerGateRequest{GateRef: ref})
@@ -235,10 +325,14 @@ func (server *Server) GetOwnerGate(w http.ResponseWriter, r *http.Request, ref g
 		writeRPCProblem(w, err)
 		return
 	}
+	if response.GetGate() == nil || response.Gate.Ref != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeMessage(w, http.StatusOK, response, "gate", "")
 }
 func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListArtifactsParams) {
-	r, ok := withProjectReference(w, r, ref)
+	r, ok := catalogRequest(w, r, &ref, p.Query, p.PageSize, p.PageToken)
 	if !ok {
 		return
 	}
@@ -246,36 +340,50 @@ func (server *Server) ListArtifacts(w http.ResponseWriter, r *http.Request, ref 
 	artifactType, artifactTypeOK := artifactTypeFilter(p.Type)
 	scanState, scanStateOK := artifactScanStateFilter(p.ScanState)
 	sourceKind, sourceKindOK := artifactSourceFilter(p.SourceKind)
-	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK {
+	sourceKinds, sourceKindsOK := artifactSourceGroupFilter(p.SourceKinds, sourceKind)
+	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK || !sourceKindsOK {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{
 		ProjectRef: ref, RunRef: stringValue(p.RunRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
-		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind,
+		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind, SourceKinds: sourceKinds,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response == nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "artifacts")
 }
 
 func (server *Server) ListOrganizationArtifacts(w http.ResponseWriter, r *http.Request, p generated.ListOrganizationArtifactsParams) {
+	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
 	lifecycleState, lifecycleStateOK := artifactLifecycleFilter(p.LifecycleState)
 	artifactType, artifactTypeOK := artifactTypeFilter(p.Type)
 	scanState, scanStateOK := artifactScanStateFilter(p.ScanState)
 	sourceKind, sourceKindOK := artifactSourceFilter(p.SourceKind)
-	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK {
+	sourceKinds, sourceKindsOK := artifactSourceGroupFilter(p.SourceKinds, sourceKind)
+	if !lifecycleStateOK || !artifactTypeOK || !scanStateOK || !sourceKindOK || !sourceKindsOK {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
 	response, err := server.control.Query.ListArtifacts(r.Context(), &controlplanev1.ListArtifactsRequest{
 		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
-		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind,
+		LifecycleState: lifecycleState, Type: artifactType, ScanState: scanState, SourceKind: sourceKind, SourceKinds: sourceKinds,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response == nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "", "artifacts")
@@ -310,7 +418,27 @@ func artifactSourceFilter[T ~string](value *T) (controlplanev1.ArtifactSource, b
 		return controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED, true
 	}
 	raw, ok := controlplanev1.ArtifactSource_value["ARTIFACT_SOURCE_"+string(*value)]
-	return controlplanev1.ArtifactSource(raw), ok
+	return controlplanev1.ArtifactSource(raw), ok && raw != 0
+}
+
+func artifactSourceGroupFilter[T ~string](values *[]T, single controlplanev1.ArtifactSource) ([]controlplanev1.ArtifactSource, bool) {
+	if values == nil || len(*values) == 0 {
+		return nil, true
+	}
+	if len(*values) > 5 || single != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_UNSPECIFIED {
+		return nil, false
+	}
+	result := make([]controlplanev1.ArtifactSource, 0, len(*values))
+	seen := make(map[controlplanev1.ArtifactSource]bool, len(*values))
+	for _, value := range *values {
+		kind, ok := artifactSourceFilter(&value)
+		if !ok || seen[kind] {
+			return nil, false
+		}
+		seen[kind] = true
+		result = append(result, kind)
+	}
+	return result, true
 }
 func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef) {
 	response, err := server.control.Query.GetArtifact(r.Context(), &controlplanev1.GetArtifactRequest{ArtifactRef: ref})
@@ -341,13 +469,22 @@ func (server *Server) PreviewSchedule(w http.ResponseWriter, r *http.Request, _ 
 	}
 	limit := int32(10)
 	if body.Limit != nil {
+		if *body.Limit < 1 || *body.Limit > 100 {
+			writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+			return
+		}
 		limit = int32(*body.Limit)
+	}
+	materialization, valid := schedulePromptContext(body.Materialization)
+	if !valid {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
 	}
 	request := &controlplanev1.PreviewScheduleRequest{
 		Preset: string(body.Preset), CronExpression: stringValue(body.CronExpression), TimeOfDay: stringValue(body.TimeOfDay),
 		DayOfWeek: stringValue(body.DayOfWeek), Timezone: body.Timezone, DstGapPolicy: string(body.DstGapPolicy),
 		DstFoldPolicy: string(body.DstFoldPolicy), MisfirePolicy: string(body.MisfirePolicy),
-		OverlapPolicy: string(body.OverlapPolicy), Limit: limit,
+		OverlapPolicy: string(body.OverlapPolicy), Limit: limit, Materialization: materialization,
 	}
 	if body.After != nil {
 		request.After = timestamppb.New(*body.After)
@@ -357,7 +494,12 @@ func (server *Server) PreviewSchedule(w http.ResponseWriter, r *http.Request, _ 
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	output, valid := schedulePromptPreviewView(w, request, response)
+	if !valid {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeJSON(w, http.StatusOK, output)
 }
 func (server *Server) GetSchedule(w http.ResponseWriter, r *http.Request, ref generated.ScheduleRef) {
 	response, err := server.control.Query.GetSchedule(r.Context(), &controlplanev1.GetScheduleRequest{ScheduleRef: ref})
@@ -378,8 +520,12 @@ func (server *Server) ListIntegrationDefinitions(w http.ResponseWriter, r *http.
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
 func (server *Server) ListIntegrationConnections(w http.ResponseWriter, r *http.Request, p generated.ListIntegrationConnectionsParams) {
+	if p.DefinitionKey != nil && !validSearchText(*p.DefinitionKey, 1, 80) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Query.ListIntegrationConnections(r.Context(), &controlplanev1.ListIntegrationConnectionsRequest{
-		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
+		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey),
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
@@ -404,7 +550,11 @@ func (server *Server) GetAdministration(w http.ResponseWriter, r *http.Request) 
 	writeMessage(w, http.StatusOK, response, "state", "")
 }
 func (server *Server) ListAuditEvents(w http.ResponseWriter, r *http.Request, p generated.ListAuditEventsParams) {
-	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query)})
+	if p.Action != nil && !validSearchText(*p.Action, 1, 160) || p.Outcome != nil && !validSearchText(*p.Outcome, 1, 80) {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), Action: stringValue(p.Action), Outcome: stringValue(p.Outcome)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

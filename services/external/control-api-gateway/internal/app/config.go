@@ -28,6 +28,7 @@ type Config struct {
 	TLSPrivateKeyFile                 string        `env:"CONTROL_API_GATEWAY_TLS_PRIVATE_KEY_FILE"`
 	OIDCIssuer                        string        `env:"CONTROL_API_GATEWAY_OIDC_ISSUER"`
 	OIDCAudience                      string        `env:"CONTROL_API_GATEWAY_OIDC_AUDIENCE"`
+	OIDCBrowserOrigin                 string        `env:"CONTROL_API_GATEWAY_OIDC_BROWSER_ORIGIN"`
 	OIDCJWKSURL                       string        `env:"CONTROL_API_GATEWAY_OIDC_JWKS_URL"`
 	OIDCConnectAddress                string        `env:"CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS"`
 	OIDCTLSServerName                 string        `env:"CONTROL_API_GATEWAY_OIDC_TLS_SERVER_NAME"`
@@ -127,6 +128,13 @@ func (config Config) validate() error {
 		if parseErr != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || origin == "*" {
 			return errors.New("control API origin allowlist is invalid")
 		}
+	}
+	browserOriginAllowed := false
+	for _, origin := range origins {
+		browserOriginAllowed = browserOriginAllowed || origin == config.OIDCBrowserOrigin
+	}
+	if !browserOriginAllowed {
+		return errors.New("control API OIDC browser origin is invalid")
 	}
 	if config.RequestTimeout < time.Second || config.RequestTimeout > time.Minute || config.RPCTimeout < time.Second || config.RPCTimeout > 10*time.Second || config.StartupTimeout < time.Second || config.ShutdownTimeout < config.RequestTimeout || config.ReadinessInterval < time.Second || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.RateLimit == 0 || config.MaximumRateKeys < 100 || config.PreAuthConcurrency < 1 || config.MaximumHTTPConcurrency < 2 || config.PerSubjectHTTPConcurrency >= config.MaximumHTTPConcurrency || config.MaximumWebSocketConcurrency < 2 || config.PerSubjectWebSocketConcurrency >= config.MaximumWebSocketConcurrency {
 		return errors.New("control API bounded configuration is invalid")

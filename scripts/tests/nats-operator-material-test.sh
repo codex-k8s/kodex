@@ -128,12 +128,13 @@ generate_material="$repository_root/tools/install/generate-material.sh"
 nats_user_policy="$repository_root/tools/install/nats-runtime-users.tsv"
 account_disk_storage_bytes=34359738368
 session_revocation_stream_bytes=16777216
+browser_state_stream_bytes=536870912
 control_plane_stream_bytes=$(sed -n \
   's/^[[:space:]]*- CONTROL_PLANE_NATS_MAX_BYTES=//p' \
   "$repository_root/deploy/k8s/base/control-plane/kustomization.yaml")
 [[ "$control_plane_stream_bytes" =~ ^[1-9][0-9]*$ ]] ||
   fail 'control-plane stream byte budget is invalid'
-((control_plane_stream_bytes + session_revocation_stream_bytes <= account_disk_storage_bytes)) ||
+((control_plane_stream_bytes + session_revocation_stream_bytes + browser_state_stream_bytes <= account_disk_storage_bytes)) ||
   fail 'mandatory JetStream reservations exceed the application account disk budget'
 [[ $(awk -F'|' 'NF == 5 {count++} END {print count+0}' "$nats_user_policy") -eq 3 ]] ||
   fail 'NATS runtime user policy must contain exactly three complete rows'
@@ -149,6 +150,11 @@ for permission_contract in \
   '$JS.API.STREAM.UPDATE.CONTROL_API_SESSION_REVOCATIONS' \
   '$JS.API.STREAM.MSG.GET.CONTROL_API_SESSION_REVOCATIONS' \
   'kodex.control_api.session_revocation.*' \
+  '$JS.API.STREAM.INFO.CONTROL_API_BROWSER_STATE' \
+  '$JS.API.STREAM.CREATE.CONTROL_API_BROWSER_STATE' \
+  '$JS.API.STREAM.UPDATE.CONTROL_API_BROWSER_STATE' \
+  '$JS.API.STREAM.MSG.GET.CONTROL_API_BROWSER_STATE' \
+  'kodex.control_api.browser_state.*' \
   'control_plane.run.*.*.events' \
   'control_plane.platform.*.events'; do
   grep -Fq -- "$permission_contract" "$nats_user_policy" ||
