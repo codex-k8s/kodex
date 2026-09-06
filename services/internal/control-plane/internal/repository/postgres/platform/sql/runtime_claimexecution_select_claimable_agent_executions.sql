@@ -125,6 +125,8 @@ SELECT n.id::text,
                  JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
                  WHERE knowledge_binding.target_kind='KNOWLEDGE'
                    AND knowledge_binding.target_ref=a.ref
+                   AND knowledge_artifact.organization_id=r.organization_id
+                   AND knowledge_artifact.project_id=r.project_id
                    AND knowledge_artifact.scan_state='CLEAN'
                    AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
@@ -133,10 +135,12 @@ SELECT n.id::text,
                'occurrenceRef', occurrence.ref, 'attempt', occurrence.attempt,
                'scheduleRef', schedule.ref, 'scheduleRevisionRef', revision.ref,
                'scheduleRevision', revision.revision, 'scheduleRevisionDigest', revision.digest,
+               'name',revision.name,'timezone',revision.timezone,'scheduledAt',occurrence.scheduled_for,
                'targetRef', occurrence.target_ref, 'targetVersion', occurrence.target_version,
                'targetDigest', occurrence.target_digest, 'text', occurrence.automation_text,
                'textDigest', occurrence.automation_text_digest, 'promptInputs', occurrence.prompt_inputs,
-               'promptInputsDigest', occurrence.prompt_inputs_digest))
+               'promptInputsDigest', occurrence.prompt_inputs_digest, 'promptInputFormat', occurrence.prompt_input_format,
+               'promptInputsRaw', occurrence.prompt_inputs::text))
            FROM control_plane.schedule_occurrences occurrence
            JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
            JOIN control_plane.schedule_revisions revision ON revision.id = occurrence.schedule_revision_id
@@ -395,6 +399,7 @@ SELECT n.id::text,
        COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
                'ref', integration_grant.ref,
+		       'grantVersion', integration_grant.version::text,
                'connectionRef', connection.ref,
                'definitionKey', connection.definition_key,
                'definitionVersion', connection.definition_version,
@@ -417,11 +422,15 @@ SELECT n.id::text,
              AND integration_grant.target_kind = 'AGENT'
              AND integration_grant.target_ref = a.ref
              AND integration_grant.enabled
+             AND integration_grant.definition_version=connection.definition_version
+             AND integration_grant.definition_digest=connection.definition_digest
              AND definition.enabled
-             AND definition.adapter_owner = 'integration-gateway'
-             AND definition.execution_route = 'MANAGED_MCP'
+             AND (definition.adapter_owner,definition.execution_route) IN
+                 (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
              AND definition.adapter_readiness = 'READY'
+             AND capability.value->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
              AND connection.enabled
+             AND connection.lifecycle_state='ACTIVE'
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
@@ -574,7 +583,8 @@ SELECT n.id::text,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
        runtime_environment.rbac_digest,
-       COALESCE(session_storage.codex_session_id::text, '')
+       COALESCE(session_storage.codex_session_id::text, ''),
+       COALESCE(storage_revision.safe_snapshot #>> '{contextSnapshot,digest}', '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
@@ -600,6 +610,10 @@ JOIN control_plane.organizations organization ON organization.id = r.organizatio
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
+LEFT JOIN control_plane.runtime_revisions storage_revision
+  ON storage_revision.id = session_storage.runtime_revision_id
+ AND storage_revision.organization_id = r.organization_id
+ AND storage_revision.session_id = s.id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id
@@ -614,7 +628,9 @@ JOIN control_plane.provider_account_policy_versions provider_policy ON provider_
 JOIN control_plane.agent_config_overlay_versions config_overlay ON config_overlay.id = a.current_config_overlay_id AND config_overlay.state = 'PUBLISHED'
 JOIN control_plane.agent_runtime_environment_bindings environment_binding ON environment_binding.agent_id = a.id
 JOIN control_plane.runtime_environment_sets environment_set ON environment_set.id = environment_binding.environment_set_id AND environment_set.state = 'ACTIVE'
-JOIN control_plane.runtime_environment_versions runtime_environment ON runtime_environment.id = environment_set.current_version_id
+JOIN control_plane.runtime_environment_versions runtime_environment ON runtime_environment.id =
+    CASE WHEN a.project_id IS NULL AND a.system_key = 'system-assistant'
+         THEN environment_set.current_version_id ELSE environment_binding.environment_version_id END
 JOIN control_plane.role_definitions rd ON rd.id = a.role_definition_id
 JOIN control_plane.runtime_profiles rp ON rp.stable_key = runtime_config.runtime_profile_key
   AND rp.provider = runtime_config.provider
@@ -647,6 +663,9 @@ JOIN LATERAL (
         SELECT instruction.ref, instruction.digest, instruction.content,
                instruction.version_number::bigint, 2
         FROM control_plane.instruction_versions instruction
+        JOIN control_plane.agent_instruction_bindings active_instruction
+          ON active_instruction.instruction_id=instruction.id AND active_instruction.agent_id=a.id
+         AND active_instruction.organization_id=a.organization_id
         WHERE instruction.agent_id = a.id
           AND instruction.state = 'PUBLISHED'
     ) source

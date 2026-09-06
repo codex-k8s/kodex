@@ -63,8 +63,15 @@ func castRoleImageRecipeInput(input entity.RoleImageRecipeInput) *controlplanev1
 }
 
 func castRoleImageRecipe(input entity.RoleImageRecipe) *controlplanev1.RoleImageRecipe {
+	var lineage *controlplanev1.RoleImageManagedLineage
+	if input.ManagedLineage != nil {
+		value := input.ManagedLineage
+		lineage = &controlplanev1.RoleImageManagedLineage{ConfigurationRef: value.ConfigurationRef, RevisionRef: value.RevisionRef, Revision: value.Revision, ManagedBy: value.ManagedBy, SourceRef: value.SourceRef, SourceRevision: value.SourceRevision, Origin: value.Origin}
+	}
 	return &controlplanev1.RoleImageRecipe{
-		Ref: input.Ref, Version: input.Version, ProjectRef: input.ProjectRef, RoleDefinitionRef: input.RoleDefinitionRef,
+		SourceAvailable: input.SourceAvailable,
+		ManagedLineage:  lineage,
+		Ref:             input.Ref, Version: input.Version, ProjectRef: input.ProjectRef, RoleDefinitionRef: input.RoleDefinitionRef,
 		Name: input.Name, State: input.State,
 		Generation: input.Generation, SpecSha256: input.SpecSHA256,
 		PolicyRevision: input.PolicyRevision, PolicySha256: input.PolicySHA256,
@@ -125,7 +132,9 @@ func imageBuildStage(stage string) controlplanev1.ImageBuildStage {
 
 func castImageBuild(input entity.ImageBuild) *controlplanev1.ImageBuild {
 	result := &controlplanev1.ImageBuild{
-		Ref: input.Ref, Version: input.Version, RecipeRef: input.RecipeRef,
+		SourceAvailable:          input.SourceAvailable,
+		ConfigurationRevisionRef: input.ConfigurationRevisionRef,
+		Ref:                      input.Ref, Version: input.Version, RecipeRef: input.RecipeRef,
 		RecipeVersion: input.RecipeVersion, RecipeGeneration: input.RecipeGeneration,
 		SpecSha256: input.SpecSHA256, Attempt: input.Attempt, Fence: input.Fence,
 		Stage: imageBuildStage(input.Stage), ProgressPercent: input.ProgressPercent,
@@ -243,13 +252,13 @@ func (server *RoleImageServer) ListRoleImageRecipes(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	items, nextPage, err := server.service.List(ctx, p, roleimagerepository.Filter{
-		ProjectRef: request.GetProjectRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Page: page(request.GetPage()),
+	items, nextPage, total, err := server.service.List(ctx, p, roleimagerepository.Filter{
+		ProjectRef: request.GetProjectRef(), RoleDefinitionRef: request.GetRoleDefinitionRef(), Page: page(request.GetPage()), Query: request.GetQuery(), State: request.GetState(),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}}
+	response := &controlplanev1.ListRoleImageRecipesResponse{Page: &controlplanev1.PageInfo{NextPageToken: nextPage}, Total: total}
 	for _, item := range items {
 		response.Recipes = append(response.Recipes, castRoleImageRecipe(item))
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	"github.com/codex-k8s/kodex/libs/go/eventing/natsjetstream"
 	"github.com/codex-k8s/kodex/libs/go/eventing/sessionrevocation"
 	"github.com/jackc/pgx/v5"
@@ -71,7 +72,7 @@ func bootstrapBroker(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, stream := range []natsjetstream.Config{config, sessionrevocation.StreamConfig(config)} {
+	for _, stream := range []natsjetstream.Config{config, sessionrevocation.StreamConfig(config), browserstate.StreamConfig(config)} {
 		if err := bootstrapBrokerWithRetry(ctx, stream, timeout, brokerRetryPolicy{
 			initial: 250 * time.Millisecond,
 			maximum: 5 * time.Second,

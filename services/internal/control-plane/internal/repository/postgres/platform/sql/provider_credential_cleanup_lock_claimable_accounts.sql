@@ -11,10 +11,7 @@ WHERE EXISTS (
           (task.state = 'PENDING' AND task.eligible_at <= clock_timestamp())
           OR (task.state = 'CLAIMED' AND task.lease_expires_at <= clock_timestamp())
       )
-      AND (
-          account.state = 'REVOKED'
-          OR task.provider_credential_revision_id IS DISTINCT FROM account.current_credential_revision_id
-      )
+      AND control_plane.provider_cleanup_task_eligible(task.id)
 )
 ORDER BY account.id
 FOR UPDATE OF account SKIP LOCKED

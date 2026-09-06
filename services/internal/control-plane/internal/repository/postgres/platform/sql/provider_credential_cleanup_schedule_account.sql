@@ -17,7 +17,7 @@ SELECT 'pcct_' || gen_random_uuid()::text,
 FROM control_plane.provider_credential_revisions revision
 WHERE revision.organization_id = @organization_id::uuid
   AND revision.provider_account_id = @account_id::uuid
-ON CONFLICT (provider_credential_revision_id) DO UPDATE
+ON CONFLICT (provider_credential_revision_id) WHERE predecessor_task_id IS NULL DO UPDATE
 SET eligible_at = LEAST(
         control_plane.provider_credential_cleanup_tasks.eligible_at,
         EXCLUDED.eligible_at

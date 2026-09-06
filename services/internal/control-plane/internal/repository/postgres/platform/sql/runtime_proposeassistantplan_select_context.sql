@@ -4,7 +4,7 @@ SELECT conversation.id::text,
        conversation.version,
        COALESCE(conversation.project_id::text, ''),
        COALESCE(project.ref, ''),
-       conversation.allowed_operations,
+       context.allowed_operations,
        run.target_ref,
        actor.id::text,
        actor.ref,
@@ -21,6 +21,8 @@ JOIN control_plane.subjects actor
  AND actor.id = run.initiated_by
  AND actor.active
 JOIN control_plane.organizations organization ON organization.id = run.organization_id
+JOIN LATERAL control_plane.assistant_context_projection(run.organization_id,actor.id,run.project_id,
+    conversation.context_entity_kind,conversation.context_entity_ref,transaction_timestamp(),conversation.project_id) context ON true
 LEFT JOIN control_plane.projects project ON project.id = conversation.project_id
 LEFT JOIN LATERAL (
     SELECT membership.role
@@ -34,6 +36,8 @@ LEFT JOIN LATERAL (
 WHERE run.organization_id = $1::uuid
   AND run.id = $2::uuid
   AND run.target_type = 'SYSTEM_ASSISTANT'
+  AND (conversation.project_id IS NULL OR (project.lifecycle='ACTIVE' AND control_plane.catalog_resource_visible(
+      run.organization_id,actor.id,'project.view','PROJECT',project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp())))
   AND EXISTS (
       SELECT 1
       FROM control_plane.memberships membership

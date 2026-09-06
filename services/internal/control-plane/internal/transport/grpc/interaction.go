@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplanev1.ListInteractionSourcesRequest) (*controlplanev1.ListInteractionSourcesResponse, error) {
@@ -19,11 +21,18 @@ func (server *Server) ListInteractionSources(ctx context.Context, _ *controlplan
 	}
 	response := &controlplanev1.ListInteractionSourcesResponse{}
 	for _, item := range items {
+		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+		if !ok || credential.Ref == "" {
+			return nil, transportError(errs.ErrUnavailable)
+		}
 		response.Sources = append(response.Sources, &controlplanev1.InteractionSource{
-			ConnectionRef: itemString(item, "connectionRef"), CredentialMaterializationRef: itemString(item, "credentialRef"),
+			DefinitionKey: itemString(item, "definitionKey"), DefinitionVersion: itemString(item, "definitionVersion"), DefinitionDigest: itemString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
+			CredentialDescriptor: castIntegrationCredential(credential),
+			ConnectionRef:        itemString(item, "connectionRef"), CredentialMaterializationRef: itemString(item, "credentialRef"),
 			BaseUrl: itemString(item, "baseURL"), TeamName: itemString(item, "teamName"),
 			ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			EnabledCapabilities: itemStrings(item, "capabilities"),
+			ConnectionVersion:   mapInt64(item, "connectionVersion"), CredentialRevisionRef: itemString(item, "credentialRevisionRef"), CredentialRevision: mapInt64(item, "credentialRevision"),
 		})
 	}
 	return response, nil
@@ -41,12 +50,23 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 	response := &controlplanev1.ClaimInteractionDeliveriesResponse{}
 	for _, item := range items {
 		templateData, _ := item["templateData"].(map[string]any)
+		credential, ok := item["credential"].(entity.IntegrationCredentialRevision)
+		if !ok || credential.Ref == "" {
+			return nil, transportError(errs.ErrUnavailable)
+		}
 		response.Claims = append(response.Claims, &controlplanev1.InteractionDeliveryClaim{
-			DeliveryRef: itemString(item, "deliveryRef"), ConnectionRef: itemString(item, "connectionRef"),
+			DefinitionKey: itemString(item, "definitionKey"), DefinitionVersion: itemString(item, "definitionVersion"), DefinitionDigest: itemString(item, "definitionDigest"), DefinitionPackage: interactionPackageBytes(item),
+			ConnectionVersion: mapInt64(item, "connectionVersion"), ApprovalGateRef: itemString(item, "approvalGateRef"), ApprovalGateVersion: mapInt64(item, "approvalGateVersion"),
+			SourceCapabilityKey:  itemString(item, "sourceCapabilityKey"),
+			CredentialDescriptor: castIntegrationCredential(credential),
+			DeliveryRef:          itemString(item, "deliveryRef"), ConnectionRef: itemString(item, "connectionRef"),
 			CredentialMaterializationRef: itemString(item, "credentialRef"), BaseUrl: itemString(item, "baseURL"),
 			TeamName: itemString(item, "teamName"), ChannelName: itemString(item, "channelName"), Locale: itemString(item, "locale"),
 			CapabilityKey: itemString(item, "capabilityKey"), MessageKey: itemString(item, "messageKey"),
 			TemplateData: structure(templateData), Lease: castLease(item),
+			GateRef: itemString(item, "gateRef"), GateVersion: mapInt64(item, "gateVersion"), RunRef: itemString(item, "runRef"),
+			ExternalTeamRef: itemString(item, "externalTeamRef"), ExternalChannelRef: itemString(item, "externalChannelRef"),
+			ExternalRootPostRef: itemString(item, "externalRootPostRef"), AcceptanceReceiptRef: itemString(item, "acceptanceReceiptRef"),
 		})
 	}
 	return response, nil
@@ -57,6 +77,8 @@ func (server *Server) CompleteInteractionDelivery(ctx context.Context, request *
 		DeliveryRef: request.GetDeliveryRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
 		Generation: request.GetGeneration(), Success: request.GetSuccess(), ExternalPostRef: request.GetExternalPostRef(),
 		ExternalThreadRef: request.GetExternalThreadRef(), SafeErrorCode: request.GetSafeErrorCode(),
+		UnknownOutcome: request.GetUnknownOutcome(), ConfirmedNoEffect: request.GetConfirmedNoEffect(),
+		ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(),
 	}
 	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload)
 	if err != nil {
@@ -78,6 +100,7 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 		ExternalPostRef: request.GetExternalPostRef(), ExternalRootPostRef: request.GetExternalRootPostRef(),
 		ExternalChannelRef: request.GetExternalChannelRef(), ExternalUserDigest: request.GetExternalUserDigest(),
 		Message: request.GetMessage(), Decision: decision,
+		ExternalTeamRef: request.GetExternalTeamRef(), GateRef: request.GetGateRef(), RunRef: request.GetRunRef(), ExpectedGateVersion: request.GetExpectedGateVersion(),
 	}
 	result, err := execute(ctx, server.service, controlplanev1.InteractionWorkService_AcceptInteractionMessage_FullMethodName, command.AcceptInteractionMessage, request.GetMutation(), payload)
 	if err != nil {
@@ -93,6 +116,11 @@ func (server *Server) AcceptInteractionMessage(ctx context.Context, request *con
 func itemString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
 	return value
+}
+
+func interactionPackageBytes(values map[string]any) []byte {
+	value, _ := values["definitionPackage"].([]byte)
+	return append([]byte(nil), value...)
 }
 
 func itemStrings(values map[string]any, key string) []string {

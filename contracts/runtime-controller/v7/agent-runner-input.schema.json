@@ -1,0 +1,797 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:contract:runtime:agent-runner-input:v7",
+  "title": "Kodex agent runner input v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "mode",
+    "workload_instance",
+    "organization_ref",
+    "session_ref",
+    "agent_ref",
+    "runtime_revision_ref",
+    "runtime_revision_version",
+    "runtime_revision_digest",
+    "image_reference",
+    "image_manifest_digest",
+    "environment_image",
+    "role_runtime_contract_revision",
+    "role_runtime_contract_sha256",
+    "role_definition_ref",
+    "runtime_profile_ref",
+    "runtime_profile_revision",
+    "instruction_ref",
+    "instruction_digest",
+    "prompt_template_ref",
+    "prompt_template_digest",
+    "prompt_materialization_digest",
+    "system_assistant",
+    "instructions",
+    "provider",
+    "model",
+    "provider_account_ref",
+    "provider_credential_revision_ref",
+    "provider_credential_revision",
+    "provider_credential_sha256",
+    "runtime_config_ref",
+    "runtime_config_version",
+    "runtime_config_digest",
+    "provider_policy_ref",
+    "provider_policy_version",
+    "provider_policy_digest",
+    "config_overlay_ref",
+    "config_overlay_version",
+    "config_overlay_digest",
+    "config_overlay",
+    "effective_reasoning_effort",
+    "reasoning_mode",
+    "runtime_environment_ref",
+    "runtime_environment_version",
+    "runtime_environment_digest",
+    "environment_binding_ref",
+    "environment_binding_version",
+    "environment_binding_digest",
+    "environment_policy",
+    "effective_kubernetes_access",
+    "codex_sandbox",
+    "codex_approval_policy",
+    "callback_url",
+    "callback_tls",
+    "execution_ticket_file",
+    "provider_auth_file",
+    "provider_auth_sha256_file",
+    "workspace_policy",
+    "workspace_root",
+    "outbox_root",
+    "codex_home"
+  ],
+  "properties": {
+    "effective_reasoning_effort": {"type": "string", "pattern": "^([a-z][a-z0-9_-]{0,63})?$"},
+    "reasoning_mode": {"enum": ["SUPPORTED", "UNSUPPORTED"]},
+    "schema": {"const": "kodex.agent-runner-input.v7"},
+    "mode": {"enum": ["TURN", "WARM"]},
+    "workload_instance": {"type": "string", "minLength": 1, "maxLength": 128},
+    "organization_ref": {"$ref": "#/$defs/opaque_ref"},
+    "run_ref": {"$ref": "#/$defs/opaque_ref"},
+    "project_ref": {"$ref": "#/$defs/opaque_ref"},
+    "node_ref": {"$ref": "#/$defs/opaque_ref"},
+    "session_ref": {"$ref": "#/$defs/opaque_ref"},
+    "turn_ref": {"$ref": "#/$defs/opaque_ref"},
+    "agent_ref": {"$ref": "#/$defs/opaque_ref"},
+    "attempt": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "lease_ref": {"$ref": "#/$defs/opaque_ref"},
+    "lease_fence": {"type": "string", "minLength": 1, "maxLength": 128},
+    "lease_generation": {"type": "integer", "minimum": 1},
+    "input_digest": {"$ref": "#/$defs/sha256"},
+    "runtime_revision_ref": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}|system-assistant-core-v[1-9][0-9]*)$"
+    },
+    "runtime_revision_version": {"type": "integer", "minimum": 1},
+    "runtime_revision_digest": {"$ref": "#/$defs/sha256"},
+    "image_reference": {
+      "type": "string",
+      "minLength": 73,
+      "maxLength": 512,
+      "pattern": "^[^\\s$\\{\\}]+@sha256:[a-f0-9]{64}$"
+    },
+    "image_manifest_digest": {"$ref": "#/$defs/image_digest"},
+    "environment_image": {"$ref": "#/$defs/environment_image"},
+    "environment_tools": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/environment_tool"}
+    },
+    "role_runtime_contract_revision": {"type": "integer", "minimum": 1},
+    "role_runtime_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "role_definition_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_profile_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_profile_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+    "instruction_ref": {"$ref": "#/$defs/opaque_ref"},
+    "instruction_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_template_ref": {"$ref": "#/$defs/opaque_ref"},
+    "prompt_template_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_materialization_digest": {"$ref": "#/$defs/sha256"},
+    "system_stt_configuration_ref": {"$ref": "#/$defs/opaque_ref"},
+    "system_stt_configuration_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+    "system_stt_configuration_version": {"type": "integer", "minimum": 1},
+    "system_stt_configuration_digest": {"$ref": "#/$defs/sha256"},
+    "execution_binding_digest": {"$ref": "#/$defs/sha256"},
+    "mcp_binding_digest": {"$ref": "#/$defs/sha256"},
+    "system_assistant": {"type": "boolean"},
+    "instructions": {"type": "string", "minLength": 1, "maxLength": 1048576},
+    "task": {"type": "string", "minLength": 1, "maxLength": 1048576},
+    "bounded_input": {"type": "object", "maxProperties": 256},
+    "session_context": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/session_message"}
+    },
+    "delegation_targets": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/delegation_target"}
+    },
+    "integration_grants": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/integration_grant"}
+    },
+    "assistant_context": {"$ref": "#/$defs/assistant_context"},
+    "attachment_set_ref": {"$ref": "#/$defs/opaque_ref"},
+    "attachment_set_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "attachment_context": {
+      "enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"]
+    },
+    "attachment_sets": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/attachment_set"}
+    },
+    "context_snapshot": {"$ref": "#/$defs/context_snapshot"},
+    "file_catalog": {"$ref": "#/$defs/file_catalog"},
+    "input_artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/input_artifact"}
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 255}
+    },
+    "provider": {"type": "string", "minLength": 1, "maxLength": 64},
+    "model": {"type": "string", "minLength": 1, "maxLength": 128},
+    "provider_account_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_credential_revision": {"type": "integer", "minimum": 1},
+    "provider_credential_sha256": {"$ref": "#/$defs/sha256"},
+    "runtime_config_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_config_version": {"type": "integer", "minimum": 1},
+    "runtime_config_digest": {"$ref": "#/$defs/sha256"},
+    "provider_policy_ref": {"$ref": "#/$defs/opaque_ref"},
+    "provider_policy_version": {"type": "integer", "minimum": 1},
+    "provider_policy_digest": {"$ref": "#/$defs/sha256"},
+    "config_overlay_ref": {"$ref": "#/$defs/opaque_ref"},
+    "config_overlay_version": {"type": "integer", "minimum": 1},
+    "config_overlay_digest": {"$ref": "#/$defs/sha256"},
+    "config_overlay": {"type": "string", "maxLength": 65536},
+    "runtime_environment_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_environment_version": {"type": "integer", "minimum": 1},
+    "runtime_environment_digest": {"$ref": "#/$defs/sha256"},
+    "environment_binding_ref": {"$ref": "#/$defs/opaque_ref"},
+    "environment_binding_version": {"type": "integer", "minimum": 1},
+    "environment_binding_digest": {"$ref": "#/$defs/sha256"},
+    "environment_values": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/environment_value"}
+    },
+    "secret_projections": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/secret_projection"}
+    },
+    "environment_policy": {"$ref": "#/$defs/environment_policy"},
+    "effective_kubernetes_access": {"$ref": "#/$defs/effective_kubernetes_access"},
+    "codex_sandbox": {"enum": ["read-only", "workspace-write"]},
+    "codex_approval_policy": {"enum": ["untrusted", "on-request", "never"]},
+    "codex_session_id": {"type": "string", "maxLength": 255},
+    "callback_url": {
+      "type": "string",
+      "pattern": "^https://[^/?#]+:[0-9]+$",
+      "maxLength": 512
+    },
+    "callback_tls": {"$ref": "#/$defs/tls_binding"},
+    "execution_ticket_file": {"$ref": "#/$defs/secret_file"},
+    "provider_auth_file": {"$ref": "#/$defs/secret_file"},
+    "provider_auth_sha256_file": {"$ref": "#/$defs/secret_file"},
+    "workspace_policy": {"$ref": "#/$defs/workspace_policy"},
+    "workspace_root": {"const": "/workspace"},
+    "outbox_root": {"const": "/workspace/.kodex/outbox"},
+    "codex_home": {"const": "/workspace/.kodex/state/codex-home"}
+  },
+  "allOf": [
+    {"if": {"properties": {"reasoning_mode": {"const": "SUPPORTED"}}}, "then": {"properties": {"effective_reasoning_effort": {"minLength": 1}}}, "else": {"properties": {"effective_reasoning_effort": {"const": ""}}}},
+    {"required": ["context_snapshot"]},
+    {"if": {"required": ["file_catalog"]}, "then": {"properties": {"mode": {"const": "TURN"}}, "required": ["project_ref"]}},
+    {
+      "if": {"properties": {"mode": {"const": "TURN"}}, "required": ["mode"]},
+      "then": {
+        "required": [
+          "run_ref",
+          "node_ref",
+          "turn_ref",
+          "attempt",
+          "lease_ref",
+          "lease_fence",
+          "lease_generation",
+          "input_digest",
+          "execution_binding_digest",
+          "mcp_binding_digest",
+          "task"
+        ]
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "WARM"}}, "required": ["mode"]},
+      "then": {
+        "properties": {"system_assistant": {"const": true}},
+        "not": {
+          "anyOf": [
+            {"required": ["run_ref"]},
+            {"required": ["node_ref"]},
+            {"required": ["turn_ref"]},
+            {"required": ["attempt"]},
+            {"required": ["lease_ref"]},
+            {"required": ["lease_fence"]},
+            {"required": ["lease_generation"]},
+            {"required": ["input_digest"]},
+            {"required": ["task"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capabilities": {"contains": {"const": "platform.stt.use"}}
+        },
+        "required": ["capabilities"]
+      },
+      "then": {
+        "required": [
+          "system_stt_configuration_ref",
+          "system_stt_configuration_revision_ref",
+          "system_stt_configuration_version",
+          "system_stt_configuration_digest"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["system_stt_configuration_ref"]},
+            {"required": ["system_stt_configuration_revision_ref"]},
+            {"required": ["system_stt_configuration_version"]},
+            {"required": ["system_stt_configuration_digest"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"required": ["input_artifacts"]},
+      "then": {
+        "properties": {
+          "capabilities": {"contains": {"const": "platform.artifact.manage"}}
+        },
+        "required": ["capabilities"]
+      }
+    },
+    {
+      "if": {"properties": {"system_assistant": {"const": false}}, "required": ["system_assistant"]},
+      "then": {
+        "properties": {
+          "environment_image": {
+            "allOf": [
+              {"$ref": "#/$defs/environment_image"},
+              {"required": ["artifact_ref", "recipe_ref", "recipe_generation"]}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "file_catalog": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "digest", "total", "purposes"],
+      "properties": {
+        "ref": {"type": "string", "pattern": "^vfc_[A-Za-z0-9_-]{8,84}$"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "total": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+        "purposes": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+          "items": {"enum": ["PROJECT", "RUN_RESULT", "SKILL", "WORKSPACE_INPUT"]}}
+      }
+    },
+    "context_snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "organization_ref", "project_ref", "agent_ref", "skills", "memories", "digest"],
+      "properties": {
+        "schema": {"const": "kodex.runtime-context.v1"},
+        "organization_ref": {"$ref": "#/$defs/opaque_ref"},
+        "project_ref": {"anyOf": [{"const": ""}, {"$ref": "#/$defs/opaque_ref"}]},
+        "agent_ref": {"$ref": "#/$defs/opaque_ref"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "skills": {"type": ["array", "null"], "maxItems": 32, "items": {"$ref": "#/$defs/context_skill"}},
+        "memories": {"type": ["array", "null"], "maxItems": 64, "items": {"$ref": "#/$defs/context_memory"}}
+      }
+    },
+    "context_provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actor_ref", "source_kind", "source_ref", "source_revision", "digest", "created_at"],
+      "properties": {
+        "actor_ref": {"$ref": "#/$defs/opaque_ref"},
+        "source_kind": {"type": "string", "minLength": 1, "maxLength": 64},
+        "source_ref": {"type": "string", "maxLength": 128},
+        "source_revision": {"type": "string", "maxLength": 128},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "context_skill_file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "artifact_ref", "artifact_revision", "digest", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 240},
+        "artifact_ref": {"$ref": "#/$defs/opaque_ref"},
+        "artifact_revision": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/image_digest"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 33554432}
+      }
+    },
+    "context_skill": {
+      "type": "object", "additionalProperties": false,
+      "required": ["binding_ref", "binding_version", "bundle_ref", "revision_ref", "revision", "digest", "scan_engine", "scan_digest", "scanned_at", "files", "provenance", "name", "description"],
+      "properties": {
+        "binding_ref": {"$ref": "#/$defs/opaque_ref"},
+        "binding_version": {"type": "integer", "minimum": 1},
+        "bundle_ref": {"$ref": "#/$defs/opaque_ref"},
+        "revision_ref": {"$ref": "#/$defs/opaque_ref"},
+        "revision": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "scan_engine": {"type": "string", "minLength": 1, "maxLength": 256},
+        "scan_digest": {"$ref": "#/$defs/sha256"},
+        "scanned_at": {"type": "string", "format": "date-time"},
+        "files": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/context_skill_file"}},
+        "provenance": {"$ref": "#/$defs/context_provenance"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 640},
+        "description": {"type": "string", "minLength": 1, "maxLength": 8000}
+      }
+    },
+    "context_memory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["binding_ref", "binding_version", "record_ref", "revision_ref", "revision", "digest", "title", "summary", "retention_until", "provenance"],
+      "properties": {
+        "binding_ref": {"$ref": "#/$defs/opaque_ref"},
+        "binding_version": {"type": "integer", "minimum": 1},
+        "record_ref": {"$ref": "#/$defs/opaque_ref"},
+        "revision_ref": {"$ref": "#/$defs/opaque_ref"},
+        "revision": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 640},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "retention_until": {"type": "string", "format": "date-time"},
+        "provenance": {"$ref": "#/$defs/context_provenance"}
+      }
+    },
+    "opaque_ref": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$"
+    },
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "image_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "secret_file": {
+      "type": "string",
+      "pattern": "^/(var/)?run/secrets/[^\\x00\\r\\n]+$",
+      "maxLength": 512
+    },
+    "tls_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server_name", "ca_file", "certificate_file", "private_key_file"],
+      "properties": {
+        "server_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\\.svc\\.cluster\\.local$",
+          "maxLength": 253
+        },
+        "ca_file": {
+          "type": "string",
+          "pattern": "^/var/run/(config|secrets)/[^\\x00\\r\\n]+$",
+          "maxLength": 512
+        },
+        "certificate_file": {"$ref": "#/$defs/secret_file"},
+        "private_key_file": {"$ref": "#/$defs/secret_file"}
+      }
+    },
+    "session_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "content"],
+      "properties": {
+        "role": {"enum": ["USER", "ASSISTANT", "SYSTEM"]},
+        "content": {"type": "string", "maxLength": 65536}
+      }
+    },
+    "delegation_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "name", "purpose", "role_description"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "purpose": {"type": "string", "maxLength": 2000},
+        "role_description": {"type": "string", "maxLength": 2000},
+        "workflow_step_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+        },
+        "workflow_step_name": {"type": "string", "maxLength": 160},
+        "instructions": {"type": "string", "maxLength": 1000},
+        "expected_result": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "integration_grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "connection_ref",
+        "definition_key",
+        "connection_name",
+        "capability_key",
+        "capability_name",
+        "capability_description",
+        "definition_version",
+        "definition_digest",
+        "operation",
+        "input_schema",
+        "input_schema_sha256",
+        "risk"
+      ],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "connection_ref": {"$ref": "#/$defs/opaque_ref"},
+        "definition_key": {"type": "string", "minLength": 1, "maxLength": 128},
+        "connection_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "capability_key": {"type": "string", "minLength": 1, "maxLength": 255},
+        "capability_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "capability_description": {"type": "string", "maxLength": 2000},
+        "definition_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "definition_digest": {"$ref": "#/$defs/sha256"},
+        "operation": {"type": "string", "minLength": 1, "maxLength": 255},
+        "input_schema": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "input_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "risk": {"enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"]}
+      }
+    },
+    "assistant_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "entity_kind", "entity_ref", "entity_name", "allowed_operations"],
+      "properties": {
+        "route": {"type": "string", "maxLength": 500},
+        "entity_kind": {"type": "string", "maxLength": 80},
+        "entity_ref": {"type": "string", "maxLength": 96},
+        "entity_name": {"type": "string", "maxLength": 300},
+        "entity_version": {"type": "integer", "minimum": 1},
+        "allowed_operations": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 80}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {"entity_kind": {"const": ""}, "entity_ref": {"const": ""}}
+        },
+        {
+          "properties": {
+            "entity_kind": {"type": "string", "minLength": 1},
+            "entity_ref": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "attachment_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "manifest_digest", "purpose", "scope", "provenance", "turn_ref"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "manifest_digest": {"$ref": "#/$defs/sha256"},
+        "purpose": {"enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE"]},
+        "scope": {"enum": ["INPUT", "SESSION"]},
+        "provenance": {"enum": ["CURRENT_TURN", "SESSION_HISTORY"]},
+        "turn_ref": {"$ref": "#/$defs/opaque_ref"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope": {"const": "INPUT"}}, "required": ["scope"]},
+          "then": {"properties": {"provenance": {"const": "CURRENT_TURN"}}}
+        },
+        {
+          "if": {"properties": {"scope": {"const": "SESSION"}}, "required": ["scope"]},
+          "then": {"properties": {"provenance": {"const": "SESSION_HISTORY"}}}
+        }
+      ]
+    },
+    "input_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "file_name", "media_type", "digest", "size_bytes", "revision", "version", "scope", "position", "source", "attachment_purpose", "provenance"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/opaque_ref"},
+        "file_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "not": {"enum": [".", ".."]},
+          "pattern": "^[^/\\\\\\x00\\r\\n]+$"
+        },
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 255},
+        "digest": {"$ref": "#/$defs/image_digest"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 536870912},
+        "revision": {"type": "integer", "minimum": 1},
+        "version": {"type": "integer", "minimum": 1},
+        "scope": {"enum": ["INPUT", "SESSION", "KNOWLEDGE"]},
+        "position": {"type": "integer", "minimum": 1},
+        "source": {"enum": ["CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT"]},
+        "attachment_set_ref": {"$ref": "#/$defs/opaque_ref"},
+        "attachment_purpose": {"enum": ["ASSISTANT_MESSAGE", "SESSION_TURN", "RUN_INPUT", "WORKFLOW_INPUT", "OWNER_GATE_MESSAGE", "PROJECT_KNOWLEDGE"]},
+        "provenance": {"enum": ["CURRENT_TURN", "SESSION_HISTORY", "PROJECT_BINDING"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope": {"const": "INPUT"}}, "required": ["scope"]},
+          "then": {
+            "required": ["attachment_set_ref"],
+            "properties": {"provenance": {"const": "CURRENT_TURN"}}
+          }
+        },
+        {
+          "if": {"properties": {"scope": {"const": "SESSION"}}, "required": ["scope"]},
+          "then": {
+            "required": ["attachment_set_ref"],
+            "properties": {"provenance": {"const": "SESSION_HISTORY"}}
+          }
+        },
+        {
+          "if": {"properties": {"scope": {"const": "KNOWLEDGE"}}, "required": ["scope"]},
+          "then": {
+            "not": {"required": ["attachment_set_ref"]},
+            "properties": {
+              "attachment_purpose": {"const": "PROJECT_KNOWLEDGE"},
+              "provenance": {"const": "PROJECT_BINDING"}
+            }
+          }
+        }
+      ]
+    },
+    "environment_name": {
+      "type": "string",
+      "pattern": "^[A-Z_][A-Z0-9_]{0,126}$",
+      "not": {
+        "anyOf": [
+          {"pattern": "^(KODEX_|CODEX_|OPENAI_|OTEL_|AWS_|AZURE_|GOOGLE_|KUBERNETES_)"},
+          {"enum": [
+            "HOME", "PATH", "PWD", "SHELL", "USER", "LOGNAME", "TMPDIR",
+            "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR"
+          ]}
+        ]
+      }
+    },
+    "environment_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"$ref": "#/$defs/environment_name"},
+        "value": {"type": "string", "maxLength": 8192, "not": {"pattern": "\\x00"}}
+      }
+    },
+    "environment_image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest"],
+      "properties": {
+        "artifact_ref": {"type": "string", "pattern": "^imgart_[A-Za-z0-9_-]{8,89}$"},
+        "recipe_ref": {"type": "string", "pattern": "^imgrec_[A-Za-z0-9_-]{8,89}$"},
+        "recipe_generation": {"type": "integer", "minimum": 1},
+        "reference": {
+          "type": "string",
+          "minLength": 73,
+          "maxLength": 512,
+          "pattern": "^[^\\s$\\{\\}]+@sha256:[a-f0-9]{64}$"
+        },
+        "digest": {"$ref": "#/$defs/image_digest"}
+      }
+    },
+    "environment_tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "command", "description"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "command": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 500},
+        "usage_hint": {"type": "string", "maxLength": 500}
+      }
+    },
+    "resource_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu_request_milli",
+        "cpu_limit_milli",
+        "memory_request_mib",
+        "memory_limit_mib",
+        "ephemeral_storage_request_mib",
+        "ephemeral_storage_limit_mib"
+      ],
+      "properties": {
+        "cpu_request_milli": {"type": "integer", "minimum": 100, "maximum": 8000},
+        "cpu_limit_milli": {"type": "integer", "minimum": 100, "maximum": 16000},
+        "memory_request_mib": {"type": "integer", "minimum": 128, "maximum": 32768},
+        "memory_limit_mib": {"type": "integer", "minimum": 128, "maximum": 65536},
+        "ephemeral_storage_request_mib": {"type": "integer", "minimum": 256, "maximum": 20480},
+        "ephemeral_storage_limit_mib": {"type": "integer", "minimum": 256, "maximum": 102400}
+      }
+    },
+    "runtime_volume": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "size_mib", "mount_path"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$"},
+        "kind": {"enum": ["EPHEMERAL_DISK", "EPHEMERAL_MEMORY"]},
+        "size_mib": {"type": "integer", "minimum": 16, "maximum": 10240},
+        "mount_path": {"type": "string", "pattern": "^/workspace/\\.kodex/volumes/[a-z](?:[a-z0-9-]{0,30}[a-z0-9])?$"}
+      }
+    },
+    "network_egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["destination", "protocol", "port"],
+      "properties": {
+        "destination": {"enum": ["DNS", "RUNTIME_CALLBACK", "PROVIDER_PROXY", "KUBERNETES_API"]},
+        "protocol": {"enum": ["TCP", "UDP"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "network_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deny_by_default", "egress"],
+      "properties": {
+        "deny_by_default": {"const": true},
+        "egress": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/network_egress"}
+        }
+      }
+    },
+    "kubernetes_access_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "namespace"],
+      "properties": {
+        "kind": {"enum": ["NONE", "READ_OWN_EXECUTION"]},
+        "namespace": {"const": "kodex-runtime"}
+      }
+    },
+    "environment_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resources",
+        "volumes",
+        "network",
+        "kubernetes_access",
+        "resources_digest",
+        "volumes_digest",
+        "network_digest",
+        "rbac_digest"
+      ],
+      "properties": {
+        "resources": {"$ref": "#/$defs/resource_policy"},
+        "volumes": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/runtime_volume"}},
+        "network": {"$ref": "#/$defs/network_policy"},
+        "kubernetes_access": {"$ref": "#/$defs/kubernetes_access_profile"},
+        "resources_digest": {"$ref": "#/$defs/sha256"},
+        "volumes_digest": {"$ref": "#/$defs/sha256"},
+        "network_digest": {"$ref": "#/$defs/sha256"},
+        "rbac_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "kubernetes_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api_group", "resource", "verbs", "resource_names"],
+      "properties": {
+        "api_group": {"const": ""},
+        "resource": {"enum": ["pods", "pods/log"]},
+        "verbs": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"const": "get"}},
+        "resource_names": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"}
+        }
+      }
+    },
+    "effective_kubernetes_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "service_account_name", "rules", "digest"],
+      "properties": {
+        "profile": {"$ref": "#/$defs/kubernetes_access_profile"},
+        "service_account_name": {"type": "string", "pattern": "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"},
+        "rules": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/kubernetes_rule"}},
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "workspace_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "access"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/workspace(?:/[A-Za-z0-9._-]+)*$"},
+        "access": {"enum": ["READ_ONLY", "WRITABLE"]}
+      }
+    },
+    "workspace_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "root", "rules", "maximum_writable_bytes", "maximum_file_count", "digest", "denial_reasons"],
+      "properties": {
+        "revision": {"type": "integer", "minimum": 1},
+        "root": {"const": "/workspace"},
+        "rules": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/workspace_rule"}},
+        "maximum_writable_bytes": {"type": "integer", "minimum": 1},
+        "maximum_file_count": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "denial_reasons": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"enum": ["READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"]}}
+      }
+    },
+    "secret_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "secret_name",
+        "secret_key",
+        "secret_uid",
+        "secret_resource_version",
+        "content_sha256"
+      ],
+      "properties": {
+        "name": {"$ref": "#/$defs/environment_name"},
+        "secret_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?$"
+        },
+        "secret_key": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,253}$"},
+        "secret_uid": {"type": "string", "minLength": 1, "maxLength": 128},
+        "secret_resource_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "content_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

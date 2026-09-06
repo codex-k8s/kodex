@@ -2,10 +2,14 @@ package grpc
 
 import (
 	"context"
+	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type managedDraftRequest interface {
@@ -54,7 +58,9 @@ func (server *Server) managedMutation(ctx context.Context, method string, kind c
 }
 
 func (server *Server) CreatePromptTemplateDraft(ctx context.Context, request *controlplanev1.CreatePromptTemplateDraftRequest) (*controlplanev1.CreatePromptTemplateDraftResponse, error) {
-	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CreatePromptTemplateDraft_FullMethodName, command.CreatePromptTemplateDraft, request.GetMutation(), managedDraftInput(request))
+	input := managedDraftInput(request)
+	input.PromptScope = castPromptScopeInput(request.GetPromptScope())
+	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CreatePromptTemplateDraft_FullMethodName, command.CreatePromptTemplateDraft, request.GetMutation(), input)
 	return &controlplanev1.CreatePromptTemplateDraftResponse{Configuration: configuration, Revision: revision}, err
 }
 func (server *Server) ValidatePromptTemplateDraft(ctx context.Context, request *controlplanev1.ValidatePromptTemplateDraftRequest) (*controlplanev1.ValidatePromptTemplateDraftResponse, error) {
@@ -62,8 +68,17 @@ func (server *Server) ValidatePromptTemplateDraft(ctx context.Context, request *
 	return &controlplanev1.ValidatePromptTemplateDraftResponse{Configuration: configuration, Revision: revision}, err
 }
 func (server *Server) PublishPromptTemplateDraft(ctx context.Context, request *controlplanev1.PublishPromptTemplateDraftRequest) (*controlplanev1.PublishPromptTemplateDraftResponse, error) {
-	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_PublishPromptTemplateDraft_FullMethodName, command.PublishPromptTemplateDraft, request.GetMutation(), managedRevisionInput(request))
-	return &controlplanev1.PublishPromptTemplateDraftResponse{Configuration: configuration, Revision: revision}, err
+	payload := managedRevisionInput(request)
+	payload.PlanRef = request.GetPlanRef()
+	payload.SelectedItemRefs = append([]string(nil), request.GetSelectedItemRefs()...)
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishPromptTemplateDraft_FullMethodName, command.PublishPromptTemplateDraft, request.GetMutation(), payload)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePublishedImpactResult(result, "PROMPT_TEMPLATE", request.GetPlanRef(), request.GetConfigurationRef()); err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.PublishPromptTemplateDraftResponse{Configuration: castManagedConfiguration(result.ManagedConfiguration), Revision: castManagedRevision(result.ManagedRevision), Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
 }
 func (server *Server) RebindPromptTemplateConsumers(ctx context.Context, request *controlplanev1.RebindPromptTemplateConsumersRequest) (*controlplanev1.RebindPromptTemplateConsumersResponse, error) {
 	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName, command.RebindPromptTemplate, request.GetMutation(), managedRebindInput(request))
@@ -82,8 +97,13 @@ func (server *Server) PublishRoleImageRevisionDraft(ctx context.Context, request
 	return &controlplanev1.PublishRoleImageRevisionDraftResponse{Configuration: configuration, Revision: revision}, err
 }
 func (server *Server) RebindRoleImageConsumers(ctx context.Context, request *controlplanev1.RebindRoleImageConsumersRequest) (*controlplanev1.RebindRoleImageConsumersResponse, error) {
-	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_RebindRoleImageConsumers_FullMethodName, command.RebindRoleImage, request.GetMutation(), managedRebindInput(request))
-	return &controlplanev1.RebindRoleImageConsumersResponse{Configuration: configuration, Revision: revision}, err
+	input := managedRebindInput(request)
+	input.PlanRef, input.SelectedItemRefs = request.GetPlanRef(), append([]string{}, request.GetSelectedItemRefs()...)
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RebindRoleImageConsumers_FullMethodName, command.RebindRoleImage, request.GetMutation(), input)
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RebindRoleImageConsumersResponse{Configuration: castManagedConfiguration(result.ManagedConfiguration), Revision: castManagedRevision(result.ManagedRevision), Plan: castRoleImageImpactPlan(result.RoleImageImpactPlan)}, nil
 }
 func (server *Server) CreateIntegrationDefinitionDraft(ctx context.Context, request *controlplanev1.CreateIntegrationDefinitionDraftRequest) (*controlplanev1.CreateIntegrationDefinitionDraftResponse, error) {
 	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName, command.CreateIntegrationDefinition, request.GetMutation(), managedDraftInput(request))
@@ -126,6 +146,32 @@ func (server *Server) CopyGitManagedConfiguration(ctx context.Context, request *
 	return &controlplanev1.CopyGitManagedConfigurationResponse{Configuration: configuration, Revision: revision}, err
 }
 
+func (server *Server) ListManagedConfigurations(ctx context.Context, request *controlplanev1.ListManagedConfigurationsRequest) (*controlplanev1.ListManagedConfigurationsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListManagedConfigurations_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	kind := ""
+	if request.GetKind() != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_UNSPECIFIED {
+		name, known := controlplanev1.ManagedConfigurationKind_name[int32(request.GetKind())]
+		if !known {
+			return nil, status.Error(codes.InvalidArgument, "invalid configuration kind")
+		}
+		kind = strings.TrimPrefix(name, "MANAGED_CONFIGURATION_KIND_")
+	}
+	items, total, next, err := server.service.ListManagedConfigurations(ctx, p, query.Filter{
+		ProjectRef: request.GetProjectRef(), Category: kind, Query: request.GetQuery(), Page: page(request.GetPage()),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListManagedConfigurationsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Configurations = append(response.Configurations, castManagedConfiguration(&item))
+	}
+	return response, nil
+}
+
 func (server *Server) ListManagedConfigurationHistory(ctx context.Context, request *controlplanev1.ListManagedConfigurationHistoryRequest) (*controlplanev1.ListManagedConfigurationHistoryResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListManagedConfigurationHistory_FullMethodName)
 	if err != nil {
@@ -147,7 +193,7 @@ func (server *Server) GetManagedConfigurationImpact(ctx context.Context, request
 	if err != nil {
 		return nil, err
 	}
-	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef())
+	impact, err := server.service.GetManagedConfigurationImpact(ctx, p, request.GetConfigurationRef(), request.GetRevisionRef(), query.Filter{Query: request.GetQuery(), Page: query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()}})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -192,6 +238,11 @@ func (server *Server) GetSystemSTTConfiguration(ctx context.Context, _ *controlp
 		Digest: configuration.Digest, ProviderAccountRef: configuration.ProviderAccountRef, Model: configuration.Model,
 		Language: configuration.Language, PermissionKey: configuration.PermissionKey, Ready: configuration.Ready,
 		ReadinessBlockers: append([]string(nil), configuration.ReadinessBlockers...), ProviderCredentialGeneration: configuration.ProviderCredentialGeneration,
+		Enabled: configuration.Enabled, MaximumAudioBytes: configuration.MaximumAudioBytes,
+		MaximumAudioDurationMilliseconds: configuration.MaximumAudioDurationMilliseconds, ProviderTimeoutMilliseconds: configuration.ProviderTimeoutMilliseconds,
+		Parameters: &controlplanev1.SystemSTTParameters{Languages: append([]string(nil), configuration.Parameters.Languages...),
+			Keywords: append([]string(nil), configuration.Parameters.Keywords...), Prompt: configuration.Parameters.Prompt,
+			Temperature: configuration.Parameters.Temperature, ChunkingStrategy: configuration.Parameters.ChunkingStrategy, Stream: configuration.Parameters.Stream},
 	}}, nil
 }
 
@@ -200,10 +251,48 @@ func castManagedRevision(value *entity.ManagedConfigurationRevision) *controlpla
 		return nil
 	}
 	return &controlplanev1.ManagedConfigurationRevision{Ref: value.Ref, Revision: value.Revision,
-		State:         controlplanev1.ManagedConfigurationState(controlplanev1.ManagedConfigurationState_value["MANAGED_CONFIGURATION_STATE_"+value.State]),
-		ContentFormat: value.ContentFormat, Content: value.Content, Digest: value.Digest,
+		SourceAvailable: value.SourceAvailable,
+		PromptScope:     castPromptScope(value.PromptScope),
+		State:           managedRevisionStateProto(value.State),
+		ContentFormat:   value.ContentFormat, Content: value.Content, Digest: value.Digest,
 		ValidationDiagnostics: append([]string(nil), value.ValidationDiagnostics...), ParentRevisionRef: value.ParentRevisionRef,
 		CreatedAt: timestamp(value.CreatedAt), ValidatedAt: optionalTimestamp(value.ValidatedAt), PublishedAt: optionalTimestamp(value.PublishedAt)}
+}
+
+func castPromptScopeInput(input *controlplanev1.PromptTemplateScopeInput) *command.PromptTemplateScopeInput {
+	if input == nil {
+		return nil
+	}
+	return &command.PromptTemplateScopeInput{TargetKind: input.GetTargetKind(), TargetRef: input.GetTargetRef(), AgentRef: input.GetAgentRef(),
+		WorkflowRevisionRef: input.GetWorkflowRevisionRef(), WorkflowStageKey: input.GetWorkflowStageKey(), ExpectedContextDigest: input.GetExpectedContextDigest(),
+		TemplateKind: strings.TrimPrefix(input.GetTemplateKind().String(), "PROMPT_TEMPLATE_KIND_")}
+}
+
+func castPromptScope(input *entity.PromptTemplateScope) *controlplanev1.PromptTemplateScope {
+	if input == nil {
+		return nil
+	}
+	return &controlplanev1.PromptTemplateScope{TargetKind: input.TargetKind, TargetRef: input.TargetRef, ContextPin: castPromptContextPin(input.ContextPin),
+		TemplateKind: controlplanev1.PromptTemplateKind(controlplanev1.PromptTemplateKind_value["PROMPT_TEMPLATE_KIND_"+input.TemplateKind])}
+}
+
+func managedRevisionStateProto(state string) controlplanev1.ManagedConfigurationState {
+	switch state {
+	case "DRAFT":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT
+	case "VALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_VALID
+	case "INVALID":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_INVALID
+	case "PUBLISHED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_PUBLISHED
+	case "SUPERSEDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_SUPERSEDED
+	case "DISCARDED":
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
+	default:
+		return controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_UNSPECIFIED
+	}
 }
 
 func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlplanev1.ManagedConfigurationSet {
@@ -211,9 +300,10 @@ func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlpla
 		return nil
 	}
 	return &controlplanev1.ManagedConfigurationSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
-		Kind: controlplanev1.ManagedConfigurationKind(controlplanev1.ManagedConfigurationKind_value["MANAGED_CONFIGURATION_KIND_"+value.Kind]),
-		Name: value.Name, ManagedBy: controlplanev1.ManagedConfigurationOwner(controlplanev1.ManagedConfigurationOwner_value["MANAGED_CONFIGURATION_OWNER_"+value.ManagedBy]),
-		Source: value.Source, SourceRevision: value.SourceRevision, CurrentRevision: castManagedRevision(value.CurrentRevision), UpdatedAt: timestamp(value.UpdatedAt)}
+		SourceEditable: value.SourceEditable,
+		Kind:           controlplanev1.ManagedConfigurationKind(controlplanev1.ManagedConfigurationKind_value["MANAGED_CONFIGURATION_KIND_"+value.Kind]),
+		Name:           value.Name, ManagedBy: controlplanev1.ManagedConfigurationOwner(controlplanev1.ManagedConfigurationOwner_value["MANAGED_CONFIGURATION_OWNER_"+value.ManagedBy]),
+		Source: value.Source, SourceRevision: value.SourceRevision, CurrentRevision: castManagedRevision(value.CurrentRevision), UpdatedAt: timestamp(value.UpdatedAt), GitSource: castConfigurationSource(value.GitSource)}
 }
 
 func castManagedConsumer(value entity.ManagedConfigurationConsumer) *controlplanev1.ManagedConfigurationConsumer {
@@ -228,7 +318,7 @@ func castManagedBinding(value entity.ManagedConfigurationBindingSnapshot) *contr
 }
 
 func castManagedImpact(value entity.ManagedConfigurationImpact) *controlplanev1.ManagedConfigurationImpact {
-	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest}
+	result := &controlplanev1.ManagedConfigurationImpact{ConfigurationRef: value.ConfigurationRef, TargetRevisionRef: value.TargetRevisionRef, Digest: value.Digest, Total: value.Total, Page: &controlplanev1.PageInfo{NextPageToken: value.NextPageToken}}
 	for _, item := range value.Consumers {
 		result.Consumers = append(result.Consumers, castManagedConsumer(item))
 	}

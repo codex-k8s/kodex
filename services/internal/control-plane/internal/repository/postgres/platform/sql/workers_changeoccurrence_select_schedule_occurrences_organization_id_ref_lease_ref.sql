@@ -27,7 +27,7 @@ SELECT o.id::text,
        revision.session_policy,
        COALESCE((SELECT session.ref FROM control_plane.sessions session
                  WHERE session.id = s.continue_session_id AND session.target_ref = o.target_ref
-                   AND session.target_type = o.target_type), '')
+                   AND session.target_type = o.target_type), ''), o.prompt_input_format
 FROM control_plane.schedule_occurrences o
 JOIN control_plane.schedules s ON s.id = o.schedule_id
 JOIN control_plane.projects p ON p.id = s.project_id

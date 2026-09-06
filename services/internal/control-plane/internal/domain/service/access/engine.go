@@ -16,6 +16,7 @@ const maximumBindingWindow = 366 * 24 * time.Hour
 
 var definitions = []entity.PermissionDefinition{
 	permission("organization.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
+	permission("platform.stt.use", "WRITE", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("organization.manage", "ADMIN", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.view", "READ", []string{"ORGANIZATION"}, []string{"ORGANIZATION"}, false),
 	permission("access.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT"}, false),
@@ -47,6 +48,8 @@ var definitions = []entity.PermissionDefinition{
 	permission("integration.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("integration.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"INTEGRATION"}, false),
 	permission("image.build", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "ROLE_IMAGE"}, false),
+	permission("image.source.view", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "ROLE_IMAGE"}, false),
+	permission("image.source.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ORGANIZATION", "PROJECT", "ROLE_IMAGE"}, false),
 	permission("image.promote", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ROLE_IMAGE"}, false),
 	permission("environment.privileged.manage", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"PROJECT", "RUNTIME_ENVIRONMENT"}, false),
 	permission("runtime.environment.disable", "ADMIN", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"RUNTIME_ENVIRONMENT"}, false),
@@ -150,7 +153,7 @@ func ValidateScope(scope entity.AccessScope) error {
 		}
 	case "RESOURCE_INSTANCE":
 		organizationScoped := scope.ResourceKind == "INTEGRATION" || scope.ResourceKind == "PROVIDER_ACCOUNT" ||
-			scope.ResourceKind == "ARTIFACT" && scope.ProjectRef == ""
+			(scope.ResourceKind == "ARTIFACT" || scope.ResourceKind == "RUN") && scope.ProjectRef == ""
 		if scope.ResourceKind == "" || scope.ResourceKind == "ORGANIZATION" || scope.ResourceRef == "" ||
 			!knownResourceKind(scope.ResourceKind) || organizationScoped && scope.ProjectRef != "" ||
 			!organizationScoped && scope.ProjectRef == "" {

@@ -5,6 +5,7 @@ SET state = 'COMPLETED',
     lease_expires_at = NULL,
     safe_error_code = '',
     terminal_receipt = @terminal_receipt,
+    completion_descriptor = @completion_descriptor::jsonb,
     completed_at = clock_timestamp(),
     updated_at = clock_timestamp()
 WHERE task.ref = @task_ref

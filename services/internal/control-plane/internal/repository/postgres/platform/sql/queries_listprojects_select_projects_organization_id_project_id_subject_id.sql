@@ -14,7 +14,7 @@ SELECT p.id,
            CROSS JOIN LATERAL unnest(membership.permissions) permission
            WHERE membership.organization_id=p.organization_id
              AND membership.project_id=p.id
-             AND membership.subject_id=$3::uuid
+             AND membership.subject_id=$2::uuid
              AND membership.active
        ), '{}'::text[]),
        (SELECT count(*)::integer FROM control_plane.agents agent WHERE agent.project_id=p.id AND agent.state<>'ARCHIVED'),
@@ -24,14 +24,9 @@ SELECT p.id,
 FROM control_plane.projects p
 WHERE p.organization_id=$1::uuid
   AND p.lifecycle<>'ARCHIVED'
-  AND ($2 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
-      SELECT 1
-      FROM control_plane.memberships membership
-      WHERE membership.project_id=p.id
-        AND membership.subject_id=$3::uuid
-        AND membership.active
-        AND 'VIEW'=ANY(membership.permissions)
-  ))
-  AND ($4='' OR p.name ILIKE '%'||$4||'%' OR p.purpose ILIKE '%'||$4||'%')
+  AND ($5='' OR p.id=NULLIF($5,'')::uuid)
+  AND EXISTS(SELECT 1 FROM control_plane.assistant_context_projection(
+      p.organization_id,$2::uuid,NULLIF($5,'')::uuid,'PROJECT',p.ref,statement_timestamp()))
+  AND ($3='' OR p.name ILIKE '%'||$3||'%' OR p.purpose ILIKE '%'||$3||'%')
 ORDER BY p.updated_at DESC
-LIMIT $5
+LIMIT $4

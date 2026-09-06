@@ -55,6 +55,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if err != nil || created.Build == nil {
 		t.Fatalf("create promotion recipe: result=%#v err=%v", created, err)
 	}
+	assertManagedRoleImageBuild(t, ctx, repository, created.Recipe, *created.Build)
+	testManagedRoleImageDraftFence(t, ctx, repository, owner, resolvedOwner, created.Recipe, *created.Build)
 	artifact := seedAdmittedPromotionArtifact(t, ctx, repository, resolvedOwner,
 		created.Recipe, *created.Build)
 	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
@@ -262,6 +264,7 @@ SET source_sha256 = $2
 WHERE ref = $1`, revisionRef, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("immutable promoted role image revision was mutable")
 	}
+	testRoleImageImpactLifecycle(t, ctx, repository, platform, roleImages, owner, resolvedOwner, readback, *activeArtifact, agent)
 }
 
 func promotionComponentCatalog(t *testing.T) (*roleimageservice.Catalog, entity.RoleImageRecipeInput) {

@@ -7,4 +7,8 @@ SELECT a.ref,COALESCE(p.ref,''),role.ref,role.name,COALESCE(a.system_key,''),a.n
 		($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=a.project_id AND m.subject_id=$4::uuid AND m.active AND 'MANAGE_AGENTS'=ANY(m.permissions))),
 		($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=a.project_id AND m.subject_id=$4::uuid AND m.active AND 'LAUNCH_RUNS'=ANY(m.permissions)))
 		FROM control_plane.agents a LEFT JOIN control_plane.projects p ON p.id=a.project_id JOIN control_plane.role_definitions role ON role.id=a.role_definition_id JOIN control_plane.runtime_profiles r ON r.stable_key=a.runtime_key LEFT JOIN control_plane.artifacts avatar ON avatar.id=a.avatar_artifact_id
-		WHERE a.organization_id=$1::uuid AND a.ref=$2 AND (a.system_key='system-assistant' OR $3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=a.project_id AND m.subject_id=$4::uuid AND m.active AND 'VIEW'=ANY(m.permissions)))
+		WHERE a.organization_id=$1::uuid AND a.ref=$2 AND (
+            (a.system_key='system-assistant' AND control_plane.catalog_resource_visible(a.organization_id,$4::uuid,
+                'organization.view','ORGANIZATION',a.organization_id,NULL,NULL,'{}'::jsonb,transaction_timestamp()))
+            OR (p.lifecycle='ACTIVE' AND control_plane.catalog_resource_visible(a.organization_id,$4::uuid,
+                'agent.view','AGENT',a.id,a.project_id,a.created_by,jsonb_build_object('PROJECT',p.id::text),transaction_timestamp())))

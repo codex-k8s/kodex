@@ -1,0 +1,99 @@
+---
+id: OPS-INTERACTION-PACKAGE-1046
+title: Управляемый пакет системных подписок и доставки Mattermost
+type: operational-contract
+status: approved
+owner: platform
+version: 1.1.0
+updated: 2026-09-05
+---
+
+# Источник и граница
+
+MVP-UI-42 и CFG-03 эпика #1018 требуют исполнения опубликованной revision,
+включая её ограничения и Human Gate. Состояние connection, grants, immutable
+delivery intent и решений принадлежит control-plane (#1046). Worker #1030
+получает private package с точными pins; public HTTP/SDK не публикует package
+worker snapshot. Actor для команды решения приходит из проверенного transport,
+внешний Mattermost actor разрешается через server-owned identity и текущие
+права на конкретный gate.
+
+`AcceptInteractionMessage` повторно проверяет actual input schema выбранной
+source capability до identity, receipt и перехода. Сужение allowed decisions
+в UI/Git revision обязательно и для прямого worker RPC. Неизвестное решение,
+отсутствующий gate ref и исключённый вариант не используют права прежнего
+поставленного пакета. Input обычной inbound subscription остаётся пустым.
+
+| Сценарий | Владелец и authority | Snapshot и переход | Результат/consumer |
+| --- | --- | --- | --- |
+| Подписка | InteractionWork.ListSources, workload, активный exact grant | Один transaction read connection/version, credential, bound package; inbound READ без отдельного approval | Private source; worker сверяет package/pins, старое поколение cancel/join |
+| Входящее сообщение | InteractionWork.AcceptMessage, проверенная identity и launch/gate.resolve | Повторно current package/grant/pins; gated inbound не принимается как автоматическая подписка | Receipt и Run/gate transition прежнего owner lifecycle |
+| Gate request/ACK | Owner gate либо acceptance receipt | Отдельный серверный контекст точного gate/receipt, channel/root; без рекурсивного gate для сообщения о gate | Одна fenced delivery, точный readback |
+| Terminal notification/mirror | Core terminal transition, точный connection grant | Immutable template/package/connection intent → WAITING_APPROVAL + отдельный owner gate | Gate доступен в общем owner list/get; core Run остаётся terminal |
+| APPROVE | gate.resolve до OCC/idempotency | Один owner transaction: gate APPROVED, delivery DUE; exact intent неизменяем | OWNER_GATE_RESOLVED, authoritative delivery queue |
+| REJECT/CANCEL | Тот же exact owner gate | Gate terminal, delivery CANCELLED; повтор не создаёт попытку | OWNER_GATE_RESOLVED, authoritative gate read; core Run без изменений |
+| Claim | Exact workload/lease/fence/generation | Current grant/connection/package совпадают с intent; approval gate APPROVED для notification/mirror | Private claim с package/pins/approval receipt |
+| Success | Та же leased attempt | SUCCEEDED + точные external post/channel/thread | Авторитетная delivery read/incident, без изменения core Run |
+| Confirmed no effect | Та же leased attempt | Только доказанный отказ до эффекта допускает bounded retry в пределах выбранного package | Новая generation/lease; прежний effect intent и approval сохраняются |
+| Timeout/expiry/unknown | Owner clock или worker report | UNKNOWN_OUTCOME, grant не выдаётся повторно | Авторитетный incident/read; скрытой повторной отправки нет |
+| Revoke/rebind | Owner connection/grant command | Current eligibility прекращается; активный intent не переносится молча на новую revision | Cancel либо явный conflict по обязательному owner lifecycle |
+
+Create gate публикует OWNER_GATE_OPENED, решение — OWNER_GATE_RESOLVED.
+Для прочих delivery/source переходов отдельного доменного события нет:
+авторитетны защищённые source/claim/read/incident RPC. Continuation и terminal
+core Run не подменяются состоянием optional delivery. Проверки охватывают
+обычный approval/reject/cancel, replay/OCC, tenant/grant/revision mismatch,
+неизменность terminal Run и UNKNOWN без resend.
+
+Документ задаёт контракт полного изменения. До завершения producer/consumer
+и PostgreSQL проверок реализация этого вклада не считается готовой.
+
+## Локальная проверка producer
+
+Disposable PostgreSQL проверяет исходный identity/ACK/UNKNOWN path и пять
+approval вариантов: APPROVE, REJECT, CANCEL, stale intent pin и revoked grant.
+Проверяется отсутствие claim до решения, OCC, idempotency receipt, единичный
+effect, private package/pins/approval readback и неизменность terminal Run.
+Пакет задаёт число попыток; исчерпание этого бюджета показывается как terminal
+incident, а не обещание очередного автоматического retry.
+
+Сверены Context7 `/jackc/pgx`: закрытие Rows перед следующей командой того же
+transaction, чтение ошибки cursor и обработка Commit/Rollback. Проверки
+SQL boundary, Proto/policy codegen и race/vet/build выполняются отдельно от
+browser и живого Mattermost. Последние остаются NOT RUN до общего gate.
+
+Дополнение source input проверено локально: scoped race — PASS (1.607s), полный
+CP vet/build — PASS; disposable PostgreSQL identity/ACK/approval/revoke и exact
+connection-test workload — PASS (0.846s). Контракты и SQL этим дополнением не
+изменяются. Тест с managed APPROVE-only revision отклоняет REJECT,
+REQUEST_CHANGES, неизвестное решение и отсутствующий gate ref.
+
+Вклад владельца `8e13b81c58527ccba99fd0dec7a88a8b526fa77e` перенесён в
+основной control-plane поверх `21fe59c5c8ad34ecb34a5e360b4a9e606de4fd6e`
+с сохранением SourceWork policy 62, catalog/runtime v7 и metadata Environment.
+На объединённом дереве полный `TestBootstrapComponent` — PASS (19.961 s),
+repository/transport race, полный control-plane vet/build, SQL boundary,
+Proto lint/build/codegen, policy replay и authority ABI render — PASS.
+Исполняемый consumer отдельного interaction-gateway проверяется его владельцем;
+общий live-сценарий и browser не подменяются этим локальным результатом.
+
+Проверка normalized `9e637cd5` обнаружила FAIL отдельного interaction subset:
+`accept inbound: invalid input`. CP source совпадал с итоговой интеграцией;
+это не отсутствующий prerequisite нормализации. ACK fixture создавала Agent
+до observation каталога, поэтому immutable catalog pins не проходили actual
+launch admission. В полном Bootstrap каталог подготавливался соседним тестом.
+Теперь `testInteractionACK` самостоятельно вызывает существующий
+`seedObservedCatalogFixture` до создания Agent. Production admission не менялся.
+
+Read-only диагностика с предшествующим model catalog test прошла за 0.817 s.
+После исправления исходный recipe с фильтром
+`^TestBootstrapComponent$/(interaction|integration_connection_tests)` — PASS
+0.854 s. Публичная цель `test-interaction-gateway-postgres` отсутствует в
+исторической CP source-ветке: попытка make завершилась `No rule to make target`,
+поэтому canonical make повторяется владельцем #1031 в normalized #1061.
+Остальные публичные CP subsets проверены: scheduler самостоятельно готовит
+каталог, integration subset явно включает model catalog test. Других таких
+публичных filters нет.
+
+Полный `make test-control-plane-postgres` на исправленной оснастке — PASS:
+Bootstrap 32.744 s и дополнительный Avatar suite 0.397 s.

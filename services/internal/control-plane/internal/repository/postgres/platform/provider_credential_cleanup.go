@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,12 +21,17 @@ const (
 )
 
 type providerCredentialCleanupCandidate struct {
-	id, ref, accountRef                               string
-	secretName, secretUID, secretVersion, contentHash string
+	recovery                                                                            entity.ProviderCleanupRecoveryIdentity
+	id, ref, accountRef                                                                 string
+	secretName, secretUID, secretVersion, contentHash                                   string
+	targetKind, authorizationRef, materializerRef, materializerUID, materializerVersion string
 }
 
 type lockedProviderCredentialCleanupTask struct {
 	state, leaseOwner, safeErrorCode, terminalReceipt string
+	organizationID, accountID, accountRef, targetKind string
+	authorizationRef, materializerRef                 string
+	completionDescriptor                              []byte
 	generation                                        int64
 	attempts, maximumAttempts                         int32
 	leaseExpiresAt                                    *time.Time
@@ -45,6 +51,12 @@ func (repository *Repository) ClaimProviderCredentialCleanupTasks(
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := repository.expireProviderAuthorizationReservations(ctx, tx, limit); err != nil {
+		return nil, err
+	}
+	if err := repository.advanceProviderAccountDeletions(ctx, tx, limit); err != nil {
+		return nil, err
+	}
 	if _, err := tx.Exec(ctx, queryProviderCredentialCleanupExpireTerminalClaims); err != nil {
 		return nil, fmt.Errorf("expire terminal provider credential cleanup claims: %w", errs.ErrUnavailable)
 	}
@@ -85,7 +97,9 @@ func (repository *Repository) ClaimProviderCredentialCleanupTasks(
 			var candidate providerCredentialCleanupCandidate
 			if err := rows.Scan(&candidate.id, &candidate.ref, &candidate.accountRef,
 				&candidate.secretName, &candidate.secretUID, &candidate.secretVersion,
-				&candidate.contentHash); err != nil {
+				&candidate.contentHash, &candidate.targetKind, &candidate.authorizationRef,
+				&candidate.materializerRef, &candidate.materializerUID, &candidate.materializerVersion,
+				&candidate.recovery.TaskRef, &candidate.recovery.Generation, &candidate.recovery.LegacyLastGeneration); err != nil {
 				rows.Close()
 				return nil, errs.ErrUnavailable
 			}
@@ -108,8 +122,17 @@ func (repository *Repository) ClaimProviderCredentialCleanupTasks(
 				return nil, errs.ErrUnavailable
 			}
 			items = append(items, domainrepo.ProviderCredentialCleanupTask{
-				Ref: candidate.ref, AccountRef: candidate.accountRef, Attempt: attempt,
+				Recovery: &candidate.recovery,
+				Ref:      candidate.ref, AccountRef: candidate.accountRef, Attempt: attempt,
 				Generation: generation, LeaseExpiresAt: expiresAt,
+				TargetKind: candidate.targetKind,
+				Authorization: entity.ProviderAuthorizationCleanupTarget{
+					Recovery: &candidate.recovery,
+					TaskRef:  candidate.ref, AccountRef: candidate.accountRef, Generation: generation,
+					AuthorizationAttemptRef: candidate.authorizationRef, MaterializerAttemptRef: candidate.materializerRef,
+					UID: candidate.materializerUID, ResourceVersion: candidate.materializerVersion,
+					Kind: providerAuthorizationCleanupKind(candidate.targetKind),
+				},
 				Credential: entity.ProviderCredentialDescriptor{
 					SecretName: candidate.secretName, SecretUID: candidate.secretUID,
 					SecretResourceVersion: candidate.secretVersion, ContentSHA256: candidate.contentHash,
@@ -127,12 +150,12 @@ func (repository *Repository) CompleteProviderCredentialCleanupTask(
 	ctx context.Context,
 	taskRef, leaseOwner string,
 	generation int64,
-	terminalReceipt string,
+	completion entity.ProviderAuthorizationCleanupResult,
 ) (domainrepo.ProviderCredentialCleanupResult, error) {
 	leaseOwner = strings.TrimSpace(leaseOwner)
-	terminalReceipt = strings.TrimSpace(terminalReceipt)
+	terminalReceipt := strings.TrimSpace(completion.TerminalReceipt)
 	if !strings.HasPrefix(taskRef, "pcct_") || leaseOwner == "" || len(leaseOwner) > 128 ||
-		generation < 1 || terminalReceipt == "" || len(terminalReceipt) > 512 {
+		generation < 1 || (terminalReceipt == "" && completion.Observation == nil) || len(terminalReceipt) > 512 {
 		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrInvalid
 	}
 	tx, task, err := repository.lockProviderCredentialCleanupTask(ctx, taskRef)
@@ -140,7 +163,17 @@ func (repository *Repository) CompleteProviderCredentialCleanupTask(
 		return domainrepo.ProviderCredentialCleanupResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	encoded, err := json.Marshal(completion)
+	if err != nil {
+		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrInvalid
+	}
+	if completion.Observation != nil {
+		terminalReceipt = providerCleanupObservationReceipt(taskRef, generation, encoded)
+	}
 	if task.state == "COMPLETED" && task.generation == generation && task.terminalReceipt == terminalReceipt {
+		if len(task.completionDescriptor) > 0 && !sameCanonicalJSON(task.completionDescriptor, encoded) {
+			return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
 		}
@@ -149,9 +182,13 @@ func (repository *Repository) CompleteProviderCredentialCleanupTask(
 	if !validProviderCredentialCleanupClaim(task, leaseOwner, generation) {
 		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
 	}
+	if err := repository.applyProviderCleanupCompletion(ctx, tx, taskRef, task, completion); err != nil {
+		return domainrepo.ProviderCredentialCleanupResult{}, err
+	}
 	tag, err := tx.Exec(ctx, queryProviderCredentialCleanupCompleteTask, pgx.StrictNamedArgs{
 		"task_ref": taskRef, "lease_owner": leaseOwner, "lease_generation": generation,
-		"terminal_receipt": terminalReceipt,
+		"terminal_receipt":      terminalReceipt,
+		"completion_descriptor": encoded,
 	})
 	if err != nil {
 		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrUnavailable
@@ -182,7 +219,7 @@ func (repository *Repository) FailProviderCredentialCleanupTask(
 		return domainrepo.ProviderCredentialCleanupResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if (task.state == "PENDING" || task.state == "DEAD_LETTER") && task.generation == generation &&
+	if (task.state == "PENDING" || task.state == "DEAD_LETTER" || task.state == "COMPLETED") && task.generation == generation &&
 		task.safeErrorCode == safeErrorCode {
 		if err := tx.Commit(ctx); err != nil {
 			return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
@@ -192,6 +229,9 @@ func (repository *Repository) FailProviderCredentialCleanupTask(
 	if !validProviderCredentialCleanupClaim(task, leaseOwner, generation) {
 		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
 	}
+	if safeErrorCode == "PROVIDER_CREDENTIAL_CLEANUP_CAS_CHANGED" && task.targetKind != "AUTHORIZATION_ATTEMPT" && task.targetKind != "AUTHORIZATION_ABSENCE" {
+		return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrInvalid
+	}
 	now := time.Now().UTC()
 	state, receipt := "PENDING", ""
 	var completedAt *time.Time
@@ -199,6 +239,20 @@ func (repository *Repository) FailProviderCredentialCleanupTask(
 		state = "DEAD_LETTER"
 		completedAt = &now
 		receipt = fmt.Sprintf("dead-letter:%s:g%d:a%d:%s", taskRef, generation, task.attempts, safeErrorCode)
+	} else if safeErrorCode == "PROVIDER_CREDENTIAL_CLEANUP_CAS_CHANGED" {
+		nextRef, err := newRef("pcct")
+		if err != nil {
+			return domainrepo.ProviderCredentialCleanupResult{}, err
+		}
+		tag, err := tx.Exec(ctx, queryProviderCleanupCASSuccessor, pgx.StrictNamedArgs{"next_ref": nextRef, "parent_ref": taskRef})
+		if err != nil {
+			return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return domainrepo.ProviderCredentialCleanupResult{}, errs.ErrConflict
+		}
+		state, completedAt = "COMPLETED", &now
+		receipt = fmt.Sprintf("no-effect-cas:%s:g%d:a%d", taskRef, generation, task.attempts)
 	}
 	eligibleAt := now.Add(providerCredentialCleanupBackoff(task.attempts))
 	tag, err := tx.Exec(ctx, queryProviderCredentialCleanupFailTask, pgx.StrictNamedArgs{
@@ -228,10 +282,18 @@ func (repository *Repository) lockProviderCredentialCleanupTask(
 		return nil, lockedProviderCredentialCleanupTask{}, errs.ErrUnavailable
 	}
 	var task lockedProviderCredentialCleanupTask
+	if err := tx.QueryRow(ctx, queryProviderCleanupLockAccount, taskRef).Scan(&task.organizationID, &task.accountID, &task.accountRef); err != nil {
+		_ = tx.Rollback(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, task, errs.ErrNotFound
+		}
+		return nil, task, errs.ErrUnavailable
+	}
 	err = tx.QueryRow(ctx, queryProviderCredentialCleanupLockTask,
 		pgx.StrictNamedArgs{"task_ref": taskRef}).Scan(
 		&task.state, &task.leaseOwner, &task.generation, &task.leaseExpiresAt,
 		&task.attempts, &task.maximumAttempts, &task.safeErrorCode, &task.terminalReceipt,
+		&task.targetKind, &task.authorizationRef, &task.materializerRef, &task.completionDescriptor,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		_ = tx.Rollback(ctx)
@@ -269,11 +331,19 @@ func providerCredentialCleanupBackoff(attempt int32) time.Duration {
 	return min(backoff, 5*time.Minute)
 }
 
+func providerAuthorizationCleanupKind(kind string) string {
+	if kind == "AUTHORIZATION_METADATA" {
+		return ""
+	}
+	return kind
+}
+
 func validProviderCredentialCleanupError(value string) bool {
 	switch value {
 	case "PROVIDER_CREDENTIAL_CLEANUP_UNAVAILABLE",
 		"PROVIDER_CREDENTIAL_CLEANUP_REJECTED",
 		"PROVIDER_CREDENTIAL_CLEANUP_TIMEOUT",
+		"PROVIDER_CREDENTIAL_CLEANUP_CAS_CHANGED",
 		"PROVIDER_CREDENTIAL_CLEANUP_FAILED":
 		return true
 	default:

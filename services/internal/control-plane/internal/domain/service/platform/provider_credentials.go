@@ -57,6 +57,25 @@ type providerMaterializationReferenceReader interface {
 	) (bool, error)
 }
 
+type providerAuthorizationReserver interface {
+	ReserveProviderAuthorization(context.Context, value.Principal, value.Mutation, string, string, string) (entity.ProviderAuthorizationReservation, error)
+}
+
+func (service *Service) reserveProviderAuthorization(ctx context.Context, principal value.Principal, mutation value.Mutation, accountRef, method string, content []byte) (value.Principal, entity.ProviderAuthorizationReservation, error) {
+	resolved, err := service.principal(ctx, principal)
+	if err != nil {
+		return value.Principal{}, entity.ProviderAuthorizationReservation{}, err
+	}
+	reserver, ok := service.repository.(providerAuthorizationReserver)
+	if !ok || service.providerCredentialMaterializer == nil {
+		return resolved, entity.ProviderAuthorizationReservation{}, errs.ErrUnavailable
+	}
+	contentDigest := sha256.Sum256(content)
+	requestDigest := sha256.Sum256([]byte(accountRef + "\x00" + method + "\x00" + hex.EncodeToString(contentDigest[:])))
+	reservation, err := reserver.ReserveProviderAuthorization(ctx, resolved, mutation, accountRef, method, hex.EncodeToString(requestDigest[:]))
+	return resolved, reservation, err
+}
+
 func WithProviderCredentialMaterializer(materializer ProviderCredentialMaterializer) Option {
 	return func(service *Service) { service.providerCredentialMaterializer = materializer }
 }
@@ -67,14 +86,15 @@ func (service *Service) StartProviderAccountDeviceAuthorization(
 	mutation value.Mutation,
 	accountRef string,
 ) (entity.ProviderAccount, error) {
-	principal, account, err := service.providerAccountForAuthorization(ctx, principal, mutation, accountRef)
+	principal, reservation, err := service.reserveProviderAuthorization(ctx, principal, mutation, accountRef, "DEVICE_CODE", nil)
 	if err != nil {
 		return entity.ProviderAccount{}, err
 	}
-	if service.providerCredentialMaterializer == nil || !containsString(account.NextActions, "CONFIGURE_CREDENTIAL") {
-		return entity.ProviderAccount{}, errs.ErrForbidden
+	if reservation.Applied {
+		return service.repository.GetProviderAccount(ctx, principal, accountRef)
 	}
-	attemptRef := providerAuthorizationRef(accountRef, mutation.IdempotencyKey, "DEVICE_CODE")
+	mutation.ExpectedVersion = &reservation.ReservedVersion
+	attemptRef := reservation.AttemptRef
 	materialized, err := service.providerCredentialMaterializer.StartDeviceAuthorization(ctx, attemptRef, accountRef)
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
@@ -84,7 +104,9 @@ func (service *Service) StartProviderAccountDeviceAuthorization(
 		Payload: command.ProviderAccountInput{
 			AccountRef: accountRef, AuthorizationRef: attemptRef, AuthorizationMethod: "DEVICE_CODE",
 			AuthorizationState: "PENDING", MaterializerAttemptRef: materialized.MaterializerAttemptRef,
-			VerificationURI: materialized.VerificationURI, UserCode: materialized.UserCode,
+			MaterializerAttemptUID:             materialized.MaterializerAttemptUID,
+			MaterializerAttemptResourceVersion: materialized.MaterializerAttemptVersion,
+			VerificationURI:                    materialized.VerificationURI, UserCode: materialized.UserCode,
 			AuthorizationExpiresAt: &materialized.ExpiresAt,
 		},
 	})
@@ -111,14 +133,15 @@ func (service *Service) AuthorizeProviderAccountAPIKey(
 		len(bytes.TrimSpace(apiKey)) != len(apiKey) || bytes.IndexAny(apiKey, "\r\n\x00") >= 0 {
 		return entity.ProviderAccount{}, errs.ErrInvalid
 	}
-	principal, account, err := service.providerAccountForAuthorization(ctx, principal, mutation, accountRef)
+	principal, reservation, err := service.reserveProviderAuthorization(ctx, principal, mutation, accountRef, "API_KEY", apiKey)
 	if err != nil {
 		return entity.ProviderAccount{}, err
 	}
-	if service.providerCredentialMaterializer == nil || !containsString(account.NextActions, "CONFIGURE_CREDENTIAL") {
-		return entity.ProviderAccount{}, errs.ErrForbidden
+	if reservation.Applied {
+		return service.repository.GetProviderAccount(ctx, principal, accountRef)
 	}
-	attemptRef := providerAuthorizationRef(accountRef, mutation.IdempotencyKey, "API_KEY")
+	mutation.ExpectedVersion = &reservation.ReservedVersion
+	attemptRef := reservation.AttemptRef
 	credentialCopy := append([]byte(nil), apiKey...)
 	defer clear(credentialCopy)
 	descriptor, masked, err := service.providerCredentialMaterializer.MaterializeAPIKey(ctx, attemptRef, accountRef, credentialCopy)

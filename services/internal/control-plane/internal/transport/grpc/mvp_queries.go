@@ -6,7 +6,9 @@ import (
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
@@ -37,7 +39,7 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 		state = enumSuffix(request.GetState(), "PROVIDER_ACCOUNT_STATE_")
 	}
 	items, next, actions, err := server.service.ListProviderAccounts(ctx, p, query.Filter{
-		Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), Page: page(request.GetPage()),
+		Query: request.GetQuery(), State: state, DefinitionKey: request.GetDefinitionKey(), Page: page(request.GetPage()), ProviderUsage: providerUsageContextInput(request.GetUsageContext()),
 	})
 	if err != nil {
 		return nil, transportError(err)
@@ -46,7 +48,11 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 		Page: &controlplanev1.PageInfo{NextPageToken: next}, NextActions: nextActions(actions),
 	}
 	for _, item := range items {
-		response.Accounts = append(response.Accounts, castProviderAccount(item))
+		account, err := castProviderAccountUsageRead(item)
+		if err != nil {
+			return nil, transportError(err)
+		}
+		response.Accounts = append(response.Accounts, account)
 	}
 	return response, nil
 }
@@ -56,11 +62,15 @@ func (server *Server) GetProviderAccount(ctx context.Context, request *controlpl
 	if err != nil {
 		return nil, err
 	}
-	item, err := server.service.GetProviderAccount(ctx, p, request.GetAccountRef())
+	item, err := server.service.GetProviderAccountWithUsage(ctx, p, request.GetAccountRef(), providerUsageContextInput(request.GetUsageContext()))
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &controlplanev1.GetProviderAccountResponse{Account: castProviderAccount(item)}, nil
+	account, err := castProviderAccountUsageRead(item)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetProviderAccountResponse{Account: account}, nil
 }
 
 func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.ProviderDefinition {
@@ -83,17 +93,31 @@ func (server *Server) ListModelCapabilities(ctx context.Context, request *contro
 	if err != nil {
 		return nil, err
 	}
-	items, total, next, err := server.service.ListModelCapabilities(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+	catalog, err := server.service.ListModelCatalog(ctx, p, request.GetProviderDefinitionKey(), request.GetProviderAccountRef(), query.Filter{
+		ExpectedCatalogRevision: request.GetExpectedCatalogRevision(), ExpectedCatalogDigest: request.GetExpectedCatalogDigest(),
 		Query: request.GetQuery(), Page: page(request.GetPage()),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.ListModelCapabilitiesResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
-	for _, item := range items {
+	return castModelCatalog(catalog), nil
+}
+
+func castModelCatalog(catalog entity.ModelCatalog) *controlplanev1.ListModelCapabilitiesResponse {
+	response := &controlplanev1.ListModelCapabilitiesResponse{Total: catalog.Total, Page: &controlplanev1.PageInfo{NextPageToken: catalog.NextPageToken}, CatalogRevision: catalog.Revision, CatalogDigest: catalog.Digest}
+	if catalog.Status != nil {
+		value := catalog.Status
+		response.CatalogStatus = &controlplanev1.ProviderModelCatalogStatus{
+			State:      controlplanev1.ProviderModelCatalogState(controlplanev1.ProviderModelCatalogState_value["PROVIDER_MODEL_CATALOG_STATE_"+value.State]),
+			Source:     controlplanev1.ProviderModelCatalogSource(controlplanev1.ProviderModelCatalogSource_value["PROVIDER_MODEL_CATALOG_SOURCE_"+value.Source]),
+			Failure:    controlplanev1.ProviderModelCatalogFailure(controlplanev1.ProviderModelCatalogFailure_value["PROVIDER_MODEL_CATALOG_FAILURE_"+value.Failure]),
+			ObservedAt: optionalTimestamp(value.ObservedAt), ExpiresAt: optionalTimestamp(value.ExpiresAt),
+		}
+	}
+	for _, item := range catalog.Models {
 		response.Models = append(response.Models, castModelCapability(item))
 	}
-	return response, nil
+	return response
 }
 
 func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapability {
@@ -105,6 +129,7 @@ func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapa
 
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
 	result := &controlplanev1.ProviderAccount{
+		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
 		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
 		Enabled: value.Enabled, Ready: value.Ready, NextActions: nextActions(value.NextActions),
@@ -220,6 +245,43 @@ func (server *Server) PreviewSchedule(ctx context.Context, request *controlplane
 	}
 	for _, occurrence := range occurrences {
 		response.Occurrences = append(response.Occurrences, timestamp(occurrence))
+	}
+	if materialization := request.GetMaterialization(); materialization != nil {
+		if len(occurrences) == 0 {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		input := command.ScheduleInput{ProjectRef: materialization.GetProjectRef(), Name: materialization.GetName(), Target: runTarget(materialization.GetTarget()), TargetVersion: materialization.GetTarget().GetTargetVersion(),
+			AutomationText: materialization.GetTask(), Input: materialization.GetInput().AsMap(), PromptInputs: materialization.GetPromptInputs().AsMap(),
+			SessionPolicy: materialization.GetSessionPolicy(), NotificationPolicy: materialization.GetNotificationPolicy(),
+			Preset: normalized.Preset, CronExpression: normalized.CronExpression, Timezone: normalized.Timezone, TimeOfDay: normalized.TimeOfDay, DayOfWeek: normalized.DayOfWeek,
+			DSTGapPolicy: normalized.DSTGapPolicy, DSTFoldPolicy: normalized.DSTFoldPolicy, MisfirePolicy: normalized.MisfirePolicy, OverlapPolicy: normalized.OverlapPolicy}
+		mode := "DRAFT"
+		switch materialization.GetMode() {
+		case controlplanev1.SchedulePromptPreviewMode_SCHEDULE_PROMPT_PREVIEW_MODE_UNSPECIFIED, controlplanev1.SchedulePromptPreviewMode_SCHEDULE_PROMPT_PREVIEW_MODE_DRAFT:
+		case controlplanev1.SchedulePromptPreviewMode_SCHEDULE_PROMPT_PREVIEW_MODE_CURRENT_REVISION:
+			mode = "CURRENT_REVISION"
+		default:
+			return nil, transportError(errs.ErrInvalid)
+		}
+		result, pin, variables, previewErr := server.service.PreviewScheduleMaterialization(ctx, p, input, materialization.GetScheduleRef(), materialization.GetExpectedScheduleVersion(), occurrences[0], materialization.GetExpectedContextDigest(), materialization.GetIncludeFullMaterialization(), mode)
+		if previewErr != nil {
+			return nil, transportError(previewErr)
+		}
+		response.MaterializedPrompt, err = castPromptMaterialization(result, materialization.GetIncludeFullMaterialization())
+		if err != nil {
+			return nil, err
+		}
+		response.MaterializationPin = &controlplanev1.SchedulePromptPreviewPin{ScheduleRef: pin.ScheduleRef, ScheduleVersion: pin.ScheduleVersion, RevisionRef: pin.RevisionRef, RevisionDigest: pin.RevisionDigest, ScheduledFor: timestamp(pin.ScheduledFor), Timezone: pin.Timezone, SessionRef: pin.SessionRef, Continuation: pin.Continuation, RevisionAvailable: pin.RevisionAvailable}
+		response.MaterializationPin.Mode = controlplanev1.SchedulePromptPreviewMode(controlplanev1.SchedulePromptPreviewMode_value["SCHEDULE_PROMPT_PREVIEW_MODE_"+pin.Mode])
+		response.MaterializationPin.ExecutionActorRef = pin.ExecutionActorRef
+		response.MaterializationPin.BaseRevisionRef, response.MaterializationPin.BaseRevisionDigest = pin.BaseRevisionRef, pin.BaseRevisionDigest
+		for _, item := range variables {
+			reason, reasonErr := castTemplateAvailabilityReason(item.Reason, item.Available)
+			if reasonErr != nil {
+				return nil, transportError(reasonErr)
+			}
+			response.AutomationVariables = append(response.AutomationVariables, &controlplanev1.TemplateVariable{Name: item.Name, ValueType: item.Type, Description: item.Description, Example: item.Example, Source: item.Source, Available: item.Available, Reason: reason})
+		}
 	}
 	return response, nil
 }

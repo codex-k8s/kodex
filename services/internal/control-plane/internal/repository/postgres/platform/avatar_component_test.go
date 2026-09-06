@@ -126,6 +126,70 @@ func TestAvatarLifecycleComponent(t *testing.T) {
 	}
 	assertRetiredAvatar(t, ctx, pool, second.Ref, agent.Ref)
 	assertAvatarUpdateError(t, ctx, service, owner, updated, avatarArtifactContentURL(second.Ref), "avatar-reject-deleted", domainerrs.ErrInvalid)
+	testUploadReceiptFreshAuthority(t, ctx, repository, service, objects, owner, updated, primary.Ref)
+}
+
+func testUploadReceiptFreshAuthority(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, objects *avatarLifecycleObjectStore, owner value.Principal, agent entity.Agent, projectRef string) {
+	t.Helper()
+	reader := contextProjectReader(t, ctx, repository, service, owner, projectRef, "UPLOAD_RECEIPT")
+	actor, err := repository.ResolvePrincipal(ctx, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := func() value.Principal {
+		return receiptFreshPrincipal(t, ctx, repository, projectRef)
+	}
+	revoke := func(binding entity.AccessBinding, key string) {
+		if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeAccessBinding, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &binding.Version}, Payload: command.AccessBindingInput{BindingRef: binding.Ref}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	avatarBinding := receiptAccessBinding(t, ctx, service, owner, actor.ActorID, "avatar-receipt-access", []string{"agent.avatar.manage", "agent.view"}, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: projectRef, ResourceKind: "AGENT", ResourceRef: agent.Ref})
+	body := avatarPNG(t)
+	uploadAvatar := func() (entity.Agent, error) {
+		return service.UploadAgentAvatar(ctx, fresh(), value.Mutation{IdempotencyKey: "avatar-receipt-protected"}, platformrepo.AgentAvatarUpload{ArtifactUpload: platformrepo.ArtifactUpload{ProjectRef: projectRef, FileName: "receipt.png", MediaType: "image/png", SizeBytes: int64(len(body)), Reader: bytes.NewReader(body)}, AgentRef: agent.Ref, ExpectedVersion: agent.Version})
+	}
+	first, err := uploadAvatar()
+	if err != nil || first.Ref != agent.Ref {
+		t.Fatalf("authorized avatar upload: %v", err)
+	}
+	if replay, err := uploadAvatar(); err != nil || replay.Version != first.Version {
+		t.Fatalf("authorized avatar replay: %v", err)
+	}
+	revoke(avatarBinding, "avatar-receipt-revoke")
+	if result, err := uploadAvatar(); !errors.Is(err, domainerrs.ErrNotFound) || result.Ref != "" {
+		t.Fatalf("revoked avatar receipt escaped fresh permission: %v", err)
+	}
+	for _, racing := range []bool{false, true} {
+		key := "artifact-receipt-preflight"
+		if racing {
+			key = "artifact-receipt-racing"
+		}
+		binding := receiptAccessBinding(t, ctx, service, owner, actor.ActorID, key, []string{"artifact.upload", "artifact.view"}, entity.AccessScope{Kind: "PROJECT", ProjectRef: projectRef})
+		upload := func() (entity.Artifact, error) {
+			return service.UploadArtifact(ctx, fresh(), value.Mutation{IdempotencyKey: key}, platformrepo.ArtifactUpload{ProjectRef: projectRef, FileName: key + ".txt", MediaType: "text/plain", SizeBytes: 4, Reader: bytes.NewReader([]byte("data"))})
+		}
+		if racing {
+			objects.afterPut = func(_ objectstorage.Receipt) {
+				if _, err := upload(); err != nil {
+					t.Fatalf("concurrent artifact receipt: %v", err)
+				}
+				revoke(binding, key+"-revoke")
+			}
+		} else {
+			first, err := upload()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if replay, err := upload(); err != nil || replay.Ref != first.Ref {
+				t.Fatalf("authorized artifact receipt: %v", err)
+			}
+			revoke(binding, key+"-revoke")
+		}
+		if result, err := upload(); !errors.Is(err, domainerrs.ErrNotFound) || result.Ref != "" {
+			t.Fatalf("revoked artifact receipt (%s): %v", key, err)
+		}
+	}
 }
 
 func testAtomicAvatarUpload(

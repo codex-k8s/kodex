@@ -11,6 +11,26 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+func TestCatalogCardsPreserveAbsentActivityAndOwnerProjection(t *testing.T) {
+	t.Parallel()
+	empty := castProject(entity.Project{IntegrationState: "NONE"})
+	if empty.LastActivityAt != nil || empty.IntegrationState != "NONE" {
+		t.Fatal("empty card invented activity")
+	}
+	activity := time.Date(2026, 9, 6, 12, 30, 0, 0, time.UTC)
+	project := castProject(entity.Project{LastActivityAt: &activity, IntegrationState: "UNKNOWN"})
+	if project.LastActivityAt == nil || !project.LastActivityAt.AsTime().Equal(activity) || project.IntegrationState != "UNKNOWN" {
+		t.Fatal("owner activity or unknown integration state lost")
+	}
+	workflow := castWorkflow(entity.Workflow{CardSummary: &entity.WorkflowCardSummary{StageCount: 3, UniqueAgentCount: 2, ParallelGroupCount: 1, HasHumanGate: true, ActiveRunCount: 2, PendingGateCount: 1}})
+	if workflow.CardSummary == nil || workflow.CardSummary.LastActivityAt != nil || workflow.CardSummary.StageCount != 3 || workflow.CardSummary.UniqueAgentCount != 2 || workflow.CardSummary.ParallelGroupCount != 1 || !workflow.CardSummary.HasHumanGate || workflow.CardSummary.ActiveRunCount != 2 || workflow.CardSummary.PendingGateCount != 1 {
+		t.Fatal("workflow card summary changed at transport")
+	}
+	if castAgent(entity.Agent{CurrentRunRef: "run_card_active"}).CurrentRunRef != "run_card_active" {
+		t.Fatal("current run link lost")
+	}
+}
+
 func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	t.Parallel()
 
@@ -28,6 +48,14 @@ func TestCastScheduleUsesPublicLifecycleStates(t *testing.T) {
 	}
 	if got := castSchedule(entity.Schedule{State: "UNKNOWN", Enabled: true}).GetState(); got != controlplanev1.ScheduleState_SCHEDULE_STATE_UNSPECIFIED {
 		t.Fatalf("unknown schedule state = %s", got)
+	}
+}
+
+func TestCastMembershipPreservesOnlyActualProjectScope(t *testing.T) {
+	for _, project := range []string{"", "prj_catalog"} {
+		if got := castMembership(entity.Membership{Ref: "member", ProjectRef: project}).GetProjectRef(); got != project {
+			t.Fatalf("membership project scope changed: %q", got)
+		}
 	}
 }
 

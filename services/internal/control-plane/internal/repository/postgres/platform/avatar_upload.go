@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
@@ -76,6 +77,22 @@ func (repository *Repository) reserveAgentAvatarUpload(
 		mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return avatarUploadReservation{}, nil, errs.ErrUnavailable
 	}
+	agent, err := repository.lockRuntimeAgent(ctx, tx, current, input.AgentRef)
+	if err != nil {
+		return avatarUploadReservation{}, nil, err
+	}
+	if agent.projectID == "" || agent.projectRef != input.ProjectRef {
+		return avatarUploadReservation{}, nil, errs.ErrNotFound
+	}
+	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ProjectRef: input.ProjectRef, ResourceKind: "AGENT", ResourceRef: input.AgentRef,
+	})
+	if err != nil {
+		return avatarUploadReservation{}, nil, err
+	}
+	if err := repository.requireAccess(ctx, tx, current, "agent.avatar.manage", target); err != nil {
+		return avatarUploadReservation{}, nil, errs.ErrNotFound
+	}
 	var storedDigest string
 	var stored []byte
 	err = tx.QueryRow(ctx, queryArtifactsUploadartifactSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
@@ -88,6 +105,16 @@ func (repository *Repository) reserveAgentAvatarUpload(
 		if json.Unmarshal(stored, &item) != nil {
 			return avatarUploadReservation{}, nil, errs.ErrConflict
 		}
+		if item.Ref != input.AgentRef || item.ProjectRef != input.ProjectRef {
+			return avatarUploadReservation{}, nil, errs.ErrConflict
+		}
+		if err := repository.requireAccess(ctx, tx, current, "agent.view", target); err != nil {
+			return avatarUploadReservation{}, nil, errs.ErrNotFound
+		}
+		result := command.Result{Agent: &item}
+		if err := repository.applyResultActionPermissions(ctx, tx, current, &result, item.ProjectRef); err != nil {
+			return avatarUploadReservation{}, nil, err
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return avatarUploadReservation{}, nil, errs.ErrConflict
 		}
@@ -96,24 +123,8 @@ func (repository *Repository) reserveAgentAvatarUpload(
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return avatarUploadReservation{}, nil, errs.ErrUnavailable
 	}
-	agent, err := repository.lockRuntimeAgent(ctx, tx, current, input.AgentRef)
-	if err != nil {
-		return avatarUploadReservation{}, nil, err
-	}
-	if agent.projectID == "" || agent.projectRef != input.ProjectRef {
-		return avatarUploadReservation{}, nil, errs.ErrNotFound
-	}
 	if agent.agentVersion != input.ExpectedVersion {
 		return avatarUploadReservation{}, nil, errs.ErrVersionMismatch
-	}
-	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
-		Kind: "RESOURCE_INSTANCE", ProjectRef: input.ProjectRef, ResourceKind: "AGENT", ResourceRef: input.AgentRef,
-	})
-	if err != nil {
-		return avatarUploadReservation{}, nil, err
-	}
-	if err := repository.requireAccess(ctx, tx, current, "agent.avatar.manage", target); err != nil {
-		return avatarUploadReservation{}, nil, errs.ErrNotFound
 	}
 	reservationRef, refErr := newRef("avres")
 	artifactRef, artifactErr := newRef("art")
@@ -246,9 +257,6 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 	if agent.id != agentID || agent.projectID != projectID || agent.projectRef != input.ProjectRef {
 		return entity.Agent{}, errs.ErrNotFound
 	}
-	if agent.agentVersion != expectedAgentVersion {
-		return entity.Agent{}, errs.ErrVersionMismatch
-	}
 	target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
 		Kind: "RESOURCE_INSTANCE", ProjectRef: input.ProjectRef, ResourceKind: "AGENT", ResourceRef: input.AgentRef,
 	})
@@ -257,6 +265,9 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 	}
 	if err := repository.requireAccess(ctx, tx, current, "agent.avatar.manage", target); err != nil {
 		return entity.Agent{}, errs.ErrNotFound
+	}
+	if agent.agentVersion != expectedAgentVersion {
+		return entity.Agent{}, errs.ErrVersionMismatch
 	}
 	receiptRef, _ := newRef("obj")
 	var artifact entity.Artifact
@@ -319,6 +330,9 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 	}
 	if err := repository.emitPlatformEventSnapshot(ctx, tx, current, "AGENT_CHANGED", item.ProjectRef,
 		item.Ref, "i18n:AGENT_AVATAR_UPDATED", item.Version, item.State); err != nil {
+		return entity.Agent{}, err
+	}
+	if err := projectAgentCards(ctx, tx, current, []*entity.Agent{&item}); err != nil {
 		return entity.Agent{}, err
 	}
 	encoded, _ := json.Marshal(item)

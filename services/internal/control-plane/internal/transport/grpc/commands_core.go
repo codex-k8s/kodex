@@ -166,11 +166,14 @@ func (server *Server) ValidateInstructionDraft(ctx context.Context, request *con
 }
 
 func (server *Server) PublishInstructionDraft(ctx context.Context, request *controlplanev1.PublishInstructionDraftRequest) (*controlplanev1.PublishInstructionDraftResponse, error) {
-	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishInstructionDraft_FullMethodName, command.PublishInstructions, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef()})
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PublishInstructionDraft_FullMethodName, command.PublishInstructions, request.GetMutation(), command.AgentInput{Ref: request.GetAgentRef(), PlanRef: request.GetPlanRef(), SelectedItemRefs: append([]string(nil), request.GetSelectedItemRefs()...)})
 	if err != nil {
 		return nil, err
 	}
-	return &controlplanev1.PublishInstructionDraftResponse{Agent: castAgent(*result.Agent)}, nil
+	if err := validatePublishedImpactResult(result, "AGENT_INSTRUCTIONS", request.GetPlanRef(), request.GetAgentRef()); err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.PublishInstructionDraftResponse{Agent: castAgent(*result.Agent), Plan: castRevisionImpactPlan(result.RevisionImpactPlan)}, nil
 }
 
 func (server *Server) RollbackInstructions(ctx context.Context, request *controlplanev1.RollbackInstructionsRequest) (*controlplanev1.RollbackInstructionsResponse, error) {
@@ -256,7 +259,7 @@ func launchRunTitleSource(title string) string {
 }
 
 func (server *Server) AddSessionTurn(ctx context.Context, request *controlplanev1.AddSessionTurnRequest) (*controlplanev1.AddSessionTurnResponse, error) {
-	payload := command.SessionTurnInput{SessionRef: request.GetSessionRef(), RunRef: request.GetRunRef(), NodeRef: request.GetNodeRef(), Task: request.GetTask(), AttachmentSetRef: request.GetAttachmentSetRef()}
+	payload := command.SessionTurnInput{SessionRef: request.GetSessionRef(), RunRef: request.GetRunRef(), NodeRef: request.GetNodeRef(), Task: request.GetTask(), AttachmentSetRef: request.GetAttachmentSetRef(), ExpectedPromptContextDigest: request.GetExpectedPromptContextDigest()}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddSessionTurn_FullMethodName, command.AddSessionTurn, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err

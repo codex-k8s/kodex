@@ -22,9 +22,14 @@ WHERE d.organization_id = @organization_id::uuid
   AND c.enabled
   AND c.state IN ('CONNECTED', 'DEGRADED')
   AND g.enabled
+  AND g.organization_id = c.organization_id AND g.connection_id = c.id
+  AND g.definition_version = c.definition_version
+  AND g.definition_digest = c.definition_digest
+  AND c.lifecycle_state = 'ACTIVE'
   AND g.capability_key = 'mattermost.gate_decisions'
   AND d.capability_key = 'mattermost.gate_decisions'
   AND d.state = 'SUCCEEDED'
+  AND d.external_team_ref = @external_team_ref AND d.external_channel_ref = @external_channel_ref
   AND d.external_post_ref = COALESCE(NULLIF(@external_root_post_ref, ''), @external_post_ref)
 LIMIT 1
 FOR UPDATE OF gate

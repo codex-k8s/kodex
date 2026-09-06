@@ -56,13 +56,8 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	if err != nil {
 		return nil, err
 	}
-	var allowed bool
-	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability,
-		scope.organizationID, runtimecontract.ArtifactCapability, lease["nodeID"]).Scan(&allowed); err != nil {
-		return nil, errs.ErrUnavailable
-	}
-	if !allowed {
-		return nil, errs.ErrForbidden
+	if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
@@ -120,6 +115,25 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	}
 	input.Payload = payload
 	return prepared, nil
+}
+
+func (repository *Repository) requireRuntimeArtifactWrite(ctx context.Context, tx pgx.Tx, current scope, lease map[string]any) error {
+	var allowed bool
+	var actorRef string
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectAgentCapability, current.organizationID,
+		runtimecontract.ArtifactCapability, lease["nodeID"], lease["leaseID"]).Scan(&allowed, &actorRef); errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrForbidden
+	} else if err != nil {
+		return errs.ErrUnavailable
+	}
+	if !allowed {
+		return errs.ErrForbidden
+	}
+	current.actorRef = actorRef
+	if err := repository.requireArtifactUploadAccess(ctx, tx, current, stringMap(lease, "projectRef")); err != nil {
+		return errs.ErrForbidden
+	}
+	return nil
 }
 
 func (repository *Repository) cleanupPreparedObjects(ctx context.Context, prepared []objectstorage.Receipt, keep bool) {

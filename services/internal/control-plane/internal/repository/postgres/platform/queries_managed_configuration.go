@@ -3,6 +3,14 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/managed_configuration_discard_revision.sql
+	queryManagedConfigurationDiscardRevision string
+	//go:embed sql/stt_runtime_actor.sql
+	querySTTRuntimeActor string
+	//go:embed sql/managed_configuration_current_revision.sql
+	queryManagedConfigurationCurrentRevision string
+	//go:embed sql/managed_configuration_list.sql
+	queryManagedConfigurationList string
 	//go:embed sql/managed_configuration_insert_set.sql
 	queryManagedConfigurationInsertSet string
 	//go:embed sql/managed_configuration_lock_set.sql

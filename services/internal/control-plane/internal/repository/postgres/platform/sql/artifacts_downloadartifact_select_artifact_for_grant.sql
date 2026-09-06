@@ -7,17 +7,13 @@ FROM control_plane.artifacts ar
 WHERE ar.organization_id = @organization_id::uuid
   AND ar.ref = @artifact_ref
   AND ar.lifecycle_state = 'ACTIVE'
-  AND (
-      @platform_role IN ('OWNER', 'ADMINISTRATOR')
-      OR (ar.project_id IS NULL AND ar.created_by = @subject_id::uuid)
-      OR EXISTS (
-          SELECT 1
-          FROM control_plane.memberships m
-          WHERE m.organization_id = ar.organization_id
-            AND m.project_id = ar.project_id
-            AND m.subject_id = @subject_id::uuid
-            AND m.active
-            AND 'VIEW' = ANY(m.permissions)
-      )
+  AND (@authority_project='' OR ar.project_id=NULLIF(@authority_project,'')::uuid)
+  AND EXISTS (
+      SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
+        AND control_plane.catalog_resource_visible(ar.organization_id,@subject_id::uuid,'artifact.view',target.kind,
+            target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp())
+        AND control_plane.catalog_resource_visible(ar.organization_id,@subject_id::uuid,'artifact.download',target.kind,
+            target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp())
   )
 FOR UPDATE OF ar;

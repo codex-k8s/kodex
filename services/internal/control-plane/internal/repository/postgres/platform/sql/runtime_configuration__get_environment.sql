@@ -1,7 +1,7 @@
 -- name: runtime_configuration__get_environment :one
 SELECT environment.ref,
        environment.version,
-       project.ref,
+       COALESCE(project.ref,''),
        environment.name,
        environment.description,
        environment.state,
@@ -30,17 +30,12 @@ SELECT environment.ref,
        current_version.digest,
        current_version.created_at
 FROM control_plane.runtime_environment_sets environment
-JOIN control_plane.projects project ON project.id = environment.project_id
+LEFT JOIN control_plane.projects project ON project.id = environment.project_id
 JOIN control_plane.runtime_environment_versions current_version ON current_version.id = environment.current_version_id
 LEFT JOIN control_plane.image_artifacts image_artifact ON image_artifact.id = current_version.role_image_artifact_id
 LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = image_artifact.recipe_id
 WHERE environment.organization_id = $1::uuid
   AND environment.ref = $2
   AND environment.state <> 'DELETED'
-  AND ($3 IN ('OWNER', 'ADMINISTRATOR') OR EXISTS (
-      SELECT 1 FROM control_plane.memberships membership
-      WHERE membership.project_id = environment.project_id
-        AND membership.subject_id = $4::uuid
-        AND membership.active
-        AND 'VIEW' = ANY(membership.permissions)
-  ));
+  AND ($3 <> '' AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection(
+      environment.organization_id,$4::uuid,NULL,'ENVIRONMENT',environment.ref,transaction_timestamp())));

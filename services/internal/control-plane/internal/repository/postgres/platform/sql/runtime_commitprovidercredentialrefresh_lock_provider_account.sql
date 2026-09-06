@@ -2,8 +2,7 @@
 SELECT account.id::text, account.current_credential_revision_id::text
 FROM control_plane.provider_accounts account
 WHERE account.organization_id = $1::uuid
-  AND account.state = 'AUTHORIZED'
-  AND account.enabled
+  AND ((account.state = 'AUTHORIZED' AND account.enabled) OR account.state = 'DELETING')
   AND account.id = (
       SELECT revision.provider_account_id
       FROM control_plane.runtime_revisions revision

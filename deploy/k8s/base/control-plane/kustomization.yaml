@@ -4,6 +4,8 @@ namespace: kodex-system
 resources:
   - serviceaccount.yaml
   - credential-rbac.yaml
+  - email-projection.yaml
+  - email-configuration.yaml
   - deployment.yaml
   - service.yaml
   - poddisruptionbudget.yaml
@@ -20,8 +22,8 @@ configMapGenerator:
   - name: control-plane-runtime
     literals:
       - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE
-      # 32 GiB account budget minus the mandatory 16 MiB session-revocation stream.
-      - CONTROL_PLANE_NATS_MAX_BYTES=34342961152
+      # Бюджет 32 GiB минус 512 MiB состояния BFF и 16 MiB отзыва сессий.
+      - CONTROL_PLANE_NATS_MAX_BYTES=33806090240
 generatorOptions:
   disableNameSuffixHash: true
 patches: null

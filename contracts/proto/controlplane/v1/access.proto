@@ -204,7 +204,9 @@ message AccessBindingDraft {
 }
 
 message ListPermissionRegistryRequest {}
-message ListPermissionRegistryResponse { repeated PermissionDefinition permissions = 1; }
+message ListPermissionRegistryResponse {
+  repeated PermissionDefinition permissions = 1;
+}
 
 message ListAccessSubjectsRequest {
   PageRequest page = 1;
@@ -302,7 +304,9 @@ message CreateAccessRoleRequest {
   repeated AccessScopeKind allowed_scopes = 5;
   string change_comment = 6;
 }
-message CreateAccessRoleResponse { AccessRole role = 1; }
+message CreateAccessRoleResponse {
+  AccessRole role = 1;
+}
 
 message CreateAccessRoleVersionRequest {
   MutationContext mutation = 1;
@@ -313,13 +317,17 @@ message CreateAccessRoleVersionRequest {
   repeated AccessScopeKind allowed_scopes = 6;
   string change_comment = 7;
 }
-message CreateAccessRoleVersionResponse { AccessRole role = 1; }
+message CreateAccessRoleVersionResponse {
+  AccessRole role = 1;
+}
 
 message ArchiveAccessRoleRequest {
   MutationContext mutation = 1;
   string role_ref = 2;
 }
-message ArchiveAccessRoleResponse { AccessRole role = 1; }
+message ArchiveAccessRoleResponse {
+  AccessRole role = 1;
+}
 
 message CreateAccessBindingRequest {
   MutationContext mutation = 1;
@@ -329,7 +337,9 @@ message CreateAccessBindingRequest {
   AccessScope scope = 5;
   AccessConditions conditions = 6;
 }
-message CreateAccessBindingResponse { AccessBinding binding = 1; }
+message CreateAccessBindingResponse {
+  AccessBinding binding = 1;
+}
 
 message ChangeAccessBindingRequest {
   MutationContext mutation = 1;
@@ -338,10 +348,14 @@ message ChangeAccessBindingRequest {
   AccessScope scope = 4;
   AccessConditions conditions = 5;
 }
-message ChangeAccessBindingResponse { AccessBinding binding = 1; }
+message ChangeAccessBindingResponse {
+  AccessBinding binding = 1;
+}
 
 message RevokeAccessBindingRequest {
   MutationContext mutation = 1;
   string binding_ref = 2;
 }
-message RevokeAccessBindingResponse { AccessBinding binding = 1; }
+message RevokeAccessBindingResponse {
+  AccessBinding binding = 1;
+}

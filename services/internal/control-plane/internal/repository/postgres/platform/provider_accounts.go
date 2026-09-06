@@ -44,9 +44,21 @@ func (repository *Repository) changeProviderAccount(
 	if version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	if input.Kind == command.CancelProviderAccountQueuedWork {
+		return repository.cancelProviderAccountQueuedWork(ctx, tx, current, input, payload, accountID, version)
+	}
 	summary := "i18n:PROVIDER_ACCOUNT_UPDATED"
 	emitEvent := true
 	switch input.Kind {
+	case command.VerifyProviderAuthorization:
+		if state != "AUTHORIZED" || !enabled || credentialID == nil {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.startProviderVerification(ctx, tx, current, accountID); err != nil {
+			return commandOutcome{}, err
+		}
+		summary = "i18n:PROVIDER_ACCOUNT_VERIFICATION_REQUESTED"
+		emitEvent = false
 	case command.StartProviderDeviceAuth:
 		if !providerAccountCanAuthorize(state) || !validPendingProviderAuthorization(payload) {
 			return commandOutcome{}, errs.ErrConflict
@@ -54,16 +66,8 @@ func (repository *Repository) changeProviderAccount(
 		if err := repository.insertProviderAuthorization(ctx, tx, current, accountID, payload); err != nil {
 			return commandOutcome{}, err
 		}
-		if credentialID != nil {
-			if _, err := tx.Exec(ctx, queryProviderCredentialCleanupScheduleAccount, pgx.StrictNamedArgs{
-				"organization_id": current.organizationID, "account_id": accountID,
-				"eligible_at": time.Now().UTC(), "maximum_attempts": providerCredentialCleanupMaxAttempts,
-			}); err != nil {
-				return commandOutcome{}, errs.ErrUnavailable
-			}
-		}
 		if _, err := tx.Exec(ctx, queryProviderAccountsUpdateLifecycle, pgx.StrictNamedArgs{
-			"account_id": accountID, "state": "PENDING_AUTHORIZATION", "enabled": false, "clear_credential": credentialID != nil,
+			"account_id": accountID, "state": "PENDING_AUTHORIZATION", "enabled": false, "clear_credential": false,
 		}); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -129,20 +133,14 @@ func (repository *Repository) changeProviderAccount(
 			}
 			summary = "i18n:PROVIDER_AUTHORIZATION_FAILED"
 		}
-	case command.RevokeProviderAccount, command.DeleteProviderAccount:
-		if state == "REVOKED" {
-			return commandOutcome{}, errs.ErrConflict
+	case command.DeleteProviderAccount:
+		if err := repository.startProviderAccountDeletion(ctx, tx, current, accountID, state); err != nil {
+			return commandOutcome{}, err
 		}
-		if input.Kind == command.DeleteProviderAccount {
-			var apiKeyAccount bool
-			if err := tx.QueryRow(ctx, queryProviderAccountsIsAPIKey, pgx.StrictNamedArgs{
-				"organization_id": current.organizationID, "account_id": accountID,
-			}).Scan(&apiKeyAccount); err != nil {
-				return commandOutcome{}, errs.ErrUnavailable
-			}
-			if !apiKeyAccount {
-				return commandOutcome{}, errs.ErrConflict
-			}
+		summary = "i18n:PROVIDER_ACCOUNT_DELETION_REQUESTED"
+	case command.RevokeProviderAccount:
+		if state == "REVOKED" || state == "DELETING" || state == "DELETED" {
+			return commandOutcome{}, errs.ErrConflict
 		}
 		var activeRuntimeLease, activeWarmConsumer bool
 		if err := tx.QueryRow(ctx, queryProviderAccountsCleanupGuard, pgx.StrictNamedArgs{
@@ -296,15 +294,20 @@ func (repository *Repository) insertProviderAuthorization(
 	accountID string,
 	payload command.ProviderAccountInput,
 ) error {
-	_, err := tx.Exec(ctx, queryProviderAccountsInsertAuthorization, pgx.StrictNamedArgs{
+	tag, err := tx.Exec(ctx, queryProviderAccountsInsertAuthorization, pgx.StrictNamedArgs{
 		"authorization_ref": payload.AuthorizationRef, "organization_id": current.organizationID,
 		"account_id": accountID, "method": payload.AuthorizationMethod, "state": payload.AuthorizationState,
 		"materializer_attempt_ref": payload.MaterializerAttemptRef, "verification_uri": payload.VerificationURI,
-		"user_code": payload.UserCode, "expires_at": payload.AuthorizationExpiresAt,
+		"materializer_attempt_uid":              payload.MaterializerAttemptUID,
+		"materializer_attempt_resource_version": payload.MaterializerAttemptResourceVersion,
+		"user_code":                             payload.UserCode, "expires_at": payload.AuthorizationExpiresAt,
 		"safe_failure_code": payload.SafeFailureCode, "created_by": current.actorID,
 	})
 	if err != nil {
 		return mapWriteError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errs.ErrConflict
 	}
 	return nil
 }
@@ -354,7 +357,11 @@ func (repository *Repository) providerAccountByRef(ctx context.Context, tx pgx.T
 		return entity.ProviderAccount{}, err
 	}
 	item.NextActions = providerAccountActions(item, true, true, true)
-	return item, nil
+	items := []entity.ProviderAccount{item}
+	if err := repository.hydrateProviderAccountLifecycle(ctx, tx, current, items); err != nil {
+		return entity.ProviderAccount{}, err
+	}
+	return items[0], nil
 }
 
 func validPendingProviderAuthorization(payload command.ProviderAccountInput) bool {

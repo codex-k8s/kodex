@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const maximumExecutionArtifactBytes = 16 << 20
+const maximumExecutionArtifactBytes = runtimecontract.MaximumSkillFileBytes
 
 func mapString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
@@ -81,6 +81,16 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), SystemAssistant: mapString(values, "stableKey") == "system-assistant"}
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
+	result.EffectiveReasoningEffort = mapString(values, "effectiveReasoningEffort")
+	result.ReasoningMode = controlplanev1.RuntimeReasoningMode(controlplanev1.RuntimeReasoningMode_value["RUNTIME_REASONING_MODE_"+mapString(values, "reasoningMode")])
+	if !castRuntimeContext(result, values["contextSnapshot"], mapString(values, "projectRef")) {
+		return nil
+	}
+	fileCatalog, validFileCatalog := castRuntimeFileCatalog(values["fileCatalog"])
+	if !validFileCatalog {
+		return nil
+	}
+	result.FileCatalog = fileCatalog
 	result.InstructionRef = mapString(values, "instructionRef")
 	result.InstructionDigest = mapString(values, "instructionDigest")
 	result.PromptTemplateRef = mapString(values, "promptTemplateRef")
@@ -302,7 +312,7 @@ func (server *Server) ReadExecutionArtifact(ctx context.Context, request *contro
 	}
 	defer download.Reader.Close()
 	content, err := io.ReadAll(io.LimitReader(download.Reader, maximumExecutionArtifactBytes+1))
-	if err != nil || len(content) > maximumExecutionArtifactBytes || int64(len(content)) != download.Artifact.SizeBytes {
+	if err != nil || int64(len(content)) > maximumExecutionArtifactBytes || int64(len(content)) != download.Artifact.SizeBytes {
 		return nil, transportError(errs.ErrUnavailable)
 	}
 	return &controlplanev1.ReadExecutionArtifactResponse{Artifact: castArtifact(download.Artifact), Content: content}, nil
@@ -556,6 +566,7 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 			DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
 			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 		}
+		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 			claim.CredentialRevision = castIntegrationCredential(credential)
 		}
@@ -620,6 +631,7 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 			},
 			EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
 		}
+		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
 			claim.CredentialRevision = castIntegrationCredential(credential)
 		}

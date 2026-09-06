@@ -10,5 +10,8 @@ JOIN control_plane.instruction_versions instruction
  AND instruction.agent_id = runtime.agent_id
  AND instruction.core
  AND instruction.state = 'PUBLISHED'
+JOIN control_plane.agent_instruction_bindings active_instruction
+ ON active_instruction.agent_id=runtime.agent_id AND active_instruction.organization_id=runtime.organization_id
+ AND active_instruction.instruction_id=instruction.id
 WHERE runtime.stable_key = 'system-assistant'
 FOR UPDATE OF runtime;

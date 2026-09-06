@@ -72,15 +72,12 @@ func (server *Server) VerifyProviderAccountDeviceAuthorization(
 	ctx context.Context,
 	request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest,
 ) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
-	principal, err := principal(ctx, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName)
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName,
+		command.VerifyProviderAuthorization, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()})
 	if err != nil {
 		return nil, err
 	}
-	account, err := server.service.RefreshProviderAccountAuthorization(ctx, principal, mutation(request.GetMutation()), request.GetAccountRef())
-	if err != nil {
-		return nil, transportError(err)
-	}
-	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(account)}, nil
+	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}, nil
 }
 
 func (server *Server) ReauthorizeProviderAccountDeviceCode(

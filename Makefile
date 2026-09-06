@@ -152,6 +152,10 @@ gen-integration-packages: check-go-toolchain
 	@gofmt -w libs/go/integrationpackage/shipped_gen.go
 
 .PHONY: gen-email-bridge check-email-bridge-codegen
+.PHONY: test-email-projection-render
+test-email-projection-render:
+	@bash scripts/tests/email-projection-render-test.sh
+
 .PHONY: test-integration-gateway-render
 .PHONY: test-integration-gateway-postgres
 test-integration-gateway-postgres:
@@ -161,12 +165,11 @@ test-integration-gateway-render:
 	@bash scripts/tests/integration-gateway-render-test.sh
 
 gen-email-bridge: check-openapi-toolchain
-	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o libs/go/emailbridgeapi/api.gen.go contracts/openapi/email-bridge/v1/openapi.yaml
+	node tools/codegen/email-bridge-schema.mjs
 
 check-email-bridge-codegen: check-openapi-toolchain
-	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
-		oapi-codegen -config tools/codegen/openapi/email-bridge-go.yaml -o "$$tmp" contracts/openapi/email-bridge/v1/openapi.yaml; \
-		cmp services/external/integration-gateway/internal/generated/emailbridge/email_bridge.gen.go "$$tmp"
+	@bash scripts/tests/email-bridge-codegen-test.sh
 
 check-integration-package-codegen: check-go-toolchain
 	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
