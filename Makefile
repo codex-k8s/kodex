@@ -294,3 +294,7 @@ check-proto-codegen: check-proto-toolchain
 .PHONY: test-registry-credential-files
 test-registry-credential-files:
 	@timeout 30s python3 scripts/tests/registry-credential-files-test.py
+
+.PHONY: test-managed-consumer-contract
+test-managed-consumer-contract:
+	@timeout 40s node scripts/tests/managed-consumer-contract-test.mjs

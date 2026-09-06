@@ -12,6 +12,27 @@ updated: 2026-09-04
 
 ## Локальные probes
 
+Для generic managed REBIND первый consumer передаётся как
+`expectedAbsent=true` без revision/version. Обычный rebind использует точные
+прежние `revisionRef`/`version`; версия target configuration в If-Match остаётся
+отдельным предусловием. После 412 получить свежий impact и состояние связи,
+не подставлять target revision или выдуманную version1 как старую связь.
+
+| Путь | Авторитетная проверка и результат |
+| --- | --- |
+| Prompt generic REBIND | Fresh consumer manage/context + global binding CAS; весь список атомарен |
+| Integration definition REBIND | Exact integration manage/key + package и binding в одной CAS-транзакции |
+| System STT REBIND | Organization manage + singleton consumer global CAS между sets |
+| Prompt prepublication | Существующий exact impact plan с consumer/binding versions и блокировками |
+| RoleImage impact | Существующий environment/Agent impact plan и OCC публикации; generic bypass отсутствует |
+
+Source Proto `ManagedConfigurationConsumer.expected_absent=5` применяется только
+к входу REBIND. HTTP selection и read DTO разделены; legacy input без pins
+отклоняется. CP deployment владеет этим SQL без новой миграции: таблицы и
+уникальный global binding key сохраняются. Claim/expiry/background events не
+добавляются; authoritative impact/effective read и прежние command events
+остаются потребителями результата. Live CAS acceptance до rollout NOT RUN.
+
 Общая readiness не зависит от catalog observer в Secret Broker: broker требует
 доступного CP для собственного startup barrier. `provider model catalog observer
 degraded` означает отказ отдельного фонового пути; проверить broker/authority и
