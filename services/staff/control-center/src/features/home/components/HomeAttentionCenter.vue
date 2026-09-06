@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { AlertTriangle, CalendarClock, ShieldQuestion } from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -16,7 +17,9 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   gates: OwnerGate[];
+  gatesCount?: number;
   failedRuns: Run[];
+  failedRunsCount?: number;
   projects: Project[];
   gatesReady: boolean;
   runsReady: boolean;
@@ -51,6 +54,7 @@ function formatDate(value?: string): string {
     timeStyle: "short",
   }).format(new Date(value));
 }
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -58,7 +62,6 @@ function formatDate(value?: string): string {
     <header class="home-attention__header">
       <div class="home-attention__heading">
         <h2 id="home-attention-title">{{ $t("workboard.attention") }}</h2>
-        <span class="home-attention__count">{{ total }}</span>
       </div>
       <span
         v-if="refreshing && ready"
@@ -77,7 +80,15 @@ function formatDate(value?: string): string {
     >
       <span /><span /><span />
     </div>
-    <div v-else class="home-attention__body">
+    <div
+      v-else
+      class="home-attention__body"
+      :class="{
+        'home-attention__body--single':
+          !(gatesCount ?? gates.length) ||
+          !(failedRunsCount ?? failedRuns.length),
+      }"
+    >
       <ProblemNotice
         v-if="gatesProblem"
         :problem="gatesProblem"
@@ -89,81 +100,84 @@ function formatDate(value?: string): string {
         @retry="emit('retryRuns')"
       />
 
-      <div v-if="gates.length" class="home-attention__group">
-        <div class="home-attention__group-head">
-          <ShieldQuestion :size="18" aria-hidden="true" />
-          <h3>{{ $t("home.pending") }}</h3>
-          <span>{{ gates.length }}</span>
-          <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+      <slot name="gates">
+        <div v-if="gates.length" class="home-attention__group">
+          <div class="home-attention__group-head">
+            <ShieldQuestion :size="18" aria-hidden="true" />
+            <h3>{{ $t("home.pending") }}</h3>
+            <span v-if="gatesCount !== undefined">{{ gatesCount }}</span>
+            <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
+          </div>
+          <RouterLink
+            v-for="gate in gates"
+            :key="gate.ref"
+            :to="{
+              path: runPath(gate.runRef, gate.projectRef),
+              query: { nodeRef: gate.nodeRef },
+            }"
+            class="home-attention__item"
+          >
+            <div class="home-attention__copy">
+              <h4>{{ serverMessage(gate.title) }}</h4>
+              <SafeSummary :content="gate.contextSummary" />
+              <p>
+                <span>{{ projectName(gate.projectRef) }}</span>
+                <span
+                  >{{ $t("workboard.initiator") }}:
+                  {{ gate.requestedBy.displayName }}</span
+                >
+              </p>
+            </div>
+            <div class="home-attention__aside">
+              <StatusBadge :state="gate.state" tone="warning" />
+              <time v-if="gate.expiresAt" :datetime="gate.expiresAt">
+                <CalendarClock :size="13" aria-hidden="true" />{{
+                  formatDate(gate.expiresAt)
+                }}
+              </time>
+            </div>
+          </RouterLink>
         </div>
-        <RouterLink
-          v-for="gate in gates"
-          :key="gate.ref"
-          :to="{
-            path: runPath(gate.runRef, gate.projectRef),
-            query: { nodeRef: gate.nodeRef },
-          }"
-          class="home-attention__item"
-        >
-          <div class="home-attention__copy">
-            <h4>{{ gate.title }}</h4>
-            <SafeSummary :content="gate.contextSummary" />
-            <p>
-              <span>{{ projectName(gate.projectRef) }}</span>
-              <span
-                >{{ $t("workboard.initiator") }}:
-                {{ gate.requestedBy.displayName }}</span
-              >
-            </p>
+      </slot>
+      <slot name="failed">
+        <div v-if="failedRuns.length" class="home-attention__group">
+          <div
+            class="home-attention__group-head home-attention__group-head--danger"
+          >
+            <AlertTriangle :size="18" aria-hidden="true" />
+            <h3>{{ $t("runs.title") }} · {{ $t("workboard.attention") }}</h3>
+            <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
           </div>
-          <div class="home-attention__aside">
-            <StatusBadge :state="gate.state" tone="warning" />
-            <time v-if="gate.expiresAt" :datetime="gate.expiresAt">
-              <CalendarClock :size="13" aria-hidden="true" />{{
-                formatDate(gate.expiresAt)
-              }}
-            </time>
-          </div>
-        </RouterLink>
-      </div>
-
-      <div v-if="failedRuns.length" class="home-attention__group">
-        <div
-          class="home-attention__group-head home-attention__group-head--danger"
-        >
-          <AlertTriangle :size="18" aria-hidden="true" />
-          <h3>{{ $t("runs.title") }} · {{ $t("workboard.attention") }}</h3>
-          <span>{{ failedRuns.length }}</span>
-          <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
+          <RouterLink
+            v-for="run in failedRuns"
+            :key="run.ref"
+            :to="runPath(run.ref, run.projectRef)"
+            class="home-attention__item"
+          >
+            <div class="home-attention__copy">
+              <h4>{{ run.title }}</h4>
+              <SafeSummary
+                :content="run.safeErrorMessage ?? run.resultSummary"
+                :fallback="run.activitySummary"
+              />
+              <p>
+                <span>{{ projectName(run.projectRef) }}</span>
+                <span>{{ run.target.displayName }}</span>
+              </p>
+            </div>
+            <div class="home-attention__aside">
+              <StatusBadge :state="run.state" tone="danger" />
+              <time :datetime="run.finishedAt ?? run.createdAt">
+                {{ formatDate(run.finishedAt ?? run.createdAt) }}
+              </time>
+            </div>
+          </RouterLink>
         </div>
-        <RouterLink
-          v-for="run in failedRuns"
-          :key="run.ref"
-          :to="runPath(run.ref, run.projectRef)"
-          class="home-attention__item"
-        >
-          <div class="home-attention__copy">
-            <h4>{{ run.title }}</h4>
-            <SafeSummary
-              :content="run.safeErrorMessage ?? run.resultSummary"
-              :fallback="run.activitySummary"
-            />
-            <p>
-              <span>{{ projectName(run.projectRef) }}</span>
-              <span>{{ run.target.displayName }}</span>
-            </p>
-          </div>
-          <div class="home-attention__aside">
-            <StatusBadge :state="run.state" tone="danger" />
-            <time :datetime="run.finishedAt ?? run.createdAt">
-              {{ formatDate(run.finishedAt ?? run.createdAt) }}
-            </time>
-          </div>
-        </RouterLink>
-      </div>
-
+      </slot>
       <p
-        v-if="ready && !gatesProblem && !runsProblem && total === 0"
+        v-if="
+          !$slots.gates && ready && !gatesProblem && !runsProblem && total === 0
+        "
         class="home-attention__empty"
       >
         {{ $t("workboard.noAttention") }}
@@ -240,11 +254,20 @@ function formatDate(value?: string): string {
 }
 .home-attention__group {
   min-width: 0;
+  max-height: 596px;
+  overflow: auto;
+}
+.home-attention__body--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 .home-attention__group + .home-attention__group {
   border-left: 1px solid var(--hairline);
 }
 .home-attention__group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
   min-height: 44px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--hairline);

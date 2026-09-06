@@ -3,10 +3,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProblem } from "@/shared/api/problem";
 
 import { readWithRetry } from "./read-retry";
+import { resetOwnerRequests } from "./owner-lifetime";
 
 afterEach(() => vi.useRealTimers());
 
 describe("readWithRetry", () => {
+  it("не повторяет старое чтение после смены owner", async () => {
+    vi.useFakeTimers();
+    const request = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+    const result = readWithRetry(request, [0, 200]);
+    const rejection = expect(result).rejects.toMatchObject({
+      name: "OwnerContextChangedError",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    resetOwnerRequests();
+    await vi.runAllTimersAsync();
+    await rejection;
+    expect(request).toHaveBeenCalledOnce();
+  });
   it("повторяет безопасное чтение после временного сетевого сбоя", async () => {
     vi.useFakeTimers();
     const request = vi

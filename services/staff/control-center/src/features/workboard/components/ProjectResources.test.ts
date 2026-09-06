@@ -19,6 +19,7 @@ const project: Project = {
   language: "ru",
   lifecycle: "ACTIVE",
   agentCount: 3,
+  integrationState: "NONE",
   workflowCount: 2,
   activeRunCount: 7,
   pendingGateCount: 4,
@@ -27,6 +28,7 @@ const project: Project = {
 };
 
 const schedule: Schedule = {
+  input: {},
   ref: "schedule_daily",
   version: 1,
   projectRef: project.ref,
@@ -42,11 +44,22 @@ const schedule: Schedule = {
   timezone: "Europe/Saratov",
   sessionPolicy: "NEW_EACH_RUN",
   notificationPolicy: "CONTROL_CENTER_ONLY",
+  dstGapPolicy: "SHIFT_FORWARD",
+  dstFoldPolicy: "RUN_ONCE_EARLIEST",
+  misfirePolicy: "COALESCE",
+  overlapPolicy: "FORBID",
+  automationText: "",
+  promptInputs: {},
   nextActions: [],
+  targetVersion: 2,
+  targetDigest: "b".repeat(64),
+  cronExpression: "0 9 * * *",
   currentRevision: {
     ref: "schedule_revision_daily",
     revision: 1,
     digest: "schedule-digest",
+    targetVersion: 2,
+    targetDigest: "b".repeat(64),
     name: "Ежедневная квалификация",
     target: {
       type: "AGENT",
@@ -60,6 +73,12 @@ const schedule: Schedule = {
     input: {},
     sessionPolicy: "NEW_EACH_RUN",
     notificationPolicy: "CONTROL_CENTER_ONLY",
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy: "COALESCE",
+    overlapPolicy: "FORBID",
+    automationText: "",
+    promptInputs: {},
     createdAt: "2026-08-29T09:00:00Z",
   },
 };

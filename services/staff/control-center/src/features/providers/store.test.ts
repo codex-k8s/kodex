@@ -2,11 +2,13 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProviderAccount, ProviderAccountPage } from "./model";
+import { KnownMutationRejection } from "@/shared/api/mutation-rejection";
 
 const api = vi.hoisted(() => ({
   authorizeProviderApiKey: vi.fn(),
   createProviderAccount: vi.fn(),
-  deleteProviderApiKeyAccount: vi.fn(),
+  deleteProviderAccountRecord: vi.fn(),
+  loadProviderAccount: vi.fn(),
   loadProviderAccounts: vi.fn(),
   loadProviderDefinitions: vi.fn(),
   reauthorizeProviderDevice: vi.fn(),
@@ -16,6 +18,9 @@ const api = vi.hoisted(() => ({
   verifyDeviceAuthorization: vi.fn(),
 }));
 vi.mock("./api", () => api);
+vi.mock("@/shared/api/client", () => ({
+  requestSignal: () => new AbortController().signal,
+}));
 
 import { useProvidersStore } from "./store";
 
@@ -46,6 +51,14 @@ function deferred<T>() {
 
 describe("providers store", () => {
   beforeEach(() => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+      },
+    });
     setActivePinia(createPinia());
     vi.clearAllMocks();
     api.loadProviderDefinitions.mockResolvedValue({
@@ -56,6 +69,41 @@ describe("providers store", () => {
   afterEach(() => {
     useProvidersStore().stopAllPolling();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+  it("после известного 412 читает свежую account projection до нового действия", async () => {
+    const store = useProvidersStore();
+    const previous = account({ nextActions: ["DELETE"] });
+    const fresh = { ...previous, version: 2 };
+    store.accounts = [previous];
+    api.deleteProviderAccountRecord.mockRejectedValueOnce(
+      new KnownMutationRejection(412),
+    );
+    api.loadProviderAccount.mockResolvedValueOnce(fresh);
+    await expect(store.remove(previous)).rejects.toMatchObject({ status: 412 });
+    expect(store.accounts).toEqual([fresh]);
+    expect(store.busyRefs).toEqual([]);
+    expect(api.deleteProviderAccountRecord).toHaveBeenCalledTimes(1);
+    api.deleteProviderAccountRecord.mockResolvedValueOnce(fresh);
+    await store.remove(fresh);
+    expect(api.deleteProviderAccountRecord.mock.calls[1]?.[0]).toMatchObject({
+      version: 2,
+    });
+    expect(api.deleteProviderAccountRecord.mock.calls[1]?.[1]).not.toBe(
+      api.deleteProviderAccountRecord.mock.calls[0]?.[1],
+    );
+  });
+  it("после отказа refresh не оставляет stale account доступной для команды", async () => {
+    const store = useProvidersStore();
+    const previous = account({ nextActions: ["DELETE"] });
+    store.accounts = [previous];
+    api.deleteProviderAccountRecord.mockRejectedValueOnce(
+      new KnownMutationRejection(412),
+    );
+    api.loadProviderAccount.mockRejectedValueOnce(new Error("Access revoked"));
+    await expect(store.remove(previous)).rejects.toThrow("Access revoked");
+    expect(store.accounts).toEqual([]);
+    expect(store.busyRefs).toEqual([]);
   });
 
   it("не позволяет устаревшему поиску перезаписать новый", async () => {
@@ -220,7 +268,10 @@ describe("providers store", () => {
     expect(store.pollingRefs).toEqual([pending.ref]);
     await vi.advanceTimersByTimeAsync(4_000);
 
-    expect(api.verifyDeviceAuthorization).toHaveBeenCalledWith(pending);
+    expect(api.verifyDeviceAuthorization).toHaveBeenCalledWith(
+      pending,
+      expect.any(String),
+    );
     expect(store.pollingRefs).toEqual([]);
     expect(store.accounts[0]?.state).toBe("AUTHORIZED");
   });
@@ -247,24 +298,97 @@ describe("providers store", () => {
     });
     api.reauthorizeProviderDevice.mockResolvedValue(pending);
     const apiKey = account({
+      nextActions: ["DELETE", "REVOKE"],
       authorization: {
         ref: "pauth_key",
         method: "API_KEY",
         state: "AUTHORIZED",
       },
     });
-    api.deleteProviderApiKeyAccount.mockResolvedValue({
+    api.deleteProviderAccountRecord.mockResolvedValue({
       ...apiKey,
       state: "REVOKED",
     });
     const store = useProvidersStore();
 
     await store.startDevice(expired);
-    await store.revoke(apiKey);
+    await store.remove(apiKey);
 
-    expect(api.reauthorizeProviderDevice).toHaveBeenCalledWith(expired);
+    expect(api.reauthorizeProviderDevice).toHaveBeenCalledWith(
+      expired,
+      expect.any(String),
+    );
     expect(api.startDeviceAuthorization).not.toHaveBeenCalled();
-    expect(api.deleteProviderApiKeyAccount).toHaveBeenCalledWith(apiKey);
+    expect(api.deleteProviderAccountRecord).toHaveBeenCalledWith(
+      apiKey,
+      expect.any(String),
+    );
     expect(api.revokeProviderAccount).not.toHaveBeenCalled();
+  });
+  it("не подменяет отзыв API-key командой удаления", async () => {
+    const item = account({
+      nextActions: ["REVOKE"],
+      authorization: {
+        ref: "pauth_key",
+        method: "API_KEY",
+        state: "AUTHORIZED",
+      },
+    });
+    api.revokeProviderAccount.mockResolvedValue({ ...item, state: "REVOKED" });
+    const store = useProvidersStore();
+    await store.revoke(item);
+    expect(api.revokeProviderAccount).toHaveBeenCalledWith(item);
+    expect(api.deleteProviderAccountRecord).not.toHaveBeenCalled();
+    await store.remove(item);
+    expect(api.deleteProviderAccountRecord).not.toHaveBeenCalled();
+  });
+
+  it.each(["start", "refresh"])(
+    "не возобновляет polling после закрытия во время %s",
+    async (operation) => {
+      vi.useFakeTimers();
+      const pending = account({
+        state: "PENDING_AUTHORIZATION",
+        nextActions: ["REFRESH_AUTHORIZATION", "CONFIGURE_CREDENTIAL"],
+        authorization: {
+          ref: "pauth_pending",
+          method: "DEVICE_CODE",
+          state: "PENDING",
+          expiresAt: "2099-08-30T08:10:00Z",
+        },
+      });
+      const response = deferred<ProviderAccount>();
+      const store = useProvidersStore();
+      store.accounts = [pending];
+      api.startDeviceAuthorization.mockReturnValue(response.promise);
+      api.verifyDeviceAuthorization.mockReturnValue(response.promise);
+      const result =
+        operation === "start"
+          ? store.startDevice(pending)
+          : store.refreshAuthorization(pending);
+      store.stopAllPolling();
+      response.resolve({ ...pending, version: 2 });
+      await result;
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(store.pollingRefs).toEqual([]);
+      expect(
+        api.startDeviceAuthorization.mock.calls.length +
+          api.verifyDeviceAuthorization.mock.calls.length,
+      ).toBe(1);
+    },
+  );
+
+  it("не отправляет параллельную мутацию одной учётной записи", async () => {
+    const response = deferred<ProviderAccount>();
+    const current = account();
+    api.setProviderAccountEnabled.mockReturnValue(response.promise);
+    const store = useProvidersStore();
+    const first = store.setEnabled(current, false);
+    await expect(store.setEnabled(current, false)).rejects.toThrow(
+      "Provider account mutation is already in progress",
+    );
+    response.resolve({ ...current, enabled: false, version: 2 });
+    await first;
+    expect(api.setProviderAccountEnabled).toHaveBeenCalledOnce();
   });
 });

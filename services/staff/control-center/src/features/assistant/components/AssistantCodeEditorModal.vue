@@ -4,6 +4,11 @@ import { json } from "@codemirror/legacy-modes/mode/javascript";
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
+import {
+  codeEditorKeymap,
+  insertVoiceText,
+} from "@/shared/ui/code-editor-keymap";
+import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { validateAssistantObjectJSON } from "@/features/assistant/code-editor";
@@ -97,6 +102,7 @@ onMounted(() => {
     doc: draft.value,
     extensions: [
       basicSetup,
+      codeEditorKeymap,
       EditorState.tabSize.of(2),
       EditorView.lineWrapping,
       theme,
@@ -135,8 +141,13 @@ onBeforeUnmount(() => {
       <ModalDialog :title="title" size="xl" :busy="busy" @close="emit('close')">
         <div
           ref="editorRoot"
+          :title="$t('app.editorKeyboard')"
           class="assistant-code-editor"
           :class="{ 'assistant-code-editor--invalid': !valid }"
+        />
+        <VoiceInputButton
+          :disabled="busy"
+          @transcript="insertVoiceText(view, $event)"
         />
         <p v-if="!valid" class="field-error" role="alert">
           {{ $t("assistant.planEditor.jsonError") }}

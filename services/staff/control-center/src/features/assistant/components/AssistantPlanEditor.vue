@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -32,6 +33,7 @@ const props = defineProps<{
   plan: AssistantPlan;
   receipt?: AssistantPlanReceipt;
   busy?: boolean;
+  readonly?: boolean;
   problem?: AppProblem;
 }>();
 const emit = defineEmits<{
@@ -70,7 +72,10 @@ const exactRevisionValidated = computed(
     props.plan.validatedRevision === props.plan.revision,
 );
 const editable = computed(
-  () => !props.busy && !["APPLIED", "REJECTED"].includes(props.plan.state),
+  () =>
+    !props.readonly &&
+    !props.busy &&
+    !["APPLIED", "REJECTED"].includes(props.plan.state),
 );
 const canSave = computed(
   () =>
@@ -81,12 +86,14 @@ const canSave = computed(
 );
 const canValidate = computed(
   () =>
+    !props.readonly &&
     !props.busy &&
     !["APPLIED", "REJECTED"].includes(props.plan.state) &&
     props.plan.state !== "VALID",
 );
 const canApply = computed(
   () =>
+    !props.readonly &&
     !props.busy &&
     exactRevisionValidated.value &&
     props.plan.nextActions.includes("APPLY_PLAN"),
@@ -246,8 +253,9 @@ function optionalNumber(event: Event): number | undefined {
             <Maximize2 :size="15" aria-hidden="true" />
           </button>
         </span>
-        <textarea
+        <VoiceTextarea
           v-model="summary"
+          :disabled="!editable"
           rows="3"
           maxlength="2000"
           :aria-label="$t('assistant.planEditor.summary')"
@@ -324,7 +332,7 @@ function optionalNumber(event: Event): number | undefined {
                 <Maximize2 :size="15" aria-hidden="true" />
               </button>
             </span>
-            <textarea
+            <VoiceTextarea
               v-model="operation.value.summary"
               rows="2"
               maxlength="2000"
@@ -413,7 +421,7 @@ function optionalNumber(event: Event): number | undefined {
                 <Maximize2 :size="15" aria-hidden="true" />
               </button>
             </span>
-            <textarea
+            <VoiceTextarea
               v-model="operation.parametersText"
               rows="4"
               spellcheck="false"
@@ -438,7 +446,7 @@ function optionalNumber(event: Event): number | undefined {
                   <Maximize2 :size="15" aria-hidden="true" />
                 </button>
               </span>
-              <textarea
+              <VoiceTextarea
                 v-model="operation.beforeText"
                 rows="5"
                 spellcheck="false"
@@ -461,7 +469,7 @@ function optionalNumber(event: Event): number | undefined {
                   <Maximize2 :size="15" aria-hidden="true" />
                 </button>
               </span>
-              <textarea
+              <VoiceTextarea
                 v-model="operation.afterText"
                 rows="4"
                 spellcheck="false"
@@ -743,7 +751,7 @@ function optionalNumber(event: Event): number | undefined {
   font-weight: 700;
   white-space: nowrap;
 }
-.field--code textarea {
+.field--code :deep(textarea) {
   font-family: var(--font-mono);
   font-size: 0.78rem;
 }

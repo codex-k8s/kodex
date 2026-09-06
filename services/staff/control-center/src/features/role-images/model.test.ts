@@ -16,6 +16,7 @@ import type {
 
 function recipe(overrides: Partial<RoleImageRecipe> = {}): RoleImageRecipe {
   return {
+    sourceAvailable: true,
     ref: "image_1",
     version: 1,
     projectRef: "project_1",
@@ -37,6 +38,7 @@ function recipe(overrides: Partial<RoleImageRecipe> = {}): RoleImageRecipe {
 
 function build(overrides: Partial<RoleImageBuild> = {}): RoleImageBuild {
   return {
+    sourceAvailable: true,
     ref: "build_1",
     version: 1,
     recipeRef: "image_1",

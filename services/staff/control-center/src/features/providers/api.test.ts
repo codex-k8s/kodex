@@ -41,7 +41,7 @@ vi.mock("@/shared/api/mutation", () => ({ mutate: mutateMock }));
 import {
   authorizeProviderApiKey,
   createProviderAccount,
-  deleteProviderApiKeyAccount,
+  deleteProviderAccountRecord,
   loadProviderAccounts,
   reauthorizeProviderDevice,
   setProviderAccountEnabled,
@@ -162,7 +162,7 @@ describe("provider API adapter", () => {
     sdk.deleteProviderAccount.mockResolvedValue({ data: account });
 
     await reauthorizeProviderDevice(account);
-    await deleteProviderApiKeyAccount(account);
+    await deleteProviderAccountRecord(account);
 
     expect(sdk.reauthorizeProviderAccountDeviceCode).toHaveBeenCalledWith(
       expect.objectContaining({ path: { providerAccountRef: account.ref } }),

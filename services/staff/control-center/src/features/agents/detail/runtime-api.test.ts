@@ -52,6 +52,21 @@ describe("agent detail runtime api", () => {
     vi.unstubAllGlobals();
   });
 
+  it("прекращает runtime read retry после отмены контекста", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    mocks.getAgentRuntimeConfiguration.mockRejectedValue(
+      Object.assign(new Error("Unavailable"), { retryable: true }),
+    );
+    const reading = loadAgentRuntime("agent_sales", controller.signal);
+    const result = expect(reading).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1);
+    controller.abort();
+    await result;
+    await vi.runAllTimersAsync();
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledOnce();
+  });
+
   it("читает runtime catalog и передаёт серверу cursor-поиск окружений", async () => {
     mocks.listRuntimeSelections.mockResolvedValue({
       data: {
@@ -110,7 +125,15 @@ describe("agent detail runtime api", () => {
       runtimeProfileRef: "runtime_openai",
       model: "gpt-5.6-sol",
       providerPolicyMode: "FIXED" as const,
-      providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+      providerAccounts: [
+        {
+          accountRef: "account-2",
+          weight: 1,
+          catalogRevision: `mcat_${"a".repeat(64)}`,
+          catalogDigest: "a".repeat(64),
+          providerDefinitionKey: "openai-codex",
+        },
+      ],
     };
     const ownResult = {
       agentVersion: 9,
@@ -170,7 +193,15 @@ describe("agent detail runtime api", () => {
         runtimeProfileRef: "runtime_openai",
         model: "gpt-5.6-sol",
         providerPolicyMode: "FIXED",
-        providerAccounts: [{ accountRef: "account-2", weight: 1 }],
+        providerAccounts: [
+          {
+            accountRef: "account-2",
+            weight: 1,
+            catalogRevision: `mcat_${"a".repeat(64)}`,
+            catalogDigest: "a".repeat(64),
+            providerDefinitionKey: "openai-codex",
+          },
+        ],
       },
       8,
     );

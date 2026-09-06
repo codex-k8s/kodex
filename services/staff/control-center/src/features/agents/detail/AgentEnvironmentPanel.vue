@@ -19,6 +19,7 @@ import type {
   AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 
 const props = defineProps<{
   agentRef: string;
@@ -33,7 +34,7 @@ const emit = defineEmits<{
   ];
 }>();
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
 const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
 const selectedEnvironment = ref("");
@@ -73,7 +74,9 @@ function environmentOption(
       .join(" · "),
     meta: value.ready ? value.state : copy.value.runtime.unavailableSelection,
     disabled: !value.ready,
-    disabledReason: value.readinessBlockers.join(" · "),
+    disabledReason: value.readinessBlockers
+      .map((code) => environmentReadinessMessage(code, t))
+      .join(" · "),
     environment: value,
   };
 }
@@ -286,7 +289,7 @@ onMounted(() => void load());
                   .readinessBlockers"
                 :key="blocker"
               >
-                {{ blocker }}
+                {{ environmentReadinessMessage(blocker, t) }}
               </li>
             </ul>
           </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -10,8 +11,9 @@ const props = withDefaults(
   defineProps<{
     value: unknown;
     depth?: number;
+    literal?: boolean;
   }>(),
-  { depth: 0 },
+  { depth: 0, literal: false },
 );
 
 const translator = useI18n();
@@ -27,6 +29,7 @@ function isContainer(value: unknown): boolean {
 }
 
 function fieldLabel(key: string): string {
+  if (props.literal) return key;
   const normalized = key.trim().toLowerCase();
   if (normalized === "status" || normalized === "state")
     return translator.t("common.status");
@@ -74,17 +77,27 @@ function isStatusField(key: string): boolean {
 }
 
 function scalarText(value: unknown): string {
+  if (props.literal) {
+    if (value === null) return "null";
+    if (value === "") return '""';
+    return typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+      ? String(value)
+      : "—";
+  }
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean")
     return translator.t(value ? "common.yes" : "common.no");
   if (typeof value !== "string" && typeof value !== "number") return "—";
   const text = String(value);
-  return opaqueRefPattern.test(text) ? "—" : text;
+  return opaqueRefPattern.test(text) ? "—" : serverMessage(text);
 }
 
 const entries = computed(() =>
   isRecord(props.value) ? Object.entries(props.value) : [],
 );
+const serverMessage = useServerMessage();
 </script>
 
 <template>
@@ -95,8 +108,11 @@ const entries = computed(() =>
         v-if="isContainer(item)"
         :value="item"
         :depth="depth + 1"
+        :literal="literal"
       />
-      <span v-else>{{ scalarText(item) }}</span>
+      <span v-else :class="{ 'structured-literal': literal }">{{
+        scalarText(item)
+      }}</span>
     </li>
   </ol>
   <dl v-else-if="isRecord(value)" class="structured-fields">
@@ -104,23 +120,32 @@ const entries = computed(() =>
       <dt>{{ fieldLabel(key) }}</dt>
       <dd>
         <StatusBadge
-          v-if="statusState(item)"
+          v-if="!literal && statusState(item)"
           :state="statusState(item) ?? ''"
         />
         <SafeStructuredData
           v-else-if="isContainer(item)"
           :value="item"
           :depth="depth + 1"
+          :literal="literal"
         />
-        <span v-else-if="isStatusField(key)">—</span>
-        <span v-else>{{ scalarText(item) }}</span>
+        <span v-else-if="!literal && isStatusField(key)">—</span>
+        <span v-else :class="{ 'structured-literal': literal }">{{
+          scalarText(item)
+        }}</span>
       </dd>
     </template>
   </dl>
-  <span v-else>{{ scalarText(value) }}</span>
+  <span v-else :class="{ 'structured-literal': literal }">{{
+    scalarText(value)
+  }}</span>
 </template>
 
 <style scoped>
+.structured-literal {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .structured-fields {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);

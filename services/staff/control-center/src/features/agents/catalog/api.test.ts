@@ -43,4 +43,15 @@ describe("agent catalog API", () => {
       }),
     );
   });
+  it("передаёт отмену поиска из async picker в generated client", async () => {
+    client.get.mockReturnValueOnce(response({ items: [], nextPageToken: "" }));
+    const controller = new AbortController();
+    await loadAgentCatalogPage(
+      { projectRef: "project_sales", query: "" },
+      controller.signal,
+    );
+    expect(client.get).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
 });

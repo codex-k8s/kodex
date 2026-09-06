@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: staff-control-center-public-assets
+  annotations:
+    kubernetes.io/ingress.class: __KODEX_INGRESS_CLASS__
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.priority: "300"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: __KODEX_INGRESS_CLASS__
+  tls:
+    - hosts: [__KODEX_PUBLIC_HOST__]
+      secretName: staff-control-center-public-tls
+  rules:
+    - host: __KODEX_PUBLIC_HOST__
+      http:
+        paths:
+          - path: /manifest.webmanifest
+            pathType: Exact
+            backend:
+              service: { name: staff-control-center, port: { name: https } }
+          - path: /logo.png
+            pathType: Exact
+            backend:
+              service: { name: staff-control-center, port: { name: https } }
+          - path: /sw.js
+            pathType: Exact
+            backend:
+              service: { name: staff-control-center, port: { name: https } }

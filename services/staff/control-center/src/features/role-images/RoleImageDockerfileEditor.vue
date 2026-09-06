@@ -5,6 +5,11 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { FileCode2, LockKeyhole, ShieldAlert } from "@lucide/vue";
 import { basicSetup } from "codemirror";
+import {
+  codeEditorKeymap,
+  insertVoiceText,
+} from "@/shared/ui/code-editor-keymap";
+import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = withDefaults(
@@ -74,6 +79,7 @@ onMounted(() => {
     doc: props.modelValue,
     extensions: [
       basicSetup,
+      codeEditorKeymap,
       StreamLanguage.define(dockerFile),
       EditorState.tabSize.of(2),
       EditorView.lineWrapping,
@@ -121,7 +127,17 @@ onBeforeUnmount(() => {
       <span />
       <LockKeyhole v-if="readonly" :size="15" aria-hidden="true" />
     </header>
-    <div ref="editorRoot" class="dockerfile-editor__viewport" />
+    <div class="code-editor-voice">
+      <div
+        ref="editorRoot"
+        class="dockerfile-editor__viewport"
+        :title="$t('app.editorKeyboard')"
+      />
+      <VoiceInputButton
+        :readonly="readonly"
+        @transcript="insertVoiceText(view, $event)"
+      />
+    </div>
     <footer aria-live="polite">
       <span class="mono">{{ lineCount }} · {{ modelValue.length }}</span>
       <span v-if="validationMessages.length" class="editor-errors">

@@ -48,11 +48,6 @@ export interface ArtifactUploadRequest {
   onProgress: (progress: { loadedBytes: number; totalBytes: number }) => void;
 }
 
-interface ArtifactCursorState {
-  version: 1;
-  sources: Partial<Record<Artifact["source"], string | null>>;
-}
-
 interface GeneratedResponse<T> {
   data?: T;
   error?: unknown;
@@ -60,45 +55,6 @@ interface GeneratedResponse<T> {
 }
 
 const artifactPageSize = 40;
-
-function parseCursor(
-  cursor: string | undefined,
-  sources: readonly Artifact["source"][],
-): Partial<Record<Artifact["source"], string | null>> {
-  if (!cursor) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cursor);
-  } catch {
-    throw new Error("Artifact cursor is invalid");
-  }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("version" in parsed) ||
-    parsed.version !== 1 ||
-    !("sources" in parsed) ||
-    typeof parsed.sources !== "object" ||
-    parsed.sources === null
-  )
-    throw new Error("Artifact cursor is invalid");
-  const values = parsed.sources as Record<string, unknown>;
-  const result: Partial<Record<Artifact["source"], string | null>> = {};
-  for (const source of sources) {
-    const value = values[source];
-    if (value !== undefined && value !== null && typeof value !== "string")
-      throw new Error("Artifact cursor is invalid");
-    if (value === null || typeof value === "string") result[source] = value;
-  }
-  return result;
-}
-
-function serializeCursor(
-  sources: Partial<Record<Artifact["source"], string | null>>,
-): string | null {
-  if (Object.values(sources).every((value) => value === null)) return null;
-  return JSON.stringify({ version: 1, sources } satisfies ArtifactCursorState);
-}
 
 function responseHeaders(xhr: XMLHttpRequest): Headers {
   const headers = new Headers();
@@ -234,89 +190,41 @@ export async function loadArtifactPage(
   filters: ArtifactListFilters,
 ): Promise<AsyncEntityPage<ArtifactListItem>> {
   const query = request.query.trim();
-  if (filters.allSources) {
-    const result = await unwrap(
-      listArtifacts({
-        path: { projectRef },
-        query: {
-          lifecycleState: filters.lifecycleState ?? "ACTIVE",
-          pageSize: artifactPageSize,
-          ...(filters.type ? { type: filters.type } : {}),
-          ...(filters.scanState ? { scanState: filters.scanState } : {}),
-          ...(query ? { query } : {}),
-          ...(request.cursor ? { pageToken: request.cursor } : {}),
-        },
-        signal: request.signal,
-      }),
-    );
-    return artifactPage(result.data.items, result.data.nextPageToken ?? null);
-  }
-  const sourceKinds = [...new Set(filters.sourceKinds)];
-  if (sourceKinds.length === 0) return { items: [], nextCursor: null };
-  const cursors = parseCursor(request.cursor, sourceKinds);
-  const activeSourceCount = sourceKinds.filter(
-    (sourceKind) => cursors[sourceKind] !== null,
-  ).length;
-  const pageSize = Math.max(
-    1,
-    Math.floor(artifactPageSize / Math.max(1, activeSourceCount)),
-  );
-  const pages = await Promise.all(
-    sourceKinds.map(async (sourceKind) => {
-      const cursor = cursors[sourceKind];
-      if (cursor === null)
-        return {
-          items: [] as Artifact[],
-          nextPageToken: undefined,
-          sourceKind,
-        };
-      const result = await unwrap(
-        listArtifacts({
-          path: { projectRef },
-          query: {
-            lifecycleState: filters.lifecycleState ?? "ACTIVE",
-            pageSize,
-            sourceKind,
-            ...(filters.type ? { type: filters.type } : {}),
-            ...(filters.scanState ? { scanState: filters.scanState } : {}),
-            ...(query ? { query } : {}),
-            ...(cursor ? { pageToken: cursor } : {}),
-          },
-          signal: request.signal,
-        }),
-      );
-      return {
-        items: result.data.items,
-        nextPageToken: result.data.nextPageToken,
-        sourceKind,
-      };
+  const sourceKinds = filters.allSources
+    ? undefined
+    : [...new Set(filters.sourceKinds)];
+  if (sourceKinds?.length === 0)
+    return { items: [], total: 0, nextCursor: null };
+  const result = await unwrap(
+    listArtifacts({
+      path: { projectRef },
+      query: {
+        lifecycleState: filters.lifecycleState ?? "ACTIVE",
+        pageSize: artifactPageSize,
+        ...(sourceKinds ? { sourceKinds } : {}),
+        ...(filters.type ? { type: filters.type } : {}),
+        ...(filters.scanState ? { scanState: filters.scanState } : {}),
+        ...(query ? { query } : {}),
+        ...(request.cursor ? { pageToken: request.cursor } : {}),
+      },
+      signal: requestSignal(request.signal),
     }),
   );
-  const nextSources: Partial<Record<Artifact["source"], string | null>> = {};
-  for (const page of pages)
-    nextSources[page.sourceKind] = page.nextPageToken ?? null;
-  const artifacts = pages
-    .flatMap((page) => page.items)
-    .sort(
-      (left, right) =>
-        right.createdAt.localeCompare(left.createdAt) ||
-        left.ref.localeCompare(right.ref),
-    );
-  return artifactPage(artifacts, serializeCursor(nextSources));
-}
-
-function artifactPage(
-  artifacts: Artifact[],
-  nextCursor: string | null,
-): AsyncEntityPage<ArtifactListItem> {
+  request.signal.throwIfAborted();
+  if (
+    !Number.isSafeInteger(result.data.total) ||
+    result.data.total < result.data.items.length
+  )
+    throw new Error("Invalid artifact catalog total");
   return {
-    items: artifacts.map((artifact) => ({
+    items: result.data.items.map((artifact) => ({
       artifact,
       description: artifact.mediaType,
       id: artifact.ref,
       label: artifact.fileName,
     })),
-    nextCursor,
+    total: result.data.total,
+    nextCursor: result.data.nextPageToken ?? null,
   };
 }
 
@@ -333,15 +241,16 @@ export async function uploadArtifactItem(
 }
 
 export async function loadArtifactImpact(
-  artifact: Artifact,
+  artifact: Pick<Artifact, "ref" | "version">,
   action: ArtifactImpact["action"],
+  signal?: AbortSignal,
 ): Promise<ArtifactImpact> {
   const impact = (
     await unwrap(
       getArtifactImpact({
         path: { artifactRef: artifact.ref },
         query: { action },
-        signal: requestSignal(),
+        signal: requestSignal(signal),
       }),
     )
   ).data;
@@ -370,7 +279,7 @@ function versionedHeaders(headers: MutationHeaders): {
 
 function destructiveHeaders(
   headers: MutationHeaders,
-  artifact: Artifact,
+  artifact: Pick<Artifact, "ref" | "version">,
   impact: ArtifactImpact,
   action: ArtifactImpact["action"],
 ): ReturnType<typeof versionedHeaders> & { "X-Impact-Digest": string } {
@@ -388,8 +297,9 @@ function destructiveHeaders(
 }
 
 export async function deleteArtifactItem(
-  artifact: Artifact,
+  artifact: Pick<Artifact, "ref" | "version">,
   impact: ArtifactImpact,
+  signal?: AbortSignal,
 ): Promise<Artifact> {
   return (
     await mutate(
@@ -397,7 +307,7 @@ export async function deleteArtifactItem(
         deleteArtifact({
           path: { artifactRef: artifact.ref },
           headers: destructiveHeaders(headers, artifact, impact, "DELETE"),
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       artifact.version,
     )
@@ -405,7 +315,8 @@ export async function deleteArtifactItem(
 }
 
 export async function restoreArtifactItem(
-  artifact: Artifact,
+  artifact: Pick<Artifact, "ref" | "version">,
+  signal?: AbortSignal,
 ): Promise<Artifact> {
   return (
     await mutate(
@@ -413,7 +324,7 @@ export async function restoreArtifactItem(
         restoreArtifact({
           path: { artifactRef: artifact.ref },
           headers: versionedHeaders(headers),
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       artifact.version,
     )
@@ -421,8 +332,9 @@ export async function restoreArtifactItem(
 }
 
 export async function purgeArtifactItem(
-  artifact: Artifact,
+  artifact: Pick<Artifact, "ref" | "version">,
   impact: ArtifactImpact,
+  signal?: AbortSignal,
 ): Promise<ArtifactPurgeReceipt> {
   return (
     await mutate(
@@ -430,7 +342,7 @@ export async function purgeArtifactItem(
         purgeArtifact({
           path: { artifactRef: artifact.ref },
           headers: destructiveHeaders(headers, artifact, impact, "PURGE"),
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       artifact.version,
     )

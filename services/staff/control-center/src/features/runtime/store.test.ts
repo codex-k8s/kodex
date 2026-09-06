@@ -92,8 +92,11 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
+import { overlaySchemaFixture } from "@/test-utils/runtime-catalog-fixture";
 function view(model: string, version: number): AgentRuntimeConfigurationView {
   return {
+    skillBindings: [],
+    memoryBindings: [],
     configuration: {
       ref: `rconf_${String(version)}`,
       version,
@@ -105,7 +108,13 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
         ref: `policy_${String(version)}`,
         version,
         mode: "FIXED",
-        accountCandidates: [{ accountRef: "account_main", weight: 1 }],
+        accountCandidates: [
+          {
+            accountRef: "account_main",
+            weight: 1,
+            defaultReasoningEffort: "medium",
+          },
+        ],
         digest: "a".repeat(64),
         createdAt: "2026-08-28T08:00:00Z",
       },
@@ -155,6 +164,7 @@ function view(model: string, version: number): AgentRuntimeConfigurationView {
     },
     safeEffectiveConfig: `model = "${model}"`,
     agentVersion: version,
+    overlaySchema: overlaySchemaFixture,
   };
 }
 
@@ -207,6 +217,85 @@ describe("runtime store", () => {
     await oldLoad;
 
     expect(store.agentViews.agent_sales?.configuration.model).toBe("gpt-new");
+  });
+  it.each(["readiness", "agents"] as const)(
+    "404 %s очищает обе inspector projections и не принимает поздний соседний ответ",
+    async (missing) => {
+      const store = useRuntimeStore();
+      const environment = view("gpt-5.6-sol", 3).environment;
+      const readiness = {
+        environmentRef: environment.ref,
+        environmentVersion: environment.version,
+        publishedVersionRef: environment.currentVersion.ref,
+        publishedVersionDigest: environment.currentVersion.digest,
+        ready: true,
+        blockers: [],
+        observedAt: "2026-09-06T00:00:00Z",
+      };
+      getRuntimeEnvironmentReadinessMock.mockReturnValueOnce(
+        response(readiness),
+      );
+      listRuntimeEnvironmentAgentsMock.mockReturnValueOnce(
+        response({ items: [], nextPageToken: "next" }),
+      );
+      await store.loadEnvironmentReadiness(environment.ref);
+      await store.loadEnvironmentAgents(environment.ref);
+      expect(store.environmentReadiness[environment.ref]?.ready).toBe(true);
+      expect(store.environmentAgentCursors[environment.ref]).toBe("next");
+      const pending = deferred<ReturnType<typeof response>>();
+      const denied = {
+        error: { status: 404, code: "NOT_FOUND", retryable: false },
+        response: new Response(null, { status: 404 }),
+      };
+      const otherMock =
+        missing === "readiness"
+          ? listRuntimeEnvironmentAgentsMock
+          : getRuntimeEnvironmentReadinessMock;
+      const missingMock =
+        missing === "readiness"
+          ? getRuntimeEnvironmentReadinessMock
+          : listRuntimeEnvironmentAgentsMock;
+      otherMock.mockReturnValueOnce(pending.promise);
+      missingMock.mockReturnValueOnce(denied);
+      const otherLoad =
+        missing === "readiness"
+          ? store.loadEnvironmentAgents(environment.ref)
+          : store.loadEnvironmentReadiness(environment.ref);
+      await (missing === "readiness"
+        ? store.loadEnvironmentReadiness(environment.ref)
+        : store.loadEnvironmentAgents(environment.ref));
+      pending.resolve(
+        response(
+          missing === "readiness"
+            ? { items: [], nextPageToken: "stale" }
+            : readiness,
+        ),
+      );
+      await otherLoad;
+      expect(store.environmentReadiness[environment.ref]).toBeUndefined();
+      expect(store.environmentAgents[environment.ref]).toBeUndefined();
+      expect(store.environmentAgentCursors[environment.ref]).toBeUndefined();
+      expect(
+        store.problems[`environment-${missing}:${environment.ref}`]?.code,
+      ).toBe("NOT_FOUND");
+    },
+  );
+  it("readiness503 убирает stale READY без объявления окружения отсутствующим", async () => {
+    const store = useRuntimeStore();
+    const environment = view("gpt-5.6-sol", 3).environment;
+    getRuntimeEnvironmentReadinessMock.mockReturnValueOnce(
+      response({ environmentRef: environment.ref, ready: true }),
+    );
+    await store.loadEnvironmentReadiness(environment.ref);
+    getRuntimeEnvironmentReadinessMock.mockReturnValueOnce({
+      error: { status: 503, code: "UNAVAILABLE", retryable: true },
+      response: new Response(null, { status: 503 }),
+    });
+    await store.loadEnvironmentReadiness(environment.ref);
+    expect(store.environmentReadiness[environment.ref]).toBeUndefined();
+    expect(
+      store.problems[`environment-readiness:${environment.ref}`]?.code,
+    ).toBe("UNAVAILABLE");
   });
 
   it("повторяет безопасное чтение runtime-конфигурации и версий в расширенном бюджете", async () => {

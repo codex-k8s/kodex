@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  ChevronDown,
+  Info,
   FileCode2,
   PackageCheck,
   Plus,
@@ -13,18 +13,27 @@ import { useI18n } from "vue-i18n";
 import type { IntegrationPackagePresentation } from "@/features/integrations/ui/model";
 import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import type { AppProblem } from "@/shared/api/problem";
+import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
 
 defineProps<{
   packages: readonly IntegrationPackagePresentation[];
   categories: readonly string[];
   search: string;
   category: string;
+  loading?: boolean;
+  hasMore?: boolean;
+  problem?: AppProblem;
 }>();
 
 const emit = defineEmits<{
   "update:search": [value: string];
   "update:category": [value: string];
   connect: [definitionKey: string];
+  more: [];
+  retry: [];
 }>();
 
 const { t } = useI18n();
@@ -32,6 +41,13 @@ const expandedKey = ref("");
 
 function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
+}
+function scroll(event: Event): void {
+  if (
+    event.currentTarget instanceof HTMLElement &&
+    nearScrollEnd(event.currentTarget)
+  )
+    emit("more");
 }
 
 function fieldType(field: IntegrationConfigurationField): string {
@@ -48,7 +64,6 @@ function fieldType(field: IntegrationConfigurationField): string {
         <h2 id="integration-catalog-title">
           {{ t("integrationsRedesign.catalogTitle") }}
         </h2>
-        <p>{{ t("integrationsRedesign.catalogDescription") }}</p>
       </div>
       <span class="result-count">{{
         t("integrationsRedesign.packageCount", { count: packages.length })
@@ -87,7 +102,15 @@ function fieldType(field: IntegrationConfigurationField): string {
         </select>
       </label>
     </div>
-    <div v-if="packages.length" class="package-grid">
+    <ProblemNotice v-if="problem" :problem="problem" @retry="emit('retry')" />
+    <p v-if="loading && !packages.length" role="status">
+      {{ t("common.loading") }}
+    </p>
+    <div
+      v-if="packages.length"
+      class="package-grid"
+      @scroll="!loading && !problem && scroll($event)"
+    >
       <article v-for="item in packages" :key="item.key" class="package-card">
         <header class="package-card__heading">
           <span class="package-icon" aria-hidden="true">
@@ -159,113 +182,133 @@ function fieldType(field: IntegrationConfigurationField): string {
           </span>
         </div>
 
-        <section
-          v-show="expandedKey === item.key"
-          class="package-details"
-          :aria-label="t('integrationsRedesign.packageDetails')"
-          :aria-hidden="expandedKey !== item.key"
+        <ModalDialog
+          v-if="expandedKey === item.key"
+          :title="item.name"
+          size="xl"
+          @close="expandedKey = ''"
         >
-          <div class="manifest-facts">
-            <span>
-              <FileCode2 :size="14" aria-hidden="true" />
-              {{ item.definition.schemaVersion }} · v{{
-                item.definition.definitionVersion
-              }}
-            </span>
-            <span class="mono">{{ item.definition.adapter }}</span>
-            <span class="mono package-digest" :title="item.definition.digest">
-              {{ item.definition.digest.slice(0, 12) }}…
-            </span>
-          </div>
-          <section class="configuration-schema">
-            <h4>Схема подключения</h4>
-            <dl
-              v-if="item.definition.configurationFields.length"
-              class="field-schema"
-            >
-              <div
-                v-for="field in item.definition.configurationFields"
-                :key="field.key"
+          <section
+            class="package-details"
+            :aria-label="t('integrationsRedesign.packageDetails')"
+          >
+            <div class="manifest-facts">
+              <span>
+                <FileCode2 :size="14" aria-hidden="true" />
+                {{ item.definition.schemaVersion }} · v{{
+                  item.definition.definitionVersion
+                }}
+              </span>
+              <span class="mono">{{ item.definition.adapter }}</span>
+              <span class="mono package-digest" :title="item.definition.digest">
+                {{ item.definition.digest.slice(0, 12) }}…
+              </span>
+            </div>
+            <section class="configuration-schema">
+              <h4>Схема подключения</h4>
+              <dl
+                v-if="item.definition.configurationFields.length"
+                class="field-schema"
               >
-                <dt>
-                  <strong>{{ field.label }}</strong>
-                  <code>{{ field.key }}</code>
-                </dt>
-                <dd>
-                  <span class="type-token">{{ fieldType(field) }}</span>
-                  <span>{{
-                    field.required ? "обязательное" : "необязательное"
-                  }}</span>
-                  <span>{{ field.help }}</span>
-                </dd>
-              </div>
-            </dl>
-            <p v-else class="schema-empty">
-              Публичная конфигурация для подключения не требуется.
-            </p>
-          </section>
-          <ul class="capability-list">
-            <li
-              v-for="capability in item.definition.capabilities"
-              :key="capability.key"
-            >
-              <div class="capability-heading">
-                <strong>{{ capability.name }}</strong>
-                <span>{{ t("integrations.risk." + capability.risk) }}</span>
-                <span v-if="capability.approvalRequired" class="approval-fact">
-                  <ShieldCheck :size="13" aria-hidden="true" /> Human Gate
-                </span>
-              </div>
-              <p>{{ capability.description }}</p>
-              <dl class="capability-policy">
-                <div>
-                  <dt>Operation</dt>
-                  <dd class="mono">{{ capability.operation }}</dd>
-                </div>
-                <div>
-                  <dt>Resource scope</dt>
-                  <dd class="mono">{{ capability.resourceKind }}</dd>
-                </div>
-                <div>
-                  <dt>Approval policy</dt>
-                  <dd class="mono">{{ capability.approvalPolicy }}</dd>
+                <div
+                  v-for="field in item.definition.configurationFields"
+                  :key="field.key"
+                >
+                  <dt>
+                    <strong>{{ field.label }}</strong>
+                    <code>{{ field.key }}</code>
+                  </dt>
+                  <dd>
+                    <span class="type-token">{{ fieldType(field) }}</span>
+                    <span>{{
+                      field.required ? "обязательное" : "необязательное"
+                    }}</span>
+                    <span>{{ field.help }}</span>
+                  </dd>
                 </div>
               </dl>
-              <section class="capability-inputs">
-                <h5>Входные поля</h5>
-                <dl v-if="capability.inputFields.length" class="field-schema">
-                  <div v-for="field in capability.inputFields" :key="field.key">
-                    <dt>
-                      <strong>{{ field.label }}</strong>
-                      <code>{{ field.key }}</code>
-                    </dt>
-                    <dd>
-                      <span class="type-token">{{ fieldType(field) }}</span>
-                      <span>{{
-                        field.required ? "обязательное" : "необязательное"
-                      }}</span>
-                      <span>{{ field.help }}</span>
-                    </dd>
+              <p v-else class="schema-empty">
+                Публичная конфигурация для подключения не требуется.
+              </p>
+            </section>
+            <ul class="capability-list">
+              <li
+                v-for="capability in item.definition.capabilities"
+                :key="capability.key"
+              >
+                <div class="capability-heading">
+                  <strong>{{ capability.name }}</strong>
+                  <span>{{ t("integrations.risk." + capability.risk) }}</span>
+                  <span
+                    v-if="capability.approvalRequired"
+                    class="approval-fact"
+                  >
+                    <ShieldCheck :size="13" aria-hidden="true" />
+                    {{ t("workflows.humanGate") }}
+                  </span>
+                </div>
+                <p>{{ capability.description }}</p>
+                <dl class="capability-policy">
+                  <div>
+                    <dt>{{ t("managed.fields.operation") }}</dt>
+                    <dd class="mono">{{ capability.operation }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t("managed.fields.resourceKind") }}</dt>
+                    <dd class="mono">{{ capability.resourceKind }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t("managed.fields.approval") }}</dt>
+                    <dd class="mono">{{ capability.approvalPolicy }}</dd>
                   </div>
                 </dl>
-                <p v-else class="schema-empty">Входные поля отсутствуют.</p>
-              </section>
-            </li>
-          </ul>
-        </section>
+                <section class="capability-inputs">
+                  <h5>Входные поля</h5>
+                  <dl v-if="capability.inputFields.length" class="field-schema">
+                    <div
+                      v-for="field in capability.inputFields"
+                      :key="field.key"
+                    >
+                      <dt>
+                        <strong>{{ field.label }}</strong>
+                        <code>{{ field.key }}</code>
+                      </dt>
+                      <dd>
+                        <span class="type-token">{{ fieldType(field) }}</span>
+                        <span>{{
+                          field.required ? "обязательное" : "необязательное"
+                        }}</span>
+                        <span>{{ field.help }}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                  <p v-else class="schema-empty">Входные поля отсутствуют.</p>
+                </section>
+              </li>
+            </ul>
+          </section>
+          <template #actions>
+            <button
+              class="button button--primary"
+              :disabled="!item.canConnect"
+              @click="
+                expandedKey = '';
+                emit('connect', item.key);
+              "
+            >
+              <Plus :size="15" />{{ t("integrations.connect") }}
+            </button>
+          </template>
+        </ModalDialog>
 
         <footer class="package-card__actions">
           <button
             class="button"
             type="button"
-            :aria-expanded="expandedKey === item.key"
+            aria-haspopup="dialog"
             @click="toggleDetails(item.key)"
           >
-            <ChevronDown
-              :size="15"
-              aria-hidden="true"
-              :class="{ 'details-chevron--open': expandedKey === item.key }"
-            />
+            <Info :size="15" aria-hidden="true" />
             {{ t("integrationsRedesign.packageDetails") }}
           </button>
           <button
@@ -286,16 +329,19 @@ function fieldType(field: IntegrationConfigurationField): string {
         </footer>
       </article>
     </div>
-    <div v-else class="catalog-empty">
+    <div v-else-if="!loading && !problem" class="catalog-empty">
       <PackageCheck :size="28" aria-hidden="true" />
       <h3>{{ t("integrationsRedesign.noPackages") }}</h3>
       <p>{{ t("integrationsRedesign.noPackagesHint") }}</p>
     </div>
-
-    <div class="zero-connection-notice">
-      <ShieldCheck :size="18" aria-hidden="true" />
-      <span>{{ t("integrationsRedesign.zeroConnectionsReady") }}</span>
-    </div>
+    <button
+      v-if="hasMore"
+      class="button"
+      :disabled="loading"
+      @click="emit('more')"
+    >
+      {{ t("managed.more") }}
+    </button>
   </section>
 </template>
 
@@ -309,7 +355,6 @@ function fieldType(field: IntegrationConfigurationField): string {
 .package-card__actions,
 .package-facts,
 .catalog-toolbar,
-.zero-connection-notice,
 .manifest-facts,
 .capability-heading,
 .unavailable-details {
@@ -384,6 +429,8 @@ function fieldType(field: IntegrationConfigurationField): string {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 12px;
+  max-height: calc(6 * 312px);
+  overflow: auto;
 }
 .package-card {
   display: flex;
@@ -589,9 +636,6 @@ function fieldType(field: IntegrationConfigurationField): string {
   margin-top: auto;
   padding-top: 16px;
 }
-.details-chevron--open {
-  transform: rotate(180deg);
-}
 .catalog-empty {
   display: grid;
   justify-items: center;
@@ -601,18 +645,6 @@ function fieldType(field: IntegrationConfigurationField): string {
   border-radius: 8px;
   text-align: center;
   background: var(--panel);
-}
-.zero-connection-notice {
-  align-items: flex-start;
-  padding: 11px 13px;
-  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
-  border-radius: 8px;
-  color: var(--text-secondary);
-  background: var(--success-soft);
-}
-.zero-connection-notice svg {
-  flex: 0 0 auto;
-  color: var(--success);
 }
 @media (max-width: 700px) {
   .panel-heading,

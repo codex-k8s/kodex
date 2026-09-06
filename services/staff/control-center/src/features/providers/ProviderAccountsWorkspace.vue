@@ -10,8 +10,11 @@ import {
   Search,
   ShieldOff,
   Smartphone,
+  Trash2,
+  Maximize2,
 } from "@lucide/vue";
 import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
 import {
   computed,
   onBeforeUnmount,
@@ -26,6 +29,13 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import { loadProviderAccount, loadProviderDefinitions } from "./api";
+import ProviderUsageDetails from "./ProviderUsageDetails.vue";
+import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
+import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
+import type { ProviderLifecycleResult } from "./lifecycle";
 
 import {
   accountAllows,
@@ -33,6 +43,7 @@ import {
   pageAllowsAccountCreation,
   readableProviderBlocker,
   safeVerificationUri,
+  upsertProviderAccount,
   type ProviderAccount,
   type ProviderAuthorizationMethod,
   type ProviderDefinitionKey,
@@ -40,6 +51,7 @@ import {
 import { useProvidersStore } from "./store";
 
 const store = useProvidersStore();
+const { t } = useI18n();
 const {
   accounts,
   accountsNextPageToken,
@@ -54,11 +66,15 @@ const {
   problem,
 } = storeToRefs(store);
 const search = ref("");
+const expanded = ref(false);
 const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
 const revokeAccount = ref<ProviderAccount>();
+const impactAccount = ref<ProviderAccount>();
+const authorizationRecoveryPending = ref(false);
 const authorizationMethod = ref<ProviderAuthorizationMethod>("DEVICE_CODE");
 const apiKey = ref("");
+const replacingApiKey = ref(false);
 const localProblem = ref<AppProblem>();
 const createForm = reactive({
   name: "",
@@ -72,6 +88,44 @@ const canCreate = computed(() =>
 const availableDefinitions = computed(() =>
   definitions.value.filter((item) => item.available),
 );
+const selectedDefinition = computed(() => {
+  const definition = definitions.value.find(
+    (item) => item.key === createForm.definitionKey,
+  );
+  return definition
+    ? {
+        ref: definition.key,
+        title: definition.name,
+        description: definition.description,
+      }
+    : undefined;
+});
+async function searchDefinitions(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+): Promise<AsyncEntityOptionPage> {
+  const page = await loadProviderDefinitions(query, cursor, signal);
+  if (!Array.isArray(page.items) || typeof page.nextPageToken !== "string")
+    throw new Error("Invalid provider definition catalog");
+  return {
+    items: page.items.map((definition) => ({
+      ref: definition.key,
+      title: definition.name,
+      description: definition.description,
+      disabled: !definition.available,
+      disabledReason: definition.available
+        ? undefined
+        : definition.readinessBlockers
+            .map((code) => t(blockerLabel(code)))
+            .join("; ") || t("common.unavailable"),
+    })),
+    nextPageToken: page.nextPageToken || undefined,
+  };
+}
+function chooseDefinition(value: unknown): void {
+  createForm.definitionKey = value === "openai-codex" ? value : "";
+}
 const authorizationDefinition = computed(() =>
   definitions.value.find(
     (item) => item.key === authorizationAccount.value?.definitionKey,
@@ -94,7 +148,7 @@ function blockerLabel(code: string): string {
 
 function scheduleSearch(): void {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(search.value), 280);
+  searchTimer = setTimeout(() => void store.load(search.value), 500);
 }
 
 function openCreate(): void {
@@ -102,6 +156,7 @@ function openCreate(): void {
   createForm.name = "";
   createForm.definitionKey = availableDefinitions.value[0]?.key ?? "";
   createOpen.value = true;
+  localProblem.value = undefined;
 }
 
 async function createAccount(): Promise<void> {
@@ -121,11 +176,16 @@ async function createAccount(): Promise<void> {
 }
 
 function openAuthorization(account: ProviderAccount): void {
+  if (authorizationAccount.value)
+    store.stopPolling(authorizationAccount.value.ref);
   authorizationAccount.value = account;
-  authorizationMethod.value = authorizationMethods.value.includes("DEVICE_CODE")
-    ? "DEVICE_CODE"
-    : "API_KEY";
+  authorizationMethod.value =
+    account.authorization?.method ??
+    (authorizationMethods.value.includes("DEVICE_CODE")
+      ? "DEVICE_CODE"
+      : "API_KEY");
   apiKey.value = "";
+  replacingApiKey.value = false;
   localProblem.value = undefined;
 }
 
@@ -138,26 +198,44 @@ function closeAuthorization(): void {
 }
 
 function syncAuthorizationAccount(account: ProviderAccount): void {
-  authorizationAccount.value = account;
+  if (authorizationAccount.value?.ref === account.ref)
+    authorizationAccount.value = account;
+  else store.stopPolling(account.ref);
 }
 
 async function startDevice(): Promise<void> {
   const account = authorizationAccount.value;
-  if (!account) return;
+  if (!account || authorizationRecoveryPending.value) return;
+  localProblem.value = undefined;
   try {
     syncAuthorizationAccount(await store.startDevice(account));
   } catch (error) {
-    localProblem.value = asProblem(error);
+    if (authorizationAccount.value?.ref === account.ref)
+      localProblem.value = asProblem(error);
+  }
+}
+
+async function reauthorize(): Promise<void> {
+  const account = authorizationAccount.value;
+  if (!account || authorizationRecoveryPending.value) return;
+  localProblem.value = undefined;
+  try {
+    syncAuthorizationAccount(await store.startDevice(account, true));
+  } catch (error) {
+    if (authorizationAccount.value?.ref === account.ref)
+      localProblem.value = asProblem(error);
   }
 }
 
 async function refreshAuthorization(): Promise<void> {
   const account = authorizationAccount.value;
-  if (!account) return;
+  if (!account || authorizationRecoveryPending.value) return;
+  localProblem.value = undefined;
   try {
     syncAuthorizationAccount(await store.refreshAuthorization(account));
   } catch (error) {
-    localProblem.value = asProblem(error);
+    if (authorizationAccount.value?.ref === account.ref)
+      localProblem.value = asProblem(error);
   }
 }
 
@@ -171,10 +249,13 @@ async function submitApiKey(): Promise<void> {
     return;
   const credential = apiKey.value;
   apiKey.value = "";
+  localProblem.value = undefined;
   try {
     syncAuthorizationAccount(await store.authorizeApiKey(account, credential));
+    replacingApiKey.value = false;
   } catch (error) {
-    localProblem.value = asProblem(error);
+    if (authorizationAccount.value?.ref === account.ref)
+      localProblem.value = asProblem(error);
   }
 }
 
@@ -186,31 +267,128 @@ async function changeEnabled(account: ProviderAccount): Promise<void> {
   }
 }
 
-async function revoke(account: ProviderAccount): Promise<void> {
+async function revoke(account: ProviderAccount): Promise<boolean> {
   try {
     const updated = await store.revoke(account);
     if (authorizationAccount.value?.ref === updated.ref)
       authorizationAccount.value = updated;
+    return true;
   } catch (error) {
     localProblem.value = asProblem(error);
+    return false;
   }
 }
 
 function requestRevoke(account: ProviderAccount): void {
   if (!accountAllows(account, "REVOKE")) return;
   revokeAccount.value = account;
+  localProblem.value = undefined;
+}
+
+function requestDelete(account: ProviderAccount): void {
+  if (!accountAllows(account, "DELETE")) return;
+  closeAuthorization();
+  impactAccount.value = account;
+  localProblem.value = undefined;
 }
 
 async function confirmRevoke(): Promise<void> {
   const account = revokeAccount.value;
   if (!account) return;
-  await revoke(account);
+  if (!(await revoke(account))) return;
   revokeAccount.value = undefined;
 }
 
+function receiveLifecycleAccount(account: ProviderAccount): void {
+  store.accounts = upsertProviderAccount(store.accounts, account);
+  if (authorizationAccount.value?.ref === account.ref) {
+    if (account.state === "DELETED") closeAuthorization();
+    else authorizationAccount.value = account;
+  }
+}
+function recovered(result: ProviderLifecycleResult): void {
+  localProblem.value = undefined;
+  store.problem = undefined;
+  receiveLifecycleAccount(result.account);
+}
+
+let verificationController = new AbortController();
+let verificationTimer: ReturnType<typeof setTimeout> | undefined;
+let verificationGeneration = 0;
+let verificationReads = 0;
+function stopVerificationObservation(): void {
+  verificationGeneration++;
+  verificationController.abort();
+  verificationController = new AbortController();
+  clearTimeout(verificationTimer);
+}
+function scheduleVerificationObservation(): void {
+  if (
+    authorizationAccount.value?.verification?.state !== "PENDING" ||
+    verificationReads >= 150
+  )
+    return;
+  verificationTimer = setTimeout(() => void observeVerification(), 4000);
+}
+async function observeVerification(): Promise<void> {
+  const current = authorizationAccount.value;
+  if (!current || current.verification?.state !== "PENDING") return;
+  if (
+    busyRefs.value.includes(current.ref) ||
+    authorizationRecoveryPending.value
+  ) {
+    scheduleVerificationObservation();
+    return;
+  }
+  const generation = verificationGeneration;
+  verificationReads++;
+  try {
+    const next = await loadProviderAccount(
+      current.ref,
+      verificationController.signal,
+    );
+    if (generation !== verificationGeneration) return;
+    if (next.ref !== current.ref)
+      throw new Error("Provider verification observation scope changed");
+    if (
+      next.version >= (authorizationAccount.value?.version ?? current.version)
+    )
+      receiveLifecycleAccount(next);
+    scheduleVerificationObservation();
+  } catch (error) {
+    if (generation !== verificationGeneration) return;
+    store.accounts = store.accounts.filter((item) => item.ref !== current.ref);
+    closeAuthorization();
+    localProblem.value = asProblem(error);
+  }
+}
+watch(
+  () => [
+    authorizationAccount.value?.ref,
+    authorizationAccount.value?.verification?.ref,
+    authorizationAccount.value?.verification?.state,
+  ],
+  () => {
+    stopVerificationObservation();
+    verificationReads = 0;
+    scheduleVerificationObservation();
+  },
+);
+
 async function copyUserCode(): Promise<void> {
   const code = authorizationAccount.value?.authorization?.userCode;
-  if (code) await navigator.clipboard.writeText(code);
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch (error) {
+    localProblem.value = asProblem(error);
+  }
+}
+
+function scrollAccounts(event: Event): void {
+  const element = event.currentTarget as HTMLElement;
+  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
+    void store.loadMore();
 }
 
 onMounted(() => void store.load());
@@ -219,8 +397,16 @@ watch(accounts, (items) => {
   if (!currentRef) return;
   const updated = items.find((item) => item.ref === currentRef);
   if (updated) authorizationAccount.value = updated;
+  else closeAuthorization();
+});
+watch(authorizationMethod, () => {
+  apiKey.value = "";
+  replacingApiKey.value = false;
+  if (authorizationAccount.value && authorizationMethod.value !== "DEVICE_CODE")
+    store.stopPolling(authorizationAccount.value.ref);
 });
 onBeforeUnmount(() => {
+  stopVerificationObservation();
   if (searchTimer) clearTimeout(searchTimer);
   store.stopAllPolling();
   apiKey.value = "";
@@ -255,6 +441,14 @@ onBeforeUnmount(() => {
         @click="openCreate"
       >
         <Plus :size="17" aria-hidden="true" />{{ $t("providers.create") }}
+      </button>
+      <button
+        class="icon-button"
+        :aria-label="$t('catalog.expand')"
+        :title="$t('catalog.expand')"
+        @click="expanded = true"
+      >
+        <Maximize2 :size="17" />
       </button>
     </header>
 
@@ -292,92 +486,161 @@ onBeforeUnmount(() => {
     </section>
 
     <AsyncState
-      :loading="loading"
-      :problem="problem"
+      :loading="loading && !accounts.length"
+      :problem="accounts.length ? undefined : problem"
       @retry="store.load(search)"
     >
-      <div v-if="accounts.length" class="provider-account-list">
-        <article
-          v-for="account in accounts"
-          :key="account.ref"
-          class="provider-account-card"
-        >
-          <div class="provider-account-card__identity">
-            <span class="provider-account-card__icon"
-              ><KeyRound :size="20" aria-hidden="true"
-            /></span>
-            <div>
-              <h2>{{ account.name }}</h2>
-              <p>{{ providerName(account.definitionKey) }}</p>
-            </div>
-          </div>
-          <div class="provider-account-card__state">
-            <StatusBadge
-              :state="account.ready ? account.state : 'UNAVAILABLE'"
-            />
-            <span>{{
-              account.externalAccountMasked ||
-              $t("providers.externalAccountPending")
-            }}</span>
-          </div>
-          <div class="provider-account-card__actions">
-            <button
-              v-if="accountAllows(account, 'CONFIGURE_CREDENTIAL')"
-              class="button"
-              type="button"
-              :disabled="busyRefs.includes(account.ref)"
-              @click="openAuthorization(account)"
-            >
-              {{ $t("providers.authorize") }}
-            </button>
-            <button
-              v-if="
-                accountAllows(account, account.enabled ? 'DISABLE' : 'ENABLE')
-              "
-              class="button"
-              type="button"
-              :disabled="busyRefs.includes(account.ref)"
-              @click="changeEnabled(account)"
-            >
-              {{ $t(account.enabled ? "common.disable" : "common.enable") }}
-            </button>
-            <button
-              v-if="accountAllows(account, 'REVOKE')"
-              class="button button--danger"
-              type="button"
-              :disabled="busyRefs.includes(account.ref)"
-              @click="requestRevoke(account)"
-            >
-              <ShieldOff :size="16" aria-hidden="true" />{{
-                $t("providers.revoke")
-              }}
-            </button>
-          </div>
-        </article>
-        <button
-          v-if="accountsNextPageToken"
-          class="button providers-load-more"
-          type="button"
-          :disabled="loadingMore"
-          @click="store.loadMore"
-        >
-          <LoaderCircle
-            v-if="loadingMore"
-            class="spin"
-            :size="16"
-            aria-hidden="true"
+      <component
+        :is="expanded ? ModalDialog : 'div'"
+        :title="expanded ? $t('providers.title') : undefined"
+        size="full"
+        @close="expanded = false"
+      >
+        <label v-if="expanded" class="providers-toolbar__search">
+          <Search :size="17" /><span class="sr-only">{{
+            $t("providers.search")
+          }}</span>
+          <input
+            v-model="search"
+            type="search"
+            :placeholder="$t('providers.searchPlaceholder')"
+            @input="scheduleSearch"
           />
-          {{ $t("providers.loadMore") }}
-        </button>
-      </div>
-      <section v-else class="empty-state">
-        <KeyRound :size="28" aria-hidden="true" />
-        <h2>{{ $t("providers.emptyTitle") }}</h2>
-        <p>{{ $t("providers.emptyText") }}</p>
-      </section>
+        </label>
+        <ProblemNotice
+          v-if="
+            problem &&
+            accounts.length &&
+            !authorizationAccount &&
+            !revokeAccount
+          "
+          :problem="problem"
+        />
+        <div
+          v-if="accounts.length"
+          class="provider-account-list"
+          :class="{ 'provider-account-list--expanded': expanded }"
+          @scroll="scrollAccounts"
+        >
+          <article
+            v-for="account in accounts"
+            :key="account.ref"
+            class="provider-account-card"
+          >
+            <div class="provider-account-card__identity">
+              <span class="provider-account-card__icon"
+                ><KeyRound :size="20" aria-hidden="true"
+              /></span>
+              <div>
+                <h2>{{ account.name }}</h2>
+                <p>{{ providerName(account.definitionKey) }}</p>
+              </div>
+            </div>
+            <div class="provider-account-card__state">
+              <StatusBadge :state="account.state" />
+              <ProviderUsageDetails :usage="account.usage" />
+              <span v-if="account.safeStatusReason">{{
+                $t(`providers.reasons.${account.safeStatusReason}`)
+              }}</span>
+              <span>{{
+                account.externalAccountMasked ||
+                $t("providers.externalAccountPending")
+              }}</span>
+            </div>
+            <div class="provider-account-card__actions">
+              <button
+                type="button"
+                class="button"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="impactAccount = account"
+              >
+                {{ $t("providerLifecycle.title") }}
+              </button>
+              <button
+                v-if="
+                  account.authorization?.method === 'DEVICE_CODE' &&
+                  accountAllows(account, 'REFRESH_AUTHORIZATION')
+                "
+                class="button"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="
+                  openAuthorization(account);
+                  refreshAuthorization();
+                "
+              >
+                <RefreshCw :size="16" />{{ $t("providers.checkAuthorization") }}
+              </button>
+              <button
+                v-if="accountAllows(account, 'DELETE')"
+                class="button button--danger"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="requestDelete(account)"
+              >
+                <Trash2 :size="16" />{{ $t("common.delete") }}
+              </button>
+              <button
+                v-if="accountAllows(account, 'CONFIGURE_CREDENTIAL')"
+                class="button"
+                type="button"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="openAuthorization(account)"
+              >
+                {{ $t("providers.authorize") }}
+              </button>
+              <button
+                v-if="
+                  accountAllows(account, account.enabled ? 'DISABLE' : 'ENABLE')
+                "
+                class="button"
+                type="button"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="changeEnabled(account)"
+              >
+                {{ $t(account.enabled ? "common.disable" : "common.enable") }}
+              </button>
+              <button
+                v-if="accountAllows(account, 'REVOKE')"
+                class="button button--danger"
+                type="button"
+                :disabled="busyRefs.includes(account.ref)"
+                @click="requestRevoke(account)"
+              >
+                <ShieldOff :size="16" aria-hidden="true" />{{
+                  $t("providers.revoke")
+                }}
+              </button>
+            </div>
+          </article>
+          <button
+            v-if="accountsNextPageToken"
+            class="button providers-load-more"
+            type="button"
+            :disabled="loadingMore"
+            @click="store.loadMore"
+          >
+            <LoaderCircle
+              v-if="loadingMore"
+              class="spin"
+              :size="16"
+              aria-hidden="true"
+            />
+            {{ $t("providers.loadMore") }}
+          </button>
+        </div>
+        <section v-else class="empty-state">
+          <KeyRound :size="28" aria-hidden="true" />
+          <h2>{{ $t("providers.emptyTitle") }}</h2>
+          <p>{{ $t("providers.emptyText") }}</p>
+        </section>
+      </component>
     </AsyncState>
 
-    <ProblemNotice v-if="localProblem" :problem="localProblem" />
+    <ProblemNotice
+      v-if="
+        localProblem && !createOpen && !authorizationAccount && !revokeAccount
+      "
+      :problem="localProblem"
+    />
 
     <ModalDialog
       v-if="createOpen"
@@ -386,26 +649,31 @@ onBeforeUnmount(() => {
       size="md"
       @close="createOpen = false"
     >
+      <ProblemNotice v-if="localProblem" :problem="localProblem" />
       <div class="provider-form">
         <label class="field">
           <span>{{ $t("common.name") }}</span>
           <input v-model="createForm.name" maxlength="160" autocomplete="off" />
         </label>
-        <label class="field">
+        <div class="field">
           <span>{{ $t("providers.definition") }}</span>
-          <select v-model="createForm.definitionKey">
-            <option
-              v-for="definition in availableDefinitions"
-              :key="definition.key"
-              :value="definition.key"
-            >
-              {{ definition.name }}
-            </option>
-          </select>
-        </label>
+          <AsyncEntityPicker
+            :model-value="createForm.definitionKey || null"
+            :selected="selectedDefinition"
+            :load-page="searchDefinitions"
+            :trigger-label="$t('providers.definition')"
+            :disabled="busyRefs.includes('create')"
+            @update:model-value="chooseDefinition"
+          />
+        </div>
       </div>
       <template #actions>
-        <button class="button" type="button" @click="createOpen = false">
+        <button
+          class="button"
+          type="button"
+          :disabled="busyRefs.includes('create')"
+          @click="createOpen = false"
+        >
           {{ $t("common.cancel") }}
         </button>
         <button
@@ -432,167 +700,286 @@ onBeforeUnmount(() => {
       size="lg"
       @close="closeAuthorization"
     >
-      <div class="authorization-dialog">
-        <div
-          class="authorization-methods"
-          role="tablist"
-          :aria-label="$t('providers.authorizationMethod')"
-        >
-          <button
-            v-for="method in authorizationMethods"
-            :key="method"
-            class="button"
-            :class="{ 'button--primary': authorizationMethod === method }"
-            type="button"
-            role="tab"
-            :aria-selected="authorizationMethod === method"
-            @click="authorizationMethod = method"
-          >
-            <Smartphone
-              v-if="method === 'DEVICE_CODE'"
-              :size="16"
-              aria-hidden="true"
-            />
-            <KeyRound v-else :size="16" aria-hidden="true" />
-            {{ $t(`providers.methods.${method}`) }}
-          </button>
-        </div>
-
-        <section
-          v-if="authorizationMethod === 'DEVICE_CODE'"
-          class="authorization-panel"
-        >
-          <template v-if="isPendingDeviceAuthorization(authorizationAccount)">
-            <p>{{ $t("providers.deviceInstructions") }}</p>
-            <a
-              v-if="
-                safeVerificationUri(
-                  authorizationAccount.authorization?.verificationUri,
-                )
-              "
-              class="button button--primary"
-              :href="
-                safeVerificationUri(
-                  authorizationAccount.authorization?.verificationUri,
-                ) ?? undefined
-              "
-              target="_blank"
-              rel="noopener noreferrer"
-              >{{ $t("providers.openVerification") }}</a
-            >
-            <div class="device-code">
-              <span>{{ $t("providers.userCode") }}</span>
-              <code>{{ authorizationAccount.authorization?.userCode }}</code>
-              <button
-                class="icon-button"
-                type="button"
-                :aria-label="$t('providers.copyCode')"
-                @click="copyUserCode"
-              >
-                <Copy :size="17" aria-hidden="true" />
-              </button>
-            </div>
-            <p
-              v-if="authorizationAccount.authorization?.expiresAt"
-              class="muted"
-            >
-              {{
-                $t("providers.expiresAt", {
-                  value: new Date(
-                    authorizationAccount.authorization.expiresAt,
-                  ).toLocaleString(),
-                })
-              }}
-            </p>
-            <p
-              v-if="pollingRefs.includes(authorizationAccount.ref)"
-              role="status"
-              class="polling-state"
-            >
-              <LoaderCircle class="spin" :size="17" aria-hidden="true" />{{
-                $t("providers.waitingAuthorization")
-              }}
-            </p>
-            <button
-              v-if="accountAllows(authorizationAccount, 'TEST')"
-              class="button"
-              type="button"
-              @click="refreshAuthorization"
-            >
-              {{ $t("providers.checkAuthorization") }}
-            </button>
-          </template>
-          <template
-            v-else-if="
-              authorizationAccount.authorization?.state === 'AUTHORIZED'
-            "
-          >
-            <Check :size="24" aria-hidden="true" />
-            <strong>{{ $t("providers.authorized") }}</strong>
-          </template>
-          <template v-else>
-            <p>{{ $t("providers.deviceDescription") }}</p>
-            <button
-              class="button button--primary"
-              type="button"
-              :disabled="
-                !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
-              "
-              @click="startDevice"
-            >
-              {{ $t("providers.startDevice") }}
-            </button>
-          </template>
-        </section>
-
-        <section v-else class="authorization-panel">
-          <template
-            v-if="authorizationAccount.authorization?.state === 'AUTHORIZED'"
-          >
-            <Check :size="24" aria-hidden="true" />
-            <strong>{{ $t("providers.authorized") }}</strong>
-          </template>
-          <form v-else class="provider-form" @submit.prevent="submitApiKey">
-            <p>{{ $t("providers.apiKeyDescription") }}</p>
-            <label class="field">
-              <span>{{ $t("providers.apiKey") }}</span>
-              <input
-                v-model="apiKey"
-                type="password"
-                maxlength="16384"
-                autocomplete="off"
-                spellcheck="false"
-                :placeholder="$t('providers.apiKeyPlaceholder')"
-              />
-              <small>{{ $t("providers.apiKeySafety") }}</small>
-            </label>
-            <button
-              class="button button--primary"
-              type="submit"
-              :disabled="
-                !apiKey ||
-                !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
-              "
-            >
-              {{ $t("providers.authorizeApiKey") }}
-            </button>
-          </form>
-        </section>
-        <div
-          v-if="authorizationAccount.authorization?.state === 'FAILED'"
-          class="safe-warning"
-          role="alert"
-        >
-          <CircleAlert :size="18" aria-hidden="true" />{{
-            $t("providers.authorizationFailed")
+      <ProblemNotice
+        v-if="localProblem || problem"
+        :problem="localProblem ?? problem"
+      />
+      <ProviderLifecycleRecovery
+        :account="authorizationAccount"
+        :problem="localProblem ?? problem"
+        @pending="authorizationRecoveryPending = $event"
+        @recovered="recovered"
+      />
+      <section
+        v-if="authorizationAccount.verification"
+        class="provider-verification"
+        role="status"
+      >
+        <strong>{{ $t("providerLifecycle.verification") }}</strong>
+        <p>
+          {{
+            $t(
+              `providerLifecycle.reasons.${authorizationAccount.verification.safeReason}`,
+            )
           }}
+        </p>
+        <p>{{ $t("providerLifecycle.verificationScope") }}</p>
+        <span
+          >{{ $t("providerLifecycle.requested") }}:
+          <time :datetime="authorizationAccount.verification.requestedAt">{{
+            authorizationAccount.verification.requestedAt
+          }}</time></span
+        >
+        <span v-if="authorizationAccount.verification.completedAt"
+          >{{ $t("providerLifecycle.completed") }}:
+          <time :datetime="authorizationAccount.verification.completedAt">{{
+            authorizationAccount.verification.completedAt
+          }}</time></span
+        >
+      </section>
+      <fieldset
+        class="authorization-boundary"
+        :disabled="
+          authorizationRecoveryPending ||
+          busyRefs.includes(authorizationAccount.ref)
+        "
+      >
+        <div class="authorization-dialog">
+          <div
+            class="authorization-methods"
+            role="tablist"
+            :aria-label="$t('providers.authorizationMethod')"
+          >
+            <button
+              v-for="method in authorizationMethods"
+              :key="method"
+              class="button"
+              :class="{ 'button--primary': authorizationMethod === method }"
+              type="button"
+              role="tab"
+              :aria-selected="authorizationMethod === method"
+              :disabled="busyRefs.includes(authorizationAccount.ref)"
+              @click="authorizationMethod = method"
+            >
+              <Smartphone
+                v-if="method === 'DEVICE_CODE'"
+                :size="16"
+                aria-hidden="true"
+              />
+              <KeyRound v-else :size="16" aria-hidden="true" />
+              {{ $t(`providers.methods.${method}`) }}
+            </button>
+          </div>
+
+          <section
+            v-if="authorizationMethod === 'DEVICE_CODE'"
+            class="authorization-panel"
+          >
+            <template v-if="isPendingDeviceAuthorization(authorizationAccount)">
+              <a
+                v-if="
+                  safeVerificationUri(
+                    authorizationAccount.authorization?.verificationUri,
+                  )
+                "
+                class="button button--primary"
+                :href="
+                  safeVerificationUri(
+                    authorizationAccount.authorization?.verificationUri,
+                  ) ?? undefined
+                "
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ $t("providers.openVerification") }}</a
+              >
+              <div class="device-code">
+                <span>{{ $t("providers.userCode") }}</span>
+                <code>{{ authorizationAccount.authorization?.userCode }}</code>
+                <button
+                  class="icon-button"
+                  type="button"
+                  :aria-label="$t('providers.copyCode')"
+                  @click="copyUserCode"
+                >
+                  <Copy :size="17" aria-hidden="true" />
+                </button>
+              </div>
+              <p
+                v-if="authorizationAccount.authorization?.expiresAt"
+                class="muted"
+              >
+                {{
+                  $t("providers.expiresAt", {
+                    value: new Date(
+                      authorizationAccount.authorization.expiresAt,
+                    ).toLocaleString(),
+                  })
+                }}
+              </p>
+              <p
+                v-if="pollingRefs.includes(authorizationAccount.ref)"
+                role="status"
+                class="polling-state"
+              >
+                <LoaderCircle class="spin" :size="17" aria-hidden="true" />{{
+                  $t("providers.waitingAuthorization")
+                }}
+              </p>
+              <button
+                v-if="
+                  accountAllows(authorizationAccount, 'REFRESH_AUTHORIZATION')
+                "
+                class="button"
+                type="button"
+                :disabled="busyRefs.includes(authorizationAccount.ref)"
+                @click="refreshAuthorization"
+              >
+                {{ $t("providers.checkAuthorization") }}
+              </button>
+            </template>
+            <template
+              v-else-if="
+                authorizationAccount.authorization?.state === 'AUTHORIZED'
+              "
+            >
+              <Check :size="24" aria-hidden="true" />
+              <strong>{{ $t("providers.authorized") }}</strong>
+              <button
+                v-if="
+                  accountAllows(authorizationAccount, 'REFRESH_AUTHORIZATION')
+                "
+                class="button"
+                :disabled="busyRefs.includes(authorizationAccount.ref)"
+                @click="refreshAuthorization"
+              >
+                <RefreshCw :size="16" />{{ $t("providers.checkAuthorization") }}
+              </button>
+              <button
+                v-if="
+                  accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
+                "
+                class="button"
+                :disabled="busyRefs.includes(authorizationAccount.ref)"
+                @click="reauthorize"
+              >
+                {{ $t("providers.reauthorize") }}
+              </button>
+            </template>
+            <template v-else>
+              <button
+                v-if="
+                  accountAllows(authorizationAccount, 'REFRESH_AUTHORIZATION')
+                "
+                class="button"
+                :disabled="busyRefs.includes(authorizationAccount.ref)"
+                @click="refreshAuthorization"
+              >
+                <RefreshCw :size="16" />{{ $t("providers.checkAuthorization") }}
+              </button>
+              <button
+                class="button button--primary"
+                type="button"
+                :disabled="
+                  busyRefs.includes(authorizationAccount.ref) ||
+                  !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
+                "
+                @click="startDevice"
+              >
+                {{ $t("providers.startDevice") }}
+              </button>
+            </template>
+          </section>
+
+          <section v-else class="authorization-panel">
+            <template
+              v-if="
+                authorizationAccount.authorization?.state === 'AUTHORIZED' &&
+                !replacingApiKey
+              "
+            >
+              <Check :size="24" aria-hidden="true" />
+              <strong>{{ $t("providers.authorized") }}</strong>
+              <button
+                v-if="
+                  accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
+                "
+                class="button"
+                :disabled="busyRefs.includes(authorizationAccount.ref)"
+                @click="replacingApiKey = true"
+              >
+                <KeyRound :size="16" />{{ $t("providers.reauthorize") }}
+              </button>
+            </template>
+            <form v-else class="provider-form" @submit.prevent="submitApiKey">
+              <label class="field">
+                <span>{{ $t("providers.apiKey") }}</span>
+                <input
+                  v-model="apiKey"
+                  type="password"
+                  maxlength="16384"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :placeholder="$t('providers.apiKeyPlaceholder')"
+                />
+                <small>{{ $t("providers.apiKeySafety") }}</small>
+              </label>
+              <button
+                class="button button--primary"
+                type="submit"
+                :disabled="
+                  !apiKey ||
+                  busyRefs.includes(authorizationAccount.ref) ||
+                  !accountAllows(authorizationAccount, 'CONFIGURE_CREDENTIAL')
+                "
+              >
+                {{ $t("providers.authorizeApiKey") }}
+              </button>
+            </form>
+          </section>
+          <div
+            v-if="authorizationAccount.authorization?.state === 'FAILED'"
+            class="safe-warning"
+            role="alert"
+          >
+            <CircleAlert :size="18" aria-hidden="true" />{{
+              $t("providers.authorizationFailed")
+            }}
+          </div>
         </div>
-      </div>
+      </fieldset>
       <template #actions>
-        <button class="button" type="button" @click="closeAuthorization">
+        <button
+          class="button"
+          type="button"
+          :disabled="busyRefs.includes(authorizationAccount.ref)"
+          @click="closeAuthorization"
+        >
           {{ $t("common.close") }}
         </button>
+        <button
+          v-if="accountAllows(authorizationAccount, 'DELETE')"
+          class="button button--danger"
+          :disabled="busyRefs.includes(authorizationAccount.ref)"
+          @click="requestDelete(authorizationAccount)"
+        >
+          <Trash2 :size="16" />{{ $t("common.delete") }}
+        </button>
       </template>
+    </ModalDialog>
+
+    <ModalDialog
+      v-if="impactAccount"
+      :title="$t('providerLifecycle.title')"
+      size="lg"
+      @close="impactAccount = undefined"
+    >
+      <ProviderAccountLifecyclePanel
+        :account="impactAccount"
+        @updated="receiveLifecycleAccount"
+        @unavailable="
+          store.accounts = store.accounts.filter((item) => item.ref !== $event)
+        "
+      />
     </ModalDialog>
 
     <ModalDialog
@@ -602,11 +989,17 @@ onBeforeUnmount(() => {
       size="sm"
       @close="revokeAccount = undefined"
     >
+      <ProblemNotice v-if="localProblem" :problem="localProblem" />
       <p>
         {{ $t("providers.revokeConfirmation", { name: revokeAccount.name }) }}
       </p>
       <template #actions>
-        <button class="button" type="button" @click="revokeAccount = undefined">
+        <button
+          class="button"
+          type="button"
+          :disabled="busyRefs.includes(revokeAccount.ref)"
+          @click="revokeAccount = undefined"
+        >
           {{ $t("common.cancel") }}
         </button>
         <button
@@ -625,6 +1018,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.authorization-boundary {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.provider-verification {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .providers-workspace {
   display: grid;
   gap: 16px;
@@ -677,6 +1081,11 @@ onBeforeUnmount(() => {
 .provider-account-list {
   display: grid;
   gap: 8px;
+  max-height: 1000px;
+  overflow: auto;
+}
+.provider-account-list--expanded {
+  max-height: calc(100dvh - 230px);
 }
 .provider-account-card {
   display: grid;
@@ -687,6 +1096,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--panel);
+  min-height: 160px;
 }
 .provider-account-card__identity {
   display: flex;
@@ -710,6 +1120,7 @@ onBeforeUnmount(() => {
 }
 .provider-account-card h2 {
   font-size: 0.94rem;
+  overflow-wrap: anywhere;
 }
 .provider-account-card p,
 .provider-account-card__state span {

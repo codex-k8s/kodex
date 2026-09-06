@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Play, Power, PowerOff } from "@lucide/vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute, useRouter } from "vue-router";
+import { onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 
 import InstructionHistory from "@/features/agents/components/InstructionHistory.vue";
 import AgentAccessPanel from "@/features/agents/detail/AgentAccessPanel.vue";
@@ -34,6 +42,27 @@ import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
+import {
+  prepareInstructionPublication,
+  publishInstructions,
+  readInstructionPublicationAgent,
+} from "@/features/agents/detail/instruction-publication";
+import {
+  publicationPlanIdentity,
+  publicationSelection,
+  restorePublicationImpact,
+} from "@/features/runtime/publication-impact";
+import type { RevisionImpactPlan } from "@/shared/api/generated/openapi/types.gen";
+import {
+  readPublicationAttempt,
+  rememberPublicationAttempt,
+  publicationRefusalClearsIntent,
+  forgetPublicationAttempt,
+  type PublicationAttempt,
+} from "@/features/runtime/publication-attempt";
+import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
@@ -49,16 +78,6 @@ const canManageAvatar = computed(() => canEdit.value);
 const canManageCapabilities = computed(
   () => agent.value?.nextActions.includes("MANAGE_CAPABILITIES") ?? false,
 );
-const capabilityCatalog = computed(() => {
-  const values = [...platform.capabilities].sort(
-    (left, right) =>
-      left.category.localeCompare(right.category) ||
-      left.name.localeCompare(right.name),
-  );
-  return canManageCapabilities.value
-    ? values
-    : values.filter((item) => hasCapability(item.key));
-});
 const instructionHistory = computed(
   () => platform.instructionVersions[agentRef.value] ?? [],
 );
@@ -82,8 +101,32 @@ const instructions = ref("");
 const task = ref("");
 const avatarFile = ref<File>();
 const busy = ref(false);
+const loaded = ref(false);
+let contextGeneration = 0;
+function captureScope(): () => boolean {
+  const generation = contextGeneration;
+  const agent = agentRef.value;
+  const project = projectRef.value;
+  return () =>
+    generation === contextGeneration &&
+    agent === agentRef.value &&
+    project === projectRef.value;
+}
 const capabilityBusy = ref("");
 const problem = ref<AppProblem>();
+const instructionPlan = ref<RevisionImpactPlan>();
+const instructionUnknown = ref(false);
+const instructionAttempt = ref<PublicationAttempt>();
+let instructionKey = "";
+function clearInstructionAttempt(ref: string): void {
+  forgetPublicationAttempt("AGENT_INSTRUCTIONS", ref, window.sessionStorage);
+  instructionAttempt.value = undefined;
+}
+watch(agentRef, () => {
+  instructionPlan.value = undefined;
+  instructionUnknown.value = false;
+  instructionAttempt.value = undefined;
+});
 const applyState = ref<"APPLIED" | "DRAFT" | "RUNNING" | "FAILED">("APPLIED");
 const applyScope = ref(t("agents.profile"));
 const applyBoundary = ref<ApplyBoundary>("next-run");
@@ -138,6 +181,19 @@ const authoritativeInstructions = computed(
 const instructionsDirty = computed(
   () => instructions.value !== authoritativeInstructions.value,
 );
+useUnsavedChanges(
+  computed(
+    () =>
+      busy.value ||
+      Boolean(capabilityBusy.value) ||
+      (loaded.value && (profileDirty.value || instructionsDirty.value)),
+  ),
+  () => t("managed.discard"),
+  { ignoreQueryOnly: true },
+);
+onBeforeRouteUpdate(
+  (to, from) => to.path !== from.path || (!busy.value && !capabilityBusy.value),
+);
 const applyReadback = computed(() => {
   const value = agent.value;
   if (!value) return undefined;
@@ -165,10 +221,6 @@ const tabs = computed<Array<{ id: AgentDetailTab; label: string }>>(() => [
   { id: "environment", label: t("roleEnvironments.title") },
   { id: "access", label: t("agents.capabilities") },
 ]);
-
-function hasCapability(key: string): boolean {
-  return agent.value?.capabilities.some((item) => item.key === key) ?? false;
-}
 
 function tabScope(tab: AgentDetailTab): string {
   return tabs.value.find((item) => item.id === tab)?.label ?? tab;
@@ -198,7 +250,7 @@ function activateTab(tab: AgentDetailTab): void {
 }
 
 function selectTab(tab: AgentDetailTab): void {
-  activateTab(tab);
+  if (busy.value || capabilityBusy.value) return;
   if (route.query.tab !== tab) {
     void router.replace({ query: { ...route.query, tab } });
   }
@@ -254,14 +306,17 @@ function syncInstructions(): void {
 }
 
 async function load(): Promise<void> {
+  const active = captureScope();
   await Promise.all([
     platform.loadProject(projectRef.value),
     platform.loadAgent(agentRef.value),
     platform.loadInstructionVersions(agentRef.value),
     platform.loadCapabilities(),
   ]);
+  if (!active()) return;
   syncProfile();
   syncInstructions();
+  loaded.value = true;
 }
 
 function avatarMutationHeaders(headers: MutationHeaders) {
@@ -316,39 +371,46 @@ function markAvatarApplied(): void {
 
 async function applyAvatar(file: File): Promise<void> {
   if (!agent.value || !canManageAvatar.value || busy.value) return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
     await uploadAvatar(file);
+    if (!active()) return;
     avatarFile.value = undefined;
     markAvatarApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function removeAvatar(): Promise<void> {
   if (!agent.value?.avatar?.artifactRef || !canManageAvatar.value || busy.value)
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
   try {
     await clearAvatar();
+    if (!active()) return;
     markAvatarApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 function updateProfile(value: AgentProfileDraft): void {
+  if (busy.value || !canEdit.value) return;
   profileDraft.value = value;
   if (sameProfileDraft(value, currentProfile.value))
     markCurrent(tabScope("profile"), "next-run");
@@ -356,6 +418,7 @@ function updateProfile(value: AgentProfileDraft): void {
 }
 
 function updateInstructions(value: string): void {
+  if (busy.value || !canEdit.value) return;
   instructions.value = value;
   if (value === authoritativeInstructions.value)
     markCurrent(tabScope("instructions"), "published");
@@ -363,7 +426,9 @@ function updateInstructions(value: string): void {
 }
 
 async function saveProfile(): Promise<void> {
-  if (!agent.value || !canEdit.value || !profileDirty.value) return;
+  if (busy.value || !agent.value || !canEdit.value || !profileDirty.value)
+    return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
@@ -379,72 +444,258 @@ async function saveProfile(): Promise<void> {
       },
       agent.value,
     );
+    if (!active()) return;
     syncProfile(updated);
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function saveInstructions(): Promise<void> {
   if (
+    busy.value ||
     !agent.value?.nextActions.includes("EDIT") ||
     !instructionsDirty.value ||
     !instructions.value.trim()
   )
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
-  markApplying(tabScope("instructions"), "published");
   try {
     const updated = await platform.saveInstructions(
       agent.value,
       instructions.value,
     );
+    if (!active()) return;
     instructions.value =
       updated.draftInstructions?.content ??
       updated.publishedInstructions?.content ??
       "";
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
-async function instructionAction(
-  action: "VALIDATE" | "PUBLISH",
-): Promise<void> {
-  if (!agent.value?.nextActions.includes(action) || instructionsDirty.value)
+async function publishInstructionSelection(selected: string[]): Promise<void> {
+  const hadUnknownAttempt = instructionAttempt.value !== undefined;
+  const current = agent.value,
+    plan = instructionPlan.value;
+  if (
+    !current ||
+    !plan ||
+    busy.value ||
+    instructionUnknown.value ||
+    instructionsDirty.value
+  )
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("instructions"), "published");
   try {
+    publicationSelection(plan, selected);
+    if (
+      current.version !== plan.sourceVersion ||
+      current.draftInstructions?.ref !== plan.draftRef ||
+      current.draftInstructions.version !== plan.draftVersion
+    )
+      throw new Error("Instruction publication intent changed");
+    const attempt: PublicationAttempt = {
+      kind: "AGENT_INSTRUCTIONS",
+      ownerRef: current.ref,
+      planRef: plan.ref,
+      version: current.version,
+      selectedItemRefs: [...selected],
+      key: instructionKey,
+    };
+    rememberPublicationAttempt(attempt, window.sessionStorage);
+    instructionAttempt.value = attempt;
+    instructionUnknown.value = true;
+    const result = await publishInstructions(
+      current,
+      plan,
+      selected,
+      instructionKey,
+    );
+    if (!active()) return;
+    instructionPlan.value = result.plan;
+    instructionUnknown.value = false;
+    clearInstructionAttempt(current.ref);
+    await platform.loadAgent(current.ref);
+    if (platform.problems.agent) throw platform.problems.agent;
+    await platform.loadInstructionVersions(current.ref);
+    if (platform.problems.instructionVersions)
+      throw platform.problems.instructionVersions;
+    if (active()) markApplied();
+  } catch (error) {
+    if (!active()) return;
+    const normalized = asProblem(error);
+    if (publicationRefusalClearsIntent(hadUnknownAttempt, normalized.status)) {
+      instructionUnknown.value = false;
+      clearInstructionAttempt(current.ref);
+    }
+    problem.value = normalized;
+    markFailed();
+  } finally {
+    if (active()) busy.value = false;
+  }
+}
+async function retryInstructionPublication(): Promise<void> {
+  const attempt = instructionAttempt.value,
+    plan = instructionPlan.value;
+  if (!attempt || !plan || busy.value || instructionsDirty.value) return;
+  const active = captureScope();
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const report = await restorePublicationImpact(
+      attempt.planRef,
+      requestSignal(),
+    );
+    if (!active()) return;
+    if (publicationPlanIdentity(report.plan) !== publicationPlanIdentity(plan))
+      throw new Error("Instruction recovery plan changed");
+    if (report.plan.state !== "PREPARED") {
+      busy.value = false;
+      await recoverInstructionPublication();
+      return;
+    }
+    const fresh = await readInstructionPublicationAgent(attempt.ownerRef);
+    if (!active()) return;
+    if (
+      fresh.version !== attempt.version ||
+      agent.value?.version !== attempt.version ||
+      report.plan.sourceVersion !== attempt.version ||
+      fresh.draftInstructions?.ref !== plan.draftRef ||
+      fresh.draftInstructions.version !== plan.draftVersion
+    )
+      throw new Error(
+        "Original instruction publication intent is no longer applicable",
+      );
+    instructionPlan.value = report.plan;
+    instructionKey = attempt.key;
+    instructionUnknown.value = false;
+    busy.value = false;
+    await publishInstructionSelection(attempt.selectedItemRefs);
+  } catch (error) {
+    if (active()) problem.value = asProblem(error);
+  } finally {
+    if (active()) busy.value = false;
+  }
+}
+async function recoverInstructionPublication(): Promise<void> {
+  const current = agent.value,
+    plan = instructionPlan.value;
+  if (!current || !plan || busy.value) return;
+  const active = captureScope();
+  busy.value = true;
+  problem.value = undefined;
+  try {
+    const report = await restorePublicationImpact(plan.ref, requestSignal());
+    if (!active()) return;
+    if (
+      publicationPlanIdentity(report.plan) === publicationPlanIdentity(plan) &&
+      report.plan.state === "EXPIRED"
+    ) {
+      instructionPlan.value = report.plan;
+      instructionUnknown.value = false;
+      clearInstructionAttempt(current.ref);
+      return;
+    }
+    if (
+      publicationPlanIdentity(report.plan) !== publicationPlanIdentity(plan) ||
+      report.plan.state !== "APPLIED"
+    )
+      throw new Error("Instruction publication outcome is not confirmed");
+    instructionPlan.value = report.plan;
+    instructionUnknown.value = false;
+    clearInstructionAttempt(current.ref);
+    await platform.loadAgent(current.ref);
+    if (platform.problems.agent) throw platform.problems.agent;
+    await platform.loadInstructionVersions(current.ref);
+    if (platform.problems.instructionVersions)
+      throw platform.problems.instructionVersions;
+    if (active()) markApplied();
+  } catch (error) {
+    if (active()) problem.value = asProblem(error);
+  } finally {
+    if (active()) busy.value = false;
+  }
+}
+async function instructionAction(
+  action: "VALIDATE" | "PUBLISH",
+): Promise<void> {
+  if (
+    busy.value ||
+    !agent.value?.nextActions.includes(action) ||
+    instructionsDirty.value
+  )
+    return;
+  const active = captureScope();
+  const ref = agentRef.value;
+  busy.value = true;
+  problem.value = undefined;
+  markApplying(tabScope("instructions"), "published");
+  try {
+    if (action === "PUBLISH") {
+      const stored = readPublicationAttempt(
+        "AGENT_INSTRUCTIONS",
+        ref,
+        window.sessionStorage,
+      );
+      const plan = stored
+        ? (await restorePublicationImpact(stored.planRef, requestSignal())).plan
+        : await prepareInstructionPublication(agent.value);
+      if (!active()) return;
+      if (
+        plan.kind !== "AGENT_INSTRUCTIONS" ||
+        plan.sourceRef !== ref ||
+        (stored && plan.sourceVersion !== stored.version)
+      )
+        throw new Error("Instruction publication scope mismatch");
+      instructionPlan.value = plan;
+      instructionAttempt.value = stored;
+      instructionUnknown.value = !!stored && plan.state === "PREPARED";
+      instructionKey = stored?.key ?? crypto.randomUUID();
+      if (stored && plan.state !== "PREPARED") clearInstructionAttempt(ref);
+      return;
+    }
+    markApplying(tabScope("instructions"), "published");
     const updated = await platform.instructionCommand(agent.value, action);
+    if (!active()) return;
     instructions.value =
       updated.draftInstructions?.content ??
       updated.publishedInstructions?.content ??
       "";
-    await platform.loadInstructionVersions(agentRef.value);
+    await platform.loadInstructionVersions(ref);
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function rollbackInstructions(
   publishedInstructionRef: string,
 ): Promise<void> {
-  if (!agent.value?.nextActions.includes("ROLLBACK")) return;
+  if (busy.value || !agent.value?.nextActions.includes("ROLLBACK")) return;
+  const active = captureScope();
+  const ref = agentRef.value;
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("instructions"), "published");
@@ -454,14 +705,17 @@ async function rollbackInstructions(
       "ROLLBACK",
       publishedInstructionRef,
     );
+    if (!active()) return;
     instructions.value = updated.publishedInstructions?.content ?? "";
-    await platform.loadInstructionVersions(agentRef.value);
+    await platform.loadInstructionVersions(ref);
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
@@ -473,29 +727,48 @@ function updateApplyState(
   setApplyState(state, scope, boundary);
 }
 
-async function toggleCapability(key: string): Promise<void> {
-  if (!agent.value || !canManageCapabilities.value || capabilityBusy.value)
+async function toggleCapability(
+  key: string,
+  enabled: boolean,
+  version: number,
+): Promise<void> {
+  if (
+    busy.value ||
+    !agent.value ||
+    agent.value.version !== version ||
+    !canManageCapabilities.value ||
+    capabilityBusy.value
+  )
     return;
+  const active = captureScope();
   capabilityBusy.value = key;
   problem.value = undefined;
   markApplying(tabScope("access"), "next-run");
   try {
     await platform.changeAgent(agent.value, {
-      action: hasCapability(key) ? "REVOKE_CAPABILITY" : "GRANT_CAPABILITY",
+      action: enabled ? "GRANT_CAPABILITY" : "REVOKE_CAPABILITY",
       capabilityKey: key,
     });
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    capabilityBusy.value = "";
+    if (active()) capabilityBusy.value = "";
   }
 }
 
 async function launch(): Promise<void> {
-  if (!agent.value?.nextActions.includes("LAUNCH") || !task.value.trim())
+  if (
+    busy.value ||
+    !agent.value?.nextActions.includes("LAUNCH") ||
+    !task.value.trim()
+  )
     return;
+  const active = captureScope();
+  const project = projectRef.value;
   busy.value = true;
   problem.value = undefined;
   try {
@@ -506,21 +779,26 @@ async function launch(): Promise<void> {
       title: task.value.trim().slice(0, 160),
       task: task.value.trim(),
     });
-    await router.push(runPath(run.ref, projectRef.value));
+    if (!active()) return;
+    busy.value = false;
+    await router.push(runPath(run.ref, project));
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
 async function toggle(): Promise<void> {
   if (
+    busy.value ||
     !agent.value?.nextActions.includes(
       agent.value.enabled ? "DISABLE" : "ENABLE",
     )
   )
     return;
+  const active = captureScope();
   busy.value = true;
   problem.value = undefined;
   markApplying(tabScope("profile"), "next-run");
@@ -528,12 +806,14 @@ async function toggle(): Promise<void> {
     await platform.changeAgent(agent.value, {
       action: agent.value.enabled ? "DISABLE" : "ENABLE",
     });
+    if (!active()) return;
     markApplied();
   } catch (error) {
+    if (!active()) return;
     problem.value = asProblem(error);
     markFailed();
   } finally {
-    busy.value = false;
+    if (active()) busy.value = false;
   }
 }
 
@@ -545,6 +825,31 @@ watch(
   },
 );
 onMounted(() => void load());
+function resetContext(): void {
+  contextGeneration++;
+  busy.value = false;
+  loaded.value = false;
+  capabilityBusy.value = "";
+  problem.value = undefined;
+  profileDraft.value = { name: "", purpose: "", roleDescription: "" };
+  instructions.value = "";
+  task.value = "";
+  avatarFile.value = undefined;
+  for (const snapshot of Object.values(tabApplyStates))
+    snapshot.state = "APPLIED";
+  activateTab(agentDetailTabFromQuery(route.query.tab));
+}
+watch(
+  [projectRef, agentRef],
+  () => {
+    resetContext();
+    void load();
+  },
+  { flush: "sync" },
+);
+onBeforeUnmount(() => {
+  contextGeneration++;
+});
 </script>
 
 <template>
@@ -593,6 +898,7 @@ onMounted(() => void load());
             class="agent-tab"
             type="button"
             role="tab"
+            :disabled="busy || Boolean(capabilityBusy)"
             :aria-selected="activeTab === tab.id"
             :aria-controls="`agent-panel-${tab.id}`"
             @click="selectTab(tab.id)"
@@ -636,7 +942,12 @@ onMounted(() => void load());
               <h2>{{ $t("runs.new") }}</h2>
               <label class="field">
                 <span>{{ $t("runs.task") }}</span>
-                <textarea v-model="task" required maxlength="8000" />
+                <VoiceTextarea
+                  v-model="task"
+                  :disabled="busy"
+                  required
+                  maxlength="8000"
+                />
               </label>
               <button
                 class="button button--primary"
@@ -697,6 +1008,8 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-instructions"
         >
           <AgentInstructionsPanel
+            :agent-ref="agent.ref"
+            :agent-version="agent.version"
             :model-value="instructions"
             :project-ref="projectRef"
             :state="instructionState"
@@ -712,9 +1025,20 @@ onMounted(() => void load());
             @publish="instructionAction('PUBLISH')"
           >
             <template #history>
+              <p v-if="agent.instructionBinding">
+                {{
+                  $t(
+                    agent.instructionBinding.effective
+                      ? "publicationImpact.instructionsEffective"
+                      : "publicationImpact.instructionsInactive",
+                  )
+                }}
+                <code>{{ agent.instructionBinding.revisionRef }}</code>
+              </p>
               <InstructionHistory
                 :versions="instructionHistory"
-                :current-ref="agent.publishedInstructions?.ref"
+                :current-ref="agent.instructionBinding?.revisionRef"
+                :current-effective="agent.instructionBinding?.effective"
                 :can-rollback="agent.nextActions.includes('ROLLBACK')"
                 :busy="busy"
                 @rollback="rollbackInstructions"
@@ -770,13 +1094,15 @@ onMounted(() => void load());
           aria-labelledby="agent-tab-access"
         >
           <AgentAccessPanel
-            :capabilities="capabilityCatalog"
-            :granted-keys="agent.capabilities.map((item) => item.key)"
+            :project-ref="agent.projectRef"
+            :agent-ref="agent.ref"
+            :agent-version="agent.version"
             :integrations="agent.integrations"
             :knowledge-count="agent.knowledgeArtifactRefs.length"
             :can-manage="canManageCapabilities"
             :busy-key="capabilityBusy"
             @toggle="toggleCapability"
+            @refresh="platform.loadAgent(agentRef)"
           />
           <ProblemNotice
             v-if="platform.problems.capabilities"
@@ -795,6 +1121,38 @@ onMounted(() => void load());
       @close="avatarFile = undefined"
       @confirm="applyAvatar"
     />
+    <ModalDialog
+      v-if="instructionPlan"
+      :title="$t('publicationImpact.title')"
+      size="lg"
+      :busy="busy"
+      @close="instructionPlan = undefined"
+    >
+      <ProblemNotice v-if="problem" :problem="problem" />
+      <button
+        v-if="instructionUnknown"
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="recoverInstructionPublication"
+      >
+        {{ $t("common.refresh") }}
+      </button>
+      <PublicationImpactSelection
+        :plan="instructionPlan"
+        :busy="busy || instructionUnknown"
+        @publish="publishInstructionSelection"
+      />
+      <button
+        v-if="instructionUnknown && instructionAttempt"
+        type="button"
+        class="button"
+        :disabled="busy"
+        @click="retryInstructionPublication"
+      >
+        {{ $t("publicationImpact.retryOriginal") }}
+      </button>
+    </ModalDialog>
   </PageFrame>
 </template>
 
@@ -864,7 +1222,7 @@ onMounted(() => void load());
   margin: 0;
   font-size: 1rem;
 }
-.launch-panel textarea {
+.launch-panel :deep(textarea) {
   min-height: 150px;
 }
 .agent-summary dl {

@@ -9,6 +9,7 @@ export interface RuntimeSecretRevealSessionBoundary {
     projectRef: string,
     secretRef: string,
   ): boolean;
+  refreshMetadata(): Promise<void>;
 }
 
 export type RuntimeSecretRevealFlowResult =
@@ -33,8 +34,9 @@ export async function executeRuntimeSecretReveal(input: {
     });
     return { kind: "reauthentication-started" };
   }
-  return {
-    kind: "revealed",
-    value: await input.reveal(input.secretRef),
-  };
+  try {
+    return { kind: "revealed", value: await input.reveal(input.secretRef) };
+  } finally {
+    await input.session.refreshMetadata();
+  }
 }

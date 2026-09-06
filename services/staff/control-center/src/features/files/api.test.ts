@@ -31,7 +31,9 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   purgeArtifact: purgeArtifactMock,
   restoreArtifact: restoreArtifactMock,
 }));
-vi.mock("@/shared/api/client", () => ({ requestSignal: () => undefined }));
+vi.mock("@/shared/api/client", () => ({
+  requestSignal: (signal?: AbortSignal) => signal,
+}));
 vi.mock("@/shared/api/mutation", () => ({ mutate: mutateMock }));
 vi.mock("@/shared/config/runtime", () => ({
   runtimeConfig: () => ({
@@ -161,7 +163,7 @@ describe("loadArtifactPage", () => {
       version: 2,
     });
     listArtifactsMock.mockResolvedValue({
-      data: { items: [deleted], nextPageToken: "trash-next" },
+      data: { items: [deleted], total: 81, nextPageToken: "trash-next" },
       response: new Response(null, { status: 200 }),
     });
     const controller = new AbortController();
@@ -191,27 +193,21 @@ describe("loadArtifactPage", () => {
     expect(page.nextCursor).toBe("trash-next");
   });
 
-  it("передаёт серверный поиск и cursor, затем сохраняет следующий cursor", async () => {
-    listArtifactsMock.mockImplementation(
-      ({ query }: { query: { sourceKind: Artifact["source"] } }) =>
-        Promise.resolve({
-          data: {
-            items: [
-              artifact(`artifact_${query.sourceKind.toLocaleLowerCase()}`, {
-                source: query.sourceKind,
-              }),
-            ],
-            nextPageToken: `cursor-${query.sourceKind}`,
-          },
-          response: new Response(null, { status: 200 }),
-        }),
-    );
+  it("передаёт группу источников одним запросом и сохраняет owner cursor/total", async () => {
+    const items = [
+      artifact("artifact_second", { source: "INTEGRATION_RESULT" }),
+      artifact("artifact_first", { source: "AGENT_RESULT" }),
+    ];
+    listArtifactsMock.mockResolvedValue({
+      data: { items, total: 81, nextPageToken: "owner-next" },
+      response: new Response(null, { status: 200 }),
+    });
     const controller = new AbortController();
-
     const page = await loadArtifactPage(
       "project_sales",
       {
         query: "  договор  ",
+        cursor: "owner-before",
         signal: controller.signal,
       },
       {
@@ -221,32 +217,40 @@ describe("loadArtifactPage", () => {
         type: "DOCUMENT",
       },
     );
-
-    expect(listArtifactsMock).toHaveBeenCalledTimes(2);
-    expect(listArtifactsMock).toHaveBeenCalledWith({
+    expect(listArtifactsMock).toHaveBeenCalledExactlyOnceWith({
       path: { projectRef: "project_sales" },
       query: {
         lifecycleState: "ACTIVE",
-        pageSize: 20,
+        pageSize: 40,
         query: "договор",
+        pageToken: "owner-before",
         scanState: "CLEAN",
-        sourceKind: "AGENT_RESULT",
+        sourceKinds: ["AGENT_RESULT", "INTEGRATION_RESULT"],
         type: "DOCUMENT",
       },
       signal: controller.signal,
     });
-    expect(page.items.map((item) => item.artifact.source)).toEqual([
-      "AGENT_RESULT",
-      "INTEGRATION_RESULT",
-    ]);
-    expect(JSON.parse(page.nextCursor ?? "{}")).toEqual({
-      version: 1,
-      sources: {
-        AGENT_RESULT: "cursor-AGENT_RESULT",
-        INTEGRATION_RESULT: "cursor-INTEGRATION_RESULT",
-      },
-    });
+    expect(page.items.map((item) => item.artifact)).toEqual(items);
+    expect(page.nextCursor).toBe("owner-next");
+    expect(page.total).toBe(81);
   });
+
+  it.each([undefined, -1, 0, 1.5])(
+    "закрыто отклоняет неверный total %s",
+    async (total) => {
+      listArtifactsMock.mockResolvedValue({
+        data: { items: [artifact("artifact_one")], total },
+        response: new Response(null, { status: 200 }),
+      });
+      await expect(
+        loadArtifactPage(
+          "project_sales",
+          { query: "", signal: new AbortController().signal },
+          { allSources: true },
+        ),
+      ).rejects.toThrow("Invalid artifact catalog total");
+    },
+  );
 
   it("передаёт upload progress и mutation headers в потоковый HTTP request", async () => {
     vi.stubGlobal("XMLHttpRequest", FakeXMLHttpRequest);

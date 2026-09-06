@@ -326,6 +326,17 @@ describe("browser-session realtime multiplexer", () => {
         { runRef: "run_realtime02", afterSequence: 4 },
       ],
     });
+    store.refreshSession();
+    const renewed = socketAt(2);
+    renewed.open();
+    expect(resumeRequest(renewed)).toMatchObject({
+      type: "SESSION_RESUME",
+      platformAfterSequence: 1,
+      runs: [
+        { runRef: "run_realtime01", afterSequence: 2 },
+        { runRef: "run_realtime02", afterSequence: 4 },
+      ],
+    });
     store.closeAll();
   });
 

@@ -9,6 +9,7 @@ import {
   Home,
   KeyRound,
   Layers3,
+  Container,
   LockKeyhole,
   Menu,
   PlugZap,
@@ -46,6 +47,8 @@ import {
   SearchCoordinator,
 } from "@/features/search/model";
 import { useSessionStore } from "@/features/session/store";
+import ProjectPicker from "@/features/projects/ProjectPicker.vue";
+import { useSpeechInput } from "@/features/speech/useSpeechInput";
 import { selectProjectRef } from "@/shared/project-context";
 import {
   currentLocale,
@@ -67,6 +70,7 @@ const platform = usePlatformStore();
 const realtime = useRealtimeStore();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
+useSpeechInput();
 const { locale, t } = useI18n();
 const mobileOpen = ref(false);
 const online = ref(navigator.onLine);
@@ -205,7 +209,6 @@ const globalLinks = computed(() => [
     path: "/projects",
     icon: FolderKanban,
   },
-  { name: "runs", label: t("nav.runs"), path: "/runs", icon: Activity },
   {
     name: "decisions",
     label: t("nav.decisions"),
@@ -226,8 +229,9 @@ const administrationLink = computed(() => ({
   icon: Settings,
 }));
 const projectLinks = computed(() => {
-  if (!projectRef.value) return [];
-  const prefix = `/projects/${encodeURIComponent(projectRef.value)}`;
+  const prefix = projectRef.value
+    ? `/projects/${encodeURIComponent(projectRef.value)}`
+    : "";
   return [
     {
       name: "project",
@@ -248,7 +252,7 @@ const projectLinks = computed(() => {
       icon: Workflow,
     },
     {
-      name: "project-runs",
+      name: projectRef.value ? "project-runs" : "runs",
       label: t("nav.runs"),
       path: `${prefix}/runs`,
       icon: Activity,
@@ -278,18 +282,43 @@ const projectLinks = computed(() => {
       icon: LockKeyhole,
     },
     {
+      name: "role-images",
+      label: t("roleImages.title"),
+      path: `${prefix}/role-images`,
+      icon: Container,
+    },
+    {
       name: "project-access",
       label: t("nav.members"),
       path: `${prefix}/members`,
       icon: UsersRound,
     },
-  ];
+  ].filter(
+    (link) =>
+      projectRef.value || !["project", "role-images"].includes(link.name),
+  );
 });
 
-function changeProject(event: Event): void {
-  const ref = (event.target as HTMLSelectElement).value;
-  if (ref) void router.push(`/projects/${encodeURIComponent(ref)}`);
-  else void router.push("/projects");
+function changeProject(ref: string): void {
+  const sections: Record<string, string> = {
+    agents: "agents",
+    workflows: "workflows",
+    runs: "runs",
+    "project-runs": "runs",
+    files: "files",
+    automations: "automations",
+    "runtime-environments": "environments",
+    "runtime-secrets": "secrets",
+    "project-access": "members",
+  };
+  const section = activeSection.value
+    ? sections[activeSection.value]
+    : undefined;
+  if (ref)
+    void router.push(
+      `/projects/${encodeURIComponent(ref)}${section ? `/${section}` : ""}`,
+    );
+  else void router.push(section ? `/${section}` : "/projects");
 }
 
 function submitSearch(): void {
@@ -301,7 +330,7 @@ function submitSearch(): void {
   }
   searchOpen.value = true;
   mobileOpen.value = false;
-  searchCoordinator.schedule(search.value, (normalized) => {
+  searchCoordinator.flush(search.value, (normalized) => {
     void platform.search(normalized);
   });
 }
@@ -342,6 +371,7 @@ function refreshAfterPreloadFailure(): void {
 }
 
 watch(search, (value) => {
+  platform.cancelSearch();
   searchOpen.value = value.trim().length > 0;
   if (value.trim().length < 2) {
     void platform.search(value);
@@ -371,6 +401,13 @@ useDismissibleLayer(searchRoot, closeSearch, {
   enabled: computed(() => searchOpen.value || mobileSearchOpen.value),
   returnFocusTo: searchInput,
 });
+watch(
+  () => session.connectionIdentity,
+  (next, previous) => {
+    if (next && previous && next !== previous && realtimeStarted.value)
+      realtime.refreshSession();
+  },
+);
 onMounted(() => {
   locale.value = currentLocale();
   document.documentElement.lang = locale.value;
@@ -390,6 +427,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   disposed = true;
+  platform.cancelSearch();
   searchCoordinator.cancel();
   window.removeEventListener("online", setOnline);
   window.removeEventListener("offline", setOnline);
@@ -421,6 +459,9 @@ onBeforeUnmount(() => {
           <img src="/logo.png" alt="" /> </span
         ><span>Kodex</span>
       </RouterLink>
+      <div class="topbar-project-picker">
+        <ProjectPicker :project="project" @select="changeProject" />
+      </div>
       <div ref="searchRoot" class="global-search-wrap">
         <form
           class="global-search"
@@ -466,7 +507,7 @@ onBeforeUnmount(() => {
             {{ $t("common.loading") }}
           </p>
           <template v-else-if="platform.problems.search">
-            <p role="alert">{{ platform.problems.search.title }}</p>
+            <p role="alert">{{ $t("errors.default") }}</p>
             <button class="button" type="button" @click="submitSearch">
               {{ $t("common.retry") }}
             </button>
@@ -561,31 +602,13 @@ onBeforeUnmount(() => {
           ><span v-if="link.count" class="count-badge">{{ link.count }}</span>
         </RouterLink>
       </nav>
-      <div class="project-switcher project-switcher--sidebar">
-        <label for="sidebar-project-switcher">{{ $t("app.project") }}</label>
-        <select
-          id="sidebar-project-switcher"
-          :value="projectRef ?? ''"
-          :title="project?.name ?? $t('app.chooseProject')"
-          @change="changeProject"
-        >
-          <option value="">{{ $t("app.chooseProject") }}</option>
-          <option
-            v-for="item in platform.projectList"
-            :key="item.ref"
-            :value="item.ref"
-          >
-            {{ item.name }}
-          </option>
-        </select>
-      </div>
       <nav
         v-if="projectLinks.length"
         class="project-nav"
         :aria-label="$t('app.projectNavigation')"
       >
         <p :title="project?.name ?? $t('app.project')">
-          {{ project?.name ?? $t("app.project") }}
+          {{ project?.name ?? $t("app.allProjects") }}
         </p>
         <RouterLink
           v-for="link in projectLinks"

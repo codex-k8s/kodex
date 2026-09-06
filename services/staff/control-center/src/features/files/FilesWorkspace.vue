@@ -26,6 +26,8 @@ import {
 import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
+import ArtifactBindingTargets from "@/features/files/ArtifactBindingTargets.vue";
+import { bindingTargetEditable } from "@/features/files/binding-targets";
 import TrashBulkDialog from "@/features/files/TrashBulkDialog.vue";
 import {
   artifactLifecycleState,
@@ -49,6 +51,7 @@ import {
 import { usePlatformStore } from "@/features/platform/store";
 import type {
   Artifact,
+  ArtifactBindingTarget,
   ArtifactImpact,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -68,6 +71,7 @@ const props = defineProps<{
   mode: FileCollectionMode;
   initialArtifactRef?: string;
 }>();
+const emit = defineEmits<{ selection: [ref: string] }>();
 const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
 const viewPreferenceKey = "kodex.files.view";
@@ -82,6 +86,13 @@ const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
 const source = ref<FileSource>("ALL");
 const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
+watch(selectedRef, (value) => emit("selection", value));
+watch(
+  () => props.initialArtifactRef,
+  (value) => {
+    selectedRef.value = value ?? "";
+  },
+);
 const selectedRefs = ref<string[]>([]);
 const uploadQueue = ref<UploadQueueItem[]>([]);
 const activeUploadCount = ref(0);
@@ -135,7 +146,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 250 },
+  { debounceMs: 500 },
 );
 const {
   error: loadError,
@@ -145,22 +156,13 @@ const {
   loadMore,
   loadingMore,
   query,
+  total,
   refresh,
 } = collection;
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canUpload = computed(() =>
   project.value?.nextActions.includes("UPLOAD_ARTIFACT"),
-);
-const agents = computed(() =>
-  Object.values(platform.agents)
-    .filter(
-      (agent) =>
-        agent.projectRef === props.projectRef &&
-        !agent.system &&
-        agent.state !== "ARCHIVED",
-    )
-    .sort((left, right) => left.name.localeCompare(right.name)),
 );
 const loadedArtifacts = computed(() =>
   items.value.map((item) => item.artifact),
@@ -453,7 +455,7 @@ watch(
   (artifacts) => {
     if (initialLoading.value && artifacts.length === 0) return;
     if (!artifacts.some((artifact) => artifact.ref === selectedRef.value))
-      selectedRef.value = artifacts[0]?.ref ?? "";
+      selectedRef.value = "";
   },
   { immediate: true },
 );
@@ -534,21 +536,6 @@ function uploadPreviewArtifact(item: UploadQueueItem): Artifact {
     createdAt: "1970-01-01T00:00:00.000Z",
     nextActions: [],
   };
-}
-
-function bindingNames(artifact: Artifact): string {
-  return artifact.agentBindings
-    .map((ref) => platform.agents[ref]?.name)
-    .filter((name): name is string => Boolean(name))
-    .join(", ");
-}
-
-function agentSupportsFiles(agentRef: string): boolean {
-  return (
-    platform.agents[agentRef]?.capabilities.some(
-      (capability) => capability.key === "platform.artifact.manage",
-    ) ?? false
-  );
 }
 
 function replaceArtifact(artifact: Artifact): void {
@@ -956,15 +943,24 @@ async function confirmLifecycleOperation(): Promise<void> {
 
 async function changeBinding(
   artifact: Artifact,
-  agentRef: string,
-  enabled: boolean,
+  target: ArtifactBindingTarget,
+  artifactVersion: number,
 ): Promise<void> {
-  if (!artifact.nextActions.includes("BIND")) return;
-  bindingBusy.value = `${artifact.ref}:${agentRef}`;
+  if (
+    bindingBusy.value ||
+    artifact.version !== artifactVersion ||
+    !bindingTargetEditable(target)
+  )
+    return;
+  bindingBusy.value = `${artifact.ref}:${target.agentRef}`;
   operationProblem.value = undefined;
   try {
     replaceArtifact(
-      await platform.changeArtifactAgentBinding(artifact, agentRef, enabled),
+      await platform.changeArtifactAgentBinding(
+        artifact,
+        target.agentRef,
+        !target.bound,
+      ),
     );
   } catch (error) {
     operationProblem.value = asProblem(error);
@@ -1044,10 +1040,7 @@ function closePreview(): void {
 onMounted(() => {
   const preferred = window.localStorage.getItem(viewPreferenceKey);
   if (preferred === "grid" || preferred === "list") viewMode.value = preferred;
-  void Promise.all([
-    platform.loadProject(props.projectRef),
-    platform.loadAgents(props.projectRef),
-  ]);
+  void platform.loadProject(props.projectRef);
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -1061,7 +1054,7 @@ onBeforeUnmount(() => {
   <section
     class="files-workspace"
     :class="{ 'files-workspace--drag-active': dragActive }"
-    aria-label="files"
+    :aria-label="t('files.title')"
     @dragenter="handleDragEnter"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
@@ -1150,7 +1143,11 @@ onBeforeUnmount(() => {
         </select>
       </label>
       <span class="files-workspace__count mono">
-        {{ custom.loaded }} {{ items.length }}
+        {{
+          total === undefined
+            ? `${custom.loaded} ${String(items.length)}`
+            : $t("files.loadedOfTotal", { loaded: items.length, total })
+        }}
       </span>
       <ViewModeToggle
         v-model="viewMode"
@@ -1244,7 +1241,10 @@ onBeforeUnmount(() => {
       </ul>
     </section>
 
-    <section class="trash-toolbar">
+    <section
+      v-if="trashMode || selectedArtifacts.length > 0"
+      :class="trashMode ? 'trash-toolbar' : 'selection-toolbar'"
+    >
       <div>
         <strong>{{ trashMode ? custom.trash : custom.activeSelection }}</strong>
         <p>
@@ -1413,10 +1413,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1555,10 +1556,11 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
-                    !artifactLifecycleState(
+                    contentBusy ||
+                    !artifactLifecycleAnnounced(
                       artifact,
                       trashMode ? 'RESTORE' : 'DELETE',
-                    ).available
+                    )
                   "
                   @change="
                     toggleSelection(
@@ -1590,7 +1592,13 @@ onBeforeUnmount(() => {
                   </span>
                 </span>
                 <span class="file-list-row__binding">
-                  {{ bindingNames(artifact) || $t("files.notBound") }}
+                  {{
+                    artifact.agentBindings.length
+                      ? $t("files.bindingCount", {
+                          count: artifact.agentBindings.length,
+                        })
+                      : $t("files.notBound")
+                  }}
                 </span>
                 <span class="mono">v{{ artifact.revision }}</span>
                 <StatusBadge :state="artifact.scanState" />
@@ -1746,37 +1754,15 @@ onBeforeUnmount(() => {
             </button>
           </section>
           <section class="file-details__bindings">
-            <h3>{{ $t("files.binding") }}</h3>
-            <p>{{ $t("files.bindingHint") }}</p>
-            <p v-if="agents.length === 0" class="muted-text">
-              {{ $t("files.noAgents") }}
-            </p>
-            <label v-for="agent in agents" :key="agent.ref">
-              <input
-                type="checkbox"
-                :checked="selectedArtifact.agentBindings.includes(agent.ref)"
-                :disabled="
-                  !selectedArtifact.nextActions.includes('BIND') ||
-                  !agentSupportsFiles(agent.ref) ||
-                  bindingBusy === `${selectedArtifact.ref}:${agent.ref}`
-                "
-                @change="
-                  changeBinding(
-                    selectedArtifact,
-                    agent.ref,
-                    ($event.target as HTMLInputElement).checked,
-                  )
-                "
-              />
-              <span
-                ><strong>{{ agent.name }}</strong
-                ><small>{{
-                  agentSupportsFiles(agent.ref)
-                    ? agent.purpose
-                    : $t("files.agentFilesCapabilityRequired")
-                }}</small></span
-              >
-            </label>
+            <ArtifactBindingTargets
+              :artifact="selectedArtifact"
+              :busy="!!bindingBusy"
+              @change="
+                (target, version) =>
+                  changeBinding(selectedArtifact!, target, version)
+              "
+              @refresh="refresh()"
+            />
           </section>
           <section class="file-details__impact">
             <h3>{{ custom.activeRunsTitle }}</h3>
@@ -1917,6 +1903,8 @@ onBeforeUnmount(() => {
 .files-workspace {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   min-height: 640px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2434,9 +2422,9 @@ onBeforeUnmount(() => {
     width: auto;
     max-width: calc(50vw - 20px);
   }
-  .files-workspace__count,
-  .files-workspace__view-toggle {
-    display: none;
+  .files-workspace__count {
+    flex: 1 1 auto;
+    white-space: normal;
   }
   .files-workspace__toolbar .button {
     min-height: 44px;
@@ -2461,12 +2449,15 @@ onBeforeUnmount(() => {
   .files-list {
     min-width: 0;
   }
+  .files-list__head {
+    display: none;
+  }
   .file-list-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: 76px;
     gap: 6px 10px;
-    padding: 10px 154px 10px 2px;
+    padding: 10px 8px 10px 48px;
   }
   .file-list-row__identity {
     grid-row: 1 / 3;
@@ -2486,7 +2477,17 @@ onBeforeUnmount(() => {
     border-left: 0;
   }
   .files-list .file-collection-item__actions {
-    right: 0;
+    position: static;
+    justify-content: flex-end;
+    padding: 0 8px 8px 48px;
+    transform: none;
+  }
+  .file-list-row__identity strong {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 </style>

@@ -4,16 +4,18 @@ import type { AssistantConversation } from "@/shared/api/generated/openapi/types
 
 const mocks = vi.hoisted(() => ({
   addAssistantTurn: vi.fn(),
+  archiveAssistantConversation: vi.fn(),
   getSystemAssistant: vi.fn(),
   listAssistantConversations: vi.fn(),
   signal: new AbortController().signal,
 }));
 
 vi.mock("@/shared/api/client", () => ({
-  requestSignal: () => mocks.signal,
+  requestSignal: (signal?: AbortSignal) => signal ?? mocks.signal,
 }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   addAssistantTurn: mocks.addAssistantTurn,
+  archiveAssistantConversation: mocks.archiveAssistantConversation,
   applyAssistantPlan: vi.fn(),
   createAssistantConversation: vi.fn(),
   getSystemAssistant: mocks.getSystemAssistant,
@@ -27,13 +29,18 @@ vi.mock("@/shared/api/problem", () => ({
   asProblem: (error: unknown) => error,
   unwrap: (value: unknown) => Promise.resolve(value),
 }));
-import { appendTurn } from "@/features/assistant/api";
+import {
+  appendTurn,
+  archiveConversation,
+  readConversations,
+} from "@/features/assistant/api";
 
 function conversation(
   turns: AssistantConversation["turns"],
 ): AssistantConversation {
   return {
     ref: "cnv_sales",
+    state: "ACTIVE",
     version: 2,
     title: "Продажи",
     titleSource: "USER_EDITED",
@@ -53,6 +60,46 @@ function conversation(
 }
 
 describe("assistant api mutation reconciliation", () => {
+  it("передаёт серверный query/state вместе с cursor", async () => {
+    mocks.listAssistantConversations.mockResolvedValue({ data: { items: [] } });
+    await readConversations("prj_sales", "cursor", mocks.signal, {
+      query: "  архив  ",
+      state: "ARCHIVED",
+    });
+    expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
+      query: {
+        projectRef: "prj_sales",
+        pageToken: "cursor",
+        pageSize: 40,
+        query: "архив",
+        state: "ARCHIVED",
+      },
+      signal: mocks.signal,
+    });
+  });
+  it("архивирует с OCC и проверяет exact terminal receipt без retry", async () => {
+    const source = conversation([]);
+    const archived = { ...source, state: "ARCHIVED", version: 3 };
+    mocks.archiveAssistantConversation.mockResolvedValue({ data: archived });
+    expect(await archiveConversation(source)).toEqual(archived);
+    expect(mocks.archiveAssistantConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { conversationRef: source.ref },
+        headers: {
+          "If-Match": '"2"',
+          "Idempotency-Key": "stable-assistant-idempotency-key",
+          "X-CSRF-Token": "a".repeat(43),
+        },
+      }),
+    );
+    mocks.archiveAssistantConversation.mockRejectedValue(new Error("Timeout"));
+    await expect(archiveConversation(source)).rejects.toThrow("Timeout");
+    expect(mocks.archiveAssistantConversation).toHaveBeenCalledTimes(2);
+    mocks.archiveAssistantConversation.mockResolvedValue({ data: source });
+    await expect(archiveConversation(source)).rejects.toThrow(
+      "receipt mismatch",
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("document", {
@@ -66,6 +113,28 @@ describe("assistant api mutation reconciliation", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("передаёт project/cursor/pageSize и возвращает nextPageToken истории", async () => {
+    const data = { items: [conversation([])], nextPageToken: "after" };
+    mocks.listAssistantConversations.mockResolvedValue({ data });
+    const signal = new AbortController().signal;
+    expect(await readConversations("prj_sales", "before", signal)).toEqual(
+      data,
+    );
+    expect(mocks.listAssistantConversations).toHaveBeenCalledWith({
+      query: { projectRef: "prj_sales", pageToken: "before", pageSize: 40 },
+      signal,
+    });
+  });
+
+  it("не вызывает SDK для отменённого чтения истории", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      readConversations(undefined, undefined, controller.signal),
+    ).rejects.toThrow();
+    expect(mocks.listAssistantConversations).not.toHaveBeenCalled();
   });
 
   it("повторяет turn с теми же key и полным payload", async () => {

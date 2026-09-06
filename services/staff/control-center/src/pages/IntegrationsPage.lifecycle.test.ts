@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -34,6 +35,9 @@ const definition: IntegrationDefinition = {
   origin: "SHIPPED",
   digest: "a".repeat(64),
   adapter: "SYNTHETIC_HTTP",
+  adapterOwner: "integration-gateway",
+  executionRoute: "MANAGED_MCP",
+  adapterReadiness: "READY",
 };
 
 function connection(
@@ -104,9 +108,16 @@ describe("IntegrationsPage lifecycle", () => {
       missingWarn: false,
       messages: { ru: {} },
     });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/integrations", component: IntegrationsPage }],
+    });
+    await router.push("/integrations");
+    await router.isReady();
     const setup = (await captureSetupState(IntegrationsPage, (app) => {
       app.use(pinia);
       app.use(i18n);
+      app.use(router);
     })) as unknown as IntegrationsSetup;
 
     await setup.openEdit(forbidden);

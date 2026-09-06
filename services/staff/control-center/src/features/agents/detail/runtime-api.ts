@@ -39,6 +39,7 @@ function versionHeaders(headers: MutationHeaders): {
 
 export async function loadAgentRuntime(
   agentRef: string,
+  signal?: AbortSignal,
 ): Promise<AgentRuntimeConfigurationView> {
   return readWithRetry(
     async () =>
@@ -46,19 +47,24 @@ export async function loadAgentRuntime(
         await unwrap(
           getAgentRuntimeConfiguration({
             path: { agentRef },
-            signal: requestSignal(),
+            signal: requestSignal(signal),
           }),
         )
       ).data,
     runtimeConfigurationReadRetryDelaysMs,
+    signal,
   );
 }
 
-export async function loadRuntimeCatalog(): Promise<RuntimeSelection[]> {
+export async function loadRuntimeCatalog(
+  signal?: AbortSignal,
+): Promise<RuntimeSelection[]> {
   return readWithRetry(
     async () =>
-      (await unwrap(listRuntimeSelections({ signal: requestSignal() }))).data
-        .items,
+      (await unwrap(listRuntimeSelections({ signal: requestSignal(signal) })))
+        .data.items,
+    readRetryDelaysMs,
+    signal,
   );
 }
 
@@ -167,17 +173,30 @@ export async function searchRuntimeEnvironments(
 async function readWithRetry<T>(
   request: () => Promise<T>,
   retryDelaysMs: readonly number[] = readRetryDelaysMs,
+  signal?: AbortSignal,
 ): Promise<T> {
   let lastProblem = asProblem(new Error("Runtime read did not start"));
   for (const delayMs of retryDelaysMs) {
+    signal?.throwIfAborted();
     if (delayMs > 0) {
-      await new Promise<void>((resolve) =>
-        globalThis.setTimeout(resolve, delayMs),
-      );
+      await new Promise<void>((resolve, reject) => {
+        const timer = globalThis.setTimeout(() => {
+          signal?.removeEventListener("abort", abort);
+          resolve();
+        }, delayMs);
+        function abort(): void {
+          globalThis.clearTimeout(timer);
+          signal?.removeEventListener("abort", abort);
+          reject(new DOMException("Runtime read aborted", "AbortError"));
+        }
+        signal?.addEventListener("abort", abort, { once: true });
+      });
     }
+    signal?.throwIfAborted();
     try {
       return await request();
     } catch (error) {
+      signal?.throwIfAborted();
       lastProblem = asProblem(error);
       if (!lastProblem.retryable || delayMs === retryDelaysMs.at(-1)) {
         throw lastProblem;

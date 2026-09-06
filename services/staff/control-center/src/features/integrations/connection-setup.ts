@@ -32,7 +32,10 @@ interface ConnectionSetupDependencies {
   createIdempotencyKey: () => string;
 }
 
-export type ConnectionConfigurationProblem = "REQUIRED" | "INVALID_HTTPS_URL";
+export type ConnectionConfigurationProblem =
+  | "REQUIRED"
+  | "INVALID_HTTPS_URL"
+  | "INVALID_VALUE";
 
 export interface PreparedConnectionConfiguration {
   value: Record<string, unknown>;
@@ -51,10 +54,18 @@ function fieldValue(
     .filter((item, index, values) => item && values.indexOf(item) === index);
 }
 
-function validHttpsUrl(value: string): boolean {
+function validHttpsUrl(value: string, originOnly: boolean): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "https:";
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      (!originOnly ||
+        ((!parsed.pathname || parsed.pathname === "/") &&
+          !parsed.search &&
+          !parsed.hash))
+    );
   } catch {
     return false;
   }
@@ -76,10 +87,42 @@ export function prepareConnectionConfiguration(
       if (field.required) problems[field.key] = "REQUIRED";
       continue;
     }
+    if (field.valueType === "INTEGER") {
+      const number =
+        typeof prepared === "string" && /^-?\d+$/.test(prepared)
+          ? Number(prepared)
+          : NaN;
+      if (
+        !Number.isSafeInteger(number) ||
+        (field.minimum !== undefined && number < field.minimum) ||
+        (field.maximum !== undefined && number > field.maximum)
+      )
+        problems[field.key] = "INVALID_VALUE";
+      else value[field.key] = number;
+      continue;
+    }
+    if (field.valueType === "BOOLEAN") {
+      if (prepared !== "true" && prepared !== "false")
+        problems[field.key] = "INVALID_VALUE";
+      else value[field.key] = prepared === "true";
+      continue;
+    }
+    const strings = Array.isArray(prepared) ? prepared : [prepared];
+    if (
+      strings.some(
+        (item) =>
+          (field.maximumLength !== undefined &&
+            item.length > field.maximumLength) ||
+          (field.allowedValues?.length && !field.allowedValues.includes(item)),
+      )
+    ) {
+      problems[field.key] = "INVALID_VALUE";
+      continue;
+    }
     if (
       field.valueType === "URL" &&
       typeof prepared === "string" &&
-      !validHttpsUrl(prepared)
+      !validHttpsUrl(prepared, field.format === "HTTPS_ORIGIN")
     ) {
       problems[field.key] = "INVALID_HTTPS_URL";
       continue;

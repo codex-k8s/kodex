@@ -19,7 +19,10 @@ export type ProviderAccount = ApiProviderAccount;
 export type ProviderAccountState = ProviderAccount["state"];
 export type ProviderAccountPage = ApiProviderAccountPage;
 export type ProviderAccountCreateInput = ApiProviderAccountCreateInput;
-export type ProviderAccountCandidate = ApiProviderAccountCandidate;
+export type ProviderAccountCandidate = Pick<
+  ApiProviderAccountCandidate,
+  "accountRef" | "weight"
+>;
 export type ProviderAccountAction = NextAction;
 export type ProviderPolicyMode = "FIXED" | "LEAST_USED" | "WEIGHTED";
 
@@ -36,12 +39,6 @@ export function pageAllowsAccountCreation(
   return actions.includes("CREATE_CONNECTION");
 }
 
-export function isRuntimeEligible(
-  account: Pick<ProviderAccount, "enabled" | "ready" | "state">,
-): boolean {
-  return account.enabled && account.ready && account.state === "AUTHORIZED";
-}
-
 export function isPendingDeviceAuthorization(
   account: Pick<ProviderAccount, "authorization">,
   now = Date.now(),
@@ -55,14 +52,16 @@ export function isPendingDeviceAuthorization(
   const expiresAt = authorization.expiresAt
     ? Date.parse(authorization.expiresAt)
     : Number.NaN;
-  return !Number.isFinite(expiresAt) || expiresAt > now;
+  return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
 export function safeVerificationUri(value: string | undefined): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    return url.protocol === "https:" && !url.username && !url.password
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }
@@ -75,12 +74,14 @@ export function readableProviderBlocker(
   | "AUTHORIZATION_UNAVAILABLE"
   | "RUNTIME_UNAVAILABLE"
   | "UNKNOWN" {
-  if (code.includes("AUTH")) return "AUTHORIZATION_UNAVAILABLE";
-  if (code.includes("RUNTIME") || code.includes("MATERIAL"))
-    return "RUNTIME_UNAVAILABLE";
-  if (code.includes("PROVIDER") || code.includes("DEFINITION"))
-    return "PROVIDER_UNAVAILABLE";
-  return "UNKNOWN";
+  switch (code) {
+    case "AUTH_MATERIAL_UNAVAILABLE":
+      return "AUTHORIZATION_UNAVAILABLE";
+    case "PROVIDER_DISABLED":
+      return "PROVIDER_UNAVAILABLE";
+    default:
+      return "UNKNOWN";
+  }
 }
 
 export function upsertProviderAccount(
@@ -88,7 +89,7 @@ export function upsertProviderAccount(
   account: ProviderAccount,
 ): ProviderAccount[] {
   const next = accounts.filter((item) => item.ref !== account.ref);
-  next.push(account);
+  if (account.state !== "DELETED") next.push(account);
   return next.sort((left, right) => left.name.localeCompare(right.name, "ru"));
 }
 

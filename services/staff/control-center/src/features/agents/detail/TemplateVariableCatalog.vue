@@ -9,18 +9,29 @@ import type { TemplateVariablePickerItem } from "@/features/agents/detail/model"
 import {
   nearScrollEnd,
   useAsyncEntityCollection,
+  type AsyncEntityLoader,
 } from "@/shared/ui/async-entity-picker";
 
 const props = defineProps<{
   projectRef: string;
+  agentRef?: string;
+  runtimeRevisionRef?: string;
   disabled: boolean;
+  loadItems?: AsyncEntityLoader<TemplateVariablePickerItem>;
+  contextKey?: string;
 }>();
 const emit = defineEmits<{ select: [item: TemplateVariablePickerItem] }>();
 const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value).instructions);
 const listboxId = `template-variable-catalog-${useId()}`;
 const activeScope = ref("ALL");
-const loader = createTemplateVariableLoader(props.projectRef);
+const loader: ReturnType<typeof createTemplateVariableLoader> = (request) =>
+  props.loadItems
+    ? props.loadItems(request)
+    : createTemplateVariableLoader(props.projectRef, {
+        agentRef: props.agentRef,
+        runtimeRevisionRef: props.runtimeRevisionRef,
+      })(request);
 const {
   hasMore,
   items,
@@ -30,7 +41,17 @@ const {
   phase,
   query,
   refresh,
-} = useAsyncEntityCollection(loader, { debounceMs: 250 });
+} = useAsyncEntityCollection(loader, { debounceMs: 500 });
+watch(
+  () => [
+    props.projectRef,
+    props.agentRef,
+    props.runtimeRevisionRef,
+    props.contextKey,
+  ],
+  () => refresh(),
+  { flush: "sync" },
+);
 
 const scopeOrder = [
   "SYSTEM",
@@ -182,6 +203,9 @@ function handleScroll(event: Event): void {
                 <span>{{ item.variable.valueType }}</span>
               </span>
               <small>{{ item.variable.description }}</small>
+              <small v-if="item.disabled" class="variable-catalog__reason">{{
+                $t(`templateAvailability.${item.variable.reason}`)
+              }}</small>
               <code
                 v-if="item.variable.example"
                 class="variable-catalog__example"

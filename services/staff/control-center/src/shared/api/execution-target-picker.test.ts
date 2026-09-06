@@ -49,11 +49,26 @@ function agent(overrides: Partial<Agent> = {}): Agent {
 function workflow(overrides: Partial<Workflow> = {}): Workflow {
   return {
     ref: "workflow_sales",
+    launchReadiness: {
+      allowedToSubmit: true,
+      reason: "READY",
+      workflowVersion: 4,
+      operationalState: "UNKNOWN",
+      contextDigest: "a".repeat(64),
+    },
     version: 4,
     projectRef: "project_sales",
     name: "Квалификация обращения",
     purpose: "Проверяет обращение и готовит ответ",
     state: "PUBLISHED",
+    cardSummary: {
+      stageCount: 0,
+      uniqueAgentCount: 0,
+      parallelGroupCount: 0,
+      hasHumanGate: false,
+      activeRunCount: 0,
+      pendingGateCount: 0,
+    },
     inputFields: [],
     steps: [],
     validationMessages: [],

@@ -1,56 +1,45 @@
 <script setup lang="ts">
-import { Columns3, List } from "@lucide/vue";
 import { computed } from "vue";
 
-import {
-  groupRuns,
-  type RunLane,
-  type RunView,
-} from "@/features/workboard/model";
+import { groupRuns, type RunLane } from "@/features/workboard/model";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
 
 const props = defineProps<{
   runs: Run[];
-  view: RunView;
+  hasMore?: boolean;
+  loadingMore?: boolean;
   preserveProject?: boolean;
 }>();
-const emit = defineEmits<{ "update:view": [value: RunView] }>();
+const emit = defineEmits<{ more: [] }>();
+function onScroll(event: Event): void {
+  const element = event.currentTarget;
+  if (
+    props.hasMore &&
+    !props.loadingMore &&
+    element instanceof HTMLElement &&
+    element.scrollHeight - element.scrollTop - element.clientHeight <= 40
+  )
+    emit("more");
+}
 const lanes = computed(() => groupRuns(props.runs));
 const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
 </script>
 
 <template>
   <div class="runs-board">
-    <div class="runs-board__toolbar">
-      <div
-        class="runs-board__segmented"
-        role="group"
-        :aria-label="$t('workboard.viewMode')"
-      >
-        <button
-          type="button"
-          :aria-pressed="view === 'KANBAN'"
-          @click="emit('update:view', 'KANBAN')"
-        >
-          <Columns3 :size="16" aria-hidden="true" />{{ $t("workboard.kanban") }}
-        </button>
-        <button
-          type="button"
-          :aria-pressed="view === 'LIST'"
-          @click="emit('update:view', 'LIST')"
-        >
-          <List :size="16" aria-hidden="true" />{{ $t("workboard.list") }}
-        </button>
-      </div>
-    </div>
-    <div v-if="view === 'KANBAN'" class="runs-board__kanban">
+    <div class="runs-board__kanban">
       <section v-for="lane in order" :key="lane" class="runs-lane">
         <header>
           <h2>{{ $t(`workboard.lanes.${lane}`) }}</h2>
           <span>{{ lanes[lane].length }}</span>
         </header>
-        <div class="runs-lane__body">
+        <div
+          class="runs-lane__body"
+          tabindex="0"
+          :aria-label="$t(`workboard.lanes.${lane}`)"
+          @scroll="onScroll"
+        >
           <RunWorkItem
             v-for="run in lanes[lane]"
             :key="run.ref"
@@ -64,47 +53,13 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
         </div>
       </section>
     </div>
-    <div v-else class="runs-board__list">
-      <RunWorkItem
-        v-for="run in runs"
-        :key="run.ref"
-        :run="run"
-        :preserve-project="preserveProject"
-      />
-    </div>
   </div>
 </template>
 
 <style scoped>
-.runs-board__toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-.runs-board__segmented {
-  display: inline-flex;
-  min-height: 36px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.runs-board__segmented button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 94px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-}
-.runs-board__segmented button[aria-pressed="true"] {
-  color: var(--accent-strong);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgb(16 22 30 / 10%);
+.runs-board {
+  min-width: 0;
+  max-width: 100%;
 }
 .runs-board__kanban {
   display: grid;
@@ -118,7 +73,7 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
   flex-direction: column;
   min-height: 320px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel);
 }
 .runs-lane > header {
@@ -148,11 +103,42 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
   align-content: start;
   gap: 8px;
   padding: 8px;
+  max-height: 1256px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  grid-auto-rows: 200px;
 }
 .runs-lane__body :deep(.run-work-item) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+.runs-lane__body :deep(.run-work-item h3) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.runs-lane__body :deep(.run-work-item .safe-summary) {
+  -webkit-line-clamp: 1;
+}
+.runs-lane__body :deep(.run-work-item dd) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runs-lane__body :deep(.run-work-item__aside) {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 4px;
 }
 .runs-lane__body :deep(.run-work-item__actors) {
   display: grid;
@@ -167,24 +153,5 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
   padding: 26px 10px;
   color: var(--muted);
   text-align: center;
-}
-.runs-board__list {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-}
-@media (max-width: 700px) {
-  .runs-board__toolbar {
-    justify-content: stretch;
-  }
-  .runs-board__segmented,
-  .runs-board__segmented button {
-    flex: 1;
-  }
-  .runs-board__kanban {
-    grid-template-columns: minmax(0, 1fr);
-    overflow-x: hidden;
-  }
 }
 </style>

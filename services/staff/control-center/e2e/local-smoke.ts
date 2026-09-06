@@ -31,7 +31,7 @@ test("локальный OIDC, API и основные экраны доступ
   const session = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/session",
+      new URL(response.url()).pathname === "/api/v1/session/callback",
   );
   await authenticateOwner(
     page,
@@ -41,7 +41,7 @@ test("локальный OIDC, API и основные экраны доступ
     },
     { mode: "local" },
   );
-  expect((await session).status()).toBe(204);
+  expect((await session).status()).toBe(200);
   const currentUserMenu = page.locator("button[aria-haspopup='menu']");
   const logout = page.getByRole("button", { name: "Выйти", exact: true });
   await currentUserMenu.click();

@@ -85,6 +85,21 @@ type TemplateVariableWire = Omit<
 export function normalizeTemplateVariable(
   variable: TemplateVariableWire,
 ): TemplateVariable {
+  if (
+    typeof variable.available !== "boolean" ||
+    ![
+      "AVAILABLE",
+      "PROJECT_CONTEXT_REQUIRED",
+      "AGENT_CONTEXT_REQUIRED",
+      "RUNTIME_CONTEXT_REQUIRED",
+      "NOT_MATERIALIZED",
+      "REVISION_NOT_SAVED",
+      "PERMISSION_REQUIRED",
+      "CAPABILITY_REQUIRED",
+    ].includes(variable.reason) ||
+    variable.available !== (variable.reason === "AVAILABLE")
+  )
+    throw new Error("Invalid template variable availability");
   const valueType = variable.valueType.toLocaleUpperCase(
     "en-US",
   ) as TemplateVariable["valueType"];
@@ -197,12 +212,15 @@ export function toTemplateVariablePickerItem(
     id: normalized.name,
     label: normalized.name,
     description: normalized.description,
+    disabled: !normalized.available,
     scope: normalized.source,
     variable: normalized,
   };
 }
 
 export function templateVariableInsertion(variable: TemplateVariable): string {
+  if (!variable.available || variable.reason !== "AVAILABLE")
+    throw new Error("Template variable is unavailable");
   if (variable.collection && variable.rangeExample?.trim())
     return variable.rangeExample.trim();
   if (variable.example.trim()) return variable.example.trim();

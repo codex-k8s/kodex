@@ -1,4 +1,10 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import type {
+  Agent,
+  InstructionCommand,
+  InstructionPublicationResult,
+  RevisionImpactPlan,
+} from "../src/shared/api/generated/openapi/types.gen";
 
 const retryableProviderTurnResults = new Map([
   ["RUNTIMEPROVIDERUNAVAILABLE", "RUNTIME_PROVIDER_UNAVAILABLE"],
@@ -253,16 +259,103 @@ export async function createAgent(
 }
 
 export async function publishAgent(page: Page): Promise<void> {
+  const agentRef = routeRef(page, "agents");
+  const readAgent = async () => {
+    const response = await readJsonWithNetworkRetry<Agent>(
+      page,
+      `/api/v1/agents/${encodeURIComponent(agentRef)}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.ref).toBe(agentRef);
+    return response.body;
+  };
+  let agent = await readAgent();
   const validate = page.getByRole("button", { name: "Проверить инструкции" });
-  if ((await validate.count()) > 0) {
+  if (
+    agent.draftInstructions &&
+    agent.draftInstructions.state !== "VALID" &&
+    (await validate.count()) > 0
+  ) {
     await expect(validate).toBeEnabled();
+    const validation = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${agentRef}/instruction-commands` &&
+        (response.request().postDataJSON() as InstructionCommand).action ===
+          "VALIDATE",
+    );
     await validate.click();
+    expect((await validation).status()).toBe(200);
+    agent = await readAgent();
   }
 
   const publish = page.getByRole("button", { name: "Опубликовать инструкции" });
   if ((await publish.count()) > 0) {
+    expect(agent.draftInstructions?.state).toBe("VALID");
     await expect(publish).toBeEnabled();
+    const prepared = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${agentRef}/instructions/impact-plans`,
+    );
     await publish.click();
+    const preparation = await prepared;
+    expect(preparation.status()).toBe(200);
+    expect(preparation.request().headers()["if-match"]).toBe(
+      `"${String(agent.version)}"`,
+    );
+    const plan = (await preparation.json()) as RevisionImpactPlan;
+    expect(plan.kind).toBe("AGENT_INSTRUCTIONS");
+    expect(plan.state).toBe("PREPARED");
+    expect(plan.sourceRef).toBe(agentRef);
+    expect(plan.sourceVersion).toBe(agent.version);
+    expect(plan.draftRef).toBe(agent.draftInstructions?.ref);
+    expect(plan.draftVersion).toBe(agent.draftInstructions?.version);
+    const panel = page.locator(".publication-impact");
+    await expect(panel).toBeVisible();
+    // Этот сценарий применяет инструкции своему Agent, а не всем consumers.
+    const consumer = panel.getByRole("checkbox", {
+      name: agentRef,
+      exact: true,
+    });
+    await expect(consumer).toBeVisible();
+    await consumer.check();
+    const publication = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname ===
+          `/api/v1/agents/${agentRef}/instruction-commands` &&
+        (response.request().postDataJSON() as InstructionCommand).action ===
+          "PUBLISH",
+    );
+    await panel
+      .getByRole("button", {
+        name: "Опубликовать и обновить выбранных: 1",
+        exact: true,
+      })
+      .click();
+    const response = await publication;
+    expect(response.status()).toBe(200);
+    const command = response.request().postDataJSON() as InstructionCommand;
+    expect(command.planRef).toBe(plan.ref);
+    expect(command.selectedItemRefs).toHaveLength(1);
+    expect(response.request().headers()["if-match"]).toBe(
+      `"${String(plan.sourceVersion)}"`,
+    );
+    expect(response.request().headers()["idempotency-key"]).toBeTruthy();
+    const receipt = (await response.json()) as InstructionPublicationResult;
+    expect(receipt.plan.ref).toBe(plan.ref);
+    expect(receipt.plan.state).toBe("APPLIED");
+    expect(receipt.plan.publishedRevisionRef).toBe(plan.draftRef);
+    expect(receipt.agent.ref).toBe(agentRef);
+    expect(receipt.agent.version).toBe(plan.sourceVersion + 1);
+    // Минимальный receipt не является полной проекцией Agent.
+    await expect
+      .poll(async () => (await readAgent()).instructionBinding?.revisionRef)
+      .toBe(plan.draftRef);
+    expect((await readAgent()).instructionBinding?.effective).toBe(true);
   }
   await expect(
     page.locator(".panel").filter({ hasText: "Инструкции" }),

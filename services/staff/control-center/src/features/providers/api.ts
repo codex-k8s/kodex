@@ -14,6 +14,9 @@ import {
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
+import { checkMutationRejection } from "@/shared/api/mutation-rejection";
+import type { ProviderAccountUsageContext } from "@/shared/api/generated/openapi/types.gen";
+import { usageQuery } from "./usage";
 
 import type {
   ProviderAccount,
@@ -67,12 +70,14 @@ export async function loadProviderAccounts(
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
   definitionKey?: ProviderDefinitionKey,
+  usageContext?: ProviderAccountUsageContext,
 ): Promise<ProviderAccountPage> {
   return (
     await unwrap(
       listProviderAccounts({
         query: {
           pageSize: 40,
+          ...usageQuery(usageContext),
           ...(definitionKey ? { definitionKey } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),
@@ -86,11 +91,13 @@ export async function loadProviderAccounts(
 export async function loadProviderAccount(
   providerAccountRef: string,
   signal: AbortSignal = requestSignal(),
+  usageContext?: ProviderAccountUsageContext,
 ): Promise<ProviderAccount> {
   return (
     await unwrap(
       getProviderAccount({
         path: { providerAccountRef },
+        query: usageQuery(usageContext),
         signal,
       }),
     )
@@ -129,6 +136,7 @@ export async function startDeviceAuthorization(
 
 export async function verifyDeviceAuthorization(
   account: ProviderAccount,
+  key?: string,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
@@ -137,14 +145,16 @@ export async function verifyDeviceAuthorization(
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
-        }),
+        }).then(checkMutationRejection),
       account.version,
+      key,
     )
   ).data;
 }
 
 export async function reauthorizeProviderDevice(
   account: ProviderAccount,
+  key?: string,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
@@ -153,8 +163,9 @@ export async function reauthorizeProviderDevice(
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
-        }),
+        }).then(checkMutationRejection),
       account.version,
+      key,
     )
   ).data;
 }
@@ -193,8 +204,9 @@ export async function revokeProviderAccount(
   ).data;
 }
 
-export async function deleteProviderApiKeyAccount(
+export async function deleteProviderAccountRecord(
   account: ProviderAccount,
+  key?: string,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
@@ -203,8 +215,9 @@ export async function deleteProviderApiKeyAccount(
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
-        }),
+        }).then(checkMutationRejection),
       account.version,
+      key,
     )
   ).data;
 }

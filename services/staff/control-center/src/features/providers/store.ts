@@ -1,18 +1,17 @@
 import { defineStore } from "pinia";
 
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { KnownMutationRejection } from "@/shared/api/mutation-rejection";
 
 import {
   authorizeProviderApiKey,
   createProviderAccount,
-  deleteProviderApiKeyAccount,
+  loadProviderAccount,
   loadProviderAccounts,
   loadProviderDefinitions,
-  reauthorizeProviderDevice,
   revokeProviderAccount,
   setProviderAccountEnabled,
   startDeviceAuthorization,
-  verifyDeviceAuthorization,
 } from "./api";
 import {
   accountAllows,
@@ -24,9 +23,12 @@ import {
   type ProviderAccountAction,
   type ProviderDefinition,
 } from "./model";
+import { startProviderLifecycle } from "./lifecycle";
+import { requestSignal } from "@/shared/api/client";
 
 const devicePollDelayMs = 4_000;
 const pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pollGenerations = new Map<string, number>();
 let loadGeneration = 0;
 let loadController: AbortController | undefined;
 
@@ -132,7 +134,8 @@ export const useProvidersStore = defineStore("providers", {
         this.accountsNextPageToken = page.nextPageToken;
         this.pageNextActions = page.nextActions;
       } catch (error) {
-        this.problem = asProblem(error);
+        if (generation === loadGeneration && query === this.query)
+          this.problem = asProblem(error);
       } finally {
         this.loadingMore = false;
       }
@@ -142,14 +145,27 @@ export const useProvidersStore = defineStore("providers", {
         throw new Error("Provider account creation is unavailable");
       return this.execute("create", () => createProviderAccount(input));
     },
-    async startDevice(account: ProviderAccount): Promise<ProviderAccount> {
+    async startDevice(
+      account: ProviderAccount,
+      reauthorize = false,
+    ): Promise<ProviderAccount> {
       if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
+      const generation = pollGenerations.get(account.ref) ?? 0;
       const updated = await this.execute(account.ref, () =>
-        account.state === "REAUTHORIZATION_REQUIRED"
-          ? reauthorizeProviderDevice(account)
+        reauthorize || account.state === "REAUTHORIZATION_REQUIRED"
+          ? startProviderLifecycle(
+              account,
+              { action: "REAUTHORIZE" },
+              window.sessionStorage,
+              requestSignal(),
+            ).then((result) => result.account)
           : startDeviceAuthorization(account),
       );
-      if (isPendingDeviceAuthorization(updated)) this.schedulePoll(updated.ref);
+      if (
+        generation === (pollGenerations.get(account.ref) ?? 0) &&
+        isPendingDeviceAuthorization(updated)
+      )
+        this.schedulePoll(updated.ref);
       return updated;
     },
     async refreshAuthorization(
@@ -159,11 +175,20 @@ export const useProvidersStore = defineStore("providers", {
         this.stopPolling(account.ref);
         return account;
       }
+      const generation = pollGenerations.get(account.ref) ?? 0;
       const updated = await this.execute(account.ref, () =>
-        verifyDeviceAuthorization(account),
+        startProviderLifecycle(
+          account,
+          { action: "VERIFY" },
+          window.sessionStorage,
+          requestSignal(),
+        ).then((result) => result.account),
       );
-      if (isPendingDeviceAuthorization(updated)) this.schedulePoll(updated.ref);
-      else this.stopPolling(updated.ref);
+      if (generation === (pollGenerations.get(account.ref) ?? 0)) {
+        if (isPendingDeviceAuthorization(updated))
+          this.schedulePoll(updated.ref);
+        else this.stopPolling(updated.ref);
+      }
       return updated;
     },
     async authorizeApiKey(
@@ -188,10 +213,18 @@ export const useProvidersStore = defineStore("providers", {
     async revoke(account: ProviderAccount): Promise<ProviderAccount> {
       if (!accountAllows(account, "REVOKE")) return account;
       this.stopPolling(account.ref);
+      return this.execute(account.ref, () => revokeProviderAccount(account));
+    },
+    async remove(account: ProviderAccount): Promise<ProviderAccount> {
+      if (!accountAllows(account, "DELETE")) return account;
+      this.stopPolling(account.ref);
       return this.execute(account.ref, () =>
-        account.authorization?.method === "API_KEY"
-          ? deleteProviderApiKeyAccount(account)
-          : revokeProviderAccount(account),
+        startProviderLifecycle(
+          account,
+          { action: "DELETE" },
+          window.sessionStorage,
+          requestSignal(),
+        ).then((result) => result.account),
       );
     },
     schedulePoll(accountRef: string): void {
@@ -213,19 +246,25 @@ export const useProvidersStore = defineStore("providers", {
       );
     },
     stopPolling(accountRef: string): void {
+      pollGenerations.set(
+        accountRef,
+        (pollGenerations.get(accountRef) ?? 0) + 1,
+      );
       const timer = pollTimers.get(accountRef);
       if (timer !== undefined) clearTimeout(timer);
       pollTimers.delete(accountRef);
       this.pollingRefs = this.pollingRefs.filter((ref) => ref !== accountRef);
     },
     stopAllPolling(): void {
-      for (const accountRef of [...this.pollingRefs])
+      for (const accountRef of new Set([...this.pollingRefs, ...this.busyRefs]))
         this.stopPolling(accountRef);
     },
     async execute(
       busyRef: string,
       operation: () => Promise<ProviderAccount>,
     ): Promise<ProviderAccount> {
+      if (this.busyRefs.includes(busyRef))
+        throw new Error("Provider account mutation is already in progress");
       this.busyRefs = [...new Set([...this.busyRefs, busyRef])];
       this.problem = undefined;
       try {
@@ -233,6 +272,24 @@ export const useProvidersStore = defineStore("providers", {
         this.accounts = upsertProviderAccount(this.accounts, account);
         return account;
       } catch (error) {
+        if (error instanceof KnownMutationRejection && error.status === 412) {
+          const signal = requestSignal();
+          try {
+            const current = await loadProviderAccount(busyRef, signal);
+            signal.throwIfAborted();
+            if (current.ref !== busyRef)
+              throw new Error("Provider refresh scope changed");
+            this.accounts = upsertProviderAccount(this.accounts, current);
+          } catch (refreshError) {
+            if (!signal.aborted) {
+              this.accounts = this.accounts.filter(
+                (item) => item.ref !== busyRef,
+              );
+              this.problem = asProblem(refreshError);
+            }
+            throw refreshError;
+          }
+        }
         this.problem = asProblem(error);
         throw this.problem;
       } finally {

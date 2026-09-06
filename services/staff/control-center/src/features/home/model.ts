@@ -55,29 +55,3 @@ export function homeFailedRuns(runs: Run[], limit = 8): Run[] {
     )
     .slice(0, limit);
 }
-
-export function homeResumableSessions(runs: Run[], limit = 6): Run[] {
-  const failed = new Set(
-    homeFailedRuns(runs, runs.length).map((run) => run.ref),
-  );
-  const seenSessions = new Set<string>();
-
-  return [...runs]
-    .filter(
-      (run) =>
-        !failed.has(run.ref) &&
-        !["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"].includes(
-          run.state,
-        ) &&
-        run.nextActions.includes("ADD_TURN"),
-    )
-    .sort((left, right) =>
-      runActivityAt(right).localeCompare(runActivityAt(left)),
-    )
-    .filter((run) => {
-      if (seenSessions.has(run.sessionRef)) return false;
-      seenSessions.add(run.sessionRef);
-      return true;
-    })
-    .slice(0, limit);
-}

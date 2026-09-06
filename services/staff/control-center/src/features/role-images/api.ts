@@ -9,6 +9,7 @@ import {
   listRoleImageRecipes,
   listRuntimeEnvironmentSets,
   promoteRoleImage,
+  queryEffectiveAccess,
   updateRoleImageRecipe,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -24,13 +25,50 @@ import type {
   RoleImagePromotionReceipt,
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, type MutationHeaders } from "@/shared/api/mutation";
+import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 
 export interface RoleDefinitionOption {
   ref: string;
   label: string;
   agentCount: number;
+}
+
+export async function loadRoleImageCreateAccess(
+  projectRef: string | undefined,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const permissionKeys = [
+    "image.build",
+    "image.source.view",
+    "image.source.manage",
+  ];
+  const page = (
+    await unwrap(
+      queryEffectiveAccess({
+        body: {
+          target: projectRef
+            ? { kind: "PROJECT", projectRef }
+            : { kind: "ORGANIZATION" },
+          permissionKeys,
+        },
+        headers: { "X-CSRF-Token": csrfToken() },
+        signal,
+      }),
+    )
+  ).data;
+  return permissionKeys.every((key) => {
+    const decisions = page.items.filter((item) => item.permissionKey === key);
+    const decision = decisions[0];
+    return (
+      decisions.length === 1 &&
+      decision?.decision === "ALLOWED" &&
+      decision.target.kind === (projectRef ? "PROJECT" : "ORGANIZATION") &&
+      decision.target.projectRef === projectRef &&
+      !decision.target.resourceKind &&
+      !decision.target.resourceRef
+    );
+  });
 }
 
 function versionedHeaders(headers: MutationHeaders): {
@@ -50,7 +88,15 @@ function versionedHeaders(headers: MutationHeaders): {
 export async function loadRoleImagePage(
   projectRef: string,
   pageToken?: string,
+  signal: AbortSignal = requestSignal(),
+  filter: {
+    query?: string;
+    state?: "ACTIVE" | "ARCHIVED";
+    roleDefinitionRef?: string;
+  } = {},
 ): Promise<RoleImageRecipePage> {
+  if (new TextEncoder().encode(filter.query ?? "").length > 128)
+    throw new Error("Role image query exceeds 128 UTF-8 bytes");
   return (
     await unwrap(
       listRoleImageRecipes({
@@ -58,8 +104,9 @@ export async function loadRoleImagePage(
         query: {
           pageSize: 40,
           ...(pageToken ? { pageToken } : {}),
+          ...filter,
         },
-        signal: requestSignal(),
+        signal,
       }),
     )
   ).data;
@@ -170,13 +217,15 @@ export async function loadRoleImageDependencies(
   return result;
 }
 
-export async function loadRoleEnvironmentCatalog(): Promise<RoleEnvironment[]> {
-  return (await unwrap(listRoleEnvironments({ signal: requestSignal() }))).data
-    .items;
+export async function loadRoleEnvironmentCatalog(
+  signal: AbortSignal = requestSignal(),
+): Promise<RoleEnvironment[]> {
+  return (await unwrap(listRoleEnvironments({ signal }))).data.items;
 }
 
 export async function loadRoleDefinitionOptions(
   projectRef: string,
+  signal: AbortSignal = requestSignal(),
 ): Promise<RoleDefinitionOption[]> {
   const values = new Map<string, { label: string; agentRefs: Set<string> }>();
   const visitedTokens = new Set<string>();
@@ -190,7 +239,7 @@ export async function loadRoleDefinitionOptions(
             pageSize: 100,
             ...(pageToken ? { pageToken } : {}),
           },
-          signal: requestSignal(),
+          signal,
         }),
       )
     ).data;

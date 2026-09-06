@@ -24,12 +24,20 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
 
   const hasMore = computed(() => Boolean(nextPageToken.value));
 
-  async function load(nextProjectRef: string, nextQuery = ""): Promise<void> {
+  async function load(
+    nextProjectRef: string,
+    nextQuery = "",
+    retain = false,
+  ): Promise<void> {
     const current = ++generation;
     const normalizedQuery = nextQuery.trim();
+    const keepItems =
+      retain &&
+      projectRef.value === nextProjectRef &&
+      query.value === normalizedQuery;
     projectRef.value = nextProjectRef;
     query.value = normalizedQuery;
-    items.value = [];
+    if (!keepItems) items.value = [];
     nextPageToken.value = undefined;
     consumedPageTokens.clear();
     loading.value = true;
@@ -88,6 +96,16 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     }
   }
 
+  function prepareRefresh(retain = false): void {
+    generation += 1;
+    if (!retain) items.value = [];
+    nextPageToken.value = undefined;
+    consumedPageTokens.clear();
+    loading.value = true;
+    loadingMore.value = false;
+    problem.value = undefined;
+  }
+
   function clear(): void {
     generation += 1;
     projectRef.value = "";
@@ -110,6 +128,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     hasMore,
     load,
     loadMore,
+    prepareRefresh,
     clear,
   };
 });

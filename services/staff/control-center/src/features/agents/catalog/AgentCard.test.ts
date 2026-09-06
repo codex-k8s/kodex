@@ -28,6 +28,7 @@ async function render(item: AgentCatalogItem): Promise<string> {
       locale: "ru",
       messages: {
         ru: {
+          entityCards: { openRun: "Открыть запуск" },
           agents: { currentActivity: "Сейчас" },
           common: {
             open: "Открыть",
@@ -59,6 +60,7 @@ describe("AgentCard", () => {
     runtimeRevision: "rev-4",
     runtimeReady: true,
     currentActivity: "Собирает сводку по обращениям",
+    currentRunRef: "run_synthetic",
     updatedAt: "2026-08-28T10:00:00Z",
   };
 

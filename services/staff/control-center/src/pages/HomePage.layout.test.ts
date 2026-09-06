@@ -21,7 +21,7 @@ describe("HomePage layout", () => {
   it("разделяет доступные источники и не рисует недостоверные provider-карточки", () => {
     expect(template).toContain(':gates="openGates"');
     expect(template).toContain(':failed-runs="failedRuns"');
-    expect(template).toContain(':runs="resumableSessions"');
+    expect(template).toContain('kind="SESSION"');
     expect(template).not.toContain("CapabilityCoverageList");
     expect(template).not.toContain("PROVIDER_AUTH_EXPIRY");
   });

@@ -20,6 +20,7 @@ export interface AgentCatalogItem {
   runtimeRevision?: string;
   runtimeReady: boolean;
   currentActivity?: string;
+  currentRunRef?: string;
   updatedAt: string;
 }
 
@@ -76,6 +77,7 @@ export function toAgentCatalogItem(agent: Agent): AgentCatalogItem {
     runtimeRevision: agent.runtimeRevision,
     runtimeReady: agent.runtimeReady,
     currentActivity: agent.currentActivity,
+    currentRunRef: agent.currentRunRef,
     updatedAt: agent.updatedAt,
   };
 }

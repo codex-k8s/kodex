@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Plus } from "@lucide/vue";
 import {
   computed,
@@ -16,6 +17,7 @@ import {
   type AgentCatalogView,
 } from "@/features/agents/catalog/model";
 import { useAgentCatalogStore } from "@/features/agents/catalog/store";
+import { catalogInvalidated } from "@/features/catalogs/api";
 import { usePlatformStore } from "@/features/platform/store";
 import {
   isAgentDraftComplete,
@@ -56,6 +58,7 @@ const form = reactive({
 });
 const formReady = computed(() => isAgentDraftComplete(form));
 let searchTimer: number | undefined;
+let catalogGeneration = 0;
 
 function openDialog(): void {
   if (!canCreate.value) return;
@@ -121,12 +124,44 @@ watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => {
     void catalog.load(projectRef.value, value);
-  }, 300);
+  }, 500);
 });
 
 onBeforeUnmount(() => {
+  catalogGeneration += 1;
+  unsubscribe();
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   catalog.clear();
+});
+const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
+  if (
+    name !== "clearOwnerState" &&
+    name !== "reloadPlatformState" &&
+    !(name === "reloadPlatformKind" && catalogInvalidated("agents", args[0]))
+  )
+    return;
+  if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+  const expected = ++catalogGeneration;
+  if (name === "clearOwnerState") {
+    catalog.clear();
+    dialog.value = false;
+    return;
+  }
+  const retain =
+    name === "reloadPlatformKind" &&
+    ["RUN", "INTEGRATION_CONNECTION", "INTEGRATION_GRANT"].includes(args[0]);
+  catalog.prepareRefresh(retain);
+  const scope = projectRef.value;
+  after(() => {
+    if (catalogGeneration === expected && projectRef.value === scope)
+      void catalog.load(scope, catalogQuery.value, retain);
+  });
+  onError((error) => {
+    if (catalogGeneration === expected) {
+      catalog.clear();
+      catalog.problem = asProblem(error);
+    }
+  });
 });
 </script>
 
@@ -144,7 +179,7 @@ onBeforeUnmount(() => {
       </button></template
     >
     <AsyncState
-      :loading="catalog.loading"
+      :loading="catalog.loading && list.length === 0"
       :problem="catalog.problem"
       :empty="list.length === 0"
       :empty-title="$t('agents.emptyTitle')"
@@ -176,7 +211,12 @@ onBeforeUnmount(() => {
       :title="$t('agents.new')"
       :busy="busy"
       @close="dialog = false"
-      ><form id="agent-form" class="form-grid" @submit.prevent="submit">
+      ><form
+        id="agent-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="120" /></label
@@ -188,15 +228,16 @@ onBeforeUnmount(() => {
             maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.role") }}</span
-          ><textarea
+          ><VoiceTextarea
             v-model.trim="form.roleDescription"
+            :disabled="busy"
             required
-            maxlength="1000"
-          /></label
+            maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("agents.instructions") }}</span
-          ><textarea
+          ><VoiceTextarea
             v-model.trim="form.initialInstructions"
+            :disabled="busy"
             required
             maxlength="65536"
           />

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import AsyncState from "@/shared/ui/AsyncState.vue";
+import OrganizationCatalog from "@/features/catalogs/OrganizationCatalog.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
@@ -15,11 +15,6 @@ const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
 const canCreate = computed(() =>
   project.value?.nextActions.includes("CREATE_WORKFLOW"),
-);
-const list = computed(() =>
-  Object.values(platform.workflows).filter(
-    (i) => i.projectRef === projectRef.value,
-  ),
 );
 const agentList = computed(() =>
   Object.values(platform.agents).filter(
@@ -48,7 +43,6 @@ async function submit() {
 }
 async function load(): Promise<void> {
   await Promise.all([
-    platform.loadWorkflows(projectRef.value),
     platform.loadAgents(projectRef.value),
     platform.loadProject(projectRef.value),
   ]);
@@ -60,7 +54,14 @@ async function load(): Promise<void> {
     dialog.value = true;
 }
 
-onMounted(() => void load());
+watch(
+  projectRef,
+  () => {
+    dialog.value = false;
+    void load();
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <PageFrame :title="$t('workflows.title')" :subtitle="$t('workflows.subtitle')"
@@ -74,54 +75,28 @@ onMounted(() => void load());
       >
         {{ $t("workflows.new") }}
       </button></template
-    ><AsyncState
-      :loading="platform.loading.workflows"
-      :problem="platform.problems.workflows"
-      :empty="list.length === 0"
-      :empty-title="$t('workflows.emptyTitle')"
-      @retry="platform.loadWorkflows(projectRef)"
-      ><template #empty-action
-        ><button
-          v-if="canCreate"
-          class="button button--primary"
-          type="button"
-          :disabled="!agentList.length"
-          @click="dialog = true"
-        >
-          {{ $t("workflows.new") }}
-        </button></template
-      >
-      <div class="entity-list">
-        <RouterLink
-          v-for="workflow in list"
-          :key="workflow.ref"
-          :to="`/projects/${projectRef}/workflows/${workflow.ref}`"
-          class="entity-row"
-          ><div>
-            <h3>{{ workflow.name }}</h3>
-            <p>{{ workflow.purpose }}</p>
-          </div>
-          <StatusBadge :state="workflow.state" /><span
-            >{{ workflow.steps.length }} · {{ $t("workflows.steps") }}</span
-          ></RouterLink
-        >
-      </div></AsyncState
-    ><ModalDialog
+    ><OrganizationCatalog kind="workflows" :project-ref="projectRef" />
+    <ModalDialog
       v-if="dialog"
       :title="$t('workflows.new')"
       :busy="busy"
       @close="dialog = false"
-      ><form id="workflow-form" class="form-grid" @submit.prevent="submit">
+      ><form
+        id="workflow-form"
+        class="form-grid"
+        :inert="busy"
+        @submit.prevent="submit"
+      >
         <label class="field field--wide"
           ><span>{{ $t("common.name") }}</span
           ><input v-model.trim="form.name" required maxlength="160" /></label
         ><label class="field field--wide"
           ><span>{{ $t("common.purpose") }}</span
-          ><textarea
+          ><VoiceTextarea
             v-model.trim="form.purpose"
+            :disabled="busy"
             required
-            maxlength="1000"
-          /></label
+            maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("workflows.coordinator") }}</span
           ><select v-model="form.coordinatorAgentRef" required>

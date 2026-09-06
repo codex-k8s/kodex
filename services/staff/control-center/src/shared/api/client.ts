@@ -2,6 +2,7 @@ import { client } from "@/shared/api/generated/openapi/client.gen";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { currentLocale } from "@/shared/locale";
 import { selectedProjectRef } from "@/shared/project-context";
+import { ownerRequestSignal } from "./owner-lifetime";
 
 const projectReferenceHeader = "X-Kodex-Project-ID";
 let projectInterceptorConfigured = false;
@@ -33,5 +34,9 @@ export function configureApiClient(): void {
 
 export function requestSignal(parent?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(runtimeConfig().requestTimeoutMs);
-  return parent ? AbortSignal.any([parent, timeout]) : timeout;
+  return AbortSignal.any([
+    ownerRequestSignal(),
+    timeout,
+    ...(parent ? [parent] : []),
+  ]);
 }

@@ -1,39 +1,31 @@
 <script setup lang="ts">
-import { Box, Layers3, Plus, Search } from "@lucide/vue";
+import { Box, Layers3, Maximize2, Plus, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useRoleImagesStore } from "@/features/role-images/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import RoleImageLineage from "./RoleImageLineage.vue";
 
 const props = defineProps<{ projectRef: string }>();
 const { t } = useI18n();
 const store = useRoleImagesStore();
 const query = ref("");
+const expanded = ref(false);
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
-const items = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase();
-  return store.catalog(props.projectRef).filter((recipe) => {
-    if (state.value !== "ALL" && recipe.state !== state.value) return false;
-    const role = store.roleDefinitionByRef.get(recipe.roleDefinitionRef);
-    const environment = store.environmentByKey.get(
-      recipe.environment.environmentKey,
-    );
-    return (
-      !needle ||
-      [
-        recipe.name,
-        role?.label ?? "",
-        environment ? t(environment.nameMessageKey) : "",
-      ].some((value) => value.toLocaleLowerCase().includes(needle))
-    );
+const items = computed(() => store.catalog(props.projectRef));
+function loadFiltered() {
+  return store.loadCatalog(props.projectRef, true, {
+    ...(query.value.trim() ? { query: query.value.trim() } : {}),
+    ...(state.value === "ALL" ? {} : { state: state.value }),
   });
-});
+}
 
 async function load(): Promise<void> {
   await Promise.all([
-    store.loadCatalog(props.projectRef),
+    loadFiltered(),
     store.loadSupportingCatalogs(props.projectRef),
   ]);
 }
@@ -51,12 +43,20 @@ watch(
   () => props.projectRef,
   () => void load(),
 );
+watch([query, state], () => void loadFiltered());
 onMounted(() => void load());
 onBeforeUnmount(() => store.dispose());
 </script>
 
 <template>
-  <section class="role-image-catalog">
+  <component
+    :is="expanded ? ModalDialog : 'section'"
+    class="role-image-catalog"
+    :class="{ 'role-image-catalog--expanded': expanded }"
+    :title="expanded ? t('roleImages.title') : undefined"
+    size="full"
+    @close="expanded = false"
+  >
     <header class="role-image-catalog__toolbar">
       <label class="catalog-search">
         <Search :size="16" aria-hidden="true" />
@@ -64,6 +64,7 @@ onBeforeUnmount(() => store.dispose());
         <input
           v-model="query"
           type="search"
+          maxlength="128"
           :placeholder="t('roleImages.search')"
         />
       </label>
@@ -75,12 +76,24 @@ onBeforeUnmount(() => store.dispose());
           <option value="ARCHIVED">{{ t("roleImages.archived") }}</option>
         </select>
       </label>
-      <span class="catalog-count">
-        {{
-          t("roleImages.loaded", { count: store.catalog(projectRef).length })
-        }}
+      <span
+        v-if="store.projectTotal[projectRef] !== undefined"
+        class="catalog-count"
+      >
+        {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
       </span>
+      <button
+        v-if="!expanded"
+        type="button"
+        class="icon-button"
+        :title="t('catalog.expand')"
+        :aria-label="t('catalog.expand')"
+        @click="expanded = true"
+      >
+        <Maximize2 :size="18" />
+      </button>
       <RouterLink
+        v-if="store.createAllowed[projectRef]"
         class="button button--primary"
         :to="`/projects/${encodeURIComponent(projectRef)}/role-images/new`"
       >
@@ -89,9 +102,6 @@ onBeforeUnmount(() => store.dispose());
       </RouterLink>
     </header>
 
-    <p class="catalog-limit" role="note">
-      {{ t("roleImages.searchLimitation") }}
-    </p>
     <ProblemNotice
       v-if="store.problem"
       :problem="store.problem"
@@ -99,12 +109,15 @@ onBeforeUnmount(() => store.dispose());
     />
 
     <div
-      v-else
       class="role-image-catalog__scroll"
       :aria-busy="store.loadingCatalog || store.loadingMore"
       @scroll="onScroll"
     >
-      <div v-if="store.loadingCatalog" class="catalog-state" role="status">
+      <div
+        v-if="store.loadingCatalog && !items.length"
+        class="catalog-state"
+        role="status"
+      >
         {{ t("common.loading") }}
       </div>
       <div v-else-if="!items.length" class="catalog-state">
@@ -160,6 +173,7 @@ onBeforeUnmount(() => store.dispose());
               </dd>
             </div>
           </dl>
+          <RoleImageLineage :lineage="recipe.managedLineage" />
           <footer>
             <span>
               {{
@@ -190,18 +204,16 @@ onBeforeUnmount(() => store.dispose());
         {{ t("roleImages.loadMore") }}
       </button>
     </div>
-  </section>
+  </component>
 </template>
 
 <style scoped>
 .role-image-catalog {
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
 }
 .role-image-catalog__toolbar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 60px;
   align-items: end;
   gap: 12px;
@@ -239,14 +251,17 @@ onBeforeUnmount(() => store.dispose());
   font-size: 0.78rem;
 }
 .role-image-catalog__scroll {
-  max-height: calc(100vh - 270px);
-  min-height: 420px;
+  max-height: 1696px;
   padding: 14px;
   overflow: auto;
 }
+.role-image-catalog--expanded .role-image-catalog__scroll {
+  max-height: calc(100dvh - 240px);
+}
 .role-image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  grid-auto-rows: minmax(340px, auto);
   gap: 12px;
 }
 .image-card {
@@ -279,6 +294,10 @@ onBeforeUnmount(() => store.dispose());
 .image-card h2 {
   font-size: 1rem;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .image-card p,
 .image-card footer > span {
@@ -339,16 +358,24 @@ onBeforeUnmount(() => store.dispose());
   .catalog-count {
     margin-left: 0;
   }
-  .role-image-catalog__scroll {
-    max-height: none;
-  }
 }
 @media (max-width: 520px) {
   .role-image-grid {
     grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: minmax(440px, auto);
   }
   .image-card dl {
     grid-template-columns: 1fr;
+  }
+  .image-card > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .image-card > header > :last-child {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .image-card footer {
+    flex-wrap: wrap;
   }
 }
 </style>

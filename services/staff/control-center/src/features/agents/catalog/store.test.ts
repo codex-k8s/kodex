@@ -105,4 +105,32 @@ describe("agent catalog store", () => {
     expect(api.loadAgentCatalogPage).toHaveBeenCalledTimes(2);
     expect(store.hasMore).toBe(false);
   });
+  it("realtime сохраняет карточку до свежего ответа и отклоняет прежнюю cursor страницу", async () => {
+    api.loadAgentCatalogPage.mockResolvedValueOnce({
+      items: [agent("agent_first")],
+      nextPageToken: "next",
+    });
+    const store = useAgentCatalogStore();
+    await store.load("project_sales");
+    const old = deferred<AgentPage>();
+    api.loadAgentCatalogPage.mockReturnValueOnce(old.promise);
+    const oldPage = store.loadMore();
+    store.prepareRefresh(true);
+    expect(store.items[0]?.version).toBe(1);
+    expect(store.hasMore).toBe(false);
+    const fresh = deferred<AgentPage>();
+    api.loadAgentCatalogPage.mockReturnValueOnce(fresh.promise);
+    const refresh = store.load("project_sales", "", true);
+    expect(store.items[0]?.version).toBe(1);
+    old.resolve({ items: [agent("agent_stale")], nextPageToken: "stale" });
+    await oldPage;
+    expect(store.items.map((item) => item.ref)).toEqual(["agent_first"]);
+    fresh.resolve({ items: [agent("agent_first", 2)] });
+    await refresh;
+    expect(store.items[0]?.version).toBe(2);
+    store.prepareRefresh(false);
+    expect(store.items).toEqual([]);
+    store.clear();
+    expect(store.loading).toBe(false);
+  });
 });
