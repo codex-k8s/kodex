@@ -382,6 +382,25 @@ export type ManagedConfigurationConsumer = {
     version: number;
 };
 
+/**
+ * ABSENT — только создание отсутствующей связи; MATCH — точные pins прежней связи. Pins target revision не обозначают отсутствие.
+ */
+export type ManagedConfigurationConsumerInput = ManagedConfigurationConsumerAbsent | ManagedConfigurationConsumerMatch;
+
+export type ManagedConfigurationConsumerAbsent = {
+    kind: 'AGENT' | 'AGENT_CONTINUATION' | 'WORKFLOW' | 'SCHEDULE' | 'RUNTIME_ENVIRONMENT' | 'INTEGRATION_CONNECTION' | 'STT_SERVICE';
+    ref: string;
+    expectedAbsent: true;
+};
+
+export type ManagedConfigurationConsumerMatch = {
+    kind: 'AGENT' | 'AGENT_CONTINUATION' | 'WORKFLOW' | 'SCHEDULE' | 'RUNTIME_ENVIRONMENT' | 'INTEGRATION_CONNECTION' | 'STT_SERVICE';
+    ref: string;
+    expectedAbsent?: false;
+    revisionRef: OpaqueRef;
+    version: number;
+};
+
 export type PrepareConfigurationWriteBackInput = {
     expectedSourceVersion: number;
     content: string;
@@ -556,7 +575,7 @@ export type RoleImageImpactPage = {
 
 export type ManagedConfigurationRebindInput = {
     impactDigest: string;
-    consumers: Array<ManagedConfigurationConsumer>;
+    consumers: Array<ManagedConfigurationConsumerInput>;
 };
 
 export type ManagedConfigurationRevision = {
