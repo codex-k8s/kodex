@@ -66,6 +66,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}()
 	logger := telemetry.Logger(os.Stdout)
 	methods := map[string]string{
+		sttv1.SpeechToTextService_GetModelCatalog_FullMethodName:    "model_catalog",
 		sttv1.SpeechToTextService_Transcribe_FullMethodName:         "transcribe",
 		sttv1.SpeechToTextService_CheckReadiness_FullMethodName:     "readiness",
 		sttv1.SpeechToTextService_CheckProtectedPath_FullMethodName: "protected_path",

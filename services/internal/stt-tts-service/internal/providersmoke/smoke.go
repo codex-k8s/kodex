@@ -11,7 +11,6 @@ import (
 	"github.com/caarlos0/env/v11"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -111,16 +110,10 @@ func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 	return nil
 }
 
-var spaces = regexp.MustCompile(`\s+`)
-
 func normalizeRussian(input string) string {
-	return spaces.ReplaceAllString(strings.TrimSpace(strings.Map(func(character rune) rune {
-		if character == 'ё' || character == 'Ё' {
-			return 'е'
-		}
-		if unicode.IsLetter(character) || unicode.IsDigit(character) || unicode.IsSpace(character) {
-			return unicode.ToLower(character)
-		}
-		return -1
-	}, input)), " ")
+	// MVP-UI-60 разрешает только регистр, whitespace и конечную пунктуацию.
+	input = strings.TrimRightFunc(input, func(character rune) bool {
+		return unicode.IsPunct(character) || unicode.IsSpace(character)
+	})
+	return strings.Join(strings.Fields(strings.ToLower(input)), " ")
 }

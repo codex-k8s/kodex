@@ -120,7 +120,11 @@ func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.Ver
 	base = metadata.NewIncomingContext(base, metadata.Pairs(authorityclient.AuthorizationMetadata, "compact"))
 	interceptor := authorityclient.VerifierUnaryServerInterceptor(principalVerifier{verified: verified})
 	var authorized context.Context
-	_, err = interceptor(base, &sttv1.TranscribeRequest{}, &grpc.UnaryServerInfo{FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName}, func(ctx context.Context, _ any) (any, error) {
+	var request any = &sttv1.TranscribeRequest{}
+	if verified.GetFullMethod() == sttv1.SpeechToTextService_GetModelCatalog_FullMethodName {
+		request = &sttv1.GetModelCatalogRequest{}
+	}
+	_, err = interceptor(base, request, &grpc.UnaryServerInfo{FullMethod: verified.GetFullMethod()}, func(ctx context.Context, _ any) (any, error) {
 		authorized = ctx
 		return nil, nil
 	})
@@ -128,4 +132,71 @@ func verifiedPrincipalContext(t *testing.T, verified *internalrpcauthorityv1.Ver
 		t.Fatalf("создание проверенного контекста: %v", err)
 	}
 	return authorized
+}
+
+func TestCatalogPrincipalUsesIndependentOrganizationPermission(t *testing.T) {
+	verified := validCatalogAuthorizationContext()
+	principal, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_GetModelCatalog_FullMethodName)
+	if err != nil || principal.Permission != value.PermissionManageConfiguration || principal.ProjectID != "" ||
+		principal.AuthorityRevision != verified.SourceRevision || principal.Actor.Reference == "" || principal.Tenant.Reference == "" {
+		t.Fatal("административная authority каталога потеряна")
+	}
+	if _, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_Transcribe_FullMethodName); err == nil {
+		t.Fatal("право каталога стало правом транскрипции")
+	}
+}
+
+func validCatalogAuthorizationContext() *internalrpcauthorityv1.VerifiedAuthorizationContext {
+	verified := validVerifiedAuthorizationContext()
+	verified.FullMethod = sttv1.SpeechToTextService_GetModelCatalog_FullMethodName
+	verified.OperationId = modelCatalogOperation
+	verified.Permission = value.PermissionManageConfiguration
+	verified.RequestBindingMode = internalrpcauth.RequestBindingUnary
+	verified.RequestDigestSha256 = emptyCatalogRequestSHA256
+	verified.Authority.Project = nil
+	return verified
+}
+
+func TestCatalogPrincipalRejectsAuthoritySubstitution(t *testing.T) {
+	for name, mutate := range map[string]func(*internalrpcauthorityv1.VerifiedAuthorizationContext){
+		"speech permission": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.Permission = value.TransportPermissionTranscribe
+		},
+		"wildcard permission": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.Permission = "system.*" },
+		"operation":           func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.OperationId = transcribeOperation },
+		"stream": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.RequestBindingMode = internalrpcauth.RequestBindingStream
+		},
+		"payload digest": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.RequestDigestSha256 = strings.Repeat("b", 64)
+		},
+		"missing digest": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.RequestDigestSha256 = "" },
+		"project": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.Authority.Project = validVerifiedAuthorizationContext().Authority.Project
+		},
+		"continuation": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.Continuation = &internalrpcauthorityv1.ContinuationLineage{}
+		},
+		"caller": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.CallerWorkloadId = "agent-runner" },
+		"target": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.TargetWorkloadId = "control-plane" },
+		"audience": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.Audience = "urn:kodex:internal-rpc:control-plane"
+		},
+		"actor provenance": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.Authority.Actor.Provenance = nil },
+		"tenant":           func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) { v.Authority.Tenant = nil },
+		"source generation": func(v *internalrpcauthorityv1.VerifiedAuthorizationContext) {
+			v.SourceRevision = maximumAuthorityRevision + 1
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			verified := validCatalogAuthorizationContext()
+			mutate(verified)
+			if _, err := Principal(verifiedPrincipalContext(t, verified), sttv1.SpeechToTextService_GetModelCatalog_FullMethodName); err == nil {
+				t.Fatal("подмена административной authority принята")
+			}
+		})
+	}
+	if _, err := Principal(t.Context(), sttv1.SpeechToTextService_GetModelCatalog_FullMethodName); err == nil {
+		t.Fatal("каталог доступен без проверенного context")
+	}
 }

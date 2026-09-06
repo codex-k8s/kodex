@@ -3,14 +3,17 @@ package grpc
 import (
 	"context"
 	"errors"
+	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-const errorDomain = "kodex.stt"
+const errorDomain = errorprofile.Domain
 
 func transportError(err error) error {
 	switch {
@@ -18,6 +21,19 @@ func transportError(err error) error {
 		return statusError(codes.Canceled, "transcription request was canceled", "INVALID_REQUEST")
 	case errors.Is(err, context.DeadlineExceeded):
 		return statusError(codes.DeadlineExceeded, "transcription deadline was exceeded", "UNAVAILABLE")
+	case errors.Is(err, errs.ErrProviderRateLimited):
+		base := status.New(codes.ResourceExhausted, errs.ErrProviderRateLimited.Error())
+		withDetails, detailErr := base.WithDetails(&errdetails.ErrorInfo{Reason: errorprofile.TranscriptionRateLimited, Domain: errorDomain})
+		if detailErr != nil {
+			return base.Err()
+		}
+		var limited *errs.ProviderRateLimit
+		if errors.As(err, &limited) && limited != nil && limited.RetryAfter >= time.Second && limited.RetryAfter <= errorprofile.MaximumRetryAfter && limited.RetryAfter%time.Second == 0 {
+			if hinted, hintErr := withDetails.WithDetails(&errdetails.RetryInfo{RetryDelay: durationpb.New(limited.RetryAfter)}); hintErr == nil {
+				withDetails = hinted
+			}
+		}
+		return withDetails.Err()
 	case errors.Is(err, errs.ErrAudioTooLarge):
 		return statusError(codes.ResourceExhausted, "audio payload exceeds the configured limit", "INVALID_REQUEST")
 	case errors.Is(err, errs.ErrAudioTooLong), errors.Is(err, errs.ErrUnsupportedAudio), errors.Is(err, errs.ErrInvalidRequest):

@@ -107,6 +107,20 @@ jq -e '
     select(.continuation.parent_operation_id == "platform.stt.transcribe")] | length == 1)
 ' "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json" >/dev/null
 
+jq -e '[.policy.operation_bindings[] |
+  select(.operation_id == "platform.stt.model-catalog.get") |
+  select(.caller_workload_id == "control-api-gateway" and
+    .target_workload_id == "stt-tts-service" and
+    .audience == "urn:kodex:internal-rpc:stt-tts-service" and
+    .full_method == "/stt.v1.SpeechToTextService/GetModelCatalog" and
+    .permission == "system.configuration.manage" and
+    .authority_proof_producer_id == "control-plane.oidc-stt" and
+    .project_required == false and
+    .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN",
+      "version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})
+  ] | length == 1' \
+  "$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json" >/dev/null
+
 yq -e 'select(.kind == "Job" and .metadata.name == "stt-provider-smoke") |
   (.spec.backoffLimit == 0 and .spec.activeDeadlineSeconds == 90 and
    .spec.template.spec.restartPolicy == "Never" and
