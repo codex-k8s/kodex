@@ -69,7 +69,7 @@ func testPromptImpactLifecycle(t *testing.T, ctx context.Context, r *Repository)
 		t.Fatal(err)
 	}
 	p.ImpactDigest = impact.Digest
-	p.Consumers = []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: first.Ref}, {Kind: "AGENT", Ref: second.Ref}, {Kind: "AGENT", Ref: third.Ref}}
+	p.Consumers = []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: first.Ref, ExpectedAbsent: true}, {Kind: "AGENT", Ref: second.Ref, ExpectedAbsent: true}, {Kind: "AGENT", Ref: third.Ref, ExpectedAbsent: true}}
 	bound := invoke(command.RebindPromptTemplate, "prompt-impact-bind", &published.ManagedConfiguration.Version, p)
 	p.Consumers = nil
 	p.ImpactDigest = ""
