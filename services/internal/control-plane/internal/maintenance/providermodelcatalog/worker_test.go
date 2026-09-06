@@ -16,6 +16,7 @@ type fixture struct {
 	calls, observed, completed int
 	denial                     error
 	task                       platformrepo.ProviderModelCatalogTask
+	empty                      bool
 }
 
 func (f *fixture) ModelCatalogRequestDigest(platformrepo.ProviderModelCatalogTask) (string, error) {
@@ -23,7 +24,31 @@ func (f *fixture) ModelCatalogRequestDigest(platformrepo.ProviderModelCatalogTas
 }
 func (f *fixture) ClaimProviderModelCatalogTasks(context.Context, string, int32, platformrepo.ProviderModelCatalogEncoder) ([]platformrepo.ProviderModelCatalogTask, error) {
 	f.calls++
+	if f.empty {
+		return nil, nil
+	}
 	return []platformrepo.ProviderModelCatalogTask{f.task}, nil
+}
+
+func TestCatalogBrokerDownPendingAndEmptyCyclesDoNotCompleteObservation(t *testing.T) {
+	f := &fixture{task: platformrepo.ProviderModelCatalogTask{ExpiresAt: time.Now().Add(15 * time.Second)}, denial: errors.New("broker unavailable")}
+	worker, err := New(f, f, func(context.Context) error { return nil }, "worker", serviceruntime.NewReadiness(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worker.runCycle(t.Context()) == nil || f.observed != 1 || f.completed != 0 {
+		t.Fatal("broker denial created a catalog observation")
+	}
+	// Пока предыдущая task принадлежит lease, claim пуст. Это не подтверждение
+	// capability: completion по-прежнему отсутствует, следующее получение повторит RPC.
+	f.empty = true
+	if err := worker.runCycle(t.Context()); err != nil || f.observed != 1 || f.completed != 0 {
+		t.Fatal("pending empty claim invented an observation")
+	}
+	f.empty = false
+	if worker.runCycle(t.Context()) == nil || f.observed != 2 || f.completed != 0 {
+		t.Fatal("broker remained unavailable but catalog became usable")
+	}
 }
 func (f *fixture) CompleteProviderModelCatalogTask(context.Context, platformrepo.ProviderModelCatalogTask, platformrepo.ProviderModelCatalogObservation) error {
 	f.completed++

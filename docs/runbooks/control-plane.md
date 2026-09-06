@@ -12,6 +12,19 @@ updated: 2026-09-04
 
 ## Локальные probes
 
+Общая readiness не зависит от catalog observer в Secret Broker: broker требует
+доступного CP для собственного startup barrier. `provider model catalog observer
+degraded` означает отказ отдельного фонового пути; проверить broker/authority и
+состояние catalog task, не удаляя CP из Service endpoints. Пустой следующий
+claim не является успешным model observation: недоступные/устаревшие capabilities
+остаются закрытыми по авторитетному account read path. Собственные DB, outbox,
+publisher, email projection и cleanup claim по-прежнему закрывают `/readyz`.
+
+Переходы: broker unavailable → task остаётся без completion → lease expiry и
+свежий retry; pending/empty claim не меняет catalog snapshot; own infrastructure
+failure → общий endpoint unready. Никаких новых domain events или изменений
+authority этот readiness fix не вводит.
+
 `/healthz` подтверждает жизнь процесса. `/readyz` читает локальный snapshot
 PostgreSQL, NATS publisher/outbox и workload-local authority. Gateway, runtime,
 integration и interaction services не вызываются из probe.

@@ -285,7 +285,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config, catalogHealth),
+		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
 		emailProjection.Run,
 		monitorOIDCSigningKeys(proofService, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
@@ -492,7 +492,13 @@ type readinessCondition interface {
 	Ready() (bool, string)
 }
 
-func monitorReadiness(service *platformservice.Service, store readinessStore, publisher readinessPublisher, emailProjection *emailProjection, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config, catalogConditions ...readinessCondition) serviceruntime.Worker {
+type readinessOwner interface {
+	Ready(context.Context) error
+}
+
+// Общий endpoint зависит только от owned infrastructure. Catalog worker сохраняет
+// собственную диагностику, но его downstream broker сам требует доступного CP.
+func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, emailProjection readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
@@ -505,15 +511,6 @@ func monitorReadiness(service *platformservice.Service, store readinessStore, pu
 				err = errors.New("provider credential cleanup claim is unavailable")
 				reason = "provider_credential_cleanup_claim_unavailable"
 				errorClass = "provider_credential_cleanup_claim"
-			}
-			if err == nil {
-				for _, condition := range catalogConditions {
-					if ready, _ := condition.Ready(); !ready {
-						err = errors.New("provider model catalog observer is unavailable")
-						reason, errorClass = "provider_model_catalog_observer_unavailable", "provider_model_catalog_observer"
-						break
-					}
-				}
 			}
 			if err == nil {
 				if readiness.Set(true, "ready") {
