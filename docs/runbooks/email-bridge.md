@@ -29,6 +29,39 @@ goose; предварительный Ping не применяет миграц�
 
 ## Подготовка владельцем
 
+### Отказ runtime до readiness (#1130)
+
+`Email bridge stopped unexpectedly` выводит только закрытые `stage` и
+`error_class`. Не включать raw cause, DSN, SQL, пути, mailbox metadata или grant
+в журналы даже временно. Диагностический checkpoint не доказывает устранение
+причины staging-падения; после штатного code-first rollout нужен новый readback.
+
+| Stage | Безопасная проверка владельцем |
+| --- | --- |
+| environment | наличие обязательных env, допустимость mode/destination/pins без значений credentials |
+| certificate_read / private_key_read / keypair_validation / ca_read / transport_tls | mode/UID/GID, symlink boundary, доступность файлов, соответствие пары и доверие CA; не печатать содержимое |
+| dsn_read / dsn_validation | Secret metadata и отдельный runtime user/DB/host/verify-full allowlist; migration использует другую роль и её успех не доказывает runtime DSN |
+| database_open / database_readiness | runtime PostgreSQL connection/schema/role; repository возвращает закрытый unavailable, поэтому один stage не различает transport и schema |
+| telemetry / metrics | approved OTLP TLS/configuration и регистрация метрик |
+| authority_client | локальная конфигурация generated client и TLS; это ещё не подтверждение рабочего protected RPC |
+| configuration_load | целостность pinned `..data` snapshot, schema и descriptor generations без содержимого почты |
+| configuration_pins | exact deployment mode/revision/digest; bootstrap допускает только пустой release seed |
+| configuration_watermark | durable revision/digest; запрещено вручную откатывать watermark ради запуска |
+| configuration_service / configuration_owner_readback | построение локального сервиса и owner ACK; report вызывается только в managed mode |
+| technical_listener / https_listener / shutdown | локальное bind/listen либо ограниченное завершение |
+
+Переходы неизменны: load → pins → durable watermark → build → managed owner ACK
+→ публикация текущего snapshot. Ошибка любого этапа оставляет `current=nil`;
+старая in-flight ссылка immutable, cancel не публикует новый snapshot. Refresh
+при startup и последующий единственный monitor используют тот же порядок.
+Диагностика не создаёт domain event, provider effect или новый owner receipt;
+источники состояния — PostgreSQL watermark и защищённый owner readback.
+
+Локальная проверка: полный EMAIL race/vet/build, `make test-email-bridge`,
+`make test-email-bridge-render` и `make test-email-bridge-install`.
+Sentinel fixtures проверяют отсутствие raw error/DSN/SQL/path/RPC payload,
+точную стадию отказа, cancellation и запрет публикации после rejected boundary.
+
 После review и отдельного допуска применяются кодовые ресурсы
 `deploy/k8s/overlays/staging/email-bridge`. Release renderer подставляет разные
 неизменяемые digests runtime и migration images. Bootstrap PostgreSQL выполняется
