@@ -5961,6 +5961,8 @@ message ManagedConfigurationConsumer {
   string ref = 2;
   string revision_ref = 3;
   int64 version = 4;
+  // Только вход REBIND: явное ожидание отсутствия связи, revision_ref/version пусты.
+  bool expected_absent = 5;
 }
 message ManagedConfigurationImpact {
   string configuration_ref = 1;
