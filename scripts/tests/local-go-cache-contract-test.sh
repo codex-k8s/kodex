@@ -42,3 +42,4 @@ grep -Fq 'cd $module_root && CGO_ENABLED=0' "$hot_reload" ||
   fail 'hot reload no longer builds from the selected module'
 
 printf 'Kodex local Go cache contract test passed\n'
+bash "$repository_root/scripts/tests/local-email-entrypoint-contract-test.sh"

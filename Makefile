@@ -85,10 +85,12 @@ test-integration-synthetic:
 
 test-full-local-e2e-entrypoint:
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
+	@./scripts/tests/local-profile-selection-test.sh
 	@./scripts/tests/hot-reload-verifier-contract-test.sh
 	@./scripts/tests/integration-deployed-e2e-contract-test.sh
 	@./scripts/tests/local-kubernetes-e2e-diagnostics-contract-test.sh
 	@./scripts/tests/local-statefulset-rollout-contract-test.sh
+	@bash scripts/tests/local-mail-projection-contract-test.sh
 
 test-local-e2e-oidc-group-fixture-contract:
 	@./scripts/tests/local-e2e-oidc-group-fixture-test.sh
@@ -134,6 +136,18 @@ test-agent-runner:
 .PHONY: test-runtime-controller-artifact-transfer
 test-runtime-controller-artifact-transfer:
 	@bash ./scripts/tests/runtime-controller-artifact-transfer-test.sh
+
+.PHONY: test-runtime-workspace-acceptance
+test-runtime-workspace-acceptance:
+	@timeout 30s node --test tools/dev/runtime-workspace-acceptance.test.mjs
+
+.PHONY: test-stt-http-acceptance
+test-stt-http-acceptance:
+	@timeout 30s node --test tools/dev/stt-http-acceptance.test.mjs tools/dev/owner-session-client.test.mjs
+
+.PHONY: test-owner-session-acceptance
+test-owner-session-acceptance:
+	@timeout 30s node --test tools/dev/owner-session-client.test.mjs
 
 test-stt-tts-service-contract:
 	@./scripts/tests/stt-tts-service-contract-test.sh

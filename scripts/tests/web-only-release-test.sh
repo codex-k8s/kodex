@@ -7,6 +7,26 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 render="$temporary_directory/render.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
+optional_render="$temporary_directory/with-mattermost.yaml"
+kubectl kustomize "$repository_root/deploy/k8s/profiles/web-with-mattermost" >"$optional_render"
+yq -o=json -I=0 '.' "$render" | jq -s '.' >"$temporary_directory/base.json"
+yq -o=json -I=0 '.' "$optional_render" | jq -s '.' >"$temporary_directory/optional.json"
+jq -n -e --slurpfile base "$temporary_directory/base.json" \
+  --slurpfile optional "$temporary_directory/optional.json" '
+  def identities: map(select(.kind != null) |
+    [.apiVersion, .kind, (.metadata.namespace // ""), .metadata.name]);
+  (($base[0] | identities) - ($optional[0] | identities) | length) == 0
+' >/dev/null || fail 'optional profile omits common deployment resources'
+for profile_render in "$render" "$optional_render"; do
+  yq -r 'select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
+    .data."key-delivery-targets.yaml"' "$profile_render" |
+    yq -o=json -I=0 '.' >"$profile_render.targets.json"
+done
+jq -n -e --slurpfile base "$render.targets.json" \
+  --slurpfile optional "$optional_render.targets.json" '
+  ($base[0].targets - $optional[0].targets | length) == 0 and
+  ($base[0] | del(.targets)) == ($optional[0] | del(.targets))
+' >/dev/null || fail 'optional profile changes or omits common authority targets'
 
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   map(select(.kind != null)) as $resources |

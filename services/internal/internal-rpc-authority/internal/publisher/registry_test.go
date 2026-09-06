@@ -36,12 +36,13 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		},
 		{
 			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
-			wantStartupReadbacks: 14,
+			wantStartupReadbacks: 15,
 			requiredTargets: []string{
 				"control-plane.authorization-issuer",
 				"secret-broker.authorization-verifier",
 				"email-bridge.authorization-issuer",
 				"interaction-gateway.authorization-issuer",
+				"session-archive.authorization-issuer",
 			},
 		},
 	} {
