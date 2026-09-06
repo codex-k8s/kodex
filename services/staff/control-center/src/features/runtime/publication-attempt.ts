@@ -1,4 +1,5 @@
 export type PublicationAttemptKind =
+  | "SYSTEM_STT"
   | "RUNTIME_ENVIRONMENT"
   | "PROMPT_TEMPLATE"
   | "AGENT_INSTRUCTIONS"

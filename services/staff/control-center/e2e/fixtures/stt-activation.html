@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка активации STT</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import SttActivationPanel from "../../src/features/managed-configurations/SttActivationPanel.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      createApp({
+        setup() {
+          const visible = ref(true),
+            version = ref(3);
+          return () =>
+            h(
+              "main",
+              { style: "max-width: 1000px; margin:auto; padding:16px" },
+              [
+                h("h1", "Опубликованная конфигурация распознавания"),
+                h(
+                  "button",
+                  { onClick: () => (visible.value = !visible.value) },
+                  "Закрыть / открыть",
+                ),
+                h(
+                  "button",
+                  { onClick: () => version.value++ },
+                  "Обновить редактор",
+                ),
+                visible.value
+                  ? h(SttActivationPanel, {
+                      configuration: {
+                        ref: "configuration_target",
+                        kind: "SYSTEM_STT",
+                        managedBy: "UI",
+                        version: version.value,
+                        name: "Русское распознавание",
+                        source: "UI",
+                        sourceRevision: "",
+                        updatedAt: "2026-09-07T00:00:00Z",
+                      },
+                      revision: {
+                        ref: "revision_target",
+                        revision: 2,
+                        state: "PUBLISHED",
+                        contentFormat: "JSON",
+                        content: "{}",
+                        digest: "a".repeat(64),
+                        validationDiagnostics: [],
+                        createdAt: "2026-09-07T00:00:00Z",
+                      },
+                    })
+                  : undefined,
+              ],
+            );
+        },
+      })
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

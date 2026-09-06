@@ -31,6 +31,7 @@ import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
 import { loadRoleImageCreateAccess } from "@/features/role-images/api";
 import ConfigurationFields from "./ConfigurationFields.vue";
+import SttActivationPanel from "./SttActivationPanel.vue";
 import GitSourcePanel from "./GitSourcePanel.vue";
 import GitWriteBackPanel from "./writeback/GitWriteBackPanel.vue";
 import PromptScopeFields from "./PromptScopeFields.vue";
@@ -758,6 +759,7 @@ watch(
   { flush: "sync" },
 );
 async function rebind(): Promise<void> {
+  if (props.kind === "SYSTEM_STT") return;
   const current = configuration.value,
     target = revision.value,
     impact = impactValue.value;
@@ -999,6 +1001,13 @@ watch(
       </template>
     </header>
     <p v-if="gitOwned" class="muted">{{ $t("managed.gitOwned") }}</p>
+    <SttActivationPanel
+      v-if="kind === 'SYSTEM_STT' && configuration && revision"
+      :configuration="configuration"
+      :revision="revision"
+      :disabled="busy || dirty"
+      @busy="sourceBusy = $event"
+    />
     <p v-if="!sourceVisible" role="status">
       {{ $t("roleImages.sourceUnavailable") }}
     </p>
@@ -1265,6 +1274,7 @@ watch(
             type="checkbox"
             :value="consumerKey(consumer)"
             :disabled="
+              kind === 'SYSTEM_STT' ||
               busy ||
               impactLoading ||
               !!impactProblem ||
@@ -1286,6 +1296,7 @@ watch(
         {{ $t("impact.more") }}
       </button>
       <button
+        v-if="kind !== 'SYSTEM_STT'"
         class="button button--primary"
         :disabled="
           busy ||

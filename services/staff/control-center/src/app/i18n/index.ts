@@ -1,6 +1,7 @@
 import { createI18n } from "vue-i18n";
 import { promptContextMessages } from "@/features/agents/detail/prompt-context-messages";
 import { writeBackMessages } from "@/features/managed-configurations/writeback/messages";
+import { sttActivationMessages } from "@/features/managed-configurations/stt-activation-messages";
 import { providerUsageMessages } from "@/features/providers/usage-messages";
 import { providerLifecycleMessages } from "@/features/providers/lifecycle-messages";
 import { workflowLaunchMessages } from "@/features/platform/workflow-launch";
@@ -12,6 +13,7 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  ...sttActivationMessages.ru,
   entityCards: entityCardMessages.ru,
   providerLifecycle: providerLifecycleMessages.ru,
   workflowLaunch: workflowLaunchMessages.ru,
@@ -3046,6 +3048,7 @@ const ru = {
 
 const en = {
   ...ru,
+  ...sttActivationMessages.en,
   entityCards: entityCardMessages.en,
   providerLifecycle: providerLifecycleMessages.en,
   workflowLaunch: workflowLaunchMessages.en,
