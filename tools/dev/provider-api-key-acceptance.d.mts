@@ -11,9 +11,11 @@ interface AuthenticatedCookie {
 
 export function authorizeProviderAPIKeyFixture(options: {
   origin: string;
-  storage: unknown;
+  storage?: unknown;
+  storagePath?: string;
   accountRef: string;
   apiKey: string;
+  idempotencyKey?: string;
   fetchAPI?: typeof fetch;
   onSessionCookies?: (cookies: AuthenticatedCookie[]) => Promise<void>;
 }): Promise<void>;
