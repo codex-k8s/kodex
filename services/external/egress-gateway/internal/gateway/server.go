@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
-	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/dnsresolver"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/tlshello"
@@ -30,6 +30,12 @@ const (
 type AccessPolicy interface {
 	Allows(string, int) bool
 	Limits() policy.Limits
+}
+
+// MailAccess принадлежит listener, не заголовкам CONNECT; TLS остаётся у bridge.
+type MailAccess interface {
+	TLSMode(string, int) string
+	AllowsLiteral(string, int, netip.Addr) bool
 }
 
 // Resolver возвращает только validated literal snapshots.
@@ -208,10 +214,14 @@ func (server *Server) handle(client net.Conn) {
 		return
 	}
 	_ = client.SetWriteDeadline(time.Time{})
-	buffered, err := tlshello.ReadAndVerify(client, reader, limits.MaximumClientHelloBytes, duration(limits.ClientHelloTimeoutMilliseconds), target.Hostname)
-	if err != nil {
-		server.metrics.Connection("rejected", "clienthello", tlsReason(err))
-		return
+	var buffered []byte
+	mail, isMail := server.policy.(MailAccess)
+	if !isMail || mail.TLSMode(target.Hostname, target.Port) != "starttls" {
+		buffered, err = tlshello.ReadAndVerify(client, reader, limits.MaximumClientHelloBytes, duration(limits.ClientHelloTimeoutMilliseconds), target.Hostname)
+		if err != nil {
+			server.metrics.Connection("rejected", "clienthello", tlsReason(err))
+			return
+		}
 	}
 	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
@@ -221,6 +231,14 @@ func (server *Server) handle(client net.Conn) {
 	if err != nil {
 		server.metrics.Connection("rejected", "dns", dnsReason(err))
 		return
+	}
+	if isMail {
+		for _, address := range snapshot.Addresses {
+			if !mail.AllowsLiteral(target.Hostname, target.Port, address) {
+				server.metrics.Connection("rejected", "connect", "policy")
+				return
+			}
+		}
 	}
 	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
@@ -236,9 +254,11 @@ func (server *Server) handle(client net.Conn) {
 		server.metrics.Connection("failed", "tunnel", "io")
 		return
 	}
-	if _, err := upstream.Write(buffered); err != nil {
-		server.metrics.Connection("failed", "tunnel", "io")
-		return
+	if len(buffered) > 0 {
+		if _, err := upstream.Write(buffered); err != nil {
+			server.metrics.Connection("failed", "tunnel", "io")
+			return
+		}
 	}
 	_ = upstream.SetWriteDeadline(time.Time{})
 	server.tunnel(client, upstream, duration(limits.IdleTimeoutMilliseconds), duration(limits.WriteTimeoutMilliseconds))
@@ -260,7 +280,11 @@ func (server *Server) writeResponse(connection net.Conn, response string, timeou
 }
 
 func (server *Server) withPolicyReadback(response string) string {
-	active, ok := server.policy.(*policy.Active)
+	active, ok := server.policy.(interface {
+		Revision() string
+		Digest() string
+		ProfileIdentity() (string, string, string)
+	})
 	if !ok {
 		return response
 	}
@@ -271,6 +295,11 @@ func (server *Server) withPolicyReadback(response string) string {
 	if workload != "" {
 		headers += "X-Kodex-Egress-Workload: " + workload + "\r\n" +
 			"X-Kodex-Egress-Operation: " + operation + "\r\n"
+	}
+	if source, ok := server.policy.(interface{ ConfigurationIdentity() (string, string) }); ok {
+		revision, digest := source.ConfigurationIdentity()
+		headers += "X-Kodex-Egress-Configuration-Revision: " + revision + "\r\n" +
+			"X-Kodex-Egress-Configuration-Digest: " + digest + "\r\n"
 	}
 	return strings.TrimSuffix(response, "\r\n") + headers + "\r\n"
 }
