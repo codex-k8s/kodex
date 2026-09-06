@@ -24,6 +24,16 @@ type runtimeWorkClientStub struct {
 	mu       sync.Mutex
 	requests []*controlplanev1.CompleteExecutionRequest
 	complete func(int) error
+	renew    func() error
+}
+
+func (client *runtimeWorkClientStub) RenewExecution(context.Context, *controlplanev1.RenewExecutionRequest, ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
+	if client.renew != nil {
+		if err := client.renew(); err != nil {
+			return nil, err
+		}
+	}
+	return &controlplanev1.RenewExecutionResponse{}, nil
 }
 
 func (client *runtimeWorkClientStub) ReportExecutionProgress(context.Context, *controlplanev1.ReportExecutionProgressRequest, ...grpc.CallOption) (*controlplanev1.ReportExecutionProgressResponse, error) {
@@ -54,6 +64,74 @@ type turnLifecycleStub struct {
 	observed    chan struct{}
 	once        sync.Once
 	deletions   atomic.Int32
+	stops       atomic.Int32
+	stopped     chan struct{}
+}
+
+func (turns *turnLifecycleStub) StopTurn(context.Context, string) error {
+	turns.stops.Add(1)
+	if turns.stopped != nil {
+		close(turns.stopped)
+	}
+	return nil
+}
+
+func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{stopped: make(chan struct{})}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.terminalGrace = time.Second
+	ctx, cancel := context.WithCancel(t.Context())
+	finished := make(chan struct{})
+	go func() { runtime.track(ctx, input, done, false); close(finished) }()
+	cancel()
+	<-turns.stopped
+	if turns.deletions.Load() != 0 || client.count() != 0 {
+		t.Fatal("shutdown revoked execution before receipt")
+	}
+	coordinator.Complete(input.LeaseRef)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("tracker did not join after receipt")
+	}
+	if turns.deletions.Load() != 0 || client.count() != 0 {
+		t.Fatal("successful receipt was replaced with fallback")
+	}
+}
+
+func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{renew: func() error { return status.Error(codes.PermissionDenied, "execution revoked") }}
+	turns := &turnLifecycleStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.terminalGrace = time.Second
+	runtime.config.LeaseRenewInterval = time.Millisecond
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	runtime.track(ctx, input, done, false)
+	if turns.deletions.Load() != 1 || client.count() != 0 {
+		t.Fatal("revoked lease was extended or completed with fabricated result")
+	}
+}
+
+func TestDrainDoesNotStopAlreadyCompletedWarmTurn(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	coordinator.Complete(input.LeaseRef)
+	turns := &turnLifecycleStub{}
+	client := &runtimeWorkClientStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.drainTurn(t.Context(), input, done)
+	if turns.stops.Load() != 0 || turns.deletions.Load() != 0 || client.count() != 0 {
+		t.Fatal("completed warm turn was stopped by shutdown fallback")
+	}
 }
 
 func (turns *turnLifecycleStub) ObserveTurnPod(context.Context, runtimecontract.RunnerInput, bool) (workload.TurnPodObservation, error) {

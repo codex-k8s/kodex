@@ -27,7 +27,7 @@ spec:
       serviceAccountName: runtime-controller
       automountServiceAccountToken: false
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 35
+      terminationGracePeriodSeconds: 240
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
@@ -81,8 +81,8 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 512Mi}
+            requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi}
+            limits: {cpu: "1", memory: 512Mi, ephemeral-storage: 2Gi}
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -91,6 +91,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
+            - {name: artifact-spool, mountPath: /var/run/kodex/runtime-controller/artifact-spool}
             - {name: kube-api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
             - {name: workload-tls, mountPath: /var/run/secrets/kodex/runtime-controller/workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /var/run/config/kodex/runtime-controller/control-plane, readOnly: true}
@@ -100,6 +101,8 @@ spec:
             - {name: otel-ca, mountPath: /var/run/config/kodex/runtime-controller/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/runtime-controller/observability, readOnly: true}
       volumes:
+        - name: artifact-spool
+          emptyDir: {sizeLimit: 2Gi}
         - name: kube-api-access
           projected:
             defaultMode: 0440

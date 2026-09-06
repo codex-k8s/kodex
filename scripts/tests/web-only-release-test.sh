@@ -111,6 +111,9 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .data.RUNTIME_CONTROLLER_SECRET_BROKER_CA_FILE ==
       "/var/run/config/kodex/runtime-controller/control-plane/ca.pem") and
   any($resources[];
+    .kind == "Deployment" and .metadata.name == "runtime-controller" and
+    .spec.template.spec.terminationGracePeriodSeconds == 240) and
+  any($resources[];
     .kind == "NetworkPolicy" and
     .metadata.name == "runtime-controller-exact-paths" and
     any(.spec.egress[];
@@ -364,6 +367,8 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .metadata.name == "runtime-role-pod-exact-secret-projection" and
     .spec.failurePolicy == "Fail" and
     .spec.paramKind == {"apiVersion":"v1","kind":"ConfigMap"} and
+    ([.spec.validations[].expression] | join(" ") | contains(
+      "object.spec.terminationGracePeriodSeconds == 150")) and
     ([.spec.validations[].expression] | join(" ") | contains(
       "runtime-sa-[a-f0-9]{16}")) and
     ([.spec.validations[].expression] | join(" ") | contains(

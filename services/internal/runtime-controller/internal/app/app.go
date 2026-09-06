@@ -129,20 +129,29 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	callbackServer, err := callback.New(callback.Config{Listen: config.CallbackListen,
 		CertificateFile: config.CallbackServerCertificateFile, PrivateKeyFile: config.CallbackServerPrivateKeyFile,
 		ClientCAFile: config.CallbackClientCAFile, ExpectedClientSPIFFEID: config.CallbackExpectedClientSPIFFEID,
-		RequestTimeout: config.RequestTimeout, WarmLongPoll: config.WarmLongPoll}, manager, control, coordinator, logger)
+		RequestTimeout: config.RequestTimeout, WarmLongPoll: config.WarmLongPoll,
+		FileTransferTimeout: config.FileTransferTimeout, ArtifactSpoolDirectory: config.ArtifactSpoolDirectory}, manager, control, coordinator, logger)
 	if err != nil {
 		return err
 	}
 	unitReadiness, assistantReadiness := serviceruntime.NewReadiness(), serviceruntime.NewReadiness()
+	defer func() { resultErr = errors.Join(resultErr, callbackServer.Close()) }()
 	unitReadiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	assistantReadiness.Set(false, "assistant_runtime_starting")
 	runtime := newRuntime(control.Runtime, credentials, manager, coordinator, config, assistantReadiness, logger)
 	technical := technicalServer(lifecycle, config, unitReadiness, assistantReadiness, metrics)
+	runtimeDone := make(chan struct{})
 	workers := serviceruntime.StartWorkers(lifecycle,
-		serveHTTP(technical, config.ShutdownTimeout), callbackServer.Run,
-		monitorUnitReadiness(control, manager, unitReadiness, metrics, logger, config),
-		func(ctx context.Context) error { return manager.RunAsLeader(ctx, runtime.Run) },
+		serveHTTP(technical, config.ShutdownTimeout),
+		func(ctx context.Context) error {
+			return runCallbackDuringDrain(ctx, runtimeDone, workload.ControllerShutdownDrain+5*time.Second, callbackServer.Run)
+		},
+		monitorUnitReadiness(control, manager, callbackServer, unitReadiness, metrics, logger, config),
+		func(ctx context.Context) error {
+			defer close(runtimeDone)
+			return manager.RunAsLeader(ctx, runtime.Run)
+		},
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
@@ -151,6 +160,31 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serviceruntime.ShutdownOperation{Name: "runtime workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
 	return errors.Join(err, shutdownErr)
+}
+
+func runCallbackDuringDrain(ctx context.Context, runtimeDone <-chan struct{}, maximum time.Duration, run func(context.Context) error) error {
+	callbackContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
+	finished, watcherDone := make(chan struct{}), make(chan struct{})
+	defer func() { close(finished); <-watcherDone }()
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+		}
+		timer := time.NewTimer(maximum)
+		defer timer.Stop()
+		select {
+		case <-finished:
+			return
+		case <-runtimeDone:
+		case <-timer.C:
+		}
+		cancel()
+	}()
+	return run(callbackContext)
 }
 
 func mergeOperations(sets ...map[string]string) map[string]string {
@@ -185,7 +219,7 @@ func readinessHandler(readiness *serviceruntime.Readiness) http.HandlerFunc {
 	}
 }
 
-func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.Manager, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.Manager, callbacks *callback.Server, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.InfrastructureCheckInterval)
 		defer ticker.Stop()
@@ -194,6 +228,9 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RequestTimeout)
 			authorityErr := control.CheckLocalAuthority(authorityCheck)
 			cancelAuthority()
+			spoolCheck, cancelSpool := context.WithTimeout(ctx, config.RequestTimeout)
+			spoolErr := callbacks.CheckArtifactSpool(spoolCheck)
+			cancelSpool()
 			kubernetesCheck, cancelKubernetes := context.WithTimeout(ctx, config.RequestTimeout)
 			kubernetesErr := manager.Check(kubernetesCheck)
 			cancelKubernetes()
@@ -205,7 +242,7 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 					logger.InfoContext(ctx, "Kubernetes runtime observation restored")
 				}
 			}
-			if authorityErr == nil && kubernetesAvailable {
+			if authorityErr == nil && spoolErr == nil && kubernetesAvailable {
 				metrics.SetReady(true)
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "runtime readiness restored")
@@ -215,6 +252,8 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 				class := "kubernetes"
 				if authorityErr != nil {
 					class = "sidecar"
+				} else if spoolErr != nil {
+					class = "artifact_spool"
 				}
 				logger.WarnContext(ctx, "runtime readiness lost", "error_class", class)
 			}

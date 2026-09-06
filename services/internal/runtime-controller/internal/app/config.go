@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const (
@@ -64,6 +65,8 @@ type Config struct {
 	InfrastructureCheckInterval    time.Duration `env:"RUNTIME_CONTROLLER_INFRASTRUCTURE_CHECK_INTERVAL"`
 	LeaseRenewInterval             time.Duration `env:"RUNTIME_CONTROLLER_LEASE_RENEW_INTERVAL"`
 	RequestTimeout                 time.Duration `env:"RUNTIME_CONTROLLER_REQUEST_TIMEOUT"`
+	FileTransferTimeout            time.Duration `env:"RUNTIME_CONTROLLER_FILE_TRANSFER_TIMEOUT"`
+	ArtifactSpoolDirectory         string        `env:"RUNTIME_CONTROLLER_ARTIFACT_SPOOL_DIRECTORY"`
 	ExecutionTimeout               time.Duration `env:"RUNTIME_CONTROLLER_EXECUTION_TIMEOUT"`
 	ShutdownTimeout                time.Duration `env:"RUNTIME_CONTROLLER_SHUTDOWN_TIMEOUT"`
 	WarmLongPoll                   time.Duration `env:"RUNTIME_CONTROLLER_WARM_LONG_POLL"`
@@ -94,7 +97,9 @@ func loadConfig() (Config, error) {
 		RunnerServiceAccount: "agent-runner", MaximumConcurrentTurns: 16,
 		PollInterval: 500 * time.Millisecond, InfrastructureCheckInterval: 10 * time.Second,
 		LeaseRenewInterval: 10 * time.Second, RequestTimeout: 5 * time.Second,
-		ExecutionTimeout: 60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
+		FileTransferTimeout:    runtimecontract.MaximumArtifactTransferDuration,
+		ArtifactSpoolDirectory: "/var/run/kodex/runtime-controller/artifact-spool",
+		ExecutionTimeout:       60 * time.Minute, ShutdownTimeout: 30 * time.Second, WarmLongPoll: 20 * time.Second,
 	}
 	if err := env.Parse(&config); err != nil {
 		return Config{}, err
@@ -123,6 +128,9 @@ func (config Config) validate() error {
 			return errors.New("runtime controller file path is invalid")
 		}
 	}
+	if !filepath.IsAbs(config.ArtifactSpoolDirectory) || filepath.Clean(config.ArtifactSpoolDirectory) != config.ArtifactSpoolDirectory {
+		return errors.New("runtime artifact spool directory is invalid")
+	}
 	spiffe, err := url.Parse(config.CallbackExpectedClientSPIFFEID)
 	if err != nil || spiffe.Scheme != "spiffe" || spiffe.Host == "" || spiffe.Path == "" || spiffe.RawQuery != "" || spiffe.Fragment != "" {
 		return errors.New("runtime callback client identity is invalid")
@@ -143,6 +151,7 @@ func (config Config) validate() error {
 		config.InfrastructureCheckInterval < 5*time.Second || config.InfrastructureCheckInterval > time.Minute ||
 		config.LeaseRenewInterval < time.Second || config.LeaseRenewInterval > 20*time.Second ||
 		config.RequestTimeout < time.Second || config.RequestTimeout > 10*time.Second ||
+		config.FileTransferTimeout < time.Second || config.FileTransferTimeout > runtimecontract.MaximumArtifactTransferDuration ||
 		config.ExecutionTimeout < time.Minute || config.ExecutionTimeout > 4*time.Hour ||
 		config.ShutdownTimeout < 5*time.Second || config.ShutdownTimeout > time.Minute ||
 		config.WarmLongPoll < time.Second || config.WarmLongPoll > 30*time.Second {

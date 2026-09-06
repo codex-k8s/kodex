@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,12 +20,49 @@ import (
 type artifactProjectionClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 	response *controlplanev1.ReadExecutionArtifactResponse
-	requests []*controlplanev1.ReadExecutionArtifactRequest
+	requests []*controlplanev1.StreamExecutionArtifactRequest
+	err      error
 }
 
-func (client *artifactProjectionClient) ReadExecutionArtifact(_ context.Context, request *controlplanev1.ReadExecutionArtifactRequest, _ ...grpc.CallOption) (*controlplanev1.ReadExecutionArtifactResponse, error) {
+func (client *artifactProjectionClient) StreamExecutionArtifact(_ context.Context, request *controlplanev1.StreamExecutionArtifactRequest, _ ...grpc.CallOption) (controlplanev1.RuntimeWorkService_StreamExecutionArtifactClient, error) {
 	client.requests = append(client.requests, request)
-	return client.response, nil
+	if client.err != nil {
+		return nil, client.err
+	}
+	return &fixtureArtifactStream{frames: []*controlplanev1.StreamExecutionArtifactResponse{
+		{Part: &controlplanev1.StreamExecutionArtifactResponse_Metadata{Metadata: client.response.GetArtifact()}},
+		{Part: &controlplanev1.StreamExecutionArtifactResponse_Chunk{Chunk: client.response.GetContent()}},
+		{Part: &controlplanev1.StreamExecutionArtifactResponse_Complete{Complete: &controlplanev1.RuntimeArtifactTransferComplete{
+			SizeBytes: client.response.GetArtifact().GetSizeBytes(), Digest: client.response.GetArtifact().GetDigest()}}},
+	}}, nil
+}
+
+type fixtureArtifactStream struct {
+	grpc.ClientStream
+	frames []*controlplanev1.StreamExecutionArtifactResponse
+}
+
+func (stream *fixtureArtifactStream) Recv() (*controlplanev1.StreamExecutionArtifactResponse, error) {
+	if len(stream.frames) == 0 {
+		return nil, io.EOF
+	}
+	frame := stream.frames[0]
+	stream.frames = stream.frames[1:]
+	return frame, nil
+}
+
+func fixtureArtifactSpool(t *testing.T) *artifactSpool {
+	t.Helper()
+	spool, err := openArtifactSpool(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := spool.close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return spool
 }
 
 func TestArtifactProjectionChecksExactOwnerResponseBeforeExposingBytes(t *testing.T) {
@@ -59,7 +97,7 @@ func TestArtifactProjectionChecksExactOwnerResponseBeforeExposingBytes(t *testin
 				ref = "artifact_foreign1"
 			}
 			client := &artifactProjectionClient{response: response}
-			server := &Server{config: Config{RequestTimeout: time.Second}, manager: manager,
+			server := &Server{config: Config{RequestTimeout: time.Second, FileTransferTimeout: time.Second}, manager: manager, spool: fixtureArtifactSpool(t),
 				control: &controlplaneclient.Client{Runtime: client}}
 			request := httptest.NewRequest(http.MethodGet, "/v1/executions/"+input.LeaseRef+"/artifacts/"+ref, nil)
 			request.Header.Set("Authorization", "Bearer "+ticket)
