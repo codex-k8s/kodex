@@ -188,17 +188,17 @@ func validateOperations(source map[string]string) (operationSet, error) {
 
 func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMethod string) (string, string, error) {
 	if expected, ok := client.proofOperations[fullMethod]; !ok || expected != operationID {
-		return "", "", errors.New("control-plane operation is not registered")
+		return "", "", authorityclient.NewProofFailure(authorityclient.StageProofOperation, errors.New("control-plane operation is not registered"))
 	}
 	grant, _ := ctx.Value(applicationGrantContextKey{}).(string)
 	if grant == "" {
 		if client.grantFile == "" {
-			return "", "", errors.New("request application credential is missing")
+			return "", "", authorityclient.NewProofFailure(authorityclient.StageGrantMissing, errors.New("request application credential is missing"))
 		}
 		var err error
 		grant, err = readCredential(client.grantFile)
 		if err != nil {
-			return "", "", err
+			return "", "", authorityclient.NewProofFailure(authorityclient.StageGrantRead, err)
 		}
 	}
 	correlation := uuid.NewString()
@@ -209,10 +209,10 @@ func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMetho
 	}
 	resolved, err := client.resolver.ResolveAuthorityProof(metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+grant), request)
 	if err != nil {
-		return "", correlation, err
+		return "", correlation, authorityclient.NewProofFailure(authorityclient.StageProofResolve, err)
 	}
 	if resolved.GetAuthorityProofCompactJws() == "" || resolved.GetProofRevision() == 0 || resolved.GetSignerGeneration() == 0 {
-		return "", correlation, errors.New("control-plane authority proof is incomplete")
+		return "", correlation, authorityclient.NewProofFailure(authorityclient.StageProofResponse, errors.New("control-plane authority proof is incomplete"))
 	}
 	return resolved.GetAuthorityProofCompactJws(), correlation, nil
 }
