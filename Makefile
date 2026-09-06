@@ -157,6 +157,10 @@ test-owner-session-acceptance:
 test-provider-api-key-acceptance:
 	@timeout 30s node --test tools/dev/provider-api-key-acceptance.test.mjs tools/dev/owner-session-client.test.mjs
 
+.PHONY: test-stt-fixture-setup
+test-stt-fixture-setup:
+	@timeout 30s node --test tools/dev/stt-fixture-setup.test.mjs tools/dev/provider-api-key-acceptance.test.mjs tools/dev/owner-session-client.test.mjs
+
 test-stt-tts-service-contract:
 	@./scripts/tests/stt-tts-service-contract-test.sh
 

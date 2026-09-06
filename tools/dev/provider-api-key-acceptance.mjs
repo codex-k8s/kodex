@@ -10,8 +10,10 @@ const failure =
 export async function authorizeProviderAPIKeyFixture({
   origin,
   storage,
+  storagePath,
   accountRef,
   apiKey,
+  idempotencyKey = randomUUID(),
   fetchAPI = fetch,
   onSessionCookies = async () => {},
 }) {
@@ -23,13 +25,15 @@ export async function authorizeProviderAPIKeyFixture({
       apiKey.length < 8 ||
       apiKey.length > 16384 ||
       apiKey.trim() !== apiKey ||
-      /[\r\n\0]/.test(apiKey)
+      /[\r\n\0]/.test(apiKey) ||
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(idempotencyKey)
     )
       throw new Error(failure);
     const signal = AbortSignal.timeout(60000);
     client = createOwnerSessionClient({
       origin,
       storage,
+      storagePath,
       // Ни body, ни cookie с отражённым credential не доходят до consumers.
       fetchAPI: async (url, options) => {
         const response = await fetchAPI(url, options);
@@ -75,7 +79,7 @@ export async function authorizeProviderAPIKeyFixture({
       headers: {
         "Content-Type": "application/json",
         "If-Match": etag,
-        "Idempotency-Key": randomUUID(),
+        "Idempotency-Key": idempotencyKey,
       },
       body: JSON.stringify({ apiKey }),
     });
