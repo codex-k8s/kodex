@@ -21,7 +21,7 @@ func main() {
 	)
 	defer stop()
 	if err := app.Run(lifecycle, root, app.ModeIssuer, version); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "internal-rpc-authority issuer failed: %v\n", err)
+		_, _ = fmt.Fprintln(os.Stderr, app.SafeRuntimeFailure(app.ModeIssuer, err))
 		os.Exit(1)
 	}
 }

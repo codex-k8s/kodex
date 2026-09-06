@@ -16,6 +16,7 @@ var publicationFunctionDeclaration string
 
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
 const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
+const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -117,7 +118,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 2 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration {
+	if len(entries) != 3 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)

@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.3
-updated: 2026-09-06
+version: 1.1.4
+updated: 2026-09-07
 ---
 
 # Наблюдаемость Go-сервисов
@@ -50,6 +50,14 @@ security/quota обхода или безусловным игнорирован
 Логи и error reporting не содержат request/response body, gRPC metadata, SQL,
 Redis command arguments, DSN, token, cookie, телефон, email, внешний subject и
 иные персональные данные.
+
+CLI boundary не сериализует цепочку ошибок через `%v`/`Error()`, даже если
+наружный domain error обычно имеет безопасный текст: иной startup path может
+вернуть driver error с секретами. Для диагностики отказа достаточно закрытой
+typed stage, нормализованного domain kind и error class; SQLSTATE выводится
+только по явному allowlist. Joined timeout/cancel фиксируется отдельно от
+первичного отказа, чтобы окончание retry budget не скрывало PostgreSQL или
+domain rejection. Sentinel tests включают вложенные ошибки и неизвестные поля.
 
 ## Общая библиотека
 

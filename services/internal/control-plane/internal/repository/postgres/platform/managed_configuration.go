@@ -265,13 +265,22 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			return commandOutcome{}, errs.ErrConflict
 		}
 		impact, impactErr := repository.managedImpactTx(ctx, tx, current, configuration.Ref, locked.Ref, query.Filter{Page: query.Page{Size: 1}})
-		if impactErr != nil || payload.ImpactDigest != impact.Digest {
-			return commandOutcome{}, errs.ErrConflict
+		if impactErr != nil {
+			return commandOutcome{}, impactErr
+		}
+		if payload.ImpactDigest != impact.Digest {
+			return commandOutcome{}, errs.ErrVersionMismatch
 		}
 		if len(payload.Consumers) == 0 || len(payload.Consumers) > 128 {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		seenConsumers := make(map[string]struct{}, len(payload.Consumers))
 		for _, consumer := range payload.Consumers {
+			key := consumer.Kind + "\x00" + consumer.Ref
+			if _, duplicate := seenConsumers[key]; duplicate || !validManagedBindingExpectation(consumer) {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+			seenConsumers[key] = struct{}{}
 			if !managedConsumerAllowed(kind, consumer) {
 				return commandOutcome{}, errs.ErrInvalid
 			}
@@ -334,11 +343,15 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			}
 			bindingRef, _ := newRef("mcbind")
 			var bindingRefReadback string
-			if err := tx.QueryRow(ctx, queryManagedConfigurationRebindConsumer, pgx.StrictNamedArgs{
+			if err := tx.QueryRow(ctx, queryManagedConfigurationCASConsumer, pgx.StrictNamedArgs{
 				"binding_ref": bindingRef, "organization_id": current.organizationID, "project_id": nullUUID(configuration.projectID),
 				"configuration_set_id": configuration.id, "revision_id": locked.RefID, "configuration_kind": kind, "consumer_kind": consumer.Kind,
 				"consumer_ref": consumer.Ref, "actor_id": current.actorID,
+				"expected_absent": consumer.ExpectedAbsent, "expected_version": consumer.Version, "expected_revision_ref": consumer.RevisionRef,
 			}).Scan(&bindingRefReadback, &consumer.Kind, &consumer.Ref, &consumer.RevisionRef, &consumer.Version); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return commandOutcome{}, errs.ErrVersionMismatch
+				}
 				return commandOutcome{}, mapWriteError(err)
 			}
 		}
@@ -562,6 +575,13 @@ func managedConsumerAllowed(kind string, consumer entity.ManagedConfigurationCon
 		}
 	}
 	return false
+}
+
+func validManagedBindingExpectation(consumer entity.ManagedConfigurationConsumer) bool {
+	if consumer.ExpectedAbsent {
+		return consumer.Version == 0 && consumer.RevisionRef == ""
+	}
+	return consumer.Version > 0 && consumer.Version <= 9007199254740991 && strings.HasPrefix(consumer.RevisionRef, "mrev_") && validOverlayHistoryRef(consumer.RevisionRef)
 }
 
 func managedOutcome(set managedSet, revision *entity.ManagedConfigurationRevision) commandOutcome {

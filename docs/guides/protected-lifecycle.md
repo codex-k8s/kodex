@@ -10,6 +10,16 @@ updated: 2026-09-06
 
 # Защищённые агрегаты и граф фонового выполнения
 
+Перепривязка consumer между configuration sets проверяет глобальную связь по
+организации/kind/consumer, а не только версию нового set. Явное expected absence
+разрешает только INSERT; существующая связь меняется только UPDATE с точными
+revision/version. Отсутствующая связь не создаётся в режиме MATCH. Impact
+commitment учитывает связи других sets того же kind и project/org scope;
+список для выбора по-прежнему ограничен target set и read eligibility.
+Stale digest/pins возвращают version mismatch без частичных effects, receipt,
+audit или events. Успех сохраняет их в одной owner-транзакции; exact replay
+возвращает прежний receipt и не перепривязывает consumer повторно.
+
 Пустой результат claim не доказывает отсутствие изменений: истечение lease и
 terminal непригодного кандидата сохраняют audit и command receipt в той же
 транзакции. Только действительно неизменившийся idle poll может их пропустить.

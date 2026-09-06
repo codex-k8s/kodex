@@ -44,7 +44,7 @@ func managedRevisionInput(request managedRevisionRequest) command.ManagedConfigu
 func managedRebindInput(request managedRebindRequest) command.ManagedConfigurationInput {
 	result := command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RevisionRef: request.GetRevisionRef(), ImpactDigest: request.GetImpactDigest()}
 	for _, item := range request.GetConsumers() {
-		result.Consumers = append(result.Consumers, entity.ManagedConfigurationConsumer{Kind: item.GetKind(), Ref: item.GetRef(), RevisionRef: item.GetRevisionRef(), Version: item.GetVersion()})
+		result.Consumers = append(result.Consumers, entity.ManagedConfigurationConsumer{Kind: item.GetKind(), Ref: item.GetRef(), RevisionRef: item.GetRevisionRef(), Version: item.GetVersion(), ExpectedAbsent: item.GetExpectedAbsent()})
 	}
 	return result
 }
