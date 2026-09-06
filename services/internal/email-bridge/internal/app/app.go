@@ -27,46 +27,55 @@ import (
 	"golang.org/x/net/netutil"
 )
 
-func Run(ctx, background context.Context, version string) error {
+func Run(ctx, background context.Context, version string) (result error) {
+	stage := stageEnvironment
+	defer func() { result = failure(stage, result) }()
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	c, e := loadConfig()
 	if e != nil {
 		return e
 	}
+	stage = stageTLS
 	transportTLS, e := tlsConfig(c)
 	if e != nil {
 		return e
 	}
+	stage = stageDSN
 	dsn, e := databaseDSN(c.DSNFile)
 	if e != nil {
 		return e
 	}
+	stage = stageDatabaseOpen
 	pool, e := pgxpool.New(ctx, dsn)
 	if e != nil {
-		return errors.New("database unavailable")
+		return e
 	}
 	defer pool.Close()
+	stage = stageDatabaseReady
 	repository := &receipt.Repository{Pool: pool}
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
 	e = repository.Ready(startup)
 	cancel()
 	if e != nil {
-		return errors.New("database schema unavailable")
+		return e
 	}
+	stage = stageTelemetry
 	telemetry, e := observability.NewRuntime(ctx, observability.RuntimeConfig{ServiceName: "email-bridge", ServiceVersion: version, Environment: c.Environment, OTLPEndpoint: c.OTLPEndpoint, OTLPTLSServerName: c.OTLPServerName, OTLPCAFile: c.OTLPCAFile, TraceSampleRatio: 0.1})
 	if e != nil {
-		return errors.New("telemetry unavailable")
+		return e
 	}
 	defer serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing})
+	stage = stageMetrics
 	metrics := observability.NewMetrics("email_bridge", version, nil)
 	businessMetrics := business.New()
 	if metrics.Register(businessMetrics.Operations) != nil || metrics.Register(businessMetrics.Reconciliations) != nil {
 		return errors.New("metrics unavailable")
 	}
+	stage = stageAuthority
 	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
 	if e != nil {
-		return errors.New("authority client invalid")
+		return e
 	}
 	defer client.Close()
 	owner := &authority.Client{API: client.Runtime}
@@ -76,11 +85,12 @@ func Run(ctx, background context.Context, version string) error {
 	if c.ConfigurationMode == configurationManaged {
 		configurationState.report = owner.ReportConfigurationReadback
 	}
+	stage = stageConfiguration
 	startup, cancel = context.WithTimeout(ctx, 20*time.Second)
 	e = configurationState.Refresh(startup)
 	cancel()
 	if e != nil {
-		return errors.New("email configuration unavailable")
+		return e
 	}
 	reconciler := &reconciliation.Service{Reports: repository, Repository: repository, Authority: owner, Interval: time.Duration(c.ReconciliationIntervalSeconds) * time.Second, Batch: c.ReconciliationBatch, Observer: businessMetrics, Barrier: func(probe context.Context) error {
 		if err := repository.Ready(probe); err != nil {
@@ -95,6 +105,7 @@ func Run(ctx, background context.Context, version string) error {
 		}
 		return client.CheckLocalAuthority(probe)
 	}}
+	stage = stageTechnical
 	readiness := serviceruntime.NewReadiness()
 	tech, e := httpserver.New(httpserver.Config{Address: c.Technical, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 16384, MaximumConnections: 64}, readiness, metrics.PrometheusHandler())
 	if e != nil {
@@ -117,9 +128,10 @@ func Run(ctx, background context.Context, version string) error {
 		}
 	}, httptransport.Handler{Current: configurationState.Service, Metrics: businessMetrics})
 	server := &http.Server{Handler: http.MaxBytesHandler(handler, 24<<20), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 70 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384, TLSConfig: transportTLS, BaseContext: func(net.Listener) context.Context { return ctx }}
+	stage = stageHTTPS
 	listener, e := net.Listen("tcp", c.Listen)
 	if e != nil {
-		return errors.New("HTTPS listener unavailable")
+		return e
 	}
 	group := serviceruntime.StartWorkers(ctx, reconciler.Run, reconciler.RunReports, func(context.Context) error {
 		e := tech.Serve()
@@ -157,5 +169,6 @@ func Run(ctx, background context.Context, version string) error {
 	})
 	<-ctx.Done()
 	readiness.Set(false, "stopping")
+	stage = stageShutdown
 	return serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "https", Timeout: 10 * time.Second, Run: server.Shutdown}, serviceruntime.ShutdownOperation{Name: "technical", Timeout: 5 * time.Second, Run: tech.Shutdown}, serviceruntime.ShutdownOperation{Name: "workers", Timeout: 10 * time.Second, Run: func(shutdown context.Context) error { group.Stop(); return group.Wait(shutdown) }})
 }

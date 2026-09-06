@@ -52,26 +52,32 @@ type configurationRuntime struct {
 }
 
 // Refresh вызывается при startup, затем только единственным bounded monitor.
-func (r *configurationRuntime) Refresh(ctx context.Context) error {
+func (r *configurationRuntime) Refresh(ctx context.Context) (result error) {
+	stage := stageConfiguration
+	defer func() { result = failure(stage, result) }()
 	snapshot, err := configuration.Load(ctx, r.root)
 	var digest string
 	if err == nil {
 		digest = api.Digest(snapshot.Configuration)
 		if r.check != nil {
+			stage = stagePins
 			err = r.check(snapshot.Configuration, digest)
 		}
 	}
 	if err == nil {
+		stage = stageWatermark
 		err = r.accept(ctx, snapshot.Configuration, digest)
 	}
 	var service *mail.Service
 	if err == nil {
+		stage = stageService
 		service = r.build(snapshot)
 		if service == nil {
 			err = errors.New("email configuration service unavailable")
 		}
 	}
 	if err == nil && r.report != nil {
+		stage = stageReadback
 		err = r.report(ctx, snapshot.Configuration.Revision, digest)
 	}
 	if err == nil {

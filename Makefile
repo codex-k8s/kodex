@@ -87,6 +87,10 @@ test-internal-rpc-authority-postgres:
 test-integration-synthetic:
 	@./scripts/tests/integration-synthetic-test.sh
 
+.PHONY: test-integration-hot-reload-container
+test-integration-hot-reload-container:
+	@./scripts/tests/integration-hot-reload-container-test.sh
+
 test-full-local-e2e-entrypoint:
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
 	@./scripts/tests/local-profile-selection-test.sh
