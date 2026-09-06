@@ -10,6 +10,15 @@ updated: 2026-09-06
 
 # Безопасность распределенных сервисов и служебного состояния
 
+Если acceptance credential разрешён только для Node/host, его нельзя передавать
+в DOM, page.evaluate, browser request context или browser storage даже при
+отключённых traces. Node-only запрос использует проверенную owner session,
+exact Origin/CSRF и свежую OCC/idempotency boundary; неизвестный результат
+mutation не повторяется автоматически. В браузер возвращается только отдельно
+проверенная cookie-пара для продолжения сценария, без credential/response body.
+Ошибки не сохраняют сырые request/response либо cause; regression использует
+synthetic sentinel и проверяет actual call path, а не текст private handoff.
+
 Hot-reload workloads с закрытым Internet получают зависимости от доверенного
 host bootstrap, в том же закреплённом контейнерном runtime. Receipt связывает
 точные manifests, image, версию package manager и platform/native ABI; он

@@ -53,6 +53,20 @@ provider data или содержимого браузерного storage.
 fetch/Headers Set-Cookie, AbortSignal, private file descriptors и fsync/rename.
 Эти проверки не заменяют общий baseline нового SHA и live acceptance.
 
+Дополнение #1113: optional API-key fixture в `integration-path.spec.ts` передаёт
+credential только в Node helper `provider-api-key-acceptance.mjs`. UI создаёт
+account и проверяет descriptor/status; Node-only owner-session client выполняет
+fresh GET с ETag и один write-only POST с Origin/CSRF/If-Match/idempotency.
+Повтор при неизвестном исходе запрещён. Проверенная cookie-пара после renewal
+возвращается браузеру отдельно, включая cleanup после потерянного ACK; key и
+ответ authorization в browser context/storage не передаются. Ошибки фиксированы
+и не содержат response body либо cause. Trace/video/screenshots остаются off.
+Реальный Run, affinity и точный cleanup сохраняются в прежнем сценарии.
+`make test-provider-api-key-acceptance` проверяет эту границу synthetic sentinel
+и source AST без живого ключа. Прежнее private утверждение «ключ уже Node-only»
+было неверным: до #1113 source вызывал DOM fill; live key scenario до исправления
+не запускался. Локальный PASS не является live provider acceptance.
+
 - [ ] Все unit эпика полностью реализованы в своих Issue/ветке/worktree/PR,
   прошли targeted проверки и включены точными commits в ветку #1031.
   Зафиксирован один полный 40-символьный SHA чистой интеграционной ветки.
