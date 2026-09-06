@@ -46,6 +46,24 @@ Live startup мог остановиться раньше telemetry; совпа�
 tls_verification и database (отдельно authentication/permission/missing/unavailable).
 `unknown` не доказывает конкретную причину; raw error, DSN и SQL не публикуются.
 
+До goose CLI ожидает только первое защищённое соединение в исходном общем
+минутном бюджете. Между попытками Ping — одна секунда; отдельного нового
+бюджета для миграций нет. Повторяются только закрытые временные причины:
+`dns_temporary`, `dns_timeout`, `connection_refused`, `connection_reset`,
+`host_unreachable`, `network_unreachable`, `network_timeout` (ETIMEDOUT).
+`dns_not_found`, неизвестный DNS/network, TLS verification, authentication,
+permission и configuration не повторяются. SQL goose/status после успешного
+Ping вызывается один раз; его сетевой отказ не запускает миграцию повторно.
+
+Исчерпание ожидания сохраняет последний сетевой `error_class` и добавляет
+`wait_status=deadline|canceled`; timeout не маскирует первоначальный refused/reset.
+Точное происхождение временного отказа (DNS, Service endpoints, policy/CNI)
+устанавливается read-only probes; по одному network class CNI race не доказан.
+В f737 оба migration Pod завершались на database_connect/network до goose за
+секунду или меньше. При этом PG endpoints были готовы; DNS/TCP из старого EMAIL
+Pod не доказывают доступность из migration Pod. Исправление даёт bounded
+startup ожидание, но не выдаёт эти наблюдения за установленную сетевую причину.
+
 При повторном up сначала сверить UID/GID/mode/size и symlink boundary DSN/CA,
 Secret metadata и reuse material. Затем по классу проверять TLS CA/SNI/expiry,
 service endpoints или PostgreSQL. Не снимать read-only/TLS и не ротировать

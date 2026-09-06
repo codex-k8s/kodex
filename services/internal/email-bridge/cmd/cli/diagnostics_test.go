@@ -26,7 +26,7 @@ func TestMigrationFailureClosedClassesNeverExposeCause(t *testing.T) {
 		{"permission", "database_permission", &pgconn.PgError{Code: "42501", Message: sentinel}},
 		{"arbitrary_sqlstate", "database", &pgconn.PgError{Code: sentinel, Message: sentinel}},
 		{"filesystem", "filesystem", &os.PathError{Op: sentinel, Path: sentinel, Err: os.ErrNotExist}},
-		{"dns", "network", &net.DNSError{Err: sentinel, Name: sentinel}},
+		{"dns", "dns", &net.DNSError{Err: sentinel, Name: sentinel}},
 		{"timeout", "timeout", fmt.Errorf("%s: %w", sentinel, context.DeadlineExceeded)},
 		{"canceled", "canceled", context.Canceled},
 		{"hostname", "tls_verification", x509.HostnameError{Certificate: &x509.Certificate{}, Host: sentinel}},
